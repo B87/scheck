@@ -1,0 +1,10 @@
+kind: single-fact
+description: 'sshd accepts passwords but listens on loopback only: the rule fires, nothing needs correlation.'
+elevation: sudo
+expect_rules:
+- sshd.password_auth_enabled
+expect_model: []
+forbid:
+- sshd.password_auth_exposed
+- net.unexpected_listener
+forbid_custom: true

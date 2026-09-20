@@ -1,0 +1,9 @@
+kind: misleading
+description: The listeners capture is truncated; context declares a service. Absence cannot be concluded.
+elevation: sudo
+expect_rules: []
+expect_model: []
+forbid:
+- net.unexpected_listener
+- svc.expected_missing
+forbid_custom: true

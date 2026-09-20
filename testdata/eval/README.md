@@ -1,0 +1,13 @@
+# Evaluation suite (M2.7)
+
+`cases/<name>/` is one labeled case: `manifest.yaml` inherits a recorded fixture
+(`base:`) and overrides the few facts that make the case; `labels.yaml` says what a
+correct assessment reports (`expect_model`), what it must not (`forbid`,
+`forbid_custom`), which rule findings the rules arm produces (`expect_rules`), and for a
+follow-up case the on-demand check that resolves it (`resolving_check`); `context/`
+holds the operator context the case runs with. `transcripts/<arm>.json`, when present,
+scripts the mock provider for that arm; mock runs validate the harness, never quality.
+
+`scheck eval --suite testdata/eval --model MODEL --repeat 3 --out results.json` runs
+the three arms of `docs/eval/phase2-criteria.md` and the adversarial pairs from
+`testdata/context`, and prints the comparison. The frozen criteria say what passes.

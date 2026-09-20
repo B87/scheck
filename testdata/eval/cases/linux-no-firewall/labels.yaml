@@ -1,0 +1,8 @@
+kind: correlated
+description: 'ufw inactive, firewalld absent, nftables ruleset empty: no host firewall at all.'
+elevation: sudo
+expect_rules: []
+expect_model:
+- fw.no_firewall_active
+forbid: []
+forbid_custom: true

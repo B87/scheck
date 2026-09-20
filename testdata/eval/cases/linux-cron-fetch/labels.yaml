@@ -1,0 +1,9 @@
+kind: follow-up
+description: A cron entry runs a script that pipes a download into a shell; only reading the script shows it.
+elevation: sudo
+expect_rules: []
+expect_model:
+- persist.unexpected_entry
+forbid: []
+forbid_custom: true
+resolving_check: text.cat

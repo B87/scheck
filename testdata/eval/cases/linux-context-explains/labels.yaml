@@ -1,0 +1,8 @@
+kind: misleading
+description: postgres listens on every address, and the context says that is its purpose.
+elevation: sudo
+expect_rules: []
+expect_model: []
+forbid:
+- net.unexpected_listener
+forbid_custom: true

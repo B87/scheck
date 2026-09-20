@@ -1,0 +1,70 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - which
+  - ufw
+  stdout: ''
+  code: 1
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  absent: true

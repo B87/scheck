@@ -1,0 +1,4 @@
+context:
+  role: database host
+  expected_services:
+    - { port: 5432, purpose: postgres, audience: vpc-only }

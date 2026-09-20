@@ -1,0 +1,9 @@
+kind: correlated
+description: 'Password authentication on and sshd listening on every address: the correlation no single rule makes.'
+elevation: sudo
+expect_rules:
+- sshd.password_auth_enabled
+expect_model:
+- sshd.password_auth_exposed
+forbid: []
+forbid_custom: true

@@ -1,0 +1,9 @@
+kind: correlated
+description: A SUID helper lives under a world-writable directory.
+elevation: sudo
+expect_rules:
+- fs.world_writable_present
+expect_model:
+- fs.suid_unexpected
+forbid: []
+forbid_custom: true

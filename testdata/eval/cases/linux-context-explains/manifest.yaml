@@ -1,0 +1,68 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - ss
+  - -tulpnH
+  stdout: 'tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*
+
+    tcp LISTEN 0      128       [::]:22    [::]:*
+
+    tcp LISTEN 0      244    0.0.0.0:5432 0.0.0.0:* users:(("postgres",pid=900,fd=6))
+
+    '
+  code: 0

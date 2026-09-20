@@ -1,0 +1,22 @@
+base: ../../../fixtures/macos
+execs:
+- argv:
+  - /usr/libexec/ApplicationFirewall/socketfilterfw
+  - --getglobalstate
+  stdout: 'Firewall is enabled. (State = 1)
+
+    '
+  code: 0
+- argv:
+  - softwareupdate
+  - -l
+  - --no-scan
+  stdout: 'Software Update Tool
+
+
+    Finding available software
+
+    No new software available.
+
+    '
+  code: 0

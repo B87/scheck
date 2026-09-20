@@ -1,0 +1,9 @@
+kind: follow-up
+description: An enabled unit whose ExecStart is under /tmp; only reading the unit file shows it.
+elevation: sudo
+expect_rules: []
+expect_model:
+- persist.unexpected_entry
+forbid: []
+forbid_custom: true
+resolving_check: text.cat

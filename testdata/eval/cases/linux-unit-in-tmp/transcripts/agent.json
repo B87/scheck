@@ -1,0 +1,10 @@
+{
+  "turns": [
+    {"tool_calls": [{"id": "c1", "name": "read_file", "input": {"path": "/etc/systemd/system/agent.service", "rationale": "an enabled unit with no package; see what it starts"}}]},
+    {"tool_calls": [{"id": "c2", "name": "report_finding", "input": {"id": "persist.unexpected_entry", "confidence": "high",
+      "evidence": [{"check": "persist.units", "excerpt": "agent.service"}, {"check": "text.cat", "excerpt": "ExecStart=/tmp/.x/agent --daemon"}],
+      "impact": "An enabled service starts a binary from a hidden directory under /tmp, which any user can write."}}],
+     "expect": {"tool_results": ["c1"]}},
+    {"text": "agent.service starts /tmp/.x/agent; reported.", "expect": {"tool_results": ["c2"]}}
+  ]
+}

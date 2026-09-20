@@ -1,0 +1,114 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - find
+  - /usr/local
+  - /opt
+  - /usr/bin
+  - /usr/sbin
+  - /bin
+  - /sbin
+  - -xdev
+  - -maxdepth
+  - '4'
+  - -type
+  - f
+  - -perm
+  - '-4000'
+  stdout: '/usr/bin/newgrp
+
+    /usr/bin/chfn
+
+    /usr/bin/mount
+
+    /usr/bin/su
+
+    /usr/bin/chsh
+
+    /usr/bin/umount
+
+    /usr/bin/gpasswd
+
+    /usr/bin/passwd
+
+    /usr/bin/sudo
+
+    /opt/tool/bin/helper
+
+    '
+  code: 0
+- argv:
+  - find
+  - /usr/local
+  - /opt
+  - /etc
+  - -xdev
+  - -maxdepth
+  - '4'
+  - -perm
+  - '-0002'
+  - -not
+  - -perm
+  - '-1000'
+  - -not
+  - -type
+  - l
+  stdout: '/opt/tool/bin
+
+    '
+  code: 0

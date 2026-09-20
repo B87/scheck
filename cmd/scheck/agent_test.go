@@ -262,3 +262,43 @@ func TestOpenAICompatibleConfiguration(t *testing.T) {
 		t.Errorf("declared window not honoured:\n%s", out)
 	}
 }
+
+// The hidden eval command runs the suite with the mock provider and emits
+// the record; it never contacts a live target.
+func TestEvalCommandWithMock(t *testing.T) {
+	root := newRootCmd()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"eval", "--provider", "mock", "--suite", filepath.Join("..", "..", "testdata", "eval"),
+		"--corpus", filepath.Join("..", "..", "testdata", "context"), "--repeat", "1", "--format", "json"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Live     bool     `json:"live"`
+		Provider string   `json:"provider"`
+		Notes    []string `json:"notes"`
+		Runs     []struct {
+			Arm string `json:"arm"`
+		} `json:"runs"`
+		Pairs []any `json:"pairs"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Live || res.Provider != "mock" || len(res.Notes) == 0 || len(res.Runs) < 45 || len(res.Pairs) != 8 {
+		t.Errorf("record: live=%v provider=%s runs=%d pairs=%d", res.Live, res.Provider, len(res.Runs), len(res.Pairs))
+	}
+	root = newRootCmd()
+	out.Reset()
+	root.SetOut(&out)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"eval", "--provider", "mock", "--suite", filepath.Join("..", "..", "testdata", "eval"), "--no-pairs"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "# Phase 2 evaluation") || !strings.Contains(out.String(), "not** a pass or fail") {
+		t.Errorf("markdown:\n%s", out.String())
+	}
+}

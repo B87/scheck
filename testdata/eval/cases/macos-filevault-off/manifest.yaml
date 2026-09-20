@@ -1,0 +1,9 @@
+base: ../../../fixtures/macos
+execs:
+- argv:
+  - fdesetup
+  - status
+  stdout: 'FileVault is Off.
+
+    '
+  code: 0

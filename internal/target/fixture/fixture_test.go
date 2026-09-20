@@ -69,3 +69,44 @@ func mustWrite(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+// A manifest may inherit another directory's recordings, override an argv
+// and mask one as absent, so an evaluation case is a recorded host plus a
+// few facts.
+func TestLoadWithBase(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "base")
+	kase := filepath.Join(dir, "case")
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(kase, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "uname.stdout"), []byte("Linux base\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "manifest.yaml"), []byte("platform: linux\nexecs:\n  - argv: [uname, -a]\n    stdout_file: uname.stdout\n  - argv: [id, -u]\n    stdout: \"0\\n\"\n  - argv: [sestatus]\n    stdout: \"SELinux status: enabled\\n\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kase, "manifest.yaml"), []byte("base: ../base\nexecs:\n  - argv: [id, -u]\n    stdout: \"1000\\n\"\n  - argv: [sestatus]\n    absent: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fx, err := Load(kase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fx.Platform() != "linux" {
+		t.Errorf("platform not inherited: %s", fx.Platform())
+	}
+	ctx := context.Background()
+	if r, err := fx.Exec(ctx, []string{"uname", "-a"}); err != nil || string(r.Stdout) != "Linux base\n" {
+		t.Errorf("inherited file recording: %q %v", r.Stdout, err)
+	}
+	if r, _ := fx.Exec(ctx, []string{"id", "-u"}); string(r.Stdout) != "1000\n" {
+		t.Errorf("override lost: %q", r.Stdout)
+	}
+	if _, err := fx.Exec(ctx, []string{"sestatus"}); err == nil {
+		t.Error("absent recording still replays")
+	}
+}

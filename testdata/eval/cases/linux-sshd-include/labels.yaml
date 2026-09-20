@@ -1,0 +1,9 @@
+kind: follow-up
+description: sudo refuses sshd -T, so the rule is not assessed; a drop-in under sshd_config.d enables passwords.
+elevation: sudo
+expect_rules: []
+expect_model:
+- sshd.password_auth_enabled
+forbid: []
+forbid_custom: true
+resolving_check: text.cat

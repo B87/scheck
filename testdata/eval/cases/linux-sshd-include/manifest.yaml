@@ -1,0 +1,114 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - sudo
+  - -n
+  - --
+  - sshd
+  - -T
+  stderr: 'sudo: a password is required
+
+    '
+  code: 1
+- argv:
+  - realpath
+  - /etc/ssh/sshd_config.d
+  stdout: '/etc/ssh/sshd_config.d
+
+    '
+  code: 0
+- argv:
+  - ls
+  - -la
+  - /etc/ssh/sshd_config.d
+  stdout: 'total 4
+
+    -rw-r--r-- 1 root root 27 Sep 20 10:00 50-cloud.conf
+
+    '
+  code: 0
+- argv:
+  - realpath
+  - /etc/ssh/sshd_config.d/50-cloud.conf
+  stdout: '/etc/ssh/sshd_config.d/50-cloud.conf
+
+    '
+  code: 0
+- argv:
+  - cat
+  - /etc/ssh/sshd_config.d/50-cloud.conf
+  stdout: 'PasswordAuthentication yes
+
+    '
+  code: 0
+- argv:
+  - realpath
+  - /etc/ssh/sshd_config
+  stdout: '/etc/ssh/sshd_config
+
+    '
+  code: 0
+- argv:
+  - cat
+  - /etc/ssh/sshd_config
+  stdout: 'Include /etc/ssh/sshd_config.d/*.conf
+
+    PermitRootLogin no
+
+    '
+  code: 0

@@ -1,0 +1,14 @@
+kind: clean
+description: Ubuntu host with firewall active, NTP synced, auditd running, no pending updates and key-only sshd.
+elevation: sudo
+expect_rules: []
+expect_model: []
+forbid:
+- net.unexpected_listener
+- fw.no_firewall_active
+- privesc.sudo_nopasswd_broad
+- fs.suid_unexpected
+- persist.unexpected_entry
+- accounts.unexpected_admin
+- sshd.password_auth_exposed
+forbid_custom: true

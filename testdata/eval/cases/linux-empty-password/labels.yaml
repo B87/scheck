@@ -1,0 +1,8 @@
+kind: single-fact
+description: An account with no password (NP) in passwd -S; the rule fires.
+elevation: sudo
+expect_rules:
+- accounts.empty_password
+expect_model: []
+forbid: []
+forbid_custom: true

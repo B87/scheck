@@ -1,0 +1,8 @@
+kind: misleading
+description: Every firewall check is unavailable; no firewall conclusion can be drawn.
+elevation: sudo
+expect_rules: []
+expect_model: []
+forbid:
+- fw.no_firewall_active
+forbid_custom: true

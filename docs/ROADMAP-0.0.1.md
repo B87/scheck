@@ -883,7 +883,7 @@ against this machine, asserts the report shape, cost under $0.50 and no denied
 model-initiated check, but needs `SCHECK_LIVE=1` and a credential and was not
 executed in this environment. Acceptance criterion 7 is unrecorded until it is.
 
-### M2.7 — phase-2-earns-its-cost evaluation
+### M2.7 — phase-2-earns-its-cost evaluation ⏳ (harness landed; live evaluation not run)
 Deliver a labeled fixture suite covering clean hosts, seeded issues, and incomplete or
 misleading evidence, including cases that can only be resolved by a follow-up catalog
 check. Compare three arms over it with identical initial facts, rule findings and
@@ -905,6 +905,31 @@ single-pass analysis are retained; that removal is a deletion, not a redesign, b
 severity, the envelope and the tool surface never belonged to the loop. The retained
 single-pass mode must still pass the adversarial gate; removing the loop does not waive it.
 **Spec:** §2.1 rationale, §11 injection corpus, §12 acceptance criteria 10 and 12.
+
+**Landed (2026-09-20): the harness, not the result.** `internal/eval` (`eval.go`: suite
+loading with label validation and the §2 minimums, the three arms over identical
+facts/rules/context, the §3 metrics, the §4 pairs; `report.go`: per-arm medians, the
+frozen verdicts, the markdown comparison), the hidden `scheck eval` command,
+`testdata/eval` with fifteen cases (2 clean, 3 single-fact, 3 correlated, 3 follow-up,
+4 misleading) built on the recorded ubuntu and macos fixtures through the new
+`base:`/`absent:` manifest fields, four scripted transcripts that exercise every metric
+(a resolved follow-up, a missed one, a false positive, a correlated hit), and
+`docs/eval/phase2-results.md`.
+
+**Not done: the live runs.** No credential was available in this environment, so
+neither the quality comparison (criterion 10) nor the adversarial evaluation
+(criterion 12) nor the cost measurement (criterion 7) has been recorded. The results
+file says so and gives the exact commands. Until a record is added there and judged
+against the frozen criteria, the decision the slice exists to make — keep the loop,
+keep single-pass only, or ship rules only — is open, and 0.0.1 cannot be signed off.
+
+**Validation of the harness.** `make check` green. `internal/eval` asserts the suite
+meets the minimums, that every case's rules arm produces exactly the rule findings its
+labels expect (the fixtures say what they claim), that a mock run scores each metric as
+the scripted transcripts intend (resolved, missed, false positive, abstention,
+correlated hit), that the pairs are identical by construction, that the summary and
+verdicts compute and that §3.1 does **not** pass on the mock; `cmd/scheck` runs `scheck
+eval --provider mock` in both formats.
 
 **M2 exit demo:** `scheck local` and `scheck ssh` produce full agentic reports against
 the `openai-compatible` provider on both a clean host and the seeded fixture, with

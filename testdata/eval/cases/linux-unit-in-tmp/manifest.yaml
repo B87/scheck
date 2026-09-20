@@ -1,0 +1,145 @@
+base: ../../../fixtures/ubuntu
+execs:
+- argv:
+  - sudo
+  - -n
+  - --
+  - ufw
+  - status
+  - verbose
+  stdout: 'Status: active
+
+    Logging: on (low)
+
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+
+    New profiles: skip
+
+
+    To                         Action      From
+
+    --                         ------      ----
+
+    22/tcp                     ALLOW IN    Anywhere
+
+    '
+  code: 0
+- argv:
+  - timedatectl
+  - show
+  stdout: 'Timezone=Etc/UTC
+
+    LocalRTC=no
+
+    CanNTP=yes
+
+    NTP=yes
+
+    NTPSynchronized=yes
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - is-active
+  - auditd
+  stdout: 'active
+
+    '
+  code: 0
+- argv:
+  - apt
+  - list
+  - --upgradable
+  stdout: 'Listing...
+
+    '
+  code: 0
+- argv:
+  - systemctl
+  - list-unit-files
+  - --state=enabled
+  - --no-pager
+  - --plain
+  stdout: 'UNIT FILE               STATE   PRESET
+
+    cron.service            enabled enabled
+
+    e2scrub_reap.service    enabled enabled
+
+    getty@.service          enabled enabled
+
+    systemd-pstore.service  enabled enabled
+
+    ufw.service             enabled enabled
+
+    ssh.socket              enabled enabled
+
+    remote-fs.target        enabled enabled
+
+    apt-daily-upgrade.timer enabled enabled
+
+    apt-daily.timer         enabled enabled
+
+    dpkg-db-backup.timer    enabled enabled
+
+    e2scrub_all.timer       enabled enabled
+
+    fstrim.timer            enabled enabled
+
+    motd-news.timer         enabled enabled
+
+
+    13 unit files listed.
+
+    agent.service                          enabled         enabled
+
+    '
+  code: 0
+- argv:
+  - realpath
+  - /etc/systemd/system/agent.service
+  stdout: '/etc/systemd/system/agent.service
+
+    '
+  code: 0
+- argv:
+  - cat
+  - /etc/systemd/system/agent.service
+  stdout: '[Unit]
+
+    Description=agent
+
+
+    [Service]
+
+    ExecStart=/tmp/.x/agent --daemon
+
+    Restart=always
+
+
+    [Install]
+
+    WantedBy=multi-user.target
+
+    '
+  code: 0
+- argv:
+  - realpath
+  - /etc/systemd/system
+  stdout: '/etc/systemd/system
+
+    '
+  code: 0
+- argv:
+  - ls
+  - -la
+  - /etc/systemd/system
+  stdout: 'total 8
+
+    drwxr-xr-x 2 root root 4096 Sep 20 10:00 .
+
+    -rw-r--r-- 1 root root  140 Sep 20 10:00 agent.service
+
+    '
+  code: 0

@@ -131,6 +131,14 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.7 (2026-09-20):**
+
+- The evaluation harness exists (§11): `internal/eval`, `scheck eval`, a fifteen-case
+  suite meeting the frozen minimums, and fixture manifests that inherit a recorded
+  host (`base:`) and can mask a recording (`absent: true`). **The live evaluation has
+  not been run**; `docs/eval/phase2-results.md` records that criteria 7, 10 and 12
+  are undecided and how to produce the record. The 0.0.1 gate is therefore open.
+
 **Changes from implementing M2.6 (2026-09-20):**
 
 - The `openai-compatible` adapter's concrete behaviours are in the §5.2 table:
@@ -1687,6 +1695,13 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
   validate` exits 0 and 3 without a target command or an inference request; a seeded
   credential is absent from text, JSON and diagnostics and a control character in a
   configured value is escaped.
+- **Evaluation harness.** `internal/eval` and the hidden `scheck eval` run the three
+  arms of `docs/eval/phase2-criteria.md` over `testdata/eval` (labeled cases built on
+  the recorded fixtures through `base:` inheritance) and the adversarial pairs of
+  `testdata/context`, score each run against its labels, and render the comparison
+  with the criteria's verdicts. A mock run validates the harness in `make check` and
+  is labelled as no claim; a live run is the record kept in
+  `docs/eval/phase2-results.md`.
 - **Redaction tests.** Seeded secrets in fixture output must not appear in any
   transcript, report, or audit log, and every redaction must leave a marker.
 
