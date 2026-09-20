@@ -1,0 +1,3 @@
+/Library/LaunchDaemons/com.docker.vmnetd.plist
+/Library/LaunchDaemons/com.docker.socket.plist
+/Library/LaunchDaemons/com.nordvpn.macos.helper.plist

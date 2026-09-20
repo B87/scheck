@@ -1,0 +1,11 @@
+
+	disabled services = {
+		"com.apple.CSCSupportd" => disabled
+		"com.apple.mdmclient.daemon.runatboot" => disabled
+		"com.apple.ftpd" => disabled
+		"com.docker.socket" => enabled
+		"com.docker.vmnetd" => enabled
+		"com.apple.smbd" => enabled
+		"com.apple.bootpd" => disabled
+		"com.apple.ftp-proxy" => enabled
+	}

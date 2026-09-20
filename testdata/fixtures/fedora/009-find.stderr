@@ -1,0 +1,4 @@
+find: '/etc/sudoers.d': Permission denied
+find: '/etc/credstore': Permission denied
+find: '/etc/ssh/sshd_config.d': Permission denied
+find: '/etc/credstore.encrypted': Permission denied

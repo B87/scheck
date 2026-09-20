@@ -29,6 +29,8 @@ func testCatalog(t *testing.T) {
 		check.Check{ID: "sys.slow", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, Argv: []string{"slow"}},
 		check.Check{ID: "svc.enabled", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, ExitOK: check.AnyExit, Argv: []string{"systemctl", "is-enabled", "sshd"}},
 		check.Check{ID: "pkg.json", Platform: check.Any, Domain: check.DomainUpdates, Parser: check.ParseJSON, Argv: []string{"pkgjson"}},
+		check.Check{ID: "sys.which", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, ExitOK: []int{0, 1}, Argv: []string{"which", "{name}"}, Params: []check.Param{{Name: "name", Kind: check.KindIdent}}},
+		check.Check{ID: "fs.find", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseLines, ExitOK: []int{0, 1}, Argv: []string{"find", "/etc", "-perm", "-0002"}},
 		check.Check{ID: "host.uuid", Platform: check.Any, Domain: check.DomainHost, Parser: check.ParseRaw, Argv: []string{"ioreg"}, Extract: `"IOPlatformUUID" = "([0-9A-F-]+)"`},
 	)
 	if vs := check.Validate(check.All()); len(vs) != 0 {
@@ -202,17 +204,34 @@ func TestRunElevation(t *testing.T) {
 	if e := h.entries(t); e[0].Decision != "unavailable:requires_elevation" {
 		t.Errorf("audit: %+v", e)
 	}
-	// sudo: prefix applied.
-	h = newHarness(t, ElevateSudo, fixture.Exec{Argv: []string{"sudo", "-n", "--", "sshd", "-T"}, Stdout: "port 22\npasswordauthentication yes\n"})
+	// sudo: prefix applied once the binary is known to exist.
+	which := fixture.Exec{Argv: []string{"which", "sshd"}, Stdout: "/usr/sbin/sshd\n"}
+	h = newHarness(t, ElevateSudo, which, fixture.Exec{Argv: []string{"sudo", "-n", "--", "sshd", "-T"}, Stdout: "port 22\npasswordauthentication yes\n"})
 	res = h.r.Run(context.Background(), "sshd.config", nil)
 	if res.Status != StatusOK || !res.Elevated || res.Parsed.(map[string]string)["passwordauthentication"] != "yes" {
 		t.Fatalf("sudo: %+v", res)
 	}
 	// sudo refused (no NOPASSWD): degrades to unavailable, never prompts.
-	h = newHarness(t, ElevateSudo, fixture.Exec{Argv: []string{"sudo", "-n", "--", "sshd", "-T"}, Code: 1, Stderr: "sudo: a password is required\n"})
+	h = newHarness(t, ElevateSudo, which, fixture.Exec{Argv: []string{"sudo", "-n", "--", "sshd", "-T"}, Code: 1, Stderr: "sudo: a password is required\n"})
 	res = h.r.Run(context.Background(), "sshd.config", nil)
-	if res.Status != StatusUnavailable || res.Reason != "sudo: sudo: a password is required" {
+	if res.Status != StatusUnavailable || !strings.HasPrefix(res.Reason, "sudo: sudo: a password is required") {
 		t.Fatalf("sudo refused: %+v", res)
+	}
+	// sudo with the binary absent: reported as not found, sudo never invoked.
+	h = newHarness(t, ElevateSudo, fixture.Exec{Argv: []string{"which", "sshd"}, Code: 1})
+	res = h.r.Run(context.Background(), "sshd.config", nil)
+	if res.Status != StatusUnavailable || res.Reason != "not found: sshd" {
+		t.Fatalf("sudo missing binary: %+v", res)
+	}
+	for _, call := range h.fx.Calls {
+		if call[0] == "sudo" {
+			t.Fatal("sudo invoked for a missing binary")
+		}
+	}
+	// sudo on a host without `which`: assume installed, let sudo speak.
+	h = newHarness(t, ElevateSudo, fixture.Exec{Argv: []string{"sudo", "-n", "--", "sshd", "-T"}, Stdout: "port 22\n"})
+	if res = h.r.Run(context.Background(), "sshd.config", nil); res.Status != StatusOK {
+		t.Fatalf("sudo without which: %+v", res)
 	}
 	// root: no prefix.
 	h = newHarness(t, ElevateRoot, fixture.Exec{Argv: []string{"sshd", "-T"}, Stdout: "port 22\n"})
@@ -237,6 +256,19 @@ func TestRunExitCodes(t *testing.T) {
 	res = h.r.Run(context.Background(), "svc.enabled", nil)
 	if res.Status != StatusOK || res.ExitCode != 1 || res.Raw != "disabled\n" {
 		t.Fatalf("AnyExit: %+v", res)
+	}
+	h = newHarness(t, ElevateNone,
+		fixture.Exec{Argv: []string{"systemctl", "is-enabled", "sshd"}, Code: 1, Stderr: "System has not been booted with systemd as init system (PID 1).\n"})
+	res = h.r.Run(context.Background(), "svc.enabled", nil)
+	if res.Status != StatusUnavailable || !strings.Contains(res.Reason, "not been booted") {
+		t.Fatalf("AnyExit with empty stdout and stderr complaint must be unavailable: %+v", res)
+	}
+	// An explicit ExitOK list is trusted: find with unreadable dirs and no
+	// matches is a valid empty result.
+	h = newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"find", "/etc", "-perm", "-0002"}, Code: 1, Stderr: "find: '/etc/credstore': Permission denied\n"})
+	res = h.r.Run(context.Background(), "fs.find", nil)
+	if res.Status != StatusOK || len(res.Parsed.([]string)) != 0 {
+		t.Fatalf("explicit ExitOK with stderr noise must stay ok: %+v", res)
 	}
 }
 

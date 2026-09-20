@@ -47,7 +47,13 @@ func init() {
 		check.Check{
 			ID: "host.hostname", Description: "Hostname",
 			Platform: check.Any, Domain: check.DomainHost, Parser: check.ParseRaw, Baseline: true,
-			Argv: []string{"hostname"},
+			Argv: []string{"uname", "-n"},
+		},
+		check.Check{
+			ID: "sys.which", Description: "Whether a binary is on PATH (run before an elevated check so a missing tool is not mistaken for a sudo refusal)",
+			Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, MinProfile: check.ProfileHardened,
+			ExitOK: []int{0, 1},
+			Argv:   []string{"which", "{name}"}, Params: []check.Param{{Name: "name", Kind: check.KindIdent}},
 		},
 		check.Check{
 			ID: "fs.realpath", Description: "Resolve symlinks in a path (used before every path decision)",

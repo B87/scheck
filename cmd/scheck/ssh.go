@@ -51,7 +51,7 @@ func newSSHCmd(opts *globalOpts) *cobra.Command {
 				return usageErr("%v", err)
 			}
 			defer func() { _ = st.Close() }()
-			sess.runner.Target = st
+			sess.runner.Target = sess.wrapTarget(st)
 			if err := verifyCanary(cmd.Context(), sess, st); err != nil {
 				return err
 			}

@@ -1,0 +1,24 @@
+UNIT FILE                         STATE   PRESET
+dbus-broker.service               enabled enabled
+getty@.service                    enabled enabled
+rpmdb-migrate.service             enabled enabled
+rpmdb-rebuild.service             enabled enabled
+sshd.service                      enabled enabled
+systemd-confext.service           enabled enabled
+systemd-homed-activate.service    enabled disabled
+systemd-homed.service             enabled enabled
+systemd-network-generator.service enabled enabled
+systemd-oomd.service              enabled enabled
+systemd-pstore.service            enabled enabled
+systemd-resolved.service          enabled enabled
+systemd-sysext.service            enabled enabled
+dbus.socket                       enabled enabled
+systemd-journald-audit.socket     enabled enabled
+systemd-userdbd.socket            enabled enabled
+reboot.target                     enabled enabled
+remote-cryptsetup.target          enabled enabled
+remote-fs.target                  enabled enabled
+dnf-makecache.timer               enabled enabled
+fstrim.timer                      enabled enabled
+
+21 unit files listed.

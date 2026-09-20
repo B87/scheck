@@ -1,0 +1,16 @@
+UNIT FILE               STATE   PRESET
+cron.service            enabled enabled
+e2scrub_reap.service    enabled enabled
+getty@.service          enabled enabled
+systemd-pstore.service  enabled enabled
+ufw.service             enabled enabled
+ssh.socket              enabled enabled
+remote-fs.target        enabled enabled
+apt-daily-upgrade.timer enabled enabled
+apt-daily.timer         enabled enabled
+dpkg-db-backup.timer    enabled enabled
+e2scrub_all.timer       enabled enabled
+fstrim.timer            enabled enabled
+motd-news.timer         enabled enabled
+
+13 unit files listed.

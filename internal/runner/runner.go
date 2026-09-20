@@ -146,6 +146,14 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 	if c.Elevated {
 		switch r.Elevate {
 		case ElevateSudo:
+			// sudo answers "a password is required" for a binary it cannot
+			// find, which would misreport a missing tool as a policy refusal.
+			if !r.installed(ctx, argv[0]) {
+				res.Argv = argv
+				res.Status, res.Reason = StatusUnavailable, "not found: "+argv[0]
+				r.audit(res, "unavailable:"+res.Reason, nil)
+				return res
+			}
 			argv = append(append([]string{}, SudoPrefix...), argv...)
 			res.Elevated = true
 		case ElevateRoot:
@@ -193,11 +201,16 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 		return res
 	}
 	if res.Elevated && r.Elevate == ElevateSudo && exec.Code == 1 && strings.HasPrefix(res.Stderr, "sudo:") {
-		res.Status, res.Reason = StatusUnavailable, "sudo: "+firstLine(res.Stderr)
+		res.Status, res.Reason = StatusUnavailable, "sudo: "+firstLine(res.Stderr)+" (no NOPASSWD rule for this command, or "+firstToken(argv, true)+" is not installed)"
 		r.audit(res, "unavailable:sudo", &res.ExitCode)
 		return res
 	}
-	if !c.ExitAllowed(exec.Code) {
+	// For a check that accepts any exit code, the code carries no signal, so a
+	// non-zero exit with nothing on stdout and a complaint on stderr is a
+	// failure (systemctl on a host without systemd exits 1 exactly like
+	// "disabled" does). Checks with an explicit ExitOK list are trusted.
+	anyExit := len(c.ExitOK) > 0 && c.ExitOK[0] == check.AnyExit[0]
+	if !c.ExitAllowed(exec.Code) || (anyExit && exec.Code != 0 && strings.TrimSpace(res.Raw) == "" && res.Stderr != "") {
 		res.Status = StatusUnavailable
 		res.Reason = fmt.Sprintf("exit %d", exec.Code)
 		if l := firstLine(res.Stderr); l != "" {
@@ -229,6 +242,34 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 	}
 	r.audit(res, "run", &res.ExitCode)
 	return res
+}
+
+// installed reports whether bin is on the target's PATH, via the sys.which
+// check; a path-qualified binary or a missing sys.which is assumed present
+// and left for the exec itself to report.
+func (r *Runner) installed(ctx context.Context, bin string) bool {
+	if strings.HasPrefix(bin, "/") {
+		return true
+	}
+	c, ok := check.Lookup("sys.which", r.Target.Platform())
+	if !ok {
+		return true
+	}
+	argv, err := c.Bind(map[string]string{"name": bin})
+	if err != nil {
+		return true
+	}
+	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
+	defer cancel()
+	exec, execErr := r.Target.Exec(cctx, argv)
+	sub := Result{CheckID: c.ID, RanAs: c.ID, Params: map[string]string{"name": bin}, Argv: argv, ExitCode: exec.Code, Duration: exec.Duration}
+	r.audit(sub, "run", &sub.ExitCode)
+	if errors.Is(execErr, target.ErrNotFound) || exec.Code == target.CodeNotFound {
+		// No `which` on this host (minimal images): assume present and let
+		// sudo report; the sudo failure message carries the caveat.
+		return true
+	}
+	return execErr == nil && exec.Code == 0
 }
 
 // resolve returns the symlink-resolved form of p via the fs.realpath check,

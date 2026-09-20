@@ -17,6 +17,7 @@ import (
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
 	"github.com/b87/scheck/internal/target"
+	"github.com/b87/scheck/internal/target/fixture"
 )
 
 // session is everything a run needs, built once from config + flags.
@@ -91,7 +92,7 @@ func (o *globalOpts) newSession(mk func(policy.Budgets) (target.Target, error)) 
 	}
 	// A nil target is allowed for transports that need the session first
 	// (ssh); the caller sets runner.Target before any check runs.
-	s.runner = &runner.Runner{Target: t, Paths: s.paths, Redactor: s.redactor, Budgets: s.budgets,
+	s.runner = &runner.Runner{Target: s.wrapTarget(t), Paths: s.paths, Redactor: s.redactor, Budgets: s.budgets,
 		Audit: s.audit, Elevate: s.elevate, Log: func(f string, a ...any) { o.logf(1, f, a...) }}
 	return s, nil
 }
@@ -183,3 +184,16 @@ func writeFactsJSON(w io.Writer, sheet *baseline.FactSheet) error {
 }
 
 func homeDir() (string, error) { return os.UserHomeDir() }
+
+// wrapTarget adds the fixture recorder when --record-fixtures is set. The
+// recorder sees post-redaction bytes only.
+func (s *session) wrapTarget(t target.Target) target.Target {
+	if t == nil || s.opts.RecordFixtures == "" {
+		return t
+	}
+	s.opts.logf(1, "recording fixtures into %s", s.opts.RecordFixtures)
+	return &fixture.Recorder{Inner: t, Dir: s.opts.RecordFixtures, Redact: func(b []byte) []byte {
+		out, _ := s.redactor.Redact(b)
+		return out
+	}}
+}

@@ -1,0 +1,20 @@
+NAME   TYPE FSTYPE MOUNTPOINT
+nbd0   disk        
+nbd1   disk        
+nbd2   disk        
+nbd3   disk        
+nbd4   disk        
+nbd5   disk        
+nbd6   disk        
+nbd7   disk        
+vda    disk        
+`-vda1 part        /etc/resolv.conf
+vdb    disk        
+nbd8   disk        
+nbd9   disk        
+nbd10  disk        
+nbd11  disk        
+nbd12  disk        
+nbd13  disk        
+nbd14  disk        
+nbd15  disk        
