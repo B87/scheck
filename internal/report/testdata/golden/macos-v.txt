@@ -4,7 +4,7 @@ host.id bc38ac67236d… · kernel 25.6.0 · profile baseline · mode facts · st
 
 Findings (2)
   medium    The macOS application firewall is disabled [fw.app_firewall_disabled]
-            evidence  fw.global: Firewall is disabled. (State = 0)
+            evidence  fw.global#1: Firewall is disabled. (State = 0)
             fix       Turn the application firewall on.
             impact    Every listening service on this machine accepts inbound connections without a
                       per-application decision, so a background agent that opens a port is reachable
@@ -13,7 +13,7 @@ Findings (2)
             caveat    This is a per-application filter, not a packet filter; it does not replace a
                       network firewall.
   low       Software updates are pending [updates.pending]
-            evidence  pkg.softwareupdate: name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)
+            evidence  pkg.softwareupdate#1: name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)
             fix       Review the pending updates and apply them with the host's package manager.
             impact    Published fixes, including security fixes, are available but not installed.
                       How serious that is depends on which packages are behind.

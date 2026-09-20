@@ -48,7 +48,9 @@ const (
 // Result is the outcome of one Run. Raw and Stderr are redacted and
 // truncated; nothing downstream ever sees other bytes.
 type Result struct {
-	CheckID string
+	Observation string
+	Occurrence  int
+	CheckID     string
 	// RanAs is the check actually executed, which differs from CheckID when
 	// a content read of a sensitive path was substituted by fs.stat.
 	RanAs      string
@@ -80,7 +82,8 @@ type Runner struct {
 	Audit    *policy.Audit
 	Elevate  Elevation
 	// Log, when set, receives verbose diagnostics (slow checks, substitutions).
-	Log func(format string, args ...any)
+	Log          func(format string, args ...any)
+	observations Observations
 }
 
 // IDs of the catalog checks the runner itself depends on.
@@ -115,15 +118,10 @@ func (r *Runner) RunAs(ctx context.Context, id string, params map[string]string,
 	}
 	if !ok {
 		res := Result{CheckID: id, Params: params, Status: StatusDenied, Reason: "unknown check id", ReasonCode: "unknown_check", origin: o}
-		r.audit(res, "denied:unknown_check", nil)
+		res = r.record(res, "denied:unknown_check", nil)
 		return res
 	}
 	return r.runCheck(ctx, c, params, o)
-}
-
-// RunCheck executes an already-resolved catalog entry (phase 1).
-func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]string) Result {
-	return r.runCheck(ctx, c, params, Origin{})
 }
 
 func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]string, o Origin) Result {
@@ -132,9 +130,11 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 	if err != nil {
 		res.Status, res.Reason = StatusDenied, err.Error()
 		res.ReasonCode = "invalid_params"
-		r.audit(res, "denied:param", nil)
+		res = r.record(res, "denied:param", nil)
 		return res
 	}
+
+	res.Argv = argv // typed bindings are known, even if policy denies execution
 
 	// Path policy on every Path param, on the resolved path.
 	for _, p := range c.Params {
@@ -148,7 +148,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		case policy.PathDeny:
 			res.Status, res.Reason = StatusDenied, verdict.Rule+": "+params[p.Name]
 			res.ReasonCode = "path_denied"
-			r.audit(res, "denied:"+verdict.Rule, nil)
+			res = r.record(res, "denied:"+verdict.Rule, nil)
 			return res
 		case policy.PathMetadataOnly:
 			if c.PathUse == check.PathContent {
@@ -156,7 +156,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 				if !ok {
 					res.Status, res.Reason = StatusUnavailable, "metadata-only path and no fs.stat check for platform"
 					res.ReasonCode = "metadata_unavailable"
-					r.audit(res, "unavailable:no_stat_check", nil)
+					res = r.record(res, "unavailable:no_stat_check", nil)
 					return res
 				}
 				r.logf("check %s: %s is %s, substituting %s", c.ID, params[p.Name], verdict.Rule, statCheck)
@@ -167,7 +167,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 				if err != nil {
 					res.Status, res.Reason = StatusDenied, err.Error()
 					res.ReasonCode = "invalid_params"
-					r.audit(res, "denied:param", nil)
+					res = r.record(res, "denied:param", nil)
 					return res
 				}
 			}
@@ -184,7 +184,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 				res.Argv = argv
 				res.Status, res.Reason = StatusUnavailable, "not found: "+argv[0]
 				res.ReasonCode = "command_missing"
-				r.audit(res, "unavailable:"+res.Reason, nil)
+				res = r.record(res, "unavailable:"+res.Reason, nil)
 				return res
 			}
 			argv = append(append([]string{}, SudoPrefix...), argv...)
@@ -195,7 +195,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 			res.Argv = argv
 			res.Status, res.Reason = StatusUnavailable, "requires elevated read"
 			res.ReasonCode = "requires_elevation"
-			r.audit(res, "unavailable:requires_elevation", nil)
+			res = r.record(res, "unavailable:requires_elevation", nil)
 			return res
 		}
 	}
@@ -246,13 +246,13 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 			res.Reason = "exec error: " + execErr.Error()
 			res.ReasonCode = "exec_error"
 		}
-		r.audit(res, "unavailable:"+res.Reason, &res.ExitCode)
+		res = r.record(res, "unavailable:"+res.Reason, &res.ExitCode)
 		return res
 	}
 	if res.Elevated && r.Elevate == ElevateSudo && exec.Code == 1 && strings.HasPrefix(res.Stderr, "sudo:") {
 		res.Status, res.Reason = StatusUnavailable, "sudo: "+firstLine(res.Stderr)+" (no NOPASSWD rule for this command, or "+firstToken(argv, true)+" is not installed)"
 		res.ReasonCode = "sudo_refused"
-		r.audit(res, "unavailable:sudo", &res.ExitCode)
+		res = r.record(res, "unavailable:sudo", &res.ExitCode)
 		return res
 	}
 	// For a check that accepts any exit code, the code carries no signal, so a
@@ -270,7 +270,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		if l := firstLine(res.Stderr); l != "" {
 			res.Reason += ": " + l
 		}
-		r.audit(res, "unavailable:"+res.Reason, &res.ExitCode)
+		res = r.record(res, "unavailable:"+res.Reason, &res.ExitCode)
 		return res
 	}
 	if c.Extract != "" {
@@ -279,7 +279,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 			res.Status, res.Reason = StatusUnavailable, "extract: pattern not found in output"
 			res.ReasonCode = "extract_error"
 			res.Raw = ""
-			r.audit(res, "unavailable:extract", &res.ExitCode)
+			res = r.record(res, "unavailable:extract", &res.ExitCode)
 			return res
 		}
 		res.Raw = m[1]
@@ -288,7 +288,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 	if perr != nil {
 		res.Status, res.Reason = StatusUnavailable, "parse error: "+perr.Error()
 		res.ReasonCode = "parse_error"
-		r.audit(res, "unavailable:parse_error", &res.ExitCode)
+		res = r.record(res, "unavailable:parse_error", &res.ExitCode)
 		return res
 	}
 	res.Parsed = parsed
@@ -296,7 +296,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 	if res.Duration > r.Budgets.PerCheckSoft {
 		r.logf("check %s: slow (%s > %s)", c.ID, res.Duration.Round(time.Millisecond), r.Budgets.PerCheckSoft)
 	}
-	r.audit(res, "run", &res.ExitCode)
+	res = r.record(res, "run", &res.ExitCode)
 	return res
 }
 
@@ -318,8 +318,16 @@ func (r *Runner) installed(ctx context.Context, bin string) bool {
 	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
 	defer cancel()
 	exec, execErr := r.Target.Exec(cctx, argv)
-	sub := Result{CheckID: c.ID, RanAs: c.ID, Params: map[string]string{"name": bin}, Argv: argv, ExitCode: exec.Code, Duration: exec.Duration}
-	r.audit(sub, "run", &sub.ExitCode)
+	sub := Result{CheckID: c.ID, RanAs: c.ID, Params: map[string]string{"name": bin}, Argv: argv, ExitCode: exec.Code, Duration: exec.Duration, Attempted: true, Status: StatusOK}
+	sub.Raw, sub.Truncated, sub.Redactions = r.finish(exec.Stdout, exec.StdoutTruncated, 4<<10)
+	sub.Stderr, _, _ = r.finish(exec.Stderr, exec.StderrTruncated, 2<<10)
+	if execErr != nil || !c.ExitAllowed(exec.Code) {
+		sub.Status, sub.ReasonCode, sub.Reason = StatusUnavailable, "exec_error", "availability probe failed"
+		sub = r.record(sub, "unavailable:which", &sub.ExitCode)
+	} else {
+		sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
+		sub = r.record(sub, "run", &sub.ExitCode)
+	}
 	if errors.Is(execErr, target.ErrNotFound) || exec.Code == target.CodeNotFound {
 		// No `which` on this host (minimal images): assume present and let
 		// sudo report; the sudo failure message carries the caveat.
@@ -343,13 +351,16 @@ func (r *Runner) resolve(ctx context.Context, p string) string {
 	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
 	defer cancel()
 	exec, execErr := r.Target.Exec(cctx, argv)
-	sub := Result{CheckID: c.ID, RanAs: c.ID, Params: map[string]string{"path": p}, Argv: argv, ExitCode: exec.Code, Duration: exec.Duration}
+	sub := Result{CheckID: c.ID, RanAs: c.ID, Params: map[string]string{"path": p}, Argv: argv, ExitCode: exec.Code, Duration: exec.Duration, Attempted: true, Status: StatusOK}
+	sub.Raw, sub.Truncated, sub.Redactions = r.finish(exec.Stdout, exec.StdoutTruncated, 4<<10)
+	sub.Stderr, _, _ = r.finish(exec.Stderr, exec.StderrTruncated, 2<<10)
 	if execErr != nil || exec.Code != 0 {
-		r.audit(sub, "unavailable:realpath", &sub.ExitCode)
+		sub.Status, sub.ReasonCode, sub.Reason = StatusUnavailable, "exec_error", "path resolution failed"
+		sub = r.record(sub, "unavailable:realpath", &sub.ExitCode)
 		return p
 	}
-	sub.Raw, _, _ = r.finish(exec.Stdout, false, 4<<10)
-	r.audit(sub, "run", &sub.ExitCode)
+	sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
+	sub = r.record(sub, "run", &sub.ExitCode)
 	resolved := strings.TrimSpace(sub.Raw)
 	if !strings.HasPrefix(resolved, "/") {
 		return p
@@ -384,17 +395,24 @@ func (r *Runner) finish(b []byte, targetTruncated bool, capBytes int) (string, b
 	return string(red), truncated, len(hits)
 }
 
-func (r *Runner) audit(res Result, decision string, code *int) {
+// record finalizes an outcome: retain a policy-safe snapshot and audit its reference.
+func (r *Runner) record(res Result, decision string, code *int) Result {
+	reasonDecision := decision == "unavailable:"+res.Reason
+	res = r.retain(res)
+	if reasonDecision {
+		decision = "unavailable:" + res.Reason
+	}
 	e := policy.AuditEntry{
-		CheckID:    res.RanAs,
-		Params:     res.Params,
-		Argv:       res.Argv,
-		Decision:   decision,
-		ExitCode:   code,
-		DurationMS: res.Duration.Milliseconds(),
-		Elevated:   res.Elevated,
-		Tool:       res.origin.Tool,
-		Rationale:  res.origin.Rationale,
+		Observation: res.Observation,
+		CheckID:     res.RanAs,
+		Params:      res.Params,
+		Argv:        res.Argv,
+		Decision:    decision,
+		ExitCode:    code,
+		DurationMS:  res.Duration.Milliseconds(),
+		Elevated:    res.Elevated,
+		Tool:        res.origin.Tool,
+		Rationale:   res.origin.Rationale,
 	}
 	if e.CheckID == "" {
 		e.CheckID = res.CheckID
@@ -405,11 +423,13 @@ func (r *Runner) audit(res Result, decision string, code *int) {
 	if err := r.Audit.Log(e); err != nil {
 		r.logf("audit log: %v", err)
 	}
+	return res
 }
 
 func (r *Runner) logf(format string, args ...any) {
 	if r.Log != nil {
-		r.Log(format, args...)
+		message, _ := r.Redactor.RedactString(fmt.Sprintf(format, args...))
+		r.Log("%s", message)
 	}
 }
 

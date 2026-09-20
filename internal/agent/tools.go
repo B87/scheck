@@ -32,13 +32,16 @@ type readFileInput struct {
 // checkResult is what run_check and read_file return: the same redacted,
 // bounded capture the report shows, never anything else.
 type checkResult struct {
-	Check      string `json:"check"`
-	Status     string `json:"status"`
-	Reason     string `json:"reason,omitempty"`
-	Summary    string `json:"summary,omitempty"`
-	Output     string `json:"output,omitempty"`
-	Truncated  bool   `json:"truncated,omitempty"`
-	Redactions int    `json:"redactions,omitempty"`
+	Observation string   `json:"observation"`
+	Error       string   `json:"error,omitempty"`
+	ValidIDs    []string `json:"valid_ids,omitempty"`
+	Check       string   `json:"check"`
+	Status      string   `json:"status"`
+	Reason      string   `json:"reason,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	Output      string   `json:"output,omitempty"`
+	Truncated   bool     `json:"truncated,omitempty"`
+	Redactions  int      `json:"redactions,omitempty"`
 }
 
 type toolError struct {
@@ -54,7 +57,7 @@ const (
 	// The first live runs showed the model calling report_finding to record
 	// a hypothesis it had ruled out ("UFW is active", filed under
 	// fw.no_firewall_active). The description says what the tool is not for.
-	reportFindingDesc = "Record one open finding: a problem that is present on the host. Never call it for something you checked and found in order, or to note that a hypothesis was ruled out; that belongs in your closing summary, and a call here would file it as an open issue. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence as verbatim excerpts of check output you have seen. Do not send a severity: scheck grades. Reporting an id that a posture rule already produced adds your evidence and context note to it."
+	reportFindingDesc = "Record one open finding: a problem that is present on the host. Never call it for something you checked and found in order, or to note that a hypothesis was ruled out; that belongs in your closing summary, and a call here would file it as an open issue. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence with the exact observation reference and a verbatim excerpt of its output. Different invocations of a check have different references. Do not send a severity: scheck grades. Reporting an id that a posture rule already produced adds your evidence and context note to it."
 )
 
 func (s *Session) tools() []llm.Tool {
@@ -87,10 +90,10 @@ func (s *Session) tools() []llm.Tool {
 				"evidence": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"check":   map[string]any{"type": "string", "description": "the check id whose output holds the excerpt"},
-						"excerpt": map[string]any{"type": "string", "description": "a verbatim excerpt of that output"},
+						"observation": map[string]any{"type": "string", "description": "the exact observation reference whose output holds the excerpt"},
+						"excerpt":     map[string]any{"type": "string", "description": "a verbatim excerpt of that output"},
 					},
-					"required": []string{"check", "excerpt"},
+					"required": []string{"observation", "excerpt"},
 				}},
 				"impact":            map[string]any{"type": "string"},
 				"remediation":       map[string]any{"type": "object", "properties": map[string]any{"summary": map[string]any{"type": "string"}, "commands": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "caveat": map[string]any{"type": "string"}}},
@@ -148,32 +151,32 @@ func (s *Session) execute(callID, id string, params map[string]string, o runner.
 	s.checks++
 	res := s.Runner.RunAs(s.ctx, id, params, o)
 	s.wall += res.Duration
-	s.results[id] = res
+	out := checkResult{Observation: res.Observation, Check: res.CheckID, Status: string(res.Status), Reason: res.Reason}
+
 	if s.Log != nil {
-		s.Log("%s %s %v: %s %s", o.Tool, id, params, res.Status, res.Reason)
+		s.Log("%s %s %v: %s %s", o.Tool, res.CheckID, res.Params, res.Status, res.Reason)
 	}
 	switch res.Status {
 	case runner.StatusDenied:
+		out.Error = fmt.Sprintf("%s: denied by policy (%s)", res.CheckID, res.Reason)
 		if res.ReasonCode == "unknown_check" {
-			return s.errorResult(callID, fmt.Sprintf("unknown check id %q", id), s.menuIDs)
+			out.Error = fmt.Sprintf("unknown check id %q", res.CheckID)
+			out.ValidIDs = s.menuIDs
 		}
-		return s.errorResult(callID, fmt.Sprintf("%s: denied by policy (%s)", id, res.Reason), nil)
 	case runner.StatusUnavailable:
-		out := checkResult{Check: id, Status: string(res.Status), Reason: res.Reason}
-		// An unavailable check is an answer, not an error the model can
-		// correct: it must not reason from its absence.
 		if res.ReasonCode == "requires_elevation" || res.ReasonCode == "sudo_refused" {
-			return s.errorResult(callID, fmt.Sprintf("%s: %s; this cannot be obtained in this run, do not infer anything from its absence", id, res.Reason), nil)
+			out.Error = fmt.Sprintf("%s: %s; this cannot be obtained in this run, do not infer anything from its absence", res.CheckID, res.Reason)
 		}
-		return s.jsonResult(callID, out, false)
+	case runner.StatusOK:
+		c, _ := check.Lookup(res.RanAs, s.Sheet.Platform)
+		out.Summary = check.Summary(c, res.Parsed)
+		if s.account(len(res.Raw)) {
+			out.Output, out.Truncated, out.Redactions = res.Raw, res.Truncated, res.Redactions
+		} else {
+			out.Error = "the model-input budget for this run is exhausted; report what you have"
+		}
 	}
-	c, _ := check.Lookup(res.RanAs, s.Sheet.Platform)
-	out := checkResult{Check: id, Status: string(res.Status), Reason: res.Reason,
-		Summary: check.Summary(c, res.Parsed), Output: res.Raw, Truncated: res.Truncated, Redactions: res.Redactions}
-	if !s.account(len(res.Raw)) {
-		return s.errorResult(callID, "the model-input budget for this run is exhausted; report what you have", nil)
-	}
-	return s.jsonResult(callID, out, false)
+	return s.jsonResult(callID, out, out.Error != "")
 }
 
 // report validates and stores a candidate through finding.Store, which owns
@@ -216,17 +219,4 @@ func (s *Session) errorResult(callID, msg string, validIDs []string) llm.ToolRes
 		s.Log("tool error: %s", msg)
 	}
 	return s.jsonResult(callID, toolError{Error: msg, ValidIDs: validIDs}, true)
-}
-
-// output answers finding.Store.Output: the redacted capture of a check that
-// ran in phase 1 or on the model's request, so a candidate's excerpt is
-// validated against what the host actually said.
-func (s *Session) output(id string) (string, bool) {
-	if r, ok := s.results[id]; ok && r.Status == runner.StatusOK {
-		return r.Raw, true
-	}
-	if r, ok := s.Sheet.Results[id]; ok && r.Status == runner.StatusOK {
-		return r.Raw, true
-	}
-	return "", false
 }

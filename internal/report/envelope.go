@@ -19,16 +19,18 @@ import (
 // 1.3 grades findings through operator context (adjustments, accepted
 // status, context-derived findings); 1.4 fills the provider block and
 // `run.agent` from phase 2 and carries model findings (docs/SPEC.md §7.4).
+// 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.4"
+const SchemaVersion = "1.5"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
 type Envelope struct {
-	SchemaVersion string          `json:"schema_version"`
-	Host          Host            `json:"host"`
-	Run           Run             `json:"run"`
-	Facts         map[string]Fact `json:"facts"`
+	SchemaVersion string                 `json:"schema_version"`
+	Host          Host                   `json:"host"`
+	Run           Run                    `json:"run"`
+	Facts         map[string]Fact        `json:"facts"`
+	Observations  map[string]Observation `json:"observations"`
 	// Assessments is one entry per selected posture rule, findings or not:
 	// coverage is reported separately from findings, because "no finding"
 	// and "not assessed" are different answers (docs/SPEC.md §7.5).
@@ -167,6 +169,7 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 	env := Envelope{
 		SchemaVersion: SchemaVersion,
 		Facts:         FactsFrom(sheet),
+		Observations:  observationsFrom(sheet),
 		Assessments:   assessed.Assessments,
 		Findings:      assessed.Findings,
 		Run: Run{

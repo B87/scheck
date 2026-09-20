@@ -201,7 +201,7 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 - `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate (profile
   tier, no canary) is enforced there, not in the tool. `report_finding` goes through
-  `finding.Store.Report`, which validates every excerpt against a check's output and
+  `finding.Store.Report`, which validates every excerpt against the exact cited observation's output and
   refuses an id the posture rules already settled: another platform's id, an id whose
   rule returned `not_matched`, or a judgement whose `Def.Premise` the rule disproved.
   Put a new deterministic guard there, never in the prompt alone.

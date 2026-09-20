@@ -69,7 +69,7 @@ assessment. Live evaluations are separate opt-in work that costs money.
    it applies to this commit; prompt/model changes require matching live evidence.
 2. Confirm `git status --porcelain` is empty and CI is green. Confirm the release
    notes header in `.goreleaser.yaml` names the implemented report schema (currently
-   1.4) and limitations accurately. Product and schema versions are independent.
+   1.5) and limitations accurately. Product and schema versions are independent.
 3. Create an annotated version tag on the candidate and push it explicitly:
 
    ```sh

@@ -19,7 +19,7 @@
           "proposed_severity": "high",
           "impact": "This is a scripted mock transcript; it proves plumbing (evidence validation, grading, merge), not model quality.",
           "remediation": {"summary": "Nothing to fix; replace the mock provider with a real one for an assessment."},
-          "evidence": [{"check": "sys.platform", "excerpt": "Linux"}],
+          "evidence": [{"observation": "sys.platform#1", "excerpt": "Linux"}],
           "context_note": "reported by the mock transcript testdata/transcripts/correlated-finding-linux.json"
         }}
       ],

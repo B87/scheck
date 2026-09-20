@@ -40,7 +40,6 @@ type Session struct {
 	Progress func(llm.Event)
 
 	ctx      context.Context
-	results  map[string]runner.Result
 	menuIDs  []string
 	checks   int
 	reported int
@@ -98,13 +97,12 @@ func (s *Session) account(n int) bool {
 // the run (docs/SPEC.md §5.6).
 func (s *Session) Run(ctx context.Context) Outcome {
 	s.ctx = ctx
-	s.results = map[string]runner.Result{}
-	s.Store.Output = s.output
 	out := Outcome{Status: "incomplete", Warnings: []string{}}
 	if s.Provider == nil || s.Runner == nil || s.Store == nil || s.Sheet == nil {
 		out.Reason = "agent session is not fully configured"
 		return out
 	}
+	s.Store.Output = s.Runner.Observations().Get
 	limits := s.Provider.Limits()
 	tools := s.tools()
 	facts := factsBlock(s.Sheet)

@@ -68,3 +68,21 @@ func TestDetectRoot(t *testing.T) {
 		t.Error("uid 501 detected as root")
 	}
 }
+
+// Even a modified plan cannot introduce argv: definitions resolve inside runner.
+func TestPlanCannotSupplyExecutableDefinition(t *testing.T) {
+	fx := fixture.New(target.Linux, fixture.Exec{Argv: []string{"uname", "-s"}, Stdout: "Linux"})
+	plan := []check.Check{{ID: "sys.platform", Argv: []string{"touch", "/tmp/should-never-run"}}, {ID: "unknown.check", Argv: []string{"touch", "/tmp/also-forbidden"}}}
+	sheet := Run(context.Background(), newRunner(fx), plan, nil)
+	if len(fx.Calls) != 1 || len(fx.Calls[0]) != 2 || fx.Calls[0][0] != "uname" || fx.Calls[0][1] != "-s" {
+		t.Fatalf("non-catalog argv: %v", fx.Calls)
+	}
+	if sheet.Results["unknown.check"].Status != runner.StatusDenied {
+		t.Fatal("unknown plan ID accepted")
+	}
+	for _, r := range sheet.Results {
+		if _, ok := sheet.Observations.Get(r.Observation); !ok {
+			t.Fatalf("missing baseline observation %+v", r)
+		}
+	}
+}

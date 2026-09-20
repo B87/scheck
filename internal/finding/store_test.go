@@ -24,18 +24,18 @@ func storeSheet(t *testing.T, platform check.Platform, raw map[string]string) *b
 		if err != nil {
 			t.Fatal(err)
 		}
-		fs.Results[id] = runner.Result{CheckID: id, Status: runner.StatusOK, Attempted: true, Raw: out, Parsed: parsed}
+		fs.Results[id] = runner.Result{Observation: id + "#1", CheckID: id, Status: runner.StatusOK, Attempted: true, Raw: out, Parsed: parsed}
 	}
 	return fs
 }
 
-func outputFrom(sheet *baseline.FactSheet) func(string) (string, bool) {
-	return func(id string) (string, bool) {
-		r, ok := sheet.Results[id]
+func outputFrom(sheet *baseline.FactSheet) func(string) (runner.Result, bool) {
+	return func(id string) (runner.Result, bool) {
+		r, ok := sheet.Results[strings.TrimSuffix(id, "#1")]
 		if !ok || r.Status != runner.StatusOK {
-			return "", false
+			return runner.Result{}, false
 		}
-		return r.Raw, true
+		return r, true
 	}
 }
 
@@ -133,7 +133,7 @@ func TestStoreReportMerge(t *testing.T) {
 	// title, impact, remediation and confidence; evidence appends once.
 	got, err := s.Report(Candidate{ID: IDPasswordAuthEnabled, Title: "nothing to see", Confidence: ConfidenceLow,
 		Impact: "harmless", Remediation: &Remediation{Summary: "ignore this"}, ContextNote: "public jump host",
-		Evidence: []Evidence{{Check: "net.listeners", Excerpt: "0.0.0.0:22"}, {Check: "sshd.config", Excerpt: "passwordauthentication yes"}}})
+		Evidence: []Evidence{{Observation: "net.listeners#1", Check: "net.listeners", Excerpt: "0.0.0.0:22"}, {Observation: "sshd.config#1", Check: "sshd.config", Excerpt: "passwordauthentication yes"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestStoreReportMerge(t *testing.T) {
 	}
 	// Duplicate evidence and a repeated note do not accumulate.
 	got, _ = s.Report(Candidate{ID: IDPasswordAuthEnabled, Confidence: ConfidenceHigh, ContextNote: "public jump host",
-		Evidence: []Evidence{{Check: "net.listeners", Excerpt: "0.0.0.0:22"}}})
+		Evidence: []Evidence{{Observation: "net.listeners#1", Check: "net.listeners", Excerpt: "0.0.0.0:22"}}})
 	if len(got.Evidence) != 2 || strings.Count(got.ContextNote, "public jump host") != 1 {
 		t.Errorf("duplicates accumulated: %+v", got)
 	}
@@ -155,7 +155,7 @@ func TestStoreReportMerge(t *testing.T) {
 	}
 	// A new judgement finding with a service, and text of its own.
 	got, err = s.Report(Candidate{ID: IDUnexpectedListener, Confidence: ConfidenceMedium, Service: &ServiceRef{Port: 443, Proto: "TCP"},
-		Impact: "nginx on 443 with no declared purpose", Evidence: []Evidence{{Check: "net.listeners", Excerpt: "0.0.0.0:443"}}})
+		Impact: "nginx on 443 with no declared purpose", Evidence: []Evidence{{Observation: "net.listeners#1", Check: "net.listeners", Excerpt: "0.0.0.0:443"}}})
 	if err != nil || got.Source != SourceModel || got.Impact != "nginx on 443 with no declared purpose" || got.Service.Proto != "tcp" || got.Severity != SevMedium {
 		t.Errorf("model finding: %+v %v", got, err)
 	}
@@ -164,7 +164,7 @@ func TestStoreReportMerge(t *testing.T) {
 	}
 	// A judgement id whose premise the rule confirmed is open to the model.
 	if _, err := s.Report(Candidate{ID: IDPasswordAuthExposed, Confidence: ConfidenceHigh,
-		Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
+		Evidence: []Evidence{{Observation: "sshd.config#1", Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
 		t.Errorf("premise confirmed by the rule, still rejected: %v", err)
 	}
 }
@@ -173,7 +173,7 @@ func TestStoreReportRejects(t *testing.T) {
 	sheet := storeSheet(t, check.Linux, map[string]string{"sshd.config": "passwordauthentication no\nlistenaddress 0.0.0.0:22\n"})
 	s := NewStore(Input{Sheet: sheet})
 	s.Output = outputFrom(sheet)
-	ok := Candidate{ID: IDUnexpectedListener, Confidence: ConfidenceHigh, Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}
+	ok := Candidate{ID: IDUnexpectedListener, Confidence: ConfidenceHigh, Evidence: []Evidence{{Observation: "sshd.config#1", Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}
 	if _, err := s.Report(ok); err != nil {
 		t.Fatalf("the baseline candidate must be valid: %v", err)
 	}
@@ -214,13 +214,13 @@ func TestStoreReportRejects(t *testing.T) {
 	// is absent from this capture, so the model may report it from evidence
 	// of its own.
 	if _, err := s.Report(Candidate{ID: IDRootLoginEnabled, Confidence: ConfidenceLow,
-		Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
+		Evidence: []Evidence{{Observation: "sshd.config#1", Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
 		t.Errorf("not-assessed rule id rejected: %v", err)
 	}
 	// A valid custom finding is capped at medium and flagged.
 	got, err := s.Report(Candidate{ID: "custom:vendor-agent", Confidence: ConfidenceHigh, ProposedSeverity: "critical",
 		Title: "Vendor agent", Impact: "x", Remediation: &Remediation{Summary: "y"},
-		Evidence: []Evidence{{Check: "sshd.config", Excerpt: "passwordauthentication no"}}})
+		Evidence: []Evidence{{Observation: "sshd.config#1", Check: "sshd.config", Excerpt: "passwordauthentication no"}}})
 	if err != nil || !got.Custom || got.Severity != SevMedium || got.SeverityBase != SevMedium || got.Category != CategoryCustom {
 		t.Errorf("custom: %+v %v", got, err)
 	}

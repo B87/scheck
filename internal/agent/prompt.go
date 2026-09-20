@@ -27,7 +27,7 @@ What you have:
 - tools: run_check runs one catalog check by id with typed parameters; read_file reads one file under the allowed prefixes; report_finding records a finding. Every command scheck can run is in the run_check menu; there is no way to run anything else.
 
 How to work:
-- Ground every finding in observed evidence and cite the check id with a verbatim excerpt of its output. A finding whose excerpt is not in the cited check's output is rejected.
+- Ground every finding in observed evidence and cite its exact observation reference with a verbatim excerpt of that observation's output. Check IDs identify definitions, not evidence. Repeated invocations keep distinct references; an excerpt from another observation is rejected.
 - Never assert the absence of a problem from an unavailable or denied check or from a [REDACTED:...] or [TRUNCATED:...] span. Report confidence: low and say what could not be checked.
 - Prefer a few high-signal findings over exhaustive noise. Correlate across facts: password authentication and a public listener together mean more than either alone. No finding without a concrete remediation.
 - Classify, do not grade: choose the finding id from the catalog (or custom:<slug> for something genuinely outside it) and supply the evidence. scheck assigns severity from its own table and from operator context; a severity you send is ignored.
@@ -68,7 +68,7 @@ func factsBlock(sheet *baseline.FactSheet) string {
 		if r.Reason != "" {
 			fmt.Fprintf(&b, " (%s)", r.Reason)
 		}
-		b.WriteString("\n")
+		fmt.Fprintf(&b, "\nobservation: %s\n", r.Observation)
 		if r.Status == runner.StatusOK {
 			fmt.Fprintf(&b, "reading: %s\n", check.Summary(c, r.Parsed))
 			out := strings.TrimRight(r.Raw, "\n")

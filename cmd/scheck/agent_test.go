@@ -79,7 +79,7 @@ func schemaFor(t *testing.T) *jsonschema.Schema {
 func TestAgentRunProducesFullReport(t *testing.T) {
 	tr := mock.Transcript{Turns: []mock.Turn{
 		{ToolCalls: []mock.Call{{ID: "c1", Name: "read_file", Input: json.RawMessage(`{"path":"/etc/hosts","rationale":"r"}`)}}},
-		{ToolCalls: []mock.Call{{ID: "c2", Name: "report_finding", Input: json.RawMessage(`{"id":"net.unexpected_listener","confidence":"medium","service":{"port":22,"proto":"tcp"},"evidence":[{"check":"net.listeners","excerpt":"0.0.0.0:22"}]}`)}}},
+		{ToolCalls: []mock.Call{{ID: "c2", Name: "report_finding", Input: json.RawMessage(`{"id":"net.unexpected_listener","confidence":"medium","service":{"port":22,"proto":"tcp"},"evidence":[{"observation":"net.listeners#1","excerpt":"0.0.0.0:22"}]}`)}}},
 		{Text: "sshd is the only listener; nothing else to report.", Usage: &llm.Usage{Input: 1200, Output: 80}},
 	}}
 	sess, sheet := agentSession(t, tr, "json", nil)

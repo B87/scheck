@@ -22,7 +22,7 @@ once the live record exists.
 **0.0.1 scope revision (2026-09-20):** M2 includes full-request context limits,
 real-model quality/adversarial release gates and configuration usability (M2.2a).
 M2.6a adds pre-release evidence and execution hardening before M2.7's qualifying live
-runs; it is planned, not implemented. M4.5 captures collection behavior as well as reports
+runs; it is implemented in the working tree. M4.5 captures collection behavior as well as reports
 to support the later pack extraction in [0.0.2](ROADMAP-0.0.2.md).
 Existing profile behavior, regression coverage, acceptance validation and the GitHub
 release process complete the 0.0.1 scope.
@@ -888,16 +888,16 @@ against this machine, asserts the report shape, cost under $0.50 and no denied
 model-initiated check, but needs `SCHECK_LIVE=1` and a credential and was not
 executed in this environment. Acceptance criterion 7 is unrecorded until it is.
 
-### M2.6a — pre-release evidence and execution hardening (planned)
+### M2.6a — pre-release evidence and execution hardening ✅
 
 **Depends on:** the implemented M2 tool loop. Complete before M2.7's qualifying live
 evaluation and before freezing the first published report contract. Historical slice
 IDs remain unchanged; the sequence is M2.6 → M2.6a → M2.7 live evaluation.
 
 **Outcome:** repeated parameterized checks retain independently citable evidence, and
-every caller asks the runner to execute a catalog ID. These address current behavior:
-the agent currently indexes results by check ID, so a second `text.cat` read replaces
-the first result used for citation validation. Neither fix depends on application packs.
+every caller asks the runner to execute a catalog ID. Previously, the agent indexed
+results by check ID, so a second `text.cat` read replaced the first result used for
+citation validation. Neither fix depends on application packs.
 
 **Deliver:**
 
@@ -943,12 +943,35 @@ changed prompt/tool contract.
 the contribution API remain in 0.0.2, informed by M5.0's application brief. This slice
 does not introduce a plugin framework or parameterized application planning.
 
-**Spec work:** §2–§3, §4.5, §5.7–§5.8, §7.3–§7.6 and §11. Update the spec, schema and
-implementation together when implementing this slice; this roadmap is a planned change.
+**Implementation and validation (2026-09-20, working tree):** the runner owns an
+immutable observation store shared by baseline, agent and report construction. Exact
+references flow through tools, findings, coverage, audit and schema 1.5 reports;
+`RunCheck` is removed. The spec, prompt, offline transcripts and golden reports are
+updated together. `make check` passes, including the offline evaluation harness.
+SSH integration passes for Ubuntu/Fedora reports with empty filesystem diffs, the
+five-shell canary matrix, exit-code handling and sudoers/elevation. A comparison with
+the pre-change commit on all three host fixtures found identical command traces,
+finding content and coverage after excluding the new observation fields. Text golden
+diffs contain reference labels and their resulting line wraps only.
+
+Run the offline two-file demo with:
+
+```sh
+go test ./internal/agent -run TestObservationCitationsEndToEnd -v
+```
+
+It verifies both citations after the second read, rejects wrong/unknown/unusable
+observations, checks persistence and default/opt-in JSON, and asserts redaction across
+model requests, reports, audit and persistence. Runner tests cover identical requests
+with changed output, immutable copies, and redacted denied requests. A baseline test
+proves a modified plan cannot supply executable argv. No live inference was run for
+this slice; qualifying M2.7 runs must use the changed prompt/tool contract.
+
+**Spec:** §2–§3, §4.5, §5.7–§5.8, §7.3–§7.6 and §11.
 
 ### M2.7 — phase-2-earns-its-cost evaluation ⏳ (harness landed; repeated live evaluation pending)
 
-**Release-evaluation prerequisite:** complete M2.6a first. Record the resulting prompt/tool
+**Release-evaluation prerequisite:** M2.6a is implemented and validated in the working tree. Record the resulting prompt/tool
 contract and build versions in the qualifying repeated runs. Preserve the frozen pass
 criteria; a preliminary run on the earlier contract does not satisfy this prerequisite.
 
@@ -998,6 +1021,35 @@ $0.0079). Read literally, the criteria say 0.0.1 ships posture rules only; the
 decision — delete the loop, keep single-pass, or change what the model is told and
 measure again without loosening a criterion — is open, and 0.0.1 cannot be signed
 off until it is made and recorded.
+
+**Next steps (2026-09-20), in order.** Every live record so far is one-repeat or
+predates M2.6a's prompt/tool contract; the first live run on that contract
+(`sp-bb2762146136`, one repeat) accepted observation-referenced citations end to end
+and told the same story as the three-repeat record. What follows is the path to a
+decision, without loosening a criterion:
+
+1. **Find out whether the loop is model-limited.** Run the three follow-up cases only
+   (`scheck eval --cases linux-cron-fetch,linux-sshd-include,linux-unit-in-tmp
+   --no-pairs --repeat 3`) with `gpt-5.6-luna` and with a stronger model. Luna made no
+   tool call in 9 of 9 follow-up agent runs. If a stronger model investigates and
+   resolves, the loop stays behind model choice and the gate is re-run with that model;
+   if neither investigates, the loop is deleted as the criteria say (a deletion, not a
+   redesign).
+2. **Give the model a channel for a ruled-out hypothesis.** Three contracts in a row
+   showed it filing "checked and found in order" observations through `report_finding`
+   (an active firewall under `fw.no_firewall_active`, with a note saying it was not a
+   finding). Prose did not stop it. The smallest version is a `verdict: ruled_out`
+   field on `report_finding` that records nothing as a finding and surfaces in the
+   closing summary; §5.9 describes the fuller track. This is a tool-contract change and
+   a new prompt version.
+3. **Record the two label decisions** before the next gate run: whether third-party
+   launch daemons on the recorded clean Mac count as unexpected persistence, and
+   whether a declared listener the grader takes to `info` counts as a false positive.
+   Either answer is a label decision written into `testdata/eval` and
+   `docs/eval/phase2-results.md`, not a change to the criteria file.
+4. **Run the gate at three repeats** on the resulting contract, with `make live`, and
+   append the record. That record decides M2: keep the loop, keep single-pass only, or
+   ship posture rules only.
 
 **Validation of the harness.** `make check` green. `internal/eval` asserts the suite
 meets the minimums, that every case's rules arm produces exactly the rule findings its

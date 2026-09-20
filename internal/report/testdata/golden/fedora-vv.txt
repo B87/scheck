@@ -5,7 +5,8 @@ host.id f7e47c01e36d… · kernel 7.0.12-linuxkit · profile baseline · mode fa
 
 Findings (1)
   low       Software updates are pending [updates.pending]
-            evidence  pkg.dnf_check_update: name=audit-libs.aarch64 version=4.0.3-1.fc40 (+36 more)
+            evidence  pkg.dnf_check_update#1: name=audit-libs.aarch64 version=4.0.3-1.fc40 (+36
+                      more)
             fix       Review the pending updates and apply them with the host's package manager.
             impact    Published fixes, including security fixes, are available but not installed.
                       How serious that is depends on which packages are behind.

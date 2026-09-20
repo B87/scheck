@@ -9,11 +9,12 @@ import (
 
 // Fact is one check's entry in the envelope's `facts` block.
 type Fact struct {
-	Status     string `json:"status"` // ok | unavailable | denied
-	ReasonCode string `json:"reason_code,omitempty"`
-	Attempted  bool   `json:"attempted"`
-	Stderr     string `json:"-"`
-	Reason     string `json:"reason,omitempty"`
+	Observation string `json:"observation,omitempty"`
+	Status      string `json:"status"` // ok | unavailable | denied
+	ReasonCode  string `json:"reason_code,omitempty"`
+	Attempted   bool   `json:"attempted"`
+	Stderr      string `json:"-"`
+	Reason      string `json:"reason,omitempty"`
 	// Summary is the one-line human reading of this fact: the same string on
 	// the screen, in the JSON and (from phase 2) in the model's prompt
 	// (docs/SPEC.md §7.4, §7.6).
@@ -35,15 +36,7 @@ type Fact struct {
 func FactsFrom(sheet *baseline.FactSheet) map[string]Fact {
 	out := make(map[string]Fact, len(sheet.Results))
 	for id, r := range sheet.Results {
-		f := Fact{Status: string(r.Status), Reason: r.Reason, Truncated: r.Truncated,
-			Redactions: r.Redactions, Elevated: r.Elevated, DurationMS: r.Duration.Milliseconds()}
-		f.ReasonCode, f.Attempted = r.ReasonCode, r.Attempted
-		f.Output, f.Stderr = r.Raw, r.Stderr
-		if r.Status == runner.StatusOK {
-			f.Parsed = r.Parsed
-		}
-		c, _ := check.Lookup(id, sheet.Platform)
-		f.Summary = Summarize(c, f)
+		f := factFrom(r, sheet.Platform)
 		out[id] = f
 	}
 	return out
@@ -60,4 +53,48 @@ func Summarize(c check.Check, f Fact) string {
 		return sanitize(f.Reason)
 	}
 	return sanitize(check.Summary(c, f.Parsed))
+}
+
+// Observation describes one invocation; Check is the request and RanAs the
+// resolved catalog definition (possibly a metadata substitution). Argv exists
+// only after typed binding; Attempted alone says whether execution was attempted.
+type Observation struct {
+	Fact
+	Check      string            `json:"check"`
+	RanAs      string            `json:"ran_as,omitempty"`
+	Params     map[string]string `json:"params,omitempty"`
+	Argv       []string          `json:"argv,omitempty"`
+	Occurrence int               `json:"occurrence"`
+}
+
+// observationsFrom builds the envelope's `observations` map. It carries
+// each invocation's metadata, outcome and summary, not its parsed value:
+// for a baseline check that would duplicate `facts`, and for a file read
+// (a raw parser) it would be the whole capture, which default JSON and
+// persistence omit by policy (docs/SPEC.md §7.4). Output stays on the
+// struct for the opt-in evidence writer.
+func observationsFrom(sheet *baseline.FactSheet) map[string]Observation {
+	out := map[string]Observation{}
+	for _, r := range sheet.Observations.All() {
+		f := factFrom(r, sheet.Platform)
+		f.Parsed = nil
+		out[r.Observation] = Observation{Fact: f, Check: r.CheckID, RanAs: r.RanAs, Params: r.Params, Argv: r.Argv, Occurrence: r.Occurrence}
+	}
+	return out
+}
+
+func factFrom(r runner.Result, platform check.Platform) Fact {
+	f := Fact{Observation: r.Observation, Status: string(r.Status), Reason: r.Reason, Truncated: r.Truncated,
+		Redactions: r.Redactions, Elevated: r.Elevated, DurationMS: r.Duration.Milliseconds(),
+		ReasonCode: r.ReasonCode, Attempted: r.Attempted, Output: r.Raw, Stderr: r.Stderr}
+	if r.Status == runner.StatusOK {
+		f.Parsed = r.Parsed
+	}
+	id := r.RanAs
+	if id == "" {
+		id = r.CheckID
+	}
+	c, _ := check.Lookup(id, platform)
+	f.Summary = Summarize(c, f)
+	return f
 }

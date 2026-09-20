@@ -46,6 +46,7 @@ func Evaluate(in Input) Result {
 		a := Assessment{Finding: rule.Finding, Check: rule.Check}
 		v := evalRule(rule, platform, disabled, in.Sheet)
 		a.Status, a.Reason = v.Status, v.Reason
+		a.Observation = in.Sheet.Results[rule.Check].Observation
 		res.Assessments = append(res.Assessments, a)
 		if v.Status != Matched {
 			continue
@@ -54,7 +55,7 @@ func Evaluate(in Input) Result {
 		if !ok {
 			continue // ValidateRules makes this unreachable in a built binary
 		}
-		ev := Evidence{Check: rule.Check, Excerpt: v.Excerpt}
+		ev := Evidence{Observation: a.Observation, Check: rule.Check, Excerpt: v.Excerpt}
 		if i, seen := byID[rule.Finding]; seen {
 			res.Findings[i].Evidence = appendEvidence(res.Findings[i].Evidence, ev)
 			continue

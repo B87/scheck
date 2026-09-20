@@ -117,7 +117,7 @@ mode. `sudoers` emits a text fragment and explicitly rejects `--format json`.
 
 Discovery JSON and run reports are different document kinds. A run report has
 `host`, `run`, `facts`, `assessments` and `findings`; discovery has `kind` and
-`checks`. The current run schema version is `1.4`. Each discovery check also lists
+`checks`. The current run schema version is `1.5`. Each discovery check also lists
 `posture_rules`: the findings that depend on that check, so a skipped check tells you
 which conclusions went unassessed. Preserve argv as an array when inspecting discovery
 output, rather than splitting a human-readable command string.

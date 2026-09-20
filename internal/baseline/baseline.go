@@ -12,9 +12,10 @@ import (
 
 // FactSheet is the ordered outcome of phase 1.
 type FactSheet struct {
-	Platform check.Platform
-	Order    []string // check ids in execution order
-	Results  map[string]runner.Result
+	Observations *runner.Observations
+	Platform     check.Platform
+	Order        []string // check ids in execution order
+	Results      map[string]runner.Result
 	// Incomplete is set when the run context ended before every check ran.
 	Incomplete bool
 }
@@ -52,13 +53,13 @@ func Plan(p check.Platform, disabled []string) []check.Check {
 // Run executes plan sequentially. It stops early when ctx ends and marks the
 // sheet incomplete; every check that did not run is absent from Results.
 func Run(ctx context.Context, r *runner.Runner, plan []check.Check, progress func(runner.Result)) *FactSheet {
-	fs := &FactSheet{Platform: r.Target.Platform(), Results: map[string]runner.Result{}}
+	fs := &FactSheet{Observations: r.Observations(), Platform: r.Target.Platform(), Results: map[string]runner.Result{}}
 	for _, c := range plan {
 		if ctx.Err() != nil {
 			fs.Incomplete = true
 			break
 		}
-		res := r.RunCheck(ctx, c, nil)
+		res := r.Run(ctx, c.ID, nil)
 		fs.Order = append(fs.Order, c.ID)
 		fs.Results[c.ID] = res
 		if progress != nil {

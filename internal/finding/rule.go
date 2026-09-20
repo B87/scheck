@@ -32,10 +32,11 @@ const (
 // Assessment is one rule's coverage record: whether it could be evaluated at
 // all, and why. Assessments are not findings and never trigger exit 1.
 type Assessment struct {
-	Finding string `json:"finding"`
-	Check   string `json:"check"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason"`
+	Observation string `json:"observation,omitempty"`
+	Finding     string `json:"finding"`
+	Check       string `json:"check"`
+	Status      string `json:"status"`
+	Reason      string `json:"reason"`
 }
 
 // Verdict is a predicate's reading of one fact.

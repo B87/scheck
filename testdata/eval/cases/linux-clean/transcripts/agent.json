@@ -1,7 +1,7 @@
 {
   "turns": [
     {"tool_calls": [{"id": "c1", "name": "report_finding", "input": {"id": "fw.no_firewall_active", "confidence": "low",
-      "evidence": [{"check": "fw.ufw", "excerpt": "Status: active"}]}}]},
+      "evidence": [{"observation": "fw.ufw#1", "excerpt": "Status: active"}]}}]},
     {"text": "reported (this scripted transcript deliberately files a false positive so the harness counts one)", "expect": {"tool_results": ["c1"]}}
   ]
 }

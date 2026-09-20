@@ -18,10 +18,10 @@ import (
 // loop one path and severity in code.
 type Store struct {
 	Grader Grader
-	// Output returns the redacted output of a check that ran in this run,
+	// Output resolves one immutable observation from this run,
 	// so a candidate's evidence excerpt can be validated against what the
 	// check actually said. nil accepts no model evidence.
-	Output func(checkID string) (string, bool)
+	Output func(observation string) (runner.Result, bool)
 
 	sheet       Input
 	findings    []Finding
@@ -99,23 +99,23 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 		return f, fmt.Errorf("%w: confidence must be high|medium|low, got %q", ErrInvalid, c.Confidence)
 	}
 	if len(c.Evidence) == 0 {
-		return f, fmt.Errorf("%w: at least one evidence entry {check, excerpt} is required", ErrInvalid)
+		return f, fmt.Errorf("%w: at least one evidence entry {observation, excerpt} is required", ErrInvalid)
 	}
 	for i, ev := range c.Evidence {
-		if ev.Check == "" || strings.TrimSpace(ev.Excerpt) == "" {
-			return f, fmt.Errorf("%w: evidence[%d] needs both check and excerpt", ErrInvalid, i)
+		if ev.Observation == "" || strings.TrimSpace(ev.Excerpt) == "" {
+			return f, fmt.Errorf("%w: evidence[%d] needs both observation and excerpt", ErrInvalid, i)
 		}
 		if s.Output == nil {
 			return f, fmt.Errorf("%w: evidence[%d]: no check output is available to validate against", ErrInvalid, i)
 		}
-		out, ok := s.Output(ev.Check)
-		if !ok {
-			return f, fmt.Errorf("%w: evidence[%d]: check %q did not run in this session; cite a check whose output you have seen", ErrInvalid, i, ev.Check)
+		out, ok := s.Output(ev.Observation)
+		if !ok || out.Status != runner.StatusOK || (ev.Check != "" && ev.Check != out.CheckID) {
+			return f, fmt.Errorf("%w: evidence[%d]: observation %q has no usable output in this session", ErrInvalid, i, ev.Observation)
 		}
-		if !excerptIn(ev.Excerpt, out) {
-			return f, fmt.Errorf("%w: evidence[%d]: excerpt is not in the output of %s; quote the output verbatim", ErrInvalid, i, ev.Check)
+		if !excerptIn(ev.Excerpt, out.Raw) {
+			return f, fmt.Errorf("%w: evidence[%d]: excerpt is not in the output of %s; quote the output verbatim", ErrInvalid, i, ev.Observation)
 		}
-		f.Evidence = appendEvidence(f.Evidence, Evidence{Check: ev.Check, Excerpt: strings.TrimSpace(ev.Excerpt)})
+		f.Evidence = appendEvidence(f.Evidence, Evidence{Observation: ev.Observation, Check: out.CheckID, Excerpt: strings.TrimSpace(ev.Excerpt)})
 	}
 	if c.Service != nil {
 		if c.Service.Port < 1 || c.Service.Port > 65535 {
@@ -315,6 +315,7 @@ func (s *Store) expectedMissing() ([]Finding, *Assessment) {
 		return nil, a
 	}
 	r, ran := s.sheet.Sheet.Results[listenersCheck]
+	a.Observation = r.Observation
 	switch {
 	case !ran:
 		a.Status, a.Reason = NotAssessed, "check-not-run"
@@ -344,7 +345,7 @@ func (s *Store) expectedMissing() ([]Finding, *Assessment) {
 		if listening[key] {
 			continue
 		}
-		ev := Evidence{Check: listenersCheck, Excerpt: fmt.Sprintf("no listener on %s; %s declares %s (%s)", key, svc.Source, key, svc.Purpose)}
+		ev := Evidence{Observation: r.Observation, Check: listenersCheck, Excerpt: fmt.Sprintf("no listener on %s; %s declares %s (%s)", key, svc.Source, key, svc.Purpose)}
 		if f == nil {
 			findings = append(findings, Finding{
 				ID: def.ID, Title: def.Title, Category: def.Category,

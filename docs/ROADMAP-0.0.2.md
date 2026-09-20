@@ -28,7 +28,7 @@ inference). Operational features remain in [0.0.4](ROADMAP-0.0.4.md); bounded as
 remains [research](ROADMAP-RESEARCH.md). Historical milestone IDs are retained.
 Planning may proceed while 0.0.1 gates are open; 0.0.2 publication requires the 0.0.1
 release gates to be satisfied first. Product versions and report schema versions differ.
-The planned M2.6a slice in [0.0.1](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-planned)
+The implemented M2.6a slice in [0.0.1](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-)
 establishes observation references and ID-only runner execution; M4.5 records the host
 behavior this release must preserve. The M5 slices build on those contracts.
 
@@ -300,7 +300,7 @@ single “fact” by joining service, process and listener outputs to evade that
 This slice adds no generic dependency scheduler or pack-supplied execution callbacks.
 
 **Observation identity:** reuse the store and citation contract established by
-[M2.6a](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-planned).
+[M2.6a](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-).
 Application binding adds observations to the same store as baseline and agent calls;
 it does not introduce another identity scheme or a map keyed only by check ID.
 Application attribution references the binding evidence as well as the condition's

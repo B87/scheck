@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/report-schema.json",
   "title": "scheck run envelope",
-  "description": "SPEC.md §7.4, schema 1.4. Development schema; compatibility starts at the first GitHub release.",
+  "description": "SPEC.md §7.4, schema 1.5. Development schema; compatibility starts at the first GitHub release.",
   "type": "object",
-  "required": ["schema_version", "host", "run", "facts", "assessments", "findings"],
+  "required": ["schema_version", "host", "run", "facts", "observations", "assessments", "findings"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
@@ -91,9 +91,10 @@
       "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
       "additionalProperties": {
         "type": "object",
-        "required": ["status", "attempted", "summary", "duration_ms"],
+        "required": ["observation", "status", "attempted", "summary", "duration_ms"],
         "additionalProperties": false,
         "properties": {
+          "observation": { "type": "string", "minLength": 1 },
           "status": { "enum": ["ok", "unavailable", "denied"] },
           "reason": { "type": "string" },
           "summary": { "type": "string" },
@@ -112,6 +113,114 @@
         }
       }
     },
+    "observations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "status",
+          "attempted",
+          "summary",
+          "duration_ms",
+          "observation",
+          "check",
+          "occurrence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "unavailable",
+              "denied"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "reason_code": {
+            "enum": [
+              "unknown_check",
+              "invalid_params",
+              "path_denied",
+              "metadata_unavailable",
+              "requires_elevation",
+              "command_missing",
+              "check_timeout",
+              "run_timeout",
+              "canceled",
+              "exec_error",
+              "sudo_refused",
+              "exit_error",
+              "parse_error",
+              "extract_error"
+            ]
+          },
+          "attempted": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "stdout",
+              "stderr"
+            ],
+            "properties": {
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              }
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "redactions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "elevated": {
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "check": {
+            "type": "string"
+          },
+          "ran_as": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "occurrence": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
     "assessments": {
       "type": "array",
       "description": "SPEC.md §7.5: one entry per selected posture rule. Not a finding; never sets the exit code.",
@@ -120,6 +229,7 @@
         "required": ["finding", "check", "status", "reason"],
         "additionalProperties": false,
         "properties": {
+          "observation": { "type": "string", "minLength": 1 },
           "finding": { "type": "string" },
           "check": { "type": "string" },
           "status": { "enum": ["matched", "not_matched", "not_applicable", "not_assessed"] },
@@ -172,6 +282,7 @@
               "additionalProperties": false,
               "properties": {
                 "check": { "type": "string" },
+                "observation": { "type": "string", "minLength": 1 },
                 "excerpt": { "type": "string" }
               }
             }

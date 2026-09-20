@@ -3,10 +3,10 @@ scheck test — mac-fixture.local — macOS 26.6.2 (25G83) — fixture, elevatio
 
 Findings (2)
   medium    The macOS application firewall is disabled [fw.app_firewall_disabled]
-            evidence  fw.global: Firewall is disabled. (State = 0)
+            evidence  fw.global#1: Firewall is disabled. (State = 0)
             fix       Turn the application firewall on.
   low       Software updates are pending [updates.pending]
-            evidence  pkg.softwareupdate: name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)
+            evidence  pkg.softwareupdate#1: name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)
             fix       Review the pending updates and apply them with the host's package manager.
 
 Not assessed (4)

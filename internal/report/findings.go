@@ -42,8 +42,12 @@ func (t *textReport) findings() {
 			t.line(l)
 		}
 		for _, e := range f.Evidence {
+			ref := e.Observation
+			if ref == "" {
+				ref = e.Check
+			} // operator context has no target observation
 			t.hang(indent+"evidence  ", indent+"          ",
-				e.Check+": "+sanitize(inline(e.Excerpt)))
+				sanitize(ref)+": "+sanitize(inline(e.Excerpt)))
 		}
 		if f.Status == finding.StatusAccepted {
 			t.hang(indent+"accepted  ", indent+"          ", sanitize(f.AcceptedReason)+" (excluded from the exit code)")

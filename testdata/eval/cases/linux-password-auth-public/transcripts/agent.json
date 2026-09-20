@@ -1,7 +1,7 @@
 {
   "turns": [
     {"tool_calls": [{"id": "c1", "name": "report_finding", "input": {"id": "sshd.password_auth_exposed", "confidence": "high",
-      "evidence": [{"check": "sshd.config", "excerpt": "passwordauthentication yes"}, {"check": "net.listeners", "excerpt": "0.0.0.0:22"}]}}]},
+      "evidence": [{"observation": "sshd.config#1", "excerpt": "passwordauthentication yes"}, {"observation": "net.listeners#1", "excerpt": "0.0.0.0:22"}]}}]},
     {"text": "Password authentication is on and sshd listens on every address.", "expect": {"tool_results": ["c1"]}}
   ]
 }

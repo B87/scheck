@@ -26,12 +26,24 @@ func WriteJSONEvidence(w io.Writer, env Envelope, include bool) error {
 			Evidence *evidence `json:"evidence,omitempty"`
 		}{f, ev}
 	}
+	observations := make(map[string]any, len(env.Observations))
+	for ref, o := range env.Observations {
+		var ev *evidence
+		if include && (o.Attempted || o.Status == "ok") {
+			ev = &evidence{o.Output, o.Stderr}
+		}
+		observations[ref] = struct {
+			Observation
+			Evidence *evidence `json:"evidence,omitempty"`
+		}{o, ev}
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(struct {
 		Envelope
-		Facts map[string]any `json:"facts"`
-	}{env, facts})
+		Facts        map[string]any `json:"facts"`
+		Observations map[string]any `json:"observations"`
+	}{env, facts, observations})
 }
 
 func short(id string) string {

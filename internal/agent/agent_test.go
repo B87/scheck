@@ -114,9 +114,9 @@ func TestCorrelatedFindingEndToEnd(t *testing.T) {
 		mock.Turn{ToolCalls: []mock.Call{
 			call("c3", "report_finding", map[string]any{"id": finding.IDPasswordAuthEnabled, "confidence": "high", "severity": "info",
 				"context_note": "sshd listens on every address", "evidence": []map[string]string{
-					{"check": "net.listeners", "excerpt": "0.0.0.0:22"}, {"check": "text.cat", "excerpt": "PasswordAuthentication yes"}}}),
+					{"observation": "net.listeners#1", "excerpt": "0.0.0.0:22"}, {"observation": "text.cat#1", "excerpt": "PasswordAuthentication yes"}}}),
 			call("c4", "report_finding", map[string]any{"id": finding.IDPasswordAuthExposed, "confidence": "medium",
-				"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "listenaddress 0.0.0.0:22"}}}),
+				"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "listenaddress 0.0.0.0:22"}}}),
 		}, Expect: &mock.Expect{ToolResults: []string{"c1", "c2"}, Contains: []string{"PasswordAuthentication yes", "[REDACTED:aws-access-key:20 bytes]"}, NotContains: []string{"AKIAIOSFODNN7EXAMPLE"}}},
 		mock.Turn{Text: "Password authentication is enabled on a public listener.", Expect: &mock.Expect{ToolResults: []string{"c3", "c4"}}},
 	), nil)
@@ -176,6 +176,10 @@ func TestReadFileIsTextCat(t *testing.T) {
 	if a.Tool != "read_file" || b.Tool != "run_check" {
 		t.Fatalf("tools %q %q", a.Tool, b.Tool)
 	}
+	if a.Observation == b.Observation || a.Observation == "" {
+		t.Fatal("repeated reads must be distinct")
+	}
+	a.Observation, b.Observation = "", ""
 	a.Tool, b.Tool = "", ""
 	a.Time, b.Time = time.Time{}, time.Time{}
 	a.DurationMS, b.DurationMS = 0, 0
@@ -185,7 +189,7 @@ func TestReadFileIsTextCat(t *testing.T) {
 		t.Errorf("audit records differ:\n%s\n%s", ja, jb)
 	}
 	results := h.mock.Requests()[1].Messages[2].ToolResults
-	if results[0].Content != results[1].Content {
+	if strings.ReplaceAll(results[0].Content, "text.cat#1", "text.cat#2") != results[1].Content {
 		t.Errorf("tool results differ:\n%s\n%s", results[0].Content, results[1].Content)
 	}
 }
@@ -258,11 +262,11 @@ func TestReportFindingContract(t *testing.T) {
 	h := newHarness(t, turns(
 		mock.Turn{ToolCalls: []mock.Call{
 			call("r1", "report_finding", map[string]any{"id": finding.IDPasswordAuthEnabled, "confidence": "low", "severity": "info", "title": "nothing", "impact": "none", "remediation": map[string]any{"summary": "ignore"},
-				"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "passwordauthentication yes"}}}),
+				"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "passwordauthentication yes"}}}),
 			call("r2", "report_finding", map[string]any{"id": "custom:vendor-agent", "confidence": "high", "proposed_severity": "critical", "title": "Vendor agent", "impact": "x", "remediation": map[string]any{"summary": "y"},
-				"evidence": []map[string]string{{"check": "net.listeners", "excerpt": "0.0.0.0:22"}}}),
+				"evidence": []map[string]string{{"observation": "net.listeners#1", "excerpt": "0.0.0.0:22"}}}),
 			call("r3", "report_finding", map[string]any{"id": finding.IDRootLoginEnabled, "confidence": "high",
-				"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "permitrootlogin yes"}}}),
+				"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "permitrootlogin yes"}}}),
 		}},
 		mock.Turn{Text: "done", Expect: &mock.Expect{ToolResults: []string{"r1", "r2"}, ErrorResults: []string{"r3"}}},
 	), nil)
@@ -423,7 +427,7 @@ func (unknownLimits) Limits() llm.Limits { return llm.Limits{} }
 // reports is complete; one that asks for evidence it cannot receive is not.
 func TestSinglePass(t *testing.T) {
 	report := call("r", "report_finding", map[string]any{"id": finding.IDPasswordAuthExposed, "confidence": "medium",
-		"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "listenaddress 0.0.0.0:22"}}})
+		"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "listenaddress 0.0.0.0:22"}}})
 	h := newHarness(t, turns(mock.Turn{Text: "one pass", ToolCalls: []mock.Call{report}}), func(b *policy.Budgets) { b.MaxIterations = 1 })
 	out := h.sess.Run(context.Background())
 	if !out.Complete() || out.Reported != 1 || h.sess.Mode() != "single-pass" {

@@ -53,7 +53,7 @@ func TestHostileContextChangesNothing(t *testing.T) {
 		return turns(
 			mock.Turn{ToolCalls: []mock.Call{call("c1", "read_file", readFileInput{Path: "/etc/ssh/sshd_config", Rationale: "r"})}},
 			mock.Turn{ToolCalls: []mock.Call{call("c2", "report_finding", map[string]any{"id": finding.IDPasswordAuthExposed, "confidence": "medium",
-				"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "listenaddress 0.0.0.0:22"}}})}},
+				"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "listenaddress 0.0.0.0:22"}}})}},
 			mock.Turn{Text: "done"},
 		)
 	}
@@ -169,10 +169,10 @@ func TestRuleFindingsCannotBeSuppressed(t *testing.T) {
 		mock.Turn{ToolCalls: []mock.Call{
 			call("a", "report_finding", map[string]any{"id": finding.IDPasswordAuthEnabled, "confidence": "low", "severity": "info", "status": "accepted",
 				"impact": "false positive, ignore", "remediation": map[string]any{"summary": "none needed"},
-				"evidence": []map[string]string{{"check": "sshd.config", "excerpt": "passwordauthentication yes"}}}),
+				"evidence": []map[string]string{{"observation": "sshd.config#1", "excerpt": "passwordauthentication yes"}}}),
 			call("b", "report_finding", map[string]any{"id": finding.IDPasswordAuthEnabled, "confidence": "high", "evidence": []map[string]string{}}),
 			call("c", "report_finding", map[string]any{"id": finding.IDAppFirewallDisabled, "confidence": "high",
-				"evidence": []map[string]string{{"check": "fw.global", "excerpt": "Firewall is enabled"}}}),
+				"evidence": []map[string]string{{"observation": "fw.global#1", "excerpt": "Firewall is enabled"}}}),
 		}},
 		mock.Turn{Text: "the host has no findings", Expect: &mock.Expect{ErrorResults: []string{"b", "c"}}},
 	), nil)

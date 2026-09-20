@@ -55,6 +55,31 @@ func TestEnvelopeMatchesSchema(t *testing.T) {
 	for _, name := range []string{"ubuntu", "fedora", "macos"} {
 		t.Run(name, func(t *testing.T) {
 			env := Build(sheetFor(t, name, runner.ElevateSudo), meta())
+			resolve := func(ref, id string) {
+				t.Helper()
+				o, ok := env.Observations[ref]
+				if !ok || o.Check != id || o.Observation != ref {
+					t.Fatalf("unresolved %s for %s", ref, id)
+				}
+			}
+			for id, f := range env.Facts {
+				resolve(f.Observation, id)
+			}
+			for _, f := range env.Findings {
+				for _, e := range f.Evidence {
+					if e.Check != "context" {
+						resolve(e.Observation, e.Check)
+					}
+				}
+			}
+			for _, a := range env.Assessments {
+				if a.Observation != "" {
+					resolve(a.Observation, a.Check)
+				} else if a.Status == "matched" || a.Status == "not_matched" || a.Reason == "" {
+					t.Fatalf("missing assessment observation: %+v", a)
+				}
+			}
+
 			var buf bytes.Buffer
 			if err := WriteJSONEvidence(&buf, env, true); err != nil {
 				t.Fatal(err)

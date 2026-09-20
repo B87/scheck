@@ -64,8 +64,9 @@ type Remediation struct {
 // Evidence is one check's contribution to a finding: the check id and the
 // excerpt that matched, already redacted by the runner.
 type Evidence struct {
-	Check   string `json:"check"`
-	Excerpt string `json:"excerpt"`
+	Observation string `json:"observation,omitempty"`
+	Check       string `json:"check"`
+	Excerpt     string `json:"excerpt"`
 }
 
 // Adjustment records one severity change and where it came from

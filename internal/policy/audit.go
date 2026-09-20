@@ -14,17 +14,18 @@ import (
 // AuditEntry is one attempted check (docs/SPEC.md §4.5). A denied call is a logged
 // line, never a silent drop.
 type AuditEntry struct {
-	Time       time.Time         `json:"time"`
-	CheckID    string            `json:"check"`
-	Params     map[string]string `json:"params,omitempty"`
-	Argv       []string          `json:"argv,omitempty"`
-	Decision   string            `json:"decision"` // run | denied:<rule> | unavailable:<reason>
-	ExitCode   *int              `json:"exit_code,omitempty"`
-	DurationMS int64             `json:"duration_ms"`
-	OutputHash string            `json:"output_sha256,omitempty"` // of the redacted output
-	Elevated   bool              `json:"elevated,omitempty"`
-	Tool       string            `json:"tool,omitempty"`      // run_check | read_file for a model-initiated call, phase 2
-	Rationale  string            `json:"rationale,omitempty"` // model-supplied, phase 2
+	Observation string            `json:"observation,omitempty"`
+	Time        time.Time         `json:"time"`
+	CheckID     string            `json:"check"`
+	Params      map[string]string `json:"params,omitempty"`
+	Argv        []string          `json:"argv,omitempty"`
+	Decision    string            `json:"decision"` // run | denied:<rule> | unavailable:<reason>
+	ExitCode    *int              `json:"exit_code,omitempty"`
+	DurationMS  int64             `json:"duration_ms"`
+	OutputHash  string            `json:"output_sha256,omitempty"` // of the redacted output
+	Elevated    bool              `json:"elevated,omitempty"`
+	Tool        string            `json:"tool,omitempty"`      // run_check | read_file for a model-initiated call, phase 2
+	Rationale   string            `json:"rationale,omitempty"` // model-supplied, phase 2
 }
 
 // Audit writes JSONL entries. A nil *Audit is valid and discards everything,
