@@ -1,0 +1,1633 @@
+{
+  "schema_version": "1.6",
+  "host": {
+    "id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+    "hostname": "21859b827686",
+    "platform": "linux",
+    "os": "Ubuntu 24.04.5 LTS",
+    "kernel": "7.0.12-linuxkit",
+    "transport": "fixture",
+    "remote_shell": "/bin/bash",
+    "canary": "n/a",
+    "elevation": "sudo"
+  },
+  "run": {
+    "started": "2026-09-20T12:00:00Z",
+    "duration_ms": 1234,
+    "status": "complete",
+    "profile": "baseline",
+    "assessment": "rules",
+    "mode": "facts",
+    "provider": null,
+    "model": null,
+    "effort": null,
+    "native": null,
+    "limits": null,
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": null
+    },
+    "context_sources": [],
+    "persisted": null,
+    "warnings": [],
+    "scheck_version": "test"
+  },
+  "assessments": [
+    {
+      "observation": "accounts.passwd_status#1",
+      "finding": "accounts.empty_password",
+      "check": "accounts.passwd_status",
+      "status": "not_matched",
+      "reason": "no-matching-record"
+    },
+    {
+      "observation": "accounts.shadow_meta#1",
+      "finding": "accounts.shadow_permissions_unexpected",
+      "check": "accounts.shadow_meta",
+      "status": "not_matched",
+      "reason": "recognized-expected-value"
+    },
+    {
+      "observation": "fs.world_writable#1",
+      "finding": "fs.world_writable_present",
+      "check": "fs.world_writable",
+      "status": "not_matched",
+      "reason": "no-matching-line"
+    },
+    {
+      "observation": "log.auditd#1",
+      "finding": "log.auditd_inactive",
+      "check": "log.auditd",
+      "status": "not_assessed",
+      "reason": "check-unavailable:exit_error"
+    },
+    {
+      "observation": "mac.sestatus#1",
+      "finding": "mac.selinux_disabled",
+      "check": "mac.sestatus",
+      "status": "not_assessed",
+      "reason": "check-unavailable:command_missing"
+    },
+    {
+      "observation": "sshd.config#1",
+      "finding": "sshd.password_auth_enabled",
+      "check": "sshd.config",
+      "status": "not_matched",
+      "reason": "recognized-other-value"
+    },
+    {
+      "observation": "sshd.config#1",
+      "finding": "sshd.root_login_enabled",
+      "check": "sshd.config",
+      "status": "not_matched",
+      "reason": "recognized-other-value"
+    },
+    {
+      "observation": "time.timedatectl#1",
+      "finding": "time.ntp_unsynced",
+      "check": "time.timedatectl",
+      "status": "not_assessed",
+      "reason": "check-unavailable:exit_error"
+    },
+    {
+      "observation": "pkg.apt_upgradable#1",
+      "finding": "updates.pending",
+      "check": "pkg.apt_upgradable",
+      "status": "not_matched",
+      "reason": "no-records"
+    },
+    {
+      "observation": "pkg.dnf_check_update#1",
+      "finding": "updates.pending",
+      "check": "pkg.dnf_check_update",
+      "status": "not_assessed",
+      "reason": "check-unavailable:command_missing"
+    },
+    {
+      "observation": "pkg.zypper_lp#1",
+      "finding": "updates.pending",
+      "check": "pkg.zypper_lp",
+      "status": "not_assessed",
+      "reason": "check-unavailable:command_missing"
+    }
+  ],
+  "findings": [],
+  "facts": {
+    "accounts.passwd": {
+      "observation": "accounts.passwd#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "22 accounts, 4 with a login shell",
+      "parsed": {
+        "kind": "accounts",
+        "items": [
+          {
+            "home": "/root",
+            "name": "root",
+            "shell": "/bin/bash",
+            "uid": "0"
+          },
+          {
+            "home": "/usr/sbin",
+            "name": "daemon",
+            "shell": "/usr/sbin/nologin",
+            "uid": "1"
+          },
+          {
+            "home": "/bin",
+            "name": "bin",
+            "shell": "/usr/sbin/nologin",
+            "uid": "2"
+          },
+          {
+            "home": "/dev",
+            "name": "sys",
+            "shell": "/usr/sbin/nologin",
+            "uid": "3"
+          },
+          {
+            "home": "/bin",
+            "name": "sync",
+            "shell": "/bin/sync",
+            "uid": "4"
+          },
+          {
+            "home": "/usr/games",
+            "name": "games",
+            "shell": "/usr/sbin/nologin",
+            "uid": "5"
+          },
+          {
+            "home": "/var/cache/man",
+            "name": "man",
+            "shell": "/usr/sbin/nologin",
+            "uid": "6"
+          },
+          {
+            "home": "/var/spool/lpd",
+            "name": "lp",
+            "shell": "/usr/sbin/nologin",
+            "uid": "7"
+          },
+          {
+            "home": "/var/mail",
+            "name": "mail",
+            "shell": "/usr/sbin/nologin",
+            "uid": "8"
+          },
+          {
+            "home": "/var/spool/news",
+            "name": "news",
+            "shell": "/usr/sbin/nologin",
+            "uid": "9"
+          },
+          {
+            "home": "/var/spool/uucp",
+            "name": "uucp",
+            "shell": "/usr/sbin/nologin",
+            "uid": "10"
+          },
+          {
+            "home": "/bin",
+            "name": "proxy",
+            "shell": "/usr/sbin/nologin",
+            "uid": "13"
+          },
+          {
+            "home": "/var/www",
+            "name": "www-data",
+            "shell": "/usr/sbin/nologin",
+            "uid": "33"
+          },
+          {
+            "home": "/var/backups",
+            "name": "backup",
+            "shell": "/usr/sbin/nologin",
+            "uid": "34"
+          },
+          {
+            "home": "/var/list",
+            "name": "list",
+            "shell": "/usr/sbin/nologin",
+            "uid": "38"
+          },
+          {
+            "home": "/run/ircd",
+            "name": "irc",
+            "shell": "/usr/sbin/nologin",
+            "uid": "39"
+          },
+          {
+            "home": "/nonexistent",
+            "name": "_apt",
+            "shell": "/usr/sbin/nologin",
+            "uid": "42"
+          },
+          {
+            "home": "/nonexistent",
+            "name": "nobody",
+            "shell": "/usr/sbin/nologin",
+            "uid": "65534"
+          },
+          {
+            "home": "/home/ubuntu",
+            "name": "ubuntu",
+            "shell": "/bin/bash",
+            "uid": "1000"
+          },
+          {
+            "home": "/",
+            "name": "systemd-network",
+            "shell": "/usr/sbin/nologin",
+            "uid": "998"
+          },
+          {
+            "home": "/run/sshd",
+            "name": "sshd",
+            "shell": "/usr/sbin/nologin",
+            "uid": "100"
+          },
+          {
+            "home": "/home/ops",
+            "name": "ops",
+            "shell": "/bin/bash",
+            "uid": "1001"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "accounts.passwd_status": {
+      "observation": "accounts.passwd_status#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "22 accounts, all locked",
+      "parsed": {
+        "kind": "passwd_status",
+        "items": [
+          {
+            "name": "root",
+            "status": "L"
+          },
+          {
+            "name": "daemon",
+            "status": "L"
+          },
+          {
+            "name": "bin",
+            "status": "L"
+          },
+          {
+            "name": "sys",
+            "status": "L"
+          },
+          {
+            "name": "sync",
+            "status": "L"
+          },
+          {
+            "name": "games",
+            "status": "L"
+          },
+          {
+            "name": "man",
+            "status": "L"
+          },
+          {
+            "name": "lp",
+            "status": "L"
+          },
+          {
+            "name": "mail",
+            "status": "L"
+          },
+          {
+            "name": "news",
+            "status": "L"
+          },
+          {
+            "name": "uucp",
+            "status": "L"
+          },
+          {
+            "name": "proxy",
+            "status": "L"
+          },
+          {
+            "name": "www-data",
+            "status": "L"
+          },
+          {
+            "name": "backup",
+            "status": "L"
+          },
+          {
+            "name": "list",
+            "status": "L"
+          },
+          {
+            "name": "irc",
+            "status": "L"
+          },
+          {
+            "name": "_apt",
+            "status": "L"
+          },
+          {
+            "name": "nobody",
+            "status": "L"
+          },
+          {
+            "name": "ubuntu",
+            "status": "L"
+          },
+          {
+            "name": "systemd-network",
+            "status": "L"
+          },
+          {
+            "name": "sshd",
+            "status": "L"
+          },
+          {
+            "name": "ops",
+            "status": "L"
+          }
+        ],
+        "partial": false
+      },
+      "elevated": true,
+      "duration_ms": 0
+    },
+    "accounts.shadow_meta": {
+      "observation": "accounts.shadow_meta#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "mode 640, owner root:shadow",
+      "parsed": {
+        "kind": "file_mode",
+        "items": [
+          {
+            "group": "shadow",
+            "mode": "640",
+            "size": "577",
+            "symbolic": "-rw-r-----",
+            "user": "root"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "disk.crypttab": {
+      "observation": "disk.crypttab#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: cat: /etc/crypttab: No such file or directory",
+      "summary": "exit 1: cat: /etc/crypttab: No such file or directory",
+      "duration_ms": 0
+    },
+    "disk.lsblk": {
+      "observation": "disk.lsblk#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "20 block devices",
+      "parsed": [
+        "NAME   TYPE FSTYPE MOUNTPOINT",
+        "nbd0   disk        ",
+        "nbd1   disk        ",
+        "nbd2   disk        ",
+        "nbd3   disk        ",
+        "nbd4   disk        ",
+        "nbd5   disk        ",
+        "nbd6   disk        ",
+        "nbd7   disk        ",
+        "vda    disk        ",
+        "`-vda1 part        /etc/resolv.conf",
+        "vdb    disk        ",
+        "nbd8   disk        ",
+        "nbd9   disk        ",
+        "nbd10  disk        ",
+        "nbd11  disk        ",
+        "nbd12  disk        ",
+        "nbd13  disk        ",
+        "nbd14  disk        ",
+        "nbd15  disk        "
+      ],
+      "duration_ms": 0
+    },
+    "fs.suid": {
+      "observation": "fs.suid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "9 SUID files",
+      "parsed": [
+        "/usr/bin/newgrp",
+        "/usr/bin/chfn",
+        "/usr/bin/mount",
+        "/usr/bin/su",
+        "/usr/bin/chsh",
+        "/usr/bin/umount",
+        "/usr/bin/gpasswd",
+        "/usr/bin/passwd",
+        "/usr/bin/sudo"
+      ],
+      "duration_ms": 0
+    },
+    "fs.world_writable": {
+      "observation": "fs.world_writable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 world-writable paths",
+      "parsed": [],
+      "duration_ms": 0
+    },
+    "fw.firewalld": {
+      "observation": "fw.firewalld#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: firewall-cmd: command not found",
+      "summary": "exit 127: bash: line 1: firewall-cmd: command not found",
+      "duration_ms": 0
+    },
+    "fw.nft": {
+      "observation": "fw.nft#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": false,
+      "reason": "not found: nft",
+      "summary": "not found: nft",
+      "duration_ms": 0
+    },
+    "fw.ufw": {
+      "observation": "fw.ufw#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: ERROR: problem running iptables: iptables v1.8.10 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)",
+      "summary": "exit 1: ERROR: problem running iptables: iptables v1.8.10 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)",
+      "elevated": true,
+      "duration_ms": 0
+    },
+    "host.hostname": {
+      "observation": "host.hostname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "21859b827686",
+      "parsed": "21859b827686\n",
+      "duration_ms": 0
+    },
+    "host.machine_id": {
+      "observation": "host.machine_id#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "ef671600129d4fc6813a00cba94421a5",
+      "parsed": "ef671600129d4fc6813a00cba94421a5\n",
+      "duration_ms": 0
+    },
+    "log.auditd": {
+      "observation": "log.auditd#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0
+    },
+    "log.journal_usage": {
+      "observation": "log.journal_usage#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Archived and active journals take up 0B in the file system.",
+      "parsed": "Archived and active journals take up 0B in the file system.\n",
+      "duration_ms": 0
+    },
+    "mac.aa_status": {
+      "observation": "mac.aa_status#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": false,
+      "reason": "not found: aa-status",
+      "summary": "not found: aa-status",
+      "duration_ms": 0
+    },
+    "mac.sestatus": {
+      "observation": "mac.sestatus#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: sestatus: command not found",
+      "summary": "exit 127: bash: line 1: sestatus: command not found",
+      "duration_ms": 0
+    },
+    "net.listeners": {
+      "observation": "net.listeners#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "2 listening sockets",
+      "parsed": {
+        "kind": "listeners",
+        "items": [
+          {
+            "address": "0.0.0.0",
+            "port": "22",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "::",
+            "port": "22",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "os.release": {
+      "observation": "os.release#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "13 settings",
+      "parsed": {
+        "bug_report_url": "https://bugs.launchpad.net/ubuntu/",
+        "home_url": "https://www.ubuntu.com/",
+        "id": "ubuntu",
+        "id_like": "debian",
+        "logo": "ubuntu-logo",
+        "name": "Ubuntu",
+        "pretty_name": "Ubuntu 24.04.5 LTS",
+        "privacy_policy_url": "https://www.ubuntu.com/legal/terms-and-policies/privacy-policy",
+        "support_url": "https://help.ubuntu.com/",
+        "ubuntu_codename": "noble",
+        "version": "24.04.5 LTS (Noble Numbat)",
+        "version_codename": "noble",
+        "version_id": "24.04"
+      },
+      "duration_ms": 0
+    },
+    "persist.cron": {
+      "observation": "persist.cron#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "25 cron entries",
+      "parsed": [
+        "/etc/crontab:# /etc/crontab: system-wide crontab",
+        "/etc/crontab:# Unlike any other crontab you don't have to run the `crontab'",
+        "/etc/crontab:# command to install the new version when you edit this file",
+        "/etc/crontab:# and files in /etc/cron.d. These files also have username fields,",
+        "/etc/crontab:# that none of the other crontabs do.",
+        "/etc/crontab:SHELL=/bin/sh",
+        "/etc/crontab:# You can also override PATH, but by default, newer versions inherit it from the environment",
+        "/etc/crontab:#PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "/etc/crontab:# Example of job definition:",
+        "/etc/crontab:# .---------------- minute (0 - 59)",
+        "/etc/crontab:# |  .------------- hour (0 - 23)",
+        "/etc/crontab:# |  |  .---------- day of month (1 - 31)",
+        "/etc/crontab:# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...",
+        "/etc/crontab:# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat",
+        "/etc/crontab:# |  |  |  |  |",
+        "/etc/crontab:# *  *  *  *  * user-name command to be executed",
+        "/etc/crontab:17 *\t* * *\troot\tcd / \u0026\u0026 run-parts --report /etc/cron.hourly",
+        "/etc/crontab:25 6\t* * *\troot\ttest -x /usr/sbin/anacron || { cd / \u0026\u0026 run-parts --report /etc/cron.daily; }",
+        "/etc/crontab:47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || { cd / \u0026\u0026 run-parts --report /etc/cron.weekly; }",
+        "/etc/crontab:52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || { cd / \u0026\u0026 run-parts --report /etc/cron.monthly; }",
+        "/etc/crontab:#",
+        "/etc/cron.d/e2scrub_all:30 3 * * 0 root test -e /run/systemd/system || SERVICE_MODE=1 /usr/lib/aarch64-linux-gnu/e2fsprogs/e2scrub_all_cron",
+        "/etc/cron.d/e2scrub_all:10 3 * * * root test -e /run/systemd/system || SERVICE_MODE=1 /sbin/e2scrub_all -A -r",
+        "/etc/cron.d/.placeholder:# DO NOT EDIT OR REMOVE",
+        "/etc/cron.d/.placeholder:# This file is a simple placeholder to keep dpkg from removing this directory"
+      ],
+      "duration_ms": 0
+    },
+    "persist.timers": {
+      "observation": "persist.timers#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0
+    },
+    "persist.units": {
+      "observation": "persist.units#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "13 units, all enabled",
+      "parsed": {
+        "kind": "units",
+        "items": [
+          {
+            "name": "cron.service",
+            "state": "enabled"
+          },
+          {
+            "name": "e2scrub_reap.service",
+            "state": "enabled"
+          },
+          {
+            "name": "getty@.service",
+            "state": "enabled"
+          },
+          {
+            "name": "systemd-pstore.service",
+            "state": "enabled"
+          },
+          {
+            "name": "ufw.service",
+            "state": "enabled"
+          },
+          {
+            "name": "ssh.socket",
+            "state": "enabled"
+          },
+          {
+            "name": "remote-fs.target",
+            "state": "enabled"
+          },
+          {
+            "name": "apt-daily-upgrade.timer",
+            "state": "enabled"
+          },
+          {
+            "name": "apt-daily.timer",
+            "state": "enabled"
+          },
+          {
+            "name": "dpkg-db-backup.timer",
+            "state": "enabled"
+          },
+          {
+            "name": "e2scrub_all.timer",
+            "state": "enabled"
+          },
+          {
+            "name": "fstrim.timer",
+            "state": "enabled"
+          },
+          {
+            "name": "motd-news.timer",
+            "state": "enabled"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "pkg.apt_upgradable": {
+      "observation": "pkg.apt_upgradable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 updates available",
+      "parsed": {
+        "kind": "updates",
+        "items": [],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "pkg.dnf_check_update": {
+      "observation": "pkg.dnf_check_update#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: dnf: command not found",
+      "summary": "exit 127: bash: line 1: dnf: command not found",
+      "duration_ms": 0
+    },
+    "pkg.zypper_lp": {
+      "observation": "pkg.zypper_lp#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: zypper: command not found",
+      "summary": "exit 127: bash: line 1: zypper: command not found",
+      "duration_ms": 0
+    },
+    "privesc.sudoers": {
+      "observation": "privesc.sudoers#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "41 sudoers lines",
+      "parsed": [
+        "#",
+        "# This file MUST be edited with the 'visudo' command as root.",
+        "#",
+        "# Please consider adding local content in /etc/sudoers.d/ instead of",
+        "# directly modifying this file.",
+        "#",
+        "# See the man page for details on how to write a sudoers file.",
+        "#",
+        "Defaults\tenv_reset",
+        "Defaults\tmail_badpass",
+        "Defaults\tsecure_path=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin\"",
+        "# This fixes CVE-2005-4890 and possibly breaks some versions of kdesu",
+        "# (#1011624, https://bugs.kde.org/show_bug.cgi?id=452532)",
+        "Defaults\tuse_pty",
+        "# This preserves proxy settings from user environments of root",
+        "# equivalent users (group sudo)",
+        "#Defaults:%sudo env_keep += \"http_proxy https_proxy ftp_proxy all_proxy no_proxy\"",
+        "# This allows running arbitrary commands, but so does ALL, and it means",
+        "# different sudoers have their choice of editor respected.",
+        "#Defaults:%sudo env_keep += \"EDITOR\"",
+        "# Completely harmless preservation of a user preference.",
+        "#Defaults:%sudo env_keep += \"GREP_COLOR\"",
+        "# While you shouldn't normally run git as root, you need to with etckeeper",
+        "#Defaults:%sudo env_keep += \"GIT_AUTHOR_* GIT_COMMITTER_*\"",
+        "# Per-user preferences; root won't have sensible values for them.",
+        "#Defaults:%sudo env_keep += \"EMAIL DEBEMAIL DEBFULLNAME\"",
+        "# \"sudo scp\" or \"sudo rsync\" should be able to use your SSH agent.",
+        "#Defaults:%sudo env_keep += \"SSH_AGENT_PID SSH_AUTH_SOCK\"",
+        "# Ditto for GPG agent",
+        "#Defaults:%sudo env_keep += \"GPG_AGENT_INFO\"",
+        "# Host alias specification",
+        "# User alias specification",
+        "# Cmnd alias specification",
+        "# User privilege specification",
+        "root\tALL=(ALL:ALL) ALL",
+        "# Members of the admin group may gain root privileges",
+        "%admin ALL=(ALL) ALL",
+        "# Allow members of group sudo to execute any command",
+        "%sudo\tALL=(ALL:ALL) ALL",
+        "# See sudoers(5) for more information on \"@include\" directives:",
+        "@includedir /etc/sudoers.d"
+      ],
+      "elevated": true,
+      "duration_ms": 0
+    },
+    "privesc.sudoers_d": {
+      "observation": "privesc.sudoers_d#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "33 sudoers.d lines",
+      "parsed": [
+        "/etc/sudoers.d/README:#",
+        "/etc/sudoers.d/README:# The default /etc/sudoers file created on installation of the",
+        "/etc/sudoers.d/README:# sudo  package now includes the directive:",
+        "/etc/sudoers.d/README:# ",
+        "/etc/sudoers.d/README:# \t@includedir /etc/sudoers.d",
+        "/etc/sudoers.d/README:# ",
+        "/etc/sudoers.d/README:# This will cause sudo to read and parse any files in the /etc/sudoers.d ",
+        "/etc/sudoers.d/README:# directory that do not end in '~' or contain a '.' character, if it",
+        "/etc/sudoers.d/README:# exists. It is not an error if the directory does not exist.",
+        "/etc/sudoers.d/README:# ",
+        "/etc/sudoers.d/README:# Note also, that because sudoers contents can vary widely, no attempt is ",
+        "/etc/sudoers.d/README:# made to add this directive to existing sudoers files on upgrade.  Feel free",
+        "/etc/sudoers.d/README:# to add the above directive to the end of your /etc/sudoers file to enable ",
+        "/etc/sudoers.d/README:# this functionality for existing installations if you wish!",
+        "/etc/sudoers.d/README:# Sudo versions older than 1.9.1 will only support the old syntax",
+        "/etc/sudoers.d/README:# #includedir. That means that the sudo versions in Debian bullseye (11)",
+        "/etc/sudoers.d/README:# and later will happily accept both @includedir and #includedir.",
+        "/etc/sudoers.d/README:#",
+        "/etc/sudoers.d/README:# Finally, please note that using the visudo command is the recommended way",
+        "/etc/sudoers.d/README:# to update sudoers content, since it protects against many failure modes.",
+        "/etc/sudoers.d/README:# See the man page for visudo and sudoers for more information.",
+        "/etc/sudoers.d/README:#",
+        "/etc/sudoers.d/scheck:# scheck elevated checks for ops on linux — generated from the compiled catalog.",
+        "/etc/sudoers.d/scheck:# Review, then install with: visudo -cf - \u003c fragment \u0026\u0026 install -m 440 fragment /etc/sudoers.d/scheck",
+        "/etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck runs them as `sudo -n -- ...`.",
+        "/etc/sudoers.d/scheck:Defaults:ops !requiretty",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/grep -rH . /etc/sudoers.d  # privesc.sudoers_d",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/passwd -S -a  # accounts.passwd_status",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/aa-status \"\"  # mac.aa_status",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/nft list ruleset  # fw.nft",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/sshd -T  # sshd.config",
+        "/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose  # fw.ufw"
+      ],
+      "elevated": true,
+      "duration_ms": 0
+    },
+    "remote.sshd_enabled": {
+      "observation": "remote.sshd_enabled#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "2 service states: disabled, not-found",
+      "parsed": [
+        "disabled",
+        "not-found"
+      ],
+      "duration_ms": 0
+    },
+    "sshd.config": {
+      "observation": "sshd.config#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "91 settings",
+      "parsed": {
+        "acceptenv": "LANG",
+        "addressfamily": "any",
+        "allowagentforwarding": "yes",
+        "allowstreamlocalforwarding": "yes",
+        "allowtcpforwarding": "yes",
+        "authenticationmethods": "any",
+        "authorizedkeyscommand": "none",
+        "authorizedkeyscommanduser": "none",
+        "authorizedkeysfile": ".ssh/authorized_keys .ssh/authorized_keys2",
+        "authorizedprincipalscommand": "none",
+        "authorizedprincipalscommanduser": "none",
+        "authorizedprincipalsfile": "none",
+        "banner": "none",
+        "casignaturealgorithms": "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256",
+        "channeltimeout": "none",
+        "chrootdirectory": "none",
+        "ciphers": "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com",
+        "clientalivecountmax": "3",
+        "clientaliveinterval": "0",
+        "compression": "yes",
+        "debianbanner": "yes",
+        "disableforwarding": "no",
+        "exposeauthinfo": "no",
+        "fingerprinthash": "SHA256",
+        "forcecommand": "none",
+        "gatewayports": "no",
+        "gssapiauthentication": "no",
+        "gssapicleanupcredentials": "yes",
+        "gssapikexalgorithms": "gss-group14-sha256-,gss-group16-sha512-,gss-nistp256-sha256-,gss-curve25519-sha256-,gss-group14-sha1-,gss-gex-sha1-",
+        "gssapikeyexchange": "no",
+        "gssapistorecredentialsonrekey": "no",
+        "gssapistrictacceptorcheck": "yes",
+        "hostbasedacceptedalgorithms": "ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256",
+        "hostbasedauthentication": "no",
+        "hostbasedusesnamefrompacketonly": "no",
+        "hostkey": "/etc/ssh/ssh_host_rsa_key",
+        "hostkeyagent": "none",
+        "hostkeyalgorithms": "ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256",
+        "ignorerhosts": "yes",
+        "ignoreuserknownhosts": "no",
+        "ipqos": "lowdelay throughput",
+        "kbdinteractiveauthentication": "no",
+        "kerberosauthentication": "no",
+        "kerberosorlocalpasswd": "yes",
+        "kerberosticketcleanup": "yes",
+        "kexalgorithms": "sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256",
+        "listenaddress": "[::]:22",
+        "logingracetime": "120",
+        "loglevel": "INFO",
+        "macs": "umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1",
+        "maxauthtries": "6",
+        "maxsessions": "10",
+        "maxstartups": "10:30:100",
+        "modulifile": "/etc/ssh/moduli",
+        "passwordauthentication": "no",
+        "permitemptypasswords": "no",
+        "permitlisten": "any",
+        "permitopen": "any",
+        "permitrootlogin": "without-password",
+        "permittty": "yes",
+        "permittunnel": "no",
+        "permituserenvironment": "no",
+        "permituserrc": "yes",
+        "persourcemaxstartups": "none",
+        "persourcenetblocksize": "32:128",
+        "pidfile": "/run/sshd.pid",
+        "port": "22",
+        "printlastlog": "yes",
+        "printmotd": "no",
+        "pubkeyacceptedalgorithms": "ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256",
+        "pubkeyauthentication": "yes",
+        "pubkeyauthoptions": "none",
+        "rekeylimit": "0 0",
+        "requiredrsasize": "1024",
+        "revokedkeys": "none",
+        "securitykeyprovider": "internal",
+        "streamlocalbindmask": "0177",
+        "streamlocalbindunlink": "no",
+        "strictmodes": "yes",
+        "subsystem": "sftp /usr/lib/openssh/sftp-server",
+        "syslogfacility": "AUTH",
+        "tcpkeepalive": "yes",
+        "trustedusercakeys": "none",
+        "unusedconnectiontimeout": "none",
+        "usedns": "no",
+        "usepam": "yes",
+        "versionaddendum": "none",
+        "x11displayoffset": "10",
+        "x11forwarding": "yes",
+        "x11uselocalhost": "yes",
+        "xauthlocation": "/usr/bin/xauth"
+      },
+      "elevated": true,
+      "duration_ms": 0
+    },
+    "sys.platform": {
+      "observation": "sys.platform#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Linux",
+      "parsed": "Linux\n",
+      "duration_ms": 0
+    },
+    "sys.shell": {
+      "observation": "sys.shell#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/bin/bash",
+      "parsed": "/bin/bash\n",
+      "duration_ms": 0
+    },
+    "sys.uid": {
+      "observation": "sys.uid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "1001",
+      "parsed": "1001\n",
+      "duration_ms": 0
+    },
+    "sys.uname": {
+      "observation": "sys.uname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Linux 21859b827686 7.0.12-linuxkit #1 SMP PREEMPT Thu Aug 27 14:02:21 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux",
+      "parsed": "Linux 21859b827686 7.0.12-linuxkit #1 SMP PREEMPT Thu Aug 27 14:02:21 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux\n",
+      "duration_ms": 0
+    },
+    "time.timedatectl": {
+      "observation": "time.timedatectl#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0
+    }
+  },
+  "observations": {
+    "accounts.passwd#1": {
+      "observation": "accounts.passwd#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "22 accounts, 4 with a login shell",
+      "duration_ms": 0,
+      "check": "accounts.passwd",
+      "ran_as": "accounts.passwd",
+      "argv": [
+        "cat",
+        "/etc/passwd"
+      ],
+      "occurrence": 1
+    },
+    "accounts.passwd_status#1": {
+      "observation": "accounts.passwd_status#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "22 accounts, all locked",
+      "elevated": true,
+      "duration_ms": 0,
+      "check": "accounts.passwd_status",
+      "ran_as": "accounts.passwd_status",
+      "argv": [
+        "sudo",
+        "-n",
+        "--",
+        "passwd",
+        "-S",
+        "-a"
+      ],
+      "occurrence": 3
+    },
+    "accounts.shadow_meta#1": {
+      "observation": "accounts.shadow_meta#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "mode 640, owner root:shadow",
+      "duration_ms": 0,
+      "check": "accounts.shadow_meta",
+      "ran_as": "accounts.shadow_meta",
+      "argv": [
+        "stat",
+        "-c",
+        "%A:%a:%U:%G:%s",
+        "/etc/shadow"
+      ],
+      "occurrence": 4
+    },
+    "disk.crypttab#1": {
+      "observation": "disk.crypttab#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: cat: /etc/crypttab: No such file or directory",
+      "summary": "exit 1: cat: /etc/crypttab: No such file or directory",
+      "duration_ms": 0,
+      "check": "disk.crypttab",
+      "ran_as": "disk.crypttab",
+      "argv": [
+        "cat",
+        "/etc/crypttab"
+      ],
+      "occurrence": 5
+    },
+    "disk.lsblk#1": {
+      "observation": "disk.lsblk#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "20 block devices",
+      "duration_ms": 0,
+      "check": "disk.lsblk",
+      "ran_as": "disk.lsblk",
+      "argv": [
+        "lsblk",
+        "-o",
+        "NAME,TYPE,FSTYPE,MOUNTPOINT"
+      ],
+      "occurrence": 6
+    },
+    "fs.suid#1": {
+      "observation": "fs.suid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "9 SUID files",
+      "duration_ms": 0,
+      "check": "fs.suid",
+      "ran_as": "fs.suid",
+      "argv": [
+        "find",
+        "/usr/local",
+        "/opt",
+        "/usr/bin",
+        "/usr/sbin",
+        "/bin",
+        "/sbin",
+        "-xdev",
+        "-maxdepth",
+        "4",
+        "-type",
+        "f",
+        "-perm",
+        "-4000"
+      ],
+      "occurrence": 7
+    },
+    "fs.world_writable#1": {
+      "observation": "fs.world_writable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 world-writable paths",
+      "duration_ms": 0,
+      "check": "fs.world_writable",
+      "ran_as": "fs.world_writable",
+      "argv": [
+        "find",
+        "/usr/local",
+        "/opt",
+        "/etc",
+        "-xdev",
+        "-maxdepth",
+        "4",
+        "-perm",
+        "-0002",
+        "-not",
+        "-perm",
+        "-1000",
+        "-not",
+        "-type",
+        "l"
+      ],
+      "occurrence": 8
+    },
+    "fw.firewalld#1": {
+      "observation": "fw.firewalld#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: firewall-cmd: command not found",
+      "summary": "exit 127: bash: line 1: firewall-cmd: command not found",
+      "duration_ms": 0,
+      "check": "fw.firewalld",
+      "ran_as": "fw.firewalld",
+      "argv": [
+        "firewall-cmd",
+        "--state"
+      ],
+      "occurrence": 9
+    },
+    "fw.nft#1": {
+      "observation": "fw.nft#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": false,
+      "reason": "not found: nft",
+      "summary": "not found: nft",
+      "duration_ms": 0,
+      "check": "fw.nft",
+      "ran_as": "fw.nft",
+      "argv": [
+        "nft",
+        "list",
+        "ruleset"
+      ],
+      "occurrence": 11
+    },
+    "fw.ufw#1": {
+      "observation": "fw.ufw#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: ERROR: problem running iptables: iptables v1.8.10 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)",
+      "summary": "exit 1: ERROR: problem running iptables: iptables v1.8.10 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)",
+      "elevated": true,
+      "duration_ms": 0,
+      "check": "fw.ufw",
+      "ran_as": "fw.ufw",
+      "argv": [
+        "sudo",
+        "-n",
+        "--",
+        "ufw",
+        "status",
+        "verbose"
+      ],
+      "occurrence": 13
+    },
+    "host.hostname#1": {
+      "observation": "host.hostname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "21859b827686",
+      "duration_ms": 0,
+      "check": "host.hostname",
+      "ran_as": "host.hostname",
+      "argv": [
+        "uname",
+        "-n"
+      ],
+      "occurrence": 14
+    },
+    "host.machine_id#1": {
+      "observation": "host.machine_id#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "ef671600129d4fc6813a00cba94421a5",
+      "duration_ms": 0,
+      "check": "host.machine_id",
+      "ran_as": "host.machine_id",
+      "argv": [
+        "cat",
+        "/etc/machine-id"
+      ],
+      "occurrence": 15
+    },
+    "log.auditd#1": {
+      "observation": "log.auditd#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0,
+      "check": "log.auditd",
+      "ran_as": "log.auditd",
+      "argv": [
+        "systemctl",
+        "is-active",
+        "auditd"
+      ],
+      "occurrence": 16
+    },
+    "log.journal_usage#1": {
+      "observation": "log.journal_usage#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Archived and active journals take up 0B in the file system.",
+      "duration_ms": 0,
+      "check": "log.journal_usage",
+      "ran_as": "log.journal_usage",
+      "argv": [
+        "journalctl",
+        "--disk-usage"
+      ],
+      "occurrence": 17
+    },
+    "mac.aa_status#1": {
+      "observation": "mac.aa_status#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": false,
+      "reason": "not found: aa-status",
+      "summary": "not found: aa-status",
+      "duration_ms": 0,
+      "check": "mac.aa_status",
+      "ran_as": "mac.aa_status",
+      "argv": [
+        "aa-status"
+      ],
+      "occurrence": 19
+    },
+    "mac.sestatus#1": {
+      "observation": "mac.sestatus#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: sestatus: command not found",
+      "summary": "exit 127: bash: line 1: sestatus: command not found",
+      "duration_ms": 0,
+      "check": "mac.sestatus",
+      "ran_as": "mac.sestatus",
+      "argv": [
+        "sestatus"
+      ],
+      "occurrence": 20
+    },
+    "net.listeners#1": {
+      "observation": "net.listeners#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "2 listening sockets",
+      "duration_ms": 0,
+      "check": "net.listeners",
+      "ran_as": "net.listeners",
+      "argv": [
+        "ss",
+        "-tulpnH"
+      ],
+      "occurrence": 21
+    },
+    "os.release#1": {
+      "observation": "os.release#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "13 settings",
+      "duration_ms": 0,
+      "check": "os.release",
+      "ran_as": "os.release",
+      "argv": [
+        "cat",
+        "/etc/os-release"
+      ],
+      "occurrence": 22
+    },
+    "persist.cron#1": {
+      "observation": "persist.cron#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "25 cron entries",
+      "duration_ms": 0,
+      "check": "persist.cron",
+      "ran_as": "persist.cron",
+      "argv": [
+        "grep",
+        "-rH",
+        ".",
+        "/etc/crontab",
+        "/etc/cron.d"
+      ],
+      "occurrence": 23
+    },
+    "persist.timers#1": {
+      "observation": "persist.timers#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0,
+      "check": "persist.timers",
+      "ran_as": "persist.timers",
+      "argv": [
+        "systemctl",
+        "list-timers",
+        "--all",
+        "--no-pager",
+        "--plain"
+      ],
+      "occurrence": 24
+    },
+    "persist.units#1": {
+      "observation": "persist.units#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "13 units, all enabled",
+      "duration_ms": 0,
+      "check": "persist.units",
+      "ran_as": "persist.units",
+      "argv": [
+        "systemctl",
+        "list-unit-files",
+        "--state=enabled",
+        "--no-pager",
+        "--plain"
+      ],
+      "occurrence": 25
+    },
+    "pkg.apt_upgradable#1": {
+      "observation": "pkg.apt_upgradable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 updates available",
+      "duration_ms": 0,
+      "check": "pkg.apt_upgradable",
+      "ran_as": "pkg.apt_upgradable",
+      "argv": [
+        "apt",
+        "list",
+        "--upgradable"
+      ],
+      "occurrence": 26
+    },
+    "pkg.dnf_check_update#1": {
+      "observation": "pkg.dnf_check_update#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: dnf: command not found",
+      "summary": "exit 127: bash: line 1: dnf: command not found",
+      "duration_ms": 0,
+      "check": "pkg.dnf_check_update",
+      "ran_as": "pkg.dnf_check_update",
+      "argv": [
+        "dnf",
+        "-q",
+        "check-update"
+      ],
+      "occurrence": 27
+    },
+    "pkg.zypper_lp#1": {
+      "observation": "pkg.zypper_lp#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: zypper: command not found",
+      "summary": "exit 127: bash: line 1: zypper: command not found",
+      "duration_ms": 0,
+      "check": "pkg.zypper_lp",
+      "ran_as": "pkg.zypper_lp",
+      "argv": [
+        "zypper",
+        "--non-interactive",
+        "lp"
+      ],
+      "occurrence": 28
+    },
+    "privesc.sudoers#1": {
+      "observation": "privesc.sudoers#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "41 sudoers lines",
+      "elevated": true,
+      "duration_ms": 0,
+      "check": "privesc.sudoers",
+      "ran_as": "privesc.sudoers",
+      "argv": [
+        "sudo",
+        "-n",
+        "--",
+        "cat",
+        "/etc/sudoers"
+      ],
+      "occurrence": 30
+    },
+    "privesc.sudoers_d#1": {
+      "observation": "privesc.sudoers_d#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "33 sudoers.d lines",
+      "elevated": true,
+      "duration_ms": 0,
+      "check": "privesc.sudoers_d",
+      "ran_as": "privesc.sudoers_d",
+      "argv": [
+        "sudo",
+        "-n",
+        "--",
+        "grep",
+        "-rH",
+        ".",
+        "/etc/sudoers.d"
+      ],
+      "occurrence": 32
+    },
+    "remote.sshd_enabled#1": {
+      "observation": "remote.sshd_enabled#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "2 service states: disabled, not-found",
+      "duration_ms": 0,
+      "check": "remote.sshd_enabled",
+      "ran_as": "remote.sshd_enabled",
+      "argv": [
+        "systemctl",
+        "is-enabled",
+        "ssh",
+        "sshd"
+      ],
+      "occurrence": 33
+    },
+    "sshd.config#1": {
+      "observation": "sshd.config#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "91 settings",
+      "elevated": true,
+      "duration_ms": 0,
+      "check": "sshd.config",
+      "ran_as": "sshd.config",
+      "argv": [
+        "sudo",
+        "-n",
+        "--",
+        "sshd",
+        "-T"
+      ],
+      "occurrence": 35
+    },
+    "sys.platform#1": {
+      "observation": "sys.platform#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Linux",
+      "duration_ms": 0,
+      "check": "sys.platform",
+      "ran_as": "sys.platform",
+      "argv": [
+        "uname",
+        "-s"
+      ],
+      "occurrence": 36
+    },
+    "sys.shell#1": {
+      "observation": "sys.shell#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/bin/bash",
+      "duration_ms": 0,
+      "check": "sys.shell",
+      "ran_as": "sys.shell",
+      "argv": [
+        "printenv",
+        "SHELL"
+      ],
+      "occurrence": 37
+    },
+    "sys.uid#1": {
+      "observation": "sys.uid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "1001",
+      "duration_ms": 0,
+      "check": "sys.uid",
+      "ran_as": "sys.uid",
+      "argv": [
+        "id",
+        "-u"
+      ],
+      "occurrence": 38
+    },
+    "sys.uname#1": {
+      "observation": "sys.uname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Linux 21859b827686 7.0.12-linuxkit #1 SMP PREEMPT Thu Aug 27 14:02:21 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux",
+      "duration_ms": 0,
+      "check": "sys.uname",
+      "ran_as": "sys.uname",
+      "argv": [
+        "uname",
+        "-a"
+      ],
+      "occurrence": 39
+    },
+    "sys.which#1": {
+      "observation": "sys.which#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/bin/passwd",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "passwd"
+      },
+      "argv": [
+        "which",
+        "passwd"
+      ],
+      "occurrence": 2
+    },
+    "sys.which#2": {
+      "observation": "sys.which#2",
+      "status": "ok",
+      "attempted": true,
+      "summary": "no output",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "nft"
+      },
+      "argv": [
+        "which",
+        "nft"
+      ],
+      "occurrence": 10
+    },
+    "sys.which#3": {
+      "observation": "sys.which#3",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/sbin/ufw",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "ufw"
+      },
+      "argv": [
+        "which",
+        "ufw"
+      ],
+      "occurrence": 12
+    },
+    "sys.which#4": {
+      "observation": "sys.which#4",
+      "status": "ok",
+      "attempted": true,
+      "summary": "no output",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "aa-status"
+      },
+      "argv": [
+        "which",
+        "aa-status"
+      ],
+      "occurrence": 18
+    },
+    "sys.which#5": {
+      "observation": "sys.which#5",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/bin/cat",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "cat"
+      },
+      "argv": [
+        "which",
+        "cat"
+      ],
+      "occurrence": 29
+    },
+    "sys.which#6": {
+      "observation": "sys.which#6",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/bin/grep",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "grep"
+      },
+      "argv": [
+        "which",
+        "grep"
+      ],
+      "occurrence": 31
+    },
+    "sys.which#7": {
+      "observation": "sys.which#7",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/sbin/sshd",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "sshd"
+      },
+      "argv": [
+        "which",
+        "sshd"
+      ],
+      "occurrence": 34
+    },
+    "time.timedatectl#1": {
+      "observation": "time.timedatectl#1",
+      "status": "unavailable",
+      "reason_code": "exit_error",
+      "attempted": true,
+      "reason": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "summary": "exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+      "duration_ms": 0,
+      "check": "time.timedatectl",
+      "ran_as": "time.timedatectl",
+      "argv": [
+        "timedatectl",
+        "show"
+      ],
+      "occurrence": 40
+    }
+  }
+}

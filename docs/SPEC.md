@@ -155,6 +155,10 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
 - Acceptance criterion 3's evidence is named rather than left to a throwaway VM: the
   container diff `make integ` already asserts, plus catalog inspection and the audit log
   on macOS (§12). The criterion is unchanged; what satisfies it is now written down.
+- §11's golden reports become golden artifacts: beside the text reports, each fixture
+  pins the JSON report (schema-validated as committed) and the run's audit log as a
+  command trace. M4.5 drops golden provider responses — no host assessment builds a
+  provider — and needs no reference remapping, since references replay identically.
 
 **Changes from the phase 2 decision (2026-09-20, M2.8):**
 
@@ -1879,12 +1883,25 @@ are what remain of 0.0.1.
   fragment plus an elevated run flipping `sshd.config` to populated, and
   `scheck ssh --stop-after facts` against Ubuntu and Fedora with schema validation and
   an empty `docker diff` afterwards (acceptance criterion 3).
-- **Golden text reports.** One per fixture (ubuntu, fedora, macos) at default, `-v`
-  and `-vv`, committed under `internal/report/testdata/golden/` and diffed in
-  `go test`; `go test ./internal/report -update` rewrites them. A diff is a review
-  item, not something to silence; §7.6 is the contract the golden files pin. Alongside
-  them, every golden is re-rendered at several widths to assert no line overruns and no
-  line carries trailing padding.
+- **Golden artifacts** (M4.5). Three per fixture (ubuntu, fedora, macos), diffed in
+  `go test`, each pinning what the others cannot. The **text report** at default, `-v`
+  and `-vv` under `internal/report/testdata/golden/` is the §7.6 contract; every golden
+  is re-rendered at several widths to assert no line overruns and no line carries
+  trailing padding. The **JSON report** beside it, rendered without
+  `--include-evidence`, pins facts, findings, assessment coverage reasons and the
+  observation references between them, and the committed file is itself validated
+  against `docs/report-schema.json`, so a golden left behind by a schema change fails
+  rather than rots. The **command trace** under `internal/baseline/testdata/golden/` is
+  the run's own audit log — one line per attempted check in execution order with the
+  observation reference, the bound parameters, the actual argv, the decision, the exit
+  code, the elevation and the SHA-256 of the redacted output. It is what fails if the
+  tool ever quietly starts running something else, and its hash is why the JSON golden
+  does not repeat the captured bytes. Only the clock and durations are normalized;
+  observation references are assigned in execution order and asserted stable across a
+  replay, so nothing needs remapping. A baseline plan binds no parameters and so
+  produces no `denied:` line; that format is asserted directly in `internal/runner`.
+  `go test ./internal/report -update` and `go test ./internal/baseline -update` rewrite
+  the goldens, and a diff is a review item, not something to silence.
 - **Rule tests.** Table-driven: fact sheet → expected finding ids. Every rule has a
   fixture where it fires and one where it does not, plus unknown, malformed,
   unavailable, denied, redacted and truncated evidence. Test applicability, disabled

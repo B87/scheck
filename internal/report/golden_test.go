@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -41,6 +42,40 @@ func TestGoldenTextReports(t *testing.T) {
 				compareGolden(t, name+verbSuffix(v)+".txt", buf.String())
 			})
 		}
+	}
+}
+
+// The JSON report is the machine-facing half of the same contract, pinned per
+// fixture the way the text report is pinned per verbosity (M4.5). It carries
+// facts, findings, assessment coverage reasons and the observation references
+// that tie them together. It deliberately renders without --include-evidence:
+// the captured bytes live in testdata/fixtures, and the command trace golden
+// in internal/baseline pins the hash of what redaction produced from them, so
+// repeating them here would add bulk and no signal (docs/SPEC.md §11).
+func TestGoldenJSONReports(t *testing.T) {
+	schema := reportSchema(t)
+	for name, elev := range fixtureElevation {
+		t.Run(name, func(t *testing.T) {
+			env := normalize(Build(sheetFor(t, name, elev), goldenMeta(elev)))
+			var buf bytes.Buffer
+			if err := WriteJSON(&buf, env); err != nil {
+				t.Fatal(err)
+			}
+			compareGolden(t, name+".json", buf.String())
+			// The committed file, not just the fresh render: a golden left
+			// behind by a schema change has to fail here rather than rot.
+			raw, err := os.ReadFile(filepath.Join("testdata", "golden", name+".json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc any
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				t.Fatal(err)
+			}
+			if err := schema.Validate(doc); err != nil {
+				t.Fatalf("committed golden violates docs/report-schema.json:\n%v", err)
+			}
+		})
 	}
 }
 
@@ -112,6 +147,10 @@ func normalize(env Envelope) Envelope {
 	for id, f := range env.Facts {
 		f.DurationMS = 0
 		env.Facts[id] = f
+	}
+	for ref, o := range env.Observations {
+		o.DurationMS = 0
+		env.Observations[ref] = o
 	}
 	return env
 }

@@ -1156,7 +1156,7 @@ M4.5–M4.7 gate 0.0.1: regression coverage, acceptance validation and release d
 part of this release; no expanded profile catalog is required. Preserve their tests.
 CLI features unavailable in 0.0.1 must fail explicitly rather than appear implemented.
 
-### M4.5 — golden-fixture regression suite
+### M4.5 — golden-fixture regression suite ✅
 Deliver a committed set of golden artifacts (recorded fixture → expected output) that
 `make check` diffs on every change, covering Ubuntu, Fedora and macOS. Live model
 quality was evaluated separately in M2.7 and no longer touches this slice.
@@ -1171,11 +1171,14 @@ Three artifacts per platform, each pinning what the others cannot:
   behind by a schema change fails instead of rotting;
 - the **command trace**, which is the run's own audit log, committed under
   `internal/baseline/testdata/golden/`: one line per attempted check in execution order
-  with the observation reference, the bound parameters, the actual argv, the decision —
-  including a denied call that never executed — the exit code, the elevation and the
-  SHA-256 of the redacted output. This is the artifact that fails when the tool quietly
-  starts running something else, and its hash is why the JSON golden need not also carry
-  the captured bytes.
+  with the observation reference, the bound parameters, the actual argv, the decision
+  (`run`, or `unavailable:<reason>` with the reason the check produced), the exit code,
+  the elevation and the SHA-256 of the redacted output. This is the artifact that fails
+  when the tool quietly starts running something else, and its hash is why the JSON
+  golden need not also carry the captured bytes. A baseline plan binds no parameters, so
+  it produces no `denied:` line; `internal/runner` asserts that format directly —
+  unknown check, `path.not_allowed` and bad parameter — which is why it is not
+  goldened.
 
 Normalize only start time and durations. Do not normalize command order, parameters,
 selection, coverage reasons or evidence links. Observation references are assigned in
@@ -1201,6 +1204,13 @@ model credential, the committed JSON validates against the schema, and the fixtu
 still carry the raw recorded output that 0.0.2's `sshd` extraction (M5.1) has to be
 verified against. No pack-aware test framework is required.
 **Spec:** §11 (fixture targets, golden reports, redaction).
+
+**Delivered (2026-09-20):** `TestGoldenJSONReports` (`internal/report`) and
+`TestGoldenCommandTrace` (`internal/baseline`) beside the existing
+`TestGoldenTextReports`, with 12 committed artifacts — nine text reports, three JSON
+reports and three traces. Both new tests run in `make check` with no target and no
+credential; the trace test replays twice and fails if the two differ, which is the
+determinism the dropped remapping step would have papered over.
 
 ### M4.6 — full acceptance criteria pass
 Not new code — a dated pass over every criterion in §12, recorded in

@@ -1,0 +1,4392 @@
+{
+  "schema_version": "1.6",
+  "host": {
+    "id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+    "hostname": "mac-fixture.local",
+    "platform": "macos",
+    "os": "macOS 26.6.2 (25G83)",
+    "kernel": "25.6.0",
+    "transport": "fixture",
+    "remote_shell": "/bin/zsh",
+    "canary": "n/a",
+    "elevation": "none"
+  },
+  "run": {
+    "started": "2026-09-20T12:00:00Z",
+    "duration_ms": 1234,
+    "status": "complete",
+    "profile": "baseline",
+    "assessment": "rules",
+    "mode": "facts",
+    "provider": null,
+    "model": null,
+    "effort": null,
+    "native": null,
+    "limits": null,
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": null
+    },
+    "context_sources": [],
+    "persisted": null,
+    "warnings": [],
+    "scheck_version": "test"
+  },
+  "assessments": [
+    {
+      "observation": "disk.fdesetup#1",
+      "finding": "disk.filevault_off",
+      "check": "disk.fdesetup",
+      "status": "not_matched",
+      "reason": "recognized-other-state"
+    },
+    {
+      "observation": "fs.world_writable#1",
+      "finding": "fs.world_writable_present",
+      "check": "fs.world_writable",
+      "status": "not_matched",
+      "reason": "no-matching-line"
+    },
+    {
+      "observation": "fw.global#1",
+      "finding": "fw.app_firewall_disabled",
+      "check": "fw.global",
+      "status": "matched",
+      "reason": "recognized-matching-state"
+    },
+    {
+      "observation": "integrity.spctl#1",
+      "finding": "integrity.gatekeeper_disabled",
+      "check": "integrity.spctl",
+      "status": "not_matched",
+      "reason": "recognized-other-state"
+    },
+    {
+      "observation": "integrity.csrutil#1",
+      "finding": "integrity.sip_disabled",
+      "check": "integrity.csrutil",
+      "status": "not_matched",
+      "reason": "recognized-other-state"
+    },
+    {
+      "observation": "remote.login#1",
+      "finding": "remote.login_enabled",
+      "check": "remote.login",
+      "status": "not_assessed",
+      "reason": "check-unavailable:requires_elevation"
+    },
+    {
+      "observation": "sshd.config#1",
+      "finding": "sshd.password_auth_enabled",
+      "check": "sshd.config",
+      "status": "not_assessed",
+      "reason": "check-unavailable:requires_elevation"
+    },
+    {
+      "observation": "sshd.config#1",
+      "finding": "sshd.root_login_enabled",
+      "check": "sshd.config",
+      "status": "not_assessed",
+      "reason": "check-unavailable:requires_elevation"
+    },
+    {
+      "observation": "time.ntp#1",
+      "finding": "time.ntp_disabled",
+      "check": "time.ntp",
+      "status": "not_assessed",
+      "reason": "check-unavailable:requires_elevation"
+    },
+    {
+      "observation": "pkg.softwareupdate#1",
+      "finding": "updates.pending",
+      "check": "pkg.softwareupdate",
+      "status": "matched",
+      "reason": "records-present"
+    }
+  ],
+  "findings": [
+    {
+      "id": "fw.app_firewall_disabled",
+      "title": "The macOS application firewall is disabled",
+      "category": "network",
+      "severity_base": "medium",
+      "severity": "medium",
+      "adjustments": [],
+      "status": "open",
+      "source": "rule",
+      "confidence": "high",
+      "platform": "macos",
+      "evidence": [
+        {
+          "observation": "fw.global#1",
+          "check": "fw.global",
+          "excerpt": "Firewall is disabled. (State = 0)"
+        }
+      ],
+      "impact": "Every listening service on this machine accepts inbound connections without a per-application decision, so a background agent that opens a port is reachable by default.",
+      "remediation": {
+        "summary": "Turn the application firewall on.",
+        "commands": [
+          "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"
+        ],
+        "caveat": "This is a per-application filter, not a packet filter; it does not replace a network firewall."
+      }
+    },
+    {
+      "id": "updates.pending",
+      "title": "Software updates are pending",
+      "category": "updates",
+      "severity_base": "low",
+      "severity": "low",
+      "adjustments": [],
+      "status": "open",
+      "source": "rule",
+      "confidence": "high",
+      "platform": "macos",
+      "evidence": [
+        {
+          "observation": "pkg.softwareupdate#1",
+          "check": "pkg.softwareupdate",
+          "excerpt": "name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)"
+        }
+      ],
+      "impact": "Published fixes, including security fixes, are available but not installed. How serious that is depends on which packages are behind.",
+      "remediation": {
+        "summary": "Review the pending updates and apply them with the host's package manager.",
+        "commands": [
+          "# review the list first, then apply with apt / dnf / zypper / softwareupdate"
+        ],
+        "caveat": "Some updates need a restart to take effect; schedule accordingly."
+      }
+    }
+  ],
+  "facts": {
+    "accounts.admins": {
+      "observation": "accounts.admins#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "GroupMembership: root alice",
+      "parsed": "GroupMembership: root alice\n",
+      "duration_ms": 0
+    },
+    "accounts.users": {
+      "observation": "accounts.users#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "134 accounts",
+      "parsed": {
+        "kind": "accounts",
+        "items": [
+          {
+            "name": "_accessoryupdater",
+            "uid": "278"
+          },
+          {
+            "name": "_amavisd",
+            "uid": "83"
+          },
+          {
+            "name": "_analyticsd",
+            "uid": "263"
+          },
+          {
+            "name": "_aonsensed",
+            "uid": "300"
+          },
+          {
+            "name": "_appinstalld",
+            "uid": "273"
+          },
+          {
+            "name": "_appleevents",
+            "uid": "55"
+          },
+          {
+            "name": "_applepay",
+            "uid": "260"
+          },
+          {
+            "name": "_appowner",
+            "uid": "87"
+          },
+          {
+            "name": "_appserver",
+            "uid": "79"
+          },
+          {
+            "name": "_appstore",
+            "uid": "33"
+          },
+          {
+            "name": "_ard",
+            "uid": "67"
+          },
+          {
+            "name": "_assetcache",
+            "uid": "235"
+          },
+          {
+            "name": "_astris",
+            "uid": "245"
+          },
+          {
+            "name": "_atsserver",
+            "uid": "97"
+          },
+          {
+            "name": "_audiomxd",
+            "uid": "294"
+          },
+          {
+            "name": "_avbdeviced",
+            "uid": "229"
+          },
+          {
+            "name": "_avphidbridge",
+            "uid": "288"
+          },
+          {
+            "name": "_backgroundassets",
+            "uid": "291"
+          },
+          {
+            "name": "_biome",
+            "uid": "289"
+          },
+          {
+            "name": "_calendar",
+            "uid": "93"
+          },
+          {
+            "name": "_captiveagent",
+            "uid": "258"
+          },
+          {
+            "name": "_ces",
+            "uid": "32"
+          },
+          {
+            "name": "_clamav",
+            "uid": "82"
+          },
+          {
+            "name": "_cmiodalassistants",
+            "uid": "262"
+          },
+          {
+            "name": "_coreaudiod",
+            "uid": "202"
+          },
+          {
+            "name": "_coremediaiod",
+            "uid": "236"
+          },
+          {
+            "name": "_coreml",
+            "uid": "280"
+          },
+          {
+            "name": "_corespeechd",
+            "uid": "306"
+          },
+          {
+            "name": "_ctkd",
+            "uid": "259"
+          },
+          {
+            "name": "_cvmsroot",
+            "uid": "212"
+          },
+          {
+            "name": "_cvs",
+            "uid": "72"
+          },
+          {
+            "name": "_cyrus",
+            "uid": "77"
+          },
+          {
+            "name": "_darwindaemon",
+            "uid": "284"
+          },
+          {
+            "name": "_datadetectors",
+            "uid": "257"
+          },
+          {
+            "name": "_demod",
+            "uid": "275"
+          },
+          {
+            "name": "_devdocs",
+            "uid": "59"
+          },
+          {
+            "name": "_devicemgr",
+            "uid": "220"
+          },
+          {
+            "name": "_diagnosticservicesd",
+            "uid": "307"
+          },
+          {
+            "name": "_diskimagesiod",
+            "uid": "271"
+          },
+          {
+            "name": "_displaypolicyd",
+            "uid": "244"
+          },
+          {
+            "name": "_distnote",
+            "uid": "241"
+          },
+          {
+            "name": "_dovecot",
+            "uid": "214"
+          },
+          {
+            "name": "_dovenull",
+            "uid": "227"
+          },
+          {
+            "name": "_dpaudio",
+            "uid": "215"
+          },
+          {
+            "name": "_driverkit",
+            "uid": "270"
+          },
+          {
+            "name": "_eligibilityd",
+            "uid": "297"
+          },
+          {
+            "name": "_eppc",
+            "uid": "71"
+          },
+          {
+            "name": "_findmydevice",
+            "uid": "254"
+          },
+          {
+            "name": "_fpsd",
+            "uid": "265"
+          },
+          {
+            "name": "_ftp",
+            "uid": "98"
+          },
+          {
+            "name": "_gamecontrollerd",
+            "uid": "247"
+          },
+          {
+            "name": "_geod",
+            "uid": "56"
+          },
+          {
+            "name": "_hidd",
+            "uid": "261"
+          },
+          {
+            "name": "_iconservices",
+            "uid": "240"
+          },
+          {
+            "name": "_installassistant",
+            "uid": "25"
+          },
+          {
+            "name": "_installcoordinationd",
+            "uid": "274"
+          },
+          {
+            "name": "_installer",
+            "uid": "96"
+          },
+          {
+            "name": "_jabber",
+            "uid": "84"
+          },
+          {
+            "name": "_kadmin_admin",
+            "uid": "218"
+          },
+          {
+            "name": "_kadmin_changepw",
+            "uid": "219"
+          },
+          {
+            "name": "_knowledgegraphd",
+            "uid": "279"
+          },
+          {
+            "name": "_krb_anonymous",
+            "uid": "234"
+          },
+          {
+            "name": "_krb_changepw",
+            "uid": "232"
+          },
+          {
+            "name": "_krb_kadmin",
+            "uid": "231"
+          },
+          {
+            "name": "_krb_kerberos",
+            "uid": "233"
+          },
+          {
+            "name": "_krb_krbtgt",
+            "uid": "230"
+          },
+          {
+            "name": "_krbfast",
+            "uid": "246"
+          },
+          {
+            "name": "_krbtgt",
+            "uid": "217"
+          },
+          {
+            "name": "_launchservicesd",
+            "uid": "239"
+          },
+          {
+            "name": "_lda",
+            "uid": "211"
+          },
+          {
+            "name": "_locationd",
+            "uid": "205"
+          },
+          {
+            "name": "_logd",
+            "uid": "272"
+          },
+          {
+            "name": "_lp",
+            "uid": "26"
+          },
+          {
+            "name": "_mailman",
+            "uid": "78"
+          },
+          {
+            "name": "_mbsetupuser",
+            "uid": "248"
+          },
+          {
+            "name": "_mcxalr",
+            "uid": "54"
+          },
+          {
+            "name": "_mdnsresponder",
+            "uid": "65"
+          },
+          {
+            "name": "_mds_stores",
+            "uid": "308"
+          },
+          {
+            "name": "_mmaintenanced",
+            "uid": "283"
+          },
+          {
+            "name": "_mobileasset",
+            "uid": "253"
+          },
+          {
+            "name": "_mobilegestalthelper",
+            "uid": "293"
+          },
+          {
+            "name": "_modelmanagerd",
+            "uid": "301"
+          },
+          {
+            "name": "_mysql",
+            "uid": "74"
+          },
+          {
+            "name": "_naturallanguaged",
+            "uid": "304"
+          },
+          {
+            "name": "_nearbyd",
+            "uid": "268"
+          },
+          {
+            "name": "_netbios",
+            "uid": "222"
+          },
+          {
+            "name": "_netstatistics",
+            "uid": "228"
+          },
+          {
+            "name": "_networkd",
+            "uid": "24"
+          },
+          {
+            "name": "_neuralengine",
+            "uid": "296"
+          },
+          {
+            "name": "_notification_proxy",
+            "uid": "285"
+          },
+          {
+            "name": "_nsurlsessiond",
+            "uid": "242"
+          },
+          {
+            "name": "_oahd",
+            "uid": "441"
+          },
+          {
+            "name": "_ondemand",
+            "uid": "249"
+          },
+          {
+            "name": "_postfix",
+            "uid": "27"
+          },
+          {
+            "name": "_postgres",
+            "uid": "216"
+          },
+          {
+            "name": "_qtss",
+            "uid": "76"
+          },
+          {
+            "name": "_reportmemoryexception",
+            "uid": "269"
+          },
+          {
+            "name": "_reportsystemmemory",
+            "uid": "302"
+          },
+          {
+            "name": "_rmd",
+            "uid": "277"
+          },
+          {
+            "name": "_sandbox",
+            "uid": "60"
+          },
+          {
+            "name": "_screensaver",
+            "uid": "203"
+          },
+          {
+            "name": "_scsd",
+            "uid": "31"
+          },
+          {
+            "name": "_securityagent",
+            "uid": "92"
+          },
+          {
+            "name": "_sntpd",
+            "uid": "281"
+          },
+          {
+            "name": "_softwareupdate",
+            "uid": "200"
+          },
+          {
+            "name": "_spinandd",
+            "uid": "305"
+          },
+          {
+            "name": "_spotlight",
+            "uid": "89"
+          },
+          {
+            "name": "_sshd",
+            "uid": "75"
+          },
+          {
+            "name": "_svn",
+            "uid": "73"
+          },
+          {
+            "name": "_swtransparencyd",
+            "uid": "303"
+          },
+          {
+            "name": "_systemstatusd",
+            "uid": "298"
+          },
+          {
+            "name": "_taskgated",
+            "uid": "13"
+          },
+          {
+            "name": "_teamsserver",
+            "uid": "94"
+          },
+          {
+            "name": "_terminusd",
+            "uid": "295"
+          },
+          {
+            "name": "_timed",
+            "uid": "266"
+          },
+          {
+            "name": "_timezone",
+            "uid": "210"
+          },
+          {
+            "name": "_tokend",
+            "uid": "91"
+          },
+          {
+            "name": "_trustd",
+            "uid": "282"
+          },
+          {
+            "name": "_trustevaluationagent",
+            "uid": "208"
+          },
+          {
+            "name": "_unknown",
+            "uid": "99"
+          },
+          {
+            "name": "_update_sharing",
+            "uid": "95"
+          },
+          {
+            "name": "_usbmuxd",
+            "uid": "213"
+          },
+          {
+            "name": "_uucp",
+            "uid": "4"
+          },
+          {
+            "name": "_warmd",
+            "uid": "224"
+          },
+          {
+            "name": "_webauthserver",
+            "uid": "221"
+          },
+          {
+            "name": "_windowserver",
+            "uid": "88"
+          },
+          {
+            "name": "_www",
+            "uid": "70"
+          },
+          {
+            "name": "_wwwproxy",
+            "uid": "252"
+          },
+          {
+            "name": "_xserverdocs",
+            "uid": "251"
+          },
+          {
+            "name": "alice",
+            "uid": "501"
+          },
+          {
+            "name": "daemon",
+            "uid": "1"
+          },
+          {
+            "name": "nobody",
+            "uid": "-2"
+          },
+          {
+            "name": "root",
+            "uid": "0"
+          },
+          {
+            "name": "start9",
+            "uid": "502"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "disk.fdesetup": {
+      "observation": "disk.fdesetup#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "FileVault is On.",
+      "parsed": "FileVault is On.\n",
+      "duration_ms": 0
+    },
+    "fs.suid": {
+      "observation": "fs.suid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 SUID files",
+      "parsed": [],
+      "duration_ms": 0
+    },
+    "fs.world_writable": {
+      "observation": "fs.world_writable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 world-writable paths",
+      "parsed": [],
+      "duration_ms": 0
+    },
+    "fw.blockall": {
+      "observation": "fw.blockall#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall has block all state set to disabled.",
+      "parsed": "Firewall has block all state set to disabled.\n",
+      "duration_ms": 0
+    },
+    "fw.global": {
+      "observation": "fw.global#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall is disabled. (State = 0)",
+      "parsed": "Firewall is disabled. (State = 0)\n",
+      "duration_ms": 0
+    },
+    "fw.stealth": {
+      "observation": "fw.stealth#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall stealth mode is off",
+      "parsed": "Firewall stealth mode is off\n",
+      "duration_ms": 0
+    },
+    "host.hostname": {
+      "observation": "host.hostname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "mac-fixture.local",
+      "parsed": "mac-fixture.local\n",
+      "duration_ms": 0
+    },
+    "host.platform_uuid": {
+      "observation": "host.platform_uuid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "AFCC3024-054E-5B1D-9CDE-9FF60BF8E219",
+      "parsed": "AFCC3024-054E-5B1D-9CDE-9FF60BF8E219",
+      "duration_ms": 0
+    },
+    "integrity.csrutil": {
+      "observation": "integrity.csrutil#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "System Integrity Protection status: enabled.",
+      "parsed": "System Integrity Protection status: enabled.\n",
+      "duration_ms": 0
+    },
+    "integrity.spctl": {
+      "observation": "integrity.spctl#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "assessments enabled",
+      "parsed": "assessments enabled\n",
+      "duration_ms": 0
+    },
+    "log.status": {
+      "observation": "log.status#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    },
+    "net.listeners": {
+      "observation": "net.listeners#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "23 listening sockets",
+      "parsed": {
+        "kind": "listeners",
+        "items": [
+          {
+            "address": "*",
+            "pid": "1020",
+            "port": "53019",
+            "process": "rapportd",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "1020",
+            "port": "53019",
+            "process": "rapportd",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "1131",
+            "port": "7000",
+            "process": "ControlCe",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "1131",
+            "port": "7000",
+            "process": "ControlCe",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "1131",
+            "port": "5000",
+            "process": "ControlCe",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "1131",
+            "port": "5000",
+            "process": "ControlCe",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "1472",
+            "port": "9277",
+            "process": "stable",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "1477",
+            "port": "7265",
+            "process": "Raycast",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "8244",
+            "port": "8099",
+            "process": "finances",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "9687",
+            "port": "5432",
+            "process": "com.docke",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "9687",
+            "port": "12434",
+            "process": "com.docke",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "9838",
+            "port": "50275",
+            "process": "Ollama",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "10104",
+            "port": "11434",
+            "process": "ollama",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "12055",
+            "port": "6463",
+            "process": "Discord",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "48795",
+            "port": "53325",
+            "process": "RiotClien",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "*",
+            "pid": "48925",
+            "port": "53346",
+            "process": "Riot\\x20C",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "54130",
+            "port": "59979",
+            "process": "Code\\x20H",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "::1",
+            "pid": "59057",
+            "port": "5433",
+            "process": "postgres",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "59057",
+            "port": "5433",
+            "process": "postgres",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "69638",
+            "port": "27124",
+            "process": "Obsidian",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "69638",
+            "port": "27123",
+            "process": "Obsidian",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "83644",
+            "port": "29428",
+            "process": "Cursor",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          },
+          {
+            "address": "127.0.0.1",
+            "pid": "83644",
+            "port": "63995",
+            "process": "Cursor",
+            "protocol": "tcp",
+            "state": "LISTEN"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "os.release": {
+      "observation": "os.release#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 settings",
+      "parsed": {
+        "buildversion": "25G83",
+        "productname": "macOS",
+        "productversion": "26.6.2"
+      },
+      "duration_ms": 0
+    },
+    "persist.launch_dirs": {
+      "observation": "persist.launch_dirs#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 launchd plists",
+      "parsed": [
+        "/Library/LaunchDaemons/com.docker.vmnetd.plist",
+        "/Library/LaunchDaemons/com.docker.socket.plist",
+        "/Library/LaunchDaemons/com.nordvpn.macos.helper.plist"
+      ],
+      "duration_ms": 0
+    },
+    "persist.launchctl": {
+      "observation": "persist.launchctl#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "555 launchd jobs, 284 running",
+      "parsed": {
+        "kind": "launchd",
+        "items": [
+          {
+            "label": "io.tailscale.ipn.macsys.login-item-helper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SafariHistoryServiceAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.progressd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.enhancedloggingd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cloudphotod",
+            "pid": "8573",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.MENotificationService",
+            "pid": "8590",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Finder",
+            "pid": "1379",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.homed",
+            "pid": "78266",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.dataaccess.dataaccessd",
+            "pid": "8223",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.quicklook",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.parentalcontrols.check",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.steipete.codexbar.312129618.312129624",
+            "pid": "1471",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mediaremoteagent",
+            "pid": "1197",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.FontWorker",
+            "pid": "1181",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.bird",
+            "pid": "26182",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.amp.mediasharingd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.knowledgeconstructiond",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.inputanalyticsd",
+            "pid": "8328",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.familycontrols.useragent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AssetCache.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.docker.docker.352890747.352891074",
+            "pid": "9601",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.podcasts.1152921500311897422.1152921500311898026",
+            "pid": "30748",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.Preview.1152921500311898404.1152921500311898409",
+            "pid": "27273",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.GameController.gamecontrolleragentd",
+            "pid": "11399",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.universalaccessAuthWarn",
+            "pid": "1788",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.UserPictureSyncAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.nsurlsessiond",
+            "pid": "1018",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.devicecheckd",
+            "pid": "67373",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.syncservices.uihandler",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.iconservices.iconservicesagent",
+            "pid": "12150",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.diagnosticextensionsd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.intelligenceplatformd",
+            "pid": "9119",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.SafariBookmarksSyncAgent",
+            "pid": "10844",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cmio.LaunchCMIOUserExtensionsAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.LinkedNotesUIService",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ndoagent",
+            "pid": "8376",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.wallpaper.agent",
+            "pid": "1383",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.bookassetd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ManagedClientAgent.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.Terminal.1152921500311914148.1152921500311914153",
+            "pid": "49021",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.localizationswitcherd",
+            "pid": "8312",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.screensharing.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.commerce",
+            "pid": "7031",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AddressBook.SourceSync",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.installerauthagent",
+            "pid": "12009",
+            "status": "-9"
+          },
+          {
+            "label": "application.sh.brew.app.354511052.354511058",
+            "pid": "20371",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appleaccounttransparencyd",
+            "pid": "84548",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.languageassetd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.familynotificationd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ManagedSettingsAgent",
+            "pid": "8530",
+            "status": "-9"
+          },
+          {
+            "label": "application.com.electron.ollama.350858570.350858577.DE93A0F6-073A-4DEF-A381-CF7A07604923",
+            "pid": "9838",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.photolibraryd",
+            "pid": "8494",
+            "status": "-9"
+          },
+          {
+            "label": "com.docker.helper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.xpc.otherbsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.sysdiagnose_agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ThreadCommissionerService",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.tipsd",
+            "pid": "10703",
+            "status": "-9"
+          },
+          {
+            "label": "application.org.p0deje.Maccy.352803717.352803723",
+            "pid": "32500",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.stickersd",
+            "pid": "80313",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.bluetoothuserd",
+            "pid": "8370",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.timezoneupdates.tznotify",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.TextInputMenuAgent",
+            "pid": "1450",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.bluetoothUIServer",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accessibility.LiveTranscriptionAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.assistant_service",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.MRTa",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CommCenter",
+            "pid": "7039",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.trustd.agent",
+            "pid": "7986",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.MailServiceAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.mail",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.0C000000-0400-0000-0000-000000000000",
+            "pid": "57413",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.04000000-0000-0000-0000-000000000000",
+            "pid": "56968",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appkit.xpc.ColorSampler",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cfprefsd.xpc.agent",
+            "pid": "990",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.coreimportd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreDevice.remotepairingd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.1E000000-0000-0000-0000-000000000000",
+            "pid": "56965",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.TrustedPeersHelper",
+            "pid": "8251",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3600_arm64_1",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.DataDetectorsLocalSources",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.unmountassistant.useragent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.facetimemessagestored",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AutoFillPanel",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.peopled",
+            "pid": "11847",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.remotecompositorclientd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.PosterBoard",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.replicatord",
+            "pid": "8241",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.keyboardservicesd",
+            "pid": "8322",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.accessibility.axassetsd",
+            "pid": "8295",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.quicklook.ThumbnailsAgent",
+            "pid": "8569",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Safari.PasswordBreachAgent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.csuseragent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.asktod",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.WindowManager.agent",
+            "pid": "999",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ContextStoreAgent",
+            "pid": "7037",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AOSPushRelay",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accessibility.AXVisualSupportAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.xpc.loginitemregisterd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.webprivacyd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.applespell",
+            "pid": "8316",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.coreservices.UASharedPasteboardProgressUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.uarppersonalizationd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.screensharing.menuextra",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.warmd_agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.voicebankingd",
+            "pid": "67374",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.gamesaved",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.io.tailscale.ipn.macsys.310850915.310850921",
+            "pid": "1374",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.universalaccesscontrol",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Safari.SafeBrowsing.Service",
+            "pid": "8630",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.notes.exchangenotesd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.findmymacmessenger",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.FilesystemUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.maps.destinationd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ScreenTimeAgent",
+            "pid": "1028",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.pluginkit.pkreporter",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.arkitd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.systemprofiler",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.hnc.Discord.350896200.350896206",
+            "pid": "12028",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.homeenergyd",
+            "pid": "10223",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cloudd",
+            "pid": "8233",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.noticeboard.agent",
+            "pid": "10845",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.UserNotificationCenterAgent",
+            "pid": "12045",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cmfsyncagent",
+            "pid": "1107",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.dt.CommandLineTools.installondemand",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ATS.FontValidator",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.diagnostics_agent",
+            "pid": "1346",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.mail.1152921500311887063.1152921500311887068",
+            "pid": "1466",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appleseed.seedusaged",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.LocalAuthentication.UIAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ap.adprivacyd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.callhistoryd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ap.promotedcontentd",
+            "pid": "9112",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.apfsuseragent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.intelligencetasksd",
+            "pid": "78149",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.networkserviceproxy",
+            "pid": "1918",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.controlcenter",
+            "pid": "1131",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.contacts.postersyncd",
+            "pid": "8231",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AMPLibraryAgent",
+            "pid": "73972",
+            "status": "0"
+          },
+          {
+            "label": "com.openssh.ssh-agent",
+            "pid": "8207",
+            "status": "0"
+          },
+          {
+            "label": "com.lihaoyun6.AirBatteryHelper",
+            "pid": "1451",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.amsondevicestoraged",
+            "pid": "10728",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.shared.1C000000-0000-0000-0000-000000000000",
+            "pid": "56967",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.tonelibraryd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.CloudPhotosConfiguration",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.security.KeychainStasher",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ctcategories.service",
+            "pid": "9114",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.CoreSimulator.SimLaunchHost-x86",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ctkd",
+            "pid": "8243",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.package-script-service",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.secinitd",
+            "pid": "8259",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.speech.speechsynthesisd.x86_64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.13000000-0100-0000-0000-000000000000",
+            "pid": "57409",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mediacontinuityd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.contacts.donation-agent",
+            "pid": "11372",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ServicesUIAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.synapse.contentlinkingd",
+            "pid": "8320",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.XprotectFramework.PluginService",
+            "pid": "9121",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ctkbind",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mediastream.mstreamd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.alf.useragent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SiriTTSTrainingAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.triald",
+            "pid": "8565",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.tccd",
+            "pid": "8227",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.nexusd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.StatusKitAgent",
+            "pid": "1184",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.diagnosticspushd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.anthropic.claudefordesktop.ShipIt",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.steipete.codexbar-sparkle-updater",
+            "pid": "2669",
+            "status": "0"
+          },
+          {
+            "label": "Limitless",
+            "pid": "-",
+            "status": "78"
+          },
+          {
+            "label": "com.apple.replayd",
+            "pid": "6980",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.coreservices.uiagent",
+            "pid": "1930",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.icloud.searchpartyuseragent",
+            "pid": "1068",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AccessibilityVisualsAgent",
+            "pid": "86878",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Siri.agent",
+            "pid": "98793",
+            "status": "1"
+          },
+          {
+            "label": "com.apple.installd.user",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.privatecloudcomputed",
+            "pid": "10714",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.textunderstandingd",
+            "pid": "8247",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.liveactivitiesd",
+            "pid": "8280",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.akd",
+            "pid": "99774",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.CallHistoryPluginHelper",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.jetpackassetd",
+            "pid": "23164",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.homeeventsd",
+            "pid": "84495",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Passwords.MenuBarExtra",
+            "pid": "1442",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.GamePolicyAgent",
+            "pid": "1914",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mbproximityhelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appplaceholdersyncd",
+            "pid": "71818",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.storeaccountd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.QuickTimePlayerX.1152921500311898780.1152921500311898785",
+            "pid": "37093",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AddressBook.AssistantService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.PIPAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cmio.ContinuityCaptureAgent",
+            "pid": "1006",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mbfloagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.searchtoold",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.printtool.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.callintelligenced",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.askpermissiond",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.microsoft.VSCode.ShipIt",
+            "pid": "78030",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ssinvitationagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.webinspectord",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.valvesoftware.steamclean",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.avatarsd",
+            "pid": "11373",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.speech.synthesisserver",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.FeatureAccessAgent",
+            "pid": "8123",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.storeuid",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.rcd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.printuitool.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.NVMeAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.speech.speechdatainstallerd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AOSHeartbeat",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CryptoTokenKit.ahp.agent",
+            "pid": "1714",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SafariNotificationAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.coredatad",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.ActivityMonitor.1152921500311908412.1152921500311908417",
+            "pid": "82859",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.remindd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appsleep",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.duetexpertd",
+            "pid": "8237",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.coreservices.useractivityd",
+            "pid": "1196",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.screencaptureui.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3600_x86_64_1",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.netauth.user.auth",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ViewBridgeAuxiliary",
+            "pid": "1189",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mbbackgrounduseragent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.14000000-0500-0000-0000-000000000000",
+            "pid": "53631",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.08000000-0400-0000-0000-000000000000",
+            "pid": "57412",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent_x86_64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.lsd",
+            "pid": "1011",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.siri.context.service",
+            "pid": "8255",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.fskit.fskit_agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.pluginkit.pkd",
+            "pid": "8245",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.shared.0D000000-0500-0000-0000-000000000000",
+            "pid": "57414",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CharacterPicker.RemoteGenerationViewService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.security.XPCTimeStampingService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Virtualization.EventTap",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.webkit.webpushd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.weatherd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.discord.discord.ShipIt",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cache_delete",
+            "pid": "8367",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.symptomsd-diag.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AMPDeviceDiscoveryAgent",
+            "pid": "1388",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accessibility.dfrhud",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CallHistorySyncHelper",
+            "pid": "81196",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.colorsync.useragent",
+            "pid": "8357",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.analyticsagent",
+            "pid": "6968",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.appleaccountd",
+            "pid": "8315",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.parsecd",
+            "pid": "10661",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mlruntimed",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Dock.agent",
+            "pid": "1376",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.parsec-fbf",
+            "pid": "40846",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.dmd",
+            "pid": "8588",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.transparencyd",
+            "pid": "32616",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.usbnotificationagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AppSSOAgent",
+            "pid": "8359",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mbuseragent",
+            "pid": "6824",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.security.cloudkeychainproxy3",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.UserEventAgent-Aqua",
+            "pid": "994",
+            "status": "0"
+          },
+          {
+            "label": "application.com.openai.codex.354255576.354255582",
+            "pid": "9612",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.followupd",
+            "pid": "8124",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.identityservicesd",
+            "pid": "1037",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.telephonyutilities.callservicesd",
+            "pid": "84862",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.DwellControl",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.generativeexperiencesd",
+            "pid": "8029",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ScreenTimeSettingsAgent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.XProtect.agent.scan",
+            "pid": "9120",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.storekitagent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.security.DiskUnmountWatcher",
+            "pid": "10260",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreLocationAgent",
+            "pid": "98706",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.StorageManagement.Service",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.securemessagingagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SecureBackupDaemon",
+            "pid": "10681",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.security.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.backgroundtaskmanagement.agent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.intelligenceflowd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.icloudwebd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.businessservicesd",
+            "pid": "55197",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cfnetwork.AuthBrokerAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.feedbackd",
+            "pid": "7030",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.storedownloadd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SpacesTouchBarAgent.app",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.BTServer.cloudpairing",
+            "pid": "1112",
+            "status": "0"
+          },
+          {
+            "label": "com.steipete.codexbar-sparkle-progress",
+            "pid": "2674",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.managedcorespotlightd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.coreservices.sharedfilelistd",
+            "pid": "1077",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.pboard",
+            "pid": "1007",
+            "status": "0"
+          },
+          {
+            "label": "application.com.apple.TextEdit.1152921500311907962.1152921500311907967",
+            "pid": "58461",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.nowplayingtouchui",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.MobileAccessoryUpdater.fudHelperAgent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.reversetemplated",
+            "pid": "20130",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.BTServer.le.agent",
+            "pid": "8377",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AskPermissionUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.thermaltrap",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.rapportd",
+            "pid": "1020",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SoftwareUpdateNotificationManager",
+            "pid": "10791",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.DistributionKit.DistributionHelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accounts.dom",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.TextInputUI.xpc.CursorUIViewService",
+            "pid": "1405",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.metadata.mdflagwriter",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.DictionaryServiceHelper",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.shared.03000000-0100-0000-0000-000000000000",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.11000000-0400-0000-0000-000000000000",
+            "pid": "56969",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.single.x86_64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.usermanagerhelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.installandsetup.migrationhelper.user",
+            "pid": "1039",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.containermanagerd",
+            "pid": "1009",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.imdpersistence.IMDPersistenceAgent",
+            "pid": "8235",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.TrustEvaluationAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Notes.datastore",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mlhostd",
+            "pid": "9098",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.preference.displays.MirrorDisplays",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.IOUIAgent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.neagent.878568F8-CCE5-4157-8315-22F20DC8FB0A",
+            "pid": "99026",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.previewshellapp",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.managedappdistributionagent",
+            "pid": "9104",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.accountsd",
+            "pid": "1038",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cdpd",
+            "pid": "8250",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.routined",
+            "pid": "1023",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.siriactionsd",
+            "pid": "8279",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.KeyboardAccessAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ecosystemagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.BiomeAgent",
+            "pid": "1010",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.storelegacy",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.OSDUIHelper",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.audio.AudioComponentRegistrar",
+            "pid": "8323",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AssetCacheLocatorService",
+            "pid": "8281",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.DiagnosticsReporter",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.lockoutagent",
+            "pid": "1019",
+            "status": "0"
+          },
+          {
+            "label": "com.riot.riotclient.checkinstalls",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.videosubscriptionsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.pbs",
+            "pid": "8637",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.calendar.CalendarAgentBookmarkMigrationService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.notificationcenterui.agent",
+            "pid": "1182",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.protectedcloudstorage.protectedcloudkeysyncing",
+            "pid": "32619",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.imklaunchagent",
+            "pid": "1303",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.FileProvider",
+            "pid": "1099",
+            "status": "0"
+          },
+          {
+            "label": "application.dev.warp.Warp-Stable.344050307.344050312",
+            "pid": "1472",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.imcore.imtransferagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mobiletimerd",
+            "pid": "8282",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.btsa",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.icdd",
+            "pid": "1441",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ckdiscretionaryd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.EscrowSecurityAlert",
+            "pid": "10659",
+            "status": "-9"
+          },
+          {
+            "label": "homebrew.mxcl.ollama",
+            "pid": "-",
+            "status": "78"
+          },
+          {
+            "label": "com.apple.MTLAssetUpgraderD",
+            "pid": "8586",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ptpcamerad",
+            "pid": "27292",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.metadata.mdwrite",
+            "pid": "25695",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.loginwindow.LWWeeklyMessageTracer",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.dt.previewsviewservice",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.spotlightknowledged",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.securityuploadd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.lockdownmoded",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.companiond",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.RapportUIAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.siriknowledged",
+            "pid": "8592",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.powerchime",
+            "pid": "34186",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.sharingd",
+            "pid": "1062",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.seserviced",
+            "pid": "67379",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mobilerepaird",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.iCloudUserNotificationsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.metrickitd",
+            "pid": "8684",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.storeassetd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.familycircled",
+            "pid": "1072",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.filevaultd",
+            "pid": "1486",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.FontRegistryUIAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.RemoteManagementAgent",
+            "pid": "81368",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.sportsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.TextInputSwitcher",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.intelligentroutingd",
+            "pid": "12095",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AMPArtworkAgent",
+            "pid": "73983",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.imagent",
+            "pid": "1060",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.sidecar-relay",
+            "pid": "98797",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cloudsettingssyncagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.assistant_cdmd",
+            "pid": "10786",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.photoanalysisd",
+            "pid": "8536",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.syncservices.SyncServer",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.imautomatichistorydeletionagent",
+            "pid": "69775",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SystemUIServer.agent",
+            "pid": "1378",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.PackageUIKit.InstallStatus",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.talagent",
+            "pid": "8492",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.suggestd",
+            "pid": "8246",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.navd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appleidsetupd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.RemoteDesktop.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.iCloudNotificationAgent",
+            "pid": "27376",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.amsaccountsd",
+            "pid": "80310",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.VoiceOver",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Maps.mapssyncd",
+            "pid": "10683",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.swtransparencyd",
+            "pid": "9116",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.gputoolsserviced",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.usernotificationsd",
+            "pid": "1024",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.FamilyControlsAgent",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.spotlightknowledged.importer",
+            "pid": "66795",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AssistiveControl",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreSimulator.SimulatorTrampoline",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreSimulator.CoreSimulatorService",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.single.arm64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ContainerMigrationService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.secd",
+            "pid": "980",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.hiservices-xpcservice",
+            "pid": "8364",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.BKAgentService",
+            "pid": "73982",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.shared.1A000000-0000-0000-0000-000000000000",
+            "pid": "57411",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent_x86_64_1",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.shared.16000000-0000-0000-0000-000000000000",
+            "pid": "56966",
+            "status": "0"
+          },
+          {
+            "label": "application.com.brave.Browser.348430598.348430605",
+            "pid": "11037",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.assistantd",
+            "pid": "1089",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.siriinferenced",
+            "pid": "9101",
+            "status": "-9"
+          },
+          {
+            "label": "application.com.apple.shortcuts.events.1152921500312101872.1152921500312101877",
+            "pid": "2701",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.studentd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.FollowUpUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.videoconference.camera",
+            "pid": "1195",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.corespotlightservice",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.uikitsystemapp",
+            "pid": "1191",
+            "status": "0"
+          },
+          {
+            "label": "application.md.obsidian.344269116.344269890",
+            "pid": "1498",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.controlstrip",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.financed",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.findmy.findmylocateagent",
+            "pid": "8240",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mediaanalysisd",
+            "pid": "8478",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.DiskArbitrationAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.todesktop.230313mzl4w4u92.ShipIt",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.assessmentagent",
+            "pid": "7028",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.exchange.exchangesyncd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.testmanagerd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.dt.AutomationModeUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.scopedbookmarksagent.xpc",
+            "pid": "8045",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ensemble",
+            "pid": "98792",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ReportCrash",
+            "pid": "8511",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.biomesyncd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.ciphermld",
+            "pid": "10657",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.UsageTrackingAgent",
+            "pid": "9106",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.email.maild",
+            "pid": "8252",
+            "status": "-9"
+          },
+          {
+            "label": "application.com.raycast.macos.213636119.350196233",
+            "pid": "1477",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.managedcorespotlightd.F61A3499-70E9-CF87-AC79-B0232C917C8F",
+            "pid": "10700",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.donotdisturbd",
+            "pid": "8238",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.accessorysensormgrd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.locationaccessstored",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.menuextra.battery.helper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appleseed.seedusaged.postinstall",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Maps.mapspushd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.coreidvd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.voicememod",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.gamed",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.STMUIHelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.intelligencecontextd",
+            "pid": "1474",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.knowledge-agent",
+            "pid": "1005",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.midiserver",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.anthropic.claudefordesktop.354651518.354651524",
+            "pid": "25221",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mobiledeviceupdater",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AccessibilityUIServer",
+            "pid": "1126",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.communicationtrustd",
+            "pid": "8232",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.helpd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.icloudmailagent",
+            "pid": "98900",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.quicklook.ui.helper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.GameOverlayUI",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.wifi.WiFiAgent",
+            "pid": "1051",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.screensharing.MessagesAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.toolkitd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.diskspaced",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.google.GoogleUpdater.wake",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.passd",
+            "pid": "1305",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.DictationIM",
+            "pid": "1297",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.sociallayerd",
+            "pid": "10849",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdmclient.agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.iCloudHelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CharacterPicker.FileService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.keychainsharingmessagingd",
+            "pid": "8523",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.MessageUIMacHelperService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3425AMD_x86_64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.gamecontroller.ConfigService",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.security.XPCKeychainSandboxCheck",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.podcasts.PodcastContentService",
+            "pid": "14449",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.CoreAuthentication.agent",
+            "pid": "1078",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.syncdefaultsd",
+            "pid": "90626",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.sidecar-display-agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.chronod",
+            "pid": "1186",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accessibility.heard",
+            "pid": "9520",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.corespeechd",
+            "pid": "1140",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.geoanalyticsd",
+            "pid": "87318",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AMPSystemPlayerAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.itunescloudd",
+            "pid": "10662",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.scrod",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.spindump_agent",
+            "pid": "8363",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.frauddefensed",
+            "pid": "82884",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AquaAppearanceHelper",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AuthenticationServicesCore.AuthenticationServicesAgent",
+            "pid": "8338",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent_arm64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.milod",
+            "pid": "39676",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.bookdatastored",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.security.keychain-circle-notification",
+            "pid": "98785",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.appstorecomponentsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.icloud.findmydeviced.findmydevice-user-agent",
+            "pid": "10724",
+            "status": "-9"
+          },
+          {
+            "label": "application.com.knollsoft.Rectangle.352815566.352815823",
+            "pid": "34331",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.XProtect.agent.scan.startup",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.amsengagementd",
+            "pid": "9111",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.betaenrollmentagent",
+            "pid": "82413",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AirPortBaseStationAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.proactiveeventtrackerd",
+            "pid": "10793",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.proactived",
+            "pid": "8236",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ModelCatalogAgent",
+            "pid": "8097",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.universalaccessd",
+            "pid": "1003",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.linkd",
+            "pid": "8122",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.accessibility.MotionTrackingAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.neagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.SafariLaunchAgent",
+            "pid": "10854",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.idsfoundation.IDSRemoteURLConnectionAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.textcomposerd",
+            "pid": "18330",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.recentsd",
+            "pid": "10336",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.spotlightknowledged.updater",
+            "pid": "19592",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.transparencyStaticKey",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.sirittsd",
+            "pid": "10798",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.dprivacyd",
+            "pid": "10660",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.usernoted",
+            "pid": "1022",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.geodMachServiceBridge",
+            "pid": "8568",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.Safari.History",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.translationd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "application.com.microsoft.VSCode.350690593.350690599.C232B3DC-3F9E-420B-BFD7-A9D6EBBB44D5",
+            "pid": "53970",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AddressBook.abd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.bluetoothaudiod",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.calaccessd",
+            "pid": "8225",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.ScreenReaderUIServer",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.newsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.systemsettingsagent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.swcd",
+            "pid": "8587",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.symptomsd.distributed-agent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.AirPlayUIAgent",
+            "pid": "1448",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.backgroundassets.user",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent_arm64_1",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.dt.previewsd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.shazamd",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.corespotlightd",
+            "pid": "1143",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.naturallanguaged",
+            "pid": "16638",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.netauth.user.gui",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.watchlistd",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.xtyped",
+            "pid": "1179",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.TMHelperAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "application.com.todesktop.230313mzl4w4u92.354792386.354792392",
+            "pid": "82674",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.Spotlight",
+            "pid": "4819",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.appstoreagent",
+            "pid": "9103",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.AMPDevicesAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.accessibility.mediaaccessibilityd",
+            "pid": "8629",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.shared.0A000000-0600-0000-0000-000000000000",
+            "pid": "53632",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3425AMD_x86_64_1",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.mdworker.sizing",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.SpeechRecognitionCore.brokerd",
+            "pid": "1302",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.metadata.mdbulkimport",
+            "pid": "1208",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.iokit.IOServiceAuthorizeAgent",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3600_arm64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.WorkflowKit.ShortcutsViewService",
+            "pid": "2026",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.carboncore.csnameddata",
+            "pid": "-",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.mdworker.application",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreSimulator.SimLaunchHost-arm64",
+            "pid": "79575",
+            "status": "-11"
+          },
+          {
+            "label": "com.apple.contactsd",
+            "pid": "8224",
+            "status": "-9"
+          },
+          {
+            "label": "com.apple.cvmsCompAgent3600_x86_64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.speech.speechsynthesisd.arm64",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.CoreRoutine.helperservice",
+            "pid": "-",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.distnoted.xpc.agent",
+            "pid": "972",
+            "status": "0"
+          },
+          {
+            "label": "com.apple.geod",
+            "pid": "8257",
+            "status": "-9"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "pkg.softwareupdate": {
+      "observation": "pkg.softwareupdate#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 updates available",
+      "parsed": {
+        "kind": "updates",
+        "items": [
+          {
+            "name": "Safari27.0TahoeAuto-27.0",
+            "version": "27.0"
+          },
+          {
+            "name": "macOS Tahoe 26.7-25G229",
+            "version": "26.7"
+          },
+          {
+            "name": "macOS 27-26A428",
+            "version": "27"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "privesc.sudoers": {
+      "observation": "privesc.sudoers#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    },
+    "privesc.sudoers_d": {
+      "observation": "privesc.sudoers_d#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    },
+    "remote.launchd_disabled": {
+      "observation": "remote.launchd_disabled#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "10 service overrides",
+      "parsed": [
+        "\tdisabled services = {",
+        "\t\t\"com.apple.CSCSupportd\" =\u003e disabled",
+        "\t\t\"com.apple.mdmclient.daemon.runatboot\" =\u003e disabled",
+        "\t\t\"com.apple.ftpd\" =\u003e disabled",
+        "\t\t\"com.docker.socket\" =\u003e enabled",
+        "\t\t\"com.docker.vmnetd\" =\u003e enabled",
+        "\t\t\"com.apple.smbd\" =\u003e enabled",
+        "\t\t\"com.apple.bootpd\" =\u003e disabled",
+        "\t\t\"com.apple.ftp-proxy\" =\u003e enabled",
+        "\t}"
+      ],
+      "duration_ms": 0
+    },
+    "remote.login": {
+      "observation": "remote.login#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    },
+    "sshd.config": {
+      "observation": "sshd.config#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    },
+    "sys.platform": {
+      "observation": "sys.platform#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Darwin",
+      "parsed": "Darwin\n",
+      "duration_ms": 0
+    },
+    "sys.shell": {
+      "observation": "sys.shell#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/bin/zsh",
+      "parsed": "/bin/zsh\n",
+      "duration_ms": 0
+    },
+    "sys.uid": {
+      "observation": "sys.uid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "501",
+      "parsed": "501\n",
+      "duration_ms": 0
+    },
+    "sys.uname": {
+      "observation": "sys.uname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Darwin mac-fixture.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:36 PDT 2026; root:xnu-12377.161.14~5/RELE…",
+      "parsed": "Darwin mac-fixture.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:36 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6030 arm64\n",
+      "duration_ms": 0
+    },
+    "time.ntp": {
+      "observation": "time.ntp#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0
+    }
+  },
+  "observations": {
+    "accounts.admins#1": {
+      "observation": "accounts.admins#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "GroupMembership: root alice",
+      "duration_ms": 0,
+      "check": "accounts.admins",
+      "ran_as": "accounts.admins",
+      "argv": [
+        "dscl",
+        ".",
+        "-read",
+        "/Groups/admin",
+        "GroupMembership"
+      ],
+      "occurrence": 1
+    },
+    "accounts.users#1": {
+      "observation": "accounts.users#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "134 accounts",
+      "duration_ms": 0,
+      "check": "accounts.users",
+      "ran_as": "accounts.users",
+      "argv": [
+        "dscl",
+        ".",
+        "-list",
+        "/Users",
+        "UniqueID"
+      ],
+      "occurrence": 2
+    },
+    "disk.fdesetup#1": {
+      "observation": "disk.fdesetup#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "FileVault is On.",
+      "duration_ms": 0,
+      "check": "disk.fdesetup",
+      "ran_as": "disk.fdesetup",
+      "argv": [
+        "fdesetup",
+        "status"
+      ],
+      "occurrence": 3
+    },
+    "fs.suid#1": {
+      "observation": "fs.suid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 SUID files",
+      "duration_ms": 0,
+      "check": "fs.suid",
+      "ran_as": "fs.suid",
+      "argv": [
+        "find",
+        "/usr/local",
+        "/opt",
+        "-xdev",
+        "-maxdepth",
+        "4",
+        "-type",
+        "f",
+        "-perm",
+        "-4000"
+      ],
+      "occurrence": 4
+    },
+    "fs.world_writable#1": {
+      "observation": "fs.world_writable#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 world-writable paths",
+      "duration_ms": 0,
+      "check": "fs.world_writable",
+      "ran_as": "fs.world_writable",
+      "argv": [
+        "find",
+        "/usr/local",
+        "/opt",
+        "/etc",
+        "/Library/LaunchDaemons",
+        "/Library/LaunchAgents",
+        "-xdev",
+        "-maxdepth",
+        "4",
+        "-perm",
+        "-0002",
+        "-not",
+        "-perm",
+        "-1000",
+        "-not",
+        "-type",
+        "l"
+      ],
+      "occurrence": 5
+    },
+    "fw.blockall#1": {
+      "observation": "fw.blockall#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall has block all state set to disabled.",
+      "duration_ms": 0,
+      "check": "fw.blockall",
+      "ran_as": "fw.blockall",
+      "argv": [
+        "/usr/libexec/ApplicationFirewall/socketfilterfw",
+        "--getblockall"
+      ],
+      "occurrence": 6
+    },
+    "fw.global#1": {
+      "observation": "fw.global#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall is disabled. (State = 0)",
+      "duration_ms": 0,
+      "check": "fw.global",
+      "ran_as": "fw.global",
+      "argv": [
+        "/usr/libexec/ApplicationFirewall/socketfilterfw",
+        "--getglobalstate"
+      ],
+      "occurrence": 7
+    },
+    "fw.stealth#1": {
+      "observation": "fw.stealth#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Firewall stealth mode is off",
+      "duration_ms": 0,
+      "check": "fw.stealth",
+      "ran_as": "fw.stealth",
+      "argv": [
+        "/usr/libexec/ApplicationFirewall/socketfilterfw",
+        "--getstealthmode"
+      ],
+      "occurrence": 8
+    },
+    "host.hostname#1": {
+      "observation": "host.hostname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "mac-fixture.local",
+      "duration_ms": 0,
+      "check": "host.hostname",
+      "ran_as": "host.hostname",
+      "argv": [
+        "uname",
+        "-n"
+      ],
+      "occurrence": 9
+    },
+    "host.platform_uuid#1": {
+      "observation": "host.platform_uuid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "AFCC3024-054E-5B1D-9CDE-9FF60BF8E219",
+      "duration_ms": 0,
+      "check": "host.platform_uuid",
+      "ran_as": "host.platform_uuid",
+      "argv": [
+        "ioreg",
+        "-rd1",
+        "-c",
+        "IOPlatformExpertDevice"
+      ],
+      "occurrence": 10
+    },
+    "integrity.csrutil#1": {
+      "observation": "integrity.csrutil#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "System Integrity Protection status: enabled.",
+      "duration_ms": 0,
+      "check": "integrity.csrutil",
+      "ran_as": "integrity.csrutil",
+      "argv": [
+        "csrutil",
+        "status"
+      ],
+      "occurrence": 11
+    },
+    "integrity.spctl#1": {
+      "observation": "integrity.spctl#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "assessments enabled",
+      "duration_ms": 0,
+      "check": "integrity.spctl",
+      "ran_as": "integrity.spctl",
+      "argv": [
+        "spctl",
+        "--status"
+      ],
+      "occurrence": 12
+    },
+    "log.status#1": {
+      "observation": "log.status#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "log.status",
+      "ran_as": "log.status",
+      "argv": [
+        "log",
+        "config",
+        "--status"
+      ],
+      "occurrence": 13
+    },
+    "net.listeners#1": {
+      "observation": "net.listeners#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "23 listening sockets",
+      "duration_ms": 0,
+      "check": "net.listeners",
+      "ran_as": "net.listeners",
+      "argv": [
+        "lsof",
+        "-nP",
+        "-iTCP",
+        "-sTCP:LISTEN"
+      ],
+      "occurrence": 14
+    },
+    "os.release#1": {
+      "observation": "os.release#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 settings",
+      "duration_ms": 0,
+      "check": "os.release",
+      "ran_as": "os.release",
+      "argv": [
+        "sw_vers"
+      ],
+      "occurrence": 15
+    },
+    "persist.launch_dirs#1": {
+      "observation": "persist.launch_dirs#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 launchd plists",
+      "duration_ms": 0,
+      "check": "persist.launch_dirs",
+      "ran_as": "persist.launch_dirs",
+      "argv": [
+        "find",
+        "/Library/LaunchDaemons",
+        "/Library/LaunchAgents",
+        "-maxdepth",
+        "1",
+        "-type",
+        "f"
+      ],
+      "occurrence": 16
+    },
+    "persist.launchctl#1": {
+      "observation": "persist.launchctl#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "555 launchd jobs, 284 running",
+      "duration_ms": 0,
+      "check": "persist.launchctl",
+      "ran_as": "persist.launchctl",
+      "argv": [
+        "launchctl",
+        "list"
+      ],
+      "occurrence": 17
+    },
+    "pkg.softwareupdate#1": {
+      "observation": "pkg.softwareupdate#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "3 updates available",
+      "duration_ms": 0,
+      "check": "pkg.softwareupdate",
+      "ran_as": "pkg.softwareupdate",
+      "argv": [
+        "softwareupdate",
+        "-l",
+        "--no-scan"
+      ],
+      "occurrence": 18
+    },
+    "privesc.sudoers#1": {
+      "observation": "privesc.sudoers#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "privesc.sudoers",
+      "ran_as": "privesc.sudoers",
+      "argv": [
+        "cat",
+        "/etc/sudoers"
+      ],
+      "occurrence": 19
+    },
+    "privesc.sudoers_d#1": {
+      "observation": "privesc.sudoers_d#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "privesc.sudoers_d",
+      "ran_as": "privesc.sudoers_d",
+      "argv": [
+        "grep",
+        "-rH",
+        ".",
+        "/etc/sudoers.d"
+      ],
+      "occurrence": 20
+    },
+    "remote.launchd_disabled#1": {
+      "observation": "remote.launchd_disabled#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "10 service overrides",
+      "duration_ms": 0,
+      "check": "remote.launchd_disabled",
+      "ran_as": "remote.launchd_disabled",
+      "argv": [
+        "launchctl",
+        "print-disabled",
+        "system"
+      ],
+      "occurrence": 21
+    },
+    "remote.login#1": {
+      "observation": "remote.login#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "remote.login",
+      "ran_as": "remote.login",
+      "argv": [
+        "systemsetup",
+        "-getremotelogin"
+      ],
+      "occurrence": 22
+    },
+    "sshd.config#1": {
+      "observation": "sshd.config#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "sshd.config",
+      "ran_as": "sshd.config",
+      "argv": [
+        "sshd",
+        "-T"
+      ],
+      "occurrence": 23
+    },
+    "sys.platform#1": {
+      "observation": "sys.platform#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Darwin",
+      "duration_ms": 0,
+      "check": "sys.platform",
+      "ran_as": "sys.platform",
+      "argv": [
+        "uname",
+        "-s"
+      ],
+      "occurrence": 24
+    },
+    "sys.shell#1": {
+      "observation": "sys.shell#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/bin/zsh",
+      "duration_ms": 0,
+      "check": "sys.shell",
+      "ran_as": "sys.shell",
+      "argv": [
+        "printenv",
+        "SHELL"
+      ],
+      "occurrence": 25
+    },
+    "sys.uid#1": {
+      "observation": "sys.uid#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "501",
+      "duration_ms": 0,
+      "check": "sys.uid",
+      "ran_as": "sys.uid",
+      "argv": [
+        "id",
+        "-u"
+      ],
+      "occurrence": 26
+    },
+    "sys.uname#1": {
+      "observation": "sys.uname#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "Darwin mac-fixture.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:36 PDT 2026; root:xnu-12377.161.14~5/RELE…",
+      "duration_ms": 0,
+      "check": "sys.uname",
+      "ran_as": "sys.uname",
+      "argv": [
+        "uname",
+        "-a"
+      ],
+      "occurrence": 27
+    },
+    "time.ntp#1": {
+      "observation": "time.ntp#1",
+      "status": "unavailable",
+      "reason_code": "requires_elevation",
+      "attempted": false,
+      "reason": "requires elevated read",
+      "summary": "requires elevated read",
+      "duration_ms": 0,
+      "check": "time.ntp",
+      "ran_as": "time.ntp",
+      "argv": [
+        "systemsetup",
+        "-getusingnetworktime"
+      ],
+      "occurrence": 28
+    }
+  }
+}

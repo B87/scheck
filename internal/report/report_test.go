@@ -34,8 +34,10 @@ func meta() Meta {
 	return Meta{Started: time.Now().Add(-time.Second), Transport: "fixture", Canary: "n/a", Elevation: "sudo", Profile: "baseline", Version: "test"}
 }
 
-// Every fixture's rendered JSON validates against docs/report-schema.json.
-func TestEnvelopeMatchesSchema(t *testing.T) {
+// reportSchema compiles docs/report-schema.json, which is the contract both
+// the freshly rendered envelope and the committed golden JSON are held to.
+func reportSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "report-schema.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +54,12 @@ func TestEnvelopeMatchesSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return schema
+}
+
+// Every fixture's rendered JSON validates against docs/report-schema.json.
+func TestEnvelopeMatchesSchema(t *testing.T) {
+	schema := reportSchema(t)
 	for _, name := range []string{"ubuntu", "fedora", "macos"} {
 		t.Run(name, func(t *testing.T) {
 			env := Build(sheetFor(t, name, runner.ElevateSudo), meta())

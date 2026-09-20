@@ -57,8 +57,8 @@ passes.
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
 | `internal/policy` | path policy, redactor, budgets, JSONL audit log |
 | `internal/runner` | the one exec path (see rule 3) |
-| `internal/baseline` | phase 1: plan, run, fact sheet |
-| `internal/report` | envelope (§7.4), JSON renderer, and the text report under the §7.6 contract (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden files in `testdata/golden`; `docs/report-schema.json` |
+| `internal/baseline` | phase 1: plan, run, fact sheet; the golden command traces in `testdata/golden` (M4.5) |
+| `internal/report` | envelope (§7.4), JSON renderer, and the text report under the §7.6 contract (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden text and JSON reports in `testdata/golden`; `docs/report-schema.json` |
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator (§7.1, §7.5); reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
@@ -104,7 +104,8 @@ go run ./cmd/scheck local                         # facts + posture rules; no mo
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
 go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
 make live                                        # opt-in live tests
-go test ./internal/report -update    # rewrite the golden text reports, then read the diff
+go test ./internal/report -update    # rewrite the golden text and JSON reports, then read the diff
+go test ./internal/baseline -update  # rewrite the golden command traces, then read the diff
 ```
 
 `make check` also runs `scripts/depcheck.sh`: `agent`, `policy`, `check`, `finding`,
@@ -174,8 +175,12 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 - Posture rules require recognized evidence; unknown is not safe or unsafe. Preserve
   assessment coverage in JSON and text, and test partial evidence (§7.5).
 - The text report is a contract (§7.6) pinned by the golden files. Regenerate with
-  `go test ./internal/report -update` and read the diff as a review item. Three rules
-  hold there: a status word describes execution, never posture; target-derived text is
+  `go test ./internal/report -update` and read the diff as a review item. Two more
+  goldens sit beside it (§11): the JSON report, validated against
+  `docs/report-schema.json` as committed, and the command trace in `internal/baseline`,
+  which is the run's audit log — argv, decision and output hash per attempted check, in
+  order. A diff there means what reaches the target changed; explain it or fix it, never
+  regenerate past it. Three rules hold for the text report: a status word describes execution, never posture; target-derived text is
   control-character escaped before it is printed; and the terminal decisions (width,
   tty, `NO_COLOR`) stay in `cmd/scheck`, never in `internal/report`.
 - Code comments cite the spec section (`docs/SPEC.md §4.3`) for anything that exists
