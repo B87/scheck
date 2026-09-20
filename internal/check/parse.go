@@ -35,7 +35,7 @@ func Parse(kind ParserKind, raw []byte) (any, error) {
 
 func parseLines(raw []byte) []string {
 	out := []string{}
-	for _, l := range strings.Split(string(raw), "\n") {
+	for l := range strings.SplitSeq(string(raw), "\n") {
 		l = strings.TrimRight(l, "\r")
 		if strings.TrimSpace(l) == "" {
 			continue

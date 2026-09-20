@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,10 +87,8 @@ func ValidateParam(p Param, val string) error {
 			return fmt.Errorf("param %q: %d outside [%d, %d]", p.Name, n, p.Min, p.Max)
 		}
 	case KindEnum:
-		for _, e := range p.Enum {
-			if e == val {
-				return nil
-			}
+		if slices.Contains(p.Enum, val) {
+			return nil
 		}
 		return fmt.Errorf("param %q: must be one of %s", p.Name, strings.Join(p.Enum, "|"))
 	default:
@@ -105,10 +104,8 @@ func validatePath(name, val string) error {
 	if !strings.HasPrefix(val, "/") {
 		return fmt.Errorf("param %q: path must be absolute", name)
 	}
-	for _, seg := range strings.Split(val, "/") {
-		if seg == ".." {
-			return fmt.Errorf("param %q: traversal (..) is not allowed", name)
-		}
+	if slices.Contains(strings.Split(val, "/"), "..") {
+		return fmt.Errorf("param %q: traversal (..) is not allowed", name)
 	}
 	return nil
 }

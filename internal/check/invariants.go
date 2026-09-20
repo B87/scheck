@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -230,10 +231,8 @@ func checkBinaryRule(c Check, bin string, rule binaryRule) []Violation {
 	var vs []Violation
 	args := c.Argv[1:]
 	for _, tok := range args {
-		for _, d := range rule.denyTokens {
-			if tok == d {
-				vs = append(vs, Violation{c.ID, RuleMutatingFlag, fmt.Sprintf("%s %s", bin, tok)})
-			}
+		if slices.Contains(rule.denyTokens, tok) {
+			vs = append(vs, Violation{c.ID, RuleMutatingFlag, fmt.Sprintf("%s %s", bin, tok)})
 		}
 		for _, p := range rule.denyPrefixes {
 			if strings.HasPrefix(tok, p) {
@@ -251,13 +250,7 @@ func checkBinaryRule(c Check, bin string, rule binaryRule) []Violation {
 				break
 			}
 		}
-		allowed := false
-		for _, v := range rule.verbs {
-			if v == verb {
-				allowed = true
-			}
-		}
-		if !allowed {
+		if !slices.Contains(rule.verbs, verb) {
 			vs = append(vs, Violation{c.ID, RuleVerbNotAllowed, fmt.Sprintf("%s %q: allowed verbs %s", bin, verb, strings.Join(rule.verbs, "|"))})
 		}
 	}
