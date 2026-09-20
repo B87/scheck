@@ -6,9 +6,9 @@
 package live
 
 import (
-	"fmt"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,7 +75,7 @@ func TestLiveLocalRun(t *testing.T) {
 			} `json:"agent"`
 		} `json:"run"`
 		Findings []struct {
-			Source   string `json:"source"`
+			Source   string                   `json:"source"`
 			Evidence []struct{ Check string } `json:"evidence"`
 		} `json:"findings"`
 	}
