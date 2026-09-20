@@ -84,5 +84,46 @@ What the false positives and the pair drift were, and what changed because of th
   read `sshd_config.d`); `linux-password-auth` agent ignored `listenaddress 127.0.0.1`;
   `linux-truncated-listeners` agent concluded from a `[TRUNCATED:…]` capture.
 
-The next run is the three-repeat record against prompt `sp-53fdd276e33f`, with the drift
-baseline the harness now prints. The criteria file is unchanged.
+The criteria file is unchanged.
+
+### 2026-09-20 — gpt-5.6-luna, `--repeat 1`, observation only (prompt `sp-53fdd276e33f`, scheck `dev`)
+
+Command: `go run ./cmd/scheck eval --model gpt-5.6-luna --repeat 1 --out
+docs/eval/results-2026-09-20-gpt-5.6-luna-repeat1.md` (the full record is that file).
+One repeat, so **not a gate result**. Run after the redaction and store fixes above.
+
+| arm | correct | false positives | missed | abstentions | resolved | incomplete | median latency | cost |
+|---|---|---|---|---|---|---|---|---|
+| rules | 0 | 0 | 0 | 0 | 0 | 0 | 9ms | n/a |
+| single-pass | 1 | 1 | 5 | 5 | 0 | 2 | 2.8s | $0.0315 |
+| agent | 3 | 8 | 3 | 0 | 1 | 0 | 12s | $0.0317 |
+
+Criteria lines as printed: FAIL §3.1 (1 follow-up resolved), FAIL §3.2 (8 vs 1), PASS
+§3.3, FAIL §3.4 (2 of 3), FAIL §3.5 (0 of 2), PASS §3.7 ($0.0041, 12s), PASS §4.1, PASS
+§4.2, FAIL §4.4 (drift in 2 of 8 pair runs; the benign-twice baseline also drifted, on
+`sshd.password_auth_exposed`, so at one repeat the two are indistinguishable).
+
+What changed against the first run, and what it showed:
+
+- The store guards held: no `remote.login_enabled`, `sshd.root_login_enabled` or
+  `sshd.password_auth_exposed` on a host whose rule disproved it. Pair drift fell from 7
+  of 8 to 2 of 8.
+- `fw.no_firewall_active` (8 agent runs) and `privesc.sudo_nopasswd_broad` (6) survived.
+  A JSON re-run of `linux-clean` and `linux-empty-password` shows why: the model cited
+  `Status: active` and the per-command grants as the evidence, wrote in the note "Not
+  reporting this as a finding; UFW evidence confirms an active host firewall", and
+  called `report_finding` anyway. It used the tool to record a hypothesis it had ruled
+  out. The tool description and the prompt now say the tool files an open problem only;
+  `PromptVersion` covers the static tool descriptions from here on.
+- `macos-clean` agent reported `net.unexpected_listener` for a docker-published
+  `*:5432` and AirPlay on `*:7000`: the recorded workstation was not clean. The case now
+  overrides the listener recording with loopback-only listeners; the label is unchanged.
+- `linux-cron-fetch`: the agent read the script and reported the cron entry as
+  `custom:periodic_root_update_script` instead of `persist.unexpected_entry`. A
+  classification miss, addressed in the prompt.
+- Still model judgement: `net.unexpected_listener` for the declared postgres in
+  `linux-context-explains` (both arms), and a conclusion from a `[TRUNCATED:…]`
+  capture in `linux-truncated-listeners`. `linux-no-firewall` is still missed by both
+  arms. Single-pass ended incomplete twice because the model asked to investigate.
+
+The next run is the three-repeat record against prompt `sp-0da93228ea0e`.

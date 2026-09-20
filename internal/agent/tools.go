@@ -46,6 +46,17 @@ type toolError struct {
 	ValidIDs []string `json:"valid_ids,omitempty"`
 }
 
+// Static tool descriptions. They are part of what the model is told, so
+// PromptVersion hashes them with the system prompt (§5.8); the run_check
+// menu is per platform and profile and is not.
+const (
+	readFileDesc = "Read one file by absolute path. Only files under the allowed prefixes (/etc, /usr/local/etc, /opt/*/etc, systemd unit directories, /Library/Launch*) can be read; a sensitive file (shadow, keys, ~/.ssh) answers with its metadata instead of its contents; anything else is denied. Identical to run_check with text.cat."
+	// The first live runs showed the model calling report_finding to record
+	// a hypothesis it had ruled out ("UFW is active", filed under
+	// fw.no_firewall_active). The description says what the tool is not for.
+	reportFindingDesc = "Record one open finding: a problem that is present on the host. Never call it for something you checked and found in order, or to note that a hypothesis was ruled out; that belongs in your closing summary, and a call here would file it as an open issue. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence as verbatim excerpts of check output you have seen. Do not send a severity: scheck grades. Reporting an id that a posture rule already produced adds your evidence and context note to it."
+)
+
 func (s *Session) tools() []llm.Tool {
 	desc, ids := menu(s.Sheet.Platform, s.Profile)
 	s.menuIDs = ids
@@ -59,7 +70,7 @@ func (s *Session) tools() []llm.Tool {
 			},
 			"required": []string{"id", "rationale"},
 		})},
-		{Name: toolReadFile, Description: "Read one file by absolute path. Only files under the allowed prefixes (/etc, /usr/local/etc, /opt/*/etc, systemd unit directories, /Library/Launch*) can be read; a sensitive file (shadow, keys, ~/.ssh) answers with its metadata instead of its contents; anything else is denied. Identical to run_check with text.cat.", Schema: llm.MustJSON(map[string]any{
+		{Name: toolReadFile, Description: readFileDesc, Schema: llm.MustJSON(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"path":      map[string]any{"type": "string"},
@@ -67,7 +78,7 @@ func (s *Session) tools() []llm.Tool {
 			},
 			"required": []string{"path"},
 		})},
-		{Name: toolReportFinding, Description: "Record one finding. Choose a catalog finding id (see <finding_catalog>) or custom:<slug>. Cite evidence as verbatim excerpts of check output you have seen. Do not send a severity: scheck grades. Reporting an id that a posture rule already produced adds your evidence and context note to it.", Schema: llm.MustJSON(map[string]any{
+		{Name: toolReportFinding, Description: reportFindingDesc, Schema: llm.MustJSON(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"id":         map[string]any{"type": "string"},

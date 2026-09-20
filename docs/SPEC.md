@@ -150,6 +150,15 @@ with its live evaluation pending (2026-09-20) · Language: Go · Inference: prov
   - The system prompt says these things too, and names what `net.unexpected_listener`,
     `fw.no_firewall_active` and `privesc.sudo_nopasswd_broad` mean, so the model is told
     before it is refused. `PromptVersion` changed (`sp-53fdd276e33f`).
+- A second observation run against the fixed tool showed the model calling
+  `report_finding` to record a hypothesis it had ruled out (an active firewall filed
+  under `fw.no_firewall_active`, with a note saying it was not a finding). The tool
+  description and the prompt now state that the tool files an open problem only, and
+  `PromptVersion` hashes the static tool descriptions together with the system prompt
+  (§5.8), since both are what the model is told; it is now `sp-0da93228ea0e`. The
+  `macos-clean` case overrides its
+  listener recording: the recorded workstation published docker and AirPlay on every
+  interface, which is not a clean host.
 - Harness ergonomics for a live run (§11): progress lines print without `-v` and name
   the reported ids; `--out` is rewritten after every run so an interrupted run leaves a
   record; `--cases` runs a subset; and a drift baseline (one benign control run twice
