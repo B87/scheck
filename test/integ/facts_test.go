@@ -74,16 +74,22 @@ func TestSSHFactsReport(t *testing.T) {
 			}
 			// Criterion 3: nothing modified on the target beyond runtime
 			// noise sshd itself produces (/run, /var/log, wtmp/lastlog).
+			// The tolerated lines are logged rather than only skipped, so the
+			// acceptance record can show what a read-only run leaves behind
+			// (docs/SPEC.md §12, docs/eval/acceptance-0.0.1.md).
+			var noise []string
 			for _, line := range strings.Split(strings.TrimSpace(c.Diff(t)), "\n") {
 				if line == "" || strings.Contains(before, line) {
 					continue
 				}
 				if strings.HasPrefix(line, "C /run") || strings.HasPrefix(line, "A /run") || strings.HasPrefix(line, "C /var") ||
 					strings.HasPrefix(line, "A /var") || line == "C /etc" || strings.HasPrefix(line, "C /home") || strings.HasPrefix(line, "A /home") {
+					noise = append(noise, line)
 					continue
 				}
 				t.Errorf("target modified: %s", line)
 			}
+			t.Logf("post-run docker diff, sshd runtime noise only (%d lines): %s", len(noise), strings.Join(noise, " | "))
 		})
 	}
 }

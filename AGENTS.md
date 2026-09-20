@@ -21,8 +21,11 @@ These are the security boundary. A change that weakens one is wrong even if ever
 passes.
 
 1. **The tool never modifies the target.** No check may write, and no code path may
-   run anything that is not a catalog entry. Integration tests assert an empty
-   `docker diff` after a full run; keep that true.
+   run anything that is not a catalog entry. Integration tests diff the container before
+   and after a full run and fail on any change outside sshd's own login noise, which
+   they log; keep that assertion true and never widen its tolerances. One write is known
+   and unresolved: `dnf -q check-update` run unprivileged leaves a metadata cache under
+   `/var/tmp` (`docs/eval/acceptance-0.0.1.md`, open item 1).
 2. **The catalog is the whole command surface.** Every executable command is a
    `check.Check` with literal argv tokens and typed `{name}` placeholders. Never build
    argv by concatenation, never accept a command string from a model or a user, never

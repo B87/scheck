@@ -159,6 +159,13 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   pins the JSON report (schema-validated as committed) and the run's audit log as a
   command trace. M4.5 drops golden provider responses — no host assessment builds a
   provider — and needs no reference remapping, since references replay identically.
+- The acceptance pass is recorded in `docs/eval/acceptance-0.0.1.md` (§12). It found one
+  write scheck can cause: `dnf -q check-update`, run unprivileged, creates and leaves a
+  metadata cache under `/var/tmp/dnf-<user>-<random>/`. No configuration, package, unit
+  or credential is touched, and the container diff shows nothing else changes — but §1
+  promises no modification without qualification, and that entry and the promise are
+  not yet reconciled. The options are recorded in the pass; the decision belongs to
+  M4.7, before publication.
 
 **Changes from the phase 2 decision (2026-09-20, M2.8):**
 
@@ -1967,6 +1974,12 @@ are what remain of 0.0.1.
 ---
 
 ## 12. Acceptance criteria for v1
+
+**Recorded pass (2026-09-21):** every criterion below was walked against `scheck
+683aac2` and the result is `docs/eval/acceptance-0.0.1.md`. All twelve pass, with one
+recorded exception under criterion 3 and the two narrowings agreed in the roadmap's M4
+scope note (criterion 3's container diff in place of a VM, criterion 1's single macOS
+machine). M4.7 requires the same pass at the release commit.
 
 1. `scheck local` and `scheck ssh …` produce a report on macOS and on Ubuntu + Fedora.
 2. No command outside the compiled catalog ever reaches the target — proven by the

@@ -1212,7 +1212,7 @@ reports and three traces. Both new tests run in `make check` with no target and 
 credential; the trace test replays twice and fails if the two differ, which is the
 determinism the dropped remapping step would have papered over.
 
-### M4.6 — full acceptance criteria pass
+### M4.6 — full acceptance criteria pass ✅
 Not new code — a dated pass over every criterion in §12, recorded in
 `docs/eval/acceptance-0.0.1.md`: for each criterion, the command or the named test that
 proves it, the evidence it produced, and a verdict. Criteria 7, 10 and 12 are cited
@@ -1228,6 +1228,15 @@ exists for it. Criterion 1's macOS leg is one developer machine, not a matrix. B
 narrowings are stated in the record and noted in §12, and neither touches criteria 2, 6
 or 11.
 **Spec:** §12, all twelve criteria.
+
+**Delivered (2026-09-21):** `docs/eval/acceptance-0.0.1.md`, walked against
+`scheck 683aac2`. All twelve criteria pass. Two items are carried out of the pass rather
+than closed by it, both decisions for M4.7: `pkg.dnf_check_update` run unprivileged
+leaves a dnf metadata cache under `/var/tmp`, which is the one write scheck can cause
+and is not reconciled with §1's unqualified promise; and `config show` displays
+`port 0` for a target with no explicit port. The integration test now logs the diff
+lines it tolerates, so criterion 3's evidence is visible rather than implied. The pass
+has to be repeated at the release commit before publication.
 
 ### M4.7 — GitHub release process
 
