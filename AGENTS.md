@@ -204,7 +204,9 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   `finding.Store.Report`, which validates every excerpt against the exact cited observation's output and
   refuses an id the posture rules already settled: another platform's id, an id whose
   rule returned `not_matched`, or a judgement whose `Def.Premise` the rule disproved.
-  Put a new deterministic guard there, never in the prompt alone.
+  Put a new deterministic guard there, never in the prompt alone. A `verdict: ruled_out`
+  call goes through `finding.Store.RuleOut`: validated the same way, never a finding,
+  surfaced as `run.agent.ruled_out`.
 - Severity never comes from the model. A `severity` in `report_finding` is ignored.
 - Every budget in `policy.Budgets` ends the run `incomplete` by name; a request is
   checked with `llm.CheckFit` before it is sent, and overflow never drops evidence.

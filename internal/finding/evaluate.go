@@ -22,6 +22,10 @@ type Input struct {
 type Result struct {
 	Findings    []Finding
 	Assessments []Assessment
+	// RuledOut lists the hypotheses the model checked and closed through
+	// report_finding's verdict: ruled_out (docs/SPEC.md §5.7). Nothing here
+	// is a finding; it is surfaced with the model's summary.
+	RuledOut []RuledOut
 }
 
 // Evaluate runs every applicable posture rule over the fact sheet

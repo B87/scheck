@@ -210,6 +210,7 @@ type Run struct {
 	RuleIDs    []string          `json:"rule_ids"`
 	ModelIDs   []string          `json:"model_ids"`
 	Findings   []finding.Finding `json:"findings"`
+	RuledOut   []string          `json:"ruled_out,omitempty"` // ids closed through verdict: ruled_out; never scored
 	Text       string            `json:"text,omitempty"`
 	Metrics    Metrics           `json:"metrics"`
 	Error      string            `json:"error,omitempty"`
@@ -296,8 +297,8 @@ func Execute(ctx context.Context, o Options) (*Results, error) {
 				res.Runs = append(res.Runs, run)
 				checkpoint()
 				if o.Log != nil {
-					o.Log("%-28s %-11s #%d %-10s correct=%d fp=%d missed=%d unexpected=%d %s ids=%v", c.Name, arm, r, run.Status,
-						run.Metrics.Correct, run.Metrics.FalsePositives, run.Metrics.Missed, run.Metrics.Unexpected, run.Ended, run.ModelIDs)
+					o.Log("%-28s %-11s #%d %-10s correct=%d fp=%d missed=%d unexpected=%d %s ids=%v ruled_out=%v", c.Name, arm, r, run.Status,
+						run.Metrics.Correct, run.Metrics.FalsePositives, run.Metrics.Missed, run.Metrics.Unexpected, run.Ended, run.ModelIDs, run.RuledOut)
 				}
 			}
 		}
@@ -403,6 +404,10 @@ func (o Options) run(ctx context.Context, c Case, arm Arm, repeat int, contextFl
 		}
 	}
 	sort.Strings(run.ModelIDs)
+	for _, r := range result.RuledOut {
+		run.RuledOut = append(run.RuledOut, r.ID)
+	}
+	sort.Strings(run.RuledOut)
 	entries := auditEntries(audit.Bytes())
 	for _, e := range entries {
 		if e.Tool != "" && strings.HasPrefix(e.Decision, "denied:") {

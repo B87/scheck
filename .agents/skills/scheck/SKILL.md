@@ -36,7 +36,8 @@ This build collects read-only evidence and assesses it two ways:
   sheet and the rule findings, may run further catalog checks through the same policy,
   and reports findings that scheck grades. JSON reports declare `run.assessment:
   "agent"`, `run.mode: "agent"` or `"single-pass"`, the provider block and `run.agent`
-  (turns, model-initiated checks, how the pass ended, the model's closing text). The
+  (turns, model-initiated checks, how the pass ended, the model's closing text, and
+  `ruled_out`: ids the model checked and dismissed, which are not findings). The
   model never assigns severity and never runs anything outside the catalog.
 
 The default provider is `openai-compatible` (model `gpt-5.6-luna` on OpenAI's
@@ -117,7 +118,7 @@ mode. `sudoers` emits a text fragment and explicitly rejects `--format json`.
 
 Discovery JSON and run reports are different document kinds. A run report has
 `host`, `run`, `facts`, `assessments` and `findings`; discovery has `kind` and
-`checks`. The current run schema version is `1.5`. Each discovery check also lists
+`checks`. The current run schema version is `1.6`. Each discovery check also lists
 `posture_rules`: the findings that depend on that check, so a skipped check tells you
 which conclusions went unassessed. Preserve argv as an array when inspecting discovery
 output, rather than splitting a human-readable command string.

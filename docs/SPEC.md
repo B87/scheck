@@ -137,6 +137,20 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from the three-repeat live evaluation (2026-09-20):**
+
+- `report_finding` carries a `verdict` (§5.7): `open` is what it always did;
+  `ruled_out` records a hypothesis the model checked and closed, with a note and
+  optionally evidence validated the same way, and files nothing. Three prompt contracts
+  in a row had shown the model filing an active firewall under `fw.no_firewall_active`
+  with a note saying it was not a finding; the tool description and prompt said not to,
+  and the model did it anyway, so the tool now has a channel for it instead of a
+  prohibition. `finding.Store.RuleOut` owns the validation (catalog id or custom slug, a
+  note, evidence against exact observations, never a finding of the run; an open report
+  later supersedes it). Schema `1.6` adds `run.agent.ruled_out` (§7.4); the text
+  report lists it under the model summary; the harness logs it as `ruled_out=[…]` and
+  never scores it. `PromptVersion` is `sp-e0d904499422`.
+
 **Changes from the first live evaluation (2026-09-20):**
 
 - One `--repeat 1` run of the harness against `gpt-5.6-luna` (recorded in
@@ -895,7 +909,7 @@ silently dropped.
 |---|---|---|
 | `run_check` | `id: string`, `params: object`, `rationale: string` | Looks up the catalog entry, validates params by kind, applies path policy, executes, redacts, truncates. Unknown id or invalid param → error result listing the valid ids/kinds. `rationale` is logged, not sent back. |
 | `read_file` | `path: string` | Sugar for `text.cat {path}` with the same path policy; returns contents or metadata-only for sensitive paths. Exists as a separate tool because models use it far more reliably than a parameterised check. It is a caller of `runner.Run` like any other: its audit record is byte-identical to the equivalent `text.cat` binding apart from the tool name, observation reference and timing, which is the test that keeps it from becoming a second enforcement path (§4). |
-| `report_finding` | the finding schema below (§7) | Validated and stored. Invalid → error result with the validation message so the model can correct it. The model does **not** supply `severity`. |
+| `report_finding` | `verdict: open\|ruled_out` (default `open`), then the finding schema below (§7); `ruled_out` takes `note` and optional evidence | `open`: validated and stored. `ruled_out`: validated and recorded as a closed hypothesis, never a finding. Invalid → error result with the validation message so the model can correct it. The model does **not** supply `severity`. |
 
 The catalog's ids, parameters and one-line descriptions are rendered into the tool
 description for `run_check`, so the model has a menu, not a language. The menu is the
@@ -929,6 +943,19 @@ way. A `not_assessed` rule leaves its id to the model, which may have obtained
 evidence the rule lacked. These are error results with the rule's check and reason, so
 the model can correct itself.
 
+`verdict: ruled_out` is the channel for a hypothesis the model checked and closed.
+Three live prompt contracts in a row showed the model filing "checked and found in
+order" observations as findings (an active firewall under `fw.no_firewall_active`, with
+a note saying it was not a finding); prose did not stop it, so the tool has a place for
+it. A ruled-out call needs a catalog id or a well-formed `custom:` slug and a `note`;
+evidence, when cited, is validated exactly like a finding's. It files nothing: the
+store keeps it apart from findings, it is never graded or counted, it cannot rule out a
+finding of the run (a rule finding is the floor; a reported one is the model's own
+claim; a `context_note` on an open report is the way to qualify either), and an open
+report of the same id later supersedes it. The report carries the list as
+`run.agent.ruled_out` and the text report prints it under the model summary, so a
+reader sees what was looked at and dismissed without mistaking it for a problem.
+
 ### 5.8 System prompt contract
 
 Provider-neutral, no vendor-specific phrasing:
@@ -943,6 +970,9 @@ Provider-neutral, no vendor-specific phrasing:
   remediation.
 - Classify, do not grade: choose the finding id and the evidence; severity is assigned
   by `scheck`.
+- A checked hypothesis that does not apply is `verdict: ruled_out` with a note, never
+  an open finding; the closing summary says what was confirmed, ruled out and not
+  checked.
 - Do not attempt exploitation, credential extraction, or lateral movement.
 
 ---
@@ -1238,7 +1268,7 @@ provider block and model findings is emitted today and validated by
 
 ```json
 {
-  "schema_version": "1.5",
+  "schema_version": "1.6",
   "host": {
     "id": "b7c1…",                 // /etc/machine-id on Linux, IOPlatformUUID on macOS; hashed
     "hostname": "bastion-1",
@@ -1251,7 +1281,8 @@ provider block and model findings is emitted today and validated by
     "profile": "baseline", "mode": "facts|agent|single-pass",
     "provider": "…", "model": "…", "effort": "high", "native": {…}, "limits": {…},
     "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
-    "prompt_version": "sp-…", "agent": {"iterations": 3, "checks": 2, "reported": 1, "ended": "model stopped", "text": "…"},
+    "prompt_version": "sp-…", "agent": {"iterations": 3, "checks": 2, "reported": 1, "ended": "model stopped", "text": "…",
+                                         "ruled_out": [{"id": "fw.no_firewall_active", "note": "…", "evidence": [ … ]}]},
     "context_sources": [{"source": "…", "kind": "file", "sha256": "…", "bytes": 0, "truncated": false}]
   },
   "observations": { "<observation ref>": { "observation": "<observation ref>", "check": "<check id>",
@@ -1322,7 +1353,9 @@ provider block (`provider`, `model`, `effort`, `native`, `limits`, `usage`) from
 `run.assessment` to `agent`, and carries `source: model` findings. These are
 development revisions, not a compatibility promise. `1.5` (M2.6a) adds the observation
 map and references in facts, evidence and assessments, changing model citations from
-check IDs to exact observations without a compatibility shim.
+check IDs to exact observations without a compatibility shim. `1.6` adds
+`run.agent.ruled_out`, the hypotheses the model closed through `report_finding`'s
+`ruled_out` verdict (§5.7).
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,

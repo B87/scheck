@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -27,7 +28,14 @@ type Store struct {
 	findings    []Finding
 	assessments []Assessment
 	byID        map[string]int
+	ruledOut    []RuledOut
 }
+
+// Verdicts a report_finding call may carry (§5.7).
+const (
+	VerdictOpen     = "open"
+	VerdictRuledOut = "ruled_out"
+)
 
 // NewStore evaluates the posture rules over in and seeds the store.
 func NewStore(in Input) *Store {
@@ -43,7 +51,11 @@ func NewStore(in Input) *Store {
 // classifies and supplies evidence; it never supplies severity, and one it
 // sends anyway is ignored, not rejected.
 type Candidate struct {
-	ID               string       `json:"id"`
+	ID string `json:"id"`
+	// Verdict is open (the default) or ruled_out; a ruled-out candidate goes
+	// through RuleOut and is never a finding (§5.7).
+	Verdict          string       `json:"verdict,omitempty"`
+	Note             string       `json:"note,omitempty"` // ruled_out: why the id does not apply
 	Title            string       `json:"title,omitempty"`
 	Confidence       string       `json:"confidence"`
 	Evidence         []Evidence   `json:"evidence"`
@@ -83,6 +95,10 @@ func (s *Store) Report(c Candidate) (Finding, error) {
 		graded, _ := s.Grader.Grade(s.findings[i])
 		return graded, nil
 	}
+	// An open report supersedes an earlier ruling-out of the same id: the
+	// model changed its mind on evidence, and a finding and its own denial
+	// cannot both stand in one run.
+	s.ruledOut = slices.DeleteFunc(s.ruledOut, func(r RuledOut) bool { return r.ID == f.ID })
 	s.byID[f.ID] = len(s.findings)
 	s.findings = append(s.findings, f)
 	graded, _ := s.Grader.Grade(f)
@@ -101,21 +117,9 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 	if len(c.Evidence) == 0 {
 		return f, fmt.Errorf("%w: at least one evidence entry {observation, excerpt} is required", ErrInvalid)
 	}
-	for i, ev := range c.Evidence {
-		if ev.Observation == "" || strings.TrimSpace(ev.Excerpt) == "" {
-			return f, fmt.Errorf("%w: evidence[%d] needs both observation and excerpt", ErrInvalid, i)
-		}
-		if s.Output == nil {
-			return f, fmt.Errorf("%w: evidence[%d]: no check output is available to validate against", ErrInvalid, i)
-		}
-		out, ok := s.Output(ev.Observation)
-		if !ok || out.Status != runner.StatusOK || (ev.Check != "" && ev.Check != out.CheckID) {
-			return f, fmt.Errorf("%w: evidence[%d]: observation %q has no usable output in this session", ErrInvalid, i, ev.Observation)
-		}
-		if !excerptIn(ev.Excerpt, out.Raw) {
-			return f, fmt.Errorf("%w: evidence[%d]: excerpt is not in the output of %s; quote the output verbatim", ErrInvalid, i, ev.Observation)
-		}
-		f.Evidence = appendEvidence(f.Evidence, Evidence{Observation: ev.Observation, Check: out.CheckID, Excerpt: strings.TrimSpace(ev.Excerpt)})
+	var err error
+	if f.Evidence, err = s.evidence(c.Evidence); err != nil {
+		return f, err
 	}
 	if c.Service != nil {
 		if c.Service.Port < 1 || c.Service.Port > 65535 {
@@ -168,6 +172,73 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 		f.Remediation = *c.Remediation
 	}
 	return f, nil
+}
+
+// evidence validates every cited excerpt against the exact observation it
+// names (§5.7): the observation must exist in this run with a successful
+// capture, and the excerpt must appear in that capture, whitespace folded.
+func (s *Store) evidence(in []Evidence) ([]Evidence, error) {
+	var out []Evidence
+	for i, ev := range in {
+		if ev.Observation == "" || strings.TrimSpace(ev.Excerpt) == "" {
+			return nil, fmt.Errorf("%w: evidence[%d] needs both observation and excerpt", ErrInvalid, i)
+		}
+		if s.Output == nil {
+			return nil, fmt.Errorf("%w: evidence[%d]: no check output is available to validate against", ErrInvalid, i)
+		}
+		res, ok := s.Output(ev.Observation)
+		if !ok || res.Status != runner.StatusOK || (ev.Check != "" && ev.Check != res.CheckID) {
+			return nil, fmt.Errorf("%w: evidence[%d]: observation %q has no usable output in this session", ErrInvalid, i, ev.Observation)
+		}
+		if !excerptIn(ev.Excerpt, res.Raw) {
+			return nil, fmt.Errorf("%w: evidence[%d]: excerpt is not in the output of %s; quote the output verbatim", ErrInvalid, i, ev.Observation)
+		}
+		out = appendEvidence(out, Evidence{Observation: ev.Observation, Check: res.CheckID, Excerpt: strings.TrimSpace(ev.Excerpt)})
+	}
+	return out, nil
+}
+
+// RuleOut records a hypothesis the model checked and closed (§5.7). It
+// files nothing: the id must be a catalog id or a well-formed custom slug,
+// must not be a finding of this run (a rule finding is the floor and a
+// reported one is the model's own claim; a context_note is the way to
+// qualify either), needs a note saying why, and any evidence it cites is
+// validated exactly like a finding's. Ruling out the same id twice merges
+// the notes.
+func (s *Store) RuleOut(c Candidate) (RuledOut, error) {
+	r := RuledOut{ID: c.ID, Note: strings.TrimSpace(c.Note)}
+	if strings.HasPrefix(c.ID, "custom:") {
+		if !customSlug.MatchString(c.ID) {
+			return r, fmt.Errorf("%w: a custom id is custom:<slug> with [a-z0-9_-], 3..64 characters", ErrInvalid)
+		}
+	} else if _, ok := Lookup(c.ID); !ok {
+		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
+	}
+	if i, seen := s.byID[c.ID]; seen {
+		return r, fmt.Errorf("%w: %s is a %s finding of this run and cannot be ruled out; report it with a context_note to qualify it", ErrInvalid, c.ID, s.findings[i].Source)
+	}
+	if r.Note == "" {
+		return r, fmt.Errorf("%w: a ruled-out verdict needs a note saying what was checked and why %s does not apply", ErrInvalid, c.ID)
+	}
+	var err error
+	if r.Evidence, err = s.evidence(c.Evidence); err != nil {
+		return r, err
+	}
+	for i := range s.ruledOut {
+		if s.ruledOut[i].ID != r.ID {
+			continue
+		}
+		have := &s.ruledOut[i]
+		if !strings.Contains(have.Note, r.Note) {
+			have.Note += " " + r.Note
+		}
+		for _, ev := range r.Evidence {
+			have.Evidence = appendEvidence(have.Evidence, ev)
+		}
+		return *have, nil
+	}
+	s.ruledOut = append(s.ruledOut, r)
+	return r, nil
 }
 
 // ruleAllows applies what the posture rules already know to a catalog id the
@@ -256,7 +327,7 @@ func excerptIn(excerpt, output string) bool {
 // (`svc.expected_missing`, `risk.acceptance_expired`) and returns the
 // report's findings and assessments, findings ordered by severity.
 func (s *Store) Result() Result {
-	res := Result{Findings: []Finding{}, Assessments: append([]Assessment{}, s.assessments...)}
+	res := Result{Findings: []Finding{}, Assessments: append([]Assessment{}, s.assessments...), RuledOut: append([]RuledOut{}, s.ruledOut...)}
 	for _, f := range s.findings {
 		g, _ := s.Grader.Grade(f)
 		res.Findings = append(res.Findings, g)

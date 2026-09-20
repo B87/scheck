@@ -54,10 +54,12 @@ type toolError struct {
 // menu is per platform and profile and is not.
 const (
 	readFileDesc = "Read one file by absolute path. Only files under the allowed prefixes (/etc, /usr/local/etc, /opt/*/etc, systemd unit directories, /Library/Launch*) can be read; a sensitive file (shadow, keys, ~/.ssh) answers with its metadata instead of its contents; anything else is denied. Identical to run_check with text.cat."
-	// The first live runs showed the model calling report_finding to record
+	// Three live contracts showed the model calling report_finding to record
 	// a hypothesis it had ruled out ("UFW is active", filed under
-	// fw.no_firewall_active). The description says what the tool is not for.
-	reportFindingDesc = "Record one open finding: a problem that is present on the host. Never call it for something you checked and found in order, or to note that a hypothesis was ruled out; that belongs in your closing summary, and a call here would file it as an open issue. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence with the exact observation reference and a verbatim excerpt of its output. Different invocations of a check have different references. Do not send a severity: scheck grades. Reporting an id that a posture rule already produced adds your evidence and context note to it."
+	// fw.no_firewall_active) whatever the prose said. The tool now has a
+	// verdict for that: ruled_out files nothing and is shown with the
+	// model's summary (docs/SPEC.md §5.7).
+	reportFindingDesc = "Record the verdict on one finding id. verdict: open (the default) files a problem that is present on the host. verdict: ruled_out records that you checked the id and it does not apply (an active firewall under fw.no_firewall_active, a narrow sudo grant under privesc.sudo_nopasswd_broad): nothing is filed, the note is shown with your summary, and the same id can still be reported open later on new evidence. Never file something you found in order as open. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence with the exact observation reference and a verbatim excerpt of its output; a ruled-out verdict needs a note and may cite evidence the same way. Different invocations of a check have different references. Do not send a severity: scheck grades. Reporting an id open that a posture rule already produced adds your evidence and context note to it; a rule finding cannot be ruled out."
 )
 
 func (s *Session) tools() []llm.Tool {
@@ -85,9 +87,11 @@ func (s *Session) tools() []llm.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"id":         map[string]any{"type": "string"},
+				"verdict":    map[string]any{"type": "string", "enum": []string{finding.VerdictOpen, finding.VerdictRuledOut}, "description": "open files a finding (the default); ruled_out files nothing and records the note"},
+				"note":       map[string]any{"type": "string", "description": "ruled_out only: what you checked and why the id does not apply"},
 				"title":      map[string]any{"type": "string", "description": "custom findings only"},
 				"confidence": map[string]any{"type": "string", "enum": []string{"high", "medium", "low"}},
-				"evidence": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{
+				"evidence": map[string]any{"type": "array", "items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"observation": map[string]any{"type": "string", "description": "the exact observation reference whose output holds the excerpt"},
@@ -101,7 +105,7 @@ func (s *Session) tools() []llm.Tool {
 				"proposed_severity": map[string]any{"type": "string", "enum": []string{"critical", "high", "medium", "low", "info"}, "description": "custom findings only; capped at medium"},
 				"service":           map[string]any{"type": "object", "properties": map[string]any{"port": map[string]any{"type": "integer"}, "proto": map[string]any{"type": "string", "enum": []string{"tcp", "udp"}}}, "required": []string{"port"}, "description": "for a network finding: the listener it is about"},
 			},
-			"required": []string{"id", "confidence", "evidence"},
+			"required": []string{"id"},
 		})},
 	}
 }
@@ -187,6 +191,23 @@ func (s *Session) report(c llm.ToolCall) llm.ToolResult {
 	// not rejected (§7.2).
 	if err := json.Unmarshal(c.Input, &cand); err != nil {
 		return s.errorResult(c.ID, "report_finding input must be an object: "+err.Error(), nil)
+	}
+	switch cand.Verdict {
+	case "", finding.VerdictOpen:
+	case finding.VerdictRuledOut:
+		r, err := s.Store.RuleOut(cand)
+		if err != nil {
+			return s.errorResult(c.ID, err.Error(), nil)
+		}
+		if s.Log != nil {
+			s.Log("report_finding %s: ruled out", r.ID)
+		}
+		return s.jsonResult(c.ID, struct {
+			RuledOut string `json:"ruled_out"`
+			Note     string `json:"note"`
+		}{r.ID, "nothing was filed; this is shown with your closing summary"}, false)
+	default:
+		return s.errorResult(c.ID, fmt.Sprintf("verdict must be %s or %s, got %q", finding.VerdictOpen, finding.VerdictRuledOut, cand.Verdict), nil)
 	}
 	f, err := s.Store.Report(cand)
 	if err != nil {

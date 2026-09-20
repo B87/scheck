@@ -15,6 +15,7 @@ import (
 	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/llm/mock"
 	"github.com/b87/scheck/internal/policy"
+	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
 	"github.com/b87/scheck/internal/target/fixture"
 )
@@ -458,5 +459,50 @@ func TestContextBlockInPrompt(t *testing.T) {
 	h.sess.Run(context.Background())
 	if strings.Contains(mock.Serialize(h.mock.Requests()[0]), "<operator_context>") {
 		t.Error("context block present with no context")
+	}
+}
+
+// verdict: ruled_out through the loop (docs/SPEC.md §5.7): a ruled-out id
+// files nothing, is not counted as reported, reaches the report next to the
+// model's summary, and a rule finding cannot be ruled out.
+func TestRuledOutVerdict(t *testing.T) {
+	h := newHarness(t, turns(
+		mock.Turn{ToolCalls: []mock.Call{
+			call("ok", "report_finding", map[string]any{"id": finding.IDNoFirewallActive, "verdict": "ruled_out", "note": "sshd is the only listener and the host has no exposure",
+				"evidence": []map[string]string{{"observation": "net.listeners#1", "excerpt": "0.0.0.0:22"}}}),
+			call("floor", "report_finding", map[string]any{"id": finding.IDPasswordAuthEnabled, "verdict": "ruled_out", "note": "keys are used in practice"}),
+			call("bad", "report_finding", map[string]any{"id": finding.IDSudoNopasswdBroad, "verdict": "maybe", "note": "x"}),
+			call("noted", "report_finding", map[string]any{"id": finding.IDSudoNopasswdBroad, "verdict": "ruled_out"}),
+		}},
+		mock.Turn{Text: "Firewall reviewed.", Expect: &mock.Expect{ToolResults: []string{"ok"}, ErrorResults: []string{"floor", "bad", "noted"},
+			Contains: []string{`"ruled_out":"fw.no_firewall_active"`}}},
+	), nil)
+	out := h.sess.Run(context.Background())
+	if !out.Complete() || out.Reported != 0 {
+		t.Fatalf("%+v", out)
+	}
+	res := h.sess.Store.Result()
+	if len(res.RuledOut) != 1 || res.RuledOut[0].ID != finding.IDNoFirewallActive || len(res.RuledOut[0].Evidence) != 1 {
+		t.Fatalf("ruled out: %+v", res.RuledOut)
+	}
+	for _, f := range res.Findings {
+		if f.ID == finding.IDNoFirewallActive {
+			t.Fatal("a ruled-out id became a finding")
+		}
+		if f.ID == finding.IDPasswordAuthEnabled && (f.Status != finding.StatusOpen || f.Source != finding.SourceRule) {
+			t.Fatalf("the rule finding was touched: %+v", f)
+		}
+	}
+	env := report.Build(h.sess.Sheet, report.Meta{Started: time.Now(), Profile: "baseline", Transport: "fixture", Elevation: "root", Canary: "n/a", Result: &res,
+		Phase2: &report.Phase2{Provider: "mock", Model: "m", Mode: "agent", Complete: true, Agent: report.AgentRun{Iterations: out.Iterations, Ended: "model stopped", Text: out.Text}}})
+	if env.Run.Agent == nil || len(env.Run.Agent.RuledOut) != 1 {
+		t.Fatalf("envelope: %+v", env.Run.Agent)
+	}
+	var text bytes.Buffer
+	if err := report.WriteText(&text, env, report.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if s := text.String(); !strings.Contains(s, "ruled out by the model (1, nothing filed)") || !strings.Contains(s, "fw.no_firewall_active: sshd is the only listener") {
+		t.Fatalf("text report:\n%s", s)
 	}
 }

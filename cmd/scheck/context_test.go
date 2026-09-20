@@ -108,7 +108,7 @@ func TestFactsReportRecordsContextSources(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.SchemaVersion != "1.5" || len(doc.Run.ContextSources) != 2 {
+	if doc.SchemaVersion != "1.6" || len(doc.Run.ContextSources) != 2 {
 		t.Fatalf("envelope: %+v", doc)
 	}
 	note, file := doc.Run.ContextSources[0], doc.Run.ContextSources[1]

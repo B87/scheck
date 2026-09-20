@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/report-schema.json",
   "title": "scheck run envelope",
-  "description": "SPEC.md §7.4, schema 1.5. Development schema; compatibility starts at the first GitHub release.",
+  "description": "SPEC.md §7.4, schema 1.6. Development schema; compatibility starts at the first GitHub release.",
   "type": "object",
   "required": ["schema_version", "host", "run", "facts", "observations", "assessments", "findings"],
   "additionalProperties": false,
@@ -51,7 +51,33 @@
             "checks": { "type": "integer", "minimum": 0 },
             "reported": { "type": "integer", "minimum": 0 },
             "ended": { "type": "string" },
-            "text": { "type": "string" }
+            "text": { "type": "string" },
+            "ruled_out": {
+              "type": "array",
+              "description": "SPEC.md §5.7: ids the model checked and closed with verdict: ruled_out. Never a finding, never graded.",
+              "items": {
+                "type": "object",
+                "required": ["id", "note"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": { "type": "string" },
+                  "note": { "type": "string" },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["check", "excerpt"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "check": { "type": "string" },
+                        "observation": { "type": "string", "minLength": 1 },
+                        "excerpt": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "usage": {

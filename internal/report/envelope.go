@@ -21,7 +21,7 @@ import (
 // `run.agent` from phase 2 and carries model findings (docs/SPEC.md §7.4).
 // 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.5"
+const SchemaVersion = "1.6"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -102,6 +102,11 @@ type AgentRun struct {
 	// Text is the model's closing summary. It is model output, rendered
 	// through the same escaping as target output.
 	Text string `json:"text,omitempty"`
+	// RuledOut lists the ids the model checked and closed with
+	// report_finding's ruled_out verdict (docs/SPEC.md §5.7). None is a
+	// finding; they are shown with the summary so a reader sees what was
+	// looked at and dismissed.
+	RuledOut []finding.RuledOut `json:"ruled_out,omitempty"`
 }
 
 // Phase2 is what the caller knows after the agent ran.
@@ -202,6 +207,7 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 		env.Run.Native, env.Run.Limits, env.Run.Usage = &native, &limits, p.Usage
 		env.Run.PromptVersion = p.PromptVersion
 		agent := p.Agent
+		agent.RuledOut = assessed.RuledOut
 		env.Run.Agent = &agent
 		env.Run.Warnings = append(env.Run.Warnings, p.Warnings...)
 		if !p.Complete {

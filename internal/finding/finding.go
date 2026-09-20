@@ -69,6 +69,15 @@ type Evidence struct {
 	Excerpt     string `json:"excerpt"`
 }
 
+// RuledOut is a hypothesis the model investigated and closed (docs/SPEC.md
+// §5.7): the id it would have reported, why it does not apply, and any
+// validated evidence. It is never a finding, never graded, never counted.
+type RuledOut struct {
+	ID       string     `json:"id"`
+	Note     string     `json:"note"`
+	Evidence []Evidence `json:"evidence,omitempty"`
+}
+
 // Adjustment records one severity change and where it came from
 // (docs/SPEC.md §6.3, §6.4): every change is attributed.
 type Adjustment struct {

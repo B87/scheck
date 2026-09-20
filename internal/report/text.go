@@ -348,7 +348,7 @@ func (t *textReport) section(title, note string, rows []row) {
 // a verdict of scheck's.
 func (t *textReport) modelSummary() {
 	a := t.env.Run.Agent
-	if a == nil || strings.TrimSpace(a.Text) == "" {
+	if a == nil || (strings.TrimSpace(a.Text) == "" && len(a.RuledOut) == 0) {
 		return
 	}
 	t.line("")
@@ -359,6 +359,16 @@ func (t *textReport) modelSummary() {
 			continue
 		}
 		t.para("  ", sanitize(para))
+	}
+	if len(a.RuledOut) == 0 {
+		return
+	}
+	// Ruled-out ids are the model's negative claims: shown, never graded,
+	// never a finding (docs/SPEC.md §5.7).
+	t.line("")
+	t.para("  ", fmt.Sprintf("ruled out by the model (%d, nothing filed):", len(a.RuledOut)))
+	for _, r := range a.RuledOut {
+		t.hang("    - ", "      ", sanitize(r.ID+": "+r.Note))
 	}
 }
 

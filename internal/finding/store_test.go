@@ -225,3 +225,62 @@ func TestStoreReportRejects(t *testing.T) {
 		t.Errorf("custom: %+v %v", got, err)
 	}
 }
+
+// verdict: ruled_out (docs/SPEC.md §5.7): a checked-and-closed hypothesis is
+// recorded with its note and validated evidence, never as a finding; a
+// finding of this run cannot be ruled out; an open report of the same id
+// later supersedes the ruling-out.
+func TestStoreRuleOut(t *testing.T) {
+	sheet := storeSheet(t, check.Linux, map[string]string{
+		"sshd.config":   "passwordauthentication yes\nlistenaddress 0.0.0.0:22\n",
+		"net.listeners": listeners,
+	})
+	s := NewStore(Input{Sheet: sheet})
+	s.Output = outputFrom(sheet)
+	s.Grader = Grader{Now: now}
+	ok := Candidate{ID: IDNoFirewallActive, Verdict: VerdictRuledOut, Note: "ufw is active",
+		Evidence: []Evidence{{Observation: "net.listeners#1", Excerpt: "0.0.0.0:443"}}}
+	r, err := s.RuleOut(ok)
+	if err != nil || r.ID != IDNoFirewallActive || len(r.Evidence) != 1 || r.Evidence[0].Check != "net.listeners" {
+		t.Fatalf("rule out: %+v %v", r, err)
+	}
+	// Twice: notes merge, evidence does not duplicate.
+	if r, err = s.RuleOut(Candidate{ID: IDNoFirewallActive, Note: "nftables holds rules", Evidence: ok.Evidence}); err != nil || len(r.Evidence) != 1 || !strings.Contains(r.Note, "ufw is active") || !strings.Contains(r.Note, "nftables") {
+		t.Fatalf("merge: %+v %v", r, err)
+	}
+	res := s.Result()
+	if len(res.RuledOut) != 1 || len(res.Findings) != 1 || hasFinding(res, IDNoFirewallActive) {
+		t.Fatalf("ruled out must not be a finding: %+v", res)
+	}
+	rejects := map[string]Candidate{
+		"unknown id":          {ID: "fw.nope", Note: "x"},
+		"bad custom slug":     {ID: "custom:Bad", Note: "x"},
+		"rule finding":        {ID: IDPasswordAuthEnabled, Note: "not on this host"},
+		"no note":             {ID: IDSudoNopasswdBroad},
+		"fabricated excerpt":  {ID: IDSudoNopasswdBroad, Note: "x", Evidence: []Evidence{{Observation: "net.listeners#1", Excerpt: "0.0.0.0:9999"}}},
+		"unknown observation": {ID: IDSudoNopasswdBroad, Note: "x", Evidence: []Evidence{{Observation: "sudo.config#7", Excerpt: "x"}}},
+	}
+	for name, c := range rejects {
+		if _, err := s.RuleOut(c); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
+	}
+	if len(s.Result().RuledOut) != 1 {
+		t.Fatal("a rejected candidate changed the store")
+	}
+	// The model rules out a listener, then reports it open on evidence: the
+	// finding stands and the ruling-out is gone; ruling it out again fails.
+	if _, err := s.RuleOut(Candidate{ID: IDUnexpectedListener, Note: "nginx is the site"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Report(Candidate{ID: IDUnexpectedListener, Confidence: ConfidenceHigh, Evidence: []Evidence{{Observation: "net.listeners#1", Excerpt: "0.0.0.0:443"}}}); err != nil {
+		t.Fatal(err)
+	}
+	res = s.Result()
+	if !hasFinding(res, IDUnexpectedListener) || len(res.RuledOut) != 1 || res.RuledOut[0].ID != IDNoFirewallActive {
+		t.Fatalf("open must supersede ruled out: %+v", res)
+	}
+	if _, err := s.RuleOut(Candidate{ID: IDUnexpectedListener, Note: "changed my mind"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a model finding was ruled out: %v", err)
+	}
+}
