@@ -4,7 +4,8 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ design · Language: Go · Inference: provider-agnostic (default
+Status: v0.6 — M0, M1 (through M1.8) and M2.1–M2.6 implemented, M2.7 harness implemented
+with its live evaluation pending (2026-09-20) · Language: Go · Inference: provider-agnostic (default
 `openai-compatible`, `--model` required; Anthropic and guaranteed local-only inference deferred past v1)
 
 **Changes from v0.1** (from design review):

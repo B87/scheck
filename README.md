@@ -4,11 +4,15 @@ A read-only security posture checker for one macOS or Linux host, locally or ove
 SSH. Every target command comes from a compiled catalog and runs through the same
 policy, redaction and audit path. scheck never applies hardening changes.
 
-**Current build:** collects facts, assesses them with compiled-in posture rules, and
-produces readable or JSON reports. The model-driven assessment is not implemented yet.
-A rule reads one fact, so exit 0 and an empty findings list mean no rule fired — not
-that the host is secure; read the `assessments` coverage and the skipped checks. This
-project is unreleased; interfaces may change before the first GitHub release.
+**Current build:** collects facts, assesses them with compiled-in posture rules, grades
+findings through operator context, and — without `--stop-after` — hands the facts to a
+model that may run further catalog checks through the same policy and report findings
+that scheck grades. A rule reads one fact, so exit 0 and an empty findings list mean no
+rule fired — not that the host is secure; read the `assessments` coverage and the
+skipped checks. **The model's quality has not been evaluated yet** (see
+[docs/eval/phase2-results.md](docs/eval/phase2-results.md)); treat model findings as
+evidence-backed candidates. This project is unreleased; interfaces may change before
+the first GitHub release.
 
 ## Quick start
 
@@ -16,9 +20,19 @@ With the Go toolchain required by [go.mod](go.mod):
 
 ```sh
 make build
-bin/scheck local --stop-after facts --no-persist
+bin/scheck local --stop-after facts --no-persist            # posture rules only, no model
 bin/scheck ssh user@host --stop-after facts --no-persist
+export OPENAI_API_KEY=...                                    # or --base-url for another endpoint
+bin/scheck local --model gpt-5-mini --context hosts/gateway.yaml   # rules + the agentic pass
+bin/scheck providers                                         # what is configured
+bin/scheck config show                                       # effective settings with provenance
 ```
+
+Operator context (`--context FILE|DIR|note:TEXT|target[:PATH]`, a `context:` block in
+`scheck.yaml`, files under `.scheck/context/`) declares the host's role, exposure,
+expected services and accepted risks; findings are graded through it with every
+change attributed, and `scheck explain FINDING-ID --exposure internet` shows the
+chain. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 SSH uses strict host-key verification and key/agent authentication. Checks needing
 privileges are unavailable unless the session is root or authorized non-interactive
@@ -52,9 +66,12 @@ and partial results. For interactive inspection,
 ## Project documentation
 
 - [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2.1 is next.
+- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2 is built, its live evaluation is pending, M4 is next.
+- [Configuration walkthrough](docs/CONFIGURATION.md): preferences, restrictions and context.
+- [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate and its record.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.
 - [Contributor instructions](AGENTS.md): development workflow and required checks.
 
-Run `make check` for vet, modernization, lint and race tests. Container integration
-tests use `make integ` and require Docker or Podman.
+Run `make check` for vet, modernization, lint, the provider-dependency check and race
+tests. Container integration tests use `make integ` and require Docker or Podman;
+`make live` runs the opt-in tests that spend real money.

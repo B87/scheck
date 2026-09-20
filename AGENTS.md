@@ -2,9 +2,11 @@
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
 over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP-0.0.1.md` says what is
-built (M0, M1, M1.6 including diagnostics and JSON discovery, M1.7 typed parsers and
-summaries, M1.8 posture rules and the finding catalog) and what is next (M2). This file is the operating manual for a coding
-agent in this repository. The spec wins on any conflict.
+built (M0, M1 through M1.8, and M2: the `llm` contract, operator context, the grader,
+the agent loop, the injection corpus, the `openai-compatible` adapter and the
+evaluation harness) and what is pending (M2.7's live evaluation, then M4). This file is
+the operating manual for a coding agent in this repository. The spec wins on any
+conflict.
 
 ## Non-negotiables
 
@@ -54,6 +56,13 @@ passes.
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
+| `internal/llm` | the provider contract (§5.1), token accounting (`CheckFit`), the registry; `mock` (transcript replay), `openai` (the default adapter), `conformance` (the suite every adapter passes), `all` (links adapters, registers deferred names) |
+| `internal/operator` | operator context: sources, the §6.2 schema, per-kind merge, budget, the `<operator_context>` block |
+| `internal/agent` | phase 2: the system prompt, the three tools, the loop; every execution through `runner.RunAs`, every finding through `finding.Store` |
+| `internal/eval` | the M2.7 harness: arms, metrics, adversarial pairs, the comparison report |
+| `testdata/context`, `testdata/eval`, `testdata/transcripts` | injection corpus with benign controls; labeled evaluation cases (`base:` a recorded fixture); mock transcripts |
+| `docs/eval` | the frozen phase 2 criteria and the results record |
+| `test/live` | opt-in tests that spend real money (`make live`, build tag `live`) |
 | `test/containers`, `test/integ` | Docker images and `integration`-tagged tests |
 | `testdata/fixtures/<name>` | recorded exec fixtures (`manifest.yaml` + files) |
 | `docs/` | `SPEC.md`, `ROADMAP-0.0.1.md`, `report-schema.json`; root `README.md` is the quick start |
@@ -80,8 +89,19 @@ go run ./cmd/scheck explain sshd.config --format json
 go run ./cmd/scheck catalog --platform linux --format json
 go run ./cmd/scheck local --stop-after facts --format json --include-evidence --no-persist
 go run ./cmd/scheck sudoers --platform macos
+go run ./cmd/scheck providers
+go run ./cmd/scheck config show --format json
+go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
+go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
+go run ./cmd/scheck local --provider mock --transcript testdata/transcripts/correlated-finding-macos.json --no-persist
+go run ./cmd/scheck local --model gpt-5-mini      # needs OPENAI_API_KEY; spends money
+go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
+make live                                        # opt-in live tests
 go test ./internal/report -update    # rewrite the golden text reports, then read the diff
 ```
+
+`make check` also runs `scripts/depcheck.sh`: `agent`, `policy`, `check`, `finding`,
+`report` and `llm` must have no adapter or SDK in their dependency graph.
 
 `make check` includes the user's `fix` target (`go fix ./...`); keep it in the chain.
 If `go fix` proposes conflicting rewrites and never converges, apply the modernization
@@ -163,11 +183,36 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   same commit and add a line to its change list. The spec is the contract; silent
   drift is a bug.
 
+## Adding a provider adapter
+
+1. Implement `llm.Provider` under `internal/llm/<name>` with net/http, not an SDK, and
+   register it in `init` with `llm.Register`; import it from `internal/llm/all`.
+   Construction takes `llm.Config` and performs no I/O; credentials are read from the
+   environment at request time and never printed.
+2. Absorb capability differences inside the adapter (§5.3) and record what was not
+   exercised in `Native()`. Never add a provider name or capability boolean to an `if`
+   in `internal/agent`.
+3. Pass `conformance.Run` through a fake server that speaks the protocol the way the
+   endpoint does; classify failures as `llm.Error` kinds so the loop can end a run
+   honestly.
+
+## Phase 2 rules
+
+- `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate (profile
+  tier, no canary) is enforced there, not in the tool. `report_finding` goes through
+  `finding.Store.Report`, which validates every excerpt against a check's output.
+- Severity never comes from the model. A `severity` in `report_finding` is ignored.
+- Every budget in `policy.Budgets` ends the run `incomplete` by name; a request is
+  checked with `llm.CheckFit` before it is sent, and overflow never drops evidence.
+- The `<operator_context>` block and check output are data; `testdata/context` is the
+  corpus and `internal/agent/injection_test.go` the boundary tests. They prove policy,
+  not model resistance: only a live run recorded in `docs/eval/phase2-results.md` does.
+
 ## Out of scope until the roadmap slice that introduces them
 
-`llm`, agent loop, context adjustments and accepted risks (M2.3), `--context` (M2.2),
-`--only`, SARIF, `scheck diff`, `--local-only`, the optional §5.9 assessment track. The
-finding catalog and posture rules arrive in M1.8 and typed parsers in M1.7; do not
-scaffold them earlier, and do not scaffold empty abstractions for any of the above.
+`--only`, SARIF, `scheck diff`, `--local-only` and `allow_egress: false` (exit 3 now),
+`anthropic` and `ollama` (registered, exit 3), tool-call emulation, chunking, the
+optional §5.9 assessment track. Do not scaffold empty abstractions for any of them.
 A posture rule reads the fact sheet only; if a rule seems to need a new command, add a
-catalog check first and keep the rule single-fact (§7.5).
+catalog check first and keep the rule single-fact (§7.5). A conclusion that needs two
+facts is the model's, through a judgement finding id in `internal/finding/catalog.go`.

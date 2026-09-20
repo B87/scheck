@@ -11,12 +11,12 @@ must be true before it's done, and which spec section it implements. "Done" alwa
 includes tests, not just code — the testing strategy in `SPEC.md` §11 is distributed
 across slices below rather than saved for the end.
 
-**Status (2026-09-20):** M0 and the original M1 slices are committed on `main`.
-M1.6 with its diagnostics/agent-CLI follow-up, M1.7 and M1.8 are implemented and
-validated in the working tree, not yet committed or released. Checkmarks indicate
-completed implementation; each slice records validation separately.
-Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules).
-M2.1 is next.
+**Status (2026-09-20):** M0, M1 (through M1.8) and M2.1–M2.6 are committed on `main`,
+one commit per slice, `make check` green at each. M2.7's harness, suite and results
+record are committed; **its live evaluation has not been run**, so acceptance criteria
+7, 10 and 12 are undecided and the loop-versus-single-pass decision is open. Checkmarks
+indicate completed implementation; each slice records validation separately. M4 follows
+once the live record exists.
 
 **0.0.1 scope revision (2026-09-20):** M2 includes full-request context limits,
 real-model quality/adversarial release gates and configuration usability (M2.2a).
