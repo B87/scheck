@@ -1,29 +1,8 @@
 base: ../../../fixtures/ubuntu
 execs:
-- argv:
-  - sudo
-  - -n
-  - --
-  - ufw
-  - status
-  - verbose
-  stdout: 'Status: active
-
-    Logging: on (low)
-
-    Default: deny (incoming), allow (outgoing), disabled (routed)
-
-    New profiles: skip
-
-
-    To                         Action      From
-
-    --                         ------      ----
-
-    22/tcp                     ALLOW IN    Anywhere
-
-    '
-  code: 0
+# Fixture note (2026-09-20): the fixture target answers with the first matching
+# argv, so a case must not record the same argv twice; the shared "ufw active"
+# preamble once shadowed this case's own ufw entry (docs/eval/phase2-results.md).
 - argv:
   - timedatectl
   - show

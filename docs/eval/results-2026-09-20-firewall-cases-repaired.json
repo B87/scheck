@@ -1,0 +1,679 @@
+{
+  "started": "2026-09-20T21:55:58.01+02:00",
+  "live": true,
+  "model": "gpt-5.6-luna",
+  "provider": "openai-compatible",
+  "prompt_version": "sp-e0d904499422",
+  "scheck_version": "dev",
+  "repeat": 3,
+  "suite": [
+    {
+      "name": "linux-no-firewall",
+      "labels": {
+        "kind": "correlated",
+        "description": "ufw inactive, firewalld absent, nftables ruleset empty: no host firewall at all.",
+        "elevation": "sudo",
+        "expect_rules": [],
+        "expect_model": [
+          "fw.no_firewall_active"
+        ],
+        "forbid": [],
+        "forbid_custom": true
+      }
+    },
+    {
+      "name": "linux-unavailable-firewall",
+      "labels": {
+        "kind": "misleading",
+        "description": "Every firewall check is unavailable; no firewall conclusion can be drawn.",
+        "elevation": "sudo",
+        "expect_rules": [],
+        "expect_model": [],
+        "forbid": [
+          "fw.no_firewall_active"
+        ],
+        "forbid_custom": true
+      }
+    }
+  ],
+  "runs": [
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "rules",
+      "repeat": 1,
+      "status": "complete",
+      "iterations": 0,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 13,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost_usd": null
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "single-pass",
+      "repeat": 1,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 7839,
+      "usage": {
+        "input": 9284,
+        "output": 1350,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost_usd": 0.0034768000000000004
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "ruled_out": [
+        "persist.unexpected_entry",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 1,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "single-pass",
+      "repeat": 2,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 7185,
+      "usage": {
+        "input": 9284,
+        "output": 1188,
+        "cache_read": 9281,
+        "cache_write": 0,
+        "cost_usd": 0.00161182
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "ruled_out": [
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 1,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "single-pass",
+      "repeat": 3,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 9629,
+      "usage": {
+        "input": 9284,
+        "output": 1654,
+        "cache_read": 9281,
+        "cache_write": 0,
+        "cost_usd": 0.00217102
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "ruled_out": [
+        "net.unexpected_listener",
+        "persist.unexpected_entry",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 1,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "agent",
+      "repeat": 1,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 14,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 21339,
+      "usage": {
+        "input": 144451,
+        "output": 1713,
+        "cache_read": 142412,
+        "cache_write": 0,
+        "cost_usd": 0.0053116399999999986
+      },
+      "rule_ids": [],
+      "model_ids": [
+        "fw.no_firewall_active"
+      ],
+      "findings": [
+        {
+          "id": "fw.no_firewall_active",
+          "title": "No host firewall is active",
+          "category": "network",
+          "severity_base": "medium",
+          "severity": "medium",
+          "adjustments": [],
+          "status": "open",
+          "source": "model",
+          "confidence": "medium",
+          "platform": "linux",
+          "evidence": [
+            {
+              "observation": "fw.ufw#1",
+              "check": "fw.ufw",
+              "excerpt": "Status: inactive"
+            }
+          ],
+          "impact": "The available firewall check reports the host firewall inactive; SSH is listening on all IPv4 and IPv6 interfaces.",
+          "remediation": {
+            "summary": "Enable and configure a host firewall with a least-privilege inbound policy, allowing only required services such as SSH from trusted sources."
+          }
+        }
+      ],
+      "ruled_out": [
+        "accounts.empty_password",
+        "log.auditd_inactive",
+        "net.unexpected_listener",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed"
+      ],
+      "text": "## Assessment summary\n\n### Confirmed finding\n- **fw.no_firewall_active — Open**\n  - Evidence: `fw.ufw#1`: `Status: inactive`\n  - SSH listens on all IPv4 and IPv6 interfaces, so host-level network exposure is not restricted by the reported firewall state.\n  - **Remediation:** Enable a host firewall and permit only required inbound services, preferably restricting SSH to trusted networks.\n\n### Ruled out\n- Unexpected listener: only SSH on standard port 22 was observed.\n- SSH password authentication and password exposure: effective configuration contains `passwordauthentication no`.\n- Broad `NOPASSWD` sudo grant: observed grants are fixed, read-only commands rather than `ALL` or shell access.\n- Empty-password accounts: all reported account statuses were locked.\n- `auditd` inactive: auditd reported `active`.\n\n### Could not conclusively assess\n- **SELinux disabled:** `sestatus` was unavailable; absence of the command is not evidence that SELinux is disabled.\n- **Pending updates:** DNF and Zypper checks were unavailable, though the applicable APT check reported `0 updates available`.\n- Shadow-permission and world-writable-path rule-outs could not be recorded because the supplied excerpts did not exactly match the tool validator’s accepted output text; their fact observations themselves reported mode `640` for `/etc/shadow` and `0 world-writable paths`.\n- File encryption could not be established from the available block-device output; `/etc/crypttab` was absent and no encryption layer was shown.",
+      "metrics": {
+        "correct": 1,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "agent",
+      "repeat": 2,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 3,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 12068,
+      "usage": {
+        "input": 31341,
+        "output": 1699,
+        "cache_read": 29448,
+        "cache_write": 0,
+        "cost_usd": 0.00300636
+      },
+      "rule_ids": [],
+      "model_ids": [
+        "fw.no_firewall_active"
+      ],
+      "findings": [
+        {
+          "id": "fw.no_firewall_active",
+          "title": "No host firewall is active",
+          "category": "network",
+          "severity_base": "medium",
+          "severity": "medium",
+          "adjustments": [],
+          "status": "open",
+          "source": "model",
+          "confidence": "high",
+          "platform": "linux",
+          "evidence": [
+            {
+              "observation": "fw.ufw#1",
+              "check": "fw.ufw",
+              "excerpt": "Status: inactive"
+            }
+          ],
+          "impact": "No active host firewall is evidenced while SSH listens on all IPv4 and IPv6 interfaces.",
+          "remediation": {
+            "summary": "Enable a host firewall with default-deny inbound rules, allowing SSH only from approved management networks."
+          }
+        }
+      ],
+      "ruled_out": [
+        "privesc.sudo_nopasswd_broad",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "text": "Assessment complete.\n\n**Confirmed finding**\n- **fw.no_firewall_active — open**\n  - Evidence: `fw.ufw#1`: `Status: inactive`\n  - SSH is listening on all IPv4 and IPv6 interfaces. Enable a host firewall with default-deny inbound rules and restrict SSH to approved management networks.\n\n**Ruled out**\n- Broad `NOPASSWD` sudo access: only fixed, individual read-only commands were observed.\n- Unexpected SUID binaries: observed list consists of standard Ubuntu administrative binaries.\n- World-writable paths without sticky bit: none observed.\n- Empty-password accounts: all accounts were reported locked.\n- Unexpected `/etc/shadow` permissions: mode `0640`, owner `root:shadow`.\n- `auditd` inactivity: auditd is active.\n- Pending updates: Ubuntu’s apt check reported no updates.\n- NTP disabled or unsynchronized: NTP is enabled and synchronized.\n- Direct unrestricted root SSH login: effective setting was `permitrootlogin without-password`, which did not match the platform rule.\n\n**Could not assess**\n- SELinux status: `sestatus` was unavailable; this host is Ubuntu and no SELinux conclusion is made.\n- dnf/zypper update checks: commands were unavailable and are not the applicable package managers evidenced for this Ubuntu host.\n- Full persistence via systemd timers: the host was not booted with systemd as PID 1, though enabled unit files and cron entries were collected.",
+      "metrics": {
+        "correct": 1,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-no-firewall",
+      "kind": "correlated",
+      "arm": "agent",
+      "repeat": 3,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 3,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 15441,
+      "usage": {
+        "input": 32476,
+        "output": 2393,
+        "cache_read": 29601,
+        "cache_write": 0,
+        "cost_usd": 0.00403862
+      },
+      "rule_ids": [],
+      "model_ids": [
+        "fw.no_firewall_active"
+      ],
+      "findings": [
+        {
+          "id": "fw.no_firewall_active",
+          "title": "No host firewall is active",
+          "category": "network",
+          "severity_base": "medium",
+          "severity": "medium",
+          "adjustments": [],
+          "status": "open",
+          "source": "model",
+          "confidence": "medium",
+          "platform": "linux",
+          "evidence": [
+            {
+              "observation": "fw.ufw#1",
+              "check": "fw.ufw",
+              "excerpt": "Status: inactive"
+            },
+            {
+              "observation": "net.listeners#1",
+              "check": "net.listeners",
+              "excerpt": "tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*"
+            }
+          ],
+          "impact": "UFW is inactive and nftables produced no ruleset output; SSH is listening on all interfaces.",
+          "remediation": {
+            "summary": "Enable a host firewall with default-deny inbound policy and allow SSH only from required management networks."
+          }
+        }
+      ],
+      "ruled_out": [
+        "accounts.empty_password",
+        "accounts.shadow_permissions_unexpected",
+        "fs.suid_unexpected",
+        "log.auditd_inactive",
+        "persist.unexpected_entry",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced",
+        "updates.pending"
+      ],
+      "text": "Assessment complete.\n\n**Confirmed finding**\n- **fw.no_firewall_active — open (medium):** UFW reports `Status: inactive`; nftables returned no ruleset output. SSH is listening on `0.0.0.0:22`. Enable a host firewall with default-deny inbound policy and restrict SSH to required management networks.\n\n**Ruled out**\n- SSH password authentication and exposed-password SSH: effective config says `passwordauthentication no`.\n- Broad NOPASSWD sudo: grants observed are fixed per-command grants.\n- Root password login, empty-password accounts, unexpected shadow permissions, unexpected SUID/world-writable paths.\n- Unexpected listeners: only SSH on port 22 was observed.\n- Inactive auditd, disabled/unsynchronised NTP, and pending APT updates.\n- Persistence entries appeared to be standard Ubuntu cron/systemd maintenance entries.\n\n**Could not assess**\n- SELinux status: `sestatus` is unavailable.\n- DNF/Zypper update checks: those package managers are unavailable; APT was checked and reported no updates.\n- Disk encryption posture was inconclusive: `/etc/crypttab` was absent and block-device output showed no FSTYPE or crypt-layer evidence.\n- AppArmor status was unavailable because `aa-status` was not found.\n",
+      "metrics": {
+        "correct": 1,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "rules",
+      "repeat": 1,
+      "status": "complete",
+      "iterations": 0,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 9,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost_usd": null
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "single-pass",
+      "repeat": 1,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 1255,
+      "usage": {
+        "input": 9266,
+        "output": 89,
+        "cache_read": 9263,
+        "cache_write": 0,
+        "cost_usd": 0.00029266000000000003
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": true,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "single-pass",
+      "repeat": 2,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 1517,
+      "usage": {
+        "input": 9266,
+        "output": 78,
+        "cache_read": 9263,
+        "cache_write": 0,
+        "cost_usd": 0.00027946000000000004
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": true,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "single-pass",
+      "repeat": 3,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 1,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 1207,
+      "usage": {
+        "input": 9266,
+        "output": 80,
+        "cache_read": 9263,
+        "cache_write": 0,
+        "cost_usd": 0.00028186
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": true,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "agent",
+      "repeat": 1,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 4,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 16871,
+      "usage": {
+        "input": 45055,
+        "output": 2549,
+        "cache_read": 41866,
+        "cache_write": 0,
+        "cost_usd": 0.0045339199999999994
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "ruled_out": [
+        "accounts.empty_password",
+        "accounts.shadow_permissions_unexpected",
+        "fs.suid_unexpected",
+        "log.auditd_inactive",
+        "net.unexpected_listener",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "text": "Assessment completed.\n\nConfirmed:\n- Ubuntu 24.04.5 LTS host.\n- SSH listens on IPv4 and IPv6 port 22.\n- SSH password authentication is disabled.\n- Direct root password login is disabled (`permitrootlogin without-password`).\n- auditd is active.\n- Accounts are locked; `/etc/shadow` is mode 640, owned by `root:shadow`.\n- No unexpected world-writable paths were reported.\n- NTP is enabled and synchronized.\n- Sudoers drop-ins contain only narrowly scoped, read-only audit commands rather than broad `NOPASSWD` access.\n\nRuled out:\n- Empty-password accounts\n- Unexpected `/etc/shadow` permissions\n- Unexpected SUID binary based on the reported inventory\n- Inactive auditd\n- Unexpected listener\n- SSH password authentication and exposed password authentication\n- Direct root password login\n- Disabled or unsynchronized NTP\n\nCould not confirm:\n- Host firewall state: firewalld, nftables, and UFW checks were unavailable or absent. This is especially relevant because SSH listens on all interfaces.\n- SELinux status: `sestatus` was unavailable.\n- Some non-APT update checks were unavailable, though the host is identified as Ubuntu.\n- Disk encryption status was inconclusive because `/etc/crypttab` was absent and the block-device output did not establish encryption state.\n- Persistence review was limited by unavailable systemd-timer inspection and the container-like environment.\n\nNo open finding was successfully filed because the available catalog findings either were ruled out, were platform-inapplicable, or lacked accepted evidence for an open report.",
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": true,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "agent",
+      "repeat": 2,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 3,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 15134,
+      "usage": {
+        "input": 32848,
+        "output": 2529,
+        "cache_read": 29765,
+        "cache_write": 0,
+        "cost_usd": 0.0042467
+      },
+      "rule_ids": [],
+      "model_ids": [],
+      "findings": [],
+      "ruled_out": [
+        "disk.filevault_off",
+        "log.auditd_inactive",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed",
+        "sshd.root_login_enabled",
+        "time.ntp_disabled",
+        "time.ntp_unsynced"
+      ],
+      "text": "Assessment completed.\n\nConfirmed:\n- SSH is listening on TCP/22 on all IPv4 and IPv6 interfaces.\n- SSH password authentication is disabled.\n- Direct root password login is not permitted.\n- All listed accounts are locked.\n- `/etc/shadow` reports mode `640`, owned by `root:shadow`.\n- No non-sticky world-writable paths were observed.\n- `auditd` is active.\n- apt reports no pending updates.\n- NTP is enabled and synchronized.\n- Sudoers drop-ins contain only fixed, per-command NOPASSWD grants; no broad `ALL`/shell NOPASSWD grant was confirmed.\n\nCould not confirm:\n- Host firewall state: firewalld, nft, and ufw checks were unavailable or produced no usable output. Because SSH is publicly bound, firewall posture remains uncertain.\n- SELinux status: `sestatus` was unavailable.\n- Disk encryption status: the Linux-specific encryption evidence was incomplete; macOS FileVault is not applicable.\n- Persistence timers could not be queried because systemd is not PID 1.\n- SUID binaries were observed, but no baseline or operator context was available to classify them as unexpected.\n\nNo additional open finding was successfully recorded because the reporting API rejected several excerpts as not matching the exact observation output, and the Linux platform does not support the generic remote-login finding.",
+      "metrics": {
+        "correct": 0,
+        "false_positives": 0,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": true,
+        "resolved": false,
+        "incomplete": false
+      }
+    },
+    {
+      "case": "linux-unavailable-firewall",
+      "kind": "misleading",
+      "arm": "agent",
+      "repeat": 3,
+      "status": "complete",
+      "ended": "model stopped",
+      "iterations": 16,
+      "checks": 0,
+      "denied_tool_calls": 0,
+      "latency_ms": 21882,
+      "usage": {
+        "input": 163635,
+        "output": 1886,
+        "cache_read": 161345,
+        "cache_write": 0,
+        "cost_usd": 0.0059481000000000004
+      },
+      "rule_ids": [],
+      "model_ids": [
+        "fw.no_firewall_active"
+      ],
+      "findings": [
+        {
+          "id": "fw.no_firewall_active",
+          "title": "No host firewall is active",
+          "category": "network",
+          "severity_base": "medium",
+          "severity": "medium",
+          "adjustments": [],
+          "status": "open",
+          "source": "model",
+          "confidence": "low",
+          "platform": "linux",
+          "evidence": [
+            {
+              "observation": "net.listeners#1",
+              "check": "net.listeners",
+              "excerpt": "tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*"
+            }
+          ],
+          "impact": "The available firewall checks were unavailable, so an active host firewall could not be confirmed; SSH listens on all IPv4 and IPv6 interfaces.",
+          "remediation": {
+            "summary": "Enable and verify a host firewall with an allowlist for required services, especially SSH from approved administration networks.",
+            "commands": [
+              "Configure the firewall appropriate to the image, allow only required traffic, and verify the active ruleset."
+            ]
+          }
+        }
+      ],
+      "ruled_out": [
+        "accounts.empty_password",
+        "accounts.shadow_permissions_unexpected",
+        "privesc.sudo_nopasswd_broad",
+        "sshd.password_auth_enabled",
+        "sshd.password_auth_exposed"
+      ],
+      "text": "## Assessment summary\n\n### Confirmed\n- **Host firewall status is unresolved and requires attention** (`fw.no_firewall_active`, low confidence): all firewall-specific checks were unavailable, while SSH listens on all IPv4 interfaces (`0.0.0.0:22`). Enable and verify a host firewall with an allowlist.\n- SSH is configured with **password authentication disabled** (`passwordauthentication no`), so password-based SSH exposure was ruled out.\n- `/etc/shadow` permissions are restrictive: mode `640`, owned by `root:shadow`.\n- No empty-password accounts were observed; all listed accounts are locked.\n- No world-writable paths without the sticky bit were observed.\n- The NOPASSWD sudo rules reviewed are narrow, fixed-command read-only grants—not broad `ALL` or shell grants.\n\n### Could not assess\n- **SELinux status**: `sestatus` unavailable.\n- Some non-native package update checks were unavailable (`dnf`, `zypper`); the native APT check reported no pending updates.\n- File encryption could not be established because `/etc/crypttab` was absent and the block-device output showed no crypt layer.\n- Firewall state could not be confirmed because `firewall-cmd`, `nft`, and `ufw` were unavailable.\n\nNo further checks were run.",
+      "metrics": {
+        "correct": 0,
+        "false_positives": 1,
+        "missed": 0,
+        "unexpected": 0,
+        "abstained": false,
+        "resolved": false,
+        "incomplete": false
+      }
+    }
+  ],
+  "pairs": [],
+  "baseline": [],
+  "notes": []
+}

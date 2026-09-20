@@ -1019,8 +1019,8 @@ fail, for reasons the record separates into model behaviour, label questions and
 natural drift. Single-pass fails its own bar. Criterion 7 passes (`make live`,
 $0.0079). Read literally, the criteria say 0.0.1 ships posture rules only; the
 decision — delete the loop, keep single-pass, or change what the model is told and
-measure again without loosening a criterion — is open, and 0.0.1 cannot be signed
-off until it is made and recorded.
+measure again without loosening a criterion — was taken through the next steps
+below: measured again on a changed contract, and decided by the second record.
 
 **Next steps (2026-09-20), in order.** Every live record so far is one-repeat or
 predates M2.6a's prompt/tool contract; the first live run on that contract
@@ -1048,9 +1048,31 @@ decision, without loosening a criterion:
    record: the clean Mac's third-party launch daemons are masked (a clean case holds
    nothing to flag without context), and a declared listener reported as
    `net.unexpected_listener` is a false positive at any severity.
-4. **Run the gate at three repeats** on the resulting contract, with `make live`, and
-   append the record. That record decides M2: keep the loop, keep single-pass only, or
-   ship posture rules only.
+4. **Run the gate at three repeats** — done (2026-09-20, the deciding record in
+   `docs/eval/phase2-results.md`, raw `results-2026-09-20-gpt-5.6-luna-ruledout.*`;
+   `make live` $0.0071). §3.2, §3.3, §3.5, §3.7 and all of §4 pass; §3.1 fails because
+   the loop made no `run_check`/`read_file` call in 45 of 45 runs, spending its
+   iterations on `ruled_out` verdicts instead; single-pass fails its own bar (forbidden
+   ids in 5 of 45 runs against the rules arm's zero; one correlated case of three in the
+   majority). The run also exposed a fixture defect (two firewall cases recorded the
+   same argv twice and the first, "ufw active", answered), fixed with a harness guard;
+   re-run on the repaired cases, the agent finds the no-firewall case 3 of 3 and
+   single-pass 0 of 3, which changes no verdict.
+
+**Decision (2026-09-20).** Read literally, the frozen criteria say **0.0.1 ships
+posture rules only**: the loop is removed and single-pass with it. Five prompt
+contracts, a stronger model and a dedicated channel for the behaviour that produced the
+false positives did not make the model investigate; the criteria said a failure here is
+a deletion, not a redesign. What is kept: the `llm` contract and adapters, the operator
+context, the grader, the finding store with its guards, the injection corpus and the
+harness, all of which are exercised offline and cost nothing to carry; the release path
+is `--stop-after facts` behaviour by default. The removal is the next slice (M2.8, to
+be written): `scheck local` without a provider runs phase 1 and the rules, the agent
+flags stay registered and exit 3 as "not available in this build", and the spec's §2.1
+records that phase 2 did not earn its place in 0.0.1 and why. The roadmap owner may
+instead keep the loop as an opt-in experiment behind a flag; the criteria do not
+provide for that, so it would be a stated deviation, recorded in the criteria's
+history, not a quiet one.
 
 **Validation of the harness.** `make check` green. `internal/eval` asserts the suite
 meets the minimums, that every case's rules arm produces exactly the rule findings its

@@ -2,8 +2,12 @@ package eval
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/b87/scheck/internal/check"
 	_ "github.com/b87/scheck/internal/check/all"
@@ -176,5 +180,35 @@ func TestSelectAndCheckpoint(t *testing.T) {
 func TestLoadRejectsBadLabels(t *testing.T) {
 	if _, err := Load(t.TempDir()); err == nil {
 		t.Error("empty dir loaded")
+	}
+}
+
+// The fixture target answers with the first matching argv, so a case that
+// records the same argv twice tests something other than what its labels say
+// (two firewall cases did, and the "ufw active" preamble shadowed their own
+// entry until a live run showed it). This is the guard.
+func TestCaseManifestsRecordEachArgvOnce(t *testing.T) {
+	s := load(t)
+	for _, c := range s.Cases {
+		raw, err := os.ReadFile(filepath.Join(c.Dir, "manifest.yaml"))
+		if err != nil {
+			continue // a case without a manifest uses its base as recorded
+		}
+		var m struct {
+			Execs []struct {
+				Argv []string `yaml:"argv"`
+			} `yaml:"execs"`
+		}
+		if err := yaml.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("%s: %v", c.Name, err)
+		}
+		seen := map[string]bool{}
+		for _, e := range m.Execs {
+			key := strings.Join(e.Argv, "\x00")
+			if seen[key] {
+				t.Errorf("%s: argv %q is recorded twice; only the first answers", c.Name, strings.Join(e.Argv, " "))
+			}
+			seen[key] = true
+		}
 	}
 }
