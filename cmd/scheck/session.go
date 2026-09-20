@@ -16,6 +16,7 @@ import (
 	_ "github.com/b87/scheck/internal/check/all" // the complete catalog
 	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/llm"
+	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
@@ -38,6 +39,9 @@ type session struct {
 	runner   *runner.Runner
 	started  time.Time
 	canary   string // ok | fail | n/a
+	// context is the merged operator context once loadContext ran; nil
+	// under --ignore-context or before loading.
+	context *operator.Merged
 }
 
 // defaultProvider is the v1 production adapter (docs/SPEC.md §5.2).
@@ -103,8 +107,8 @@ func (o *globalOpts) newSession(cmd *cobra.Command, mk func(policy.Budgets) (tar
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Provider != "" || cfg.Model != "" || !cfg.Context.IsZero() {
-		o.logf(1, "config: provider/model/context are ignored in this build (phase 1)")
+	if cfg.Provider != "" || cfg.Model != "" {
+		o.logf(1, "config: provider/model are ignored in this build (phase 1)")
 	}
 
 	s := &session{opts: o, cfg: cfg, started: time.Now(), canary: "n/a"}
@@ -144,6 +148,41 @@ func (s *session) close() {
 	if err := s.audit.Close(); err != nil {
 		s.opts.logf(0, "audit log: %v", err)
 	}
+}
+
+// loadContext reads every operator-context source (docs/SPEC.md §6.1). A
+// target: source is read through the runner as the text.cat check, so it is
+// subject to the path policy and appears in the audit log like any other
+// binding — there is no second read path. --ignore-context reads nothing.
+func (s *session) loadContext(ctx context.Context) error {
+	if s.opts.IgnoreCtx {
+		s.opts.logf(1, "context: ignored (--ignore-context)")
+		return nil
+	}
+	read := func(path string) (string, error) {
+		res := s.runner.Run(ctx, "text.cat", map[string]string{"path": path})
+		if res.Status != runner.StatusOK {
+			return "", fmt.Errorf("%s: %s", res.Status, res.Reason)
+		}
+		return res.Raw, nil
+	}
+	if s.runner.Target == nil {
+		read = nil
+	}
+	m, err := operator.Load(operator.Options{
+		ConfigContext: s.cfg.Context, ConfigSource: s.cfg.ContextSource,
+		ImplicitDir: operator.DefaultImplicitDir, Flags: s.opts.Context,
+		Budget: s.budgets.ContextBytes, ReadTarget: read, KnownFinding: config.KnownFinding,
+	})
+	if err != nil {
+		return usageErr("%v", err)
+	}
+	s.context = m
+	for _, w := range m.Warnings {
+		s.opts.logf(0, "warning: %s", w)
+	}
+	s.opts.logf(1, "%s", m.Summary())
+	return nil
 }
 
 // plan returns the phase 1 check list for the target's platform.
@@ -231,6 +270,7 @@ func (s *session) writeReport(w io.Writer, sheet *baseline.FactSheet) (report.En
 		Profile:   s.profile.String(),
 		Version:   version.Version,
 		Disabled:  s.cfg.DisableChecks,
+		Context:   s.context,
 	})
 	if !s.opts.NoPersist {
 		dir, err := state.Dir(s.cfg.StateDir)

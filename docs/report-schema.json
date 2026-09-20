@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/report-schema.json",
   "title": "scheck run envelope",
-  "description": "SPEC.md §7.4, schema 1.1. Development schema; compatibility starts at the first GitHub release.",
+  "description": "SPEC.md §7.4, schema 1.2. Development schema; compatibility starts at the first GitHub release.",
   "type": "object",
   "required": ["schema_version", "host", "run", "facts", "assessments", "findings"],
   "additionalProperties": false,
@@ -55,11 +55,15 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["source", "sha256", "truncated"],
+            "required": ["source", "kind", "sha256", "bytes", "truncated"],
+            "additionalProperties": false,
             "properties": {
               "source": { "type": "string" },
+              "kind": { "enum": ["config", "implicit", "file", "note", "target"] },
               "sha256": { "type": "string" },
-              "truncated": { "type": "boolean" }
+              "bytes": { "type": "integer", "minimum": 0 },
+              "truncated": { "type": "boolean" },
+              "unresolved": { "type": "boolean" }
             }
           }
         },

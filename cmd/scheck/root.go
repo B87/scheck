@@ -44,7 +44,7 @@ type globalOpts struct {
 // notInPhase1 lists the flags that exist for surface stability but have no
 // implementation yet. Setting any of them is a usage error.
 func (o *globalOpts) notInPhase1(cmd *cobra.Command) error {
-	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort", "context", "ignore-context"} {
+	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort"} {
 		if f := cmd.Flags().Lookup(name); f != nil && f.Changed {
 			return usageErr("--%s is not available in this build (phase 1: baseline only)", name)
 		}
@@ -87,11 +87,11 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&opts.RecordFixtures, "record-fixtures", "", "developer: record every exec into DIR as a fixture")
 	_ = pf.MarkHidden("record-fixtures")
 
-	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort", "context", "ignore-context"} {
+	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort"} {
 		pf.Lookup(name).Usage += " (not available in this build)"
 	}
 	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
-	pf.Lookup("stop-after").Usage = "plan|facts: print that stage and exit (context not available in this build)"
+	pf.Lookup("stop-after").Usage = "context|plan|facts: print that stage and exit"
 	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules.\n" +
 		"Use local or ssh with --stop-after facts; no model or API key is needed.\n" +
 		"Exit codes: 0 no finding at or above the profile threshold (not a claim of full\n" +

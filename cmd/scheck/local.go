@@ -87,13 +87,19 @@ func runStopAfter(cmd *cobra.Command, sess *session) error {
 		printPlan(out, sess.runner.Target.Platform(), sess.elevate, plan)
 		return nil
 	case "facts":
+		if err := sess.loadContext(cmd.Context()); err != nil {
+			return err
+		}
 		sheet, err := sess.runBaseline(cmd.Context())
 		if err != nil {
 			return err
 		}
 		return reportAndExit(sess, out, sheet)
 	case "context":
-		return usageErr("--stop-after context is not available in this build (phase 1)")
+		if err := sess.loadContext(cmd.Context()); err != nil {
+			return err
+		}
+		return writeContext(out, sess.context, sess.opts.Format)
 	case "":
 		fmt.Fprintln(os.Stderr, "scheck: agent mode is not available in this build; use --stop-after facts")
 		return usageErr("no model in phase 1")

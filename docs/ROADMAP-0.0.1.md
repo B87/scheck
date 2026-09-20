@@ -537,7 +537,7 @@ configuration error, overflow, fit) and usage accumulation; the mock's transcrip
 drives a three-turn tool-calling exchange with `expect` assertions and exhaustion;
 `cmd/scheck` asserts every registered provider is listed and no credential is printed.
 
-### M2.2 — operator context: ingestion and merge (no model)
+### M2.2 — operator context: ingestion and merge (no model) ✅
 Deliver `--context` for all four source forms (§6.1) plus the two implicit sources
 (`scheck.yaml`'s `context:` block and `./.scheck/context/**`), the per-kind merge
 semantics, the §6.2 structured schema with validation, `Budgets.ContextBytes` truncation
@@ -558,6 +558,32 @@ truncated with a warning and `truncated: true` in the report; an unknown accepte
 exits 3 at load. Prose is inert in this slice by construction — the injection corpus
 belongs to M2.5, where a model first sees it.
 **Spec:** §6.1, §6.2, §4.4 `ContextBytes`, §7.4 `context_sources`.
+
+**Landed (2026-09-20).** `internal/operator` (`operator.go`: sources, the §6.2 schema
+with validation, per-kind merge with per-key origins, the budget cut; `render.go`: the
+`<operator_context>` block and the accounting line), `cmd/scheck/context.go`
+(`--stop-after context` in text and JSON), `session.loadContext`, `report.Meta.Context`
+and schema 1.2.
+
+- **`target:` is prose only.** The structured block is what accepts risks and sets
+  exposure; the host being audited must not be able to do either for itself. Recorded
+  in SPEC §6.1 and its change list. The read is `runner.Run("text.cat")`, so the audit
+  log shows it as an ordinary catalog binding and the path policy applies (a
+  `target:/etc/shadow` is refused with exit 3).
+- **Order is written down**: config block, `./.scheck/context/**` in lexical path
+  order, then `--context` left to right. A YAML source's non-`context:` keys are
+  carried as prose rather than dropped.
+- `config.Validate` loads the `context:` block through the same code, so an unknown
+  accepted-risk id fails at config load as well as from a `--context` file.
+
+**Validation.** `make check` green. `internal/operator` tests cover per-kind merge with
+origins, every schema validation failure, the budget cut across three sources (marker,
+flags, warnings), deterministic implicit-directory order, target sources through an
+injected reader and unresolved without one, expiry and unknown-key passthrough.
+`cmd/scheck` asserts the target read is audited as `text.cat` and policed, that the
+facts report carries `context_sources` with hashes and the truncated flag, that
+`--stop-after context` prints the block and that `--ignore-context` reads nothing.
+Demo verified by hand on this Mac with a note, a markdown file and a yaml file.
 
 ### M2.2a — configuration inspection, validation and walkthrough
 

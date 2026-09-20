@@ -15,6 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/llm"
+	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
 )
 
@@ -44,6 +47,10 @@ type Config struct {
 	RedactExtra   []string             `yaml:"redact_extra"`
 	Targets       map[string]SSHTarget `yaml:"targets"`
 	Context       yaml.Node            `yaml:"context"`
+	// ContextSource is the file whose context: block won (a later file
+	// replaces the block whole; per-key merging happens across --context
+	// sources, docs/SPEC.md §6.1).
+	ContextSource string `yaml:"-"`
 
 	// Sources lists the files that contributed, in merge order.
 	Sources []string `yaml:"-"`
@@ -82,6 +89,9 @@ func LoadFiles(paths ...string) (*Config, error) {
 			return nil, fmt.Errorf("config %s: %w", p, err)
 		}
 		merged.overlay(&c)
+		if !c.Context.IsZero() {
+			merged.ContextSource = p
+		}
 		merged.Sources = append(merged.Sources, p)
 	}
 	return merged, nil
@@ -149,7 +159,24 @@ func (c *Config) Validate() error {
 	if _, err := policy.NewRedactor(c.RedactExtra); err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
+	if _, ok := llm.ParseEffort(c.Effort); !ok {
+		return fmt.Errorf("config: effort %q is not low|medium|high|max", c.Effort)
+	}
+	if c.MaxContext < 0 {
+		return fmt.Errorf("config: max_context %d is negative", c.MaxContext)
+	}
+	// The context: block is validated at load so an unknown accepted-risk id
+	// is a usage error before anything runs (docs/SPEC.md §6.2).
+	if _, err := operator.Load(operator.Options{ConfigContext: c.Context, ConfigSource: c.ContextSource, KnownFinding: KnownFinding}); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
 	return nil
+}
+
+// KnownFinding is the accepted_risks id check (docs/SPEC.md §6.2).
+func KnownFinding(id string) bool {
+	_, ok := finding.Lookup(id)
+	return ok
 }
 
 func known(id string) bool {

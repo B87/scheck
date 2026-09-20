@@ -9,13 +9,14 @@ import (
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/operator"
 )
 
 // SchemaVersion identifies the development envelope. 1.1 adds per-fact
 // summaries, the typed `parsed` shapes, rule findings and the assessment
-// coverage array (docs/SPEC.md §7.4). Compatibility starts at the first
-// GitHub release.
-const SchemaVersion = "1.1"
+// coverage array; 1.2 fills `run.context_sources` from operator context
+// (docs/SPEC.md §7.4). Compatibility starts at the first GitHub release.
+const SchemaVersion = "1.2"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -65,22 +66,22 @@ type Host struct {
 
 // Run describes the invocation. Provider fields are null until phase 2.
 type Run struct {
-	Started        time.Time       `json:"started"`
-	DurationMS     int64           `json:"duration_ms"`
-	Status         string          `json:"status"` // complete | incomplete
-	Profile        string          `json:"profile"`
-	Assessment     string          `json:"assessment"`
-	Mode           string          `json:"mode"` // facts | agent | single-pass
-	Provider       *string         `json:"provider"`
-	Model          *string         `json:"model"`
-	Effort         *string         `json:"effort"`
-	Native         any             `json:"native"`
-	Limits         any             `json:"limits"`
-	Usage          Usage           `json:"usage"`
-	ContextSources []ContextSource `json:"context_sources"`
-	Persisted      *string         `json:"persisted"` // path, or null
-	Warnings       []string        `json:"warnings"`
-	Version        string          `json:"scheck_version"`
+	Started        time.Time         `json:"started"`
+	DurationMS     int64             `json:"duration_ms"`
+	Status         string            `json:"status"` // complete | incomplete
+	Profile        string            `json:"profile"`
+	Assessment     string            `json:"assessment"`
+	Mode           string            `json:"mode"` // facts | agent | single-pass
+	Provider       *string           `json:"provider"`
+	Model          *string           `json:"model"`
+	Effort         *string           `json:"effort"`
+	Native         any               `json:"native"`
+	Limits         any               `json:"limits"`
+	Usage          Usage             `json:"usage"`
+	ContextSources []operator.Source `json:"context_sources"`
+	Persisted      *string           `json:"persisted"` // path, or null
+	Warnings       []string          `json:"warnings"`
+	Version        string            `json:"scheck_version"`
 }
 
 // Usage is token accounting; cost is null when the provider has no price.
@@ -90,13 +91,6 @@ type Usage struct {
 	CacheRead  int      `json:"cache_read"`
 	CacheWrite int      `json:"cache_write"`
 	CostUSD    *float64 `json:"cost_usd"`
-}
-
-// ContextSource records one operator-context input with its hash.
-type ContextSource struct {
-	Source    string `json:"source"`
-	SHA256    string `json:"sha256"`
-	Truncated bool   `json:"truncated"`
 }
 
 // Meta is what the caller knows that the fact sheet does not.
@@ -110,6 +104,9 @@ type Meta struct {
 	// Disabled is config `disable_checks`: a rule whose check was disabled is
 	// not assessed, and says so (docs/SPEC.md §7.5).
 	Disabled []string
+	// Context is the merged operator context, or nil under --ignore-context
+	// or when none was supplied (docs/SPEC.md §6).
+	Context *operator.Merged
 }
 
 // Build assembles the envelope from a fact sheet.
@@ -128,10 +125,14 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 			Profile:        meta.Profile,
 			Mode:           "facts",
 			Assessment:     "rules",
-			ContextSources: []ContextSource{},
+			ContextSources: []operator.Source{},
 			Warnings:       []string{},
 			Version:        meta.Version,
 		},
+	}
+	if meta.Context != nil {
+		env.Run.ContextSources = append(env.Run.ContextSources, meta.Context.Sources...)
+		env.Run.Warnings = append(env.Run.Warnings, meta.Context.Warnings...)
 	}
 	if sheet.Incomplete {
 		env.Run.Status = "incomplete"

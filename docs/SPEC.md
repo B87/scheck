@@ -131,6 +131,16 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.2 (2026-09-20):**
+
+- A `target:` context source is prose only (§6.1): the structured block can accept
+  risks and set exposure, and the machine being audited must not be able to do either
+  for itself. The full source order and the budget's cut rule are written down, and
+  `--stop-after context` prints the block the model reads. The envelope's
+  `run.context_sources` entries gained `kind`, `bytes` and `unresolved` (§7.4, schema
+  1.2). Operator context lives in `internal/operator`; `config.Validate` loads the
+  `context:` block so an unknown accepted-risk id fails before anything runs.
+
 **Changes from implementing M2.1 (2026-09-20):**
 
 - `llm.Provider` gained `Native()` (§5.1): the roadmap delivers `Native` alongside
@@ -830,10 +840,24 @@ never silently influenced by a file the operator forgot about.
   `accepted_risks`) are concatenated and deduplicated by their natural key. The
   order is: config file, then `--context` sources left to right.
 - **Prose** (everything else) is never merged. Each piece is passed through verbatim
-  under a heading naming its source, in the order given.
+  under a heading naming its source, in the order given. A YAML source that carries
+  keys beside `context:` contributes those keys as prose, so nothing an operator wrote
+  is silently dropped.
+
+The full order is: the config file's `context:` block, then `./.scheck/context/**` in
+lexical path order (whatever the filesystem returned), then `--context` sources left to
+right. A directory source is read the same way. A `target:` source is **prose only**,
+whatever its extension: a host must not be able to accept its own risks or declare its
+own exposure (§6.4). It is read as the `text.cat` catalog check through the runner, so
+it is audited, path-policed and redacted like any other file; an inspection that never
+contacts the target records it as `unresolved`.
 
 Total context is capped by `Budgets.ContextBytes`, with an explicit warning when
-truncated; truncation is recorded in the report.
+truncated; truncation is recorded in the report. The structured block is counted first,
+then prose in source order; the piece that crosses the budget is cut with a
+`[TRUNCATED:<n bytes>]` marker and every later piece is dropped with its source marked
+truncated. `--stop-after context` prints exactly the block the model will read (§6.3),
+followed by the per-source hashes and the budget line.
 
 ### 6.2 Structured context schema
 
@@ -1021,7 +1045,7 @@ provider block and model findings is emitted today and validated by
     "profile": "baseline", "mode": "facts|agent|single-pass",
     "provider": "…", "model": "…", "effort": "high", "native": {…}, "limits": {…},
     "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
-    "context_sources": [{"source": "…", "sha256": "…", "truncated": false}]
+    "context_sources": [{"source": "…", "kind": "file", "sha256": "…", "bytes": 0, "truncated": false}]
   },
   "facts":    { "<check id>": { "status": "ok|unavailable|denied", "reason": "…",
                                 "summary": "26 listening sockets",
@@ -1061,7 +1085,10 @@ Pre-release schema history: `1.0` is the M1 envelope, extended during M1.6 revie
 assessment scope, execution diagnostics and opt-in evidence; `1.1` (M1.7, M1.8) adds
 `facts.<id>.summary`, the typed `parsed` shapes of §3 (`{kind, items, partial}`, so a
 record is `parsed.items[0]`), the `assessments` array and populated `findings` with
-`source: rule`. These are development revisions, not a compatibility promise.
+`source: rule`; `1.2` (M2.2) fills `run.context_sources` from operator context, one
+entry per source with its kind (`config|implicit|file|note|target`), byte count,
+sha256 and truncated flag, and `unresolved` for a `target:` source an inspection did
+not read. These are development revisions, not a compatibility promise.
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,
