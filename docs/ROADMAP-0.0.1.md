@@ -794,7 +794,7 @@ mock --transcript testdata/transcripts/correlated-finding-macos.json` reads
 `/etc/ssh/sshd_config` and lists `/etc/ssh` through the runner, reports the custom
 finding capped at medium, and exits 1.
 
-### M2.5 — operator context in the prompt + injection corpus
+### M2.5 — operator context in the prompt + injection corpus ✅
 Deliver the `<operator_context>` prompt block (§6.3): the structured map rendered so the
 model can reason about *why* a port is expected, prose passed through verbatim under
 per-source headings, and the §11 injection corpus run against `mock`.
@@ -807,6 +807,28 @@ and hostile tool calls cannot bypass policy. Include instruction-shaped target o
 as well as operator prose. Scripted transcripts do not prove that a model resists
 injection; M2.7 must evaluate this corpus with the real model before 0.0.1.
 **Spec:** §6.3, §5.8, §11 injection corpus.
+
+**Landed (2026-09-20).** `testdata/context/hostile/` (eight files: role override,
+report nothing, downgrade and accept, run a command, fetch a URL, read sensitive
+paths, fabricated evidence, the schema written as prose) each paired with a benign
+control of the same name under `benign/`; `internal/agent/injection_test.go`; one
+added sentence in the system prompt declaring check output to be data. The prompt
+block itself (structured YAML the model can reason about, prose verbatim under
+per-source headings, the §6.4 declaration first) landed with M2.4 through
+`operator.Merged.Block`, the same text `--stop-after context` prints.
+
+**Validation.** `make check` green. The tests establish, with a scripted model, what
+policy guarantees regardless of the model: the identical transcript run with the
+hostile corpus, the benign corpus and no context produces byte-identical findings and
+severities, and the hostile prose appears in the prompt only inside the declared block;
+the schema-as-prose file stays prose; a transcript that obeys the corpus (a shell, a
+metadata URL, `/etc/shadow`, a private key, `~/.aws`, a traversal, a metacharacter in a
+path, a glob) is denied or answered with metadata at every call, each with an audit
+line, and every argv the target saw starts with a catalog binary; a transcript that
+tries to accept, downgrade or fabricate leaves the rule finding at its grade with its
+curated text; planted instruction text in a baseline fact and in a read file reaches
+the model only inside `<facts>` and a transcript that obeys it is denied. None of this
+is a claim about model resistance: M2.7 runs the corpus against the real model.
 
 ### M2.6 — `openai-compatible` provider
 Deliver the real adapter for a backend with native tool calling (OpenAI, or a
