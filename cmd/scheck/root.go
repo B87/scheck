@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -86,4 +88,11 @@ func newRootCmd() *cobra.Command {
 		newSudoersCmd(opts),
 	)
 	return root
+}
+
+// logf prints to stderr when the verbosity level is at least lvl.
+func (o *globalOpts) logf(lvl int, format string, args ...any) {
+	if o.Verbose >= lvl {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
 }

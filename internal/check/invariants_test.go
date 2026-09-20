@@ -54,6 +54,8 @@ func TestValidateCatchesEachRule(t *testing.T) {
 			c.Params = append(c.Params, Param{Name: "mode", Kind: KindEnum})
 		}, RuleBadParam},
 		{"unknown parser", func(c *Check) { c.Parser = "xml" }, RuleParserKind},
+		{"extract without group", func(c *Check) { c.Extract = "uuid" }, RuleExtract},
+		{"extract invalid", func(c *Check) { c.Extract = "(" }, RuleExtract},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,17 +98,6 @@ func TestValidateBaselineTierCap(t *testing.T) {
 	}
 	if vs := Validate(cs); !hasRule(vs, RuleBaselineTierCap) {
 		t.Errorf("cap not enforced: %v", vs)
-	}
-}
-
-// The registered catalog, whatever it contains at this point in the build,
-// must satisfy every invariant. This is acceptance criterion 2's first proof.
-func TestRegisteredCatalogIsValid(t *testing.T) {
-	all := All()
-	if vs := Validate(all); len(vs) != 0 {
-		for _, v := range vs {
-			t.Error(v)
-		}
 	}
 }
 

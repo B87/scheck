@@ -29,6 +29,7 @@ func testCatalog(t *testing.T) {
 		check.Check{ID: "sys.slow", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, Argv: []string{"slow"}},
 		check.Check{ID: "svc.enabled", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, ExitOK: check.AnyExit, Argv: []string{"systemctl", "is-enabled", "sshd"}},
 		check.Check{ID: "pkg.json", Platform: check.Any, Domain: check.DomainUpdates, Parser: check.ParseJSON, Argv: []string{"pkgjson"}},
+		check.Check{ID: "host.uuid", Platform: check.Any, Domain: check.DomainHost, Parser: check.ParseRaw, Argv: []string{"ioreg"}, Extract: `"IOPlatformUUID" = "([0-9A-F-]+)"`},
 	)
 	if vs := check.Validate(check.All()); len(vs) != 0 {
 		t.Fatalf("test catalog invalid: %v", vs)
@@ -263,5 +264,17 @@ func TestRunParseErrorKeepsRaw(t *testing.T) {
 	res := h.r.Run(context.Background(), "pkg.json", nil)
 	if res.Status != StatusUnavailable || !strings.HasPrefix(res.Reason, "parse error") || res.Raw != "{not json" {
 		t.Fatalf("%+v", res)
+	}
+}
+
+func TestRunExtractKeepsOnlyTheMatch(t *testing.T) {
+	h := newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"ioreg"}, Stdout: "  \"IOPlatformSerialNumber\" = \"SERIAL123\"\n  \"IOPlatformUUID\" = \"AFCC3024-054E-5B1D-9CDE-9FF60BF8E219\"\n"})
+	res := h.r.Run(context.Background(), "host.uuid", nil)
+	if res.Status != StatusOK || res.Raw != "AFCC3024-054E-5B1D-9CDE-9FF60BF8E219" || strings.Contains(res.Raw, "SERIAL") {
+		t.Fatalf("%+v", res)
+	}
+	h = newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"ioreg"}, Stdout: "nothing here"})
+	if res = h.r.Run(context.Background(), "host.uuid", nil); res.Status != StatusUnavailable || res.Raw != "" {
+		t.Fatalf("no match: %+v", res)
 	}
 }

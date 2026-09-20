@@ -32,6 +32,7 @@ const (
 	RuleBaselineTierCap    = "baseline-tier-cap"
 	RuleParserKind         = "unknown-parser"
 	RuleElevatedPrefixOnly = "elevation-not-in-argv"
+	RuleExtract            = "bad-extract"
 )
 
 // BaselineTierCap is the maximum number of on-demand checks visible under the
@@ -144,6 +145,14 @@ func validateOne(c Check) []Violation {
 	case ParseRaw, ParseLines, ParseKV, ParseJSON:
 	default:
 		add(RuleParserKind, "parser %q", c.Parser)
+	}
+	if c.Extract != "" {
+		re, err := regexp.Compile(c.Extract)
+		if err != nil {
+			add(RuleExtract, "extract %q: %v", c.Extract, err)
+		} else if re.NumSubexp() != 1 {
+			add(RuleExtract, "extract %q must have exactly one capture group", c.Extract)
+		}
 	}
 
 	declared := map[string]Param{}

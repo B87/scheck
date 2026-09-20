@@ -7,6 +7,12 @@ linters:
     - unconvert
     - unparam
   settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        - (*text/tabwriter.Writer).Flush
     gosec:
       excludes:
         - G204 # subprocess launched with variable: the catalog is the whole point; invariants test guards it

@@ -149,6 +149,10 @@ type Check struct {
 	// Canary marks the single entry whose literal deliberately contains shell
 	// metacharacters, used to verify SSH quoting before any other command.
 	Canary bool
+	// Extract, when set, is a regexp with one capture group; after redaction
+	// the runner keeps only that group as the raw output. It minimises what a
+	// chatty command (ioreg, dmidecode) hands to the model.
+	Extract string
 }
 
 // AnyExit is the ExitOK value meaning "any exit code is a valid result".

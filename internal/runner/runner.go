@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -204,6 +205,16 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 		}
 		r.audit(res, "unavailable:"+res.Reason, &res.ExitCode)
 		return res
+	}
+	if c.Extract != "" {
+		m := regexp.MustCompile(c.Extract).FindStringSubmatch(res.Raw)
+		if m == nil {
+			res.Status, res.Reason = StatusUnavailable, "extract: pattern not found in output"
+			res.Raw = ""
+			r.audit(res, "unavailable:extract", &res.ExitCode)
+			return res
+		}
+		res.Raw = m[1]
 	}
 	parsed, perr := check.Parse(c.Parser, []byte(res.Raw))
 	if perr != nil {

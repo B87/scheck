@@ -22,3 +22,7 @@ func (e *exitError) Unwrap() error { return e.Err }
 func usageErr(format string, args ...any) error {
 	return &exitError{Code: exitUsage, Err: fmt.Errorf(format, args...)}
 }
+
+func incompleteErr(format string, args ...any) error {
+	return &exitError{Code: exitIncomplete, Err: fmt.Errorf(format, args...)}
+}
