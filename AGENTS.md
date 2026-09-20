@@ -96,6 +96,7 @@ go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
 go run ./cmd/scheck local --provider mock --transcript testdata/transcripts/correlated-finding-macos.json --no-persist
 go run ./cmd/scheck local                         # needs OPENAI_API_KEY; gpt-5.6-luna; spends money
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
+go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
 make live                                        # opt-in live tests
 go test ./internal/report -update    # rewrite the golden text reports, then read the diff
 ```
@@ -200,7 +201,10 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 - `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate (profile
   tier, no canary) is enforced there, not in the tool. `report_finding` goes through
-  `finding.Store.Report`, which validates every excerpt against a check's output.
+  `finding.Store.Report`, which validates every excerpt against a check's output and
+  refuses an id the posture rules already settled: another platform's id, an id whose
+  rule returned `not_matched`, or a judgement whose `Def.Premise` the rule disproved.
+  Put a new deterministic guard there, never in the prompt alone.
 - Severity never comes from the model. A `severity` in `report_finding` is ignored.
 - Every budget in `policy.Budgets` ends the run `incomplete` by name; a request is
   checked with `llm.CheckFit` before it is sent, and overflow never drops evidence.

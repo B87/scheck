@@ -917,12 +917,17 @@ frozen verdicts, the markdown comparison), the hidden `scheck eval` command,
 (a resolved follow-up, a missed one, a false positive, a correlated hit), and
 `docs/eval/phase2-results.md`.
 
-**Not done: the live runs.** No credential was available in this environment, so
-neither the quality comparison (criterion 10) nor the adversarial evaluation
-(criterion 12) nor the cost measurement (criterion 7) has been recorded. The results
-file says so and gives the exact commands. Until a record is added there and judged
-against the frozen criteria, the decision the slice exists to make — keep the loop,
-keep single-pass only, or ship rules only — is open, and 0.0.1 cannot be signed off.
+**Not done: the live runs.** One `--repeat 1` run against `gpt-5.6-luna` exists
+(recorded in the results file as an observation: it fails §3.2, §3.4, §3.5 and §4.4 and
+is not a gate result, since the criteria require three repeats). It found a redaction
+false positive on sudoers `NOPASSWD:` lines and two gaps in `finding.Store` (another
+platform's id, and an id the rule had disproved) that are fixed in the spec's "first
+live evaluation" change entry; the prompt changed with them. Neither the quality
+comparison (criterion 10) nor the adversarial evaluation (criterion 12) nor the cost
+measurement (criterion 7) has been recorded at three repeats. Until a record is added
+and judged against the frozen criteria, the decision the slice exists to make — keep
+the loop, keep single-pass only, or ship rules only — is open, and 0.0.1 cannot be
+signed off.
 
 **Validation of the harness.** `make check` green. `internal/eval` asserts the suite
 meets the minimums, that every case's rules arm produces exactly the rule findings its

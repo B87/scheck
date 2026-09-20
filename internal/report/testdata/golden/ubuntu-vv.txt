@@ -393,7 +393,7 @@ Privilege escalation     ran      privesc.sudoers         41 sudoers lines [elev
   | # See sudoers(5) for more information on "@include" directives:
   |
   | @includedir /etc/sudoers.d
-Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
   | /etc/sudoers.d/README:#
@@ -428,20 +428,14 @@ Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [el
   | /etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck
   | runs them as `sudo -n -- ...`.
   | /etc/sudoers.d/scheck:Defaults:ops !requiretty
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] /etc/sudoers
-  | # privesc.sudoers
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -rH .
-  | /etc/sudoers.d  # privesc.sudoers_d
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -S -a  #
-  | accounts.passwd_status
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] ""  #
-  | mac.aa_status
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] list ruleset
-  | # fw.nft
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -T  #
-  | sshd.config
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] status
-  | verbose  # fw.ufw
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/grep -rH . /etc/sudoers.d  #
+  | privesc.sudoers_d
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/passwd -S -a  # accounts.passwd_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/aa-status ""  # mac.aa_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/nft list ruleset  # fw.nft
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/sshd -T  # sshd.config
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose  # fw.ufw
 Startup and persistence  ran      persist.cron            25 cron entries
                                                           System crontab and cron.d entries
                                                           (file:line, non-empty lines)

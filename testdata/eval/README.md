@@ -10,4 +10,8 @@ scripts the mock provider for that arm; mock runs validate the harness, never qu
 
 `scheck eval --suite testdata/eval --model MODEL --repeat 3 --out results.json` runs
 the three arms of `docs/eval/phase2-criteria.md` and the adversarial pairs from
-`testdata/context`, and prints the comparison. The frozen criteria say what passes.
+`testdata/context`, then one benign control twice per repeat as the drift baseline, and
+prints the comparison. Progress lines go to stderr as each run ends, with the ids the
+model reported; `--out` is rewritten after every run, so an interrupted run leaves a
+record; `--cases NAME,NAME` runs a subset while iterating on one case (the record is
+then below the minimums and says so). The frozen criteria say what passes.

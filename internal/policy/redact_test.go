@@ -57,6 +57,11 @@ func TestRedactLeavesLegitimateContentAlone(t *testing.T) {
 		"PasswordAuthentication=no",
 		"token_required: false",
 		"# password: none",
+		// sudoers tags: the value after NOPASSWD: is the granted command, and
+		// hiding it is what made a model call a per-command grant "broad".
+		"ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers",
+		"# %wheel\tALL=(ALL)\tNOPASSWD: ALL",
+		"%admin ALL=(ALL) PASSWD: /usr/bin/systemctl",
 		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGxpbnV4bGludXhsaW51eGxpbnV4bGludXhsaW4 ops@bastion",
 	}
 	for _, in := range keep {

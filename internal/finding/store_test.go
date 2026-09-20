@@ -162,15 +162,31 @@ func TestStoreReportMerge(t *testing.T) {
 	if n := len(s.Findings()); n != 2 {
 		t.Errorf("%d findings", n)
 	}
+	// A judgement id whose premise the rule confirmed is open to the model.
+	if _, err := s.Report(Candidate{ID: IDPasswordAuthExposed, Confidence: ConfidenceHigh,
+		Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
+		t.Errorf("premise confirmed by the rule, still rejected: %v", err)
+	}
 }
 
 func TestStoreReportRejects(t *testing.T) {
-	sheet := storeSheet(t, check.Linux, map[string]string{"sshd.config": "passwordauthentication no\n"})
+	sheet := storeSheet(t, check.Linux, map[string]string{"sshd.config": "passwordauthentication no\nlistenaddress 0.0.0.0:22\n"})
 	s := NewStore(Input{Sheet: sheet})
 	s.Output = outputFrom(sheet)
-	ok := Candidate{ID: IDPasswordAuthEnabled, Confidence: ConfidenceHigh, Evidence: []Evidence{{Check: "sshd.config", Excerpt: "passwordauthentication no"}}}
+	ok := Candidate{ID: IDUnexpectedListener, Confidence: ConfidenceHigh, Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}
+	if _, err := s.Report(ok); err != nil {
+		t.Fatalf("the baseline candidate must be valid: %v", err)
+	}
+	s = NewStore(Input{Sheet: sheet})
+	s.Output = outputFrom(sheet)
 	cases := map[string]func(c *Candidate){
-		"unknown id":         func(c *Candidate) { c.ID = "sshd.nope" },
+		"unknown id": func(c *Candidate) { c.ID = "sshd.nope" },
+		// The rule read passwordauthentication and found "no": the model may
+		// not re-raise the rule's id from the same fact, nor a judgement
+		// that presupposes it, nor an id whose rule is for another platform.
+		"rule disproved":     func(c *Candidate) { c.ID = IDPasswordAuthEnabled; c.Evidence[0].Excerpt = "passwordauthentication no" },
+		"premise disproved":  func(c *Candidate) { c.ID = IDPasswordAuthExposed },
+		"other platform":     func(c *Candidate) { c.ID = IDRemoteLoginEnabled },
 		"bad confidence":     func(c *Candidate) { c.Confidence = "certain" },
 		"no evidence":        func(c *Candidate) { c.Evidence = nil },
 		"fabricated excerpt": func(c *Candidate) { c.Evidence[0].Excerpt = "permitrootlogin yes" },
@@ -193,6 +209,13 @@ func TestStoreReportRejects(t *testing.T) {
 	}
 	if n := len(s.Findings()); n != 0 {
 		t.Errorf("a rejected candidate was stored: %d", n)
+	}
+	// A rule that was not assessed leaves its id to the model: permitrootlogin
+	// is absent from this capture, so the model may report it from evidence
+	// of its own.
+	if _, err := s.Report(Candidate{ID: IDRootLoginEnabled, Confidence: ConfidenceLow,
+		Evidence: []Evidence{{Check: "sshd.config", Excerpt: "listenaddress 0.0.0.0:22"}}}); err != nil {
+		t.Errorf("not-assessed rule id rejected: %v", err)
 	}
 	// A valid custom finding is capped at medium and flagged.
 	got, err := s.Report(Candidate{ID: "custom:vendor-agent", Confidence: ConfidenceHigh, ProposedSeverity: "critical",

@@ -391,7 +391,7 @@ Accounts                 ran      accounts.shadow_meta    mode 0, owner root:roo
                                                           Permissions of /etc/shadow (metadata only,
                                                           never contents)
   | ----------:0:root:root:580
-Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated, 1 redacted]
+Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated]
                                                           sudoers policy
   | ## Sudoers allows particular users to run various commands as
   | ## the root user, without needing the root password.
@@ -507,7 +507,7 @@ Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elev
   | %wheel  ALL=(ALL)       ALL
   |
   | ## Same thing without a password
-  | # %wheel        ALL=(ALL)       NOPASSWD: [REDACTED:kv-secret:21 bytes] bytes]
+  | # %wheel        ALL=(ALL)       NOPASSWD: ALL
   |
   | ## Allows members of the users group to mount and unmount the
   | ## cdrom as root
@@ -518,7 +518,7 @@ Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elev
   |
   | ## Read drop-in files from /etc/sudoers.d (the # here does not mean a comment)
   | #includedir /etc/sudoers.d
-Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
   | /etc/sudoers.d/scheck:# scheck elevated checks for ops on linux — generated from the compiled
@@ -528,20 +528,14 @@ Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [el
   | /etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck
   | runs them as `sudo -n -- ...`.
   | /etc/sudoers.d/scheck:Defaults:ops !requiretty
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] /etc/sudoers
-  | # privesc.sudoers
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -rH .
-  | /etc/sudoers.d  # privesc.sudoers_d
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -S -a  #
-  | accounts.passwd_status
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] ""  #
-  | mac.aa_status
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] list ruleset
-  | # fw.nft
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -T  #
-  | sshd.config
-  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] status
-  | verbose  # fw.ufw
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/grep -rH . /etc/sudoers.d  #
+  | privesc.sudoers_d
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/passwd -S -a  # accounts.passwd_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/aa-status ""  # mac.aa_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/nft list ruleset  # fw.nft
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/sshd -T  # sshd.config
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose  # fw.ufw
 Startup and persistence  ran      persist.cron            0 cron entries
                                                           System crontab and cron.d entries
                                                           (file:line, non-empty lines)

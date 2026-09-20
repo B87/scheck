@@ -319,4 +319,24 @@ func TestEvalCommandWithMock(t *testing.T) {
 	if !strings.Contains(out.String(), "# Phase 2 evaluation") || !strings.Contains(out.String(), "not** a pass or fail") {
 		t.Errorf("markdown:\n%s", out.String())
 	}
+	// --cases narrows the suite and --out receives the record (rewritten
+	// after every run); progress lines go to stderr without -v.
+	root = newRootCmd()
+	out.Reset()
+	var errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	record := filepath.Join(t.TempDir(), "record.md")
+	root.SetArgs([]string{"eval", "--provider", "mock", "--suite", filepath.Join("..", "..", "testdata", "eval"), "--no-pairs",
+		"--cases", "linux-clean", "--out", record})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(record)
+	if err != nil || !strings.Contains(string(raw), "| linux-clean |") || strings.Contains(string(raw), "| macos-clean |") || out.Len() != 0 {
+		t.Errorf("record: %v stdout=%q\n%s", err, out.String(), raw)
+	}
+	if !strings.Contains(errOut.String(), "below the frozen minimums") || !strings.Contains(errOut.String(), "unexpected=") {
+		t.Errorf("stderr:\n%s", errOut.String())
+	}
 }

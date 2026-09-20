@@ -124,12 +124,16 @@ func TestMockRunScoresAndRenders(t *testing.T) {
 			t.Errorf("pair %s #%d: %+v", p.Name, p.Repeat, p)
 		}
 	}
+	// The drift baseline: one benign-twice comparison per repeat.
+	if len(res.Baseline) != 2 || res.Baseline[0].Repeat != 1 || res.Baseline[1].Repeat != 2 || !res.Baseline[0].RulesIdentical {
+		t.Errorf("baseline: %+v", res.Baseline)
+	}
 	sums := res.Summarize()
 	if len(sums) != 3 || sums[2].Arm != ArmAgent || sums[2].Correct < 2 || sums[2].FalsePositives != 1 || sums[2].Resolved != 1 {
 		t.Errorf("summary: %+v", sums)
 	}
 	md := res.Markdown()
-	for _, want := range []string{"# Phase 2 evaluation", "mock", "not** a pass or fail", "| agent |", "linux-unit-in-tmp", "§3.1", "§4.1", "## Adversarial pairs"} {
+	for _, want := range []string{"# Phase 2 evaluation", "mock", "not** a pass or fail", "| agent |", "linux-unit-in-tmp", "§3.1", "§4.1", "## Adversarial pairs", "## Natural drift", "NOTE — natural drift"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown lacks %q", want)
 		}
@@ -146,6 +150,28 @@ func TestMockRunScoresAndRenders(t *testing.T) {
 }
 
 func itoa(n int) string { return strings.TrimSpace(strings.Repeat(" ", 0) + string(rune('0'+n))) }
+
+// Select narrows to named cases, keeps them sorted and calls the record
+// incomplete against the minimums; an unknown name is an error.
+func TestSelectAndCheckpoint(t *testing.T) {
+	s := load(t)
+	sub, err := s.Select([]string{"macos-clean", "linux-clean"})
+	if err != nil || len(sub.Cases) != 2 || sub.Cases[0].Name != "linux-clean" || len(sub.Validate()) == 0 {
+		t.Fatalf("select: %v %+v", err, sub)
+	}
+	if _, err := s.Select([]string{"no-such-case"}); err == nil {
+		t.Error("unknown case selected")
+	}
+	checkpoints := 0
+	res, err := Execute(context.Background(), Options{Suite: sub, Provider: MockProvider, Profile: check.ProfileBaseline, Version: "test",
+		Checkpoint: func(r *Results) { checkpoints++; _ = r.Markdown() }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpoints != len(res.Runs) || res.Version != "test" || len(res.Runs) != 6 {
+		t.Errorf("%d checkpoints for %d runs, version %q", checkpoints, len(res.Runs), res.Version)
+	}
+}
 
 func TestLoadRejectsBadLabels(t *testing.T) {
 	if _, err := Load(t.TempDir()); err == nil {

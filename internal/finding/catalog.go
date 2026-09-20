@@ -16,6 +16,11 @@ type Def struct {
 	BaseSeverity Severity
 	Impact       string
 	Remediation  Remediation
+	// Premise lists rule-covered finding ids this judgement presupposes. When
+	// a posture rule has disproved a premise on complete evidence, the store
+	// rejects a model candidate for this id (§7.5): a correlation cannot
+	// stand on a fact the rule read and found the other way.
+	Premise []string
 }
 
 // Finding ids. They are the join key for accepted risks, dedupe and
@@ -342,7 +347,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDPasswordAuthExposed: {
 		ID: IDPasswordAuthExposed, Title: "sshd accepts passwords on a listener reachable beyond the host",
-		Category: CategoryRemoteAccess, BaseSeverity: SevHigh,
+		Category: CategoryRemoteAccess, BaseSeverity: SevHigh, Premise: []string{IDPasswordAuthEnabled},
 		Impact: "Password authentication is enabled and sshd listens on a non-loopback address, so online " +
 			"password guessing is possible from wherever the listener is reachable.",
 		Remediation: Remediation{

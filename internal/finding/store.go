@@ -153,6 +153,9 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 	if !ok {
 		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
 	}
+	if err := s.ruleAllows(def); err != nil {
+		return f, err
+	}
 	f.Title, f.Category, f.SeverityBase, f.Severity = def.Title, def.Category, def.BaseSeverity, def.BaseSeverity
 	f.Impact, f.Remediation = def.Impact, def.Remediation
 	// For a model-only finding the Def's text is the default and the
@@ -165,6 +168,55 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 		f.Remediation = *c.Remediation
 	}
 	return f, nil
+}
+
+// ruleAllows applies what the posture rules already know to a catalog id the
+// model wants to report (docs/SPEC.md §7.5). A rule-covered id belongs to
+// the rule on its platform: an id whose rules are all bound to another
+// platform does not exist on this host; an id whose rule read complete
+// evidence and found it not matched cannot be re-raised by the model from
+// the same facts (the model may still add to a finding the rule raised); and
+// a judgement id whose premise a rule disproved has nothing to stand on. A
+// not-assessed rule leaves the id to the model, since the rule had no
+// usable evidence and the model may have obtained some.
+func (s *Store) ruleAllows(def Def) error {
+	platform := s.sheet.platform()
+	if rs := rulesFor(def.ID); len(rs) > 0 && platform != "" {
+		applicable := false
+		for _, r := range rs {
+			if r.Platform == check.Any || r.Platform == platform {
+				applicable = true
+			}
+		}
+		if !applicable {
+			return fmt.Errorf("%w: %s is not a %s finding; its posture rule applies to another platform", ErrInvalid, def.ID, platform)
+		}
+	}
+	if _, seeded := s.byID[def.ID]; !seeded {
+		if a, disproved := s.disproved(def.ID); disproved {
+			return fmt.Errorf("%w: the posture rule for %s read %s and found it not matched (%s); the rule's reading of that fact stands, so report a different id or cite a fact the rule did not read", ErrInvalid, def.ID, a.Check, a.Reason)
+		}
+	}
+	for _, id := range def.Premise {
+		if _, seeded := s.byID[id]; seeded {
+			continue
+		}
+		if a, disproved := s.disproved(id); disproved {
+			return fmt.Errorf("%w: %s presupposes %s, which the posture rule disproved from %s (%s)", ErrInvalid, def.ID, id, a.Check, a.Reason)
+		}
+	}
+	return nil
+}
+
+// disproved reports whether a posture rule for the id evaluated its check
+// on complete, recognized evidence and found the condition absent.
+func (s *Store) disproved(id string) (Assessment, bool) {
+	for _, a := range s.assessments {
+		if a.Finding == id && a.Status == NotMatched {
+			return a, true
+		}
+	}
+	return Assessment{}, false
 }
 
 // merge folds a validated model candidate into an existing finding (§7.5):

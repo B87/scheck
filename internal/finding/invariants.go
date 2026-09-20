@@ -28,6 +28,7 @@ const (
 	RuleDefIncomplete  = "finding-def-incomplete"
 	RuleDefSeverity    = "finding-def-unknown-severity"
 	RuleDefCategory    = "finding-def-unknown-category"
+	RuleDefPremise     = "finding-def-premise-not-rule-covered"
 )
 
 // Categories a Def may carry (docs/SPEC.md §7.1), plus the two the grader
@@ -71,6 +72,11 @@ func ValidateRules() []Violation {
 		}
 		if d.BaseSeverity.Rank() < 0 {
 			out = append(out, Violation{d.ID, RuleDefSeverity, fmt.Sprintf("severity %q", d.BaseSeverity)})
+		}
+		for _, id := range d.Premise {
+			if len(rulesFor(id)) == 0 {
+				out = append(out, Violation{d.ID, RuleDefPremise, fmt.Sprintf("premise %q has no posture rule to disprove it", id)})
+			}
 		}
 	}
 	for _, r := range Rules() {

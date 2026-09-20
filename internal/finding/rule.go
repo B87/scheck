@@ -360,6 +360,17 @@ func Rules() []Rule {
 	return out
 }
 
+// rulesFor returns the rules that raise a finding id.
+func rulesFor(findingID string) []Rule {
+	var out []Rule
+	for _, r := range rules {
+		if r.Finding == findingID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // RulesFor returns the rules that read a given check id, for `scheck explain`.
 func RulesFor(checkID string) []Rule {
 	var out []Rule

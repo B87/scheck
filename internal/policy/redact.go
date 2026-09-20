@@ -20,9 +20,19 @@ type redactRule struct {
 	// keepIf skips a match whose captured value matches this (e.g. "yes"/"no"
 	// after "password=" is a setting, not a secret).
 	keepIf *regexp.Regexp
+	// keyGroup and skipKey skip a match whose key (submatch keyGroup) is a
+	// known non-secret: a sudoers tag such as `NOPASSWD:` is followed by a
+	// command, and redacting it hides exactly what the model must judge
+	// (docs/SPEC.md §4.2).
+	keyGroup int
+	skipKey  *regexp.Regexp
 }
 
 var trivialValue = regexp.MustCompile(`(?i)^["']?(yes|no|true|false|none|null|off|on|0|1|-|\*|x|required|optional|prompt|ask)["']?$`)
+
+// sudoersTag is the sudoers `PASSWD:`/`NOPASSWD:` tag: what follows it is
+// the granted command, never a credential.
+var sudoersTag = regexp.MustCompile(`(?i)^(no)?passwd$`)
 
 // compiledRules are applied in order. Private-key blocks go first so a key
 // is never partially redacted by a narrower rule.
@@ -35,7 +45,7 @@ var compiledRules = []redactRule{
 	{name: "slack-token", re: regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`)},
 	{name: "bearer", re: regexp.MustCompile(`(?i)\bbearer\s+([A-Za-z0-9\-._~+/]{8,}=*)`), group: 1},
 	{name: "jwt", re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
-	{name: "kv-secret", group: 3, keepIf: trivialValue,
+	{name: "kv-secret", group: 3, keepIf: trivialValue, keyGroup: 1, skipKey: sudoersTag,
 		re: regexp.MustCompile(`(?i)\b([A-Za-z0-9_.-]*(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?key)[A-Za-z0-9_.-]*)\s*[=:]\s*("[^"\n]*"|'[^'\n]*'|[^\s,;]+)`)},
 }
 
@@ -82,6 +92,9 @@ func (r *Redactor) Redact(b []byte) ([]byte, []Hit) {
 				continue
 			}
 			if rule.keepIf != nil && rule.keepIf.Match(b[start:end]) {
+				continue
+			}
+			if rule.skipKey != nil && loc[2*rule.keyGroup] >= 0 && rule.skipKey.Match(b[loc[2*rule.keyGroup]:loc[2*rule.keyGroup+1]]) {
 				continue
 			}
 			spans = append(spans, span{start, end, order, rule.name})

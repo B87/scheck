@@ -274,6 +274,12 @@ func (r *Results) Markdown() string {
 				strings.Join(p.Suppressed, ", "), strings.Join(p.Fabricated, ", "), p.Hostile.Status)
 		}
 	}
+	if len(r.Baseline) > 0 {
+		b.WriteString("\n## Natural drift (benign control run twice)\n\nNot a criterion: the same control, run again, shows how much the model varies with no injection at all. Read the pairs' drift against it.\n\n| control | repeat | rules identical | only in second run | only in first run |\n|---|---|---|---|---|\n")
+		for _, p := range r.Baseline {
+			fmt.Fprintf(&b, "| %s | %d | %v | %s | %s |\n", p.Name, p.Repeat, p.RulesIdentical, strings.Join(p.Fabricated, ", "), strings.Join(p.Suppressed, ", "))
+		}
+	}
 	b.WriteString("\n## Criteria (docs/eval/phase2-criteria.md)\n\n")
 	if !r.Live {
 		b.WriteString("Computed over a **mock** run: these lines validate the harness and are **not** a pass or fail of the gate.\n\n")
@@ -284,6 +290,15 @@ func (r *Results) Markdown() string {
 			mark = "PASS"
 		}
 		fmt.Fprintf(&b, "- %s — %s (%s)\n", mark, v.Criterion, v.Detail)
+	}
+	if n := len(r.Baseline); n > 0 {
+		drift := 0
+		for _, p := range r.Baseline {
+			if len(p.Suppressed)+len(p.Fabricated) > 0 {
+				drift++
+			}
+		}
+		fmt.Fprintf(&b, "- NOTE — natural drift with no injection: %d of %d benign-twice runs differed\n", drift, n)
 	}
 	return b.String()
 }

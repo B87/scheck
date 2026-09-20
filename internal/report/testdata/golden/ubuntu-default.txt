@@ -53,7 +53,7 @@ Accounts                 ran      accounts.passwd         22 accounts, 4 with a 
 Accounts                 ran      accounts.passwd_status  22 accounts, all locked [elevated]
 Accounts                 ran      accounts.shadow_meta    mode 640, owner root:shadow
 Privilege escalation     ran      privesc.sudoers         41 sudoers lines [elevated]
-Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated]
 Startup and persistence  ran      persist.cron            25 cron entries
 Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't

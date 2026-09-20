@@ -111,9 +111,9 @@ Accounts                 ran      accounts.passwd_status  22 accounts, all locke
 Accounts                 ran      accounts.shadow_meta    mode 0, owner root:root
                                                           Permissions of /etc/shadow (metadata only,
                                                           never contents)
-Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated, 1 redacted]
+Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated]
                                                           sudoers policy
-Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
 Startup and persistence  ran      persist.cron            0 cron entries

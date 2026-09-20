@@ -101,7 +101,7 @@ Accounts                 ran      accounts.shadow_meta    mode 640, owner root:s
                                                           never contents)
 Privilege escalation     ran      privesc.sudoers         41 sudoers lines [elevated]
                                                           sudoers policy
-Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
 Startup and persistence  ran      persist.cron            25 cron entries

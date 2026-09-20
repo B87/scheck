@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -26,6 +25,7 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 		corpus   string
 		advCase  string
 		noPairs  bool
+		cases    []string
 	)
 	cmd := &cobra.Command{
 		Use:    "eval",
@@ -33,17 +33,15 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			w, closeOutput, err := opts.commandOutput(cmd.OutOrStdout())
-			if err != nil {
-				return err
-			}
-			defer closeOutput()
 			suite, err := eval.Load(suiteDir)
 			if err != nil {
 				return usageErr("%v", err)
 			}
+			if suite, err = suite.Select(cases); err != nil {
+				return usageErr("%v", err)
+			}
 			if missing := suite.Validate(); len(missing) > 0 {
-				fmt.Fprintf(os.Stderr, "warning: suite below the frozen minimums: %v\n", missing)
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: suite below the frozen minimums: %v\n", missing)
 			}
 			cfg, err := opts.loadConfig(cmd)
 			if err != nil {
@@ -53,7 +51,10 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			if name == "" {
 				name = defaultProvider
 			}
-			o := eval.Options{Suite: suite, Repeat: repeat, Model: cfg.Model, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
+			// Progress goes to stderr unconditionally: a live run is minutes
+			// long and its record lands in --out or stdout when it is done.
+			o := eval.Options{Suite: suite, Repeat: repeat, Model: cfg.Model, Version: version.Version,
+				Log: func(f string, a ...any) { fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) }}
 			o.Effort, _ = llm.ParseEffort(cfg.Effort)
 			o.Profile, _ = check.ParseProfile(cfg.Profile)
 			if name == "mock" {
@@ -72,17 +73,36 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			if !noPairs {
 				o.Corpus, o.AdversarialCase = corpus, advCase
 			}
+			render := func(res *eval.Results) ([]byte, error) {
+				if opts.Format == "json" {
+					return json.MarshalIndent(res, "", "  ")
+				}
+				return []byte(res.Markdown()), nil
+			}
+			if opts.Out != "" {
+				// The record is rewritten after every run, so an interrupted
+				// live run still leaves what it measured.
+				o.Checkpoint = func(res *eval.Results) {
+					if raw, err := render(res); err == nil {
+						_ = writeFileAtomic(opts.Out, raw)
+					}
+				}
+			}
 			res, err := eval.Execute(cmd.Context(), o)
 			if err != nil {
 				return incompleteErr("%v", err)
 			}
-			res.Version = version.Version
-			if opts.Format == "json" {
-				enc := json.NewEncoder(w)
-				enc.SetIndent("", "  ")
-				return enc.Encode(res)
+			raw, err := render(res)
+			if err != nil {
+				return err
 			}
-			_, err = io.WriteString(w, res.Markdown())
+			if opts.Out != "" {
+				if err := writeFileAtomic(opts.Out, raw); err != nil {
+					return usageErr("--out: %v", err)
+				}
+				return nil
+			}
+			_, err = cmd.OutOrStdout().Write(append(raw, '\n'))
 			return err
 		},
 	}
@@ -91,5 +111,16 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 	cmd.Flags().StringVar(&corpus, "corpus", "testdata/context", "injection corpus directory")
 	cmd.Flags().StringVar(&advCase, "adversarial-case", "linux-password-auth-public", "the case the adversarial pairs run on")
 	cmd.Flags().BoolVar(&noPairs, "no-pairs", false, "skip the adversarial pairs")
+	cmd.Flags().StringSliceVar(&cases, "cases", nil, "run only these cases (comma-separated names); the record is then below the minimums")
 	return cmd
+}
+
+// writeFileAtomic replaces path in one rename so a reader never sees a
+// half-written record.
+func writeFileAtomic(path string, raw []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }

@@ -60,8 +60,8 @@ Remote access            ran      remote.sshd_enabled     2 service states: not-
 Accounts                 ran      accounts.passwd         22 accounts, 5 with a login shell
 Accounts                 ran      accounts.passwd_status  22 accounts, all locked [elevated]
 Accounts                 ran      accounts.shadow_meta    mode 0, owner root:root
-Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated, 1 redacted]
-Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated, 7 redacted]
+Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated]
+Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated]
 Startup and persistence  ran      persist.cron            0 cron entries
 Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't

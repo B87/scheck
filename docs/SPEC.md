@@ -132,6 +132,30 @@ with its live evaluation pending (2026-09-20) · Language: Go · Inference: prov
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from the first live evaluation (2026-09-20):**
+
+- One `--repeat 1` run of the harness against `gpt-5.6-luna` (recorded in
+  `docs/eval/phase2-results.md` as an observation, not a gate result) found three
+  defects in the tool rather than in the model, and they are fixed here:
+  - The `kv-secret` redaction rule matched the sudoers tag `NOPASSWD:` and replaced the
+    granted command with a marker, so a per-command grant read as a broad one. The
+    rule now skips the sudoers `PASSWD`/`NOPASSWD` keys (§4.2); the ubuntu and fedora
+    fixtures that recorded the mangled lines are restored byte for byte.
+  - `finding.Store` accepted a rule-covered id the rule had disproved on complete
+    evidence (`sshd.root_login_enabled` with `permitrootlogin no` in the capture) and
+    an id whose rules are bound to another platform (`remote.login_enabled` on Linux).
+    Three deterministic guards join the store (§5.7, §7.5): platform, rule verdict, and
+    a judgement's `Premise` (`sshd.password_auth_exposed` presupposes
+    `sshd.password_auth_enabled`). A not-assessed rule still leaves its id to the model.
+  - The system prompt says these things too, and names what `net.unexpected_listener`,
+    `fw.no_firewall_active` and `privesc.sudo_nopasswd_broad` mean, so the model is told
+    before it is refused. `PromptVersion` changed (`sp-53fdd276e33f`).
+- Harness ergonomics for a live run (§11): progress lines print without `-v` and name
+  the reported ids; `--out` is rewritten after every run so an interrupted run leaves a
+  record; `--cases` runs a subset; and a drift baseline (one benign control run twice
+  per repeat) is reported next to the adversarial pairs so §4.4's bound is read against
+  the model's natural variance. The criteria file is unchanged.
+
 **Changes from implementing M2.7 (2026-09-20):**
 
 - The evaluation harness exists (§11): `internal/eval`, `scheck eval`, a fifteen-case
@@ -532,7 +556,9 @@ This is how the baseline learns `/etc/shadow`'s mode and owner without ever read
 Every byte of check output passes the redactor before the model, the report, the audit
 log, or any transcript sees it. Rules: private-key blocks, `AKIA…`-style keys, bearer
 tokens, `password=`/`secret=`/`token=` values, and a config-extensible regex list
-(`redact_extra:`).
+(`redact_extra:`). The key/value rule keeps trivial values (`password=no` is a setting)
+and skips the sudoers tags `PASSWD:`/`NOPASSWD:`, whose value is the granted command:
+redacting it would hide exactly what a sudoers reading has to judge.
 
 **Redactions are marked, not silent.** A redacted span is replaced by
 `[REDACTED:<rule>:<n bytes>]` so the model knows something was there. This is the same
@@ -849,6 +875,16 @@ appear, whitespace folded, in the redacted output of a check that ran in this se
 the reason, and the store is untouched. A `severity` field is ignored, not rejected;
 `custom:<slug>` needs `proposed_severity`, title, impact and remediation and is capped
 at `medium`.
+
+The store also applies what the posture rules already know to a catalog id: an id
+whose rules are all bound to another platform is rejected on this one; an id whose rule
+read complete, recognized evidence and returned `not_matched` cannot be raised by the
+model from the same facts (it may still add evidence or a note to a finding the rule
+did raise); and a judgement id whose `Premise` (a rule-covered id in its `Def`) the
+rule disproved is rejected, since a correlation cannot stand on a fact read the other
+way. A `not_assessed` rule leaves its id to the model, which may have obtained
+evidence the rule lacked. These are error results with the rule's check and reason, so
+the model can correct itself.
 
 ### 5.8 System prompt contract
 

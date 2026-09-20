@@ -24,10 +24,10 @@
 /etc/sudoers.d/scheck:# Review, then install with: visudo -cf - < fragment && install -m 440 fragment /etc/sudoers.d/scheck
 /etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck runs them as `sudo -n -- ...`.
 /etc/sudoers.d/scheck:Defaults:ops !requiretty
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:12 bytes] /etc/sudoers  # privesc.sudoers
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:13 bytes] -rH . /etc/sudoers.d  # privesc.sudoers_d
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:15 bytes] -S -a  # accounts.passwd_status
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:19 bytes] ""  # mac.aa_status
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:13 bytes] list ruleset  # fw.nft
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:14 bytes] -T  # sshd.config
-/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:13 bytes] status verbose  # fw.ufw
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/grep -rH . /etc/sudoers.d  # privesc.sudoers_d
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/passwd -S -a  # accounts.passwd_status
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/aa-status ""  # mac.aa_status
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/nft list ruleset  # fw.nft
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/sshd -T  # sshd.config
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose  # fw.ufw
