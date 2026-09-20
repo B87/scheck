@@ -60,13 +60,6 @@ func reportAndExit(sess *session, out io.Writer, sheet *baseline.FactSheet) erro
 	return nil
 }
 
-func plural(n int, noun string) string {
-	if n == 1 {
-		return noun
-	}
-	return noun + "s"
-}
-
 // runStopAfter executes the stage selected by --stop-after for a built
 // session. In phase 1 the only complete runs are plan and facts.
 func runStopAfter(cmd *cobra.Command, sess *session) error {

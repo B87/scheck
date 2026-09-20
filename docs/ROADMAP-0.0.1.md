@@ -585,7 +585,7 @@ facts report carries `context_sources` with hashes and the truncated flag, that
 `--stop-after context` prints the block and that `--ignore-context` reads nothing.
 Demo verified by hand on this Mac with a note, a markdown file and a yaml file.
 
-### M2.2a — configuration inspection, validation and walkthrough
+### M2.2a — configuration inspection, validation and walkthrough ✅
 
 Deliver `scheck config show` and `scheck config validate`, using the same configuration
 resolver and validation rules as ordinary runs. `show` supports text and JSON and
@@ -632,6 +632,34 @@ context that an assessment would consume.
 
 **Spec work:** align §6.1 and §9, add these CLI contracts to §8 and their tests to §11
 when implementing this slice. No new configuration-loading or target-execution path.
+
+**Landed (2026-09-20).** `internal/config/resolve.go` (`Layer`, `Overrides`,
+`Resolve` with per-scalar origins and per-entry source lists, `Defaults`,
+`StripUserInfo`), `cmd/scheck/configcmd.go` (`config show|validate` in text and JSON),
+`docs/CONFIGURATION.md`, and SPEC §8/§9/§11. `loadConfig` in the CLI builds
+`Overrides` from flags that were *changed*, so a registered default never overrides a
+file; `LoadFiles` is now `Resolve` over layers with no overrides, so tests and the run
+path share one fold.
+
+- Provenance is per entry for accumulated lists ("`net.listeners <- user.yaml,
+  scheck.yaml`") and per key for the merged context; a later file's `context:` block
+  replaces an earlier one's whole, and the spec says so.
+- `validate` names the source of the error and exits 3; `show` still renders a broken
+  configuration with the error attached. `target:` context is listed as unresolved.
+  Provider validation checks the name is registered and available and notes a missing
+  model; adapter-specific validation is M2.6's.
+- Every displayed string passes the redactor and the terminal escaper; credentials are
+  presence-only; a base URL's user info is stripped.
+
+**Validation.** `make check` green. `internal/config` tests cover provenance across
+user, project and flag layers, absent files, accumulated entries with every source,
+unset flags not overriding files, `--local-only` narrowing `allow_egress`, user-info
+stripping, and effort/max_context validation. `cmd/scheck` runs the binary in a scratch
+home: the demo (user model, project `hardened`, `--profile baseline` attributed to the
+flag with the model keeping its file origin), the plan path honouring the same resolved
+settings, validate's exit codes for an invalid context field and an invalid profile,
+unresolved target context, and a leak test with a seeded key in the environment, a
+credential in a URL, a secret in a note and a control character in a target name.
 
 ### M2.3 — severity adjustments + accepted risks
 `finding.Def` and the base severity table exist since M1.8; M2.2 now supplies real

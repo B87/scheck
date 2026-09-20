@@ -131,6 +131,15 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.2a (2026-09-20):**
+
+- §9 now states the precedence the implementation always had — defaults, OS user
+  config, project `scheck.yaml`, explicitly set flags — and the real user-config
+  locations; the previous wording listed the files in the wrong order. `scheck config
+  show` and `scheck config validate` join §8, backed by a resolver with provenance
+  (`config.Resolve`) that runs and inspection share. `docs/CONFIGURATION.md` is the
+  walkthrough.
+
 **Changes from implementing M2.2 (2026-09-20):**
 
 - A `target:` context source is prose only (§6.1): the structured block can accept
@@ -1297,6 +1306,7 @@ scheck explain ID                       # CHECK-ID: what a check runs, why, its 
                                         #   use, extract; one section per platform-specific definition.
                                         #   Lists the posture rules that read the fact.)
 scheck providers                        # configured providers, limits, native features
+scheck config show|validate             # effective settings with provenance; validate exits 0|3 (§9)
 scheck diff [A B]                       # posture drift between two runs (M4)
 scheck --format text|json|sarif  --out FILE
        --include-evidence             # JSON facts only: optional redacted diagnostics
@@ -1408,7 +1418,15 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 
 ## 9. Configuration
 
-`./scheck.yaml`, `~/.config/scheck/config.yaml`, then flags (last wins).
+Precedence, lowest first: built-in defaults → the OS user config file → the project
+`./scheck.yaml` → flags the operator explicitly set. A flag's registered default never
+overrides a file; only a flag that was given counts. The user file is
+`$XDG_CONFIG_HOME/scheck/config.yaml` (default `~/.config/scheck/config.yaml`) on
+Linux and `~/Library/Application Support/scheck/config.yaml` on macOS
+(`os.UserConfigDir`). Scalars override per key; `disable_checks`, `deny_paths` and
+`redact_extra` accumulate across files; `targets` merge by name; a later file's
+`context:` block replaces an earlier one's whole (per-key merging happens across
+context *sources*, §6.1).
 
 ```yaml
 provider: openai-compatible   # v1 production adapter; anthropic / ollama post-v1
@@ -1436,6 +1454,16 @@ widens what `scheck` may execute or reveal. Credentials come from the environmen
 provider (`OPENAI_API_KEY` or `--base-url` for `openai-compatible`; `ANTHROPIC_API_KEY`
 or an `ant auth login` profile / WIF for `anthropic`; nothing for `ollama`). Never
 read a key from the config file.
+
+**Inspection.** `scheck config show` prints every effective setting with its source
+(`default`, the file path, or `flag`), every accumulated entry with every source that
+listed it, the targets, credential *presence* per provider, and the merged operator
+context a run would consume with per-key origins. `scheck config validate` applies the
+same validation a run applies plus the local context sources and exits 0 or 3, naming
+the source of an error. Both use the resolver a run uses, contact neither a model nor a
+target, report a `target:` context source as unresolved, and pass every displayed
+string through the redactor and the terminal escaper; a base URL with user info is
+shown with the credentials stripped. `docs/CONFIGURATION.md` is the walkthrough.
 
 ---
 
@@ -1533,6 +1561,12 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
   versions and failures, and require the criteria to pass before v1. This is measured
   resistance on the corpus, not a guarantee against every injection; deterministic
   policy remains the security boundary. Live evaluations are opt-in, not default CI.
+- **Configuration tests.** Inspection and an ordinary run resolve identical effective
+  settings from the same files and flags, including absent files, accumulated
+  restrictions and context conflicts; an unset flag never overrides a file; `config
+  validate` exits 0 and 3 without a target command or an inference request; a seeded
+  credential is absent from text, JSON and diagnostics and a control character in a
+  configured value is escaped.
 - **Redaction tests.** Seeded secrets in fixture output must not appear in any
   transcript, report, or audit log, and every redaction must leave a marker.
 

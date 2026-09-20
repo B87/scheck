@@ -117,6 +117,7 @@ func newRootCmd() *cobra.Command {
 		newExplainCmd(opts),
 		newSudoersCmd(opts),
 		newProvidersCmd(opts),
+		newConfigCmd(opts),
 	)
 	return root
 }

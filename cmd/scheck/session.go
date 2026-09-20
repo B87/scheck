@@ -47,48 +47,70 @@ type session struct {
 // defaultProvider is the v1 production adapter (docs/SPEC.md §5.2).
 const defaultProvider = "openai-compatible"
 
-// loadConfig merges the file chain and overlays the flags that were set
-// (last wins), then validates. It is the one resolver every command uses.
+// loadConfig resolves the effective configuration the way every command
+// does (docs/SPEC.md §9): defaults, user file, project file, then the flags
+// the operator explicitly set. It validates and returns the result with its
+// provenance, so `config show` and a run cannot disagree.
 func (o *globalOpts) loadConfig(cmd *cobra.Command) (*config.Config, error) {
-	cfg, err := config.Load()
+	r, err := o.resolveConfig(cmd)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.Config.Validate(); err != nil {
+		return nil, usageErr("%v", err)
+	}
+	for _, src := range r.Config.Sources {
+		o.logf(1, "config: loaded %s", src)
+	}
+	return r.Config, nil
+}
+
+// resolveConfig loads the file chain and applies explicitly set flags. It
+// does not validate, so `config show` can display a broken configuration
+// alongside the error `config validate` reports.
+func (o *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Resolved, error) {
+	layers, err := config.LoadLayers(config.Paths()...)
 	if err != nil {
 		return nil, usageErr("%v", err)
 	}
-	if o.Profile != "" {
-		cfg.Profile = o.Profile
+	return config.Resolve(layers, o.overrides(cmd)), nil
+}
+
+// overrides collects the flags the operator set. A flag that was not given
+// contributes nothing, so a registered default never overrides a file.
+func (o *globalOpts) overrides(cmd *cobra.Command) config.Overrides {
+	var ov config.Overrides
+	changed := func(name string) bool {
+		if cmd == nil {
+			return false
+		}
+		f := cmd.Flags().Lookup(name)
+		return f != nil && f.Changed
 	}
-	if o.Sudo {
-		cfg.Elevate = "sudo"
+	str := func(name string, v *string) *string {
+		if changed(name) {
+			return v
+		}
+		return nil
 	}
-	if o.Elevate != "" {
-		cfg.Elevate = o.Elevate
+	ov.Profile = str("profile", &o.Profile)
+	ov.Elevate = str("elevate", &o.Elevate)
+	if changed("sudo") && o.Sudo && ov.Elevate == nil {
+		sudo := "sudo"
+		ov.Elevate = &sudo
 	}
-	if o.StateDir != "" {
-		cfg.StateDir = o.StateDir
+	ov.StateDir = str("state-dir", &o.StateDir)
+	ov.Provider = str("provider", &o.Provider)
+	ov.Model = str("model", &o.Model)
+	ov.BaseURL = str("base-url", &o.BaseURL)
+	ov.Effort = str("effort", &o.Effort)
+	if changed("max-context") {
+		ov.MaxContext = &o.MaxContext
 	}
-	if o.Provider != "" {
-		cfg.Provider = o.Provider
+	if changed("local-only") {
+		ov.LocalOnly = &o.LocalOnly
 	}
-	if o.Model != "" {
-		cfg.Model = o.Model
-	}
-	if o.BaseURL != "" {
-		cfg.BaseURL = o.BaseURL
-	}
-	if o.Effort != "" {
-		cfg.Effort = o.Effort
-	}
-	if o.MaxContext != 0 {
-		cfg.MaxContext = o.MaxContext
-	}
-	_ = cmd
-	if err := cfg.Validate(); err != nil {
-		return nil, usageErr("%v", err)
-	}
-	for _, src := range cfg.Sources {
-		o.logf(1, "config: loaded %s", src)
-	}
-	return cfg, nil
+	return ov
 }
 
 // providerConfig is what an adapter is built from: the operator's selection,

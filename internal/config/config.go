@@ -7,9 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"gopkg.in/yaml.v3"
@@ -56,79 +54,47 @@ type Config struct {
 	Sources []string `yaml:"-"`
 }
 
-// Paths returns the default file chain, lowest precedence first.
+// Paths returns the default file chain, lowest precedence first: the OS
+// user config, then the project file (docs/SPEC.md §9).
 func Paths() []string {
 	var out []string
-	if dir, err := os.UserConfigDir(); err == nil {
-		out = append(out, filepath.Join(dir, "scheck", "config.yaml"))
+	if p, err := UserConfigPath(); err == nil {
+		out = append(out, p)
 	}
-	out = append(out, "scheck.yaml")
-	return out
+	return append(out, ProjectConfigPath)
 }
 
-// Load merges the default file chain. A missing file is not an error; a
-// malformed one, or one with an unknown top-level key, is.
+// Load resolves the default file chain with no flag overrides.
 func Load() (*Config, error) { return LoadFiles(Paths()...) }
 
-// LoadFiles merges the given files, later ones overriding earlier ones per
-// scalar key; list keys are unioned because they can only narrow.
+// LoadFiles merges the given files over the built-in defaults, later ones
+// overriding earlier ones per scalar key; list keys are unioned because they
+// can only narrow. A missing file is not an error; a malformed one, or one
+// with an unknown top-level key, is.
 func LoadFiles(paths ...string) (*Config, error) {
-	merged := &Config{}
-	for _, p := range paths {
-		raw, err := os.ReadFile(p)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("config %s: %w", p, err)
-		}
-		var c Config
-		dec := yaml.NewDecoder(bytes.NewReader(raw))
-		dec.KnownFields(true)
-		if err := dec.Decode(&c); err != nil && !errors.Is(err, os.ErrNotExist) && err.Error() != "EOF" {
-			return nil, fmt.Errorf("config %s: %w", p, err)
-		}
-		merged.overlay(&c)
-		if !c.Context.IsZero() {
-			merged.ContextSource = p
-		}
-		merged.Sources = append(merged.Sources, p)
+	layers, err := LoadLayers(paths...)
+	if err != nil {
+		return nil, err
 	}
-	return merged, nil
+	return Resolve(layers, Overrides{}).Config, nil
 }
 
-func (c *Config) overlay(o *Config) {
-	setIf(&c.Provider, o.Provider)
-	setIf(&c.Model, o.Model)
-	setIf(&c.BaseURL, o.BaseURL)
-	setIf(&c.Effort, o.Effort)
-	if o.MaxContext != 0 {
-		c.MaxContext = o.MaxContext
+// readFile parses one file. present is false when it does not exist.
+func readFile(p string) (*Config, bool, error) {
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
 	}
-	setIf(&c.Profile, o.Profile)
-	setIf(&c.Elevate, o.Elevate)
-	setIf(&c.StateDir, o.StateDir)
-	if o.AllowEgress != nil {
-		c.AllowEgress = o.AllowEgress
+	if err != nil {
+		return nil, false, fmt.Errorf("config %s: %w", p, err)
 	}
-	c.DisableChecks = union(c.DisableChecks, o.DisableChecks)
-	c.DenyPaths = union(c.DenyPaths, o.DenyPaths)
-	c.RedactExtra = union(c.RedactExtra, o.RedactExtra)
-	if len(o.Targets) > 0 {
-		if c.Targets == nil {
-			c.Targets = map[string]SSHTarget{}
-		}
-		maps.Copy(c.Targets, o.Targets)
+	var c Config
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err := dec.Decode(&c); err != nil && err.Error() != "EOF" {
+		return nil, false, fmt.Errorf("config %s: %w", p, err)
 	}
-	if !o.Context.IsZero() {
-		c.Context = o.Context
-	}
-}
-
-func setIf(dst *string, v string) {
-	if v != "" {
-		*dst = v
-	}
+	return &c, true, nil
 }
 
 func union(a, b []string) []string {

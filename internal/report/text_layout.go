@@ -98,6 +98,10 @@ func isControl(r rune) bool {
 	return r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r))
 }
 
+// Sanitize is sanitize for callers outside the package that print text of
+// uncertain origin (`scheck config show`, `scheck explain`).
+func Sanitize(s string) string { return sanitize(s) }
+
 // inline prevents target-derived fields from forging report structure (§7.6).
 func inline(s string) string { return strings.Join(strings.Fields(sanitize(s)), " ") }
 
