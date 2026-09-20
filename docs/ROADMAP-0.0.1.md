@@ -863,9 +863,10 @@ in `internal/llm/all`; `test/live` behind the `live` build tag with `make live`.
   `cache_read`.
 - **Pricing only where the table applies**: `cost_usd` is computed on OpenAI's
   endpoint for known families and null everywhere else, never an invented number.
-- **Configuration errors are usage errors before any target contact**: no model, an
-  unknown window without `max_context`, no key on OpenAI's endpoint, credentials in
-  the URL. `--local-only` and `allow_egress: false` were already exit 3 from M2.4.
+- **Configuration errors are usage errors before any target contact**: no model on a
+  non-OpenAI endpoint, an unknown window without `max_context`, no key on OpenAI's
+  endpoint, credentials in the URL. OpenAI's endpoint defaults to `gpt-5.6-luna`.
+  `--local-only` and `allow_egress: false` were already exit 3 from M2.4.
 
 **Validation.** `make check` green. The conformance suite (§11) is green for
 `openai-compatible` through a fake chat-completions server that streams text and

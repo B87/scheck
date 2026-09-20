@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/b87/scheck/internal/llm/openai"
 	"github.com/b87/scheck/internal/version"
 )
 
@@ -73,7 +74,7 @@ func newRootCmd() *cobra.Command {
 	pf.BoolVar(&opts.Sudo, "sudo", false, "shorthand for --elevate sudo")
 	pf.StringVar(&opts.Only, "only", "", "category filter, comma-separated")
 	pf.StringVar(&opts.Provider, "provider", "", "openai-compatible|mock (anthropic, ollama: post-v1)")
-	pf.StringVar(&opts.Model, "model", "", "model name")
+	pf.StringVar(&opts.Model, "model", "", "model name (default "+openai.DefaultModel+" on OpenAI's endpoint)")
 	pf.StringVar(&opts.BaseURL, "base-url", "", "provider base URL")
 	pf.BoolVar(&opts.LocalOnly, "local-only", false, "refuse any provider that leaves the machine")
 	pf.StringVar(&opts.Effort, "effort", "", "low|medium|high|max")

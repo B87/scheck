@@ -229,6 +229,9 @@ func TestOpenAICompatibleConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("OPENAI_API_KEY", "")
 	_ = os.Unsetenv("OPENAI_API_KEY")
+	if out, code := runIn(t, dir, "local"); code != exitUsage || out != "" {
+		t.Errorf("default luna, no key: exit %d %q", code, out)
+	}
 	if out, code := runIn(t, dir, "local", "--model", "gpt-5"); code != exitUsage || out != "" {
 		t.Errorf("no key: exit %d %q", code, out)
 	}
@@ -256,6 +259,21 @@ func TestOpenAICompatibleConfiguration(t *testing.T) {
 	}
 	if strings.Contains(out, "sk-test") {
 		t.Error("credential printed")
+	}
+	out, code = runIn(t, dir, "providers", "--format", "json")
+	if code != exitOK {
+		t.Fatalf("providers default model: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Providers {
+		if p.Name != "openai-compatible" {
+			continue
+		}
+		if p.Status != "ready" || p.Limits == nil || p.Limits.MaxContext != 1050000 {
+			t.Errorf("default luna window: %+v", p)
+		}
 	}
 	out, _ = runIn(t, dir, "providers", "--model", "mystery-7b", "--base-url", "http://localhost:8000/v1", "--max-context", "8192")
 	if !strings.Contains(out, "openai-compatible") || !strings.Contains(out, "ready") || !strings.Contains(out, "8192") {

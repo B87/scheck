@@ -22,7 +22,7 @@ func need(t *testing.T) (model string) {
 	}
 	model = os.Getenv("SCHECK_LIVE_MODEL")
 	if model == "" {
-		model = "gpt-5-mini"
+		model = "gpt-5.6-luna"
 	}
 	if os.Getenv("OPENAI_API_KEY") == "" && os.Getenv("SCHECK_LIVE_BASE_URL") == "" {
 		t.Skip("OPENAI_API_KEY or SCHECK_LIVE_BASE_URL not set")

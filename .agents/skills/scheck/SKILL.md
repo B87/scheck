@@ -39,12 +39,13 @@ This build collects read-only evidence and assesses it two ways:
   (turns, model-initiated checks, how the pass ended, the model's closing text). The
   model never assigns severity and never runs anything outside the catalog.
 
-The default provider is `openai-compatible` (`--model` required, `OPENAI_API_KEY` in
-the environment or `--base-url` for another endpoint; an unknown model needs
-`--max-context`). `mock` replays a transcript for plumbing tests. A bare `scheck local`
-without a usable provider exits 3 before touching the target; `scheck providers` shows
-what is configured. Model quality has not been evaluated yet (M2.7): treat model
-findings as candidates with evidence, not as verified conclusions.
+The default provider is `openai-compatible` (model `gpt-5.6-luna` on OpenAI's
+endpoint, `OPENAI_API_KEY` in the environment or `--base-url` plus `--model` for
+another endpoint; an unknown model needs `--max-context`). `mock` replays a
+transcript for plumbing tests. A bare `scheck local` without a usable provider
+exits 3 before touching the target; `scheck providers` shows what is configured.
+Model quality has not been evaluated yet (M2.7): treat model findings as
+candidates with evidence, not as verified conclusions.
 
 A rule reads one fact and fires only on evidence it recognises, so:
 

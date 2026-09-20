@@ -23,7 +23,7 @@ make build
 bin/scheck local --stop-after facts --no-persist            # posture rules only, no model
 bin/scheck ssh user@host --stop-after facts --no-persist
 export OPENAI_API_KEY=...                                    # or --base-url for another endpoint
-bin/scheck local --model gpt-5-mini --context hosts/gateway.yaml   # rules + the agentic pass
+bin/scheck local --context hosts/gateway.yaml                # rules + the agentic pass (gpt-5.6-luna)
 bin/scheck providers                                         # what is configured
 bin/scheck config show                                       # effective settings with provenance
 ```

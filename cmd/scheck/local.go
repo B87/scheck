@@ -22,7 +22,7 @@ func newLocalCmd(opts *globalOpts) *cobra.Command {
 			"policy and report findings that scheck grades. --stop-after facts needs no model. JSON " +
 			"output is on stdout, diagnostics on stderr. Exit 0 no finding at or above the profile " +
 			"threshold, 1 findings, 2 incomplete, 3 usage/policy error.",
-		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --model gpt-5 --context hosts/gateway.yaml\n  scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json\n  scheck local --stop-after plan --format json",
+		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --context hosts/gateway.yaml\n  scheck local --model gpt-5.6-terra --context hosts/gateway.yaml\n  scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json\n  scheck local --stop-after plan --format json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := opts.notInPhase1(cmd); err != nil {

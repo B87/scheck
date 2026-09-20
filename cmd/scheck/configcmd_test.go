@@ -179,3 +179,30 @@ func TestConfigShowLeaksNothing(t *testing.T) {
 		}
 	}
 }
+
+// OpenAI's endpoint defaults to gpt-5.6-luna; a different base URL does not
+// invent a model name (docs/SPEC.md §5.2).
+func TestOpenAIEndpointDefaultsToLuna(t *testing.T) {
+	dir := t.TempDir()
+	out, code := runIn(t, dir, "config", "show", "--format", "json")
+	if code != exitOK {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	var doc inspection
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Settings["model"].Value != "gpt-5.6-luna" || doc.Settings["model"].Source != "default" {
+		t.Errorf("openai default: %+v", doc.Settings["model"])
+	}
+	out, code = runIn(t, dir, "config", "show", "--base-url", "http://localhost:8000/v1", "--format", "json")
+	if code != exitOK {
+		t.Fatalf("custom endpoint: exit %d:\n%s", code, out)
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Settings["model"].Value != "" {
+		t.Errorf("custom endpoint invented a model: %+v", doc.Settings["model"])
+	}
+}

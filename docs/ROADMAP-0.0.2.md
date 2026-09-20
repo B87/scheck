@@ -36,6 +36,9 @@ release gates to be satisfied first. Product versions and report schema versions
 | First existing domain? | `sshd`: both platform definitions of `sshd.config`, its two posture rules and their finding definitions. Keep existing IDs, evidence, grading and default behavior. |
 | First new application? | Selected in M5.0 using a written assessment brief; no placeholder application may survive that gate. |
 | Custom applications? | Operator declarations bind one named running service per invocation to reviewed checks. Ship a Next.js deployment example; declarations contain identifiers and expected behavior, never commands or executable rules. |
+| Who resolves a running application? | A bounded core workflow owns service/process binding and its uncertainty. It invokes catalog IDs through the runner; packs supply no orchestration hooks. |
+| What identifies evidence? | A run-local observation reference identifies one check invocation, including its bound parameters and execution occurrence. Check IDs identify definitions, not individual observations. |
+| What may a parser contribute? | A namespaced parser implementation producing a supported fact shape. Predicates depend on the shape and its completeness contract, not the parser's identity. |
 | Supported deployments? | At least one named Linux distribution/application-version combination with local and SSH integration coverage. M5.0 names the exact matrix; macOS application support is optional, existing macOS host coverage is mandatory. |
 | What is a pack? | Identity, checks, parsing support where needed, finding definitions, single-fact posture rules, fixtures and authoring documentation. No execution hooks. |
 | What stays in core? | Bootstrap/canary, shared file primitives, remaining host checks, transport, runner, policy, agent, grading and rendering. Do not migrate every host domain in this release. |
@@ -114,6 +117,15 @@ bound M5.2a's custom-application workflow so it remains achievable whichever pac
    useful deterministic deployment findings with counterexamples and abstention cases.
    Name which existing checks can supply evidence and which reviewed additions are needed.
    Do not require reading a project directory outside current path policy to meet the demo.
+   Specify the bounded service-to-process binding sequence, evidence used to distinguish
+   process lifetimes, maximum follow-up checks and when binding becomes uncertain. Walk
+   through missing services, wrappers/children, PID reuse and a restart between reads.
+   Each deterministic finding must name one observation that proves its condition;
+   identity bookkeeping must not become a hidden cross-fact security predicate.
+7. Parser contracts for the proposed checks: separate implementation IDs from output
+   shapes, name the fields/completeness information consumed by each predicate, and
+   identify any shape needing a reviewed core addition. Prefer an existing shape when
+   it faithfully represents the evidence; do not encode a verdict to avoid adding one.
 
 **Demo/review:** walk each proposed finding from one realistic evidence example to the
 expected report. A reviewer can identify what will be assessed and what will remain
@@ -125,8 +137,9 @@ credential mechanism. Technical uncertainties are resolved with bounded experime
 on disposable integration targets, not left as M5.2 TODOs. Record the selection and
 rejected alternative's tradeoff in the brief.
 
-**Spec work:** identify required changes to §3, §7.1, §7.5 and §11. This gate records
-the design; implementation and corresponding spec updates belong to M5.1/M5.2.
+**Spec work:** identify required changes to §2–§4, §6, §7 and §11, including binding,
+observation references and parser shapes. This gate records the design; implementation
+and corresponding spec updates belong to M5.1, M5.2 and M5.2a.
 
 ## M5.1 — explicit composition, pack identity and the sshd extraction
 
@@ -138,6 +151,13 @@ Keep the contribution interface internal until the two real packs exercise it.
 - Replace `init()` registration in `internal/check/{common,linux,macos}` with explicit
   composition and validation of core plus packs. Assemble checks, finding definitions,
   parser bindings and rule references together; validating checks alone is insufficient.
+- Separate parser implementation identity from output shape in that composition.
+  A parser declares a supported shape and returns its defined value and completeness
+  metadata; composition validates predicate compatibility against the shape. Core owns
+  shape contracts, common predicates and summary behavior. Adding a parser for an
+  existing shape must not require consumer branches keyed on its parser or pack ID.
+  Unsupported shapes fail composition; a parser returning a value inconsistent with
+  its declared shape produces unavailable evidence, never a predicate panic or pass.
 - Make the validated catalog immutable, including nested argv/parameter slices and
   values returned to callers. Planning, runner lookup, agent menus, finding validation,
   discovery and sudoers generation consume this same composition.
@@ -169,6 +189,9 @@ Keep the contribution interface internal until the two real packs exercise it.
 5. Exactly one core canary runs first over SSH; existing redaction and read-only integration
    tests remain green. The tier cap is checked over the full composition per platform,
    not separately for each pack.
+6. Distinct parser implementations producing the same supported shape work with the
+   same predicates and summaries. Reject incompatible shape/predicate bindings before
+   target contact; malformed parser results retain an explicit coverage limitation.
 
 **Demo:** compare existing fixture reports before/after extraction, then show a local
 plan with `--disable-pack sshd`. Attempt a model call to `sshd.config` in that selection
@@ -251,6 +274,46 @@ argv, scripts, parsers, credentials or allowed paths. Disabled packs/checks stay
 Validate unknown names and invalid bindings before target contact; expose the resolved
 application selection through config inspection and plans.
 
+**Binding ownership:** a bounded core application-binding workflow owns the transition
+from a validated declaration to observed service/process identity. Configuration and
+planning validate static identifiers without target contact; the workflow resolves
+runtime-dependent parameters from recognized observations after normal target bootstrap.
+It executes only catalog IDs through the runner under the same selection and budgets.
+It exposes binding status and supporting observation references to evaluation and
+reporting, so callers do not reconstruct service/PID relationships independently.
+
+M5.0 fixes the supported service-manager sequence and its collection bound. Core checks
+the observed service membership and process-lifetime evidence needed for attribution;
+a PID alone does not establish continuity. Missing, ambiguous, inaccessible or changed
+identity ends that binding attempt with an explicit reason, without an automatic retry
+loop. Keep collected observations, but assessments requiring an unproven binding become
+`not_assessed`; unrelated host assessments remain usable. Describe consistency as what
+the observations establish, not as an atomic snapshot of a running service.
+
+Binding establishes which subject evidence belongs to; it does not combine observations
+into security conclusions. Rules still evaluate one observation. Do not synthesize a
+single “fact” by joining service, process and listener outputs to evade that boundary.
+This slice adds no generic dependency scheduler or pack-supplied execution callbacks.
+
+**Observation identity:** core assigns an immutable run-local reference to each check
+invocation/result. It records the requested check ID, parameters, execution occurrence
+and result, linking to the catalog definition and validated bindings when available.
+Retain denied/unavailable outcomes without implying they passed validation or executed. Two
+invocations remain distinct even with identical parameters; a later result never
+overwrites an earlier observation. Together with run identity, the reference is
+unambiguous in persisted reports; it is not a stable identity for cross-run comparison.
+Parameter storage follows existing policy/redaction rules and adds no raw-data channel.
+
+Baseline collection, application binding and agent calls use the same observation store.
+Findings cite observations, and the finding store validates each model excerpt against
+the exact cited observation's redacted capture. Assessments identify their supporting
+observations, or explain why none could be obtained. Application attribution references
+the binding evidence as well as the condition's evidence. Reporting and persistence keep
+these references resolvable under the existing evidence-inclusion policy; they do not
+require retaining raw captures by default. Check IDs remain visible for discovery and
+provenance. Specify the schema/tool-contract changes in this slice and apply SPEC §7.4
+versioning; do not retrofit unique executions into a map keyed only by check ID.
+
 **Deliver and demonstrate:**
 
 - Collect service/process identity, runtime user, recognized launch mode and actual
@@ -263,9 +326,10 @@ application selection through config inspection and plans.
   as observed facts, not proof of internet reachability. Comparing separate service,
   listener and proxy facts remains phase 2 work; do not hide joins in single-fact rules.
 - Keep expected and observed state distinct in the report. Attribute application facts,
-  findings and coverage to the selected application and observed service/process. Preserve
-  check IDs and parameterized evidence references. Multiple application instances in one
-  invocation, with new deduplication semantics, are deferred.
+  findings and coverage through the binding and observation contracts above. Preserve
+  existing finding-ID merge semantics while retaining all distinct supporting observation
+  references. Multiple application instances in one invocation and subject-specific
+  finding deduplication remain deferred; repeated observations are required now.
 - Read only policy-approved evidence. A project path is not a new allowed prefix; a
   deployment under `/srv` or a user's home may still be assessed from permitted runtime
   metadata, with file-based checks explicitly unavailable. Never execute `next.config.*`,
@@ -285,6 +349,14 @@ Assert labeled findings and coverage, correct attribution, redaction, unchanged 
 state and no requests to the application's HTTP endpoints. An unreadable project tree
 must not prevent reporting the runtime evidence that was collected.
 
+Exercise the same check with two parameter sets, then twice with identical parameters
+and different outputs. Assert that every observation survives, citations resolve to the
+correct execution, an excerpt found only in another observation is rejected, and JSON/persistence
+preserve attribution. Include a PID-reuse/restart fixture where observations remain
+available but application attribution cannot be established, and prove no unbounded
+recollection occurs. Disabled checks/packs and exhausted budgets must also stop dependent
+binding steps without a bypass or fabricated application assessment.
+
 **Boundary:** this is deployment posture assessment. HTTP header/cookie/TLS probing,
 authentication tests, route crawling, dependency vulnerability scanning and source-code
 security review are outside this slice. Even GET/HEAD requests can execute application
@@ -292,7 +364,8 @@ logic, generate logs or populate caches; active web testing needs a separate exp
 side-effect and target-scope contract. Do not smuggle it in as a read-only catalog command.
 
 **Spec work:** §2–§4, §6, §7.4–§7.6, §8–§9 and §11. Specify application declarations,
-parameterized baseline planning and report attribution without introducing another
+parameterized baseline planning, binding ownership, observation storage and report
+attribution, plus evidence references in §5.7 and §7.3, without introducing another
 execution path or changing path-policy authority.
 
 ## M5.3 — public authoring API and an independently built example
@@ -306,6 +379,10 @@ policy or report implementation types.
 - Public definition types, explicit composition/CLI entry point and fixture validation
   helpers. A contributor supplies pack definitions and pure parsing support; core retains
   execution, rule evaluation, grading, evidence validation and rendering.
+- Publish the supported fact shapes and their completeness contracts separately from
+  parser implementation IDs. External parsers return those values; consumers use common
+  predicates, summaries and serialization. New shapes or predicate capabilities require
+  a reviewed core/API change, not arbitrary return types or pack-owned renderer hooks.
 - A documented custom-build recipe with pinned module versions, source review steps and
   an explicit pack list. No blank imports, global registration, source-file patching or
   undocumented build tags to include a pack.
@@ -319,8 +396,12 @@ policy or report implementation types.
 **Demo:** an example in a separate Go module imports the public API, builds a custom
 `scheck` with core plus the example, and produces a fixture-backed report. A separate
 module checked into the repository is sufficient; a separately hosted repository is not
-required. The example may reuse the first application's definitions rather than add a
-second production application to the release.
+required. It must define a distinct namespaced parser in that module, returning a
+supported shape consumed by a core predicate and summary, and produce schema-valid JSON
+and a persisted report with observation references. Cover complete, incomplete and
+invalid parser results. It may reuse the first application's evidence format and need
+not add a second production application, but merely importing its existing definitions
+does not demonstrate the parser contribution boundary.
 
 **Done when:** CI builds/tests that module without `internal/` imports or edits to core
 source; the official binary uses the same composition path; validation catches broken
@@ -364,12 +445,12 @@ public API; keep security enforcement private.
 | Gate | Required recorded evidence |
 |---|---|
 | Useful assessment | M5.0 brief, supported deployment matrix and M5.2 expected/actual findings and coverage. |
-| Custom application | M5.2a's Next.js local/SSH demo using the official binary, runtime finding/abstention fixtures and application attribution; no app code execution or HTTP probing. |
+| Custom application | M5.2a's Next.js local/SSH demo using the official binary, runtime finding/abstention fixtures, bounded binding and restart/PID-reuse attribution tests; no app code execution or HTTP probing. |
 | Preserved host behavior | Before/after fixture comparison for Ubuntu, Fedora and macOS; reviewed schema/golden diffs. |
 | Closed execution surface | Composition failures, mutation isolation, disabled-ID denials, canary, redaction and budget tests. |
 | Read-only collection | Local/SSH integration results on every claimed application deployment; empty controlled filesystem diffs and sudoers validation where applicable. |
-| External authoring | Separate-module build and validation result using only the documented API. |
-| Traceability | Discovery/report/persistence examples, identity repeat/change tests and compatibility rejection tests. |
+| External authoring | Separate-module build and validation using only the documented API, including its own parser consumed by core predicates, summaries and persistence. |
+| Traceability | Discovery/report/persistence examples, pack identity repeat/change tests, distinct repeated observations with exact citation validation, and compatibility rejection tests. |
 | AI regression | Existing live quality/adversarial criteria pass, extended with application cases; record model, prompt, pack/build identities, repetitions and failures. |
 | Release hygiene | Green `make check` (including `go fix`), relevant integration results and the artifact checks established by 0.0.1. |
 

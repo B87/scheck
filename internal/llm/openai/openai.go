@@ -33,6 +33,30 @@ const Name = "openai-compatible"
 // DefaultBaseURL is OpenAI's endpoint (docs/SPEC.md §5.2).
 const DefaultBaseURL = "https://api.openai.com/v1"
 
+// DefaultModel is selected when the operator omitted --model and the
+// endpoint is OpenAI's. A different --base-url still requires an explicit
+// model: that endpoint decides which names exist (docs/SPEC.md §5.2).
+const DefaultModel = "gpt-5.6-luna"
+
+// ResolveModel returns the model the adapter will send. An empty result
+// means the operator must set --model (a non-OpenAI endpoint with no name).
+func ResolveModel(model, baseURL string) string {
+	if model != "" {
+		return model
+	}
+	if openAIEndpoint(baseURL) {
+		return DefaultModel
+	}
+	return ""
+}
+
+func openAIEndpoint(base string) bool {
+	if base == "" {
+		return true
+	}
+	return strings.TrimRight(base, "/") == DefaultBaseURL
+}
+
 // keyVar is the environment variable the credential is read from (§9).
 // It is the variable's name, never a value.
 const keyVar = "OPENAI_API_KEY" //nolint:gosec // an environment variable name
@@ -60,14 +84,20 @@ type Provider struct {
 	// legacyMaxTokens is set after an endpoint rejected
 	// max_completion_tokens; older servers only know max_tokens.
 	legacyMaxTokens bool
+	// effortNone is set when chat completions accepts function tools
+	// only with reasoning_effort=none. The field must be sent, not
+	// omitted: omitting lets the endpoint default to medium.
+	effortNone bool
 }
 
-// New builds the adapter from configuration without any I/O. The model is
-// required; the context window comes from max_context or the model table
-// and an unknown window is a configuration error (§5.3). The credential is
-// checked for presence only when the endpoint is OpenAI's; its value is
-// read at request time.
+// New builds the adapter from configuration without any I/O. OpenAI's
+// endpoint defaults the model to DefaultModel; any other endpoint requires
+// --model because it decides which names exist. The context window comes
+// from max_context or the model table and an unknown window is a
+// configuration error (§5.3). The credential is checked for presence only
+// when the endpoint is OpenAI's; its value is read at request time.
 func New(cfg llm.Config) (*Provider, error) {
+	cfg.Model = ResolveModel(cfg.Model, cfg.BaseURL)
 	if cfg.Model == "" {
 		return nil, errors.New("--model is required: the endpoint decides which models exist")
 	}
@@ -104,8 +134,9 @@ func New(cfg llm.Config) (*Provider, error) {
 		model: cfg.Model, baseURL: base, env: env,
 		limits: llm.Limits{MaxContext: maxCtx, Local: false},
 		info:   info, priced: known && base == DefaultBaseURL,
-		client: &http.Client{Timeout: 10 * time.Minute},
-		native: llm.Native{ToolCalling: true, ParallelToolCalls: true, PromptCaching: false, Reasoning: known && info.reasoning},
+		client:     &http.Client{Timeout: 10 * time.Minute},
+		native:     llm.Native{ToolCalling: true, ParallelToolCalls: true, PromptCaching: false, Reasoning: known && info.reasoning && !info.toolsNeedNone},
+		effortNone: info.toolsNeedNone,
 	}
 	return p, nil
 }
@@ -119,7 +150,9 @@ func (p *Provider) Limits() llm.Limits { return p.limits }
 // Native implements llm.Provider. PromptCaching is false because the adapter
 // places no cache breakpoints: OpenAI caches long prefixes automatically and
 // the hits show in usage.cache_read, but Block.Cacheable is not exercised.
-// Reasoning flips to false if the endpoint rejects reasoning_effort.
+// Reasoning is false when the family cannot combine function tools with a
+// non-none reasoning_effort on chat completions, and flips to false if the
+// endpoint later rejects reasoning_effort.
 func (p *Provider) Native() llm.Native {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -170,7 +203,7 @@ type wireRequest struct {
 // encode maps the neutral request onto the wire (docs/SPEC.md §5.1). System
 // blocks become one system message in order; tool results become `tool`
 // messages; the output reservation is max_completion_tokens.
-func (p *Provider) encode(r llm.Request, legacy bool, effort bool) wireRequest {
+func (p *Provider) encode(r llm.Request, legacy, reasoning, none bool) wireRequest {
 	w := wireRequest{Model: r.Model, Stream: true, StreamOptions: map[string]any{"include_usage": true}}
 	if w.Model == "" {
 		w.Model = p.model
@@ -225,7 +258,10 @@ func (p *Provider) encode(r llm.Request, legacy bool, effort bool) wireRequest {
 			w.MaxCompletionTokens = r.MaxTokens
 		}
 	}
-	if effort && r.Effort != "" {
+	switch {
+	case none && len(w.Tools) > 0:
+		w.ReasoningEffort = "none"
+	case reasoning && r.Effort != "":
 		w.ReasoningEffort = mapEffort(r.Effort)
 	}
 	return w
@@ -246,18 +282,18 @@ func (p *Provider) Stream(ctx context.Context, r llm.Request) (llm.Stream, error
 		return nil, err
 	}
 	p.mu.Lock()
-	legacy, effort := p.legacyMaxTokens, p.native.Reasoning
+	legacy, reasoning, none := p.legacyMaxTokens, p.native.Reasoning, p.effortNone
 	p.mu.Unlock()
 	for range 3 {
-		resp, err := p.post(ctx, p.encode(r, legacy, effort))
+		resp, err := p.post(ctx, p.encode(r, legacy, reasoning, none))
 		if err == nil {
 			return newStream(resp.Body, p), nil
 		}
-		// Two capability differences the adapter absorbs (docs/SPEC.md §5.3)
-		// rather than the loop: an endpoint that only knows max_tokens, and
-		// one that rejects reasoning_effort. Each is retried once, and the
-		// outcome is recorded in Native so the report never claims a feature
-		// that was not exercised.
+		// Capability differences the adapter absorbs (docs/SPEC.md §5.3)
+		// rather than the loop: an endpoint that only knows max_tokens,
+		// one that rejects reasoning_effort outright, and one that accepts
+		// function tools only with reasoning_effort=none. Each is retried
+		// once, and Native records what was actually exercised.
 		if bad, ok := errors.AsType[*badRequest](err); ok {
 			switch {
 			case !legacy && bad.mentions("max_completion_tokens"):
@@ -266,10 +302,21 @@ func (p *Provider) Stream(ctx context.Context, r llm.Request) (llm.Stream, error
 				p.legacyMaxTokens = true
 				p.mu.Unlock()
 				continue
-			case effort && bad.mentions("reasoning_effort", "reasoning"):
-				effort = false
+			case !none && bad.mentions("reasoning") && bad.mentions("tool", "function"):
+				// Chat completions on GPT-5.6 Luna: tools work, but only
+				// at reasoning_effort=none. Omitting the field is not
+				// enough; the endpoint then defaults to medium.
+				reasoning, none = false, true
 				p.mu.Lock()
 				p.native.Reasoning = false
+				p.effortNone = true
+				p.mu.Unlock()
+				continue
+			case (reasoning || none) && bad.mentions("reasoning_effort", "reasoning"):
+				reasoning, none = false, false
+				p.mu.Lock()
+				p.native.Reasoning = false
+				p.effortNone = false
 				p.mu.Unlock()
 				continue
 			}
@@ -359,6 +406,7 @@ func classify(status int, msg, body string) error {
 		strings.Contains(low, "context window") || strings.Contains(low, "too many tokens") || status == http.StatusRequestEntityTooLarge:
 		return llm.Errorf(llm.ErrContextOverflow, "HTTP %d: %s", status, msg)
 	case status == http.StatusBadRequest && (strings.Contains(low, "tool") || strings.Contains(low, "function")) &&
+		!strings.Contains(low, "reasoning") &&
 		(strings.Contains(low, "not support") || strings.Contains(low, "unsupported") || strings.Contains(low, "unknown parameter") || strings.Contains(low, "unrecognized")):
 		return llm.Errorf(llm.ErrUnsupported, "native tool calling is required and this endpoint rejected it: %s", msg)
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:

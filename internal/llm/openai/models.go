@@ -16,10 +16,21 @@ type modelInfo struct {
 	cachedUSD  float64 // per 1M cached input tokens
 	outputUSD  float64 // per 1M output tokens
 	reasoning  bool    // accepts reasoning_effort
+	// toolsNeedNone: chat completions accepts function tools only with
+	// reasoning_effort=none. Omitting the field lets the endpoint default
+	// to medium and reject the request (GPT-5.6 Luna).
+	toolsNeedNone bool
 }
 
 // models is matched by prefix, longest first, on the model name.
+// GPT-5.6 and GPT-6 must outrank the "gpt-5" prefix: "gpt-5.6-luna"
+// HasPrefix-matches "gpt-5".
 var models = []modelInfo{
+	{prefix: "gpt-6-astra", maxContext: 1050000, inputUSD: 10.00, cachedUSD: 1.00, outputUSD: 50.00, reasoning: true},
+	{prefix: "gpt-5.6-luna", maxContext: 1050000, inputUSD: 0.20, cachedUSD: 0.02, outputUSD: 1.20, reasoning: true, toolsNeedNone: true},
+	{prefix: "gpt-5.6-terra", maxContext: 1050000, inputUSD: 2.00, cachedUSD: 0.20, outputUSD: 12.00, reasoning: true},
+	{prefix: "gpt-5.6-sol", maxContext: 1050000, inputUSD: 4.00, cachedUSD: 0.40, outputUSD: 20.00, reasoning: true},
+	{prefix: "gpt-5.6", maxContext: 1050000, inputUSD: 4.00, cachedUSD: 0.40, outputUSD: 20.00, reasoning: true}, // alias of Sol
 	{prefix: "gpt-5-nano", maxContext: 400000, inputUSD: 0.05, cachedUSD: 0.005, outputUSD: 0.40, reasoning: true},
 	{prefix: "gpt-5-mini", maxContext: 400000, inputUSD: 0.25, cachedUSD: 0.025, outputUSD: 2.00, reasoning: true},
 	{prefix: "gpt-5", maxContext: 400000, inputUSD: 1.25, cachedUSD: 0.125, outputUSD: 10.00, reasoning: true},

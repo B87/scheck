@@ -94,7 +94,7 @@ go run ./cmd/scheck config show --format json
 go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
 go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
 go run ./cmd/scheck local --provider mock --transcript testdata/transcripts/correlated-finding-macos.json --no-persist
-go run ./cmd/scheck local --model gpt-5-mini      # needs OPENAI_API_KEY; spends money
+go run ./cmd/scheck local                         # needs OPENAI_API_KEY; gpt-5.6-luna; spends money
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
 make live                                        # opt-in live tests
 go test ./internal/report -update    # rewrite the golden text reports, then read the diff

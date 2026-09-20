@@ -6,7 +6,7 @@ reasons, and reports. It never modifies the target.
 
 Status: v0.6 — M0, M1 (through M1.8) and M2.1–M2.6 implemented, M2.7 harness implemented
 with its live evaluation pending (2026-09-20) · Language: Go · Inference: provider-agnostic (default
-`openai-compatible`, `--model` required; Anthropic and guaranteed local-only inference deferred past v1)
+`openai-compatible`, model `gpt-5.6-luna` on OpenAI's endpoint; Anthropic and guaranteed local-only inference deferred past v1)
 
 **Changes from v0.1** (from design review):
 
@@ -139,6 +139,16 @@ with its live evaluation pending (2026-09-20) · Language: Go · Inference: prov
   host (`base:`) and can mask a recording (`absent: true`). **The live evaluation has
   not been run**; `docs/eval/phase2-results.md` records that criteria 7, 10 and 12
   are undecided and how to produce the record. The 0.0.1 gate is therefore open.
+
+**Changes from the GPT-5.6 model table (2026-09-20):**
+
+- OpenAI's endpoint defaults to `gpt-5.6-luna` when `--model` is omitted; a
+  different `--base-url` still requires an explicit model because that endpoint
+  decides which names exist. The built-in context and price table covers
+  GPT-5.6 Sol/Terra/Luna (and the `gpt-5.6` alias of Sol) and GPT-6 Astra (§5.2).
+  Chat completions on Luna accepts function tools only with `reasoning_effort=none`;
+  the adapter sends that and records `Native.Reasoning` false, rather than treating
+  the 400 as a missing-tools failure.
 
 **Changes from implementing M2.6 (2026-09-20):**
 
@@ -707,7 +717,7 @@ adds the output reservation and answers whether the request may be sent. An unkn
 
 | Provider | Covers | Notes |
 |---|---|---|
-| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). The context window comes from `max_context:` or a built-in table of model families; unknown is a configuration error. `OPENAI_API_KEY` must be present for OpenAI's endpoint and is sent as a bearer token when set for any other; a base URL may not carry credentials. The request is chat completions with `stream: true`, `tools` as functions, `tool_choice: auto`, the output reservation as `max_completion_tokens` (falling back to `max_tokens` once if the endpoint rejects it) and `Effort` as `reasoning_effort` (`max` → `high`); an endpoint that rejects `reasoning_effort` loses it and `Native.Reasoning` records that. `Block.Cacheable` is not exercised (`Native.PromptCaching: false`): the endpoint caches long prefixes on its own and reports hits as `cache_read`; `cache_write` is 0. `cost_usd` is priced from the table only on OpenAI's endpoint, null elsewhere. A 400 naming the context length, a 413, a 401/403 and a 5xx map to `context_overflow`, `auth` and `transport`; a 400 rejecting tools is `unsupported`. |
+| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. `--base-url` defaults to `https://api.openai.com/v1`, and on that endpoint `--model` defaults to `gpt-5.6-luna`. A different endpoint still requires `--model`: it decides what exists. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). The context window comes from `max_context:` or a built-in table of model families (GPT-5.6 Sol/Terra/Luna, GPT-6 Astra, and earlier GPT-5 / GPT-4.1 / GPT-4o / o-series families); unknown is a configuration error. `OPENAI_API_KEY` must be present for OpenAI's endpoint and is sent as a bearer token when set for any other; a base URL may not carry credentials. The request is chat completions with `stream: true`, `tools` as functions, `tool_choice: auto`, the output reservation as `max_completion_tokens` (falling back to `max_tokens` once if the endpoint rejects it) and `Effort` as `reasoning_effort` (`max` → `high`); an endpoint that rejects `reasoning_effort` loses it and `Native.Reasoning` records that; an endpoint that rejects function tools together with `reasoning_effort` is retried with `none` (chat completions on GPT-5.6 Luna) and is not a missing-tools failure. `Block.Cacheable` is not exercised (`Native.PromptCaching: false`): the endpoint caches long prefixes on its own and reports hits as `cache_read`; `cache_write` is 0. `cost_usd` is priced from the table only on OpenAI's endpoint, null elsewhere. A 400 naming the context length, a 413, a 401/403 and a 5xx map to `context_overflow`, `auth` and `transport`; a 400 rejecting tools is `unsupported`. |
 | `anthropic` (post-v1 M3.1) | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
 | `ollama` (post-v1 M3.2) | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
 | `mock` | tests | Replays recorded transcripts (`--transcript FILE`); used by every non-live test. A transcript declares `limits` and `native` and one turn per model call; a turn may `fail` with a classified error kind or carry `expect` assertions over the request it answers, so a test can assert what the loop sent without reaching into the provider. |
@@ -1431,7 +1441,7 @@ scheck --format text|json|sarif  --out FILE
        --elevate none|sudo  (--sudo)    # elevation mechanism (§8.1)
        --only remote-access,updates     # category filter
        --provider openai-compatible      # anthropic / ollama: post-v1; mock for tests
-       --model NAME  --base-url URL
+       --model NAME  --base-url URL     # model defaults to gpt-5.6-luna on OpenAI's endpoint
        --local-only                     # unavailable until post-v1 M3.3; exit 3
        --effort low|medium|high|max
        --context SOURCE                 # repeatable: FILE | DIR | note:TEXT | target[:PATH]  (§6.1)
@@ -1554,7 +1564,7 @@ context *sources*, §6.1).
 
 ```yaml
 provider: openai-compatible   # v1 production adapter; anthropic / ollama post-v1
-model: gpt-5                  # required for openai-compatible; the endpoint decides what exists
+model: gpt-5.6-luna           # default on OpenAI's endpoint; required for any other --base-url
 # base_url: http://localhost:11434    # defaults to https://api.openai.com/v1
 # max_context: 128000         # the model's context window when the adapter cannot know it (§5.3)
 effort: high

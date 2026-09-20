@@ -23,13 +23,14 @@ type fakeServer struct {
 	next   int
 	bodies []map[string]any
 	// hooks let a test make the server misbehave.
-	rejectMaxCompletion bool // 400 on max_completion_tokens the first time
-	rejectReasoning     bool // 400 on reasoning_effort
-	rejectTools         bool // 400 unsupported tools
-	status              int  // when set, every response is this status with an error body
-	errorBody           string
-	noDone              bool // end the stream without [DONE]
-	auth                string
+	rejectMaxCompletion  bool // 400 on max_completion_tokens the first time
+	rejectReasoning      bool // 400 on reasoning_effort
+	rejectTools          bool // 400 unsupported tools
+	rejectToolsReasoning bool // 400 tools unless reasoning_effort=none
+	status               int  // when set, every response is this status with an error body
+	errorBody            string
+	noDone               bool // end the stream without [DONE]
+	auth                 string
 }
 
 func newFake(t *testing.T, turns []conformance.Turn) (*fakeServer, *httptest.Server) {
@@ -71,6 +72,13 @@ func (f *fakeServer) handle(w http.ResponseWriter, r *http.Request) {
 	if _, has := body["tools"]; has && f.rejectTools {
 		fail(400, "tools is not supported by this model")
 		return
+	}
+	if _, hasTools := body["tools"]; hasTools && f.rejectToolsReasoning {
+		v, has := body["reasoning_effort"]
+		if !has || v != "none" {
+			fail(400, "Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.")
+			return
+		}
 	}
 	if idx >= len(f.turns) {
 		fail(500, "no more scripted turns")

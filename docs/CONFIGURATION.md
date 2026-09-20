@@ -23,9 +23,12 @@ The user config file is read first:
 - Linux: `$XDG_CONFIG_HOME/scheck/config.yaml`, by default `~/.config/scheck/config.yaml`
 - macOS: `~/Library/Application Support/scheck/config.yaml`
 
+OpenAI's endpoint defaults to `gpt-5.6-luna`. Set `model:` (or `--model`) to pick
+another family, or when `--base-url` is not OpenAI's.
+
 ```yaml
 # ~/.config/scheck/config.yaml
-model: gpt-5
+model: gpt-5.6-terra
 effort: high
 state_dir: ~/.local/state/scheck
 ```
@@ -34,7 +37,7 @@ state_dir: ~/.local/state/scheck
 $ scheck config show
 SETTING       VALUE                      SOURCE
 provider      openai-compatible          default
-model         gpt-5                      /home/me/.config/scheck/config.yaml
+model         gpt-5.6-terra              /home/me/.config/scheck/config.yaml
 effort        high                       /home/me/.config/scheck/config.yaml
 profile       baseline                   default
 ...
@@ -164,7 +167,8 @@ $ echo $?
 - `anthropic` and `ollama` are registered names that exit 3 (post-v1).
 - Adapter-specific validation of `model` and `max_context` (whether the endpoint knows
   the model, whether the window is declared) happens when an adapter is built for a run;
-  `config validate` only notes that `model` is required for an agent run.
+  `config validate` notes that `--model` is still required for an agent run against a
+  non-OpenAI `--base-url`. OpenAI's endpoint defaults to `gpt-5.6-luna`.
 
 ## 7. Reading `config show --format json`
 
@@ -172,7 +176,7 @@ $ echo $?
 {
   "kind": "config",
   "files":       [{"path": "...", "present": true}],
-  "settings":    {"model": {"value": "gpt-5", "source": "/home/me/.config/scheck/config.yaml"}},
+  "settings":    {"model": {"value": "gpt-5.6-terra", "source": "/home/me/.config/scheck/config.yaml"}},
   "lists":       {"disable_checks": [{"value": "fs.suid", "sources": "scheck.yaml"}]},
   "targets":     {"bastion": {"host": "10.0.0.5", "user": "ops", "port": 0, "identity": "~/.ssh/ops", "source": "scheck.yaml"}},
   "context":     {"structured": {...}, "origins": {"exposure": "hosts/gateway.yaml"}, "sources": [...], "prose": [{"source": "...", "bytes": 66}]},

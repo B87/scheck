@@ -31,12 +31,16 @@ func provider(t *testing.T, f *fakeServer, url string, cfg llm.Config) *Provider
 	return p
 }
 
-// Construction is configuration only: model required, window known, no
+// Construction is configuration only: OpenAI's endpoint defaults the
+// model, a different endpoint requires --model, window known, no
 // credential in the URL, key presence checked for OpenAI's endpoint only.
 func TestNewValidatesConfiguration(t *testing.T) {
 	noKey := env(map[string]string{})
-	if _, err := New(llm.Config{Env: noKey}); err == nil || !strings.Contains(err.Error(), "--model") {
-		t.Errorf("no model: %v", err)
+	if _, err := New(llm.Config{Env: noKey}); err == nil || !strings.Contains(err.Error(), keyVar) {
+		t.Errorf("default model, no key: %v", err)
+	}
+	if _, err := New(llm.Config{BaseURL: "http://localhost:8000/v1", Env: noKey}); err == nil || !strings.Contains(err.Error(), "--model") {
+		t.Errorf("custom endpoint, no model: %v", err)
 	}
 	if _, err := New(llm.Config{Model: "gpt-4o", Env: noKey}); err == nil || !strings.Contains(err.Error(), keyVar) {
 		t.Errorf("no key on the default endpoint: %v", err)
@@ -51,6 +55,10 @@ func TestNewValidatesConfiguration(t *testing.T) {
 	p, err = New(llm.Config{Model: "gpt-5-mini", Env: env(map[string]string{keyVar: "k"})})
 	if err != nil || p.Limits().MaxContext != 400000 || !p.Native().Reasoning || !p.priced || p.Native().PromptCaching {
 		t.Errorf("known model: %v %+v", err, p)
+	}
+	p, err = New(llm.Config{Env: env(map[string]string{keyVar: "k"})})
+	if err != nil || p.model != DefaultModel || p.Limits().MaxContext != 1050000 || p.Native().Reasoning || !p.effortNone || !p.priced {
+		t.Errorf("default luna: %v %+v", err, p)
 	}
 	if _, err := New(llm.Config{Model: "gpt-4o", BaseURL: "https://u:p@api.example.com/v1", Env: noKey}); err == nil {
 		t.Error("credentials in the base URL accepted")
@@ -155,6 +163,44 @@ func TestAdapterAbsorbsCapabilityDifferences(t *testing.T) {
 
 	f, srv = newFake(t, []conformance.Turn{{Text: "ok"}})
 	defer srv.Close()
+	f.rejectToolsReasoning = true
+	p = provider(t, f, srv.URL, llm.Config{Model: "gpt-5"})
+	if _, err := llm.Complete(context.Background(), p, llm.Request{
+		Effort:   llm.EffortHigh,
+		Tools:    []llm.Tool{{Name: "t", Schema: json.RawMessage(`{}`)}},
+		Messages: []llm.Message{{Role: llm.RoleUser, Text: "x"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if p.Native().Reasoning {
+		t.Error("tools+reasoning retreat still claims Native.Reasoning")
+	}
+	if f.lastBody()["reasoning_effort"] != "none" {
+		t.Errorf("tools+reasoning retry: %v", f.lastBody()["reasoning_effort"])
+	}
+	if len(f.bodies) != 2 {
+		t.Errorf("want one retry, got %d requests", len(f.bodies))
+	}
+
+	f, srv = newFake(t, []conformance.Turn{{Text: "ok"}})
+	defer srv.Close()
+	f.rejectToolsReasoning = true
+	p = provider(t, f, srv.URL, llm.Config{Model: DefaultModel})
+	if p.Native().Reasoning {
+		t.Fatal("luna should not claim reasoning on chat-completions tools")
+	}
+	if _, err := llm.Complete(context.Background(), p, llm.Request{
+		Tools:    []llm.Tool{{Name: "t", Schema: json.RawMessage(`{}`)}},
+		Messages: []llm.Message{{Role: llm.RoleUser, Text: "x"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.bodies) != 1 || f.lastBody()["reasoning_effort"] != "none" {
+		t.Errorf("luna first shot: %d requests effort=%v", len(f.bodies), f.lastBody()["reasoning_effort"])
+	}
+
+	f, srv = newFake(t, []conformance.Turn{{Text: "ok"}})
+	defer srv.Close()
 	f.rejectTools = true
 	p = provider(t, f, srv.URL, llm.Config{})
 	_, err := llm.Complete(context.Background(), p, llm.Request{Tools: []llm.Tool{{Name: "t", Schema: json.RawMessage(`{}`)}}, Messages: []llm.Message{{Role: llm.RoleUser, Text: "x"}}})
@@ -239,6 +285,15 @@ func TestErrorClassification(t *testing.T) {
 func TestModelTable(t *testing.T) {
 	if m, ok := lookup("gpt-5-mini-2026-01-01"); !ok || m.prefix != "gpt-5-mini" {
 		t.Errorf("longest prefix: %+v %v", m, ok)
+	}
+	if m, ok := lookup("gpt-5.6-luna"); !ok || m.prefix != "gpt-5.6-luna" || m.maxContext != 1050000 || !m.toolsNeedNone {
+		t.Errorf("luna: %+v %v", m, ok)
+	}
+	if m, ok := lookup("gpt-5.6"); !ok || m.prefix != "gpt-5.6" {
+		t.Errorf("gpt-5.6 alias must not match gpt-5: %+v %v", m, ok)
+	}
+	if m, ok := lookup("gpt-6-astra"); !ok || m.prefix != "gpt-6-astra" {
+		t.Errorf("astra: %+v %v", m, ok)
 	}
 	if _, ok := lookup("llama-3"); ok {
 		t.Error("unknown model matched")

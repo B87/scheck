@@ -18,6 +18,7 @@ import (
 	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/llm"
+	"github.com/b87/scheck/internal/llm/openai"
 	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/report"
@@ -82,7 +83,23 @@ func (o *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Resolved, error)
 	if err != nil {
 		return nil, usageErr("%v", err)
 	}
-	return config.Resolve(layers, o.overrides(cmd)), nil
+	r := config.Resolve(layers, o.overrides(cmd))
+	applyOpenAIModelDefault(r)
+	return r, nil
+}
+
+// applyOpenAIModelDefault fills gpt-5.6-luna when the operator left model
+// unset and the endpoint is OpenAI's, so config show, providers and a run
+// agree. A different base URL still requires --model (docs/SPEC.md §5.2).
+func applyOpenAIModelDefault(r *config.Resolved) {
+	c := r.Config
+	if c.Model != "" || (c.Provider != "" && c.Provider != openai.Name) {
+		return
+	}
+	if m := openai.ResolveModel("", c.BaseURL); m != "" {
+		c.Model = m
+		r.Origin["model"] = config.SourceDefault
+	}
 }
 
 // overrides collects the flags the operator set. A flag that was not given
