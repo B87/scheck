@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b87/scheck/docs/report-schema.json",
+  "title": "scheck run envelope",
+  "description": "SPEC.md §7.4. schema_version is MAJOR.MINOR; readers reject an unknown MAJOR.",
+  "type": "object",
+  "required": ["schema_version", "host", "run", "facts", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "host": {
+      "type": "object",
+      "required": ["id", "hostname", "platform", "os", "kernel", "transport", "canary", "elevation"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "hostname": { "type": "string" },
+        "platform": { "enum": ["linux", "macos"] },
+        "os": { "type": "string" },
+        "kernel": { "type": "string" },
+        "transport": { "enum": ["local", "ssh", "fixture"] },
+        "remote_shell": { "type": "string" },
+        "canary": { "enum": ["ok", "fail", "n/a"] },
+        "elevation": { "enum": ["none", "sudo", "root"] }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["started", "duration_ms", "status", "profile", "mode", "provider", "model", "effort", "native", "limits", "usage", "context_sources", "persisted", "warnings", "scheck_version"],
+      "additionalProperties": false,
+      "properties": {
+        "started": { "type": "string", "format": "date-time" },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["complete", "incomplete"] },
+        "profile": { "enum": ["baseline", "hardened"] },
+        "mode": { "enum": ["facts", "agent", "single-pass"] },
+        "provider": { "type": ["string", "null"] },
+        "model": { "type": ["string", "null"] },
+        "effort": { "type": ["string", "null"], "enum": ["low", "medium", "high", "max", null] },
+        "native": { "type": ["object", "null"] },
+        "limits": { "type": ["object", "null"] },
+        "usage": {
+          "type": "object",
+          "required": ["input", "output", "cache_read", "cache_write", "cost_usd"],
+          "properties": {
+            "input": { "type": "integer" },
+            "output": { "type": "integer" },
+            "cache_read": { "type": "integer" },
+            "cache_write": { "type": "integer" },
+            "cost_usd": { "type": ["number", "null"] }
+          }
+        },
+        "context_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "sha256", "truncated"],
+            "properties": {
+              "source": { "type": "string" },
+              "sha256": { "type": "string" },
+              "truncated": { "type": "boolean" }
+            }
+          }
+        },
+        "persisted": { "type": ["string", "null"] },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "scheck_version": { "type": "string" }
+      }
+    },
+    "facts": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "duration_ms"],
+        "additionalProperties": false,
+        "properties": {
+          "status": { "enum": ["ok", "unavailable", "denied"] },
+          "reason": { "type": "string" },
+          "parsed": {},
+          "truncated": { "type": "boolean" },
+          "redactions": { "type": "integer", "minimum": 0 },
+          "elevated": { "type": "boolean" },
+          "duration_ms": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "findings": { "type": "array" }
+  }
+}

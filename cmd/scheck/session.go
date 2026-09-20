@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,8 +15,10 @@ import (
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
+	"github.com/b87/scheck/internal/state"
 	"github.com/b87/scheck/internal/target"
 	"github.com/b87/scheck/internal/target/fixture"
+	"github.com/b87/scheck/internal/version"
 )
 
 // session is everything a run needs, built once from config + flags.
@@ -32,6 +33,7 @@ type session struct {
 	paths    *policy.PathPolicy
 	runner   *runner.Runner
 	started  time.Time
+	canary   string // ok | fail | n/a
 }
 
 // newSession loads config, applies flags (last wins), and builds the policy
@@ -64,7 +66,7 @@ func (o *globalOpts) newSession(mk func(policy.Budgets) (target.Target, error)) 
 		o.logf(1, "config: provider/model/context are ignored in this build (phase 1)")
 	}
 
-	s := &session{opts: o, cfg: cfg, started: time.Now()}
+	s := &session{opts: o, cfg: cfg, started: time.Now(), canary: "n/a"}
 	s.profile, _ = check.ParseProfile(cfg.Profile)
 	s.elevate = runner.ElevateNone
 	if cfg.Elevate == "sudo" {
@@ -175,15 +177,42 @@ type nopCloser struct{ io.Writer }
 
 func (nopCloser) Close() error { return nil }
 
-// writeFactsJSON is the provisional --stop-after facts output until the
-// full envelope lands (M1.4); it already uses the envelope's `facts` shape.
-func writeFactsJSON(w io.Writer, sheet *baseline.FactSheet) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(map[string]any{"facts": report.FactsFrom(sheet), "incomplete": sheet.Incomplete})
+// writeReport builds the envelope, persists it unless --no-persist, and
+// renders it in --format.
+func (s *session) writeReport(w io.Writer, sheet *baseline.FactSheet) (report.Envelope, error) {
+	env := report.Build(sheet, report.Meta{
+		Started:   s.started,
+		Transport: string(s.runner.Target.Transport()),
+		Canary:    s.canary,
+		Elevation: string(s.elevate),
+		Profile:   s.profile.String(),
+		Version:   version.Version,
+	})
+	if !s.opts.NoPersist {
+		dir, err := state.Dir(s.cfg.StateDir)
+		if err == nil {
+			var path string
+			path, err = state.Write(dir, &env)
+			if err == nil {
+				s.opts.logf(1, "persisted %s", path)
+			}
+		}
+		if err != nil {
+			env.Run.Warnings = append(env.Run.Warnings, "not persisted: "+err.Error())
+			s.opts.logf(0, "warning: run not persisted: %v", err)
+		}
+	}
+	switch s.opts.Format {
+	case "json":
+		return env, report.WriteJSON(w, env)
+	case "text":
+		return env, report.WriteText(w, env)
+	case "sarif":
+		return env, usageErr("--format sarif is not available in this build (phase 1)")
+	default:
+		return env, usageErr("--format must be text|json|sarif")
+	}
 }
-
-func homeDir() (string, error) { return os.UserHomeDir() }
 
 // wrapTarget adds the fixture recorder when --record-fixtures is set. The
 // recorder sees post-redaction bytes only.
@@ -197,3 +226,5 @@ func (s *session) wrapTarget(t target.Target) target.Target {
 		return out
 	}}
 }
+
+func homeDir() (string, error) { return os.UserHomeDir() }

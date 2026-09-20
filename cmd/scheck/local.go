@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -53,11 +54,12 @@ func runStopAfter(cmd *cobra.Command, sess *session) error {
 		if err != nil {
 			return err
 		}
-		if err := writeFactsJSON(out, sheet); err != nil {
+		env, err := sess.writeReport(out, sheet)
+		if err != nil {
 			return err
 		}
-		if sheet.Incomplete {
-			return incompleteErr("run timed out before every baseline check ran")
+		if env.Run.Status != "complete" {
+			return incompleteErr("run incomplete: %s", strings.Join(env.Run.Warnings, "; "))
 		}
 		return nil
 	case "context":

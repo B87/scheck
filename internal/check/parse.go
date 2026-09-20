@@ -55,7 +55,7 @@ func parseKV(raw []byte) map[string]string {
 	out := map[string]string{}
 	for _, l := range parseLines(raw) {
 		l = strings.TrimSpace(l)
-		if strings.HasPrefix(l, "#") {
+		if strings.HasPrefix(l, "#") || strings.HasPrefix(l, "[TRUNCATED:") || strings.HasPrefix(l, "[REDACTED:") {
 			continue
 		}
 		sep := strings.IndexAny(l, "=: \t")

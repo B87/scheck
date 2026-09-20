@@ -127,6 +127,7 @@ func verifyCanary(ctx context.Context, sess *session, st *ssh.Target) error {
 		}
 		return incompleteErr("%v", err)
 	}
+	sess.canary = "ok"
 	sess.opts.logf(1, "ssh: canary ok")
 	return nil
 }
