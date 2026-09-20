@@ -2,6 +2,7 @@ package policy
 
 import (
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -188,10 +189,8 @@ func sensitive(p string) (string, bool) {
 				return r.name, true
 			}
 		case matchComponent:
-			for _, c := range comps[:max(len(comps)-1, 0)] {
-				if c == r.pattern {
-					return r.name, true
-				}
+			if slices.Contains(comps[:max(len(comps)-1, 0)], r.pattern) {
+				return r.name, true
 			}
 		}
 	}

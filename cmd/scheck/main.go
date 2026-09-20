@@ -9,8 +9,7 @@ import (
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
-		var ee *exitError
-		if errors.As(err, &ee) {
+		if ee, ok := errors.AsType[*exitError](err); ok {
 			fmt.Fprintln(os.Stderr, "scheck:", ee.Err)
 			os.Exit(ee.Code)
 		}

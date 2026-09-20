@@ -114,7 +114,7 @@ func mappedPort(t testing.TB, rt, id string) int {
 	t.Helper()
 	out := run(t, rt, "port", id, "22")
 	// "127.0.0.1:55000" (possibly one line per address family)
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		if _, p, err := net.SplitHostPort(strings.TrimSpace(line)); err == nil {
 			if n, err := strconv.Atoi(p); err == nil {
 				return n

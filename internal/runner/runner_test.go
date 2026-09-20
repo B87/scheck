@@ -64,7 +64,7 @@ func newHarness(t *testing.T, elevate Elevation, execs ...fixture.Exec) *harness
 func (h *harness) entries(t *testing.T) []policy.AuditEntry {
 	t.Helper()
 	var out []policy.AuditEntry
-	for _, l := range bytes.Split(bytes.TrimSpace(h.audit.Bytes()), []byte("\n")) {
+	for l := range bytes.SplitSeq(bytes.TrimSpace(h.audit.Bytes()), []byte("\n")) {
 		var e policy.AuditEntry
 		if err := json.Unmarshal(l, &e); err != nil {
 			t.Fatalf("bad audit line %s: %v", l, err)

@@ -25,7 +25,7 @@ func TestGenerateCoversCatalog(t *testing.T) {
 				t.Errorf("%s: non-elevated %s granted", p, c.ID)
 			}
 		}
-		for _, line := range strings.Split(out, "\n") {
+		for line := range strings.SplitSeq(out, "\n") {
 			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "Defaults") || line == "" {
 				continue
 			}

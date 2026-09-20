@@ -108,8 +108,7 @@ func authMethods(identity string) ([]xssh.AuthMethod, error) {
 		}
 		signer, err := xssh.ParsePrivateKey(raw)
 		if err != nil {
-			var pass *xssh.PassphraseMissingError
-			if errors.As(err, &pass) {
+			if _, ok := errors.AsType[*xssh.PassphraseMissingError](err); ok {
 				return nil, fmt.Errorf("ssh: identity %s is passphrase-protected; load it into ssh-agent instead", identity)
 			}
 			return nil, fmt.Errorf("ssh: identity %s: %w", identity, err)

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -103,9 +104,7 @@ func (c *Config) overlay(o *Config) {
 		if c.Targets == nil {
 			c.Targets = map[string]SSHTarget{}
 		}
-		for k, v := range o.Targets {
-			c.Targets[k] = v
-		}
+		maps.Copy(c.Targets, o.Targets)
 	}
 	if !o.Context.IsZero() {
 		c.Context = o.Context

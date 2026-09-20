@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -148,17 +149,17 @@ func printPlan(w io.Writer, platform check.Platform, elevate runner.Elevation, p
 }
 
 func argvString(argv []string) string {
-	out := ""
+	var out strings.Builder
 	for i, a := range argv {
 		if i > 0 {
-			out += " "
+			out.WriteString(" ")
 		}
 		if a == "" {
 			a = `""`
 		}
-		out += a
+		out.WriteString(a)
 	}
-	return out
+	return out.String()
 }
 
 // output opens --out or returns stdout.
