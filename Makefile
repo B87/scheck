@@ -25,9 +25,9 @@ check: vet fix lint test
 integ:
 	go test -tags integration -count=1 ./test/...
 
-# Re-record fixture targets from the containers in test/containers.
+# Re-record testdata/fixtures/{ubuntu,fedora} from the containers in test/containers.
 fixtures:
-	./test/containers/record.sh
+	SCHECK_RECORD=1 go test -tags integration -count=1 -run TestRecordFixtures ./test/integ/
 
 clean:
 	rm -rf bin
