@@ -207,3 +207,79 @@ check` and the SSH/container integrations pass. No paid inference was performed 
 part of M2.6a. Earlier live records above describe their recorded builds and prompts;
 they do not validate this changed contract. The next qualifying three-repeat evaluation
 must record the new build and `run.prompt_version`, with the frozen criteria unchanged.
+
+## 2026-09-20 — follow-up cases only: is the loop model-limited? (not a gate result)
+
+The three-repeat record above showed the loop unused: zero `run_check`/`read_file`
+calls in 9 of 9 follow-up agent runs. The roadmap's first next step asks whether that is
+the model or the loop. Command, on the M2.6a contract (`sp-bb2762146136`, scheck `dev`),
+for each of `gpt-5.6-luna` and `gpt-5.6-terra`:
+
+```
+scheck eval --model <model> --cases linux-cron-fetch,linux-sshd-include,linux-unit-in-tmp --no-pairs --repeat 3 -v --out …
+```
+
+Raw records: `results-2026-09-20-followup-gpt-5.6-luna.md`,
+`results-2026-09-20-followup-gpt-5.6-terra.md`. Three cases are below the frozen
+minimums, so nothing here is a §3 verdict.
+
+| model | arm | runs | right (expected id reported) | false positives | ids reported at all | median tokens | cost |
+|---|---|---|---|---|---|---|---|
+| gpt-5.6-luna | single-pass | 9 | 0 | 0 | 6 | 9,350 | $0.0036 |
+| gpt-5.6-luna | agent | 9 | 3 (cron-fetch 2 of 3, unit-in-tmp 1 of 3, sshd-include 0 of 3) | 2 (custom ids) | 8 | 38,860 | $0.0158 |
+| gpt-5.6-terra | single-pass | 9 | 0 | 0 | 0 | 9,519 | $0.0973 |
+| gpt-5.6-terra | agent | 9 | 0 | 0 | 0 | 9,512 | $0.0534 |
+
+- **Luna investigates on this contract.** Median agent tokens are four times
+  single-pass, and the loop reports `persist.unexpected_entry` in 3 of 9 runs where
+  single-pass reports it in 0 of 9. No run counted as resolved: the harness requires
+  the labeled `text.cat` to have run, and the cron entry (`*/5 * * * * root
+  /etc/cron.daily/update`) is suspicious from the cron listing alone, which is
+  consistent with the loop reporting without reading the script. `linux-sshd-include`
+  was never resolved: the loop reported the wildcard listener, the admin account and
+  the firewall instead of reading `sshd_config.d`.
+- **Terra does not investigate.** Median agent tokens equal single-pass tokens: no
+  tool call in 9 of 9 agent runs, and no finding in 18 of 18 runs. It is not the
+  stronger model for this loop, and it costs ten times as much per token.
+- **Neither branch of the roadmap's rule applies cleanly.** The stronger model does
+  not investigate, so the gate is not re-run with it; Luna does investigate, so the
+  loop is not deleted on this evidence. The decision falls to the three-repeat gate on
+  Luna with the next contract.
+
+**One diagnostic run each on the next contract** (`sp-e0d904499422`, which adds the
+`ruled_out` verdict to `report_finding`; `linux-cron-fetch`, `--repeat 1`, JSON):
+
+- Luna, agent: 6 iterations, 5 model-initiated checks, read `/etc/cron.daily/update`,
+  reported `persist.unexpected_entry` citing `persist.cron#1` and `text.cat#1`,
+  **resolved**, 0 false positives, 0 unexpected ids; ruled out
+  `privesc.sudo_nopasswd_broad` and `sshd.password_auth_exposed` through the verdict
+  instead of filing them. This is the first live run in which a checked-and-closed
+  hypothesis did not become a finding.
+- Terra, agent: 4 iterations, 0 checks, 0 findings; ruled out `fw.no_firewall_active`
+  and `privesc.sudo_nopasswd_broad`. Both single-pass runs: nothing.
+
+One run decides nothing; it shows the channel is used as intended and that the
+resolved metric fires when the read happens.
+
+## 2026-09-20 — label decisions before the next gate run
+
+Two counts in the three-repeat record were label questions, not model errors. They
+are decided here and in `testdata/eval`; the criteria file is unchanged.
+
+1. **Third-party launch daemons on the recorded clean Mac are masked.** The
+   `macos-clean` recording carried three third-party launch daemons (Docker twice,
+   NordVPN), and the agent reported them as `persist.unexpected_entry` in 2 of 3 runs.
+   A clean case must hold nothing a careful auditor should flag without context;
+   whether Docker on a developer Mac is intended is a context question and belongs to a
+   misleading case, not to the clean one. The manifest now overrides the
+   `persist.launch_dirs` listing to empty, as it already overrides the listeners, and
+   `persist.unexpected_entry` stays forbidden. Consequence: a future report of it on
+   this case is a false positive without qualification.
+2. **A declared listener reported as `net.unexpected_listener` is a false positive,
+   at any severity.** In `linux-context-explains` both arms reported the declared
+   postgres listener in 3 of 3 runs and the grader took it to `info`. The id means a
+   listener the operator context does not account for, and `expected_services` accounts
+   for this one. The model's remark (wildcard bind against a `vpc-only` audience) is a
+   sentence for the closing summary, not a finding. The label stands unchanged and the
+   decision is written into the case's `labels.yaml`. Severity never enters the
+   false-positive definition (criteria §3), and this record does not change that.

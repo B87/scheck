@@ -1,5 +1,5 @@
 kind: clean
-description: macOS host with the application firewall on, FileVault on, no pending updates and loopback-only listeners.
+description: macOS host with the application firewall on, FileVault on, no pending updates, loopback-only listeners and no third-party launch daemons.
 elevation: none
 expect_rules: []
 expect_model: []

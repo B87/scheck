@@ -1028,25 +1028,26 @@ predates M2.6a's prompt/tool contract; the first live run on that contract
 and told the same story as the three-repeat record. What follows is the path to a
 decision, without loosening a criterion:
 
-1. **Find out whether the loop is model-limited.** Run the three follow-up cases only
-   (`scheck eval --cases linux-cron-fetch,linux-sshd-include,linux-unit-in-tmp
-   --no-pairs --repeat 3`) with `gpt-5.6-luna` and with a stronger model. Luna made no
-   tool call in 9 of 9 follow-up agent runs. If a stronger model investigates and
-   resolves, the loop stays behind model choice and the gate is re-run with that model;
-   if neither investigates, the loop is deleted as the criteria say (a deletion, not a
-   redesign).
-2. **Give the model a channel for a ruled-out hypothesis.** Three contracts in a row
-   showed it filing "checked and found in order" observations through `report_finding`
-   (an active firewall under `fw.no_firewall_active`, with a note saying it was not a
-   finding). Prose did not stop it. The smallest version is a `verdict: ruled_out`
-   field on `report_finding` that records nothing as a finding and surfaces in the
-   closing summary; §5.9 describes the fuller track. This is a tool-contract change and
-   a new prompt version.
-3. **Record the two label decisions** before the next gate run: whether third-party
-   launch daemons on the recorded clean Mac count as unexpected persistence, and
-   whether a declared listener the grader takes to `info` counts as a false positive.
-   Either answer is a label decision written into `testdata/eval` and
-   `docs/eval/phase2-results.md`, not a change to the criteria file.
+1. **Find out whether the loop is model-limited** — done (2026-09-20, recorded in
+   `docs/eval/phase2-results.md`). The three follow-up cases at three repeats, no
+   pairs, on the M2.6a contract: `gpt-5.6-luna` investigates (median agent tokens four
+   times single-pass; the expected id in 3 of 9 agent runs against 0 of 9 single-pass;
+   no run resolved by the harness's definition because the cron listing alone gives
+   the entry away) and `gpt-5.6-terra` does not (no tool call in 9 of 9, no finding in
+   18 of 18, at ten times the price). Neither branch of the rule applies: the stronger
+   model does not rescue the loop, and Luna does use it. The gate is re-run on Luna
+   with the next contract.
+2. **Give the model a channel for a ruled-out hypothesis** — done. `report_finding`
+   carries `verdict: open|ruled_out` (§5.7); `finding.Store.RuleOut` validates it like
+   a finding and files nothing; the report carries `run.agent.ruled_out` (schema 1.6),
+   the text report lists it under the model summary, the harness logs it and never
+   scores it. `PromptVersion` is `sp-e0d904499422`. One diagnostic run on
+   `linux-cron-fetch` used it as intended: two hypotheses ruled out, none filed, the
+   script read, the entry reported and resolved.
+3. **Record the two label decisions** — done, in `testdata/eval` and the results
+   record: the clean Mac's third-party launch daemons are masked (a clean case holds
+   nothing to flag without context), and a declared listener reported as
+   `net.unexpected_listener` is a false positive at any severity.
 4. **Run the gate at three repeats** on the resulting contract, with `make live`, and
    append the record. That record decides M2: keep the loop, keep single-pass only, or
    ship posture rules only.

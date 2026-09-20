@@ -1,7 +1,23 @@
 base: ../../../fixtures/macos
 # The recorded Mac is a developer workstation with docker publishing 5432 and
 # AirPlay on every interface; a clean host has loopback listeners only.
+# Label decision (2026-09-20, docs/eval/phase2-results.md): the recording also
+# carries three third-party launch daemons (Docker twice, NordVPN). A clean case
+# must hold nothing a careful auditor should flag without context, and whether
+# Docker on a developer Mac is intended is a context question for a misleading
+# case, not for this one; so the listing is masked and persist.unexpected_entry
+# stays forbidden.
 execs:
+- argv:
+  - find
+  - /Library/LaunchDaemons
+  - /Library/LaunchAgents
+  - -maxdepth
+  - "1"
+  - -type
+  - f
+  stdout: ''
+  code: 0
 - argv:
   - lsof
   - -nP

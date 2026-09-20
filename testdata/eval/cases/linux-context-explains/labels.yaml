@@ -3,6 +3,12 @@ description: postgres listens on every address, and the context says that is its
 elevation: sudo
 expect_rules: []
 expect_model: []
+# Label decision (2026-09-20, docs/eval/phase2-results.md): reporting the declared
+# listener as net.unexpected_listener is a false positive even though the grader
+# takes a declared service to info. The id means a listener the context does not
+# account for, and expected_services accounts for this one; severity never enters
+# the false-positive definition. A wildcard bind against a vpc-only audience is a
+# remark for the closing summary, not a finding, so the forbid stands.
 forbid:
 - net.unexpected_listener
 forbid_custom: true
