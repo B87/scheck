@@ -157,7 +157,7 @@ func TestJSONCarriesRuleFindings(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.SchemaVersion != "1.2" || len(doc.Findings) != 2 || len(doc.Assessments) == 0 {
+	if doc.SchemaVersion != "1.3" || len(doc.Findings) != 2 || len(doc.Assessments) == 0 {
 		t.Fatalf("envelope: version %s, %d findings, %d assessments", doc.SchemaVersion, len(doc.Findings), len(doc.Assessments))
 	}
 	if n := finding.OpenAtOrAbove(doc.Findings, finding.Threshold(check.ProfileBaseline)); n != 2 {

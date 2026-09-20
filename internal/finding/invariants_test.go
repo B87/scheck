@@ -73,15 +73,19 @@ func TestEveryDefIsComplete(t *testing.T) {
 			t.Errorf("%s: a title is a phrase, not a sentence: %q", d.ID, d.Title)
 		}
 	}
-	// Every finding id in the catalog is reachable from a rule; an id with no
-	// rule and no model to raise it would never appear in a report.
+	// Every finding id in the catalog is reachable: from a rule, from the
+	// grader (context-derived) or from the model (judgement). An id nothing
+	// can raise would never appear in a report.
 	reachable := map[string]bool{}
 	for _, r := range Rules() {
 		reachable[r.Finding] = true
 	}
+	for id := range judgementDefs {
+		reachable[id] = true
+	}
 	for _, d := range Defs() {
 		if !reachable[d.ID] {
-			t.Errorf("%s has no rule that can raise it", d.ID)
+			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)
 		}
 	}
 }

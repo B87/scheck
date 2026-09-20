@@ -15,31 +15,43 @@ import (
 )
 
 func newExplainCmd(opts *globalOpts) *cobra.Command {
-	return &cobra.Command{
-		Use:   "explain CHECK-ID",
-		Short: "Show exactly what a check runs, on which platform, and how it is parsed",
-		Long: "explain prints one catalog entry verbatim: its description, the literal argv " +
+	var ef explainFlags
+	cmd := &cobra.Command{
+		Use:   "explain CHECK-ID|FINDING-ID",
+		Short: "Show what a check runs and how it is parsed, or a finding's severity chain",
+		Long: "explain CHECK-ID prints one catalog entry verbatim: its description, the literal argv " +
 			"with its typed placeholders, its parameters, whether it needs elevation, how " +
 			"its output is parsed and which posture rules read the fact. A check id that is " +
-			"defined per platform prints one section per platform.",
+			"defined per platform prints one section per platform.\n\n" +
+			"explain FINDING-ID prints the severity chain — base, context adjustments, confidence " +
+			"cap, accepted-risk status, final — for that finding id. The §6.2 structured keys are " +
+			"accepted as flags (--exposure, --environment, --expected-service, --accepted) and are " +
+			"layered over any --context sources, so an adjustment can be reproduced without a run.",
+		Example: "  scheck explain sshd.config\n  scheck explain sshd.password_auth_enabled --exposure internet\n" +
+			"  scheck explain net.unexpected_listener --service 5432 --expected-service 443 --format json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
-			entries := explainEntries(id)
-			if len(entries) == 0 {
-				return usageErr("unknown check id %q: `scheck catalog --platform all` lists every id", id)
-			}
 			w, closeOutput, err := opts.commandOutput(cmd.OutOrStdout())
 			if err != nil {
 				return err
 			}
 			defer closeOutput()
+			if def, ok := finding.Lookup(id); ok {
+				return opts.explainFinding(cmd, w, def, ef)
+			}
+			entries := explainEntries(id)
+			if len(entries) == 0 {
+				return usageErr("unknown id %q: `scheck catalog --platform all` lists every check id; finding ids are listed by `scheck explain --format json` of a check's posture_rules", id)
+			}
 			if opts.Format == "json" {
 				return writeDiscovery(w, "explain", "all", "", "", entries)
 			}
 			return writeExplain(w, id, entries, opts.textOptions(w))
 		},
 	}
+	ef.register(cmd)
+	return cmd
 }
 
 // explainEntries returns every catalog entry registered under id, sorted so a

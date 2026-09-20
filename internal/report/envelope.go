@@ -14,9 +14,11 @@ import (
 
 // SchemaVersion identifies the development envelope. 1.1 adds per-fact
 // summaries, the typed `parsed` shapes, rule findings and the assessment
-// coverage array; 1.2 fills `run.context_sources` from operator context
-// (docs/SPEC.md §7.4). Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.2"
+// coverage array; 1.2 fills `run.context_sources` from operator context;
+// 1.3 grades findings through operator context (adjustments, accepted
+// status, context-derived findings) (docs/SPEC.md §7.4). Compatibility
+// starts at the first GitHub release.
+const SchemaVersion = "1.3"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -107,12 +109,36 @@ type Meta struct {
 	// Context is the merged operator context, or nil under --ignore-context
 	// or when none was supplied (docs/SPEC.md §6).
 	Context *operator.Merged
+	// Result, when set, is the finding store's graded outcome (phase 2 adds
+	// model findings to it). When nil, Build grades the posture rules'
+	// findings itself.
+	Result *finding.Result
+	// Now is the grader's clock for accepted-risk expiry; zero means now.
+	Now time.Time
+}
+
+// Grader builds the severity chain from the meta's context (docs/SPEC.md
+// §7.2): nil context means unadjusted, which under --ignore-context is a
+// precise claim (§6.4).
+func (m Meta) Grader() finding.Grader {
+	g := finding.Grader{Now: m.Now}
+	if m.Context != nil && !m.Context.Structured.IsZero() {
+		s := m.Context.Structured
+		g.Context, g.Origins = &s, m.Context.Origins
+	}
+	return g
 }
 
 // Build assembles the envelope from a fact sheet.
 func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 	prof, _ := check.ParseProfile(meta.Profile)
-	assessed := finding.Evaluate(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
+	assessed := meta.Result
+	if assessed == nil {
+		store := finding.NewStore(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
+		store.Grader = meta.Grader()
+		r := store.Result()
+		assessed = &r
+	}
 	env := Envelope{
 		SchemaVersion: SchemaVersion,
 		Facts:         FactsFrom(sheet),

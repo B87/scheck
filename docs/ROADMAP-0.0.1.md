@@ -661,7 +661,7 @@ settings, validate's exit codes for an invalid context field and an invalid prof
 unresolved target context, and a leak test with a seeded key in the environment, a
 credential in a URL, a secret in a note and a control character in a target name.
 
-### M2.3 — severity adjustments + accepted risks
+### M2.3 — severity adjustments + accepted risks ✅
 `finding.Def` and the base severity table exist since M1.8; M2.2 now supplies real
 structured context. Deliver the rest of the deterministic grader: base severity →
 structured-context adjustments (§6.3) → confidence cap → accepted-risk status → final
@@ -681,6 +681,37 @@ produces `risk.acceptance_expired` and does **not** suppress its own finding;
 non-firing cases; a rule finding from M1.8 and an identical synthetic model finding grade
 to the same severity through the same chain.
 **Spec:** §6.3, §7.1, §7.2, §11 severity tests, acceptance criterion 9 (deterministic half).
+
+**Landed (2026-09-20).** `internal/finding/grade.go` (`Grader`, `Step`, the §6.3 table,
+`ExpiredAcceptances`), `internal/finding/store.go` (`Store`, `Candidate`, validation,
+merge, `svc.expected_missing`), nine new `Def`s in `catalog.go`, `report.Build` grading
+through the store, `cmd/scheck/explain_finding.go`, schema 1.3.
+
+- **The store exists now, not in M2.4**, because the grader is its consumer: the merge
+  contract (rule text retained, evidence appended without duplicates, notes
+  attributed) and the evidence validation (an excerpt must appear in the cited check's
+  redacted output) are what make a model finding and a rule finding grade alike.
+- **Order in the table**: expected services, exposure, environment; custom findings
+  are never escalated and capped at medium; the chain records a step that could not
+  move (info cannot go lower) without an adjustment entry.
+- **`svc.expected_missing` is a negative claim** and gets its own assessment entry:
+  matched, not_matched, or not_assessed when `net.listeners` is unavailable or partial.
+- `scheck explain FINDING-ID` takes `--exposure`, `--environment`,
+  `--expected-service`, `--service`, `--accepted`, `--expires`, `--emulated-tools`
+  over any `--context` sources; JSON is `kind: finding` with the `chain` array.
+
+**Validation.** `make check` green; goldens unchanged (no context in the fixtures).
+`internal/finding` has the §11 severity table (seventeen rows: neutral exposures,
+escalation per category, de-escalation, clamping at both ends, expected and
+undeclared services, acceptance, acceptance plus escalation, expired acceptance),
+JSON attribution, nil context equals base for every def, custom caps, the confidence
+cap, expired-acceptance findings, and rule-versus-model parity; the store tests cover
+expected_missing firing, non-firing, partial and absent listeners, merge (text
+replacement and suppression refused, duplicates collapsed, service kept) and every
+rejection class. `cmd/scheck` runs the demo (escalated, accepted and excluded from the
+exit code, expired not suppressed, declared service missing), asserts
+`--ignore-context` findings are byte-identical to a run with no context, and covers
+`explain FINDING-ID` in text and JSON with an invalid flag and an unknown id.
 
 ### M2.4 — three tools + agent loop, mock only
 Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (§5.7), the

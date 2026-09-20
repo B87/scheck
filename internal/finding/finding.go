@@ -68,8 +68,8 @@ type Evidence struct {
 	Excerpt string `json:"excerpt"`
 }
 
-// Adjustment records one severity change and where it came from. Phase 1
-// produces none; the structured-context adjustments of §6.3 arrive in M2.3.
+// Adjustment records one severity change and where it came from
+// (docs/SPEC.md §6.3, §6.4): every change is attributed.
 type Adjustment struct {
 	Rule   string `json:"rule"`
 	Source string `json:"source"`
@@ -87,13 +87,47 @@ type Finding struct {
 	Severity     Severity     `json:"severity"`
 	Adjustments  []Adjustment `json:"adjustments"`
 	Status       string       `json:"status"` // open | accepted
-	Source       string       `json:"source"` // rule | model
-	Confidence   string       `json:"confidence"`
-	Platform     string       `json:"platform"`
-	Evidence     []Evidence   `json:"evidence"`
-	Impact       string       `json:"impact"`
-	Remediation  Remediation  `json:"remediation"`
+	// AcceptedReason is the operator's stated reason when Status is accepted.
+	AcceptedReason string      `json:"accepted_reason,omitempty"`
+	Source         string      `json:"source"` // rule | model
+	Confidence     string      `json:"confidence"`
+	Platform       string      `json:"platform"`
+	Evidence       []Evidence  `json:"evidence"`
+	Impact         string      `json:"impact"`
+	Remediation    Remediation `json:"remediation"`
+	// ContextNote is the model's attributed note on how operator context
+	// bears on this finding; it never changes severity (§6.3).
+	ContextNote string `json:"context_note,omitempty"`
+	// Service is the listener a network finding is about, graded against
+	// expected_services (§6.3).
+	Service *ServiceRef `json:"service,omitempty"`
+	// Custom marks a custom:<slug> finding: capped at medium, never
+	// escalated, flagged for a reviewer to promote into the catalog (§7.1).
+	Custom bool `json:"custom,omitempty"`
 }
+
+// Confidence levels (§7.3).
+const (
+	ConfidenceHigh   = "high"
+	ConfidenceMedium = "medium"
+	ConfidenceLow    = "low"
+)
+
+// Rank orders confidence levels.
+func Rank(confidence string) int {
+	switch confidence {
+	case ConfidenceHigh:
+		return 2
+	case ConfidenceMedium:
+		return 1
+	case ConfidenceLow:
+		return 0
+	}
+	return -1
+}
+
+// CategoryCustom is the category of a custom finding.
+const CategoryCustom = "custom"
 
 // Statuses a finding can carry.
 const (

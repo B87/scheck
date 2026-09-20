@@ -1,6 +1,9 @@
 package finding
 
-import "sort"
+import (
+	"maps"
+	"sort"
+)
 
 // Def is a finding id's compiled-in definition (docs/SPEC.md §7.1). Title,
 // Impact and Remediation live here rather than only in a model's output,
@@ -33,7 +36,31 @@ const (
 	IDNTPUnsynced          = "time.ntp_unsynced"
 	IDUpdatesPending       = "updates.pending"
 	IDWorldWritablePresent = "fs.world_writable_present"
+
+	// Context-derived findings (docs/SPEC.md §6.3), produced by the grader.
+	IDExpectedMissing   = "svc.expected_missing"
+	IDAcceptanceExpired = "risk.acceptance_expired"
+
+	// Judgement findings: no single-fact rule produces these; the model
+	// classifies them in phase 2 from correlated evidence (§2.1, §7.2).
+	IDUnexpectedListener  = "net.unexpected_listener"
+	IDNoFirewallActive    = "fw.no_firewall_active"
+	IDSudoNopasswdBroad   = "privesc.sudo_nopasswd_broad" //nolint:gosec // a finding id, not a credential
+	IDUnexpectedSUID      = "fs.suid_unexpected"
+	IDUnexpectedPersist   = "persist.unexpected_entry"
+	IDUnexpectedAdmin     = "accounts.unexpected_admin"
+	IDPasswordAuthExposed = "sshd.password_auth_exposed"
 )
+
+// IDs lists every catalog finding id, sorted.
+func IDs() []string {
+	out := make([]string, 0, len(defs))
+	for id := range defs {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // defs is the finding catalog. Base severities are the §7.1 table's.
 var defs = map[string]Def{
@@ -219,6 +246,110 @@ var defs = map[string]Def{
 			Summary:  "Review each path and remove world write where it is not deliberate.",
 			Commands: []string{"# review first:", "ls -ld <path>", "sudo chmod o-w <path>"},
 			Caveat:   "Shared directories that are world-writable by design (/tmp, /var/tmp) carry the sticky bit and are already excluded from this check.",
+		},
+	},
+}
+
+func init() {
+	maps.Copy(defs, judgementDefs)
+}
+
+// judgementDefs are the findings only correlated evidence or operator
+// context can produce. Their text is the default a model finding carries
+// when the model supplies none (§7.1).
+var judgementDefs = map[string]Def{
+	IDExpectedMissing: {
+		ID: IDExpectedMissing, Title: "A declared service is not listening",
+		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Impact: "Operator context declares a service on this port, but nothing is listening on it. Either " +
+			"the service is down, the context is stale, or the host is not the one the context describes.",
+		Remediation: Remediation{
+			Summary:  "Confirm the service is meant to run here and start it, or correct expected_services in the context.",
+			Commands: []string{"# review first:", "ss -tulpn   # Linux", "lsof -nP -iTCP -sTCP:LISTEN   # macOS"},
+		},
+	},
+	IDAcceptanceExpired: {
+		ID: IDAcceptanceExpired, Title: "An accepted-risk entry has expired",
+		Category: CategoryGovernance, BaseSeverity: SevLow,
+		Impact: "The acceptance no longer suppresses the finding it names, and the operator's record of " +
+			"why the risk was tolerable is out of date.",
+		Remediation: Remediation{
+			Summary: "Re-review the risk: extend the acceptance with a new expires date and reason, or remediate the finding.",
+			Caveat:  "The finding the acceptance named is reported as open until the entry is renewed.",
+		},
+	},
+	IDUnexpectedListener: {
+		ID: IDUnexpectedListener, Title: "A service is listening that the context does not explain",
+		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Impact: "A listener with no declared purpose is reachable from wherever this host's network " +
+			"allows, and nobody has said it should be.",
+		Remediation: Remediation{
+			Summary:  "Identify the process, decide whether the listener is wanted, and either declare it in expected_services or stop and disable it.",
+			Commands: []string{"# review first:", "ss -tulpn   # Linux", "lsof -nP -iTCP -sTCP:LISTEN   # macOS"},
+		},
+	},
+	IDNoFirewallActive: {
+		ID: IDNoFirewallActive, Title: "No host firewall is active",
+		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Impact: "Every listening service is reachable from any network the host is attached to; there is " +
+			"no host-level filter between a service and the network.",
+		Remediation: Remediation{
+			Summary: "Enable the platform's host firewall and allow only the services this host is meant to expose.",
+			Commands: []string{"# Linux: ufw enable / firewall-cmd --state / nft list ruleset",
+				"# macOS: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"},
+			Caveat: "Allow the administrative path (SSH) before enabling a default-deny policy.",
+		},
+	},
+	IDSudoNopasswdBroad: {
+		ID: IDSudoNopasswdBroad, Title: "A broad NOPASSWD sudo rule is in effect",
+		Category: "privesc", BaseSeverity: SevHigh,
+		Impact: "An account, or every member of a group, can become root without re-authenticating, so " +
+			"any compromise of that account is a compromise of the host.",
+		Remediation: Remediation{
+			Summary:  "Restrict the rule to the specific commands that need it, or remove NOPASSWD.",
+			Commands: []string{"sudo visudo   # edit; never edit sudoers with another tool"},
+		},
+	},
+	IDUnexpectedSUID: {
+		ID: IDUnexpectedSUID, Title: "An unexpected SUID binary is present",
+		Category: "fs", BaseSeverity: SevMedium,
+		Impact: "The binary runs with its owner's privileges for any local user; a flaw in it, or a " +
+			"writable path to it, is a local privilege escalation.",
+		Remediation: Remediation{
+			Summary:  "Confirm the binary needs the SUID bit; if not, remove it.",
+			Commands: []string{"# review first:", "ls -l <path>", "sudo chmod u-s <path>"},
+		},
+	},
+	IDUnexpectedPersist: {
+		ID: IDUnexpectedPersist, Title: "An unexplained persistence entry is enabled",
+		Category: "persistence", BaseSeverity: SevMedium,
+		Impact: "Something runs at boot or on a schedule that the host's stated role does not account " +
+			"for; persistence is where an intruder or a forgotten tool survives a reboot.",
+		Remediation: Remediation{
+			Summary: "Identify the unit, timer, cron entry or launchd job, and disable it if it is not wanted.",
+			Commands: []string{"# Linux: systemctl cat <unit>; systemctl disable --now <unit>",
+				"# macOS: launchctl print system/<label>; sudo launchctl bootout system/<label>"},
+		},
+	},
+	IDUnexpectedAdmin: {
+		ID: IDUnexpectedAdmin, Title: "An account has administrative rights the context does not explain",
+		Category: "accounts", BaseSeverity: SevMedium,
+		Impact: "The account can escalate to root; if it is a service account, a leftover, or unknown to " +
+			"the operator, that is an unmanaged path to full control.",
+		Remediation: Remediation{
+			Summary: "Confirm who the account is for and remove it from the administrative group if it does not need it.",
+		},
+	},
+	IDPasswordAuthExposed: {
+		ID: IDPasswordAuthExposed, Title: "sshd accepts passwords on a listener reachable beyond the host",
+		Category: CategoryRemoteAccess, BaseSeverity: SevHigh,
+		Impact: "Password authentication is enabled and sshd listens on a non-loopback address, so online " +
+			"password guessing is possible from wherever the listener is reachable.",
+		Remediation: Remediation{
+			Summary: "Set PasswordAuthentication no, or bind sshd to a management address only.",
+			Commands: []string{"sudo sshd -T | grep -iE 'passwordauthentication|listenaddress'",
+				"# then set PasswordAuthentication no and reload sshd"},
+			Caveat: "Confirm a working key-based login first.",
 		},
 	},
 }

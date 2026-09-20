@@ -3,6 +3,7 @@ package finding
 import (
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/b87/scheck/internal/check"
 )
@@ -26,7 +27,19 @@ const (
 	RuleBadRegexp      = "rule-bad-regexp"
 	RuleDefIncomplete  = "finding-def-incomplete"
 	RuleDefSeverity    = "finding-def-unknown-severity"
+	RuleDefCategory    = "finding-def-unknown-category"
 )
+
+// Categories a Def may carry (docs/SPEC.md §7.1), plus the two the grader
+// and custom findings introduce.
+var Categories = []string{
+	CategoryRemoteAccess, CategoryNetwork, "accounts", "privesc", "integrity", "updates",
+	"persistence", "logging", "fs", "disk", "time", CategoryGovernance, CategoryCustom,
+}
+
+func knownCategory(c string) bool {
+	return slices.Contains(Categories, c)
+}
 
 // regexpFields collects every pattern a predicate will compile at evaluation
 // time, so a malformed one fails the invariants test rather than a run.
@@ -49,6 +62,9 @@ func regexpFields(p Predicate) []string {
 func ValidateRules() []Violation {
 	var out []Violation
 	for _, d := range Defs() {
+		if !knownCategory(d.Category) {
+			out = append(out, Violation{d.ID, RuleDefCategory, fmt.Sprintf("category %q", d.Category)})
+		}
 		if d.Title == "" || d.Impact == "" || d.Category == "" || d.Remediation.Summary == "" {
 			out = append(out, Violation{d.ID, RuleDefIncomplete,
 				"a rule finding has no model to write its text, so title, category, impact and remediation are required"})

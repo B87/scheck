@@ -26,6 +26,12 @@ func (t *textReport) findings() {
 	for _, f := range fs {
 		head := "  " + pad(string(f.Severity), severityColumn) + sp
 		title := sanitize(f.Title) + " [" + f.ID + "]"
+		if f.Status == finding.StatusAccepted {
+			title += " [accepted]"
+		}
+		if f.Custom {
+			title += " [custom]"
+		}
 		for i, l := range wrapHanging(head, indent, title, t.opt.Width) {
 			if i == 0 {
 				// Colour the severity word only: it is the one thing in the
@@ -39,9 +45,23 @@ func (t *textReport) findings() {
 			t.hang(indent+"evidence  ", indent+"          ",
 				e.Check+": "+sanitize(inline(e.Excerpt)))
 		}
-		t.hang(indent+"fix       ", indent+"          ", f.Remediation.Summary)
+		if f.Status == finding.StatusAccepted {
+			t.hang(indent+"accepted  ", indent+"          ", sanitize(f.AcceptedReason)+" (excluded from the exit code)")
+		}
+		if f.ContextNote != "" {
+			t.hang(indent+"context   ", indent+"          ", sanitize(f.ContextNote))
+		}
+		t.hang(indent+"fix       ", indent+"          ", sanitize(f.Remediation.Summary))
 		if t.opt.Verbose >= 1 {
-			t.hang(indent+"impact    ", indent+"          ", f.Impact)
+			// Every severity change is attributed (docs/SPEC.md §6.4).
+			if len(f.Adjustments) > 0 {
+				parts := make([]string, 0, len(f.Adjustments))
+				for _, a := range f.Adjustments {
+					parts = append(parts, fmt.Sprintf("%s (%s, from %s)", a.Rule, a.Delta, sanitize(a.Source)))
+				}
+				t.hang(indent+"severity  ", indent+"          ", fmt.Sprintf("base %s → %s: %s", f.SeverityBase, f.Severity, strings.Join(parts, "; ")))
+			}
+			t.hang(indent+"impact    ", indent+"          ", sanitize(f.Impact))
 			// Commands are text for the human; scheck never runs one
 			// (docs/SPEC.md §7.3). They keep their own lines rather than
 			// being wrapped into prose, so they can be copied.
@@ -112,13 +132,29 @@ func (t *textReport) findingsLine() string {
 		// Never "no findings": nothing here looked at what no rule covers.
 		return "0 findings from posture rules"
 	}
+	var open []finding.Finding
+	accepted := 0
+	for _, f := range fs {
+		if f.Open() {
+			open = append(open, f)
+		} else {
+			accepted++
+		}
+	}
 	var parts []string
-	for _, c := range finding.CountBySeverity(fs) {
+	for _, c := range finding.CountBySeverity(open) {
 		parts = append(parts, fmt.Sprintf("%d %s", c.Count, c.Severity))
 	}
 	noun := "findings"
 	if len(fs) == 1 {
 		noun = "finding"
 	}
-	return fmt.Sprintf("%d %s (%s)", len(fs), noun, strings.Join(parts, ", "))
+	s := fmt.Sprintf("%d %s", len(fs), noun)
+	if len(parts) > 0 {
+		s += " (" + strings.Join(parts, ", ") + ")"
+	}
+	if accepted > 0 {
+		s += fmt.Sprintf(", %d accepted", accepted)
+	}
+	return s
 }

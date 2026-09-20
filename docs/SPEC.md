@@ -131,6 +131,22 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.3 (2026-09-20):**
+
+- The grader is `finding.Grader` and the merge contract is `finding.Store` (§7.2,
+  §7.5): the store validates a candidate's evidence against the output of a check that
+  ran (a fabricated excerpt is an error result, not a finding), merges by id, and
+  grades everything through one chain. `report.Build` grades the posture rules'
+  findings through the same store, so a rule finding and a model finding cannot grade
+  differently. `scheck explain FINDING-ID` prints the chain (§8).
+- The order of the adjustment table, the `service` field, the completeness rule for
+  `svc.expected_missing` and the `governance`/`custom` categories are written into §6.3
+  and §7.3. Seven judgement finding ids (`net.unexpected_listener`,
+  `fw.no_firewall_active`, `privesc.sudo_nopasswd_broad`, `fs.suid_unexpected`,
+  `persist.unexpected_entry`, `accounts.unexpected_admin`,
+  `sshd.password_auth_exposed`) join the catalog so the model has a menu of
+  correlated conclusions with curated text; no rule raises them.
+
 **Changes from implementing M2.2a (2026-09-20):**
 
 - §9 now states the precedence the implementation always had — defaults, OS user
@@ -908,6 +924,18 @@ The two kinds of context have different consumers.
   `risk.acceptance_expired` finding in its own right.
 - **`compliance`** — selects the reference frameworks cited in findings.
 
+The grader applies the table in a fixed order: expected services first (they decide
+what a listener means), then exposure, then environment; each step is clamped to the
+scale and a step that cannot move a severity is recorded in the chain but not as an
+adjustment. A listener is matched to `expected_services` by the finding's `service`
+(`{port, proto}`), which the model supplies for a network finding; with no declared
+services there is no judgement to make and the finding keeps its base. A custom
+finding is never moved upward and is capped at `medium` after adjustment (§7.1).
+`svc.expected_missing` is a negative claim, so it needs a complete `net.listeners`
+fact: an unavailable or partial capture leaves it `not_assessed` in the `assessments`
+array rather than silently absent. `risk.acceptance_expired` carries the lapsed entry
+as its evidence (`check: context`).
+
 The model still sees the structured block (so it can reason about *why* a port is
 expected), but nothing it says about severity is used.
 
@@ -1024,7 +1052,9 @@ and the same grader; a finding never bypasses the table because of where it came
 ```
 
 The model supplies `id`, `title`, `confidence`, `evidence`, `impact`, `context_note`,
-`remediation`. `scheck` supplies everything else. `severity`:
+`remediation`, and for a network finding `service: {port, proto}`. `scheck` supplies
+everything else, including `accepted_reason` (with `status: accepted`) and
+`custom: true` on a `custom:` finding. `severity`:
 `critical|high|medium|low|info`. `confidence`: `high|medium|low`. `status`:
 `open|accepted`. `source`: `rule|model` (§7.5); for a rule finding `title`, `impact`
 and `remediation` come from the Def, `evidence` is the check id and the matched
@@ -1097,7 +1127,11 @@ record is `parsed.items[0]`), the `assessments` array and populated `findings` w
 `source: rule`; `1.2` (M2.2) fills `run.context_sources` from operator context, one
 entry per source with its kind (`config|implicit|file|note|target`), byte count,
 sha256 and truncated flag, and `unresolved` for a `target:` source an inspection did
-not read. These are development revisions, not a compatibility promise.
+not read; `1.3` (M2.3) grades findings through the structured context — populated
+`adjustments`, `status: accepted` with `accepted_reason`, `context_note`, `service`,
+`custom`, the `governance` and `custom` categories and the context-derived
+`svc.expected_missing` and `risk.acceptance_expired` findings. These are development
+revisions, not a compatibility promise.
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,

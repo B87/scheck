@@ -66,7 +66,7 @@ func Evaluate(in Input) Result {
 			Adjustments: []Adjustment{}, Status: StatusOpen, Source: SourceRule,
 			// A rule fires only on recognized evidence, so its confidence is
 			// not a judgement call (docs/SPEC.md §7.5).
-			Confidence: "high", Platform: string(platform),
+			Confidence: ConfidenceHigh, Platform: string(platform),
 			Evidence: []Evidence{ev}, Impact: def.Impact, Remediation: def.Remediation,
 		})
 	}
