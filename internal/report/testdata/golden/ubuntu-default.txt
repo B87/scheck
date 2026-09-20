@@ -101,4 +101,4 @@ Skipped (11)
 
 assessment: posture rules only. 6 of 11 rules had the evidence to decide. Every other line reports
 what a command observed, not whether the host is configured safely: a rule reads one fact and says
-nothing about what no rule covers. The agentic pass is not available in this build.
+nothing about what no rule covers. The agentic pass did not run.

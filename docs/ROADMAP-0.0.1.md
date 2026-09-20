@@ -713,7 +713,7 @@ exit code, expired not suppressed, declared service missing), asserts
 `--ignore-context` findings are byte-identical to a run with no context, and covers
 `explain FINDING-ID` in text and JSON with an invalid flag and an unknown id.
 
-### M2.4 — three tools + agent loop, mock only
+### M2.4 — three tools + agent loop, mock only ✅
 Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (§5.7), the
 provider-neutral system prompt (§5.8), and the loop (§5.6) wired to `mock` only. No real
 provider — this slice proves control flow (iteration budget, full-request context guards,
@@ -755,6 +755,44 @@ in it, end to end through both renderers.
 - the rule-merge cases are covered: attempted text replacement, attempted suppression,
   duplicate evidence.
 **Spec:** §5.6, §5.7, §5.8, §7.2, §7.5 merge, §7.4.
+
+**Landed (2026-09-20).** `internal/agent` (`agent.go`: `Session`, `Run`, `Outcome`,
+the budgets; `tools.go`: the three tools and their schemas; `prompt.go`: the §5.8
+system prompt, `PromptVersion`, the facts/findings/catalog blocks and the run_check
+menu), `runner.Origin`/`RunAs` (tool, rationale, profile gate, `tool` in the audit
+line), `report.Phase2`/`AgentRun` and schema 1.4, agent mode in `cmd/scheck`
+(`buildProvider` before any target contact, `runAgent`, `-v`/`-vv` progress), the
+footer and "Model summary" section, `policy.Canonical` for macOS `/private`, and
+`testdata/transcripts/correlated-finding-{linux,macos}.json`.
+
+- **The gate is in the runner.** A model-initiated call carries its origin; a check
+  outside the profile's tier, or the canary, is `denied:unknown_check` there, audited
+  like any other denial. The tool never decides what may run.
+- **Evidence is validated against output.** `finding.Store.Output` looks at phase 1 and
+  the model's own checks; a fabricated excerpt is an error result the model can
+  correct from, and never a finding.
+- **Single-pass is the same loop.** `MaxIterations: 1`; a last turn that only reported
+  is complete, one that asked for evidence is incomplete and says so.
+- **Found by the demo on a real Mac:** the path policy did not recognise
+  `/private/etc` as `/etc`. Fixed in the runner's decision path, macOS only.
+
+**Validation.** `make check` green (`depcheck` included: `agent` has no provider
+dependency). `internal/agent` covers the demo transcript end to end (merge into the
+rule finding, a new model finding, the prompt's contents and the secret's absence),
+`read_file`/`text.cat` audit identity, error results for an unknown id, an invalid
+param, a denied path, a sensitive path (metadata, not error), an elevated check under
+`--elevate none`, hidden and canary checks, an unknown tool and malformed input — each
+with its audit line — the report_finding contract (severity ignored, custom capped,
+rule text and confidence retained, fabricated evidence rejected), all six budgets
+ending incomplete, the five context-limit cases (initial overflow with no request
+sent and findings kept, history growth, output reservation, unknown limit, provider
+overflow with no retry), single-pass complete/unanswered, refusal and error stops.
+`cmd/scheck` validates a phase 2 envelope against the schema in both renderers, an
+incomplete pass exiting 2 with facts and assessments kept, and every configuration
+error exiting 3 with no report. Verified by hand on this Mac: `scheck local --provider
+mock --transcript testdata/transcripts/correlated-finding-macos.json` reads
+`/etc/ssh/sshd_config` and lists `/etc/ssh` through the runner, reports the custom
+finding capped at medium, and exits 1.
 
 ### M2.5 — operator context in the prompt + injection corpus
 Deliver the `<operator_context>` prompt block (§6.3): the structured map rendered so the

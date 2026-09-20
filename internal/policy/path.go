@@ -106,6 +106,23 @@ var sensitiveRules = []sensitiveRule{
 	{"sssd_secrets", matchFull, "/var/lib/sss/secrets/*"},
 }
 
+// Canonical maps a resolved path to the form the policy tables are written
+// in. On macOS /etc, /var and /tmp are symlinks into /private, so
+// `realpath /etc/ssh/sshd_config` is `/private/etc/ssh/sshd_config`; the
+// policy's prefixes and sensitive patterns name `/etc/...`, and a sensitive
+// file must not escape them by its canonical spelling. The runner applies
+// this for macOS targets only (docs/SPEC.md §4.1).
+func Canonical(p string, macOS bool) string {
+	if macOS {
+		for _, root := range []string{"/private/etc", "/private/var", "/private/tmp"} {
+			if p == root || strings.HasPrefix(p, root+"/") {
+				return strings.TrimPrefix(p, "/private")
+			}
+		}
+	}
+	return p
+}
+
 // PathPolicy decides whether a resolved absolute path may be read.
 type PathPolicy struct {
 	extraDeny []string

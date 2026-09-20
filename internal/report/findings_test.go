@@ -117,7 +117,7 @@ func TestFooterStatesAssessmentScope(t *testing.T) {
 	out := render(t, env, Options{Width: 110})
 	tail := out[strings.LastIndex(out, "assessment:"):]
 	for _, want := range []string{"posture rules only", "rules had the evidence to decide",
-		"not whether the host is configured safely", "not available in this build"} {
+		"not whether the host is configured safely", "The agentic pass did not run"} {
 		if !strings.Contains(tail, want) {
 			t.Errorf("footer %q lacks %q", tail, want)
 		}

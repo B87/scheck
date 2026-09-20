@@ -67,7 +67,7 @@ func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 func TestFooterNeverClaimsAnAssessment(t *testing.T) {
 	out := render(t, synthetic(map[string]Fact{"fw.global": {Status: "ok", Parsed: "ok"}}), Options{})
 	tail := out[strings.LastIndex(out, "assessment:"):]
-	for _, want := range []string{"not whether the host is", "not available in this build"} {
+	for _, want := range []string{"not whether the host is", "The agentic pass did not run"} {
 		if !strings.Contains(tail, want) {
 			t.Errorf("footer %q lacks %q", tail, want)
 		}

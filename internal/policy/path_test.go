@@ -66,3 +66,27 @@ func TestPathPolicyCleansButDoesNotResolve(t *testing.T) {
 		t.Errorf("traversal escaped: %+v", v)
 	}
 }
+
+// macOS spells /etc as /private/etc once resolved; the policy must judge the
+// canonical name, so an allowed prefix still allows and a sensitive file is
+// still metadata-only (docs/SPEC.md §4.1).
+func TestCanonicalMacOSPrivate(t *testing.T) {
+	pp := NewPathPolicy(nil)
+	cases := map[string]PathDecision{
+		"/private/etc/ssh/sshd_config":          PathAllow,
+		"/private/etc/master.passwd":            PathMetadataOnly,
+		"/private/etc/ssh/ssh_host_ed25519_key": PathMetadataOnly,
+		"/private/var/log/system.log":           PathMetadataOnly,
+		"/private/var/root/.ssh/id_rsa":         PathMetadataOnly,
+		"/private/tmp/x":                        PathDeny,
+		"/privateer/etc/passwd":                 PathDeny,
+	}
+	for p, want := range cases {
+		if got := pp.Decide(Canonical(p, true)).Decision; got != want {
+			t.Errorf("macos %s: %s, want %s", p, got, want)
+		}
+		if got := pp.Decide(Canonical(p, false)).Decision; got != PathDeny {
+			t.Errorf("linux %s: %s, want deny (no /private on Linux)", p, got)
+		}
+	}
+}

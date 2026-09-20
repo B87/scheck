@@ -21,6 +21,7 @@ func WriteText(w io.Writer, env Envelope, opt Options) error {
 	t.header()
 	t.findings()
 	t.coverage()
+	t.modelSummary()
 	t.facts()
 	t.notRun()
 	t.footer()
@@ -342,19 +343,61 @@ func (t *textReport) section(title, note string, rows []row) {
 	}
 }
 
-// footer never claims an absence of problems. Nothing in this build looked at
-// posture, so it says so (docs/SPEC.md §7.6).
+// modelSummary prints the model's closing text after the findings. It is
+// model output: escaped like target output, labelled as the model's, never
+// a verdict of scheck's.
+func (t *textReport) modelSummary() {
+	a := t.env.Run.Agent
+	if a == nil || strings.TrimSpace(a.Text) == "" {
+		return
+	}
+	t.line("")
+	t.line(t.st.bold("Model summary"))
+	t.para("  ", "the model's own closing words; findings above carry the code-assigned severity")
+	for para := range strings.SplitSeq(strings.TrimSpace(a.Text), "\n") {
+		if strings.TrimSpace(para) == "" {
+			continue
+		}
+		t.para("  ", sanitize(para))
+	}
+}
+
+// footer never claims an absence of problems: it says what assessed the
+// host and what did not (docs/SPEC.md §7.6).
 func (t *textReport) footer() {
 	t.line("")
-	scope := "assessment: posture rules only. "
+	r := t.env.Run
+	var scope string
+	if r.Agent == nil {
+		scope = "assessment: posture rules only. "
+	} else {
+		provider, model := orNone(deref(r.Provider)), orNone(deref(r.Model))
+		scope = fmt.Sprintf("assessment: posture rules and the %s pass (%s, %s; %d %s, %d model-initiated %s, %d/%d tokens in/out). ",
+			r.Mode, provider, model, r.Agent.Iterations, plural(r.Agent.Iterations, "turn"), r.Agent.Checks, plural(r.Agent.Checks, "check"),
+			r.Usage.Input, r.Usage.Output)
+	}
 	if n := len(t.env.Assessments); n == 0 {
 		scope += "No posture rule applied to this host. "
 	} else {
 		scope += fmt.Sprintf("%d of %d rules had the evidence to decide. ", n-len(t.env.NotAssessed()), n)
 	}
-	t.para("", scope+"Every other line reports what a command observed, not whether the host is "+
-		"configured safely: a rule reads one fact and says nothing about what no rule covers. "+
-		"The agentic pass is not available in this build.")
+	tail := "Every other line reports what a command observed, not whether the host is " +
+		"configured safely: a rule reads one fact and says nothing about what no rule covers. "
+	if r.Agent == nil {
+		tail += "The agentic pass did not run."
+	} else if r.Agent.Ended != "model stopped" {
+		tail += "The " + r.Mode + " pass did not finish: " + sanitize(r.Agent.Ended) + "."
+	} else {
+		tail += "Model findings carry code-assigned severity and evidence validated against check output."
+	}
+	t.para("", scope+tail)
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // severitiesFor lists the severities of the findings whose evidence includes

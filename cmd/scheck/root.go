@@ -41,12 +41,15 @@ type globalOpts struct {
 	RecordFixtures string
 }
 
-// notInPhase1 lists the flags that exist for surface stability but have no
-// implementation yet. Setting any of them is a usage error.
+// unavailableFlags lists the flags that exist for surface stability but
+// have no implementation in this build (docs/SPEC.md §8). Setting any of
+// them is a usage error, never a silent no-op.
+var unavailableFlags = []string{"only", "local-only"}
+
 func (o *globalOpts) notInPhase1(cmd *cobra.Command) error {
-	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort"} {
+	for _, name := range unavailableFlags {
 		if f := cmd.Flags().Lookup(name); f != nil && f.Changed {
-			return usageErr("--%s is not available in this build (phase 1: baseline only)", name)
+			return usageErr("--%s is not available in this build", name)
 		}
 	}
 	return nil
@@ -87,13 +90,14 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&opts.RecordFixtures, "record-fixtures", "", "developer: record every exec into DIR as a fixture")
 	_ = pf.MarkHidden("record-fixtures")
 
-	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort"} {
+	for _, name := range unavailableFlags {
 		pf.Lookup(name).Usage += " (not available in this build)"
 	}
 	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
 	pf.Lookup("stop-after").Usage = "context|plan|facts: print that stage and exit"
-	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules.\n" +
-		"Use local or ssh with --stop-after facts; no model or API key is needed.\n" +
+	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules and,\n" +
+		"without --stop-after, by a model through a closed tool surface (--provider, --model).\n" +
+		"--stop-after facts needs no model or API key.\n" +
 		"Exit codes: 0 no finding at or above the profile threshold (not a claim of full\n" +
 		"coverage — read the assessments and skipped checks), 1 findings, 2 incomplete run,\n" +
 		"3 usage/policy error. JSON goes to stdout; diagnostics to stderr."

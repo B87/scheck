@@ -9,6 +9,7 @@ import (
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/operator"
 )
 
@@ -16,9 +17,10 @@ import (
 // summaries, the typed `parsed` shapes, rule findings and the assessment
 // coverage array; 1.2 fills `run.context_sources` from operator context;
 // 1.3 grades findings through operator context (adjustments, accepted
-// status, context-derived findings) (docs/SPEC.md §7.4). Compatibility
-// starts at the first GitHub release.
-const SchemaVersion = "1.3"
+// status, context-derived findings); 1.4 fills the provider block and
+// `run.agent` from phase 2 and carries model findings (docs/SPEC.md §7.4).
+// Compatibility starts at the first GitHub release.
+const SchemaVersion = "1.4"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -66,33 +68,54 @@ type Host struct {
 	Elevation   string `json:"elevation"`
 }
 
-// Run describes the invocation. Provider fields are null until phase 2.
+// Run describes the invocation. Provider fields are null in facts mode.
 type Run struct {
 	Started        time.Time         `json:"started"`
 	DurationMS     int64             `json:"duration_ms"`
 	Status         string            `json:"status"` // complete | incomplete
 	Profile        string            `json:"profile"`
-	Assessment     string            `json:"assessment"`
-	Mode           string            `json:"mode"` // facts | agent | single-pass
+	Assessment     string            `json:"assessment"` // none | rules | agent
+	Mode           string            `json:"mode"`       // facts | agent | single-pass
 	Provider       *string           `json:"provider"`
 	Model          *string           `json:"model"`
 	Effort         *string           `json:"effort"`
-	Native         any               `json:"native"`
-	Limits         any               `json:"limits"`
-	Usage          Usage             `json:"usage"`
+	Native         *llm.Native       `json:"native"`
+	Limits         *llm.Limits       `json:"limits"`
+	Usage          llm.Usage         `json:"usage"`
+	PromptVersion  string            `json:"prompt_version,omitempty"`
+	Agent          *AgentRun         `json:"agent,omitempty"`
 	ContextSources []operator.Source `json:"context_sources"`
 	Persisted      *string           `json:"persisted"` // path, or null
 	Warnings       []string          `json:"warnings"`
 	Version        string            `json:"scheck_version"`
 }
 
-// Usage is token accounting; cost is null when the provider has no price.
-type Usage struct {
-	Input      int      `json:"input"`
-	Output     int      `json:"output"`
-	CacheRead  int      `json:"cache_read"`
-	CacheWrite int      `json:"cache_write"`
-	CostUSD    *float64 `json:"cost_usd"`
+// AgentRun is how phase 2 ended (docs/SPEC.md §5.6): a pass that hit any
+// budget is incomplete and says which one.
+type AgentRun struct {
+	Iterations int    `json:"iterations"`
+	Checks     int    `json:"checks"`   // model-initiated
+	Reported   int    `json:"reported"` // accepted report_finding calls
+	Ended      string `json:"ended"`    // "model stopped" or the budget/failure that ended the run
+	// Text is the model's closing summary. It is model output, rendered
+	// through the same escaping as target output.
+	Text string `json:"text,omitempty"`
+}
+
+// Phase2 is what the caller knows after the agent ran.
+type Phase2 struct {
+	Provider      string
+	Model         string
+	Effort        string
+	Native        llm.Native
+	Limits        llm.Limits
+	Usage         llm.Usage
+	Mode          string // agent | single-pass
+	PromptVersion string
+	Agent         AgentRun
+	Complete      bool
+	Reason        string
+	Warnings      []string
 }
 
 // Meta is what the caller knows that the fact sheet does not.
@@ -115,6 +138,8 @@ type Meta struct {
 	Result *finding.Result
 	// Now is the grader's clock for accepted-risk expiry; zero means now.
 	Now time.Time
+	// Phase2 is set after the agentic pass ran (docs/SPEC.md §7.4).
+	Phase2 *Phase2
 }
 
 // Grader builds the severity chain from the meta's context (docs/SPEC.md
@@ -163,6 +188,23 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 	if sheet.Incomplete {
 		env.Run.Status = "incomplete"
 		env.Run.Warnings = append(env.Run.Warnings, "run timed out before every baseline check ran")
+	}
+	if p := meta.Phase2; p != nil {
+		env.Run.Mode, env.Run.Assessment = p.Mode, "agent"
+		env.Run.Provider, env.Run.Model = &p.Provider, &p.Model
+		if p.Effort != "" {
+			env.Run.Effort = &p.Effort
+		}
+		native, limits := p.Native, p.Limits
+		env.Run.Native, env.Run.Limits, env.Run.Usage = &native, &limits, p.Usage
+		env.Run.PromptVersion = p.PromptVersion
+		agent := p.Agent
+		env.Run.Agent = &agent
+		env.Run.Warnings = append(env.Run.Warnings, p.Warnings...)
+		if !p.Complete {
+			env.Run.Status = "incomplete"
+			env.Run.Warnings = append(env.Run.Warnings, "the AI assessment did not finish: "+p.Reason)
+		}
 	}
 	env.Host = hostFrom(sheet, meta)
 	if env.Host.ID == "" {

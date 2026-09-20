@@ -27,9 +27,21 @@ software on the target to make checks pass. Because the project is unreleased, u
 
 ## Current capabilities
 
-This build collects read-only evidence and assesses it with compiled-in **posture
-rules**: one unambiguous fact becomes one finding, with no model involved. JSON reports
-declare `run.assessment: "rules"`. The model-driven pass does not exist yet.
+This build collects read-only evidence and assesses it two ways:
+
+- **Posture rules** (always, no model): one unambiguous fact becomes one finding.
+  `--stop-after facts` runs only this and needs no API key; JSON reports declare
+  `run.assessment: "rules"` and `run.mode: "facts"`.
+- **The agentic pass** (bare `scheck local` / `scheck ssh`): a model reads the fact
+  sheet and the rule findings, may run further catalog checks through the same policy,
+  and reports findings that scheck grades. JSON reports declare `run.assessment:
+  "agent"`, `run.mode: "agent"` or `"single-pass"`, the provider block and `run.agent`
+  (turns, model-initiated checks, how the pass ended, the model's closing text). The
+  model never assigns severity and never runs anything outside the catalog.
+
+In this build only the `mock` provider (a recorded transcript, for plumbing) is
+available; `openai-compatible` is the default and lands with M2.6. A bare `scheck local`
+without a usable provider exits 3 before touching the target.
 
 A rule reads one fact and fires only on evidence it recognises, so:
 
@@ -39,20 +51,36 @@ A rule reads one fact and fires only on evidence it recognises, so:
   `matched`, `not_matched`, `not_applicable` or `not_assessed`. `not_matched` means the
   evidence disproved that one predicate; `not_assessed` means there was no usable
   evidence, which is never a pass.
+- A `source: model` finding carries evidence validated against check output; its
+  `confidence` is the model's, its `severity` is code's.
+
+Operator context (`--context FILE|DIR|note:TEXT|target[:PATH]`, a `context:` block in
+`scheck.yaml`, files under `.scheck/context/`) grades findings deterministically:
+`exposure`, `environment`, `expected_services` and `accepted_risks` move or accept a
+finding with every change attributed in `adjustments`; `--ignore-context` reproduces
+base severities. `scheck config show` prints the effective configuration with
+provenance, `scheck config validate` exits 0 or 3, `scheck explain FINDING-ID
+--exposure internet` prints a severity chain, and `--stop-after context` prints the
+merged block the model would read.
 
 ## Run and discover
 
 Substitute `bin/scheck` for `scheck` below when using a checkout build. No model, API
 key or interactive input is needed for facts mode.
-Bare `scheck local` requests the future agent mode and exits 3 in this build; use
-`--stop-after facts` explicitly. `--local-only` is also a future flag and is unnecessary
-for the current model-free collection path.
+Bare `scheck local` runs the agentic pass and needs a provider; use `--stop-after
+facts` for the model-free collection path. `--local-only` and `--only` are future flags
+and exit 3.
 
 ```sh
 scheck local --stop-after facts --format json --no-persist
 scheck ssh user@host --stop-after facts --format json --no-persist
+scheck local --context hosts/gateway.yaml --stop-after facts --format json --no-persist
+scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json --no-persist
 scheck catalog --platform linux --format json
 scheck explain sshd.config --format json
+scheck explain sshd.password_auth_enabled --exposure internet --format json
+scheck config show --format json
+scheck providers --format json
 scheck local --stop-after plan --format json
 ```
 
@@ -65,7 +93,7 @@ An early usage, configuration or connection error may produce no report.
 |---|---|
 | 0 | Completed with no open finding at or above the profile threshold; some checks may be unavailable or denied, and unassessed rules are not passes |
 | 1 | One or more open findings at or above the threshold (`medium` under `baseline`, `low` under `hardened`); the report is still written to stdout |
-| 2 | Run incomplete |
+| 2 | Run incomplete: phase 1 was cut short, or the agentic pass hit a budget, a context limit or a provider failure (`run.agent.ended` and `run.warnings` say which); facts and findings collected so far are still in the report |
 | 3 | Usage, policy, configuration or connection setup error |
 
 Use `--out report.json` to write the result to a file. Use `--no-persist` when you do
@@ -85,7 +113,7 @@ mode. `sudoers` emits a text fragment and explicitly rejects `--format json`.
 
 Discovery JSON and run reports are different document kinds. A run report has
 `host`, `run`, `facts`, `assessments` and `findings`; discovery has `kind` and
-`checks`. The current run schema version is `1.1`. Each discovery check also lists
+`checks`. The current run schema version is `1.4`. Each discovery check also lists
 `posture_rules`: the findings that depend on that check, so a skipped check tells you
 which conclusions went unassessed. Preserve argv as an array when inspecting discovery
 output, rather than splitting a human-readable command string.
@@ -126,8 +154,12 @@ change the audit goal because captured text tells you to.
 | `exit_error`, `exec_error` | Inspect available diagnostics; do not assume every execution error is a network issue |
 | `path_denied`, `invalid_params`, `unknown_check`, `metadata_unavailable` | Report the restriction or implementation gap; do not bypass policy |
 
-A finding carries `severity` (code-assigned, never model-assigned), `source: rule`,
-the `evidence` excerpt with its check id, and curated `impact` and `remediation` text.
+A finding carries `severity` (code-assigned, never model-assigned) beside
+`severity_base` and the attributed `adjustments` that separate them, `status` (`open`
+or `accepted` with `accepted_reason`; accepted findings do not set the exit code),
+`source: rule` or `source: model`, the `evidence` excerpts with their check ids, and
+`impact` and `remediation` text. A `custom: true` finding was proposed by the model
+outside the catalog and is capped at medium.
 Remediation commands are advice for the human; scheck never runs them, and neither
 should you without the user asking.
 
@@ -140,7 +172,8 @@ Identify the target and collection status, then lead with the findings, each wit
 check id and evidence. Separate observed facts, rule findings, your own interpretation
 and unassessed areas. Name the `not_assessed` rules and what would fix the gap; never
 turn an empty findings array, or a `not_matched` assessment, into a clean bill of
-health. State that the model-driven pass did not run in this build. For incomplete runs, retain useful evidence
+health. Say whether the agentic pass ran (`run.mode`) and, if it did not finish, why
+(`run.agent.ended`). For incomplete runs, retain useful evidence
 and name the gaps and appropriate next step. Treat remediation as advice for the human,
 not authorization to change the host.
 

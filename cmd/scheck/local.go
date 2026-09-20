@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,12 +16,13 @@ import (
 func newLocalCmd(opts *globalOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "local",
-		Short: "Audit this machine with the posture rules (no model)",
-		Long: "Collect read-only facts and assess them with the compiled-in posture rules. This build " +
-			"requires --stop-after plan or facts; the agentic pass is not available. JSON output is on " +
-			"stdout, diagnostics on stderr. Exit 0 no finding at or above the profile threshold, " +
-			"1 findings, 2 incomplete, 3 usage/policy error.",
-		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --stop-after facts --format json --include-evidence --no-persist\n  scheck local --stop-after plan --format json",
+		Short: "Audit this machine: posture rules, then the agentic pass unless --stop-after",
+		Long: "Collect read-only facts, assess them with the compiled-in posture rules and, without " +
+			"--stop-after, hand them to a model that may run further catalog checks through the same " +
+			"policy and report findings that scheck grades. --stop-after facts needs no model. JSON " +
+			"output is on stdout, diagnostics on stderr. Exit 0 no finding at or above the profile " +
+			"threshold, 1 findings, 2 incomplete, 3 usage/policy error.",
+		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --model gpt-5 --context hosts/gateway.yaml\n  scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json\n  scheck local --stop-after plan --format json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := opts.notInPhase1(cmd); err != nil {
@@ -94,8 +93,15 @@ func runStopAfter(cmd *cobra.Command, sess *session) error {
 		}
 		return writeContext(out, sess.context, sess.opts.Format)
 	case "":
-		fmt.Fprintln(os.Stderr, "scheck: agent mode is not available in this build; use --stop-after facts")
-		return usageErr("no model in phase 1")
+		if err := sess.loadContext(cmd.Context()); err != nil {
+			return err
+		}
+		sheet, err := sess.runBaseline(cmd.Context())
+		if err != nil {
+			return err
+		}
+		sess.runAgent(cmd.Context(), sheet)
+		return reportAndExit(sess, out, sheet)
 	default:
 		return usageErr("--stop-after must be context|plan|facts")
 	}

@@ -131,6 +131,19 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.4 (2026-09-20):**
+
+- The loop's end conditions are written down (§5.6): every budget names itself in
+  `run.agent.ended`, the last permitted turn counts as complete only when it reported
+  and did not investigate, and unexecuted tool calls get error results. The menu gate
+  moved into `runner.RunAs` (§5.7) so a hidden check is denied and audited by the one
+  enforcement point. `report_finding`'s evidence validation is specified: an excerpt
+  must be in the output of a check that ran.
+- The envelope gains `run.prompt_version` and `run.agent` at schema 1.4 (§7.4); the
+  prompt hash is what the evaluation records (`docs/eval/phase2-criteria.md`).
+- macOS `/private` canonicalisation in the path policy (§4.1), found by running the
+  mock demo on a Mac: `realpath /etc/ssh/sshd_config` was denied as outside `/etc`.
+
 **Changes from implementing M2.3 (2026-09-20):**
 
 - The grader is `finding.Grader` and the merge contract is `finding.Store` (§7.2,
@@ -461,7 +474,10 @@ Applies to every `Path`-typed parameter in every check and to `read_file` identi
   `~/.aws/**`, `~/.ssh/**`, `/etc/ssh/ssh_host_*_key`.
 - Symlinks are resolved on the target before the decision (`realpath` is a catalog
   check); the decision is made on the resolved path, and traversal (`..`) is rejected
-  at the charset level before that.
+  at the charset level before that. On macOS `/etc`, `/var` and `/tmp` resolve into
+  `/private`, so the runner maps `/private/etc/...` back to `/etc/...` before the
+  decision (`policy.Canonical`, macOS targets only): an allowed prefix still allows,
+  and a sensitive file cannot escape its pattern by its canonical spelling.
 
 The deny list is compiled in. Config may add to it (`deny_paths:`), never remove.
 
@@ -757,6 +773,20 @@ truncated run is reported as `status: incomplete`, never as a clean bill of heal
 implementation. That is what makes the comparison in §12 criterion 10 a one-variable
 experiment: same prompt, same tools, same facts, different iteration budget.
 
+The loop (`internal/agent`) is: build the request (system prompt, finding catalog,
+`<facts>` with every baseline check's redacted output, `<rule_findings>`,
+`<not_assessed>`, `<operator_context>`), check it fits (§5.3), stream the reply, then
+execute every tool call in order and answer them in one user turn. It ends `complete`
+when the model replies without tool calls. It ends `incomplete`, naming the cause,
+when any budget is hit — `MaxIterations`, `AgentChecks`, `AgentWallClock` (the sum of
+model-initiated execution time), `ModelInputTotal` (the facts block plus every tool
+result), `MaxTokens` (a reply cut at the completion limit), `RunTimeout` — or when the
+model refuses, the provider fails, or a request would not fit. On the last permitted
+turn, a reply that only reported findings is a finished pass (that is what single-pass
+is); one that asked for evidence it will never receive is not. Tool calls that were
+not executed because a budget ended the run are answered with an error result, never
+silently dropped.
+
 ### 5.7 Tool surface (three tools, deliberately small)
 
 | Tool | Input | Behaviour |
@@ -766,7 +796,21 @@ experiment: same prompt, same tools, same facts, different iteration budget.
 | `report_finding` | the finding schema below (§7) | Validated and stored. Invalid → error result with the validation message so the model can correct it. The model does **not** supply `severity`. |
 
 The catalog's ids, parameters and one-line descriptions are rendered into the tool
-description for `run_check`, so the model has a menu, not a language.
+description for `run_check`, so the model has a menu, not a language. The menu is the
+active profile's tier without the canary; the gate is enforced in `runner.RunAs`, not
+in the tool, so a call for a hidden check is audited as `denied:unknown_check` exactly
+like an id that does not exist. `run_check` and `read_file` name their tool and carry
+the model's rationale into the audit line. A tool result is the same redacted, bounded
+capture the report shows; an unavailable check is an answer (`status: unavailable`,
+with its reason), and an elevated check that cannot run in this session is an error
+result telling the model not to infer anything from its absence.
+
+`report_finding` is validated by `finding.Store` (§7.5): every evidence excerpt must
+appear, whitespace folded, in the redacted output of a check that ran in this session
+(phase 1 or on the model's request); a candidate that fails is an error result naming
+the reason, and the store is untouched. A `severity` field is ignored, not rejected;
+`custom:<slug>` needs `proposed_severity`, title, impact and remediation and is capped
+at `medium`.
 
 ### 5.8 System prompt contract
 
@@ -1084,6 +1128,7 @@ provider block and model findings is emitted today and validated by
     "profile": "baseline", "mode": "facts|agent|single-pass",
     "provider": "…", "model": "…", "effort": "high", "native": {…}, "limits": {…},
     "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
+    "prompt_version": "sp-…", "agent": {"iterations": 3, "checks": 2, "reported": 1, "ended": "model stopped", "text": "…"},
     "context_sources": [{"source": "…", "kind": "file", "sha256": "…", "bytes": 0, "truncated": false}]
   },
   "facts":    { "<check id>": { "status": "ok|unavailable|denied", "reason": "…",
@@ -1130,8 +1175,12 @@ sha256 and truncated flag, and `unresolved` for a `target:` source an inspection
 not read; `1.3` (M2.3) grades findings through the structured context — populated
 `adjustments`, `status: accepted` with `accepted_reason`, `context_note`, `service`,
 `custom`, the `governance` and `custom` categories and the context-derived
-`svc.expected_missing` and `risk.acceptance_expired` findings. These are development
-revisions, not a compatibility promise.
+`svc.expected_missing` and `risk.acceptance_expired` findings; `1.4` (M2.4) fills the
+provider block (`provider`, `model`, `effort`, `native`, `limits`, `usage`) from phase
+2, adds `run.prompt_version` and `run.agent` (`iterations`, `checks`, `reported`,
+`ended`, the model's closing `text`), sets `run.mode` to `agent` or `single-pass` and
+`run.assessment` to `agent`, and carries `source: model` findings. These are
+development revisions, not a compatibility promise.
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,
@@ -1380,7 +1429,14 @@ before printing the plan. For connection-free discovery, use
 `scheck catalog --platform linux|macos --format json`; this lists the platform catalog,
 not the configured target's exact plan. Plans cannot show phase 2 commands, which the
 model chooses at run time.
-`--stop-after facts` runs phase 1 only and needs no API key.
+`--stop-after facts` runs phase 1 only and needs no API key. Without `--stop-after`,
+the provider is selected and built before any target is contacted — a missing model,
+an unknown context limit, a deferred adapter, `--local-only` or `allow_egress: false`
+exit 3 with nothing executed — then phase 1 runs, then the agentic pass, then the
+report. `-v` shows each tool call as the model makes it; `-vv` streams the model's
+text to stderr. The text report closes with what assessed the host: "posture rules and
+the agent pass (provider, model; turns, model-initiated checks, tokens)" and, when the
+pass did not finish, why.
 
 Exit codes: `0` no open finding at or above the profile threshold · `1` findings present ·
 `2` run incomplete (check/agent/transport failure, budget exhausted) · `3` usage or policy

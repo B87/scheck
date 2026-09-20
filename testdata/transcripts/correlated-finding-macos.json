@@ -1,0 +1,33 @@
+{
+  "limits": {"max_context": 200000},
+  "native": {"tool_calling": true, "parallel_tool_calls": true},
+  "turns": [
+    {
+      "text": "Checking whether sshd's effective configuration is backed by the file and what else is in /etc/ssh.",
+      "tool_calls": [
+        {"id": "c1", "name": "read_file", "input": {"path": "/etc/ssh/sshd_config", "rationale": "confirm the configured source of the effective sshd settings"}},
+        {"id": "c2", "name": "run_check", "input": {"id": "fs.list", "params": {"path": "/etc/ssh"}, "rationale": "look for drop-in configuration and host keys"}}
+      ]
+    },
+    {
+      "text": "Recording what the evidence supports.",
+      "tool_calls": [
+        {"id": "c3", "name": "report_finding", "input": {
+          "id": "custom:demo-model-finding",
+          "title": "Demo: the model reported a finding through the closed tool surface",
+          "confidence": "medium",
+          "proposed_severity": "high",
+          "impact": "This is a scripted mock transcript; it proves plumbing (evidence validation, grading, merge), not model quality.",
+          "remediation": {"summary": "Nothing to fix; replace the mock provider with a real one for an assessment."},
+          "evidence": [{"check": "sys.platform", "excerpt": "Darwin"}],
+          "context_note": "reported by the mock transcript testdata/transcripts/correlated-finding-macos.json"
+        }}
+      ],
+      "expect": {"tool_results": ["c1", "c2"]}
+    },
+    {
+      "text": "I confirmed the platform from sys.platform and read what the path policy allowed under /etc/ssh. The custom finding above is a plumbing demonstration: its severity was proposed as high and capped at medium by scheck. Nothing else was claimed.",
+      "expect": {"tool_results": ["c3"]}
+    }
+  ]
+}

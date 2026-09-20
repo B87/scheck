@@ -67,6 +67,7 @@ type Result struct {
 	Duration   time.Duration
 	Elevated   bool
 	PathRule   string
+	origin     Origin
 }
 
 // Runner composes a target with the policy. All fields but Log and Audit are
@@ -88,20 +89,45 @@ const (
 	statCheck     = "fs.stat"
 )
 
+// Origin says who asked for a check. Phase 1 leaves it zero. A model-
+// initiated call (phase 2's run_check / read_file) names its tool and
+// carries the model's rationale into the audit log, and is gated to the
+// checks the model may see: the active profile's tier, never the canary
+// (docs/SPEC.md §3 tiers, §4.3). The gate lives here, in the one
+// enforcement point, not in the tool.
+type Origin struct {
+	Tool      string
+	Rationale string
+	// Profile bounds a model-initiated call; only read when Tool is set.
+	Profile check.Profile
+}
+
 // Run executes the check with the given id on the runner's target platform.
 func (r *Runner) Run(ctx context.Context, id string, params map[string]string) Result {
+	return r.RunAs(ctx, id, params, Origin{})
+}
+
+// RunAs is Run with a stated origin.
+func (r *Runner) RunAs(ctx context.Context, id string, params map[string]string, o Origin) Result {
 	c, ok := check.Lookup(id, r.Target.Platform())
+	if ok && o.Tool != "" && (c.Canary || c.MinProfile > o.Profile) {
+		ok = false // outside the model's menu: same answer as an id that does not exist
+	}
 	if !ok {
-		res := Result{CheckID: id, Params: params, Status: StatusDenied, Reason: "unknown check id", ReasonCode: "unknown_check"}
+		res := Result{CheckID: id, Params: params, Status: StatusDenied, Reason: "unknown check id", ReasonCode: "unknown_check", origin: o}
 		r.audit(res, "denied:unknown_check", nil)
 		return res
 	}
-	return r.RunCheck(ctx, c, params)
+	return r.runCheck(ctx, c, params, o)
 }
 
-// RunCheck executes an already-resolved catalog entry.
+// RunCheck executes an already-resolved catalog entry (phase 1).
 func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]string) Result {
-	res := Result{CheckID: c.ID, RanAs: c.ID, Params: params}
+	return r.runCheck(ctx, c, params, Origin{})
+}
+
+func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]string, o Origin) Result {
+	res := Result{CheckID: c.ID, RanAs: c.ID, Params: params, origin: o}
 	argv, err := c.Bind(params)
 	if err != nil {
 		res.Status, res.Reason = StatusDenied, err.Error()
@@ -116,7 +142,7 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 			continue
 		}
 		resolved := r.resolve(ctx, params[p.Name])
-		verdict := r.Paths.Decide(resolved)
+		verdict := r.Paths.Decide(policy.Canonical(resolved, r.Target.Platform() == check.MacOS))
 		res.PathRule = verdict.Rule
 		switch verdict.Decision {
 		case policy.PathDeny:
@@ -367,6 +393,8 @@ func (r *Runner) audit(res Result, decision string, code *int) {
 		ExitCode:   code,
 		DurationMS: res.Duration.Milliseconds(),
 		Elevated:   res.Elevated,
+		Tool:       res.origin.Tool,
+		Rationale:  res.origin.Rationale,
 	}
 	if e.CheckID == "" {
 		e.CheckID = res.CheckID

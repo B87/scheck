@@ -23,6 +23,7 @@ type AuditEntry struct {
 	DurationMS int64             `json:"duration_ms"`
 	OutputHash string            `json:"output_sha256,omitempty"` // of the redacted output
 	Elevated   bool              `json:"elevated,omitempty"`
+	Tool       string            `json:"tool,omitempty"`      // run_check | read_file for a model-initiated call, phase 2
 	Rationale  string            `json:"rationale,omitempty"` // model-supplied, phase 2
 }
 
