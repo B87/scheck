@@ -137,6 +137,17 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes to the research track after the three-repeat record (2026-09-20):**
+
+- §5.9's initial scope moves from "service/context relationship" (which §6.3 already
+  decides in code) to one judgement per candidate item for the context-dependent
+  judgement ids, with code owning enumeration, deterministic filters, bounded
+  follow-up reads and filing. The offline work is a fourth arm of the existing M2.7
+  harness rather than a second corpus. `ROADMAP-RESEARCH.md` records why: the live
+  record's failures are an unused loop and per-item context judgements, which is the
+  shape a System One model can answer and the shape it cannot replace. No key is held;
+  the live slice stays deferred.
+
 **Changes from the three-repeat live evaluation (2026-09-20):**
 
 - `report_finding` carries a `verdict` (§5.7): `open` is what it always did;
@@ -993,17 +1004,23 @@ provider framework. Its domain-level input is policy-filtered evidence plus oper
 context; its output is candidate assessments tied to existing evidence identifiers.
 The implementation owns question wording, batching and vendor response conversion.
 
-Initial scope: classify service/context relationships as `expected`, `unexpected`, or
-`insufficient_context`. Code retains explicit status and completeness metadata, resolves
-evidence references, and performs exact parsing, counting and comparisons. Missing,
-denied, redacted or truncated evidence must not imply a negative finding. Assessment
-results neither assign severity nor authorize checks, change accepted risks, suppress
-findings, skip investigation, or affect exit codes. They remain separate evaluation
-artifacts until a measured result justifies a production integration decision.
+Initial scope: one yes/no judgement per candidate item for the context-dependent
+judgement ids (`persist.unexpected_entry`, `net.unexpected_listener`,
+`fs.suid_unexpected`, `accounts.unexpected_admin`), where code enumerates the
+candidates, applies the deterministic filters, runs any bounded follow-up read through
+the runner from a fixed per-kind table, builds a per-item state, and decides what to
+file. `expected_services` matching and `svc.expected_missing` stay with §6.3. Code
+retains explicit status and completeness metadata, resolves evidence references, and
+performs exact parsing, counting and comparisons. Missing, denied, redacted or truncated
+evidence must not imply a negative finding and is never sent. Assessment results neither
+assign severity nor authorize checks, change accepted risks, suppress findings, skip
+investigation, or affect exit codes. They remain separate evaluation artifacts until a
+measured result justifies a production integration decision.
 
-Development proceeds with hand-authored synthetic responses and a local fake HTTP
-server. These prove plumbing, validation and failure handling, not model quality or
-prompt-injection resistance. An optional available generative/local model may answer
+Development proceeds as a fourth arm of the M2.7 harness over the same labeled cases
+(`ROADMAP-RESEARCH.md`), with scripted answers and a local fake HTTP server. These
+prove plumbing, validation and failure handling, not model quality or prompt-injection
+resistance. An optional available generative/local model may answer
 the same questions for comparison; its results are attributed to that model and are
 never presented as Jev performance or calibration.
 
