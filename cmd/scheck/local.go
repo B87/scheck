@@ -16,16 +16,18 @@ import (
 func newLocalCmd(opts *globalOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "local",
-		Short: "Audit this machine: posture rules, then the agentic pass unless --stop-after",
-		Long: "Collect read-only facts, assess them with the compiled-in posture rules and, without " +
-			"--stop-after, hand them to a model that may run further catalog checks through the same " +
-			"policy and report findings that scheck grades. --stop-after facts needs no model. JSON " +
-			"output is on stdout, diagnostics on stderr. Exit 0 no finding at or above the profile " +
-			"threshold, 1 findings, 2 incomplete, 3 usage/policy error.",
-		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --context hosts/gateway.yaml\n  scheck local --model gpt-5.6-terra --context hosts/gateway.yaml\n  scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json\n  scheck local --stop-after plan --format json",
+		Short: "Audit this machine with the compiled-in posture rules",
+		Long: "Collect read-only facts and assess them with the compiled-in posture rules, graded " +
+			"through operator context. No model is involved and no API key is needed: the " +
+			"model-assessed pass did not earn its cost in this build (docs/SPEC.md §2.1). A rule " +
+			"reads one fact, so exit 0 means no rule fired, not that the host is secure — read the " +
+			"assessment coverage and the skipped checks. JSON output is on stdout, diagnostics on " +
+			"stderr. Exit 0 no finding at or above the profile threshold, 1 findings, 2 incomplete, " +
+			"3 usage/policy error.",
+		Example: "  scheck local --no-persist\n  scheck local --format json --include-evidence --no-persist\n  scheck local --context hosts/gateway.yaml\n  scheck local --stop-after plan --format json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := opts.notInPhase1(cmd); err != nil {
+			if err := opts.rejectUnimplemented(cmd); err != nil {
 				return err
 			}
 			sess, err := opts.newSession(cmd, func(b policy.Budgets) (target.Target, error) {
@@ -60,7 +62,9 @@ func reportAndExit(sess *session, out io.Writer, sheet *baseline.FactSheet) erro
 }
 
 // runStopAfter executes the stage selected by --stop-after for a built
-// session. In phase 1 the only complete runs are plan and facts.
+// session. Without --stop-after the run collects the facts and assesses
+// them with the posture rules, which is what the whole run is in this
+// build: no model stage follows it (docs/SPEC.md §2.1).
 func runStopAfter(cmd *cobra.Command, sess *session) error {
 	out, closeOutput, err := sess.opts.commandOutput(cmd.OutOrStdout())
 	if err != nil {
@@ -78,7 +82,7 @@ func runStopAfter(cmd *cobra.Command, sess *session) error {
 		}
 		printPlan(out, sess.runner.Target.Platform(), sess.elevate, plan)
 		return nil
-	case "facts":
+	case "", "facts":
 		if err := sess.loadContext(cmd.Context()); err != nil {
 			return err
 		}
@@ -92,16 +96,6 @@ func runStopAfter(cmd *cobra.Command, sess *session) error {
 			return err
 		}
 		return writeContext(out, sess.context, sess.opts.Format)
-	case "":
-		if err := sess.loadContext(cmd.Context()); err != nil {
-			return err
-		}
-		sheet, err := sess.runBaseline(cmd.Context())
-		if err != nil {
-			return err
-		}
-		sess.runAgent(cmd.Context(), sheet)
-		return reportAndExit(sess, out, sheet)
 	default:
 		return usageErr("--stop-after must be context|plan|facts")
 	}

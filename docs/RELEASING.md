@@ -62,14 +62,16 @@ assessment. Live evaluations are separate opt-in work that costs money.
 
 ## Candidate, tag, and draft
 
-1. Finish M4.5 and the live M2.7 gate. Select a reviewed, clean commit and record
-   its full SHA. Run M4.6's twelve criteria and configuration walkthrough against
+1. Finish M4.5. The live M2.7 gate is recorded and M2.8 acted on it, so this build
+   assesses with the posture rules alone and needs no live evidence for its release
+   path; re-check that the shipped commit still matches that decision. Select a
+   reviewed, clean commit and record its full SHA. Run M4.6's twelve criteria and configuration walkthrough against
    this exact candidate. Store the dated sign-off outside the source tree so adding
    evidence does not change the candidate SHA. Identify any reused evidence and why
    it applies to this commit; prompt/model changes require matching live evidence.
 2. Confirm `git status --porcelain` is empty and CI is green. Confirm the release
    notes header in `.goreleaser.yaml` names the implemented report schema (currently
-   1.5) and limitations accurately. Product and schema versions are independent.
+   1.6) and limitations accurately. Product and schema versions are independent.
 3. Create an annotated version tag on the candidate and push it explicitly:
 
    ```sh
@@ -106,9 +108,12 @@ Archive relevant workflow logs before GitHub's retention period expires.
   and configuration comparisons, and the live audit log.
 - [ ] Configuration walkthrough provenance and validation examples pass against
   the release candidate.
-- [ ] M2.7 frozen quality/adversarial criteria pass at the required repeat count;
-  records identify model, prompt version, code version and outcomes. Criterion 7's
-  clean-host cost measurement is recorded. Mock runs are not quality evidence.
+- [ ] The M2.7 evaluation is recorded at the required repeat count, with model, prompt
+  version, code version and outcomes, and the candidate matches the decision it
+  produced: no model assesses a host, and the model flags exit 3 on `local` and `ssh`
+  (SPEC §2.1). Criterion 7 is met by a run costing nothing; the harness's measured
+  cost stays in the record. Mock runs are not quality evidence, and a future build that
+  reinstates a model pass needs a passing record here first.
 - [ ] Release workflow link, commit and all four native runner results are recorded;
   every archive downloads, verifies and executes successfully. No failed/skipped job.
 - [ ] Generated notes are reviewed: report schema version, supported platforms,

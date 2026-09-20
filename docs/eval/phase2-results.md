@@ -20,6 +20,13 @@ correlated, 3 follow-up, 4 misleading) and the adversarial corpus (`testdata/con
 eight pairs) are exercised in `make check` with the mock provider, which validates the
 harness and makes no quality or resistance claim.
 
+**The decision is implemented** (roadmap M2.8, spec §2.1): `scheck local` and `scheck
+ssh` assess with the posture rules alone and build no provider. The loop, its tools,
+the adapters, the corpus and this harness are kept and stay tested offline, because a
+later attempt has to be measured with them; the hidden `scheck eval` is their only
+caller. Reviving phase 2 takes a new record here that passes the criteria in this
+directory, unchanged.
+
 Consequences for the release gate:
 
 - **Criterion 10 (phase 2 earns its cost): fails.** The loop is not used by the model

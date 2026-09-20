@@ -288,7 +288,7 @@ func validateProvider(cfg *config.Config) error {
 		return fmt.Errorf("provider %q is not available in this build", cfg.Provider)
 	}
 	if cfg.Model == "" && cfg.Provider != "mock" {
-		return fmt.Errorf("model: not set; --model or model: is required for an agent run with %s (facts mode needs none)", cfg.Provider)
+		return fmt.Errorf("model: not set; --model or model: is required to build %s (no host assessment in this build needs one)", cfg.Provider)
 	}
 	return nil
 }

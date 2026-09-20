@@ -38,7 +38,7 @@ release:
 
     **Draft: publication requires the completed [release checklist](https://github.com/b87/scheck/blob/{{ .Commit }}/docs/RELEASING.md).**
 
-    Commit: `{{ .Commit }}`. Report schema: **1.4** (separate from the product version).
+    Commit: `{{ .Commit }}`. Report schema: **1.6** (separate from the product version).
     Linux and macOS (`darwin` assets), each on amd64 and arm64. MIT licensed.
     macOS binaries are unsigned and unnotarized.
 
@@ -48,14 +48,16 @@ release:
     then extract it with `tar -xzf ARCHIVE` and run `./scheck --version`.
 
     Limitations: one host per run; no remediation, Windows support, additional
-    production providers, guaranteed local-only AI, or context chunking.
-    Offline rules are available with `--stop-after facts`. Coverage and evidence
-    matter: exit 0 is not a security verdict.
+    production providers, guaranteed local-only AI, or context chunking. **No model
+    assesses a host:** the model-assessed pass was measured against criteria frozen
+    before it was built, did not earn its cost, and is not part of this build, so a run
+    needs no API key and sends nothing a check observed off the machine. Coverage and
+    evidence matter: exit 0 is not a security verdict.
 
     Before publication, replace this paragraph with links to the release workflow's
     four native smoke results, M4.5 regression evidence, M4.6 acceptance sign-off
-    for this commit, and M2.7 live quality/adversarial/cost records. Record the
-    evaluated model and prompt version and any remaining release limitations.
+    for this commit, and the M2.7 evaluation record with the decision it produced.
+    Record the evaluated model and prompt version and any remaining release limitations.
 
 changelog:
   sort: asc

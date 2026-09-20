@@ -3,6 +3,12 @@
 // Package live holds the opt-in tests that spend real money (docs/SPEC.md
 // §11): SCHECK_LIVE=1 and OPENAI_API_KEY (or a --base-url endpoint) are
 // required, and `make live` runs them. They never run in `make check`.
+//
+// `scheck local` and `scheck ssh` assess with the posture rules alone and
+// cost nothing in this build (docs/SPEC.md §2.1), so the one path left that
+// spends money is the evaluation harness. This test drives it against one
+// labeled case: it checks the adapter end to end against the real endpoint
+// and records the cost of one agent run.
 package live
 
 import (
@@ -11,8 +17,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -31,15 +35,13 @@ func need(t *testing.T) (model string) {
 	return model
 }
 
-// One `scheck local` run against this machine with the reference adapter:
-// a full agentic report, cost under $0.50 at default effort (acceptance
-// criterion 7), no denied model-initiated check in the audit log, and cache
-// hits reported by the endpoint on the second turn onward.
-func TestLiveLocalRun(t *testing.T) {
+// One live run of the harness on the clean Linux case: the agent arm
+// completes, costs well under the $0.50 of acceptance criterion 7, attempts
+// no check the policy denies, and every finding it reports carries evidence.
+func TestLiveEvalRun(t *testing.T) {
 	model := need(t)
-	dir := t.TempDir()
-	audit := filepath.Join(dir, "audit.jsonl")
-	args := []string{"run", "../../cmd/scheck", "local", "--model", model, "--format", "json", "--no-persist", "--audit-log", audit}
+	args := []string{"run", "../../cmd/scheck", "eval", "--model", model, "--suite", "../../testdata/eval",
+		"--cases", "linux-clean", "--no-pairs", "--repeat", "1", "--format", "json"}
 	if u := os.Getenv("SCHECK_LIVE_BASE_URL"); u != "" {
 		args = append(args, "--base-url", u)
 	}
@@ -49,63 +51,68 @@ func TestLiveLocalRun(t *testing.T) {
 	cmd := exec.Command("go", args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	code := 0
-	if ee, ok := err.(*exec.ExitError); ok {
-		code = ee.ExitCode()
-	} else if err != nil {
+	if err := cmd.Run(); err != nil {
 		t.Fatalf("%v\n%s", err, errb.String())
 	}
-	if code == 3 {
-		t.Fatalf("usage error:\n%s", errb.String())
-	}
-	var env struct {
-		Run struct {
-			Status   string `json:"status"`
-			Mode     string `json:"mode"`
-			Provider string `json:"provider"`
+	var res struct {
+		Live          bool   `json:"live"`
+		Provider      string `json:"provider"`
+		Model         string `json:"model"`
+		PromptVersion string `json:"prompt_version"`
+		Runs          []struct {
+			Arm      string   `json:"arm"`
+			Status   string   `json:"status"`
+			Ended    string   `json:"ended"`
+			Checks   int      `json:"checks"`
+			Denied   int      `json:"denied_tool_calls"`
+			RuledOut []string `json:"ruled_out"`
 			Usage    struct {
 				Input     int      `json:"input"`
 				CacheRead int      `json:"cache_read"`
 				CostUSD   *float64 `json:"cost_usd"`
 			} `json:"usage"`
-			Agent struct {
-				Iterations int    `json:"iterations"`
-				Ended      string `json:"ended"`
-			} `json:"agent"`
-		} `json:"run"`
-		Findings []struct {
-			Source   string                   `json:"source"`
-			Evidence []struct{ Check string } `json:"evidence"`
-		} `json:"findings"`
+			Findings []struct {
+				Source   string `json:"source"`
+				Evidence []struct {
+					Observation string `json:"observation"`
+				} `json:"evidence"`
+			} `json:"findings"`
+		} `json:"runs"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
 		t.Fatalf("%v\n%s\n%s", err, out.String(), errb.String())
 	}
-	cost := "unpriced"
-	if env.Run.Usage.CostUSD != nil {
-		cost = fmt.Sprintf("$%.4f", *env.Run.Usage.CostUSD)
+	if !res.Live || res.Provider != "openai-compatible" || res.Model != model {
+		t.Errorf("record header: live=%v provider=%s model=%s", res.Live, res.Provider, res.Model)
 	}
-	t.Logf("status %s mode %s iterations %d ended %q input %d cache_read %d cost %s (criterion 7 record)",
-		env.Run.Status, env.Run.Mode, env.Run.Agent.Iterations, env.Run.Agent.Ended, env.Run.Usage.Input, env.Run.Usage.CacheRead, cost)
-	if env.Run.Provider != "openai-compatible" || env.Run.Mode != "agent" {
-		t.Errorf("run block: %+v", env.Run)
-	}
-	if env.Run.Usage.CostUSD != nil && *env.Run.Usage.CostUSD >= 0.50 {
-		t.Errorf("cost %.4f USD is not under the $0.50 budget", *env.Run.Usage.CostUSD)
-	}
-	if env.Run.Agent.Iterations > 1 && env.Run.Usage.CacheRead == 0 {
-		t.Logf("note: no cached tokens reported over %d turns", env.Run.Agent.Iterations)
-	}
-	for _, f := range env.Findings {
-		if len(f.Evidence) == 0 {
-			t.Errorf("finding without evidence: %+v", f)
+	var agent int
+	for _, r := range res.Runs {
+		if r.Arm != "agent" {
+			continue
+		}
+		agent++
+		cost := "unpriced"
+		if r.Usage.CostUSD != nil {
+			cost = fmt.Sprintf("$%.4f", *r.Usage.CostUSD)
+		}
+		t.Logf("agent run: status %s ended %q checks %d ruled_out %v input %d cache_read %d cost %s (criterion 7 record, prompt %s)",
+			r.Status, r.Ended, r.Checks, r.RuledOut, r.Usage.Input, r.Usage.CacheRead, cost, res.PromptVersion)
+		if r.Status != "complete" {
+			t.Errorf("agent run did not finish: %s", r.Ended)
+		}
+		if r.Usage.CostUSD != nil && *r.Usage.CostUSD >= 0.50 {
+			t.Errorf("cost %.4f USD is not under the $0.50 budget", *r.Usage.CostUSD)
+		}
+		if r.Denied > 0 {
+			t.Errorf("%d model-initiated check(s) were denied by policy", r.Denied)
+		}
+		for _, f := range r.Findings {
+			if f.Source == "model" && len(f.Evidence) == 0 {
+				t.Errorf("model finding without evidence: %+v", f)
+			}
 		}
 	}
-	raw, _ := os.ReadFile(audit)
-	for line := range strings.SplitSeq(string(raw), "\n") {
-		if strings.Contains(line, `"tool":`) && strings.Contains(line, `"decision":"denied:`) {
-			t.Errorf("a model-initiated check was denied: %s", line)
-		}
+	if agent == 0 {
+		t.Fatalf("no agent run in the record:\n%s", out.String())
 	}
 }

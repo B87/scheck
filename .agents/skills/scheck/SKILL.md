@@ -27,26 +27,19 @@ software on the target to make checks pass. Because the project is unreleased, u
 
 ## Current capabilities
 
-This build collects read-only evidence and assesses it two ways:
+This build collects read-only evidence and assesses it one way: **posture rules**, a
+compiled-in table where one unambiguous fact becomes one finding, graded through
+operator context. Every run declares `run.assessment: "rules"` and `run.mode: "facts"`.
 
-- **Posture rules** (always, no model): one unambiguous fact becomes one finding.
-  `--stop-after facts` runs only this and needs no API key; JSON reports declare
-  `run.assessment: "rules"` and `run.mode: "facts"`.
-- **The agentic pass** (bare `scheck local` / `scheck ssh`): a model reads the fact
-  sheet and the rule findings, may run further catalog checks through the same policy,
-  and reports findings that scheck grades. JSON reports declare `run.assessment:
-  "agent"`, `run.mode: "agent"` or `"single-pass"`, the provider block and `run.agent`
-  (turns, model-initiated checks, how the pass ended, the model's closing text, and
-  `ruled_out`: ids the model checked and dismissed, which are not findings). The
-  model never assigns severity and never runs anything outside the catalog.
-
-The default provider is `openai-compatible` (model `gpt-5.6-luna` on OpenAI's
-endpoint, `OPENAI_API_KEY` in the environment or `--base-url` plus `--model` for
-another endpoint; an unknown model needs `--max-context`). `mock` replays a
-transcript for plumbing tests. A bare `scheck local` without a usable provider
-exits 3 before touching the target; `scheck providers` shows what is configured.
-Model quality has not been evaluated yet (M2.7): treat model findings as
-candidates with evidence, not as verified conclusions.
+**No model assesses a host.** A model-assessed pass exists in the codebase; it was
+measured against criteria frozen before it was built, did not earn its cost, and was
+taken out of the CLI. A run therefore needs no API key, spends nothing, and sends
+nothing a check observed off the machine. `--provider`, `--model`, `--base-url`,
+`--effort`, `--transcript` and `--max-context` exit 3 on `local` and `ssh`; do not
+offer them as a way to get a deeper assessment, and do not report an absent
+`run.agent` block as a failure. `scheck providers` still lists the adapters. A report
+with a provider block and `run.agent` can only come from an older build or from the
+project's own evaluation harness; read it as such.
 
 A rule reads one fact and fires only on evidence it recognises, so:
 
@@ -56,8 +49,10 @@ A rule reads one fact and fires only on evidence it recognises, so:
   `matched`, `not_matched`, `not_applicable` or `not_assessed`. `not_matched` means the
   evidence disproved that one predicate; `not_assessed` means there was no usable
   evidence, which is never a pass.
-- A `source: model` finding carries evidence validated against check output; its
-  `confidence` is the model's, its `severity` is code's.
+- Every finding this build emits is `source: rule`. A `source: model` finding, with its
+  evidence validated against check output and its `confidence` the model's, comes only
+  from the project's evaluation harness or an older build; its `severity` is code's
+  either way.
 
 Operator context (`--context FILE|DIR|note:TEXT|target[:PATH]`, a `context:` block in
 `scheck.yaml`, files under `.scheck/context/`) grades findings deterministically:
@@ -66,21 +61,21 @@ finding with every change attributed in `adjustments`; `--ignore-context` reprod
 base severities. `scheck config show` prints the effective configuration with
 provenance, `scheck config validate` exits 0 or 3, `scheck explain FINDING-ID
 --exposure internet` prints a severity chain, and `--stop-after context` prints the
-merged block the model would read.
+merged block that grades the findings.
 
 ## Run and discover
 
 Substitute `bin/scheck` for `scheck` below when using a checkout build. No model, API
-key or interactive input is needed for facts mode.
-Bare `scheck local` runs the agentic pass and needs a provider; use `--stop-after
-facts` for the model-free collection path. `--local-only` and `--only` are future flags
-and exit 3.
+key or interactive input is needed for any of it. A bare `scheck local` collects the
+facts and assesses them; `--stop-after facts` means the same thing and is accepted for
+scripts that already use it. `--stop-after plan` and `--stop-after context` stop
+earlier. `--local-only` and `--only` are future flags and exit 3.
 
 ```sh
-scheck local --stop-after facts --format json --no-persist
-scheck ssh user@host --stop-after facts --format json --no-persist
-scheck local --context hosts/gateway.yaml --stop-after facts --format json --no-persist
-scheck local --provider mock --transcript testdata/transcripts/correlated-finding-linux.json --no-persist
+scheck local --format json --no-persist
+scheck ssh user@host --format json --no-persist
+scheck local --context hosts/gateway.yaml --format json --no-persist
+scheck local --format json --include-evidence --no-persist
 scheck catalog --platform linux --format json
 scheck explain sshd.config --format json
 scheck explain sshd.password_auth_enabled --exposure internet --format json
@@ -98,7 +93,7 @@ An early usage, configuration or connection error may produce no report.
 |---|---|
 | 0 | Completed with no open finding at or above the profile threshold; some checks may be unavailable or denied, and unassessed rules are not passes |
 | 1 | One or more open findings at or above the threshold (`medium` under `baseline`, `low` under `hardened`); the report is still written to stdout |
-| 2 | Run incomplete: phase 1 was cut short, or the agentic pass hit a budget, a context limit or a provider failure (`run.agent.ended` and `run.warnings` say which); facts and findings collected so far are still in the report |
+| 2 | Run incomplete: collection was cut short by a budget, a timeout or a transport failure (`run.warnings` says which); facts and findings collected so far are still in the report |
 | 3 | Usage, policy, configuration or connection setup error |
 
 Use `--out report.json` to write the result to a file. Use `--no-persist` when you do
@@ -163,8 +158,8 @@ A finding carries `severity` (code-assigned, never model-assigned) beside
 `severity_base` and the attributed `adjustments` that separate them, `status` (`open`
 or `accepted` with `accepted_reason`; accepted findings do not set the exit code),
 `source: rule` or `source: model`, the `evidence` excerpts with their check ids, and
-`impact` and `remediation` text. A `custom: true` finding was proposed by the model
-outside the catalog and is capped at medium.
+`impact` and `remediation` text. A `custom: true` finding was proposed by a model
+outside the catalog and is capped at medium; this build emits none.
 Remediation commands are advice for the human; scheck never runs them, and neither
 should you without the user asking.
 
@@ -177,8 +172,8 @@ Identify the target and collection status, then lead with the findings, each wit
 check id and evidence. Separate observed facts, rule findings, your own interpretation
 and unassessed areas. Name the `not_assessed` rules and what would fix the gap; never
 turn an empty findings array, or a `not_matched` assessment, into a clean bill of
-health. Say whether the agentic pass ran (`run.mode`) and, if it did not finish, why
-(`run.agent.ended`). For incomplete runs, retain useful evidence
+health. Do not imply a model reviewed the host: this build's findings are the posture rules'
+and yours. For incomplete runs, retain useful evidence
 and name the gaps and appropriate next step. Treat remediation as advice for the human,
 not authorization to change the host.
 

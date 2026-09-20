@@ -4,15 +4,16 @@ A read-only security posture checker for one macOS or Linux host, locally or ove
 SSH. Every target command comes from a compiled catalog and runs through the same
 policy, redaction and audit path. scheck never applies hardening changes.
 
-**Current build:** collects facts, assesses them with compiled-in posture rules, grades
-findings through operator context, and — without `--stop-after` — hands the facts to a
-model that may run further catalog checks through the same policy and report findings
-that scheck grades. A rule reads one fact, so exit 0 and an empty findings list mean no
-rule fired — not that the host is secure; read the `assessments` coverage and the
-skipped checks. **The model's quality has not been evaluated yet** (see
-[docs/eval/phase2-results.md](docs/eval/phase2-results.md)); treat model findings as
-evidence-backed candidates. This project is unreleased; interfaces may change before
-the first GitHub release.
+**Current build:** collects facts, assesses them with compiled-in posture rules and
+grades findings through operator context. A rule reads one fact, so exit 0 and an empty
+findings list mean no rule fired — not that the host is secure; read the `assessments`
+coverage and the skipped checks. **No model assesses a host:** a model-assessed pass
+exists in the codebase and was measured against criteria frozen before it was built,
+did not earn its cost, and is therefore not part of this build — the evaluation and the
+reasoning are recorded in
+[docs/eval/phase2-results.md](docs/eval/phase2-results.md). A run needs no API key and
+sends nothing a check observed off the machine. This project is unreleased; interfaces
+may change before the first GitHub release.
 
 ## Installation
 
@@ -41,11 +42,10 @@ With the Go toolchain required by [go.mod](go.mod):
 
 ```sh
 make build
-bin/scheck local --stop-after facts --no-persist            # posture rules only, no model
-bin/scheck ssh user@host --stop-after facts --no-persist
-export OPENAI_API_KEY=...                                    # or --base-url for another endpoint
-bin/scheck local --context hosts/gateway.yaml                # rules + the agentic pass (gpt-5.6-luna)
-bin/scheck providers                                         # what is configured
+bin/scheck local --no-persist                                # facts + posture rules; no model, no key
+bin/scheck ssh user@host --no-persist
+bin/scheck local --context hosts/gateway.yaml                # grade the findings through context
+bin/scheck local --stop-after plan                           # what it would run, without running it
 bin/scheck config show                                       # effective settings with provenance
 ```
 
@@ -62,8 +62,8 @@ sudo is enabled with `--sudo`. scheck never asks for a password.
 ## AI agents and automation
 
 ```sh
-bin/scheck local --stop-after facts --format json --no-persist
-bin/scheck local --stop-after facts --format json --include-evidence --no-persist
+bin/scheck local --format json --no-persist
+bin/scheck local --format json --include-evidence --no-persist
 bin/scheck catalog --platform linux --format json
 bin/scheck explain sshd.config --format json
 bin/scheck local --stop-after plan --format json
@@ -87,9 +87,9 @@ and partial results. For interactive inspection,
 ## Project documentation
 
 - [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2 is built, its live evaluation is pending, M4 is next.
+- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2 is built and evaluated, M4 is next.
 - [Configuration walkthrough](docs/CONFIGURATION.md): preferences, restrictions and context.
-- [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate and its record.
+- [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.
 - [Contributor instructions](AGENTS.md): development workflow and required checks.
 - [Release runbook](docs/RELEASING.md): GoReleaser, validation evidence and manual publication.

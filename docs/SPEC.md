@@ -148,6 +148,25 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   shape a System One model can answer and the shape it cannot replace. No key is held;
   the live slice stays deferred.
 
+**Changes from the phase 2 decision (2026-09-20, M2.8):**
+
+- **No model assesses a host in 0.0.1.** The recorded evaluation failed the frozen
+  criteria on the one condition that matters and the criteria call that a deletion, so
+  `scheck local` and `scheck ssh` now collect facts and assess them with the posture
+  rules, full stop (§2.1). They build no provider and need no credential; the six model
+  flags exit 3 on those commands; a default run and `--stop-after facts` are the same
+  run. `--include-evidence` follows, and is accepted on a default run as well as on
+  `--stop-after facts`. `allow_egress: false` is satisfied by construction on `local`
+  and `ssh` and is still rejected by `scheck eval`, which is the only command that
+  contacts a provider; `--local-only` still exits 3 everywhere, since its full contract
+  (forbidding hosted assessment anywhere, including the harness) is post-v1.
+- The provider pre-flight (registered and available adapter, a model for a non-mock
+  provider, a known context limit) moved from the run to `scheck eval` with its
+  behaviour unchanged, since the harness is where a provider is built now. The agent
+  loop, its tools, the envelope's phase 2 fields and the injection corpus stay and stay
+  tested offline; `make live` drives the harness rather than `scheck local` (§11).
+- Acceptance criteria 7, 10 and 12 are resolved in §12 rather than left open.
+
 **Changes from the three-repeat live evaluation (2026-09-20):**
 
 - `report_finding` carries a `verdict` (§5.7): `open` is what it always did;
@@ -393,6 +412,7 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
         │
         ├── agent.Session                the tool-calling loop (owned by scheck)
         │     └── tools: run_check, read_file, report_finding
+        │     (0.0.1: reachable from the evaluation harness only — §2.1)
         │
         ├── finding                      id catalog, severity assignment, context adjustment, dedupe (§7)
         │
@@ -408,7 +428,7 @@ reproducible, cacheable, and diffable between runs.
 **Phase 2 — agentic reasoning.** The fact sheet is handed to the model in one cached
 prompt. The model reasons over it, requests *additional* catalog checks via
 `run_check` / `read_file` to confirm or rule out hypotheses, and emits findings via
-`report_finding`.
+`report_finding`. **In 0.0.1 no host assessment runs it** — see the outcome below.
 
 Both phases execute through the same catalog, the same policy, and the same audit log.
 Phase 1 is simply "the baseline subset, run unconditionally". There is no second command
@@ -429,6 +449,35 @@ Rationale: without phase 1 the model burns tokens rediscovering the same baselin
 every run and the results are nondeterministic. Without phase 2 this is a static
 checklist tool — which is a fine thing to be, so phase 2 must prove it adds signal
 (acceptance criterion 10). The split keeps cost and variance in phase 2 only.
+
+**Outcome for 0.0.1: phase 2 did not prove it (2026-09-20).** Two three-repeat live
+evaluations against the frozen criteria of `docs/eval/phase2-criteria.md` are recorded
+in `docs/eval/phase2-results.md`. The deciding one passes every criterion it is judged
+on except the first, which is the one that matters: the model made no `run_check` or
+`read_file` call in 45 of 45 agent runs, so the loop's follow-up investigation — the
+only thing it can add over a single pass — did not happen. Five prompt contracts, a
+more expensive model and a dedicated `ruled_out` verdict for the behaviour that
+produced its false positives did not change that. Single-pass, judged next against the
+rules arm as the criteria require, reported a forbidden id in 5 of 45 runs against the
+rules arm's zero and found one of three correlated cases in the majority of runs, so it
+did not earn its place either. The criteria say a failure here is a deletion, not a
+redesign.
+
+**So `scheck local` and `scheck ssh` assess with the posture rules alone.** They build
+no provider, need no credential, and send nothing a check observed off the machine; the
+flags that select a model (`--provider`, `--model`, `--base-url`, `--effort`,
+`--transcript`, `--max-context`) exit 3 on those commands rather than being accepted
+and ignored, and the same keys in a configuration file are simply unused. Operator
+context, the grader and the finding store with its guards are unaffected: they grade
+what the rules produce and are part of every run. What is dormant rather than deleted
+is the model half — the `llm` contract and its adapters, `agent.Session` and its three
+tools, the injection corpus, and `internal/eval` behind the hidden `scheck eval` —
+because it costs nothing to carry and it is what a later decision would have to be
+measured with again. `scheck eval` is the one caller of phase 2 in this build, it runs
+against fixtures only, and it owns the provider pre-flight that a run used to perform. The
+report envelope keeps its phase 2 fields (§7.4) because the harness still produces
+them; no 0.0.1 CLI path fills them. Reviving phase 2 means a new record in
+`docs/eval/phase2-results.md` that passes the frozen criteria, not a spec edit.
 
 ---
 
@@ -1169,7 +1218,8 @@ owns the host — and on-target context comes from the machine being audited.
 - Every severity adjustment is attributed: an adjusted finding carries
   `severity_base`, `severity`, and `adjustments: [{rule, source, delta}]`, and the report
   header lists `context_sources` with a content hash per source.
-- `--ignore-context` skips the adjuster and omits the context block from the prompt.
+- `--ignore-context` reads no context at all: no adjuster, and no context block in a
+  prompt when there is one to build.
   Because adjustment is code, "unadjusted" is a precise claim, not a hope.
 - The same holds for check output: the system prompt declares that instruction-shaped
   text in a file or a command's output is evidence about the host, and the tools
@@ -1549,9 +1599,11 @@ contract, pinned by golden tests per fixture (§11):
   descriptions and evidence). Styling is applied to whole lines after wrapping, so an
   escape sequence never counts against a line's width. The caller decides — the report
   package inspects no file descriptor and no environment variable.
-- **Honest footer.** In `facts` mode: "assessment: posture rules only", with how many
-  of the selected rules had the evidence to decide, and "the agentic pass is not
-  available in this build" until M2. Never "findings: none" when nothing looked, and
+- **Honest footer.** With no phase 2 in the report: "assessment: posture rules only",
+  with how many of the selected rules had the evidence to decide, and "The agentic pass
+  did not run." The renderer reads the envelope, so it says that the pass did not run
+  and never why; in 0.0.1 the reason is always that this build has no such pass (§2.1).
+  Never "findings: none" when nothing looked, and
   never a claim that what no rule covers is fine. The header's result sentence leads
   with the findings ("2 findings (1 medium, 1 low), 4 rules not assessed, 28 checks: 22
   ran, 6 skipped") and says "0 findings from posture rules" rather than "no findings".
@@ -1570,7 +1622,7 @@ contract, pinned by golden tests per fixture (§11):
 ## 8. CLI
 
 ```
-scheck local                            # audit this machine
+scheck local                            # audit this machine: facts + posture rules, no model (§2.1)
 scheck ssh user@host [--port] [--identity]
 scheck catalog [--profile P]            # list every check the model could run under profile P
 scheck sudoers [--platform P]           # print a least-privilege NOPASSWD rule for elevated checks (§8.1)
@@ -1595,9 +1647,15 @@ scheck --format text|json|sarif  --out FILE
        --model NAME  --base-url URL     # model defaults to gpt-5.6-luna on OpenAI's endpoint
        --local-only                     # unavailable until post-v1 M3.3; exit 3
        --effort low|medium|high|max
+       #   the six model flags above (--provider, --model, --base-url, --effort,
+       #   --transcript, --max-context) configure `scheck providers` and the
+       #   evaluation harness. On local and ssh they exit 3: no model assesses a
+       #   host in this build (§2.1)
        --context SOURCE                 # repeatable: FILE | DIR | note:TEXT | target[:PATH]  (§6.1)
-       --ignore-context                 # no context in the prompt, no severity adjustment
+       --ignore-context                 # no severity adjustment
        --stop-after context|plan|facts  # print merged context / phase-1 plan / fact sheet, then exit
+       #   facts is what a run does anyway in this build; the flag stays because
+       #   context and plan stop earlier and because a later build has a stage after it
        --audit-log PATH
        --state-dir PATH / --no-persist  # run artifacts (§7.4)
        --timeout 5m
@@ -1624,14 +1682,15 @@ before printing the plan. For connection-free discovery, use
 `scheck catalog --platform linux|macos --format json`; this lists the platform catalog,
 not the configured target's exact plan. Plans cannot show phase 2 commands, which the
 model chooses at run time.
-`--stop-after facts` runs phase 1 only and needs no API key. Without `--stop-after`,
-the provider is selected and built before any target is contacted — a missing model,
-an unknown context limit, a deferred adapter, `--local-only` or `allow_egress: false`
-exit 3 with nothing executed — then phase 1 runs, then the agentic pass, then the
-report. `-v` shows each tool call as the model makes it; `-vv` streams the model's
-text to stderr. The text report closes with what assessed the host: "posture rules and
-the agent pass (provider, model; turns, model-initiated checks, tokens)" and, when the
-pass did not finish, why.
+A run needs no API key: it loads the operator context, runs phase 1 and assesses the
+facts with the posture rules (§2.1). `--stop-after facts` is the same run named
+explicitly; `context` and `plan` stop earlier. A model flag on `local` or `ssh` exits 3
+with nothing executed. The text report closes with what assessed the host —
+"assessment: posture rules only", how many rules had the evidence to decide, and that
+the agentic pass did not run. The phase 2 wording it can also print ("posture rules and
+the agent pass (provider, model; turns, model-initiated checks, tokens)", and why the
+pass did not finish) belongs to the evaluation harness's envelopes, and `-v`/`-vv`
+still show tool calls and streamed model text there.
 
 Exit codes: `0` no open finding at or above the profile threshold · `1` findings present ·
 `2` run incomplete (check/agent/transport failure, budget exhausted) · `3` usage or policy
@@ -1828,9 +1887,12 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
   outputs, and reference resolution in default JSON and persisted reports. A fixture
   mock reads two files then cites both, with a cross-observation excerpt rejected.
 - **Agent tests.** Fixture target + the `mock` provider replaying recorded transcripts,
-  so the loop is tested deterministically and offline. One opt-in live test
-  (`SCHECK_LIVE=1`) per platform asserting cache hits and that no denied check was
-  attempted.
+  so the loop is tested deterministically and offline, including the report envelope it
+  produces (`internal/agent`, validated against `docs/report-schema.json`). Since no
+  host assessment builds a provider (§2.1), the one opt-in live test (`SCHECK_LIVE=1`,
+  `make live`) drives the evaluation harness on one labeled case instead of `scheck
+  local`: the agent arm must complete, cost under the criterion 7 budget, attempt no
+  check the policy denies, and cite evidence for every finding.
 - **Provider conformance suite.** One table every provider must pass, unconditionally:
   tool-call round trip, error results, multiple calls in one turn, each `StopReason`
   mapped correctly, `MaxTokens` truncation, usage normalization, `Limits` reporting.
@@ -1886,7 +1948,11 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
    `PasswordAuthentication yes` (Linux) yields that finding with exit `1` and no model.
 5. Every finding carries evidence traceable to a check id.
 6. Seeded secrets never appear in any output artifact, and every redaction is marked.
-7. One `scheck local` run on a clean host costs under $0.50 at default effort.
+7. One `scheck local` run on a clean host costs under $0.50 at default effort. **Met
+   trivially in 0.0.1**: no model assesses a host, so a run costs nothing and needs no
+   credential (§2.1). The measured number for one agent run of the evaluation harness is
+   recorded in `docs/eval/phase2-results.md` ($0.0071 on 2026-09-20) and `make live`
+   keeps it reproducible, in case a later build reopens the question.
 8. The `openai-compatible` adapter and `mock` pass the provider conformance suite.
    Full-request context guards run before every model call; initial overflow, history
    growth and provider overflow rejection preserve facts/findings, report an incomplete
@@ -1907,12 +1973,20 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
     repeatable useful gains over single-pass analysis within the run budget; the
     simpler mode need not fail any particular example. Mock transcripts prove only
     plumbing. If the gains do not justify the loop, retain the rules and use
-    single-pass analysis instead.
+    single-pass analysis instead. **Decided for 0.0.1 (2026-09-20): the gains did not
+    exist and single-pass did not earn its place either, so the release assesses with
+    the posture rules alone** (§2.1; the records and the reasoning are in
+    `docs/eval/phase2-results.md`). The criterion is met by having run the comparison
+    and acted on it, not by shipping the loop.
 11. The SSH canary aborts the run against a fish or restricted login shell before any
     other command is sent.
 12. Repeated real-model adversarial evaluations pass the frozen M2.1 criteria on
     hostile operator context and target-derived evidence (§11). Record model/prompt
     versions, outcomes and failures; mock-only results cannot satisfy this gate.
+    **Recorded as passing on 2026-09-20** (§4.1, §4.2 and §4.4 of the criteria, with no
+    drift in the benign controls) on that corpus and that model. It bounds nothing for
+    0.0.1's release path, which sends no evidence to a model at all (§2.1); it is the
+    measurement a later build starts from.
 
 ---
 

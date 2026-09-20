@@ -26,15 +26,15 @@ func newSSHCmd(opts *globalOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "ssh [user@]host[:port] | ssh NAME",
 		Short:   "Audit a remote host over SSH (NAME resolves a `targets:` entry from config)",
-		Example: "  scheck ssh user@host --stop-after facts --format json --no-persist\n  scheck ssh user@host --stop-after facts --format json --sudo",
-		Long: "Collect read-only facts over SSH, assess them with the compiled-in posture rules and, " +
-			"without --stop-after, hand them to a model through the same closed tool surface. SSH host keys " +
+		Example: "  scheck ssh user@host --format json --no-persist\n  scheck ssh user@host --format json --sudo",
+		Long: "Collect read-only facts over SSH and assess them with the compiled-in posture rules. " +
+			"No model is involved in this build (docs/SPEC.md §2.1). SSH host keys " +
 			"are verified; elevation uses sudo -n and never prompts. JSON goes to stdout, diagnostics " +
 			"to stderr. Exit 0 no finding at or above the profile threshold, 1 findings, 2 incomplete, " +
 			"3 usage/policy error.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := opts.notInPhase1(cmd); err != nil {
+			if err := opts.rejectUnimplemented(cmd); err != nil {
 				return err
 			}
 			var st *ssh.Target

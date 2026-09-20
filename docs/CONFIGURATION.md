@@ -4,13 +4,19 @@ scheck reads three kinds of input, and it helps to keep them apart:
 
 | Kind | What it is | Where it lives | Can it widen what scheck does? |
 |---|---|---|---|
-| **Preferences** | which model, which profile, where runs are stored | user config, project `scheck.yaml`, flags | no |
+| **Preferences** | which profile, where runs are stored, which model the evaluation harness uses | user config, project `scheck.yaml`, flags | no |
 | **Restrictions** | checks to skip, paths to deny, extra redactions | the same files; lists **accumulate** across them | no — every entry narrows |
 | **Context** | what the host is for, what should be listening, which risks are accepted | `context:` block, `./.scheck/context/`, `--context` | no — it changes how findings are graded, never what runs |
 
 Nothing in any file can add a command, widen a path or reveal a redacted value
 (`SPEC.md` §9). Credentials are never read from a file: they come from the environment
 (`OPENAI_API_KEY`) at run time.
+
+**No model assesses a host in this build** (`SPEC.md` §2.1): `scheck local` and `scheck
+ssh` collect facts and assess them with the posture rules, and the model settings below
+configure `scheck providers` and the project's evaluation harness only. A model flag on
+`local` or `ssh` exits 3; the same keys in a file are unused and cannot fail a run, so
+a configuration written for an earlier build keeps working.
 
 `scheck config show` prints the effective result with the source of every value, and
 `scheck config validate` applies the same rules a run applies. Both are local: neither
@@ -24,7 +30,9 @@ The user config file is read first:
 - macOS: `~/Library/Application Support/scheck/config.yaml`
 
 OpenAI's endpoint defaults to `gpt-5.6-luna`. Set `model:` (or `--model`) to pick
-another family, or when `--base-url` is not OpenAI's.
+another family, or when `--base-url` is not OpenAI's. These settle what `scheck
+providers` reports and what the evaluation harness would use; a host assessment reads
+neither.
 
 ```yaml
 # ~/.config/scheck/config.yaml
@@ -74,8 +82,9 @@ disable_checks (accumulated; every source that listed an entry is named)
 ## 3. Per-host context files
 
 Context describes the host so findings are specific to its role. The structured block
-(`SPEC.md` §6.2) is consumed by code, deterministically; everything else is prose the
-model reads verbatim.
+(`SPEC.md` §6.2) is consumed by code, deterministically; everything else is prose,
+which in this build is carried in the run's context sources and shown by `--stop-after
+context` rather than read by anything.
 
 ```yaml
 # hosts/gateway.yaml
@@ -163,12 +172,18 @@ $ echo $?
 
 `config show` and `config validate` label these honestly rather than pretending:
 
-- `--local-only` / `allow_egress: false` fail explicitly before any inference (post-v1).
+- The model-assessed pass itself: it did not earn its cost against criteria frozen
+  before it was built (`SPEC.md` §2.1, `docs/eval/phase2-results.md`). The six model
+  flags exit 3 on `local` and `ssh`.
+- `--local-only` fails explicitly (post-v1). `allow_egress: false` is satisfied by
+  construction on `local` and `ssh`, which contact nothing, and is rejected by the
+  evaluation harness, which does.
 - `anthropic` and `ollama` are registered names that exit 3 (post-v1).
 - Adapter-specific validation of `model` and `max_context` (whether the endpoint knows
-  the model, whether the window is declared) happens when an adapter is built for a run;
-  `config validate` notes that `--model` is still required for an agent run against a
-  non-OpenAI `--base-url`. OpenAI's endpoint defaults to `gpt-5.6-luna`.
+  the model, whether the window is declared) happens when an adapter is built, which
+  now only the evaluation harness does; `config validate` notes that `--model` is still
+  required for a non-OpenAI `--base-url`. OpenAI's endpoint defaults to
+  `gpt-5.6-luna`.
 
 ## 7. Reading `config show --format json`
 

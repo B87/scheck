@@ -11,12 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/b87/scheck/internal/agent"
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	_ "github.com/b87/scheck/internal/check/all" // the complete catalog
 	"github.com/b87/scheck/internal/config"
-	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/llm/openai"
 	"github.com/b87/scheck/internal/operator"
@@ -45,13 +43,6 @@ type session struct {
 	// context is the merged operator context once loadContext ran; nil
 	// under --ignore-context or before loading.
 	context *operator.Merged
-	// provider is built before any target is contacted when the run will
-	// reach phase 2; nil under --stop-after.
-	provider llm.Provider
-	effort   llm.Effort
-	// phase2 and result are set once the agentic pass ran.
-	phase2 *report.Phase2
-	result *finding.Result
 }
 
 // defaultProvider is the v1 production adapter (docs/SPEC.md §5.2).
@@ -140,7 +131,9 @@ func (o *globalOpts) overrides(cmd *cobra.Command) config.Overrides {
 }
 
 // providerConfig is what an adapter is built from: the operator's selection,
-// never a credential (docs/SPEC.md §9).
+// never a credential (docs/SPEC.md §9). Its callers are `scheck providers`
+// and the evaluation harness; no host assessment builds a provider in this
+// build (docs/SPEC.md §2.1).
 func (o *globalOpts) providerConfig(cfg *config.Config) llm.Config {
 	effort, _ := llm.ParseEffort(cfg.Effort)
 	return llm.Config{Model: cfg.Model, BaseURL: cfg.BaseURL, MaxContext: cfg.MaxContext,
@@ -178,14 +171,6 @@ func (o *globalOpts) newSession(cmd *cobra.Command, mk func(policy.Budgets) (tar
 			return nil, usageErr("%v", err)
 		}
 	}
-	// Phase 2 needs a provider; build it before any target is contacted so a
-	// missing model, an unknown context limit or an unavailable adapter is a
-	// usage error with nothing executed (docs/SPEC.md §5.2, §5.3).
-	if o.StopAfter == "" {
-		if err := s.buildProvider(); err != nil {
-			return nil, err
-		}
-	}
 	t, err := mk(s.budgets)
 	if err != nil {
 		return nil, err
@@ -200,92 +185,6 @@ func (o *globalOpts) newSession(cmd *cobra.Command, mk func(policy.Budgets) (tar
 func (s *session) close() {
 	if err := s.audit.Close(); err != nil {
 		s.opts.logf(0, "audit log: %v", err)
-	}
-}
-
-// buildProvider selects and constructs the inference provider (docs/SPEC.md
-// §5.2). Egress control and deferred adapters fail here, explicitly, before
-// a single byte could leave the machine (§5.4).
-func (s *session) buildProvider() error {
-	cfg := s.cfg
-	if s.opts.LocalOnly {
-		return usageErr("--local-only is not available in this build (post-v1); it never silently enables egress")
-	}
-	if cfg.AllowEgress != nil && !*cfg.AllowEgress {
-		return usageErr("allow_egress: false is not available in this build (post-v1); no provider can honour it yet")
-	}
-	name := cfg.Provider
-	if name == "" {
-		name = defaultProvider
-	}
-	if err := validateProvider(cfg); err != nil && (cfg.Model == "" && name != "mock") {
-		return usageErr("%v", err)
-	}
-	p, err := llm.Build(name, s.opts.providerConfig(cfg))
-	if err != nil {
-		return usageErr("provider %s: %v", name, err)
-	}
-	if p.Limits().MaxContext <= 0 {
-		return usageErr("provider %s: the context limit for model %q is unknown; set max_context: or --max-context (docs/SPEC.md §5.3)", name, cfg.Model)
-	}
-	s.provider, _ = p, name
-	s.effort, _ = llm.ParseEffort(cfg.Effort)
-	s.opts.logf(1, "provider %s, model %s, context limit %d tokens", name, cfg.Model, p.Limits().MaxContext)
-	return nil
-}
-
-// runAgent is phase 2 (docs/SPEC.md §2.1, §5.6): the fact sheet and the
-// rule findings go to the model through the closed tool surface, every
-// execution through the same runner as phase 1, every finding through the
-// store that grades it.
-func (s *session) runAgent(ctx context.Context, sheet *baseline.FactSheet) {
-	ctx, cancel := context.WithTimeout(ctx, s.budgets.RunTimeout)
-	defer cancel()
-	in := finding.Input{Sheet: sheet, Profile: s.profile, Disabled: s.cfg.DisableChecks}
-	meta := s.meta()
-	store := finding.NewStore(in)
-	store.Grader = meta.Grader()
-	store.Grader.EmulatedToolCalling = !s.provider.Native().ToolCalling
-	sess := &agent.Session{
-		Provider: s.provider, Runner: s.runner, Store: store, Sheet: sheet, Rules: finding.Evaluate(in),
-		Profile: s.profile, Budgets: s.budgets, Context: s.context, Model: s.cfg.Model, Effort: s.effort,
-		Log: func(f string, a ...any) { s.opts.logf(1, "agent: "+f, a...) },
-	}
-	if s.opts.Verbose >= 1 {
-		sess.Progress = s.progress
-	}
-	out := sess.Run(ctx)
-	res := store.Result()
-	s.result = &res
-	ended := "model stopped"
-	if !out.Complete() {
-		ended = out.Reason
-	}
-	s.phase2 = &report.Phase2{
-		Provider: s.provider.Name(), Model: s.cfg.Model, Effort: string(s.effort),
-		Native: s.provider.Native(), Limits: s.provider.Limits(), Usage: out.Usage,
-		Mode: sess.Mode(), PromptVersion: agent.PromptVersion,
-		Agent:    report.AgentRun{Iterations: out.Iterations, Checks: out.Checks, Reported: out.Reported, Ended: ended, Text: out.Text},
-		Complete: out.Complete(), Reason: out.Reason, Warnings: out.Warnings,
-	}
-	s.opts.logf(1, "agent: %s after %d turns, %d checks, %d findings reported (%s)", out.Status, out.Iterations, out.Checks, out.Reported, ended)
-}
-
-// progress shows the model working on stderr: tool calls at -v, the text
-// stream at -vv. Model text is escaped like target text before it reaches
-// the terminal.
-func (s *session) progress(ev llm.Event) {
-	switch ev.Kind {
-	case llm.EventToolCall:
-		s.opts.logf(1, "model → %s %s", ev.ToolCall.Name, report.Sanitize(string(ev.ToolCall.Input)))
-	case llm.EventText:
-		if s.opts.Verbose >= 2 {
-			fmt.Fprint(os.Stderr, report.Sanitize(ev.Text))
-		}
-	case llm.EventDone:
-		if s.opts.Verbose >= 2 && ev.Response != nil && ev.Response.Text != "" {
-			fmt.Fprintln(os.Stderr)
-		}
 	}
 }
 
@@ -409,8 +308,6 @@ func (s *session) meta() report.Meta {
 		Version:   version.Version,
 		Disabled:  s.cfg.DisableChecks,
 		Context:   s.context,
-		Result:    s.result,
-		Phase2:    s.phase2,
 	}
 }
 

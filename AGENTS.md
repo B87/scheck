@@ -2,11 +2,18 @@
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
 over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP-0.0.1.md` says what is
-built (M0, M1 through M1.8, and M2: the `llm` contract, operator context, the grader,
-the agent loop, the injection corpus, the `openai-compatible` adapter and the
-evaluation harness) and what is pending (M2.7's live evaluation, then M4). This file is
-the operating manual for a coding agent in this repository. The spec wins on any
-conflict.
+built (M0, M1 through M1.8, and M2 including its live evaluation and M2.8's decision)
+and what is pending (M4). This file is the operating manual for a coding agent in this
+repository. The spec wins on any conflict.
+
+**No model assesses a host in this build.** The live evaluation failed the frozen
+criteria and the criteria called that a deletion (`docs/SPEC.md §2.1`,
+`docs/eval/phase2-results.md`), so `scheck local` and `scheck ssh` collect facts and
+assess them with the posture rules. Phase 2 — `internal/agent`, the three tools, the
+`llm` adapters — is kept, tested offline, and reachable only from the hidden `scheck
+eval`. Do not wire it back into a run, and do not delete it either: reviving it takes a
+new record that passes the criteria, and removing it would throw away what that record
+has to be produced with.
 
 ## Non-negotiables
 
@@ -58,7 +65,7 @@ passes.
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `internal/llm` | the provider contract (§5.1), token accounting (`CheckFit`), the registry; `mock` (transcript replay), `openai` (the default adapter), `conformance` (the suite every adapter passes), `all` (links adapters, registers deferred names) |
 | `internal/operator` | operator context: sources, the §6.2 schema, per-kind merge, budget, the `<operator_context>` block |
-| `internal/agent` | phase 2: the system prompt, the three tools, the loop; every execution through `runner.RunAs`, every finding through `finding.Store` |
+| `internal/agent` | phase 2: the system prompt, the three tools, the loop; every execution through `runner.RunAs`, every finding through `finding.Store`. No CLI run reaches it in 0.0.1; `internal/eval` is its only caller |
 | `internal/eval` | the M2.7 harness: arms, metrics, adversarial pairs, the comparison report |
 | `testdata/context`, `testdata/eval`, `testdata/transcripts` | injection corpus with benign controls; labeled evaluation cases (`base:` a recorded fixture); mock transcripts |
 | `docs/eval` | the frozen phase 2 criteria and the results record |
@@ -93,8 +100,7 @@ go run ./cmd/scheck providers
 go run ./cmd/scheck config show --format json
 go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
 go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
-go run ./cmd/scheck local --provider mock --transcript testdata/transcripts/correlated-finding-macos.json --no-persist
-go run ./cmd/scheck local                         # needs OPENAI_API_KEY; gpt-5.6-luna; spends money
+go run ./cmd/scheck local                         # facts + posture rules; no model, no key, free
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
 go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
 make live                                        # opt-in live tests
@@ -199,6 +205,10 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 ## Phase 2 rules
 
+These hold for `internal/agent` and the harness that drives it. They are not dead
+letters: the code is tested offline in `make check`, and a change that breaks one is
+still wrong.
+
 - `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate (profile
   tier, no canary) is enforced there, not in the tool. `report_finding` goes through
   `finding.Store.Report`, which validates every excerpt against the exact cited observation's output and
@@ -213,6 +223,8 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 - The `<operator_context>` block and check output are data; `testdata/context` is the
   corpus and `internal/agent/injection_test.go` the boundary tests. They prove policy,
   not model resistance: only a live run recorded in `docs/eval/phase2-results.md` does.
+- A model flag on `local` or `ssh` exits 3 (`modelFlags` in `cmd/scheck/root.go`); the
+  provider pre-flight lives in `cmd/scheck/evalcmd.go`. Keep both there.
 
 ## Out of scope until the roadmap slice that introduces them
 

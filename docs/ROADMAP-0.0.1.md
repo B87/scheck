@@ -969,7 +969,7 @@ this slice; qualifying M2.7 runs must use the changed prompt/tool contract.
 
 **Spec:** §2–§3, §4.5, §5.7–§5.8, §7.3–§7.6 and §11.
 
-### M2.7 — phase-2-earns-its-cost evaluation ⏳ (harness landed; repeated live evaluation pending)
+### M2.7 — phase-2-earns-its-cost evaluation ✅ (recorded; the gate fails, see M2.8)
 
 **Release-evaluation prerequisite:** M2.6a is implemented and validated in the working tree. Record the resulting prompt/tool
 contract and build versions in the qualifying repeated runs. Preserve the frozen pass
@@ -1082,11 +1082,58 @@ correlated hit), that the pairs are identical by construction, that the summary 
 verdicts compute and that §3.1 does **not** pass on the mock; `cmd/scheck` runs `scheck
 eval --provider mock` in both formats.
 
-**M2 exit demo:** `scheck local` and `scheck ssh` produce full agentic reports against
-the `openai-compatible` provider on both a clean host and the seeded fixture, with
-attributed severity adjustments visible in the JSON output. Acceptance criteria 5, 6, 7,
-8, 9 (model half), 10 and 12 are all checkable at this point. Configuration inspection
-and validation from M2.2a are complete, including provider settings. M4 follows.
+### M2.8 — act on the evaluation: no model assesses a host in 0.0.1 ✅
+
+M2.7's record fails the frozen criteria on the one condition that matters, and the
+criteria call that a deletion rather than a redesign. This slice carries it out at the
+product surface and nowhere else.
+
+**What changed.** `scheck local` and `scheck ssh` collect facts and assess them with
+the posture rules, graded through operator context; a default run and `--stop-after
+facts` are the same run. They build no provider, need no credential and send nothing a
+check observed off the machine. The six flags that select a model (`--provider`,
+`--model`, `--base-url`, `--effort`, `--transcript`, `--max-context`) exit 3 on those
+two commands with a message that says where they still work, following the convention
+that a flag for something this build does not do is registered and rejected, never a
+silent no-op. The same keys in a configuration file are unused rather than fatal, so an
+operator who configured a model for an earlier build is not blocked by it.
+`--include-evidence` is accepted on a default run as well as after `--stop-after facts`,
+since they collect the same facts. `allow_egress: false` is satisfied by construction
+on `local` and `ssh`; `scheck eval` still rejects it, and `--local-only` still exits 3
+everywhere because its full contract is post-v1.
+
+**What was kept, deliberately.** `internal/agent` with its three tools, the `llm`
+contract and its adapters, the operator context, the grader, the finding store with its
+guards, the injection corpus and `internal/eval` behind the hidden `scheck eval`. The
+harness is now the only caller of phase 2, so the provider pre-flight that a run used to
+perform (registered and available adapter, a model for a non-mock provider, a known
+context limit) moved into `cmd/scheck/evalcmd.go` unchanged. Everything stays under
+`make check`: the loop's report envelope and its schema validation moved from
+`cmd/scheck` to `internal/agent`, where the code still lives, and `make live` now drives
+the harness on one labeled case instead of `scheck local`, which is the only path left
+that can spend money. Deleting the loop instead would have thrown away the apparatus a
+future decision has to be measured with, and the criteria ask for the loop to stop
+assessing hosts, not for the measurement to become impossible.
+
+**Spec work:** §2.1 records the outcome, what it means for the two commands and what
+"kept" covers; §7.6 drops the stale "not available in this build" clause for the
+footer's actual wording; §8 annotates the model flags and `--stop-after facts`; §11
+describes the live test's new target; §12 resolves criteria 7, 10 and 12 instead of
+leaving them open; the change list carries the entry.
+
+**Validation:** `make check` green, including the moved envelope and schema tests. New
+CLI tests assert that every model flag exits 3 on `local` and `ssh` with no output,
+that a configured provider and model cannot fail a run, and that the harness rejects a
+deferred adapter, an unknown provider, a missing transcript, a missing credential, an
+unknown context window and `allow_egress: false` before a case runs. A rules-only
+`scheck local` on this Mac exits 1 with one finding and no provider built.
+
+**M2 exit demo:** `scheck local` and `scheck ssh` produce a rules-only report with
+attributed severity adjustments visible in the JSON output, and the phase 2 comparison
+that acceptance criterion 10 asks for is recorded in `docs/eval/phase2-results.md` with
+the decision it produced. Acceptance criteria 5, 6, 7, 8, 9, 10 and 12 are all decided
+at this point. Configuration inspection and validation from M2.2a are complete,
+including provider settings. M4 follows.
 
 ---
 
@@ -1201,6 +1248,9 @@ through the documented release process.
   calendar time as needed without burning budget, and are the right place to get the
   security boundary reviewed by someone other than its author before M2 starts spending
   money against it.
+- **M2.7 was the highest-risk slice, and it came back negative.** M2.8 acted on it: the
+  loop no longer assesses a host, and the code, corpus and harness behind it stay for
+  whatever reopens the question. The note below is why the sequencing made that cheap.
 - **M2.7 (phase-2-earns-its-cost) is the highest-risk slice in the roadmap.** It's
   placed as late as reasonably possible within M2 — after the loop, tools, and context
   ingestion all work — and its success criteria are frozen in M2.1, before any of them
