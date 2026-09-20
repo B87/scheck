@@ -7,9 +7,11 @@ import "github.com/b87/scheck/internal/check"
 
 // CanaryString is echoed by sys.canary. It carries every character class the
 // SSH quoter must survive: quotes, spaces, $, backticks, semicolons, pipes,
-// globs and a backslash. The invariants test exempts exactly this one entry
-// from the metacharacter rule.
-const CanaryString = `scheck canary: 'single' "double" $HOME ` + "`id`" + ` ;| *? \back`
+// globs and backslashes. The doubled backslash is what distinguishes fish
+// (which collapses it inside single quotes) from POSIX sh; the path-qualified
+// printf is what a restricted shell refuses. The invariants test exempts
+// exactly this one entry from the metacharacter rule.
+const CanaryString = `scheck canary: 'single' "double" $HOME ` + "`id`" + ` ;| *? \back \\double`
 
 var pathParam = []check.Param{{Name: "path", Kind: check.KindPath}}
 
@@ -19,7 +21,7 @@ func init() {
 			ID: "sys.canary", Description: "Round-trip a fixed string to verify remote quoting",
 			Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, Canary: true,
 			MinProfile: check.ProfileHardened,
-			Argv:       []string{"printf", "%s", CanaryString},
+			Argv:       []string{"/usr/bin/printf", "%s", CanaryString},
 		},
 		check.Check{
 			ID: "sys.platform", Description: "Kernel name (uname -s), used for platform detection",

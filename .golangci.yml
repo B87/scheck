@@ -17,6 +17,7 @@ linters:
       excludes:
         - G204 # subprocess launched with variable: the catalog is the whole point; invariants test guards it
         - G304 # file read by variable path: config, fixtures and --identity are user-supplied paths by design
+        - G704 # SSRF: dialing an operator-named host is the ssh transport's purpose
   exclusions:
     rules:
       - path: _test\.go

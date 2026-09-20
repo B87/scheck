@@ -5,20 +5,6 @@ import "github.com/spf13/cobra"
 // Subcommand constructors are replaced slice by slice; until then each one
 // exists so the CLI surface matches SPEC.md §8.
 
-func newSSHCmd(opts *globalOpts) *cobra.Command {
-	return &cobra.Command{
-		Use:   "ssh user@host",
-		Short: "Audit a remote host over SSH",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := opts.notInPhase1(cmd); err != nil {
-				return err
-			}
-			return usageErr("ssh: not implemented yet")
-		},
-	}
-}
-
 func newSudoersCmd(_ *globalOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "sudoers",

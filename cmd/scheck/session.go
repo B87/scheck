@@ -89,6 +89,8 @@ func (o *globalOpts) newSession(mk func(policy.Budgets) (target.Target, error)) 
 	if err != nil {
 		return nil, err
 	}
+	// A nil target is allowed for transports that need the session first
+	// (ssh); the caller sets runner.Target before any check runs.
 	s.runner = &runner.Runner{Target: t, Paths: s.paths, Redactor: s.redactor, Budgets: s.budgets,
 		Audit: s.audit, Elevate: s.elevate, Log: func(f string, a ...any) { o.logf(1, f, a...) }}
 	return s, nil
@@ -179,3 +181,5 @@ func writeFactsJSON(w io.Writer, sheet *baseline.FactSheet) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(map[string]any{"facts": report.FactsFrom(sheet), "incomplete": sheet.Incomplete})
 }
+
+func homeDir() (string, error) { return os.UserHomeDir() }
