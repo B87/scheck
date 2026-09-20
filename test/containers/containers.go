@@ -74,6 +74,15 @@ func (c *Container) Exec(t testing.TB, args ...string) string {
 	return run(t, Runtime(), append([]string{"exec", c.ID}, args...)...)
 }
 
+// ExecInput runs a command inside the container with stdin supplied.
+func (c *Container) ExecInput(t testing.TB, input string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(Runtime(), append([]string{"exec", "-i", c.ID}, args...)...)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // Diff returns `docker diff` output: every filesystem change since start.
 func (c *Container) Diff(t testing.TB) string {
 	t.Helper()
