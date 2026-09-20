@@ -111,8 +111,13 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   imperative describing the slice.
 - Exit codes: 0 ok, 1 findings, 2 incomplete, 3 usage/policy/canary. Do not invent a
   fifth.
-- Report `schema_version` is `MAJOR.MINOR`; an additive field bumps MINOR and
-  `docs/report-schema.json`; a rename or removal bumps MAJOR.
+- Until the first GitHub release, breaking CLI, config and report changes are allowed;
+  do not build compatibility shims or migrations for development artifacts. Keep the
+  spec, implementation, schema and fixtures aligned when implementing a change.
+  After that release, report `schema_version` is `MAJOR.MINOR`: additions bump MINOR;
+  renames, removals and type changes bump MAJOR (`docs/SPEC.md §7.4`).
+- Posture rules require recognized evidence; unknown is not safe or unsafe. Preserve
+  assessment coverage in JSON and text, and test partial evidence (§7.5).
 - Code comments cite the spec section (`docs/SPEC.md §4.3`) for anything that exists
   because of a security decision.
 - Flags for later milestones stay registered and exit 3 with "not available in this

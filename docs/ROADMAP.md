@@ -15,8 +15,10 @@ across slices below rather than saved for the end.
 **Status (2026-09-20):** M0 and M1 are done, one commit per slice, on `main`. Every
 slice below carries a ✅ with what actually landed where it differs from the plan.
 Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules);
-those are next, then M2.1. The second-person review of the security boundary is still
-open; see `AGENTS.md` for how to work in the repo.
+those are next, then M2.1. Before the first GitHub release, breaking changes are
+allowed without compatibility shims or mandatory major-version bumps; implement the
+spec, schema and fixture changes together (SPEC §7.4). The second-person review of
+the security boundary is still open; see `AGENTS.md` for how to work in the repo.
 
 ---
 
@@ -252,7 +254,9 @@ the `summary` string per fact in the envelope, and `schema_version` 1.1 with
 files", "3 updates available"; `--format json | jq '.facts["net.listeners"].parsed[0]'`
 shows a record with named fields.
 **Done when:** every baseline check on all three fixtures has a summary that is not
-"N lines"; parser edge tests (empty, truncated mid-record, header-only, CRLF) pass;
+"N lines"; parser edge tests (empty, truncated mid-record, header-only, CRLF, unknown
+states and redacted fields) pass; incomplete counts are labelled partial and parser
+results retain enough completeness information for §7.5's evidence requirements;
 the fixtures re-recorded with `make fixtures` show no diff in recorded bytes, only in
 golden output.
 **Spec:** §3 typed parsers, §7.4 schema 1.1.
@@ -262,14 +266,17 @@ Deliver `internal/finding`: `Def` with title, base severity, impact and remediat
 text (§7.1) for the seed ids in §7.5; `Rule` and its predicate kinds; the evaluator
 over a fact sheet; findings in the envelope with `source: rule`; findings-first text
 rendering; exit `1` under `--stop-after facts` when an open finding meets the profile
-threshold. Base severity only: context adjustments, confidence caps and accepted risks
-stay in M2.2.
+threshold (`medium` for baseline, `low` for hardened). Include the `assessments`
+array and coverage rendering from §7.5; update the schema with the implementation.
+Base severity only: context adjustments, confidence caps and accepted risks stay in M2.2.
 **Demo:** `scheck local --stop-after facts` on a Mac with the application firewall off
 shows one medium finding with the `fw.global` excerpt and the remediation, and exits
 `1`; a Linux fixture with `PasswordAuthentication yes` does the same.
-**Done when:** every rule has a firing and a non-firing fixture; an `unavailable` fact
-renders "not assessed" and never a finding; the invariants test extends to rules (every
-`Rule.Check` is a catalog id, every `Rule.Finding` a Def, predicate kind matches the
+**Done when:** every rule has firing, non-firing and insufficient-evidence fixtures;
+unknown, malformed, unavailable, denied, redacted and truncated evidence follow §7.5;
+applicability and disabled checks have coverage tests; JSON and text agree on assessment
+outcomes and finding counts; both profile thresholds and exit precedence are tested.
+The invariants test extends to rules (every `Rule.Check` is a catalog id, every `Rule.Finding` a Def, predicate kind matches the
 check's parser); acceptance criterion 4 passes as reworded in §12.
 **Spec:** §7.1, §7.5, §8 exit codes, §12 criterion 4.
 
@@ -311,7 +318,9 @@ and the ~150-line loop (§5.6) wired to `mock` only. No real provider yet — th
 the loop's control flow (iteration budget, context chunking trigger, stop-on-no-tool-calls)
 against scripted transcripts.
 Rule findings (§7.5) are in the prompt; a `report_finding` on an existing rule id
-merges (severity and confidence stand, the model's context note and evidence append).
+merges under §7.5: curated rule text and source remain, validated context notes and
+evidence append, and the shared grader owns severity. Test attempted replacements,
+suppression and duplicate evidence.
 **Demo:** `scheck local --provider mock --transcript fixtures/correlated-finding.json`
 producing a full report with a real finding in it, end to end through the renderers.
 **Done when:** the loop enforces every budget in `policy.Budgets` against the mock
@@ -337,17 +346,19 @@ producing a real report.
 run's cost is measured and checked against the $0.50 budget (acceptance criterion 7).
 **Spec:** §5.2, §5.5.
 
-### M2.6 — phase-2-earns-its-cost fixture
-Deliver the seeded cross-domain fixture host (password auth + empty-password account +
-public listener) as a reusable fixture target, run both in agent mode and in a
-stripped-down single-pass mode (a temporary code path or a feature flag — doesn't need
-to be the final §5.3 single-pass, just enough to prove the comparison).
-**Demo:** two `scheck` runs against the fixture, diffed: agent mode's findings list
-contains the correlated finding, the single-pass one doesn't.
-**Done when:** acceptance criterion 10 is demonstrated and recorded (not just believed).
-This is the checkpoint where the project either confirms the two-phase design or
-pivots — treat a failure here as a stop-the-line result, not a footnote.
-**Spec:** §2.1 rationale, acceptance criterion 10.
+### M2.6 — phase-2-earns-its-cost evaluation
+Deliver a labeled fixture suite covering clean hosts, seeded issues and incomplete
+or misleading evidence, including cases requiring follow-up catalog checks. Compare
+posture rules alone, single-pass analysis and the agent with identical initial facts,
+rule findings and context. Set success criteria before evaluating; record model and
+prompt versions and repeat model runs. Mock transcripts validate plumbing only.
+**Demo:** a comparison report of correct additional findings, false positives, missed
+issues, justified abstentions, uncertainty resolved by follow-up checks, latency,
+tokens and cost. Do not require single-pass analysis to miss a particular example.
+**Done when:** acceptance criterion 10 is demonstrated and recorded: investigation
+produces repeatable useful gains within budget. If it does not justify its cost,
+retain posture rules and single-pass analysis and remove the loop from the design.
+**Spec:** §2.1 rationale, §12 acceptance criterion 10.
 
 **M2 exit demo:** `scheck local` and `scheck ssh` produce full agentic reports against
 the `anthropic` provider on both a clean host and the seeded fixture, with attributed
@@ -399,8 +410,8 @@ Deliver the one conditional path the loop is allowed to have (§5.3): fact-sheet
 chunking by domain when the prefix would exceed half of `MaxContext`, plus the final
 correlation pass.
 **Demo:** run against `ollama` with a small-context model (a genuinely small local
-model, e.g. a 4K-context one) and the M2.6 fixture; confirm the correlated finding still
-surfaces via the correlation pass despite chunking.
+model, e.g. a 4K-context one) and the M2.6 fixtures; confirm supported findings still
+surface via the correlation pass despite chunking.
 **Done when:** a chunked run and an unchunked run over the same fact sheet on a
 large-context model agree on the correlated finding — chunking shouldn't lose the
 signal M2.6 exists to prove.

@@ -70,6 +70,13 @@ Status: v0.4 — M0 and M1 implemented (2026-09-20), M1.6–M1.8 (readable phase
 - Roadmap: M1.6–M1.8 land these before M2; M2.2 shrinks to context adjustments and
   accepted risks (§10).
 
+- Posture assessments distinguish matched, not matched, not applicable and not
+  assessed; rules require recognized evidence and preserve uncertainty (§7.5).
+- Before the first GitHub release, breaking changes are permitted without migration
+  machinery; the release establishes the compatibility baseline (§7.4).
+- Profile exit thresholds are explicit (§8), and the agent evaluation compares rules,
+  single-pass analysis and follow-up investigation (§12).
+
 ---
 
 ## 1. Goals / Non-goals
@@ -736,8 +743,9 @@ type Def struct {
 
 `Title`, `Impact` and `Remediation` live on the Def, not only in the model's output,
 because a posture rule (§7.5) must produce a complete finding with no model in the
-loop. For a model finding the Def's text is the default and the model's text, when
-present, replaces `impact` and `remediation`.
+loop. For a model-only finding the Def's text is the default and the model's text, when
+present, replaces `impact` and `remediation`. For an existing rule finding, the merge
+contract in §7.5 applies: its curated text is retained.
 
 Ids are the join key for accepted risks, severity, dedupe and cross-run diffing, so the
 model must not invent them. `report_finding` accepts a catalog id, or `custom:<slug>`
@@ -813,7 +821,7 @@ a translation step, even though v1 audits one host per invocation:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "host": {
     "id": "b7c1…",                 // /etc/machine-id on Linux, IOPlatformUUID on macOS; hashed
     "hostname": "bastion-1",
@@ -830,6 +838,10 @@ a translation step, even though v1 audits one host per invocation:
   },
   "facts":    { "<check id>": { "status": "ok|unavailable|denied", "reason": "…",
                                 "summary": "26 listening sockets", "parsed": … } },
+  "assessments": [                 // one per selected posture rule (§7.5)
+    {"finding": "disk.filevault_off", "check": "disk.fdesetup",
+     "status": "not_matched", "reason": "recognized-enabled-state"}
+  ],
   "findings": [ … ]                // rule findings from phase 1, model findings from phase 2 (§7.5)
 }
 ```
@@ -844,13 +856,21 @@ model's prompt. The envelope is validated against `docs/report-schema.json` in t
 Findings are a flat array keyed by catalog id, never nested under a host, so
 concatenation is trivial.
 
-Schema history: `1.0` is the M1 envelope; `1.1` (M1.7, M1.8) adds `facts.<id>.summary`,
-`findings[].source` and the typed `parsed` shapes of §3.
+Pre-release schema history: `1.0` is the M1 envelope; `1.1` (M1.7, M1.8) introduces
+`facts.<id>.summary`, `findings[].source`, `assessments` and the typed `parsed` shapes
+of §3. These are development revisions, not a compatibility promise.
 
-`schema_version` is `MAJOR.MINOR`, bumped on any change to this envelope: MINOR for
-an additive field, MAJOR for a rename, removal, or type change. A reader (a fleet
-aggregator, `scheck diff`, a future `scheck` reading an older run) rejects an
-unrecognized MAJOR rather than guessing at a shape it was never tested against.
+**Compatibility starts at the first GitHub release.** Before that release, breaking
+CLI, configuration and report changes are allowed. Update the spec, implementation,
+`docs/report-schema.json` and fixtures together when the change is implemented;
+do not add compatibility shims, dual fields or migrations for development artifacts.
+A breaking change does not require a major version bump during this period. Readers
+may reject unsupported development artifacts with a clear error.
+
+The first GitHub release establishes the supported contract. After that release,
+`schema_version` is `MAJOR.MINOR`: additive changes bump MINOR; renames, removals and
+field type changes bump MAJOR. Readers reject an unrecognized MAJOR rather than guess
+at an unsupported shape. The release notes identify the schema version shipped.
 
 **Persistence.** From M1, every run writes this envelope to
 `<state-dir>/runs/<host.id>/<started>.json` (default state dir
@@ -885,15 +905,37 @@ type Rule struct {
   all, password auth *and* a public listener) is the model's job in phase 2. Single-fact
   rules stay obvious, and every one is testable with a fixture where it fires and one
   where it does not.
-- **A rule over an `unavailable` or `denied` fact does not fire.** The report says
-  "not assessed: <check> unavailable" for that finding rather than nothing, so nobody
-  reasons from absence (§3).
+- **Evaluate recognized evidence, not failure to recognize a good state.** A predicate
+  may fire only on a complete, recognized value or record proving its condition.
+  Missing fields, unknown output, parse failures and redacted values are not matches
+  or passes. A complete matching record in partial output can prove an existential
+  condition; a negative or absence claim requires complete relevant evidence. Counts
+  from incomplete output are labelled as partial, never presented as exact totals.
+- **Record assessment coverage separately from findings.** Each selected rule produces
+  an `assessments` entry (§7.4), identified by finding id and check id, with a reason
+  and one of `matched`, `not_matched`, `not_applicable`, `not_assessed`. Only `matched`
+  emits a finding. `not_matched` means this predicate was disproved by sufficient
+  evidence, not that the host or domain is secure.
+- **Applicability must be known.** A rule's platform gate or a recognized result from
+  its own check may establish `not_applicable`; a missing executable alone cannot.
+  Otherwise unavailable, denied or insufficient evidence produces `not_assessed`.
+  Keep this interpretation in the check/parser and evaluator, not in the renderer.
+  Do not add cross-check applicability predicates to the single-fact rule mechanism.
+  Rules outside the selected platform/profile are omitted. Disabled selected checks
+  leave their rules `not_assessed`, with the disabling reason.
+- **Render coverage honestly.** Group not-assessed rules by check and reason, with a
+  remedy when known. Not-applicable assessments remain available in JSON and verbose
+  output but do not clutter the default list of missing coverage. Assessment entries
+  are not findings and do not themselves trigger exit `1`.
 - **A rule finding is graded like any other.** `source: rule`, `confidence: high`,
   evidence is the check id plus the matched excerpt, and the severity goes through §7.2,
   so context adjustments and accepted risks apply.
 - **The model enriches, never overrides.** Rule findings are in the phase 2 prompt. A
-  `report_finding` with the same id merges: the rule's severity and confidence stand,
-  the model's `context_note` and extra evidence are appended.
+  `report_finding` with the same id merges: `source: rule`, title, impact, remediation
+  and rule confidence are retained; validated extra evidence and attributed model
+  context notes append without duplicate evidence. The shared grader still owns
+  severity, adjustments and accepted-risk status. Model-supplied text cannot replace
+  curated rule guidance or suppress the rule finding.
 - **The table is compiled in** beside the finding catalog (`internal/finding`). The
   invariants test extends to it: every `Rule.Check` is a catalog id, every
   `Rule.Finding` is a Def, and the predicate kind matches the check's parser.
@@ -902,7 +944,7 @@ Seed table (M1.8). Base severities are the §7.1 table entries for these ids:
 
 | Finding | Platform | Check | Fires when | Base |
 |---|---|---|---|---|
-| `disk.filevault_off` | macos | `disk.fdesetup` | raw does not match `FileVault is On` | high |
+| `disk.filevault_off` | macos | `disk.fdesetup` | recognized `FileVault is Off` state | high |
 | `integrity.sip_disabled` | macos | `integrity.csrutil` | raw matches `disabled` | high |
 | `integrity.gatekeeper_disabled` | macos | `integrity.spctl` | raw matches `assessments disabled` | medium |
 | `fw.app_firewall_disabled` | macos | `fw.global` | raw matches `State = 0` | medium |
@@ -911,12 +953,20 @@ Seed table (M1.8). Base severities are the §7.1 table entries for these ids:
 | `sshd.password_auth_enabled` | any | `sshd.config` | `passwordauthentication` = `yes` | medium |
 | `sshd.root_login_enabled` | any | `sshd.config` | `permitrootlogin` = `yes` | high |
 | `accounts.empty_password` | linux | `accounts.passwd_status` | a record with status `NP` | critical |
-| `accounts.shadow_readable` | linux | `accounts.shadow_meta` | mode is not one of `0`, `600`, `640` | high |
+| `accounts.shadow_permissions_unexpected` | linux | `accounts.shadow_meta` | parsed mode is outside `0`, `600`, `640` | high |
 | `mac.selinux_disabled` | linux | `mac.sestatus` | `selinux status` = `disabled` | medium |
-| `log.auditd_inactive` | linux | `log.auditd` | raw is not `active` | low |
+| `log.auditd_inactive` | linux | `log.auditd` | recognized `inactive` or `failed` state | low |
 | `time.ntp_unsynced` | linux | `time.timedatectl` | `ntpsynchronized` = `no` | low |
 | `updates.pending` | any | `pkg.*` | any `updates` record | low |
 | `fs.world_writable_present` | any | `fs.world_writable` | any line | medium |
+
+The shadow rule reports an unexpected mode, not proven access by an unauthorized
+user; its title, impact and remediation must preserve that distinction. Missing or
+malformed modes are not assessed. Likewise an empty-password status does not alone
+prove a usable remote login, and a disabled named protection does not prove all
+alternative protections are absent. Unknown or transitional FileVault states are not
+assessed by the off rule. `pkg.*` denotes separate rules bound to concrete catalog
+ids, not a wildcard execution or lookup mechanism.
 
 `fs.suid` deliberately has no rule: SUID files are normal, and which ones are not is
 judgement. The same applies to listeners, persistence entries and sudoers content.
@@ -931,8 +981,8 @@ contract, pinned by golden tests per fixture (§11):
   `host.id`, profile, mode, kernel and timings move to `-v`.
 - **Findings first, then facts.** Rule findings (and, in phase 2, model findings) come
   before the fact sheet, ordered by severity: title, severity, the evidence excerpt with
-  its check id, the remediation summary. Not-assessed findings close the section, each
-  naming the unavailable check.
+  its check id, the remediation summary. Not-assessed assessments close the section,
+  grouped by check and reason; they are excluded from finding counts.
 - **Status words, not marks.** A check `ran`, was `skipped` (unavailable) or was
   `denied`. A mark column may exist for scanning, but a mark never means "posture ok":
   a fact whose rule fired shows the finding's severity, not a plus.
@@ -991,6 +1041,12 @@ time; the catalog (`scheck catalog`) shows everything phase 2 *could* run.
 Exit codes: `0` no open finding at or above the profile threshold · `1` findings present ·
 `2` run incomplete (check/agent/transport failure, budget exhausted) · `3` usage or policy
 error (including a failed SSH canary, an unknown host key, or an unknown accepted-risk id).
+
+Profile thresholds apply from M1.8: `baseline` fails on `medium` or higher;
+`hardened` fails on `low` or higher. `info` findings remain visible but never trigger
+exit `1`. Thresholds select the exit result, not which findings are displayed.
+Exit `3` takes precedence over `2`, which takes precedence over `1`, then `0`.
+An exit `0` is not a claim of full coverage: consult the assessments and skipped checks.
 
 Under `--stop-after facts` the findings are the posture rules' (§7.5), so the run
 exits `1` when one is open at or above the profile threshold and `0` otherwise
@@ -1078,7 +1134,7 @@ read a key from the config file.
 ## 10. Milestones
 
 Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
-`ROADMAP.md` for the per-slice record. M2 is next.
+`ROADMAP.md` for the per-slice record. M1.6–M1.8 are next, then M2.
 
 - **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
   and invariants test, `policy` (path, redaction, budgets), audit log, elevation
@@ -1132,8 +1188,11 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
   and `-vv`, committed and diffed in `go test`. A diff is a review item, not something
   to silence; §7.6 is the contract the golden files pin.
 - **Rule tests.** Table-driven: fact sheet → expected finding ids. Every rule has a
-  fixture where it fires and one where it does not; an `unavailable` fact never fires a
-  rule and renders "not assessed". The catalog invariants test covers rules (§7.5).
+  fixture where it fires and one where it does not, plus unknown, malformed,
+  unavailable, denied, redacted and truncated evidence. Test applicability, disabled
+  checks, partial positive records and incomplete negative claims. Assert the same
+  assessments and finding counts in JSON and text, and profile exit thresholds.
+  The catalog invariants test covers rules (§7.5).
 - **Severity tests.** Table-driven: (finding id, structured context) → expected
   severity, adjustments and status. `--ignore-context` asserted to equal base severity
   exactly.
@@ -1174,11 +1233,18 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
    `exposure: internet` and as `exposure: lan` yields severities that differ exactly per
    the adjustment table, every adjustment is attributed to its source, and
    `--ignore-context` reproduces base severities byte-for-byte.
-10. **Phase 2 earns its cost.** On a fixture host with a seeded cross-domain issue
-    (e.g. password auth + empty-password account + public listener), the agentic run
-    reports the correlated finding and a single-pass run over the same fact sheet does
-    not. If this cannot be demonstrated, the agent loop is removed and single-pass
-    becomes the design.
+10. **Phase 2 earns its cost.** Compare posture rules alone, single-pass analysis,
+    and the agent on the same labeled fixture suite and operator context. Include
+    clean hosts, seeded issues and incomplete or misleading evidence; some cases
+    must require additional catalog evidence. Both model modes receive the same
+    initial facts and rule findings. Record correct additional findings, false
+    positives, missed issues, justified abstentions, resolved uncertainty, latency,
+    tokens and cost across repeated model runs. Define success criteria before the
+    evaluation and record model/prompt versions. Follow-up investigation must show
+    repeatable useful gains over single-pass analysis within the run budget; the
+    simpler mode need not fail any particular example. Mock transcripts prove only
+    plumbing. If the gains do not justify the loop, retain the rules and use
+    single-pass analysis instead.
 11. The SSH canary aborts the run against a fish or restricted login shell before any
     other command is sent.
 
