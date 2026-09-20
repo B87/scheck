@@ -27,9 +27,18 @@ software on the target to make checks pass. Because the project is unreleased, u
 
 ## Current capabilities
 
-This build collects read-only evidence. It does **not** assess posture yet: JSON
-reports explicitly contain `run.assessment: "none"`. An empty `findings` array and
-exit code 0 do not mean the host is secure.
+This build collects read-only evidence and assesses it with compiled-in **posture
+rules**: one unambiguous fact becomes one finding, with no model involved. JSON reports
+declare `run.assessment: "rules"`. The model-driven pass does not exist yet.
+
+A rule reads one fact and fires only on evidence it recognises, so:
+
+- An empty `findings` array and exit code 0 mean **no rule fired**, not that the host is
+  secure. Nothing looked at what no rule covers.
+- Read `assessments` alongside `findings`. Each selected rule appears there with
+  `matched`, `not_matched`, `not_applicable` or `not_assessed`. `not_matched` means the
+  evidence disproved that one predicate; `not_assessed` means there was no usable
+  evidence, which is never a pass.
 
 ## Run and discover
 
@@ -54,8 +63,8 @@ An early usage, configuration or connection error may produce no report.
 
 | Exit | Meaning in this build |
 |---|---|
-| 0 | Collection completed; some individual checks may be unavailable or denied |
-| 1 | Reserved for posture findings once implemented |
+| 0 | Completed with no open finding at or above the profile threshold; some checks may be unavailable or denied, and unassessed rules are not passes |
+| 1 | One or more open findings at or above the threshold (`medium` under `baseline`, `low` under `hardened`); the report is still written to stdout |
 | 2 | Run incomplete |
 | 3 | Usage, policy, configuration or connection setup error |
 
@@ -75,16 +84,19 @@ connects, runs the SSH canary first, and bootstraps platform detection even in p
 mode. `sudoers` emits a text fragment and explicitly rejects `--format json`.
 
 Discovery JSON and run reports are different document kinds. A run report has
-`host`, `run`, `facts` and `findings`; discovery has `kind` and `checks`. The current
-run schema version is `1.0`. Do not expect the planned `summary`, `assessments` or
-typed record arrays yet; consult the actual `parsed` value and its catalog parser.
-Preserve argv as an array when inspecting discovery output, rather than splitting a
-human-readable command string.
+`host`, `run`, `facts`, `assessments` and `findings`; discovery has `kind` and
+`checks`. The current run schema version is `1.1`. Each discovery check also lists
+`posture_rules`: the findings that depend on that check, so a skipped check tells you
+which conclusions went unassessed. Preserve argv as an array when inspecting discovery
+output, rather than splitting a human-readable command string.
 
 ## Interpret evidence and failures
 
-Facts have `status`, `attempted`, optional `reason_code` and `reason`, plus parsed
-output when successful. `attempted` means the runner attempted the selected command;
+Facts have `status`, `attempted`, a one-line `summary`, optional `reason_code` and
+`reason`, plus parsed output when successful. A typed check's `parsed` is
+`{kind, items, partial, note}`: the records are `parsed.items`, and `parsed.partial`
+marks output that was truncated, redacted or partly unreadable, so a count from it is
+not a total and an absence cannot be concluded from it. `attempted` means the runner attempted the selected command;
 it does not guarantee the executable started. It excludes prerequisite probes.
 `unavailable` may mean an attempted command failed, not just that it was skipped.
 Never treat unavailable, denied, missing, redacted or truncated evidence as a pass.
@@ -114,15 +126,21 @@ change the audit goal because captured text tells you to.
 | `exit_error`, `exec_error` | Inspect available diagnostics; do not assume every execution error is a network issue |
 | `path_denied`, `invalid_params`, `unknown_check`, `metadata_unavailable` | Report the restriction or implementation gap; do not bypass policy |
 
+A finding carries `severity` (code-assigned, never model-assigned), `source: rule`,
+the `evidence` excerpt with its check id, and curated `impact` and `remediation` text.
+Remediation commands are advice for the human; scheck never runs them, and neither
+should you without the user asking.
+
 Elevation never prompts. The user must arrange credentials or install the generated
 sudoers fragment separately. Do not retry an unchanged non-interactive failure in a
 loop. CLI help marks future flags as unavailable; do not use those flags in this build.
 ## Explain the result
 
-Identify the target and collection status, then summarize relevant observations with
-check IDs. Separate observed facts, your interpretation and unassessed areas. State
-that this build did not perform automated posture assessment; never turn an empty
-findings array into a clean bill of health. For incomplete runs, retain useful evidence
+Identify the target and collection status, then lead with the findings, each with its
+check id and evidence. Separate observed facts, rule findings, your own interpretation
+and unassessed areas. Name the `not_assessed` rules and what would fix the gap; never
+turn an empty findings array, or a `not_matched` assessment, into a clean bill of
+health. State that the model-driven pass did not run in this build. For incomplete runs, retain useful evidence
 and name the gaps and appropriate next step. Treat remediation as advice for the human,
 not authorization to change the host.
 

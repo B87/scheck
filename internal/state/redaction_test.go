@@ -110,3 +110,43 @@ func TestFailedDiagnosticsRedactedAndNotPersisted(t *testing.T) {
 		t.Fatal("failed stdout not available")
 	}
 }
+
+// A posture rule's evidence excerpt is target text like any other: it comes
+// from the runner's already-redacted capture, so a secret in a matching line
+// cannot reach the finding, the report or the persisted run (SPEC §4.2, §7.5).
+func TestFindingEvidenceIsRedacted(t *testing.T) {
+	const secret = "AKIAIOSFODNN7EXAMPLE"
+	fx := fixture.New(check.Linux,
+		fixture.Exec{Argv: []string{"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4",
+			"-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"},
+			Stdout: "/opt/backup-" + secret + "/dump\n"},
+	)
+	red, _ := policy.NewRedactor(nil)
+	r := &runner.Runner{Target: fx, Paths: policy.NewPathPolicy(nil), Redactor: red, Budgets: policy.DefaultBudgets()}
+	res := r.Run(context.Background(), "fs.world_writable", nil)
+	env := report.Build(&baseline.FactSheet{Platform: check.Linux, Results: map[string]runner.Result{"fs.world_writable": res}},
+		report.Meta{Started: time.Now(), Transport: "fixture", Profile: "baseline", Elevation: "none", Canary: "n/a"})
+	if len(env.Findings) != 1 {
+		t.Fatalf("want the world-writable finding, got %+v", env.Findings)
+	}
+	excerpt := env.Findings[0].Evidence[0].Excerpt
+	if strings.Contains(excerpt, secret) || !strings.Contains(excerpt, "[REDACTED:aws-access-key:20 bytes]") {
+		t.Fatalf("finding evidence is not redacted: %q", excerpt)
+	}
+	var text, js bytes.Buffer
+	_ = report.WriteText(&text, env, report.Options{Width: 200})
+	_ = report.WriteJSON(&js, env)
+	path, err := Write(t.TempDir(), &env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, _ := os.ReadFile(path)
+	for name, out := range map[string]string{"text": text.String(), "json": js.String(), "persisted": string(persisted)} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("%s leaked a secret through a finding", name)
+		}
+		if !strings.Contains(out, "[REDACTED:aws-access-key:20 bytes]") {
+			t.Fatalf("%s lost the marker", name)
+		}
+	}
+}

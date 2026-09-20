@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // WriteText renders the report a person reads (docs/SPEC.md §7.6): a two-line
@@ -18,6 +19,8 @@ func WriteText(w io.Writer, env Envelope, opt Options) error {
 	t.st = style{on: t.opt.Color}
 	t.platform = check.Platform(env.Host.Platform)
 	t.header()
+	t.findings()
+	t.coverage()
 	t.facts()
 	t.notRun()
 	t.footer()
@@ -86,7 +89,12 @@ func (t *textReport) header() {
 	if denied > 0 {
 		parts = append(parts, fmt.Sprintf("%d denied by policy", denied))
 	}
-	t.line(fmt.Sprintf("%d checks: %s", len(t.env.Facts), strings.Join(parts, ", ")))
+	result := []string{t.findingsLine()}
+	if n := len(t.env.NotAssessed()); n > 0 {
+		result = append(result, fmt.Sprintf("%d %s not assessed", n, plural(n, "rule")))
+	}
+	result = append(result, fmt.Sprintf("%d checks: %s", len(t.env.Facts), strings.Join(parts, ", ")))
+	t.para("", strings.Join(result, ", "))
 
 	if t.opt.Verbose >= 1 {
 		detail := []string{
@@ -229,8 +237,19 @@ func clip(s string, n int) string {
 // or the reason it did not run.
 func (t *textReport) detail(r row) string {
 	f := r.fact
-	s := summary(f)
+	// A fact built by Build carries its summary; one handed to the renderer
+	// directly is summarised here, so text and JSON never disagree.
+	s := f.Summary
+	if s == "" {
+		s = Summarize(r.chk, f)
+	}
 	var flags []string
+	// A check whose rule fired shows the finding's severity: a status word
+	// describes execution and must never read as "posture ok"
+	// (docs/SPEC.md §7.6).
+	for _, sev := range t.severitiesFor(r.id) {
+		flags = append(flags, "finding: "+string(sev))
+	}
 	if f.Status == "ok" && f.Reason != "" {
 		flags = append(flags, sanitize(f.Reason))
 	}
@@ -327,9 +346,37 @@ func (t *textReport) section(title, note string, rows []row) {
 // posture, so it says so (docs/SPEC.md §7.6).
 func (t *textReport) footer() {
 	t.line("")
-	t.para("", "assessment: none. Every line above reports what a command observed, not "+
-		"whether the host is configured safely. Posture rules and the agentic pass are "+
-		"not available in this build.")
+	scope := "assessment: posture rules only. "
+	if n := len(t.env.Assessments); n == 0 {
+		scope += "No posture rule applied to this host. "
+	} else {
+		scope += fmt.Sprintf("%d of %d rules had the evidence to decide. ", n-len(t.env.NotAssessed()), n)
+	}
+	t.para("", scope+"Every other line reports what a command observed, not whether the host is "+
+		"configured safely: a rule reads one fact and says nothing about what no rule covers. "+
+		"The agentic pass is not available in this build.")
+}
+
+// severitiesFor lists the severities of the findings whose evidence includes
+// this check, most serious first.
+func (t *textReport) severitiesFor(id string) []finding.Severity {
+	var out []finding.Severity
+	for _, f := range t.env.Findings {
+		for _, e := range f.Evidence {
+			if e.Check == id {
+				out = append(out, f.Severity)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return noun
+	}
+	return noun + "s"
 }
 
 func statusWord(status string) string {

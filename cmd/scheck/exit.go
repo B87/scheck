@@ -26,3 +26,11 @@ func usageErr(format string, args ...any) error {
 func incompleteErr(format string, args ...any) error {
 	return &exitError{Code: exitIncomplete, Err: fmt.Errorf(format, args...)}
 }
+
+// findingsErr ends a run that completed and found something at or above the
+// profile threshold (docs/SPEC.md §8). The report is already written; this
+// only carries the code, and its message goes to stderr, never into the
+// report on stdout.
+func findingsErr(format string, args ...any) error {
+	return &exitError{Code: exitFindings, Err: fmt.Errorf(format, args...)}
+}

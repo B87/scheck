@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/report"
 )
 
 func env(started time.Time) *report.Envelope {
 	return &report.Envelope{SchemaVersion: report.SchemaVersion,
 		Host: report.Host{ID: strings.Repeat("ab", 32)}, Run: report.Run{Started: started, Warnings: []string{}},
-		Facts: map[string]report.Fact{}, Findings: []any{}}
+		Facts: map[string]report.Fact{}, Findings: []finding.Finding{}}
 }
 
 func TestWriteTwiceSameHostDir(t *testing.T) {

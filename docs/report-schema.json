@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/report-schema.json",
   "title": "scheck run envelope",
-  "description": "SPEC.md §7.4. Development schema; compatibility starts at the first GitHub release.",
+  "description": "SPEC.md §7.4, schema 1.1. Development schema; compatibility starts at the first GitHub release.",
   "type": "object",
-  "required": ["schema_version", "host", "run", "facts", "findings"],
+  "required": ["schema_version", "host", "run", "facts", "assessments", "findings"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
@@ -34,7 +34,7 @@
         "status": { "enum": ["complete", "incomplete"] },
         "profile": { "enum": ["baseline", "hardened"] },
         "mode": { "enum": ["facts", "agent", "single-pass"] },
-        "assessment": { "const": "none" },
+        "assessment": { "enum": ["none", "rules", "agent"] },
         "provider": { "type": ["string", "null"] },
         "model": { "type": ["string", "null"] },
         "effort": { "type": ["string", "null"], "enum": ["low", "medium", "high", "max", null] },
@@ -73,11 +73,12 @@
       "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
       "additionalProperties": {
         "type": "object",
-        "required": ["status", "attempted", "duration_ms"],
+        "required": ["status", "attempted", "summary", "duration_ms"],
         "additionalProperties": false,
         "properties": {
           "status": { "enum": ["ok", "unavailable", "denied"] },
           "reason": { "type": "string" },
+          "summary": { "type": "string" },
           "reason_code": { "enum": ["unknown_check", "invalid_params", "path_denied", "metadata_unavailable", "requires_elevation", "command_missing", "check_timeout", "run_timeout", "canceled", "exec_error", "sudo_refused", "exit_error", "parse_error", "extract_error"] },
           "attempted": { "type": "boolean" },
           "evidence": {
@@ -93,6 +94,75 @@
         }
       }
     },
-    "findings": { "type": "array" }
+    "assessments": {
+      "type": "array",
+      "description": "SPEC.md §7.5: one entry per selected posture rule. Not a finding; never sets the exit code.",
+      "items": {
+        "type": "object",
+        "required": ["finding", "check", "status", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "finding": { "type": "string" },
+          "check": { "type": "string" },
+          "status": { "enum": ["matched", "not_matched", "not_applicable", "not_assessed"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "SPEC.md §7.3. Phase 1 emits rule findings only (source: rule).",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "severity_base", "severity", "adjustments", "status", "source", "confidence", "platform", "evidence", "impact", "remediation"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "category": { "enum": ["remote-access", "network", "accounts", "privesc", "integrity", "updates", "persistence", "logging", "fs", "disk", "time"] },
+          "severity_base": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["rule", "source", "delta"],
+              "properties": {
+                "rule": { "type": "string" },
+                "source": { "type": "string" },
+                "delta": { "type": "string" }
+              }
+            }
+          },
+          "status": { "enum": ["open", "accepted"] },
+          "source": { "enum": ["rule", "model"] },
+          "confidence": { "enum": ["high", "medium", "low"] },
+          "platform": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["check", "excerpt"],
+              "additionalProperties": false,
+              "properties": {
+                "check": { "type": "string" },
+                "excerpt": { "type": "string" }
+              }
+            }
+          },
+          "impact": { "type": "string" },
+          "remediation": {
+            "type": "object",
+            "required": ["summary"],
+            "additionalProperties": false,
+            "properties": {
+              "summary": { "type": "string" },
+              "commands": { "type": "array", "items": { "type": "string" } },
+              "caveat": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
   }
 }

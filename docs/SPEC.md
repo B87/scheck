@@ -4,8 +4,8 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable phase 1) planned, M2+ design · Language: Go · Inference: provider-agnostic (default
-`openai-compatible`, `--model` required; Anthropic and local models supported)
+Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ design · Language: Go · Inference: provider-agnostic (default
+`openai-compatible`, `--model` required; Anthropic and guaranteed local-only inference deferred past v1)
 
 **Changes from v0.1** (from design review):
 
@@ -33,7 +33,7 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
 - Elevation is `sudo -n` only, configured as `elevate:` with a `scheck sudoers`
   generator for least-privilege grants (§8.1).
 
-**Changes from v0.2** (from building M0 and M1; see `ROADMAP.md`):
+**Changes from v0.2** (from building M0 and M1; see `ROADMAP-0.0.1.md`):
 
 - `check.Check` gained `Description`, `ExitOK`, `PathUse`, `Canary` and `Extract` (§3).
   The first two are needed by the model menu and by checks whose exit code is the
@@ -112,7 +112,7 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
   the first adapter built (M2.6); `anthropic` moves to M3.1 (§5.2, §10). The `llm`
   interface in §5.1 does not change: it keeps `Block.Cacheable` and `Effort` because it
   is designed from the richest provider, not the first one implemented.
-- M2 is re-sliced into seven (`ROADMAP.md`): context ingestion (§6.1, §6.2) moves ahead
+- M2 is re-sliced into seven (`ROADMAP-0.0.1.md`): context ingestion (§6.1, §6.2) moves ahead
   of the severity-adjustment slice, because structured context is the grader's input
   (§6.3) and was previously scheduled after its consumer. `scheck providers` and the
   frozen phase-2 evaluation criteria gain an owning slice.
@@ -123,6 +123,53 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
   separate analysis path.
 - `scheck explain` accepts a finding id and prints the severity chain (§8), replacing the
   separate grading devtool the roadmap had sketched.
+
+**v1 scope revision (2026-09-20):**
+
+- M3.1–M3.4 move after v1: additional providers, tool-call emulation, guaranteed
+  local-only inference and domain chunking do not gate release. M4 follows M2.
+- M2 owns request-size guards before every model call, preserving evidence and
+  reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
+
+**Changes from implementing M1.7 and M1.8 (2026-09-20):**
+
+- `check.Parse` takes the whole `Check`, not just its `ParserKind` (§3). A typed shape
+  is produced from several tools' output formats (`ss` and `lsof` both answer
+  `listeners`; four package managers answer `updates`), and the catalog's own argv is
+  what says which format to expect. Sniffing the target's output to pick a parser was
+  the alternative and is worse: the format choice must not depend on target-controlled
+  bytes.
+- A typed parser produces `check.Records` — `{kind, items, partial, note}` — not a bare
+  slice (§3, §7.4). Completeness travels with the records because §7.5 needs it: a rule
+  may prove an existential condition from partial output but never an absence. In JSON a
+  typed fact's `parsed` is that object, so a record is `parsed.items[0]`.
+- A new typed shape, `file_mode`, reads a `stat` line into `{symbolic, mode, user,
+  group, size}`. The §7.5 shadow rule is specified over a *parsed* mode, and a regexp
+  over a raw line cannot express "recognized and outside a set" without lookahead.
+- `Unit` is required on `kv` checks as well as `lines` checks (§3): "13 settings" is a
+  reading, "13 keys" is a shape. The invariants test enforces it and rejects a `Unit` on
+  a typed shape, which names its own records.
+- A posture rule's predicate answers with three states, not a boolean (§7.5):
+  `matched`, `not_matched` and `not_assessed`. Predicates therefore carry what makes
+  evidence *recognizable* — `RawMatch.Requires`, `KeyEquals.Known`, `FieldEquals.Known`,
+  `FieldOutside.Recognize` — so an answer scheck does not understand can never be read
+  as a pass. This is the mechanism behind "evaluate recognized evidence, not failure to
+  recognize a good state".
+- The `pkg.*` row of the §7.5 seed table is four rules, one per concrete catalog id.
+  Several rules may share a finding id; the evaluator emits that finding once and
+  appends each rule's evidence.
+- `finding.Def` does not carry `References` yet (§7.1): the field selects citations by
+  `context.compliance`, which arrives with operator context in M2.2. Findings emit no
+  `references` key until then rather than inventing citations.
+- `run.assessment` is `rules` under `--stop-after facts` from M1.8 (§7.4), and the
+  envelope gains the `assessments` array. `run.assessment` stays a field of its own:
+  an empty `findings` array is never the same claim as "nothing was assessed".
+- The text report's header line leads with the result, the severity colours arrive, and
+  a fact whose rule fired carries `[finding: <severity>]` rather than a pass mark
+  (§7.6). Coverage is rendered in two places: the not-assessed rules close the findings
+  section by default, and `-v` prints the whole coverage table.
+- Real-model quality and adversarial evaluations gate v1 (§11, §12); mock transcripts
+  prove enforcement and control flow only.
 
 ---
 
@@ -142,9 +189,10 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
 - **Operator context as a first-class input.** The operator can hand `scheck` their
   architecture notes, expected services, exposure and accepted risks so findings are
   specific to the host's actual role rather than to a generic checklist (§6).
-- **Model-agnostic inference.** A hosted frontier model, an OpenAI-compatible endpoint,
-  or a fully local model, behind one interface — including a zero-egress mode for hosts
-  whose configuration may not leave the machine (§5).
+- **Replaceable inference.** v1 supports native tool calling through the
+  `openai-compatible` adapter behind a provider-neutral interface. Additional adapters,
+  emulation and a guaranteed zero-egress AI mode are post-v1 (§5). Offline posture
+  rules remain available without a model.
 - **Stable severities.** The same host with the same context yields the same severity
   for the same finding id, regardless of provider or run (§7.2).
 
@@ -157,6 +205,8 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
 - No fleet orchestration, no server, no agent daemon. One host per invocation.
 - No Windows.
 - No fine-tuning, no bundled model weights, no embedded vector store.
+- No additional production adapters, tool-call emulation, guaranteed local-only AI
+  mode or small-context chunking; these belong to post-v1 M3.
 - No free-form command composition by the model. If a check is not in the catalog, the
   model cannot run it; adding a check is a code change with a test.
 
@@ -177,7 +227,7 @@ Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable
         ├── policy                       one owner for: path sensitivity, redaction, budgets (§4)
         │
         ├── llm.Provider                 one narrow contract; adapters absorb provider differences (§5)
-        │     └── llm/{anthropic,openai,ollama,mock}
+        │     └── llm/{openai,mock}   (anthropic/ollama: post-v1)
         │
         ├── agent.Session                the tool-calling loop (owned by scheck)
         │     └── tools: run_check, read_file, report_finding
@@ -230,7 +280,7 @@ type Check struct {
     ID          string          // "sshd.config", "fs.suid", "pkg.apt_upgradable"
     Description string          // one line, rendered into the model's menu
     Platform    Platform        // macos | linux | any
-    Domain      Domain          // for chunking and --only filtering
+    Domain      Domain          // report grouping and --only filtering
     Argv        []string        // literal tokens; a token that is exactly "{name}" binds a Param
     Params      []Param         // typed; every placeholder must bind exactly one Param
     Parser      ParserKind      // raw | lines | kv | json | a typed shape (below)
@@ -242,7 +292,7 @@ type Check struct {
     PathUse     PathUse         // content | metadata: what a check with a Path param returns (§4.1)
     Canary      bool            // the one entry whose literal contains metacharacters (§4.3)
     Extract     string          // optional regexp with one group; only the group is kept as output
-    Unit        string          // Parser == lines: plural noun for one line ("SUID files"); the summary is "<n> <Unit>"
+    Unit        string          // Parser == lines|kv: plural noun for one record ("SUID files"); the summary is "<n> <Unit>"
 }
 
 type Param struct {
@@ -263,14 +313,26 @@ read of a sensitive path (§4.1). `Canary` exempts exactly one entry from the
 metacharacter invariant (§4.3).
 
 **Typed parsers.** `Parser` is `raw`, `lines`, `kv` or `json`, or one of the typed
-shapes: `listeners` (protocol, address, port, pid, process), `accounts` (name, uid,
-shell, home), `passwd_status` (name, status), `units` (name, state), `updates` (name,
-version), `launchd` (label, pid, status). A typed shape exists when something downstream
-needs fields: the summary line (§7.6), a posture rule (§7.5) or `scheck diff` (§7.4).
-Everything else stays `lines`, and `Unit` names what one line is, so the summary reads
-"0 SUID files" rather than "0 lines"; the catalog test requires `Unit` on every `lines`
-check. A per-check summariser function was considered and rejected: a typed record
-serves three consumers and is diffable, a closure serves one and is not.
+shapes: `listeners` (protocol, state, address, port, pid, process), `accounts` (name,
+uid, shell, home), `passwd_status` (name, status), `units` (name, state), `updates`
+(name, version), `launchd` (label, pid, status), `file_mode` (symbolic, mode, user,
+group, size). A typed shape exists when something downstream needs fields: the summary
+line (§7.6), a posture rule (§7.5) or `scheck diff` (§7.4). Everything else stays
+`lines` or `kv`, and `Unit` names what one record is, so the summary reads "0 SUID
+files" and "13 settings" rather than "0 lines" and "13 keys"; the catalog test requires
+`Unit` on every `lines` and `kv` check, and rejects one on a typed shape. A per-check
+summariser function was considered and rejected: a typed record serves three consumers
+and is diffable, a closure serves one and is not.
+
+A typed parser produces `check.Records`: `{kind, items, partial, note}`, where each item
+is a record of named fields. `partial` is set when the capture carried a redaction or
+truncation marker, or a line the format's parser did not recognise. Completeness travels
+with the records because §7.5 needs it — a rule may prove an existential condition from
+partial output, never an absence — and because a count from incomplete output must be
+labelled partial rather than presented as a total. `check.Parse` takes the whole
+`Check`, because one shape is produced from several tools (`ss` and `lsof` both answer
+`listeners`) and the catalog's argv, not the target's bytes, decides which format to
+expect.
 
 **Invariants, enforced by a test over the whole catalog** (`internal/check/invariants.go`,
 run over every registered check by `internal/check/all`; each rule has a name that
@@ -433,8 +495,6 @@ type Budgets struct {
     MaxIterations    int           // 24 model turns
     MaxTokens        int           // 32000 per completion
     ContextBytes     int           // 32 KiB merged operator context
-    ChunkAtFraction  float64       // 0.5 — chunk the fact sheet when the system prefix
-                                   //       would exceed this fraction of Limits.MaxContext (§5.3)
     RunTimeout       time.Duration // 5m, --timeout
 }
 ```
@@ -457,9 +517,11 @@ the `fs.stat` argv that actually ran.
 
 ## 5. Inference layer (provider-agnostic)
 
-Inference is a replaceable component. `scheck` must run against a hosted frontier model,
-against an OpenAI-compatible endpoint, or fully locally — the last case matters because
-some operators are not permitted to send host configuration off the machine at all.
+Inference is a replaceable component. v1 supports `openai-compatible` endpoints with
+native tool calling, plus `mock` for tests. Supporting a second production adapter,
+emulation and guaranteed local-only AI is deferred to M3 after v1. A compatible local
+endpoint may work, but selecting a loopback URL does not establish a zero-egress
+guarantee. Operators requiring offline operation can use phase 1 without a model.
 
 Consequence of that requirement: **`scheck` owns the agent loop.** No provider SDK's
 tool-runner helper drives the conversation. The loop is ~150 lines in `agent`, has one
@@ -531,21 +593,26 @@ makes them testable without a network.
 
 | Provider | Covers | Notes |
 |---|---|---|
-| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Native features probed from config, not assumed; the rest emulated (§5.3). |
-| `anthropic` | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
-| `ollama` | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
+| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). |
+| `anthropic` (post-v1 M3.1) | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
+| `ollama` (post-v1 M3.2) | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
 | `mock` | tests | Replays recorded transcripts; used by every non-live test. |
 
-Selection: `--provider`/`--model`, or `provider:` in config, or inferred from which
-credentials are present (with `openai-compatible` winning ties). `scheck providers` lists
+Selection: `--provider`/`--model`, or `provider:` in config; v1 defaults to
+`openai-compatible`. Deferred providers fail explicitly with exit 3, "not available
+in this build". After M3, credential inference may select an available provider,
+with `openai-compatible` winning ties. `scheck providers` lists
 what is configured and each one's `Limits` and `Native` set.
 
 ### 5.3 Adapters absorb capability differences
 
 v0.1 exposed six capability booleans and had the loop degrade per combination. That put
 2^n paths in the one component that must be simplest, and made the conformance suite
-conditional. Instead, **every adapter presents the full contract** and emulates what its
-backend lacks:
+conditional. Instead, **every adapter presents the full contract**. In v1, unsupported
+native tool calling is rejected before inference with exit 3; emulation is not silently
+enabled. Cache hints may be ignored and effort mapped only where supported, with
+`Native` recording what is exercised. The following emulation design is deferred to
+M3.2; it must not be scaffolded in v1:
 
 - **No native tool calling** → the adapter renders tools into the system prompt as a
   JSON call protocol, parses the model's reply into `ToolCalls`, and returns tool results
@@ -557,11 +624,33 @@ backend lacks:
 - **No native reasoning** → the adapter prepends a "think step by step before calling
   tools or reporting" instruction when `Effort >= high`.
 
-The one thing an adapter cannot hide is **context size**: the loop chunks the fact sheet
-by domain when the system prefix would exceed `Limits.MaxContext × Budgets.ChunkAtFraction`,
-analyses per chunk, and does a final correlation pass over the findings only. This is the
-only conditional path in `agent`, and the threshold lives in `policy.Budgets` (§4.4) with
-every other number that shapes a run, not as a constant inside the loop.
+**Context limits (required in M2).** Before every model call, check the entire
+serialized request against `Limits.MaxContext`, reserving the requested maximum output
+allowance. Count system instructions, tool schemas and catalog descriptions, facts,
+operator context, all conversation messages and tool results, plus provider framing.
+Token accounting belongs in `llm`, using a model-appropriate tokenizer or a documented
+conservative bound; provider-specific serialization must not leak into the agent loop.
+`Limits.MaxContext` must be known from validated model configuration or reliable
+provider metadata; an unknown limit is a configuration error (exit 3), never an
+assumption of unlimited space. `ModelInputTotal` is a separate byte budget, not a
+substitute for this token check.
+
+If the request cannot fit, do not send it. Preserve collected facts and validated
+findings, mark `run.status: incomplete`, retain assessment coverage, explain that the
+AI assessment could not finish because of the context limit, and exit 2. This applies
+both to an oversized initial request and to history growth after tool calls. A provider
+context-overflow rejection receives the same incomplete treatment; never retry it by
+silently dropping evidence. Existing policy redaction and marked truncation still
+apply, but no additional evidence truncation, history eviction or summarization is
+introduced merely to fit the context window in v1.
+
+**Small-context support (post-v1 M3.4).** Domain chunking and a final correlation pass
+are deferred. Introduce `Budgets.ChunkAtFraction` (initially 0.5) only with that slice;
+it triggers when the system prefix exceeds that fraction of `Limits.MaxContext`.
+Every chunk and correlation request must still pass the full request-size guard.
+Evaluate cross-domain cases where neither domain alone yields a finding: correlating
+findings alone may discard the facts needed to discover the relationship. Chunking
+must demonstrate preserved signal before it becomes a supported execution mode.
 
 `Native` has exactly two consumers, and the agent loop is neither of them: the report
 header records it so a reader knows which features were emulated, and `finding` reads
@@ -569,7 +658,11 @@ header records it so a reader knows which features were emulated, and `finding` 
 emulated, because parsed-from-text calls are more error-prone. The cap is applied in
 `finding`, never by the model, and the loop must not branch on any field of `Native`.
 
-### 5.4 Egress control
+### 5.4 Egress control (post-v1 M3.3)
+
+In v1, `--local-only` and `allow_egress: false` fail explicitly with exit 3 before
+any inference request; neither may be ignored or treated as an egress guarantee.
+The following supported local-only mode is deferred:
 
 `allow_egress: false` (config) or `--local-only` makes any non-`Local` provider a hard
 error before a single byte leaves the machine. For a tool whose input is a host's
@@ -792,7 +885,8 @@ type Def struct {
     BaseSeverity Severity // critical | high | medium | low | info
     Impact       string   // one sentence; used verbatim by a rule finding, the model may sharpen it in phase 2
     Remediation  Remediation // summary, commands, caveat (§7.3); text for the human, never executed
-    References   map[string][]string // framework → citations, selected by context.compliance
+    // References (framework → citations, selected by context.compliance) arrives
+    // with operator context in M2.2; until then a finding emits no `references`.
 }
 ```
 
@@ -873,9 +967,9 @@ human** — `scheck` never runs them.
 
 The JSON report is shaped so that a future fleet tool can concatenate reports without
 a translation step, even though v1 audits one host per invocation. The example below
-shows the planned M1.7–M2 shape, not the current binary's complete schema. Current
-M1.6 fields are described below it and validated by `docs/report-schema.json`;
-`summary`, `assessments`, typed records and non-empty findings arrive in later slices:
+shows the shape including the phase 2 fields that M2 fills; everything except the
+provider block and model findings is emitted today and validated by
+`docs/report-schema.json`:
 
 ```json
 {
@@ -895,7 +989,8 @@ M1.6 fields are described below it and validated by `docs/report-schema.json`;
     "context_sources": [{"source": "…", "sha256": "…", "truncated": false}]
   },
   "facts":    { "<check id>": { "status": "ok|unavailable|denied", "reason": "…",
-                                "summary": "26 listening sockets", "parsed": … } },
+                                "summary": "26 listening sockets",
+                                "parsed": {"kind": "listeners", "items": [ … ], "partial": false} } },
   "assessments": [                 // one per selected posture rule (§7.5)
     {"finding": "disk.filevault_off", "check": "disk.fdesetup",
      "status": "not_matched", "reason": "recognized-enabled-state"}
@@ -914,8 +1009,10 @@ model's prompt. The envelope is validated against `docs/report-schema.json` in t
 Findings are a flat array keyed by catalog id, never nested under a host, so
 concatenation is trivial.
 
-Current M1.6 reports explicitly set `run.assessment: "none"`; an empty findings
-array is not a security verdict. Facts expose `attempted` and optional `reason_code`
+From M1.8 a phase 1 report sets `run.assessment: "rules"` and carries the
+`assessments` array; `"none"` remains the value for a build or a mode that assessed
+nothing. An empty findings array is never a security verdict on its own — the scope of
+what was assessed is a field, not an inference. Facts expose `attempted` and optional `reason_code`
 independently of `status`. Codes are assigned by the runner: `requires_elevation`,
 `sudo_refused`, `command_missing`, `check_timeout`, `run_timeout`, `canceled`,
 `exec_error`, `exit_error`, `parse_error`, `extract_error`, `invalid_params`,
@@ -926,9 +1023,10 @@ object (`stdout`, `stderr`) to attempted facts in JSON output only. Captures rem
 redacted, bounded and extraction-filtered; persistence and default JSON omit them.
 
 Pre-release schema history: `1.0` is the M1 envelope, extended during M1.6 review with
-assessment scope, execution diagnostics and opt-in evidence; `1.1` (M1.7, M1.8) introduces
-`facts.<id>.summary`, `findings[].source`, `assessments` and the typed `parsed` shapes
-of §3. These are development revisions, not a compatibility promise.
+assessment scope, execution diagnostics and opt-in evidence; `1.1` (M1.7, M1.8) adds
+`facts.<id>.summary`, the typed `parsed` shapes of §3 (`{kind, items, partial}`, so a
+record is `parsed.items[0]`), the `assessments` array and populated `findings` with
+`source: rule`. These are development revisions, not a compatibility promise.
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,
@@ -964,9 +1062,17 @@ type Rule struct {
     Finding  string         // finding id (§7.1); the Def supplies title, severity, impact, remediation
     Check    string         // the one check whose fact the rule reads
     Platform check.Platform // macos | linux | any
-    When     Predicate      // KeyEquals{Key, Value} over kv | Matches{Regexp} over raw
-                            // AnyLine{Regexp} over lines | Field{Name, Value} over a typed shape
+    When     Predicate      // KeyEquals{Key, Value, Known} over kv
+                            // RawMatch{Regexp, Requires} over raw
+                            // AnyLine{Regexp} over lines
+                            // FieldEquals{Field, Value, Known}, FieldOutside{Field, Allowed,
+                            //   Recognize}, AnyRecord{} over a typed shape
 }
+
+A predicate answers `matched`, `not_matched` or `not_assessed` — never a boolean. The
+recognizability fields (`Requires`, `Known`, `Recognize`) are what make the third answer
+possible: a value the rule does not understand, a missing key, a redacted value or a
+truncated capture is `not_assessed`, never a pass.
 ```
 
 - **Rules read the fact sheet; they never execute a command.** The command surface is
@@ -1038,6 +1144,10 @@ alternative protections are absent. Unknown or transitional FileVault states are
 assessed by the off rule. `pkg.*` denotes separate rules bound to concrete catalog
 ids, not a wildcard execution or lookup mechanism.
 
+`pkg.*` above is four rules, one per concrete catalog id. Several rules may share one
+finding id; the evaluator emits that finding once and appends each matching rule's
+evidence.
+
 `fs.suid` deliberately has no rule: SUID files are normal, and which ones are not is
 judgement. The same applies to listeners, persistence entries and sudoers content.
 
@@ -1055,7 +1165,8 @@ contract, pinned by golden tests per fixture (§11):
   grouped by check and reason; they are excluded from finding counts.
 - **Status words, not marks.** A check `ran`, was `skipped` (unavailable) or was
   `denied`. A mark column may exist for scanning, but a mark never means "posture ok":
-  a fact whose rule fired shows the finding's severity, not a plus.
+  a fact whose rule fired shows the finding's severity in its reading
+  (`[finding: high]`), not a plus.
 - **The fact sheet is one flat table**, header row `DOMAIN STATUS CHECK READING`, one
   row per check, rows ordered by domain and then id. Every row repeats its domain so the
   report sorts, greps and pipes as a table; there are no section sub-headings and no box
@@ -1089,10 +1200,12 @@ contract, pinned by golden tests per fixture (§11):
   descriptions and evidence). Styling is applied to whole lines after wrapping, so an
   escape sequence never counts against a line's width. The caller decides — the report
   package inspects no file descriptor and no environment variable.
-- **Honest footer.** In `facts` mode: "assessment: posture rules only; run without
-  `--stop-after` for the agentic pass" (or "agentic pass not available in this build"
-  until M2, and "assessment: none … posture rules and the agentic pass are not available
-  in this build" until M1.8). Never "findings: none" when nothing looked.
+- **Honest footer.** In `facts` mode: "assessment: posture rules only", with how many
+  of the selected rules had the evidence to decide, and "the agentic pass is not
+  available in this build" until M2. Never "findings: none" when nothing looked, and
+  never a claim that what no rule covers is fine. The header's result sentence leads
+  with the findings ("2 findings (1 medium, 1 low), 4 rules not assessed, 28 checks: 22
+  ran, 6 skipped") and says "0 findings from posture rules" rather than "no findings".
 - **Width.** Lines wrap at the terminal width or 100 columns; no trailing padding.
   Wrapping prefers a space, falls back to a hard cut rather than dropping a byte, and
   never breaks a `[REDACTED:…]` or `[TRUNCATED:…]` marker in half: the marker is the
@@ -1120,7 +1233,7 @@ scheck explain ID                       # CHECK-ID: what a check runs, why, its 
                                         #   (purpose, literal argv with its {placeholders}, typed params,
                                         #   platform, domain, phase, elevation, parser, exit codes, path
                                         #   use, extract; one section per platform-specific definition.
-                                        #   The posture-rule list arrives with the rules in M1.8.)
+                                        #   Lists the posture rules that read the fact.)
 scheck providers                        # configured providers, limits, native features
 scheck diff [A B]                       # posture drift between two runs (M4)
 scheck --format text|json|sarif  --out FILE
@@ -1128,9 +1241,9 @@ scheck --format text|json|sarif  --out FILE
        --profile baseline|hardened      # severity thresholds + catalog tier (§3)
        --elevate none|sudo  (--sudo)    # elevation mechanism (§8.1)
        --only remote-access,updates     # category filter
-       --provider openai-compatible|anthropic|ollama
+       --provider openai-compatible      # anthropic / ollama: post-v1; mock for tests
        --model NAME  --base-url URL
-       --local-only                     # refuse any provider that leaves the machine
+       --local-only                     # unavailable until post-v1 M3.3; exit 3
        --effort low|medium|high|max
        --context SOURCE                 # repeatable: FILE | DIR | note:TEXT | target[:PATH]  (§6.1)
        --ignore-context                 # no context in the prompt, no severity adjustment
@@ -1179,10 +1292,12 @@ exits `1` when one is open at or above the profile threshold and `0` otherwise
 `RunTimeout` cut the run, `3` for usage, config or canary errors. One meaning per exit
 code, whichever phase produced it. `-v` and `-vv` govern both logging and how much of
 the text report is shown (§7.6).
-In the current M1.6 build, `run.assessment` is `none`, `findings` is empty, and exit
-`1` is not emitted. Successful collection returns `0` even with individual unavailable
-checks; consult `run.status`, warnings and each fact. JSON reports may accompany exit
-`2`; early setup/usage failures may have no report. See the [scheck skill](../.agents/skills/scheck/SKILL.md).
+From M1.8 the build emits exit `1`: `run.assessment` is `rules`, `findings` holds the
+rule findings, and `assessments` records every selected rule's coverage. Exit `0` means
+no open finding reached the profile threshold — not that the host is well configured,
+and not that everything was assessed; consult `assessments`, `run.status`, warnings and
+each fact. JSON reports may accompany exit `1` and `2`; early setup/usage failures may
+have no report. See the [scheck skill](../.agents/skills/scheck/SKILL.md).
 
 Flags that belong to a later milestone are registered from day one and exit `3` with
 "not available in this build" until that milestone lands.
@@ -1234,11 +1349,11 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 `./scheck.yaml`, `~/.config/scheck/config.yaml`, then flags (last wins).
 
 ```yaml
-provider: openai-compatible   # openai-compatible (default) | anthropic | ollama
+provider: openai-compatible   # v1 production adapter; anthropic / ollama post-v1
 model: gpt-5                  # required for openai-compatible; the endpoint decides what exists
 # base_url: http://localhost:11434    # defaults to https://api.openai.com/v1
 effort: high
-allow_egress: true            # false forbids any non-local provider
+allow_egress: true            # false fails explicitly in v1; local-only mode post-v1
 profile: baseline
 elevate: none                 # none | sudo (§8.1)
 state_dir: ~/.local/state/scheck
@@ -1263,9 +1378,8 @@ read a key from the config file.
 
 ## 10. Milestones
 
-Status (2026-09-20): M0, M1 and M1.6 including its review follow-up are implemented;
-see `ROADMAP.md` for validation and working-tree status. M1.7 typed parsers and
-summaries is next, then M1.8 posture rules and M2.
+Status (2026-09-20): M0, M1, M1.6 including its review follow-up, M1.7 and M1.8 are
+implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 is next.
 
 - **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
   and invariants test, `policy` (path, redaction, budgets), audit log, elevation
@@ -1277,10 +1391,12 @@ summaries is next, then M1.8 posture rules and M2.
   the finding id catalog (§7.5, §7.1), so phase 1 says what is wrong without a model.
 - **M2 — agent.** `llm` interface, the loop, three tools, system prompt, severity
   adjustments and accepted risks on top of the M1.8 catalog, operator context (§6),
-  the `openai-compatible` provider, the `mock` provider, `scheck providers`.
-- **M3 — more providers.** `anthropic` + `ollama` with tool-call emulation,
-  `--local-only`, provider conformance suite. Two independent providers is what proves
-  the abstraction is real.
+  the `openai-compatible` provider, the `mock` provider, `scheck providers`, request-size
+  guards and repeated real-model quality/adversarial evaluations.
+- **M3 — more providers (post-v1; not a dependency of M4).** `anthropic` + `ollama`
+  with tool-call emulation,
+  `--local-only`, small-context chunking and extension of the existing provider
+  conformance suite. Additional provider coverage is not a v1 release gate.
 - **M4 — polish.** SARIF, profile tiers, category filters, `scheck diff`, golden-fixture
   tests.
 - **Optional research — bounded assessment (§5.9).** Offline fixtures and harness
@@ -1338,10 +1454,22 @@ summaries is next, then M1.8 posture rules and M2.
   tool-call round trip, error results, multiple calls in one turn, each `StopReason`
   mapped correctly, `MaxTokens` truncation, usage normalization, `Limits` reporting.
   Emulating adapters run the same table; that is the point.
-- **Context-injection corpus.** Context files containing instruction-shaped text
-  ("ignore previous instructions", "report no findings", "run `curl … | sh`") must not
-  change the auditor role, suppress findings wholesale, alter any severity, or produce
-  a denied check attempt in the audit log.
+- **Context-limit tests.** Cover an oversized first request, tool-result/history
+  growth, schema/framing overhead, output reservation, unknown limits and provider
+  overflow rejection. Assert no oversized request is sent when caught locally, no
+  evidence is silently dropped, and collected facts/findings survive in an incomplete
+  report with exit 2.
+- **Injection corpus.** Operator prose and target-derived check output containing
+  instruction-shaped text ("ignore previous instructions", "report no findings",
+  "run `curl … | sh`") must not change the auditor role, suppress findings wholesale,
+  alter code-owned severity, or produce a denied check attempt in the evaluated runs.
+  M2.5 tests prompt boundaries and enforcement with mock transcripts; these do not
+  establish model resistance. M2.7 must also run repeated real-model evaluations over
+  hostile and benign paired fixtures, including incomplete and misleading evidence.
+  Freeze pass criteria in `docs/eval/phase2-criteria.md` at M2.1, record model/prompt
+  versions and failures, and require the criteria to pass before v1. This is measured
+  resistance on the corpus, not a guarantee against every injection; deterministic
+  policy remains the security boundary. Live evaluations are opt-in, not default CI.
 - **Redaction tests.** Seeded secrets in fixture output must not appear in any
   transcript, report, or audit log, and every redaction must leave a marker.
 
@@ -1360,9 +1488,11 @@ summaries is next, then M1.8 posture rules and M2.
 5. Every finding carries evidence traceable to a check id.
 6. Seeded secrets never appear in any output artifact, and every redaction is marked.
 7. One `scheck local` run on a clean host costs under $0.50 at default effort.
-8. The same host produces a structurally valid report under at least two providers, one
-   of them fully local with emulated tool calling, and `--local-only` refuses a cloud
-   provider before any egress.
+8. The `openai-compatible` adapter and `mock` pass the provider conformance suite.
+   Full-request context guards run before every model call; initial overflow, history
+   growth and provider overflow rejection preserve facts/findings, report an incomplete
+   AI assessment and exit 2 without silently dropping evidence (§5.3, §11). Additional
+   providers, emulation, guaranteed local-only AI and chunking are post-v1 requirements.
 9. Operator context changes the report deterministically: the same host audited as
    `exposure: internet` and as `exposure: lan` yields severities that differ exactly per
    the adjustment table, every adjustment is attributed to its source, and
@@ -1381,6 +1511,9 @@ summaries is next, then M1.8 posture rules and M2.
     single-pass analysis instead.
 11. The SSH canary aborts the run against a fish or restricted login shell before any
     other command is sent.
+12. Repeated real-model adversarial evaluations pass the frozen M2.1 criteria on
+    hostile operator context and target-derived evidence (§11). Record model/prompt
+    versions, outcomes and failures; mock-only results cannot satisfy this gate.
 
 ---
 
@@ -1400,6 +1533,7 @@ with a reason that beats the one recorded.
 | Elevation mechanism? | `sudo -n` only in v1, as a prefix, plus `scheck sudoers` (§8.1). Password forwarding and `doas`/`run0` deferred. | Never transmit a password; the prefix design makes the others cheap to add later. |
 | Which provider is built first? | `openai-compatible` (M2.6); `anthropic` follows in M3.1 (§5.2, §10). | The widest-reach adapter should be the one the conformance suite is written against, and a second provider that is *richer* than the reference implementation tests the interface harder than a second one that matches it. The `llm` interface stays designed from the richest provider so M3.1 adds no field. |
 | Confidence under emulated tool calling? | Capped at `medium` in code, keyed on `Native.ToolCalling` (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. Per-call emulation provenance would cap more precisely in a mixed run, but no adapter emulates anything until M3.2 — revisit it there, with the emulation in front of us, rather than scaffolding it now. |
+| Must M3 ship in v1? | No: ship M2, then M4; M3.1–M3.4 are post-v1. Keep full-request context guards and real-model quality/adversarial release gates in M2. | More providers and chunking expand compatibility; robustness first requires bounded execution, honest incompleteness and measured quality. Chunking adds a separate risk of losing cross-domain evidence. |
 | Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9), developed offline; live evaluation deferred until access is available. | Bounded judgments have a different contract, and waitlisted vendor access must not block the product. |
 | Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§7.5), one fact → one finding, code-graded like everything else. | Most users stop at `--stop-after facts`; a fact sheet that never says "this is wrong" is a debug artefact, not a tool. The model still owns every conclusion that needs two facts or judgement. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§8). | One meaning per exit code; CI can gate on the offline run. |

@@ -1,11 +1,10 @@
-# scheck — roadmap to v1
+# scheck — roadmap to 0.0.1
 
-This decomposes `SPEC.md`'s five milestones (§10) into slices small enough to ship and
+This decomposes the first release's milestones from `SPEC.md` (§10) into slices small enough to ship and
 demo individually. Each slice is vertical — it produces something runnable, not a layer
 that only compiles. Slices are numbered in dependency order within their milestone;
-milestones themselves are ordered, but a later milestone's early slices sometimes have
-no dependency on the one before it, and that's noted where it matters for parallelizing
-two people's work.
+the 0.0.1 sequence is M0 → M1 → M2 → M4.5–M4.7. Historical milestone IDs are preserved.
+References to “v1” in the spec mean this first release, now named 0.0.1.
 
 Every slice lists: what it delivers, a **demo** (a command that proves it works), what
 must be true before it's done, and which spec section it implements. "Done" always
@@ -13,11 +12,17 @@ includes tests, not just code — the testing strategy in `SPEC.md` §11 is dist
 across slices below rather than saved for the end.
 
 **Status (2026-09-20):** M0 and the original M1 slices are committed on `main`.
-M1.6 and its diagnostics/agent-CLI follow-up are implemented and validated in the
-working tree, not yet committed or released. Checkmarks indicate completed
-implementation; each slice records validation separately.
+M1.6 with its diagnostics/agent-CLI follow-up, M1.7 and M1.8 are implemented and
+validated in the working tree, not yet committed or released. Checkmarks indicate
+completed implementation; each slice records validation separately.
 Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules).
-M1.7 (typed parsers and summaries) is next, then M1.8 and M2.1.
+M2.1 is next.
+
+**0.0.1 scope revision (2026-09-20):** M2 includes full-request context limits,
+real-model quality/adversarial release gates and configuration usability (M2.2a).
+Existing profile behavior, regression coverage, acceptance validation and the GitHub
+release process complete the 0.0.1 scope.
+
 Before the first GitHub release, breaking changes are
 allowed without compatibility shims or mandatory major-version bumps; implement the
 spec, schema and fixture changes together (SPEC §7.4). The second-person review of
@@ -204,7 +209,7 @@ Deliver the state directory writer: every run lands at
 `<state-dir>/runs/<host.id>/<started>.json`, honoring `--state-dir` / `--no-persist`,
 redacted the same as the report.
 **Demo:** run `scheck local --stop-after facts` twice, `ls` the state dir, and diff the
-two persisted files by hand to confirm the shape that `scheck diff` will need later.
+two persisted files by hand to confirm stable host identity and inspectable run artifacts.
 **Done when:** persistence never blocks the run (a full disk degrades to a logged
 warning, not a failure).
 **Spec:** §7.4.
@@ -231,9 +236,10 @@ and unreadable. Every check showed `+`, including "Firewall is disabled"; summar
 the first raw line ("134 lines: _accessoryupdater 278"); six checks said "requires
 elevated read" with no remedy; the footer said "findings: none". Three slices fix that
 before the model exists, using the M1 pause point. M1.6 fixed the marks, the remedies
-and the footer; the raw-line summaries are M1.7's job and are still there. The decisions behind them (posture
-rules in phase 1, exit `1` in facts mode, typed parsers, `-vv` for output) are in
-SPEC §13.
+and the footer; M1.7 replaced the raw-line summaries with typed readings; M1.8 added the
+posture rules, so the report now leads with what is wrong. The decisions behind them
+(posture rules in phase 1, exit `1` in facts mode, typed parsers, `-vv` for output) are
+in SPEC's change list.
 
 ### M1.6 — readable fact sheet ✅
 Deliver the §7.6 text contract minus anything that needs new parsers: two-line header,
@@ -337,10 +343,9 @@ plans emit valid JSON; unsupported SARIF exits 3 without stdout. The updated rep
 schema validates fixture reports with optional evidence. Docker integration was not
 run: the Docker API socket was inaccessible in this sandbox.
 
-M1.7 and M1.8 remain separate slices; typed posture facts and findings are not
-implemented here.
+M1.7 and M1.8 remained separate slices and landed after this one.
 
-### M1.7 — typed parsers + summaries
+### M1.7 — typed parsers + summaries ✅
 Deliver the typed shapes in §3 (`listeners`, `accounts`, `passwd_status`, `units`,
 `updates`, `launchd`), the `Unit` field on every `lines` check (catalog test enforces),
 the `summary` string per fact in the envelope, and `schema_version` 1.1 with
@@ -356,7 +361,46 @@ the fixtures re-recorded with `make fixtures` show no diff in recorded bytes, on
 golden output.
 **Spec:** §3 typed parsers, §7.4 schema 1.1.
 
-### M1.8 — posture rules + finding id catalog
+**Landed (2026-09-20).** `internal/check/typed.go` holds the shapes, `summary.go` the
+one-line readings, and `check.Parse` now takes the whole `Check` rather than a
+`ParserKind`.
+
+- **Seven shapes**, one more than the plan: `listeners`, `accounts`, `passwd_status`,
+  `units`, `updates`, `launchd` and `file_mode`. The last is new and exists because the
+  §7.5 shadow-permissions rule is specified over a *parsed* mode; a regexp over a raw
+  `stat` line cannot express "recognized and outside a set" without lookahead. Recorded
+  in SPEC §3 and its change list.
+- **A typed parser reads the check, not just its kind.** `ss` and `lsof` both answer
+  `listeners`; `apt`, `dnf`, `zypper` and `softwareupdate` all answer `updates`. The
+  format is selected from the catalog's own `Argv[0]`, never by sniffing the target's
+  output, so target bytes cannot steer the parser.
+- **`Records{kind, items, partial, note}`** rather than a bare slice: completeness
+  travels with the records, because §7.5 lets a rule prove presence from partial output
+  but never absence, and because an incomplete count must say so ("24 listening sockets
+  (partial: output was truncated or redacted)").
+- **`Unit` is required on `kv` checks too**, and rejected on typed shapes. "13 settings"
+  is a reading; "13 keys" is a shape. New invariant `missing-unit`.
+- **`parseKV` was rewritten**: `KEY=value`, then `Some Key: value` (the only form whose
+  key may contain spaces), then `key value`. The old "split on the first of `=:` or
+  whitespace" turned `sestatus`'s "SELinux status: enabled" into key `selinux` — which
+  the §7.5 SELinux rule reads as `selinux status`, so the rule table could not have been
+  written against the old parser. `sshd -T`'s "listenaddress [::]:22" still splits on
+  the space.
+- **`summary` per fact** in the envelope, in the text table and (from phase 2) in the
+  prompt: one string, produced in `internal/check` beside the parsers.
+
+**Validation.** `make check` green (vet, `go fix` with no rewrites, lint 0 issues, race
+suite). Parser edge tests cover empty, truncated mid-record, header-only, CRLF, unknown
+states, redacted fields and 1 MiB of garbage per kind; `internal/baseline/fixtures_test.go`
+asserts record counts and populated fields on all three recorded fixtures;
+`internal/report/summary_test.go` fails any fact whose reading is still shape-level on
+any fixture. Nine golden reports regenerated and read as a review item. `make fixtures`
+was re-run against the containers: the only diff in recorded bytes is the container's
+own hostname in two `uname` captures, which changes on every container run, so it was
+reverted to keep the goldens stable. Nothing in this slice changes what is executed,
+only how the recorded bytes are parsed.
+
+### M1.8 — posture rules + finding id catalog ✅
 Deliver `internal/finding`: `Def` with title, base severity, impact and remediation
 text (§7.1) for the seed ids in §7.5; `Rule` and its predicate kinds; the evaluator
 over a fact sheet; findings in the envelope with `source: rule`; findings-first text
@@ -375,6 +419,51 @@ The invariants test extends to rules (every `Rule.Check` is a catalog id, every 
 check's parser); acceptance criterion 4 passes as reworded in §12.
 **Spec:** §7.1, §7.5, §8 exit codes, §12 criterion 4.
 
+**Landed (2026-09-20).** `internal/finding`: `finding.go` (severity, the emitted
+finding), `catalog.go` (15 `Def`s), `rule.go` (predicates and the rule table),
+`evaluate.go` (the evaluator) and `invariants.go`. The package reads a fact sheet and
+imports no target, no runner constructor and no argv.
+
+- **A predicate answers three ways**, not two: `matched`, `not_matched`,
+  `not_assessed`. That is what implements "evaluate recognized evidence, not failure to
+  recognize a good state" (§7.5), so the recognizability lives in the predicate —
+  `RawMatch.Requires`, `KeyEquals.Known`, `FieldEquals.Known`, `FieldOutside.Recognize`.
+  An unknown FileVault state, a redacted value, a truncated capture, a missing key, a
+  denied or unavailable check and a check disabled in config all end as `not_assessed`.
+- **Coverage is a first-class array.** Every selected rule emits an `assessments` entry;
+  only `matched` emits a finding. The text report closes the findings section with the
+  not-assessed rules, grouped by check and reason, carrying that check's own remedy
+  ("re-run with --sudo"), and `-v` prints the whole coverage table.
+- **The seed table's `pkg.*` row is four rules**, one per concrete catalog id. Two
+  package managers on one host produce one `updates.pending` finding with both excerpts.
+- **Exit 1** from `reportAndExit` in `cmd/scheck`, after the report is written, with
+  exit 2 taking precedence: an incomplete run's silence is not a clean bill of health.
+- **Severity colours** arrive (the only colours in the report), and a fact whose rule
+  fired carries `[finding: <severity>]` in its reading rather than a pass mark.
+- **`scheck explain CHECK-ID`** now lists the posture rules that read the fact, and JSON
+  discovery gains `posture_rules` per check, so an agent that sees a check skipped knows
+  which conclusions went unassessed.
+- **Not implemented, deliberately:** `finding.Def.References`. The field selects
+  citations by `context.compliance`, which arrives in M2.2; inventing citations now
+  would be worse than omitting the key (SPEC §7.1 and its change list say so).
+
+**Validation.** `make check` green. `internal/finding` has firing, non-firing and
+insufficient-evidence fixtures for every rule in the table, and a test that fails when a
+new rule ships without all three; separate tests cover partial evidence proving presence
+but not absence, applicability, disabled checks, evidence merging, severity ordering and
+both profile thresholds. `ValidateRules` is asserted over the real catalog and
+per-violation-class. `internal/report` covers findings-first rendering, the -v detail,
+coverage grouping with remedies, the footer's refusal to claim a verdict, JSON/text
+agreement and escaping of target-derived excerpts; `cmd/scheck` covers the exit-code
+matrix and exit-2-over-1 precedence. Verified by hand on a real Mac: `scheck local
+--stop-after facts` reports the application firewall as one medium finding with the
+`fw.global` excerpt and the remediation, and exits 1. `make integ` is green (Ubuntu and
+Fedora containers, schema validation, every audited argv a catalog binding, empty
+`docker diff`, `visudo -cf`); no check, argv or execution path changed in either slice.
+Acceptance criterion 4 is covered by a test in `cmd/scheck`: offline, with no model, a
+FileVault-off macOS sheet and a `PasswordAuthentication yes` Linux sheet each yield
+their finding with evidence and remediation and exit 1.
+
 **M1 readability exit demo:** the M1 exit demo commands, read by someone who has not
 seen the JSON, plus a CI job that fails (exit `1`) on a FileVault-off fixture.
 
@@ -385,8 +474,9 @@ seen the JSON, plus a CI job that fails (exit `1`) on a FileVault-off fixture.
 Goal: phase 2 exists and can be tested entirely offline via the `mock` provider before
 a single live API call is spent.
 
-Two slices here have no model dependency at all. Operator context is consumed by
-`finding` deterministically (§6.3), so M2.2 and M2.3 improve `--stop-after facts` on
+Context ingestion, configuration inspection and grading have no model dependency.
+Operator context is consumed by `finding` deterministically (§6.3), so M2.2, M2.2a
+and M2.3 improve `--stop-after facts` on
 their own and can be built in parallel with M2.1 by a second person; M2.4 is the first
 slice that needs both halves. M2.2 before M2.3 is deliberate: the grader's structured
 input is a real merged context type, not a synthetic one invented ahead of its producer.
@@ -396,8 +486,8 @@ because this is where a phase-2 implementation is most likely to breach one:
 
 - Every execution goes through `runner.Run`. `run_check` and `read_file` are callers of
   the one enforcement point, never a second path (§4, AGENTS.md non-negotiable 3).
-- The loop branches on nothing but the chunking budget (§5.1). A provider name, a
-  `Native` flag or a capability boolean must never appear in an `if` inside `agent`;
+- Provider-dependent loop behavior is limited to context-size handling (§5.1, §5.3).
+  A provider name, a `Native` flag or a capability boolean must never appear in an `if` inside `agent`;
   adapters absorb the difference (§5.3).
 - Severity comes from code, never from the model (§7.2). `report_finding` has no
   `severity` field and a supplied one is ignored, not rejected.
@@ -412,7 +502,10 @@ Deliver the interface exactly as specified in §5.1 (`Stream`, package-level `Co
 `Native` set. `scheck providers` is the slice's only user-visible surface and the smoke
 test that an adapter registers correctly.
 Also commit `docs/eval/phase2-criteria.md`: the success criteria M2.7 is judged against,
-written now, while nothing is built and no result is known. M2.7 cites that file;
+written now, while nothing is built and no result is known. Include pass criteria for
+repeated real-model adversarial evaluations over hostile operator prose and target
+output, with benign paired controls; freeze these alongside quality and cost criteria.
+M2.7 cites that file;
 changing it later is a commit with a reason in the message, not a quiet edit.
 **Demo:** `scheck providers` lists `mock` and `openai-compatible` (the latter
 unconfigured, no key) with their limits; a transcript fixture drives `mock` through a
@@ -445,6 +538,54 @@ exits 3 at load. Prose is inert in this slice by construction — the injection 
 belongs to M2.5, where a model first sees it.
 **Spec:** §6.1, §6.2, §4.4 `ContextBytes`, §7.4 `context_sources`.
 
+### M2.2a — configuration inspection, validation and walkthrough
+
+Deliver `scheck config show` and `scheck config validate`, using the same configuration
+resolver and validation rules as ordinary runs. `show` supports text and JSON and
+reports effective settings with provenance: built-in default, user-config file,
+project `scheck.yaml`, or an explicit CLI flag. For accumulated restrictions and merged
+context, retain contributing sources per entry/key rather than claiming one file owns
+an entire merged value. Keep the existing slice IDs; this slice follows M2.2.
+
+Align SPEC §9, help and implementation on precedence: built-in defaults → OS user
+config → project `scheck.yaml` → explicitly supplied flags. Document the actual Linux
+and macOS user-config locations. Defaults from flag registration must not accidentally
+override file settings; restriction lists accumulate and context uses M2.2's per-kind
+merge rules. Define deterministic ordering for implicit context files and conflict
+resolution for duplicate expected-service and accepted-risk entries, then test it.
+
+`config show` and `config validate` inspect local configuration without contacting a
+model or target. Validate local context sources and report target-resident context as
+unresolved, not successfully validated; resolving it remains the explicit
+`--stop-after context` path through the runner. Credentials are never printed. Apply
+redaction and terminal escaping to displayed values and diagnostics, including context
+and credential-bearing URLs; source attribution must not leak inline secret values.
+
+**Demo:** a user default selects a model, project configuration selects `hardened`, and
+`scheck config show --profile baseline --format json` identifies the flag as the profile's
+source while retaining the model's file origin. `scheck config validate` identifies an
+invalid local context field with its source and exits 3. Then
+`scheck local --context ./hosts/gateway.yaml --stop-after context` shows the merged
+context that an assessment would consume.
+
+**Done when:**
+
+- tests establish identical effective settings for inspection and ordinary runs,
+  including explicit flags, absent files, accumulated restrictions and context conflicts;
+- validation exits 0 for valid local configuration and 3 for usage/config errors,
+  without target commands or inference requests; unresolved remote context is explicit;
+- seeded credentials are absent from text, JSON and diagnostics, and target-derived
+  text cannot control the terminal;
+- provider settings are inspected without credentials or network probes; M2.6 completes
+  adapter-specific validation and tests unavailable features failing explicitly;
+- a checked-in walkthrough covers personal defaults, team configuration, per-host
+  context files, inline notes, expected services, expiring accepted risks and one-off
+  CLI overrides. It distinguishes preferences, context and restrictions, and labels
+  unavailable features honestly.
+
+**Spec work:** align §6.1 and §9, add these CLI contracts to §8 and their tests to §11
+when implementing this slice. No new configuration-loading or target-execution path.
+
 ### M2.3 — severity adjustments + accepted risks
 `finding.Def` and the base severity table exist since M1.8; M2.2 now supplies real
 structured context. Deliver the rest of the deterministic grader: base severity →
@@ -469,7 +610,7 @@ to the same severity through the same chain.
 ### M2.4 — three tools + agent loop, mock only
 Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (§5.7), the
 provider-neutral system prompt (§5.8), and the loop (§5.6) wired to `mock` only. No real
-provider — this slice proves control flow (iteration budget, chunking trigger,
+provider — this slice proves control flow (iteration budget, full-request context guards,
 stop-on-no-tool-calls) against scripted transcripts.
 `run.mode` becomes `agent`, or `single-pass` when the iteration budget is 1. Single-pass
 is the same loop with `MaxIterations: 1`, not a second code path; that is what makes
@@ -491,6 +632,12 @@ in it, end to end through both renderers.
   each one ends the run `status: incomplete` with exit `2`, never a clean bill of health
   — `MaxIterations`, `AgentChecks`, `AgentWallClock`, `ModelInputTotal`, `MaxTokens`,
   `RunTimeout`;
+- before every model call, the entire serialized request plus output reservation is
+  checked against a known `Limits.MaxContext` (§5.3); tests cover initial overflow,
+  history/tool-result growth and tool/schema/framing overhead. Locally detected
+  overflow sends no request, preserves facts/findings, explains the incomplete AI
+  assessment and exits 2. Unknown limits fail configuration with exit 3. No silent
+  evidence removal or chunking; token accounting stays within `llm`;
 - `read_file` and `text.cat {path}` produce byte-identical audit records apart from the
   tool name — the test that stops model-facing sugar from becoming a second enforcement
   path;
@@ -506,30 +653,34 @@ in it, end to end through both renderers.
 ### M2.5 — operator context in the prompt + injection corpus
 Deliver the `<operator_context>` prompt block (§6.3): the structured map rendered so the
 model can reason about *why* a port is expected, prose passed through verbatim under
-per-source headings, and the §11 context-injection corpus run against `mock`.
+per-source headings, and the §11 injection corpus run against `mock`.
 **Demo:** `scheck local --provider mock --transcript ... --context
 ./testdata/context/hostile/` produces the same findings, the same roles and the same
 severities as the identical transcript run without the hostile context.
-**Done when:** the corpus passes — no seeded string changes the auditor role, suppresses
-findings wholesale, alters any severity, or produces a denied check attempt in the audit
-log; and a test asserts severity is unreachable from prose by construction, because the
-grader's only context input is the structured map merged in M2.2.
-**Spec:** §6.3, §5.8, §11 context-injection corpus.
+**Done when:** mock tests establish prompt/data boundaries and deterministic
+protections: prose cannot reach severity grading, rule findings cannot be suppressed,
+and hostile tool calls cannot bypass policy. Include instruction-shaped target output
+as well as operator prose. Scripted transcripts do not prove that a model resists
+injection; M2.7 must evaluate this corpus with the real model before 0.0.1.
+**Spec:** §6.3, §5.8, §11 injection corpus.
 
 ### M2.6 — `openai-compatible` provider
 Deliver the real adapter for a backend with native tool calling (OpenAI, or a
 vLLM/Groq/Together endpoint), selected with `--base-url` + `--model`: native tool
-calling, the `Effort` mapping, and cache breakpoints honoured where the endpoint
-supports them. This is the default provider and the reference implementation the
+calling (required in 0.0.1; unsupported endpoints fail explicitly), the `Effort` mapping,
+and cache breakpoints honoured where the endpoint supports them. This is the default provider and the reference implementation the
 conformance suite is written against, and the first slice that costs real money.
 **Demo:** `scheck local --provider openai-compatible --model ...` against a real
 (throwaway VM) target, producing a real report.
 **Done when:** the provider conformance suite (§11) is green for `openai-compatible`
-running the same table `mock` has passed since M2.1; a live run's cost is measured and
+running the same table `mock` has passed since M2.1; token accounting includes provider
+framing and reserved output, and provider context-overflow errors preserve the report
+with incomplete status and exit 2. Deferred providers, `--local-only` and
+`allow_egress: false` fail explicitly before inference, never silently enable egress.
+A live run's cost is measured and
 checked against the $0.50 budget (acceptance criterion 7);
 `Block.Cacheable` and `Effort` are each either exercised by the adapter or recorded as
-unexercised in `Native`, so M3.1 does not discover that the interface cannot express a
-feature no adapter has used yet.
+unexercised in `Native`; the report must not imply unsupported features were used.
 **Spec:** §5.2, §5.5.
 
 ### M2.7 — phase-2-earns-its-cost evaluation
@@ -540,190 +691,108 @@ context: **posture rules alone** (`--stop-after facts`), **single-pass**
 (`MaxIterations: 1`), and **the agent**. The only variable is the iteration budget —
 same prompt, same tools, same evidence — so a difference is attributable to
 investigation and nothing else. Repeat model runs and record model and prompt versions.
-Mock transcripts validate plumbing only and make no quality claim.
+Mock transcripts validate plumbing only and make no quality claim. Also run repeated
+real-model adversarial evaluations on the M2.5 corpus, pairing hostile operator context
+and check output with benign controls. Record failures and model/prompt versions;
+these live evaluations are opt-in, but recorded passing results are required for 0.0.1.
 **Demo:** a comparison report of correct additional findings, false positives, missed
 issues, justified abstentions, uncertainty resolved by a follow-up check, latency, tokens
 and cost. Do not require single-pass analysis to miss any particular example.
-**Done when:** acceptance criterion 10 is demonstrated and recorded against the criteria
+**Done when:** acceptance criteria 10 and 12 are demonstrated and recorded against the criteria
 frozen in `docs/eval/phase2-criteria.md` at M2.1 — investigation produces repeatable
 useful gains within budget. If it does not, the loop is removed and posture rules plus
 single-pass analysis are retained; that removal is a deletion, not a redesign, because
-severity, the envelope and the tool surface never belonged to the loop.
-**Spec:** §2.1 rationale, §12 acceptance criterion 10.
+severity, the envelope and the tool surface never belonged to the loop. The retained
+single-pass mode must still pass the adversarial gate; removing the loop does not waive it.
+**Spec:** §2.1 rationale, §11 injection corpus, §12 acceptance criteria 10 and 12.
 
 **M2 exit demo:** `scheck local` and `scheck ssh` produce full agentic reports against
 the `openai-compatible` provider on both a clean host and the seeded fixture, with
 attributed severity adjustments visible in the JSON output. Acceptance criteria 5, 6, 7,
-9 (model half), and 10 are all checkable at this point.
+8, 9 (model half), 10 and 12 are all checkable at this point. Configuration inspection
+and validation from M2.2a are complete, including provider settings. M4 follows.
 
 ---
 
-## M3 — more providers
+## M4 — regression coverage and release validation
 
-Goal: prove the abstraction from both directions — a provider whose native feature set
-is *richer* than the reference implementation's (`anthropic`), and one that lacks native
-tool calling, parallel calls, and caching all at once, the worst case (`ollama`).
-
-### M3.1 — `anthropic` provider (richer native features)
-Deliver the adapter for Claude API / Bedrock / Vertex / Foundry: adaptive thinking,
-`output_config.effort`, native prompt caching breakpoints. This isolates "a provider the
-interface must already be able to express" from "a provider whose capabilities must be
-emulated," which M3.2 adds next.
-**Demo:** `scheck local --provider anthropic` against the same fixture host as M2.7.
-**Done when:** conformance suite green; the same fixture's findings are structurally
-identical (schema, not content) to the `openai-compatible` run; `Block.Cacheable` maps to
-a real cache breakpoint and `Effort` to `output_config.effort` with **no change to the
-`llm` interface** — if either needs a new field, §5.1 was under-designed and that is the
-finding this slice exists to produce.
-**Spec:** §5.2.
-
-### M3.2 — tool-call emulation + `ollama`
-Deliver the emulation layer (§5.3): render tools into the system prompt, parse a text
-protocol into `ToolCalls`, serialize parallel calls one at a time. Wire it under
-`ollama`, `Local: true`.
-**Demo:** `scheck local --provider ollama --model llama3.1 --local-only` against the
-fixture host, showing `native.tool_calling: false` in the report header and a
-`confidence` cap of `medium` on any finding from an emulated call.
-**Done when:** conformance suite green for `ollama` running the *same* table as
-`openai-compatible` — no conditional skips. This is the actual proof the abstraction is
-real, not M3.1.
-**Spec:** §5.3, §11 provider conformance suite.
-
-### M3.3 — `--local-only` / egress control
-Deliver the hard-error path: any non-`Local` provider under `--local-only` or
-`allow_egress: false` fails before one byte leaves the machine.
-**Demo:** `scheck local --provider anthropic --local-only` — assert the failure happens
-before the audit log shows any network-bound activity, and before the target is even
-contacted for phase 1 if that ordering matters (decide and document which comes first).
-**Done when:** acceptance criterion 8 passes in full: same fixture host, two providers,
-one local, structurally valid reports from both, and the egress refusal proven with a
-packet-capture-free assertion (e.g. a test double that panics on any dial attempt).
-**Spec:** §5.4, acceptance criterion 8.
-
-### M3.4 — small-context chunking
-Deliver the one conditional path the loop is allowed to have (§5.3): fact-sheet
-chunking by domain when the prefix would exceed half of `MaxContext`, plus the final
-correlation pass.
-**Demo:** run against `ollama` with a small-context model (a genuinely small local
-model, e.g. a 4K-context one) and the M2.7 fixtures; confirm supported findings still
-surface via the correlation pass despite chunking.
-**Done when:** a chunked run and an unchunked run over the same fact sheet on a
-large-context model agree on the correlated finding — chunking shouldn't lose the
-signal M2.7 exists to prove.
-**Spec:** §5.3 (context size), ties back to acceptance criterion 10.
-
-**M3 exit demo:** the exact same fixture host audited by `openai-compatible`, `anthropic`
-and `ollama` produces three structurally identical, schema-valid reports, with the
-report headers showing the honest `native` capability differences between them.
-
----
-
-## M4 — polish
-
-Goal: the remaining acceptance criteria and CLI ergonomics that don't gate correctness
-but do gate calling this v1.
-
-### M4.1 — SARIF renderer
-**Demo:** `scheck local --format sarif --out report.sarif`, validated against the SARIF
-schema and (if convenient) uploaded to a GitHub code-scanning check on a scratch repo.
-**Spec:** §2 (`report/sarif`).
-
-### M4.2 — profile tiers (`baseline` / `hardened`)
-Deliver `MinProfile` filtering on the catalog (§3) — this is where the catalog can
-finally grow past the baseline-tier cap without bloating cheap runs.
-**Demo:** `scheck catalog --profile baseline` vs. `--profile hardened`, showing the
-menu size difference; a live run under each profile showing token/cost difference.
-**Spec:** §3 tiers.
-
-### M4.3 — category filters (`--only`)
-**Demo:** `scheck local --only remote-access,updates` skipping unrelated baseline
-checks and narrowing the model's menu to those domains.
-**Spec:** §8.
-
-### M4.4 — `scheck diff`
-Deliver drift detection over two persisted runs (§7.4): added/removed listeners, units,
-SUID files, and findings that appeared, disappeared, or changed severity. The typed
-records from M1.7 make this a set difference per record kind, not a line diff.
-**Demo:** run `scheck local` on a VM, install an unexpected package that opens a port,
-run again, `scheck diff` between the two persisted files.
-**Spec:** §7.4, §10 M4.
+M4.5–M4.7 gate 0.0.1: regression coverage, acceptance validation and release delivery. Existing profile thresholds and catalog filtering remain
+part of this release; no expanded profile catalog is required. Preserve their tests.
+CLI features unavailable in 0.0.1 must fail explicitly rather than appear implemented.
 
 ### M4.5 — golden-fixture regression suite
 Deliver a committed set of golden reports (input fixtures → expected report JSON) that
 CI diffs on every change, covering at least one fixture per platform and one per
-provider category (native tool-calling, emulated, local).
+0.0.1 provider (`mock` and recorded native-tool-calling adapter responses). Live model
+quality is evaluated separately in M2.7.
 **Spec:** §11 (ties together fixture targets, mock provider, and conformance suite into
 one CI gate).
 
 ### M4.6 — full acceptance criteria pass
 Not new code — a dedicated pass running every criterion in §12 end to end (including
 the before/after filesystem diff on a throwaway VM for criterion 3, and both Ubuntu and
-Fedora for criterion 1) and recording the result. This is the v1 sign-off gate.
-**Spec:** §12, all eleven criteria.
+Fedora for criterion 1) and recording the result. Also run the M2.2a configuration
+walkthrough against the release build and verify its provenance and validation examples.
+This is the 0.0.1 sign-off gate.
+**Spec:** §12, all twelve criteria.
 
-**M4 exit demo:** all eleven acceptance criteria in §12 pass and are recorded. v1 ships.
+### M4.7 — GitHub release process
 
----
+Deliver a documented, repeatable GitHub release process for `v0.0.1` and subsequent
+version tags. Add CI and a release workflow under `.github/workflows/`, plus a maintainer
+runbook in `docs/RELEASING.md`. This slice plans release automation; it does not publish
+anything merely by implementing the workflow.
 
-## Optional research — bounded assessment (not on the v1 critical path)
+Build archives for Linux and macOS on `amd64` and `arm64`, containing the `scheck`
+binary and the repository's license. Name assets consistently, for example
+`scheck_0.0.1_linux_amd64.tar.gz`, and attach a SHA-256 checksum file. Inject the tagged
+version through the existing `internal/version.Version` linker variable; release builds
+must not report a development version or a dirty working tree. Use the repository's
+Go toolchain requirement and pin build tooling/actions to reviewed versions.
 
-This track implements SPEC §5.9 only as an experiment. Jev access is waitlisted.
-M0–M4 continue independently; no release gate, default test or ordinary audit depends
-on this track. Do not add an empty production abstraction in anticipation of access.
+The runbook defines the sequence: select a clean commit, pass M4.6's acceptance gate,
+create and push its `v0.0.1` tag, build and verify assets, prepare a draft GitHub Release,
+review the artifacts and release notes, then explicitly publish it. Notes identify
+supported platforms, installation/checksum instructions, first-release limitations,
+report schema version and the recorded validation evidence. Publishing establishes the
+first-release compatibility baseline from SPEC §7.4; product and schema versions remain
+separate. Do not move an already published tag or silently replace its binaries.
 
-### R1 — labeled fixtures and offline assessment harness
-Start after M1 facts are available; this does not gate M2. Build a small fixture corpus
-for service/context relationships (`expected`, `unexpected`, `insufficient_context`),
-with human labels and evidence references. Include absent context, unavailable checks,
-truncation, contradictions and instruction-shaped content. Separate development cases
-from held-out evaluation cases. Use authored synthetic responses to exercise the harness;
-neither an API key nor a vendor capture is needed to create them.
-**Demo:** an offline test runs fixture facts plus context through scripted assessments
-and writes a separate evaluation artifact without changing the normal report.
-**Done when:** evidence references and result shapes are validated; missing/invalid
-answers and uncertainty leave normal findings, severity and exit codes unchanged.
-Synthetic responses are clearly labeled; passing tests makes no model-quality claim.
-**Spec:** §5.9.
+**Demo:** rehearse the workflow against a non-production tag in a scratch repository or
+an unpublished release, download the generated archives, verify checksums and run
+`--version`, `catalog --format json` and `explain` on matching OS/architecture runners.
+These artifact smoke checks require neither a model API key nor a real-host assessment.
 
-### R2 — optional comparison with an available model
-Once an existing generative/local adapter is usable, evaluate the same labeled cases
-through it and compare with deterministic rules. Use this to improve task definitions
-and the measurement harness, without claiming it simulates Jev's calibration or accuracy.
-If no model is available, R1 still completes and mainline development continues.
-**Demo:** an opt-in evaluation records model/question versions, per-case predictions,
-precision/recall, false negatives, abstentions, latency and cost where available.
-**Done when:** quality measurements are distinguishable from scripted plumbing tests;
-no comparison run is required in default CI. Freeze evaluation criteria before R3.
-**Spec:** §5.9.
+**Done when:**
 
-### R3 — Jev adapter and live evaluation, deferred until access
-Only when credentials are available, add a small Go HTTP adapter inside the experiment.
-Use a local fake server for request/response validation, authentication failures,
-rate limits, overload, timeouts and malformed responses. Enforce egress policy before
-requests, bounded retries, and environment-only credentials. Pin model/question versions.
-**Demo:** an explicitly enabled live run compares actual Jev against R2 and deterministic
-baselines on the held-out cases, including hostile and incomplete evidence.
-**Done when:** actual measurements establish whether accuracy, investigation effort and
-cost/latency justify adoption. No arbitrary confidence threshold is treated as calibrated.
-Access unavailable means this slice stays deferred; it does not block v1.
-**Spec:** §5.9.
+- CI runs `make check`, including `go fix`, and fails if required modernization leaves
+  tracked source changes; relevant container integration results and M2.7's recorded
+  live quality/adversarial evaluations are required release evidence;
+- the release workflow builds the exact tagged commit, verifies tag/version agreement,
+  and produces all four archives and checksums; each advertised platform has recorded
+  execution evidence, using an appropriate runner or documented manual validation;
+- checks gate asset creation, and missing/failed artifacts prevent publication;
+  release-write permissions are scoped to the release job, ordinary CI cannot publish,
+  and untrusted pull requests do not receive release credentials;
+- a rehearsal proves draft creation, download verification and smoke checks; retries
+  cannot overwrite an already published release, and the runbook covers recovering a
+  failed draft build without moving a published tag;
+- README installation instructions link to GitHub Releases and distinguish published
+  binaries from source builds. Document macOS signing/notarization status accurately;
+  do not imply it is supplied unless implemented and verified;
+- M4.6 evidence is recorded for the release commit before publication. No production
+  model credentials are needed for routine builds or artifact smoke tests.
 
-### R4 — decide whether to integrate
-Write an evidence-backed decision: keep the experiment, remove it, or propose a bounded
-production role with explicit fallback and coverage semantics. Any production integration
-requires updating the spec, reporting contract and tests first. Do not silently promote
-an experimental assessment into a finding filter or an investigation gate.
-**Done when:** the decision cites actual evaluation results; no integration is required
-for a successful experiment or for shipping v1.
-**Spec:** §5.9.
+**Spec work:** §7.4 compatibility baseline, §11 validation and §12 acceptance evidence;
+document release mechanics in `docs/RELEASING.md` when implementing this slice.
+
+**M4 exit demo:** all twelve acceptance criteria in §12 pass and are recorded, and
+M4.7 produces verified artifacts with a completed release checklist. Publish `v0.0.1`
+through the documented release process.
 
 ---
 
 ## Sequencing notes
-
-- **Jev is optional throughout.** R1 can proceed offline after M1; R2 uses an available
-  model if desired; R3 waits for access. None is a dependency of M0–M4. Mock responses
-  demonstrate software behavior, never semantic accuracy or prompt-injection robustness.
 
 - **M0 and M1 have no model dependency and no live-API cost.** They can absorb as much
   calendar time as needed without burning budget, and are the right place to get the
@@ -736,14 +805,11 @@ for a successful experiment or for shipping v1.
   built so far are needed either way (M1's `--stop-after facts` mode and the tool
   surface used for confirmation checks), but a negative result means `agent.Session`'s
   multi-turn correlation is what gets cut, not the checks or the reporting.
-- **`openai-compatible` is built before `anthropic`** (M2.6, then M3.1) because the
-  widest-reach adapter should be the one the conformance suite is written against. The
-  cost of that order is that the reference implementation is the *narrower* feature set,
-  so `Block.Cacheable` and `Effort` — fields that exist in §5.1 because of `anthropic` —
-  risk going unexercised until M3.1. The `llm` interface stays designed from the richest
-  provider, and M2.6's done-when records which fields no adapter has exercised yet.
-- **M3.1 before M3.2 is deliberate**, not filler: it separates "does a second provider
-  slot into the interface at all" from "does the emulation layer work," so a conformance
-  failure in M3.2 is unambiguously about emulation.
-- **Nothing in M4 blocks anything else in M4** — those five slices can run in parallel
-  across contributors once M3 is done.
+- **Configuration usability follows context ingestion.** M2.2a uses the same resolver
+  as real runs and adds inspection, validation and a walkthrough before M2.3. Its
+  provider-specific validation is completed with M2.6; no live model is needed to
+  inspect preferences or local context.
+- **M4.5–M4.7 complete 0.0.1.** Regression coverage grows with M1/M2;
+  M4.6 signs off those results, configuration usability and all twelve acceptance
+  criteria. M4.7 can prepare automation earlier, but publication requires that sign-off
+  for the release commit.

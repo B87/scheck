@@ -3,6 +3,7 @@ package report
 
 import (
 	"github.com/b87/scheck/internal/baseline"
+	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/runner"
 )
 
@@ -13,6 +14,10 @@ type Fact struct {
 	Attempted  bool   `json:"attempted"`
 	Stderr     string `json:"-"`
 	Reason     string `json:"reason,omitempty"`
+	// Summary is the one-line human reading of this fact: the same string on
+	// the screen, in the JSON and (from phase 2) in the model's prompt
+	// (docs/SPEC.md §7.4, §7.6).
+	Summary    string `json:"summary"`
 	Parsed     any    `json:"parsed,omitempty"`
 	Truncated  bool   `json:"truncated,omitempty"`
 	Redactions int    `json:"redactions,omitempty"`
@@ -37,7 +42,22 @@ func FactsFrom(sheet *baseline.FactSheet) map[string]Fact {
 		if r.Status == runner.StatusOK {
 			f.Parsed = r.Parsed
 		}
+		c, _ := check.Lookup(id, sheet.Platform)
+		f.Summary = Summarize(c, f)
 		out[id] = f
 	}
 	return out
+}
+
+// Summarize is the one-line reading of a fact: what the check observed, or
+// why it observed nothing. It is never a verdict — posture is the rules' job
+// (docs/SPEC.md §7.5, §7.6).
+func Summarize(c check.Check, f Fact) string {
+	if f.Status != "ok" {
+		if f.Reason == "" {
+			return f.Status + ", no reason recorded"
+		}
+		return sanitize(f.Reason)
+	}
+	return sanitize(check.Summary(c, f.Parsed))
 }

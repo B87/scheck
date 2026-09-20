@@ -6,7 +6,7 @@ import (
 )
 
 func good() Check {
-	return Check{ID: "fs.stat", Platform: Any, Domain: DomainFS, Parser: ParseLines,
+	return Check{ID: "fs.stat", Platform: Any, Domain: DomainFS, Parser: ParseLines, Unit: "file entries",
 		Argv: []string{"stat", "-c", "%a:%U", "{path}"}, PathUse: PathMetadata,
 		Params: []Param{{Name: "path", Kind: KindPath}}}
 }
@@ -54,6 +54,9 @@ func TestValidateCatchesEachRule(t *testing.T) {
 			c.Params = append(c.Params, Param{Name: "mode", Kind: KindEnum})
 		}, RuleBadParam},
 		{"unknown parser", func(c *Check) { c.Parser = "xml" }, RuleParserKind},
+		{"lines without unit", func(c *Check) { c.Unit = "" }, RuleMissingUnit},
+		{"kv without unit", func(c *Check) { c.Parser, c.Unit = ParseKV, "" }, RuleMissingUnit},
+		{"typed shape with unit", func(c *Check) { c.Parser = ParseListeners }, RuleMissingUnit},
 		{"extract without group", func(c *Check) { c.Extract = "uuid" }, RuleExtract},
 		{"extract invalid", func(c *Check) { c.Extract = "(" }, RuleExtract},
 	}

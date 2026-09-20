@@ -258,7 +258,7 @@ func (r *Runner) RunCheck(ctx context.Context, c check.Check, params map[string]
 		}
 		res.Raw = m[1]
 	}
-	parsed, perr := check.Parse(c.Parser, []byte(res.Raw))
+	parsed, perr := check.Parse(c, []byte(res.Raw))
 	if perr != nil {
 		res.Status, res.Reason = StatusUnavailable, "parse error: "+perr.Error()
 		res.ReasonCode = "parse_error"

@@ -23,14 +23,14 @@ func testCatalog(t *testing.T) {
 		check.Check{ID: "sys.canary", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, Canary: true, Argv: []string{"printf", "%s", "a'b"}},
 		check.Check{ID: "fs.realpath", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseRaw, PathUse: check.PathMetadata, Argv: []string{"realpath", "{path}"}, Params: pathParam},
 		check.Check{ID: "fs.stat", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseRaw, PathUse: check.PathMetadata, Argv: []string{"stat", "-c", "%a:%U", "{path}"}, Params: pathParam},
-		check.Check{ID: "text.cat", Platform: check.Any, Domain: check.DomainText, Parser: check.ParseLines, PathUse: check.PathContent, Argv: []string{"cat", "{path}"}, Params: pathParam},
-		check.Check{ID: "sys.uname", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseLines, Baseline: true, Argv: []string{"uname", "-a"}},
-		check.Check{ID: "sshd.config", Platform: check.Any, Domain: check.DomainSSHD, Parser: check.ParseKV, Baseline: true, Elevated: true, Argv: []string{"sshd", "-T"}},
+		check.Check{ID: "text.cat", Platform: check.Any, Domain: check.DomainText, Parser: check.ParseLines, Unit: "lines of the file", PathUse: check.PathContent, Argv: []string{"cat", "{path}"}, Params: pathParam},
+		check.Check{ID: "sys.uname", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseLines, Unit: "kernel lines", Baseline: true, Argv: []string{"uname", "-a"}},
+		check.Check{ID: "sshd.config", Platform: check.Any, Domain: check.DomainSSHD, Parser: check.ParseKV, Unit: "settings", Baseline: true, Elevated: true, Argv: []string{"sshd", "-T"}},
 		check.Check{ID: "sys.slow", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, Argv: []string{"slow"}},
 		check.Check{ID: "svc.enabled", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, ExitOK: check.AnyExit, Argv: []string{"systemctl", "is-enabled", "sshd"}},
 		check.Check{ID: "pkg.json", Platform: check.Any, Domain: check.DomainUpdates, Parser: check.ParseJSON, Argv: []string{"pkgjson"}},
 		check.Check{ID: "sys.which", Platform: check.Any, Domain: check.DomainSys, Parser: check.ParseRaw, ExitOK: []int{0, 1}, Argv: []string{"which", "{name}"}, Params: []check.Param{{Name: "name", Kind: check.KindIdent}}},
-		check.Check{ID: "fs.find", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseLines, ExitOK: []int{0, 1}, Argv: []string{"find", "/etc", "-perm", "-0002"}},
+		check.Check{ID: "fs.find", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseLines, Unit: "world-writable paths", ExitOK: []int{0, 1}, Argv: []string{"find", "/etc", "-perm", "-0002"}},
 		check.Check{ID: "host.uuid", Platform: check.Any, Domain: check.DomainHost, Parser: check.ParseRaw, Argv: []string{"ioreg"}, Extract: `"IOPlatformUUID" = "([0-9A-F-]+)"`},
 	)
 	if vs := check.Validate(check.All()); len(vs) != 0 {

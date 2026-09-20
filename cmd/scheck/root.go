@@ -88,7 +88,11 @@ func newRootCmd() *cobra.Command {
 	}
 	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
 	pf.Lookup("stop-after").Usage = "plan|facts: print that stage and exit (context not available in this build)"
-	root.Long = "Read-only host evidence collection. This build does not assess security posture.\nUse local or ssh with --stop-after facts; no model or API key is needed.\nExit codes: 0 completed collection (not a security pass), 1 findings (future),\n2 incomplete run, 3 usage/policy error. JSON goes to stdout; diagnostics to stderr."
+	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules.\n" +
+		"Use local or ssh with --stop-after facts; no model or API key is needed.\n" +
+		"Exit codes: 0 no finding at or above the profile threshold (not a claim of full\n" +
+		"coverage — read the assessments and skipped checks), 1 findings, 2 incomplete run,\n" +
+		"3 usage/policy error. JSON goes to stdout; diagnostics to stderr."
 	root.Example = "  scheck local --stop-after facts --format json --no-persist\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if opts.Format != "text" && opts.Format != "json" {

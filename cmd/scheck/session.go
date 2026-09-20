@@ -190,6 +190,7 @@ func (s *session) writeReport(w io.Writer, sheet *baseline.FactSheet) (report.En
 		Elevation: string(s.elevate),
 		Profile:   s.profile.String(),
 		Version:   version.Version,
+		Disabled:  s.cfg.DisableChecks,
 	})
 	if !s.opts.NoPersist {
 		dir, err := state.Dir(s.cfg.StateDir)

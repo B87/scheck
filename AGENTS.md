@@ -1,9 +1,9 @@
 # Working on scheck as an agent
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
-over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP.md` says what is
-built (M0, M1, M1.6 including diagnostics and JSON discovery) and what is next (M1.7 typed parsers and summaries, then M1.8
-posture rules, then M2). This file is the operating manual for a coding
+over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP-0.0.1.md` says what is
+built (M0, M1, M1.6 including diagnostics and JSON discovery, M1.7 typed parsers and
+summaries, M1.8 posture rules and the finding catalog) and what is next (M2). This file is the operating manual for a coding
 agent in this repository. The spec wins on any conflict.
 
 ## Non-negotiables
@@ -50,13 +50,13 @@ passes.
 | `internal/runner` | the one exec path (see rule 3) |
 | `internal/baseline` | phase 1: plan, run, fact sheet |
 | `internal/report` | envelope (§7.4), JSON renderer, and the text report under the §7.6 contract (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden files in `testdata/golden`; `docs/report-schema.json` |
-| `internal/finding` | (from M1.8) finding id catalog with base severities, posture rules (§7.5); reads facts, never executes |
+| `internal/finding` | finding id catalog with base severities, posture rules and their evaluator (§7.1, §7.5); reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `test/containers`, `test/integ` | Docker images and `integration`-tagged tests |
 | `testdata/fixtures/<name>` | recorded exec fixtures (`manifest.yaml` + files) |
-| `docs/` | `SPEC.md`, `ROADMAP.md`, `report-schema.json`; root `README.md` is the quick start |
+| `docs/` | `SPEC.md`, `ROADMAP-0.0.1.md`, `report-schema.json`; root `README.md` is the quick start |
 
 Everything is under `internal/`; nothing is importable from outside the module.
 
@@ -93,7 +93,10 @@ by hand (this happened with `slices.Contains` in `internal/check`).
    `Domain`, literal `Argv`, `Parser`, `Baseline`, `MinProfile`. Set `ExitOK` when a
    non-zero exit is an answer (`check.AnyExit` for `systemctl is-*`). Set `Elevated`
    when root is needed. Set `PathUse` on any check with a `Path` param. Set `Extract`
-   to keep one line of a chatty command.
+   to keep one line of a chatty command. Set `Unit` on a `lines` or `kv` check (the
+   plural noun for one record), or pick a typed shape when a summary, a rule or a
+   future diff needs fields; a typed parser keyed to a new tool's output format goes in
+   `internal/check/typed.go` and is selected from `Argv[0]`, never by sniffing output.
 2. Run `make check`. The invariants test names the rule you broke; fix the entry, not
    the rule.
 3. If the check is elevated, `internal/sudoers` needs the binary's absolute path in its
@@ -102,6 +105,21 @@ by hand (this happened with `slices.Contains` in `internal/check`).
    macOS, run with `--record-fixtures DIR` locally and scrub hostname, user and
    serial numbers before committing.
 5. Keep the baseline tier at or under the cap (40 on-demand entries at `baseline`).
+
+## Adding a posture rule
+
+1. Add or reuse a `finding.Def` in `internal/finding/catalog.go`: a rule finding has no
+   model to write its text, so title, category, base severity, impact and remediation
+   are all required.
+2. Add the `Rule` in `internal/finding/rule.go`. One rule reads one check; a conclusion
+   needing two facts is phase 2's job. Pick the predicate that matches the check's
+   parser and fill in what makes the evidence *recognizable* (`Requires`, `Known`,
+   `Recognize`) — without it the predicate cannot abstain, and an answer scheck does not
+   understand would be read as a pass (§7.5).
+3. Add all three fixtures to `TestEveryRuleFiresDisprovesAndAbstains`: firing,
+   disproved, and insufficient evidence. The test fails when a rule has no fixtures.
+4. Run `make check`; `ValidateRules` names the invariant you broke. Regenerate the
+   golden reports and read the diff.
 
 ## Testing rules
 

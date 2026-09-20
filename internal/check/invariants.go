@@ -34,6 +34,7 @@ const (
 	RuleParserKind         = "unknown-parser"
 	RuleElevatedPrefixOnly = "elevation-not-in-argv"
 	RuleExtract            = "bad-extract"
+	RuleMissingUnit        = "missing-unit"
 )
 
 // BaselineTierCap is the maximum number of on-demand checks visible under the
@@ -142,8 +143,18 @@ func validateOne(c Check) []Violation {
 		add(RuleEmptyArgv, "no argv")
 		return vs
 	}
-	switch c.Parser {
-	case ParseRaw, ParseLines, ParseKV, ParseJSON:
+	switch {
+	case c.Parser == ParseLines || c.Parser == ParseKV:
+		// A record count is only a reading when the records have a name
+		// (docs/SPEC.md §3): "9 SUID files", never "9 lines".
+		if c.Unit == "" {
+			add(RuleMissingUnit, "parser %q needs Unit, the plural noun for one record", c.Parser)
+		}
+	case c.Parser == ParseRaw || c.Parser == ParseJSON:
+	case IsTyped(c.Parser):
+		if c.Unit != "" {
+			add(RuleMissingUnit, "typed shape %q names its own records; Unit %q is unused", c.Parser, c.Unit)
+		}
 	default:
 		add(RuleParserKind, "parser %q", c.Parser)
 	}

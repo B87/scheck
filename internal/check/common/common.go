@@ -73,6 +73,7 @@ func init() {
 		check.Check{
 			ID: "fs.list", Description: "Directory listing with modes and owners",
 			Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseLines, PathUse: check.PathMetadata,
+			Unit: "directory entries",
 			Argv: []string{"ls", "-la", "{path}"}, Params: pathParam,
 		},
 		check.Check{

@@ -1,19 +1,46 @@
 scheck test — fbf2f7a11b33 — Fedora Linux 40 (Container Image) — fixture, elevation sudo
-33 checks: 22 ran, 11 skipped
+1 finding (1 low), 5 rules not assessed, 33 checks: 22 ran, 11 skipped
+
+Findings (1)
+  low       Software updates are pending [updates.pending]
+            evidence  pkg.dnf_check_update: name=audit-libs.aarch64 version=4.0.3-1.fc40 (+36 more)
+            fix       Review the pending updates and apply them with the host's package manager.
+
+Not assessed (5)
+  these posture rules had no usable evidence; they are not passes
+  log.auditd did not run: exit 1: System has not been booted with systemd as init system (PID 1).
+    Can't operate.
+    log.auditd_inactive
+    remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
+  mac.sestatus did not run: exit 127: bash: line 1: sestatus: command not found
+    mac.selinux_disabled
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  pkg.apt_upgradable did not run: exit 127: bash: line 1: apt: command not found
+    updates.pending
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  pkg.zypper_lp did not run: exit 127: bash: line 1: zypper: command not found
+    updates.pending
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  time.timedatectl did not run: exit 1: System has not been booted with systemd as init system (PID
+    1). Can't operate.
+    time.ntp_unsynced
+    remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
 
 DOMAIN                   STATUS   CHECK                   READING
 Host identity            ran      host.hostname           fbf2f7a11b33
 Host identity            ran      host.machine_id         172d9b861de844f9a2a5182d371b0267
-Operating system         ran      os.release              22 keys
+Operating system         ran      os.release              22 settings
 Software updates         skipped  pkg.apt_upgradable      exit 127: bash: line 1: apt: command not
                                                           found
-Software updates         ran      pkg.dnf_check_update    37 lines: audit-libs.aarch64
-                                                          4.0.3-1.fc40                updates
+Software updates         ran      pkg.dnf_check_update    37 updates available [finding: low]
 Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
                                                           not found
 Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
                                                           or directory
-Disk encryption          ran      disk.lsblk              20 lines: NAME   TYPE FSTYPE MOUNTPOINT
+Disk encryption          ran      disk.lsblk              20 block devices
 System integrity         skipped  mac.aa_status           sudo: sudo: a password is required (no
                                                           NOPASSWD rule for this command, or
                                                           aa-status is not installed) [elevated]
@@ -27,30 +54,21 @@ Firewall                 skipped  fw.nft                  sudo: sudo: a password
 Firewall                 skipped  fw.ufw                  sudo: sudo: a password is required (no
                                                           NOPASSWD rule for this command, or ufw is
                                                           not installed) [elevated]
-Network exposure         ran      net.listeners           2 lines: tcp LISTEN 0      128
-                                                          0.0.0.0:22 0.0.0.0:*
-SSH server               ran      sshd.config             93 keys [elevated]
-Remote access            ran      remote.sshd_enabled     2 lines: not-found
-Accounts                 ran      accounts.passwd         22 lines: root:x:0:0:Super
-                                                          User:/root:/bin/bash
-Accounts                 ran      accounts.passwd_status  22 lines: root L 2024-01-27 0 99999 7 -1
-                                                          [elevated]
-Accounts                 ran      accounts.shadow_meta    ----------:0:root:root:580
-Privilege escalation     ran      privesc.sudoers         94 lines: ## Sudoers allows particular
-                                                          users to run various commands as
-                                                          [elevated, 1 redacted]
-Privilege escalation     ran      privesc.sudoers_d       11 lines: /etc/sudoers.d/scheck:# scheck
-                                                          elevated checks for ops on linux —
-                                                          generated from the compiled catalog.
-                                                          [elevated, 7 redacted]
-Startup and persistence  ran      persist.cron            0 lines
+Network exposure         ran      net.listeners           2 listening sockets
+SSH server               ran      sshd.config             93 settings [elevated]
+Remote access            ran      remote.sshd_enabled     2 service states: not-found, enabled
+Accounts                 ran      accounts.passwd         22 accounts, 5 with a login shell
+Accounts                 ran      accounts.passwd_status  22 accounts, all locked [elevated]
+Accounts                 ran      accounts.shadow_meta    mode 0, owner root:root
+Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated, 1 redacted]
+Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated, 7 redacted]
+Startup and persistence  ran      persist.cron            0 cron entries
 Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't
                                                           operate.
-Startup and persistence  ran      persist.units           23 lines: UNIT FILE
-                                                          STATE   PRESET
-Filesystem               ran      fs.suid                 12 lines: /usr/bin/chage
-Filesystem               ran      fs.world_writable       0 lines
+Startup and persistence  ran      persist.units           21 units, all enabled
+Filesystem               ran      fs.suid                 12 SUID files
+Filesystem               ran      fs.world_writable       0 world-writable paths
 Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't
                                                           operate.
@@ -94,5 +112,6 @@ Skipped (11)
                       operate.
     remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
 
-assessment: none. Every line above reports what a command observed, not whether the host is
-configured safely. Posture rules and the agentic pass are not available in this build.
+assessment: posture rules only. 6 of 11 rules had the evidence to decide. Every other line reports
+what a command observed, not whether the host is configured safely: a rule reads one fact and says
+nothing about what no rule covers. The agentic pass is not available in this build.

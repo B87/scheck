@@ -4,10 +4,11 @@ A read-only security posture checker for one macOS or Linux host, locally or ove
 SSH. Every target command comes from a compiled catalog and runs through the same
 policy, redaction and audit path. scheck never applies hardening changes.
 
-**Current build:** collects facts and produces readable or JSON reports. Automated
-posture findings and the model-driven assessment are not implemented yet. Exit 0 and
-an empty findings list do not mean the host is secure. This project is unreleased;
-interfaces may change before the first GitHub release.
+**Current build:** collects facts, assesses them with compiled-in posture rules, and
+produces readable or JSON reports. The model-driven assessment is not implemented yet.
+A rule reads one fact, so exit 0 and an empty findings list mean no rule fired — not
+that the host is secure; read the `assessments` coverage and the skipped checks. This
+project is unreleased; interfaces may change before the first GitHub release.
 
 ## Quick start
 
@@ -33,9 +34,13 @@ bin/scheck explain sshd.config --format json
 bin/scheck local --stop-after plan --format json
 ```
 
-Read stdout, stderr and the exit code separately. JSON declares
-`run.assessment: "none"`; each fact includes status and whether execution was
-attempted. Optional evidence is redacted, bounded and extraction-filtered.
+Read stdout, stderr and the exit code separately. Exit 1 means a posture rule found
+something at or above the profile threshold; the report is still written. JSON declares
+`run.assessment: "rules"` and carries `findings` plus an `assessments` entry per
+selected rule (`matched`, `not_matched`, `not_applicable`, `not_assessed`); each fact
+includes a one-line `summary`, its status and whether execution was attempted. A typed
+fact's records are at `parsed.items`, with `parsed.partial` when the output was
+incomplete. Optional evidence is redacted, bounded and extraction-filtered.
 Use `--out report.json` to save the report. `--no-persist` disables the additional
 state-directory artifact, not an explicit output file or audit log.
 
@@ -47,7 +52,7 @@ and partial results. For interactive inspection,
 ## Project documentation
 
 - [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP.md): implementation status and validation; M1.7 is next.
+- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2.1 is next.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.
 - [Contributor instructions](AGENTS.md): development workflow and required checks.
 

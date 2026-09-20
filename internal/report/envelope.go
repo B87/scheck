@@ -8,11 +8,14 @@ import (
 
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/finding"
 )
 
-// SchemaVersion identifies the development envelope. Compatibility starts at
-// the first GitHub release (docs/SPEC.md §7.4).
-const SchemaVersion = "1.0"
+// SchemaVersion identifies the development envelope. 1.1 adds per-fact
+// summaries, the typed `parsed` shapes, rule findings and the assessment
+// coverage array (docs/SPEC.md §7.4). Compatibility starts at the first
+// GitHub release.
+const SchemaVersion = "1.1"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -21,7 +24,29 @@ type Envelope struct {
 	Host          Host            `json:"host"`
 	Run           Run             `json:"run"`
 	Facts         map[string]Fact `json:"facts"`
-	Findings      []any           `json:"findings"`
+	// Assessments is one entry per selected posture rule, findings or not:
+	// coverage is reported separately from findings, because "no finding"
+	// and "not assessed" are different answers (docs/SPEC.md §7.5).
+	Assessments []finding.Assessment `json:"assessments"`
+	Findings    []finding.Finding    `json:"findings"`
+}
+
+// OpenFindings counts the open findings at or above the profile threshold:
+// the number that makes the run exit 1 (docs/SPEC.md §8).
+func (e Envelope) OpenFindings(p check.Profile) int {
+	return finding.OpenAtOrAbove(e.Findings, finding.Threshold(p))
+}
+
+// NotAssessed returns the assessments that could not be evaluated, which is
+// what an operator reads as missing coverage.
+func (e Envelope) NotAssessed() []finding.Assessment {
+	var out []finding.Assessment
+	for _, a := range e.Assessments {
+		if a.Status == finding.NotAssessed {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // Host identifies the audited machine. ID is stable across runs and
@@ -82,21 +107,27 @@ type Meta struct {
 	Elevation string
 	Profile   string
 	Version   string
+	// Disabled is config `disable_checks`: a rule whose check was disabled is
+	// not assessed, and says so (docs/SPEC.md §7.5).
+	Disabled []string
 }
 
 // Build assembles the envelope from a fact sheet.
 func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
+	prof, _ := check.ParseProfile(meta.Profile)
+	assessed := finding.Evaluate(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
 	env := Envelope{
 		SchemaVersion: SchemaVersion,
 		Facts:         FactsFrom(sheet),
-		Findings:      []any{},
+		Assessments:   assessed.Assessments,
+		Findings:      assessed.Findings,
 		Run: Run{
 			Started:        meta.Started,
 			DurationMS:     time.Since(meta.Started).Milliseconds(),
 			Status:         "complete",
 			Profile:        meta.Profile,
 			Mode:           "facts",
-			Assessment:     "none",
+			Assessment:     "rules",
 			ContextSources: []ContextSource{},
 			Warnings:       []string{},
 			Version:        meta.Version,

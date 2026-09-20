@@ -35,6 +35,25 @@ func TestFixtureReplay(t *testing.T) {
 			t.Errorf("%s: no lines", r.CheckID)
 		}
 	}
+	// Typed shapes (docs/SPEC.md §3) must survive a real recorded capture,
+	// not just a hand-written line: atLeast asserts the record count and that
+	// the named field is populated on every record.
+	atLeast := func(n int, field string) func(*testing.T, runner.Result) {
+		return func(t *testing.T, r runner.Result) {
+			recs, ok := r.Parsed.(check.Records)
+			if !ok {
+				t.Fatalf("%s: parsed %T, want typed records", r.CheckID, r.Parsed)
+			}
+			if recs.Len() < n {
+				t.Errorf("%s: %d records, want >= %d", r.CheckID, recs.Len(), n)
+			}
+			for _, rec := range recs.Items {
+				if rec[field] == "" {
+					t.Errorf("%s: record without %s: %v", r.CheckID, field, rec)
+				}
+			}
+		}
+	}
 	rawMatch := func(re string) func(*testing.T, runner.Result) {
 		return func(t *testing.T, r runner.Result) {
 			if !regexp.MustCompile(re).MatchString(r.Raw) {
@@ -46,25 +65,31 @@ func TestFixtureReplay(t *testing.T) {
 		"ubuntu": {elevate: runner.ElevateSudo, minOK: 20, ok: map[string]func(*testing.T, runner.Result){
 			"os.release":             kv("id", "ubuntu"),
 			"sshd.config":            kv("passwordauthentication", "no"),
-			"accounts.passwd_status": nonEmptyLines,
-			"pkg.apt_upgradable":     nonEmptyLines,
+			"accounts.passwd_status": atLeast(10, check.FieldStatus),
+			"pkg.apt_upgradable":     atLeast(0, check.FieldName),
 			"privesc.sudoers_d":      nonEmptyLines,
 			"host.machine_id":        rawMatch(`^[0-9a-f]{32}\s*$`),
+			"accounts.passwd":        atLeast(10, check.FieldShell),
+			"accounts.shadow_meta":   atLeast(1, check.FieldMode),
+			"persist.units":          atLeast(5, check.FieldState),
+			"net.listeners":          atLeast(2, check.FieldPort),
 		}},
 		"fedora": {elevate: runner.ElevateSudo, minOK: 18, ok: map[string]func(*testing.T, runner.Result){
 			"os.release":           kv("id", "fedora"),
 			"sshd.config":          kv("passwordauthentication", "no"),
-			"pkg.dnf_check_update": func(*testing.T, runner.Result) {},
+			"pkg.dnf_check_update": atLeast(5, check.FieldVersion),
 			"privesc.sudoers":      nonEmptyLines,
 		}},
 		"macos": {elevate: runner.ElevateNone, minOK: 20, ok: map[string]func(*testing.T, runner.Result){
 			"os.release":         kv("productname", "macOS"),
 			"host.platform_uuid": rawMatch(`^[0-9A-F-]{36}$`),
 			"disk.fdesetup":      rawMatch(`FileVault is (On|Off)`),
+			"persist.launchctl":  atLeast(20, check.FieldLabel),
+			"pkg.softwareupdate": atLeast(1, check.FieldName),
 			"integrity.csrutil":  rawMatch(`enabled|disabled`),
 			"fw.global":          rawMatch(`Firewall is (enabled|disabled)`),
-			"accounts.users":     nonEmptyLines,
-			"net.listeners":      nonEmptyLines,
+			"accounts.users":     atLeast(20, check.FieldUID),
+			"net.listeners":      atLeast(1, check.FieldPort),
 		}},
 	}
 	for name, ex := range fixtures {

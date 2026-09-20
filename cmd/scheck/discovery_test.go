@@ -118,8 +118,17 @@ func TestFactsJSONWithEvidenceFromFixture(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["run"].(map[string]any)["assessment"] != "none" {
-		t.Fatal("missing scope")
+	// Phase 1 assesses with the posture rules and says so; the assessment
+	// scope is a field of its own, never inferred from an empty findings
+	// array (docs/SPEC.md §7.4).
+	if doc["run"].(map[string]any)["assessment"] != "rules" {
+		t.Fatalf("assessment scope: %v", doc["run"].(map[string]any)["assessment"])
+	}
+	if _, ok := doc["assessments"].([]any); !ok {
+		t.Fatal("no assessment coverage array")
+	}
+	if doc["facts"].(map[string]any)["sys.uname"].(map[string]any)["summary"] != "Linux fixture" {
+		t.Fatalf("fact summary: %v", doc["facts"].(map[string]any)["sys.uname"])
 	}
 	f := doc["facts"].(map[string]any)["sys.uname"].(map[string]any)
 	if f["evidence"].(map[string]any)["stdout"] != "Linux fixture" {

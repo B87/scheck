@@ -1,6 +1,51 @@
 scheck test — mac-fixture.local — macOS 26.6.2 (25G83) — fixture, elevation none
-28 checks: 22 ran, 6 skipped
+2 findings (1 medium, 1 low), 4 rules not assessed, 28 checks: 22 ran, 6 skipped
 host.id bc38ac67236d… · kernel 25.6.0 · profile baseline · mode facts · status complete · 1234ms
+
+Findings (2)
+  medium    The macOS application firewall is disabled [fw.app_firewall_disabled]
+            evidence  fw.global: Firewall is disabled. (State = 0)
+            fix       Turn the application firewall on.
+            impact    Every listening service on this machine accepts inbound connections without a
+                      per-application decision, so a background agent that opens a port is reachable
+                      by default.
+            commands  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+            caveat    This is a per-application filter, not a packet filter; it does not replace a
+                      network firewall.
+  low       Software updates are pending [updates.pending]
+            evidence  pkg.softwareupdate: name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)
+            fix       Review the pending updates and apply them with the host's package manager.
+            impact    Published fixes, including security fixes, are available but not installed.
+                      How serious that is depends on which packages are behind.
+            commands  # review the list first, then apply with apt / dnf / zypper / softwareupdate
+            caveat    Some updates need a restart to take effect; schedule accordingly.
+
+Not assessed (4)
+  these posture rules had no usable evidence; they are not passes
+  remote.login did not run: requires elevated read
+    remote.login_enabled
+    remedy: re-run with --sudo. On macOS run `sudo -v` first, or install the fragment printed by
+            `scheck sudoers` so no password is needed.
+  sshd.config did not run: requires elevated read
+    sshd.password_auth_enabled, sshd.root_login_enabled
+    remedy: re-run with --sudo. On macOS run `sudo -v` first, or install the fragment printed by
+            `scheck sudoers` so no password is needed.
+  time.ntp did not run: requires elevated read
+    time.ntp_disabled
+    remedy: re-run with --sudo. On macOS run `sudo -v` first, or install the fragment printed by
+            `scheck sudoers` so no password is needed.
+
+Rule coverage (10)
+  disk.filevault_off             not_matched   disk.fdesetup · recognized-other-state
+  fs.world_writable_present      not_matched   fs.world_writable · no-matching-line
+  fw.app_firewall_disabled       matched       fw.global · recognized-matching-state
+  integrity.gatekeeper_disabled  not_matched   integrity.spctl · recognized-other-state
+  integrity.sip_disabled         not_matched   integrity.csrutil · recognized-other-state
+  remote.login_enabled           not_assessed  remote.login · check-unavailable:requires_elevation
+  sshd.password_auth_enabled     not_assessed  sshd.config · check-unavailable:requires_elevation
+  sshd.root_login_enabled        not_assessed  sshd.config · check-unavailable:requires_elevation
+  time.ntp_disabled              not_assessed  time.ntp · check-unavailable:requires_elevation
+  updates.pending                matched       pkg.softwareupdate · records-present
 
 DOMAIN                   STATUS   CHECK                    READING
 Host identity            ran      host.hostname            mac-fixture.local
@@ -9,12 +54,12 @@ Host identity            ran      host.hostname            mac-fixture.local
 Host identity            ran      host.platform_uuid       AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
                                                            IOPlatformUUID (hashed into host.id)
   | AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
-Operating system         ran      os.release               3 keys
+Operating system         ran      os.release               3 settings
                                                            macOS product name, version and build
   | ProductName:            macOS
   | ProductVersion:         26.6.2
   | BuildVersion:           25G83
-Software updates         ran      pkg.softwareupdate       9 lines: Software Update Tool
+Software updates         ran      pkg.softwareupdate       3 updates available [finding: low]
                                                            Pending macOS software updates (cached
                                                            scan)
   | Software Update Tool
@@ -48,14 +93,13 @@ Firewall                 ran      fw.blockall              Firewall has block al
                                                            state
   | Firewall has block all state set to disabled.
 Firewall                 ran      fw.global                Firewall is disabled. (State = 0)
+                                                           [finding: medium]
                                                            Application firewall global state
   | Firewall is disabled. (State = 0)
 Firewall                 ran      fw.stealth               Firewall stealth mode is off
                                                            Application firewall stealth mode
   | Firewall stealth mode is off
-Network exposure         ran      net.listeners            24 lines: COMMAND     PID   USER   FD
-                                                           TYPE             DEVICE SIZE/OFF NODE
-                                                           NAME
+Network exposure         ran      net.listeners            23 listening sockets
                                                            Listening TCP sockets with owning process
   | COMMAND     PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
   | rapportd   1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP *:53019 (LISTEN)
@@ -83,7 +127,7 @@ Network exposure         ran      net.listeners            24 lines: COMMAND    
   | Cursor    83644 alice   63u  IPv4 0x9ba441a685381c29      0t0  TCP 127.0.0.1:63995 (LISTEN)
 SSH server               skipped  sshd.config              requires elevated read
                                                            Effective sshd configuration
-Remote access            ran      remote.launchd_disabled  10 lines: disabled services = {
+Remote access            ran      remote.launchd_disabled  10 service overrides
                                                            launchd service overrides in the system
                                                            domain (screensharing, RemoteDesktop,
                                                            ftpd, smbd ...)
@@ -103,7 +147,7 @@ Remote access            skipped  remote.login             requires elevated rea
 Accounts                 ran      accounts.admins          GroupMembership: root alice
                                                            Members of the admin group
   | GroupMembership: root alice
-Accounts                 ran      accounts.users           134 lines: _accessoryupdater        278
+Accounts                 ran      accounts.users           134 accounts
                                                            Local accounts with their UniqueID
   | _accessoryupdater        278
   | _amavisd                 83
@@ -244,14 +288,13 @@ Privilege escalation     skipped  privesc.sudoers          requires elevated rea
 Privilege escalation     skipped  privesc.sudoers_d        requires elevated read
                                                            sudoers.d drop-ins (file:line, non-empty
                                                            lines)
-Startup and persistence  ran      persist.launch_dirs      3 lines: /Library/LaunchDaemons/com.docke
-                                                           r.vmnetd.plist
+Startup and persistence  ran      persist.launch_dirs      3 launchd plists
                                                            Third-party LaunchDaemons and
                                                            LaunchAgents
   | /Library/LaunchDaemons/com.docker.vmnetd.plist
   | /Library/LaunchDaemons/com.docker.socket.plist
   | /Library/LaunchDaemons/com.nordvpn.macos.helper.plist
-Startup and persistence  ran      persist.launchctl        556 lines: PID Status Label
+Startup and persistence  ran      persist.launchctl        555 launchd jobs, 284 running
                                                            Loaded launchd jobs in the session domain
   | PID     Status  Label
   | -       0       io.tailscale.ipn.macsys.login-item-helper
@@ -811,11 +854,11 @@ Startup and persistence  ran      persist.launchctl        556 lines: PID Status
   | -       0       com.apple.CoreRoutine.helperservice
   | 972     0       com.apple.distnoted.xpc.agent
   | 8257    -9      com.apple.geod
-Filesystem               ran      fs.suid                  0 lines
+Filesystem               ran      fs.suid                  0 SUID files
                                                            SUID binaries under local prefixes
                                                            (depth-capped)
   | (no output)
-Filesystem               ran      fs.world_writable        0 lines
+Filesystem               ran      fs.world_writable        0 world-writable paths
                                                            World-writable entries without the sticky
                                                            bit under system prefixes (depth-capped)
   | (no output)
@@ -848,5 +891,6 @@ Skipped (6)
     remedy: re-run with --sudo. On macOS run `sudo -v` first, or install the fragment printed by
             `scheck sudoers` so no password is needed.
 
-assessment: none. Every line above reports what a command observed, not whether the host is
-configured safely. Posture rules and the agentic pass are not available in this build.
+assessment: posture rules only. 6 of 10 rules had the evidence to decide. Every other line reports
+what a command observed, not whether the host is configured safely: a rule reads one fact and says
+nothing about what no rule covers. The agentic pass is not available in this build.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/b87/scheck/internal/finding"
 )
 
 // DefaultWidth is the wrap column when the caller does not know the terminal
@@ -40,14 +42,30 @@ func (o Options) normalize() Options {
 	return o
 }
 
-// style renders emphasis. Severity colours are the only colours in the
-// contract (docs/SPEC.md §7.6) and no severity exists before the posture
-// rules land, so this build styles structure only: bold headings, dim
-// evidence. Everything here is a no-op when Color is false.
+// style renders emphasis: bold headings, dim evidence, and the severity
+// colours, which are the only colours in the contract (docs/SPEC.md §7.6).
+// Everything here is a no-op when Color is false.
 type style struct{ on bool }
 
 func (s style) bold(t string) string { return s.wrap(t, "\x1b[1m") }
 func (s style) dim(t string) string  { return s.wrap(t, "\x1b[2m") }
+
+// severity is the one colour in the report that carries meaning
+// (docs/SPEC.md §7.6). info is left unstyled: it is information, not alarm.
+func (s style) severity(sev finding.Severity, t string) string {
+	switch sev {
+	case finding.SevCritical:
+		return s.wrap(t, "\x1b[1;31m")
+	case finding.SevHigh:
+		return s.wrap(t, "\x1b[31m")
+	case finding.SevMedium:
+		return s.wrap(t, "\x1b[33m")
+	case finding.SevLow:
+		return s.wrap(t, "\x1b[36m")
+	default:
+		return t
+	}
+}
 
 func (s style) wrap(t, seq string) string {
 	if !s.on || t == "" {

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/b87/scheck/internal/finding"
 )
 
 func render(t *testing.T, env Envelope, opt Options) string {
@@ -22,9 +24,10 @@ func synthetic(facts map[string]Fact) Envelope {
 		SchemaVersion: SchemaVersion,
 		Host: Host{ID: strings.Repeat("a", 64), Hostname: "box", Platform: "linux",
 			OS: "Ubuntu 24.04", Kernel: "6.8.0", Transport: "local", Canary: "n/a", Elevation: "none"},
-		Run:      Run{Status: "complete", Profile: "baseline", Mode: "facts", Version: "test", Warnings: []string{}},
-		Facts:    facts,
-		Findings: []any{},
+		Run:         Run{Status: "complete", Profile: "baseline", Mode: "facts", Version: "test", Warnings: []string{}},
+		Facts:       facts,
+		Assessments: []finding.Assessment{},
+		Findings:    []finding.Finding{},
 	}
 }
 
@@ -44,7 +47,8 @@ func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 		"skipped  privesc.sudoers",
 		"denied   fs.read",
 		"Firewall is disabled. (State = 0)",
-		"assessment: none",
+		"0 findings from posture rules",
+		"assessment: posture rules only",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q from:\n%s", want, out)

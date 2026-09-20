@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/version"
 )
 
@@ -27,6 +28,19 @@ type checkDescription struct {
 	Extract     string             `json:"extract"`
 	Canary      bool               `json:"canary"`
 	Budget      budgetDescription  `json:"budget"`
+	Unit        string             `json:"unit,omitempty"`
+	// Rules names the posture rules that read this check's fact, so a caller
+	// that sees the check skipped knows which conclusions went unassessed
+	// (docs/SPEC.md §7.5).
+	Rules []ruleDescription `json:"posture_rules"`
+}
+
+type ruleDescription struct {
+	Finding      string `json:"finding"`
+	Platform     string `json:"platform"`
+	Predicate    string `json:"predicate"`
+	BaseSeverity string `json:"base_severity"`
+	Title        string `json:"title"`
 }
 type paramDescription struct {
 	Name string          `json:"name"`
@@ -55,12 +69,21 @@ func writeDiscovery(w io.Writer, kind, platform, profile, elevation string, chec
 		} else if exitOK == nil {
 			exitOK = []int{0}
 		}
+		rules := []ruleDescription{}
+		for _, r := range finding.RulesFor(c.ID) {
+			if r.Platform != check.Any && c.Platform != check.Any && r.Platform != c.Platform {
+				continue
+			}
+			def, _ := finding.Lookup(r.Finding)
+			rules = append(rules, ruleDescription{r.Finding, string(r.Platform), r.When.String(), string(def.BaseSeverity), def.Title})
+		}
 		entries = append(entries, checkDescription{
 			ID: c.ID, Description: c.Description, Platform: c.Platform, Domain: c.Domain,
 			Argv: c.Argv, Params: params, Parser: c.Parser, Baseline: c.Baseline,
 			MinProfile: c.MinProfile.String(), Elevated: c.Elevated, ExitOK: exitOK, AnyExit: anyExit,
 			PathUse: c.PathUse, Extract: c.Extract, Canary: c.Canary,
 			Budget: budgetDescription{c.Budget.Soft.Milliseconds(), c.Budget.Hard.Milliseconds(), c.Budget.Output},
+			Unit:   c.Unit, Rules: rules,
 		})
 	}
 	enc := json.NewEncoder(w)

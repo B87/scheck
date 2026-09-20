@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
 )
@@ -18,9 +19,9 @@ func newExplainCmd(opts *globalOpts) *cobra.Command {
 		Use:   "explain CHECK-ID",
 		Short: "Show exactly what a check runs, on which platform, and how it is parsed",
 		Long: "explain prints one catalog entry verbatim: its description, the literal argv " +
-			"with its typed placeholders, its parameters, whether it needs elevation and how " +
-			"its output is parsed. A check id that is defined per platform prints one section " +
-			"per platform.",
+			"with its typed placeholders, its parameters, whether it needs elevation, how " +
+			"its output is parsed and which posture rules read the fact. A check id that is " +
+			"defined per platform prints one section per platform.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
@@ -100,6 +101,20 @@ func writeExplainEntry(w io.Writer, c check.Check, opt report.Options) {
 	field("phase", explainPhase(c))
 	field("elevation", explainElevation(c))
 	field("parser", explainParser(c.Parser))
+	// Which conclusions depend on this check, so an operator who sees it
+	// skipped knows what went unassessed (docs/SPEC.md §7.5, §8).
+	if rules := rulesFor(c); len(rules) > 0 {
+		verb, them := "rules read", "them"
+		if len(rules) == 1 {
+			verb, them = "rule reads", "it"
+		}
+		field("rules", fmt.Sprintf("%d posture %s this fact; a skipped check leaves %s not assessed, never passed:",
+			len(rules), verb, them))
+		for _, r := range rules {
+			def, _ := finding.Lookup(r.Finding)
+			field("", fmt.Sprintf("%s (%s) when %s", r.Finding, def.BaseSeverity, r.When))
+		}
+	}
 	field("exit codes", explainExitOK(c))
 	if c.PathUse != check.PathNone {
 		field("path use", explainPathUse(c.PathUse))
@@ -129,6 +144,18 @@ func writeExplainEntry(w io.Writer, c check.Check, opt report.Options) {
 	}
 }
 
+// rulesFor is the posture rules that read this catalog entry on its own
+// platform.
+func rulesFor(c check.Check) []finding.Rule {
+	var out []finding.Rule
+	for _, r := range finding.RulesFor(c.ID) {
+		if r.Platform == check.Any || c.Platform == check.Any || r.Platform == c.Platform {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func explainPhase(c check.Check) string {
 	if c.Baseline {
 		return "baseline — runs in every phase 1 run on this platform"
@@ -155,6 +182,9 @@ func explainParser(p check.ParserKind) string {
 	case check.ParseJSON:
 		return "json — decoded as JSON"
 	default:
+		if check.IsTyped(p) {
+			return string(p) + " — typed records with named fields, which a posture rule reads by name"
+		}
 		return string(p)
 	}
 }

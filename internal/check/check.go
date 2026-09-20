@@ -153,6 +153,12 @@ type Check struct {
 	// the runner keeps only that group as the raw output. It minimises what a
 	// chatty command (ioreg, dmidecode) hands to the model.
 	Extract string
+	// Unit is the plural noun for one record of a lines or kv check ("SUID
+	// files", "settings"), so the fact's one-line reading is "<n> <Unit>"
+	// rather than "<n> lines" (docs/SPEC.md §3, §7.6). Typed shapes name
+	// their own records and leave it empty; the invariants test requires it
+	// on every other parsed-into-records check.
+	Unit string
 }
 
 // AnyExit is the ExitOK value meaning "any exit code is a valid result".
