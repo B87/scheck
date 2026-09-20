@@ -221,3 +221,44 @@ func TestAgentModeConfigurationErrorsExitThree(t *testing.T) {
 		t.Errorf("plan with a deferred provider configured: exit %d", code)
 	}
 }
+
+// The reference adapter's configuration errors are usage errors before any
+// target contact: no key on OpenAI's endpoint, an unknown context window;
+// `scheck providers` reports the same states without a request.
+func TestOpenAICompatibleConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "")
+	_ = os.Unsetenv("OPENAI_API_KEY")
+	if out, code := runIn(t, dir, "local", "--model", "gpt-5"); code != exitUsage || out != "" {
+		t.Errorf("no key: exit %d %q", code, out)
+	}
+	t.Setenv("OPENAI_API_KEY", "sk-test")
+	if out, code := runIn(t, dir, "local", "--model", "mystery-7b"); code != exitUsage || out != "" {
+		t.Errorf("unknown window: exit %d %q", code, out)
+	}
+	out, code := runIn(t, dir, "providers", "--model", "gpt-5", "--format", "json")
+	if code != exitOK {
+		t.Fatalf("providers: exit %d", code)
+	}
+	var doc struct {
+		Providers []providerStatus `json:"providers"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Providers {
+		if p.Name != "openai-compatible" {
+			continue
+		}
+		if p.Status != "ready" || p.Limits == nil || p.Limits.MaxContext != 400000 || p.Native == nil || !p.Native.ToolCalling || p.Native.PromptCaching {
+			t.Errorf("openai-compatible: %+v", p)
+		}
+	}
+	if strings.Contains(out, "sk-test") {
+		t.Error("credential printed")
+	}
+	out, _ = runIn(t, dir, "providers", "--model", "mystery-7b", "--base-url", "http://localhost:8000/v1", "--max-context", "8192")
+	if !strings.Contains(out, "openai-compatible") || !strings.Contains(out, "ready") || !strings.Contains(out, "8192") {
+		t.Errorf("declared window not honoured:\n%s", out)
+	}
+}

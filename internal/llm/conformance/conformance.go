@@ -206,8 +206,17 @@ func Run(t *testing.T, name string, h Harness) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resp.Usage.Input != u.Input || resp.Usage.Output != u.Output || resp.Usage.CacheRead != u.CacheRead || resp.Usage.CacheWrite != u.CacheWrite {
+		if resp.Usage.Input != u.Input || resp.Usage.Output != u.Output || resp.Usage.CacheRead != u.CacheRead {
 			t.Errorf("usage %+v want %+v", resp.Usage, u)
+		}
+		// cache_write exists only where the adapter places cache breakpoints
+		// (Native.PromptCaching); a protocol without the concept reports 0,
+		// never a guess.
+		if p.Native().PromptCaching && resp.Usage.CacheWrite != u.CacheWrite {
+			t.Errorf("cache_write %d want %d", resp.Usage.CacheWrite, u.CacheWrite)
+		}
+		if !p.Native().PromptCaching && resp.Usage.CacheWrite != 0 {
+			t.Errorf("cache_write %d reported without prompt caching", resp.Usage.CacheWrite)
 		}
 		if resp.Usage.CostUSD == nil || *resp.Usage.CostUSD != priced {
 			t.Errorf("cost %v want %v", resp.Usage.CostUSD, priced)

@@ -152,6 +152,11 @@ func (p *Provider) Stream(ctx context.Context, r llm.Request) (llm.Stream, error
 	resp := llm.Response{Text: turn.Text, StopReason: turn.StopReason}
 	if turn.Usage != nil {
 		resp.Usage = *turn.Usage
+		if !p.t.Native.PromptCaching {
+			// A provider without cache breakpoints has no cache writes to
+			// report; the mock behaves like one when it declares none.
+			resp.Usage.CacheWrite = 0
+		}
 	}
 	for _, c := range turn.ToolCalls {
 		resp.ToolCalls = append(resp.ToolCalls, llm.ToolCall{ID: c.ID, Name: c.Name, Input: c.Input})

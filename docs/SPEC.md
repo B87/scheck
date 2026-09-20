@@ -131,6 +131,18 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.6 (2026-09-20):**
+
+- The `openai-compatible` adapter's concrete behaviours are in the §5.2 table:
+  credential rule, context-window sources, the two capability differences it absorbs
+  (`max_tokens`, `reasoning_effort`), caching and pricing, error classification. The
+  conformance suite requires `cache_write` only from an adapter whose
+  `Native.PromptCaching` is true; a protocol without the concept reports 0 (§11).
+- The opt-in live tests live under `test/live` behind the `live` build tag (`make
+  live`, `SCHECK_LIVE=1`); they are not part of `make check` and were not run for this
+  slice (no credential in the development environment). Acceptance criterion 7's cost
+  measurement is therefore still to be recorded.
+
 **Changes from implementing M2.5 (2026-09-20):**
 
 - The `<operator_context>` block was already in the prompt from M2.4; this slice adds
@@ -686,7 +698,7 @@ adds the output reservation and answers whether the request may be sent. An unkn
 
 | Provider | Covers | Notes |
 |---|---|---|
-| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). |
+| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). The context window comes from `max_context:` or a built-in table of model families; unknown is a configuration error. `OPENAI_API_KEY` must be present for OpenAI's endpoint and is sent as a bearer token when set for any other; a base URL may not carry credentials. The request is chat completions with `stream: true`, `tools` as functions, `tool_choice: auto`, the output reservation as `max_completion_tokens` (falling back to `max_tokens` once if the endpoint rejects it) and `Effort` as `reasoning_effort` (`max` → `high`); an endpoint that rejects `reasoning_effort` loses it and `Native.Reasoning` records that. `Block.Cacheable` is not exercised (`Native.PromptCaching: false`): the endpoint caches long prefixes on its own and reports hits as `cache_read`; `cache_write` is 0. `cost_usd` is priced from the table only on OpenAI's endpoint, null elsewhere. A 400 naming the context length, a 413, a 401/403 and a 5xx map to `context_overflow`, `auth` and `transport`; a 400 rejecting tools is `unsupported`. |
 | `anthropic` (post-v1 M3.1) | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
 | `ollama` (post-v1 M3.2) | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
 | `mock` | tests | Replays recorded transcripts (`--transcript FILE`); used by every non-live test. A transcript declares `limits` and `native` and one turn per model call; a turn may `fail` with a classified error kind or carry `expect` assertions over the request it answers, so a test can assert what the loop sent without reaching into the provider. |

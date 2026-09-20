@@ -830,7 +830,7 @@ curated text; planted instruction text in a baseline fact and in a read file rea
 the model only inside `<facts>` and a transcript that obeys it is denied. None of this
 is a claim about model resistance: M2.7 runs the corpus against the real model.
 
-### M2.6 — `openai-compatible` provider
+### M2.6 — `openai-compatible` provider ✅ (live cost measurement pending)
 Deliver the real adapter for a backend with native tool calling (OpenAI, or a
 vLLM/Groq/Together endpoint), selected with `--base-url` + `--model`: native tool
 calling (required in 0.0.1; unsupported endpoints fail explicitly), the `Effort` mapping,
@@ -848,6 +848,40 @@ checked against the $0.50 budget (acceptance criterion 7);
 `Block.Cacheable` and `Effort` are each either exercised by the adapter or recorded as
 unexercised in `Native`; the report must not imply unsupported features were used.
 **Spec:** §5.2, §5.5.
+
+**Landed (2026-09-20).** `internal/llm/openai` (`openai.go`: construction from
+configuration with no I/O, the wire encoding, streaming SSE decoding, tool-call
+assembly by index, error classification, the two absorbed capability differences;
+`models.go`: context windows and list prices per family), registered as the default
+in `internal/llm/all`; `test/live` behind the `live` build tag with `make live`.
+
+- **Native tool calling required**: an endpoint that rejects `tools` fails as
+  `unsupported`; nothing emulates. `max_completion_tokens` falls back to `max_tokens`
+  once; a rejected `reasoning_effort` is dropped and `Native.Reasoning` set false, so
+  the report never claims a feature that was not exercised. `Block.Cacheable` is
+  recorded as unexercised (`PromptCaching: false`); automatic cache hits show in
+  `cache_read`.
+- **Pricing only where the table applies**: `cost_usd` is computed on OpenAI's
+  endpoint for known families and null everywhere else, never an invented number.
+- **Configuration errors are usage errors before any target contact**: no model, an
+  unknown window without `max_context`, no key on OpenAI's endpoint, credentials in
+  the URL. `--local-only` and `allow_egress: false` were already exit 3 from M2.4.
+
+**Validation.** `make check` green. The conformance suite (§11) is green for
+`openai-compatible` through a fake chat-completions server that streams text and
+tool-call fragments the way the endpoint does — the same table `mock` passes.
+Adapter tests cover configuration validation, the request encoding (one system
+message, tool messages, functions, `max_completion_tokens`, `reasoning_effort`, the
+bearer header), the `max_tokens` fallback and its persistence, the `reasoning_effort`
+retreat recorded in `Native`, tools rejected as unsupported, usage with cached tokens
+and cost on the priced path versus null on a custom endpoint, error classification
+per status and message, a stream that ends without `[DONE]`, malformed tool
+arguments, and the model table. `cmd/scheck` covers the exit-3 cases and `scheck
+providers` reporting the adapter ready with its window and native set.
+**Not done:** the live run. `test/live/TestLiveLocalRun` performs one `scheck local`
+against this machine, asserts the report shape, cost under $0.50 and no denied
+model-initiated check, but needs `SCHECK_LIVE=1` and a credential and was not
+executed in this environment. Acceptance criterion 7 is unrecorded until it is.
 
 ### M2.7 — phase-2-earns-its-cost evaluation
 Deliver a labeled fixture suite covering clean hosts, seeded issues, and incomplete or
