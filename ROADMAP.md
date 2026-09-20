@@ -346,7 +346,65 @@ Fedora for criterion 1) and recording the result. This is the v1 sign-off gate.
 
 ---
 
+## Optional research — bounded assessment (not on the v1 critical path)
+
+This track implements SPEC §5.9 only as an experiment. Jev access is waitlisted.
+M0–M4 continue independently; no release gate, default test or ordinary audit depends
+on this track. Do not add an empty production abstraction in anticipation of access.
+
+### R1 — labeled fixtures and offline assessment harness
+Start after M1 facts are available; this does not gate M2. Build a small fixture corpus
+for service/context relationships (`expected`, `unexpected`, `insufficient_context`),
+with human labels and evidence references. Include absent context, unavailable checks,
+truncation, contradictions and instruction-shaped content. Separate development cases
+from held-out evaluation cases. Use authored synthetic responses to exercise the harness;
+neither an API key nor a vendor capture is needed to create them.
+**Demo:** an offline test runs fixture facts plus context through scripted assessments
+and writes a separate evaluation artifact without changing the normal report.
+**Done when:** evidence references and result shapes are validated; missing/invalid
+answers and uncertainty leave normal findings, severity and exit codes unchanged.
+Synthetic responses are clearly labeled; passing tests makes no model-quality claim.
+**Spec:** §5.9.
+
+### R2 — optional comparison with an available model
+Once an existing generative/local adapter is usable, evaluate the same labeled cases
+through it and compare with deterministic rules. Use this to improve task definitions
+and the measurement harness, without claiming it simulates Jev's calibration or accuracy.
+If no model is available, R1 still completes and mainline development continues.
+**Demo:** an opt-in evaluation records model/question versions, per-case predictions,
+precision/recall, false negatives, abstentions, latency and cost where available.
+**Done when:** quality measurements are distinguishable from scripted plumbing tests;
+no comparison run is required in default CI. Freeze evaluation criteria before R3.
+**Spec:** §5.9.
+
+### R3 — Jev adapter and live evaluation, deferred until access
+Only when credentials are available, add a small Go HTTP adapter inside the experiment.
+Use a local fake server for request/response validation, authentication failures,
+rate limits, overload, timeouts and malformed responses. Enforce egress policy before
+requests, bounded retries, and environment-only credentials. Pin model/question versions.
+**Demo:** an explicitly enabled live run compares actual Jev against R2 and deterministic
+baselines on the held-out cases, including hostile and incomplete evidence.
+**Done when:** actual measurements establish whether accuracy, investigation effort and
+cost/latency justify adoption. No arbitrary confidence threshold is treated as calibrated.
+Access unavailable means this slice stays deferred; it does not block v1.
+**Spec:** §5.9.
+
+### R4 — decide whether to integrate
+Write an evidence-backed decision: keep the experiment, remove it, or propose a bounded
+production role with explicit fallback and coverage semantics. Any production integration
+requires updating the spec, reporting contract and tests first. Do not silently promote
+an experimental assessment into a finding filter or an investigation gate.
+**Done when:** the decision cites actual evaluation results; no integration is required
+for a successful experiment or for shipping v1.
+**Spec:** §5.9.
+
+---
+
 ## Sequencing notes
+
+- **Jev is optional throughout.** R1 can proceed offline after M1; R2 uses an available
+  model if desired; R3 waits for access. None is a dependency of M0–M4. Mock responses
+  demonstrate software behavior, never semantic accuracy or prompt-injection robustness.
 
 - **M0 and M1 have no model dependency and no live-API cost.** They can absorb as much
   calendar time as needed without burning budget, and are the right place to get the

@@ -454,6 +454,58 @@ Provider-neutral, no vendor-specific phrasing:
 
 ---
 
+### 5.9 Optional bounded assessment experiment (outside v1 requirements)
+
+TypeSafe's Jev is a candidate for semantic judgments over collected evidence, such as
+whether an observed service is explained by operator notes or a persistence entry
+warrants investigation. It is an optional research track, not a prerequisite for M0–M4
+or v1. Access is currently waitlisted; development, default CI and release gates must
+not require a Jev account, credentials, network access to TypeSafe, or recorded Jev
+responses. The existing generative-provider plan remains the production path.
+
+If implemented for evaluation, keep assessment separate from `llm.Provider`: bounded
+decisions do not implement its conversational streaming and tool-generation contract.
+Start with an internal evaluation harness, not a public CLI mode or a general-purpose
+provider framework. Its domain-level input is policy-filtered evidence plus operator
+context; its output is candidate assessments tied to existing evidence identifiers.
+The implementation owns question wording, batching and vendor response conversion.
+
+Initial scope: classify service/context relationships as `expected`, `unexpected`, or
+`insufficient_context`. Code retains explicit status and completeness metadata, resolves
+evidence references, and performs exact parsing, counting and comparisons. Missing,
+denied, redacted or truncated evidence must not imply a negative finding. Assessment
+results neither assign severity nor authorize checks, change accepted risks, suppress
+findings, skip investigation, or affect exit codes. They remain separate evaluation
+artifacts until a measured result justifies a production integration decision.
+
+Development proceeds with hand-authored synthetic responses and a local fake HTTP
+server. These prove plumbing, validation and failure handling, not model quality or
+prompt-injection resistance. An optional available generative/local model may answer
+the same questions for comparison; its results are attributed to that model and are
+never presented as Jev performance or calibration.
+
+Any later live adapter must use the same policy and egress restrictions as other
+inference: `--local-only` forbids hosted assessment and hosted fallback. Credentials
+come from the environment, never fixtures or config. Validate response IDs, types,
+allowed choices and probability ranges; bound requests, retries and deadlines. Failure
+or uncertainty leaves the ordinary audit path intact. Keep provider probabilities
+separate from report confidence; thresholds need held-out evaluation, not a direct
+conversion from vendor confidence into `high|medium|low`.
+
+Before production adoption, compare deterministic rules, an available generative model
+and actual Jev on human-labeled fixtures. Record precision/recall, false negatives,
+abstentions, investigation frequency, latency and cost, including adversarial and
+incomplete evidence. Pin the tested model and question versions. Synthetic/replayed
+answers cannot satisfy this quality gate. A failed or unavailable experiment does not
+block v1; a successful one requires an explicit spec update for its production role.
+
+Research references (reviewed 2026-09-20): [primitives](https://docs.typesafe.ai/primitives),
+[HTTP API](https://docs.typesafe.ai/api), [models](https://docs.typesafe.ai/models),
+[known limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13). Typed output
+constrains answer shape; it does not guarantee truth or resistance to hostile inputs.
+
+---
+
 ## 6. Operator-supplied context
 
 A generic host audit produces generic findings. `0.0.0.0:5432` is low-signal noise on a
@@ -790,6 +842,8 @@ read a key from the config file.
   the abstraction is real.
 - **M4 — polish.** SARIF, profile tiers, category filters, `scheck diff`, golden-fixture
   tests.
+- **Optional research — bounded assessment (§5.9).** Offline fixtures and harness
+  first; a Jev comparison only when access is available. No M0–M4 dependency or v1 gate.
 
 ---
 
@@ -871,5 +925,6 @@ with a reason that beats the one recorded.
 | SSH canary fails? | Abort, exit 3, no further command sent (§4.3). | Quoting is the whole boundary on SSH; do not guess around it. |
 | Elevation mechanism? | `sudo -n` only in v1, as a prefix, plus `scheck sudoers` (§8.1). Password forwarding and `doas`/`run0` deferred. | Never transmit a password; the prefix design makes the others cheap to add later. |
 | Confidence under emulated tool calling? | Capped at `medium` in code (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. |
+| Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9), developed offline; live evaluation deferred until access is available. | Bounded judgments have a different contract, and waitlisted vendor access must not block the product. |
 
 No open questions remain for v1.
