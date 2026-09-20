@@ -13,25 +13,26 @@ import (
 // globalOpts holds every flag from docs/SPEC.md §8. Flags that belong to a later
 // milestone are registered so the surface is stable, and rejected at run time.
 type globalOpts struct {
-	Format    string
-	Out       string
-	Profile   string
-	Elevate   string
-	Sudo      bool
-	Only      string
-	Provider  string
-	Model     string
-	BaseURL   string
-	LocalOnly bool
-	Effort    string
-	Context   []string
-	IgnoreCtx bool
-	StopAfter string
-	AuditLog  string
-	StateDir  string
-	NoPersist bool
-	Timeout   time.Duration
-	Verbose   int
+	IncludeEvidence bool
+	Format          string
+	Out             string
+	Profile         string
+	Elevate         string
+	Sudo            bool
+	Only            string
+	Provider        string
+	Model           string
+	BaseURL         string
+	LocalOnly       bool
+	Effort          string
+	Context         []string
+	IgnoreCtx       bool
+	StopAfter       string
+	AuditLog        string
+	StateDir        string
+	NoPersist       bool
+	Timeout         time.Duration
+	Verbose         int
 
 	// RecordFixtures is a hidden developer flag: every exec of the run is written
 	// to DIR as a fixture manifest usable by target/fixture.
@@ -60,6 +61,7 @@ func newRootCmd() *cobra.Command {
 	}
 	pf := root.PersistentFlags()
 	pf.StringVar(&opts.Format, "format", "text", "report format: text|json|sarif")
+	pf.BoolVar(&opts.IncludeEvidence, "include-evidence", false, "include redacted diagnostics in JSON facts (not persisted)")
 	pf.StringVar(&opts.Out, "out", "", "write the report to FILE instead of stdout")
 	pf.StringVar(&opts.Profile, "profile", "", "baseline|hardened (default baseline)")
 	pf.StringVar(&opts.Elevate, "elevate", "", "elevation mechanism: none|sudo (default none)")
@@ -81,10 +83,30 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&opts.RecordFixtures, "record-fixtures", "", "developer: record every exec into DIR as a fixture")
 	_ = pf.MarkHidden("record-fixtures")
 
+	for _, name := range []string{"only", "provider", "model", "base-url", "local-only", "effort", "context", "ignore-context"} {
+		pf.Lookup(name).Usage += " (not available in this build)"
+	}
+	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
+	pf.Lookup("stop-after").Usage = "plan|facts: print that stage and exit (context not available in this build)"
+	root.Long = "Read-only host evidence collection. This build does not assess security posture.\nUse local or ssh with --stop-after facts; no model or API key is needed.\nExit codes: 0 completed collection (not a security pass), 1 findings (future),\n2 incomplete run, 3 usage/policy error. JSON goes to stdout; diagnostics to stderr."
+	root.Example = "  scheck local --stop-after facts --format json --no-persist\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if opts.Format != "text" && opts.Format != "json" {
+			return usageErr("--format must be text|json; sarif is not available in this build")
+		}
+		if cmd.Name() == "sudoers" && opts.Format != "text" {
+			return usageErr("sudoers emits a text fragment; --format json is not supported")
+		}
+		if opts.IncludeEvidence && (opts.Format != "json" || opts.StopAfter != "facts" || (cmd.Name() != "local" && cmd.Name() != "ssh")) {
+			return usageErr("--include-evidence requires local or ssh --stop-after facts --format json")
+		}
+		return nil
+	}
 	root.AddCommand(
 		newLocalCmd(opts),
 		newSSHCmd(opts),
 		newCatalogCmd(opts),
+		newExplainCmd(opts),
 		newSudoersCmd(opts),
 	)
 	return root

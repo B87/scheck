@@ -4,8 +4,8 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: v0.4 — M0 and M1 implemented (2026-09-20), M1.6–M1.8 (readable phase 1) planned, M2+ design · Language: Go · Inference: provider-agnostic (default `anthropic` /
-`claude-opus-5`; OpenAI-compatible and local models supported)
+Status: v0.5 — M0, M1 and M1.6 implemented (2026-09-20), M1.7–M1.8 (readable phase 1) planned, M2+ design · Language: Go · Inference: provider-agnostic (default
+`openai-compatible`, `--model` required; Anthropic and local models supported)
 
 **Changes from v0.1** (from design review):
 
@@ -67,8 +67,8 @@ Status: v0.4 — M0 and M1 implemented (2026-09-20), M1.6–M1.8 (readable phase
   exists, and `-v` / `-vv` govern how much of the report is shown (§8).
 - `--stop-after facts` exits `1` when a rule finding is open at the profile threshold
   (§8); acceptance criterion 4 now requires the offline run to say so (§12).
-- Roadmap: M1.6–M1.8 land these before M2; M2.2 shrinks to context adjustments and
-  accepted risks (§10).
+- Roadmap: M1.6–M1.8 land these before M2; the severity-adjustment slice shrinks to
+  context adjustments and accepted risks (M2.3 after the v0.5 renumbering, §10).
 
 - Posture assessments distinguish matched, not matched, not applicable and not
   assessed; rules require recognized evidence and preserve uncertainty (§7.5).
@@ -76,6 +76,53 @@ Status: v0.4 — M0 and M1 implemented (2026-09-20), M1.6–M1.8 (readable phase
   machinery; the release establishes the compatibility baseline (§7.4).
 - Profile exit thresholds are explicit (§8), and the agent evaluation compares rules,
   single-pass analysis and follow-up investigation (§12).
+
+**Changes from v0.4** (from implementing M1.6, 2026-09-20):
+
+- The fact sheet is a flat table with a repeated `DOMAIN` column rather than domain
+  sub-headings, so the report sorts, greps and pipes as a table (§7.6).
+- The text report escapes control characters in every target-derived string before
+  printing it (§7.6). A check's stdout must not be able to drive the operator's
+  terminal; this is a security property of the renderer, not cosmetics.
+- Wrapping never splits a `[REDACTED:…]` or `[TRUNCATED:…]` marker, and a hanging block
+  counts its own prefix against the width (§7.6).
+- The terminal decisions (width, tty, `NO_COLOR`) belong to the CLI; `internal/report`
+  takes them as options and reads no descriptor and no environment (§7.6). Until
+  severities exist the report styles structure only, never colour.
+- `-vv` renders the runner's redacted capture, carried in process. Default JSON and
+  persistence omit it; the review follow-up adds opt-in JSON evidence (§7.4, §7.6).
+- `scheck explain CHECK-ID` ships, with one section per platform-specific definition
+  (§8). Its posture-rule list waits for the rules themselves (M1.8).
+
+**M1.6 review follow-up (2026-09-20):**
+
+- Header fields are escaped and folded to one logical line; failed attempted checks
+  expose only policy-filtered diagnostics. Extraction failures keep full stdout hidden.
+- Machine consumers can request JSON discovery (`catalog`, `explain`, plans), explicit
+  `run.assessment`, diagnostic reason codes and optional redacted evidence (§7.4, §8).
+- Timeout guidance distinguishes per-check limits from the whole-run deadline.
+- Agent CLI guidance is maintained as the repository-local `scheck` skill, replacing
+  the standalone usage document.
+- Documentation distinguishes the implemented M1.6 envelope from M1.7–M1.8 plans,
+  and records the current SSH planning bootstrap (§8).
+
+**Changes from v0.5** (2026-09-20):
+
+- `openai-compatible` is the default provider and the reference implementation, and is
+  the first adapter built (M2.6); `anthropic` moves to M3.1 (§5.2, §10). The `llm`
+  interface in §5.1 does not change: it keeps `Block.Cacheable` and `Effort` because it
+  is designed from the richest provider, not the first one implemented.
+- M2 is re-sliced into seven (`ROADMAP.md`): context ingestion (§6.1, §6.2) moves ahead
+  of the severity-adjustment slice, because structured context is the grader's input
+  (§6.3) and was previously scheduled after its consumer. `scheck providers` and the
+  frozen phase-2 evaluation criteria gain an owning slice.
+- The fact-sheet chunking threshold moves from a constant in `agent` to
+  `Budgets.ChunkAtFraction` (§4.4, §5.3), so every number that shapes a run lives in one
+  struct.
+- `single-pass` is defined as the agent loop with `MaxIterations: 1` (§5.6), not a
+  separate analysis path.
+- `scheck explain` accepts a finding id and prints the severity chain (§8), replacing the
+  separate grading devtool the roadmap had sketched.
 
 ---
 
@@ -386,6 +433,8 @@ type Budgets struct {
     MaxIterations    int           // 24 model turns
     MaxTokens        int           // 32000 per completion
     ContextBytes     int           // 32 KiB merged operator context
+    ChunkAtFraction  float64       // 0.5 — chunk the fact sheet when the system prefix
+                                   //       would exceed this fraction of Limits.MaxContext (§5.3)
     RunTimeout       time.Duration // 5m, --timeout
 }
 ```
@@ -482,14 +531,14 @@ makes them testable without a network.
 
 | Provider | Covers | Notes |
 |---|---|---|
-| `anthropic` | Claude API, Bedrock, Vertex, Foundry | **Default and reference implementation.** Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively. |
-| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | One adapter, `--base-url` + `--model`. Native features probed from config, not assumed; the rest emulated (§5.3). |
+| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Native features probed from config, not assumed; the rest emulated (§5.3). |
+| `anthropic` | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
 | `ollama` | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
 | `mock` | tests | Replays recorded transcripts; used by every non-live test. |
 
 Selection: `--provider`/`--model`, or `provider:` in config, or inferred from which
-credentials are present (with `anthropic` winning ties). `scheck providers` lists what is
-configured and each one's `Limits` and `Native` set.
+credentials are present (with `openai-compatible` winning ties). `scheck providers` lists
+what is configured and each one's `Limits` and `Native` set.
 
 ### 5.3 Adapters absorb capability differences
 
@@ -509,14 +558,16 @@ backend lacks:
   tools or reporting" instruction when `Effort >= high`.
 
 The one thing an adapter cannot hide is **context size**: the loop chunks the fact sheet
-by domain when the prefix would exceed `MaxContext/2`, analyses per chunk, and does a
-final correlation pass over the findings only. This is the only conditional path in
-`agent`.
+by domain when the system prefix would exceed `Limits.MaxContext × Budgets.ChunkAtFraction`,
+analyses per chunk, and does a final correlation pass over the findings only. This is the
+only conditional path in `agent`, and the threshold lives in `policy.Budgets` (§4.4) with
+every other number that shapes a run, not as a constant inside the loop.
 
-The report header records `Native` so a reader knows which features were emulated. A
-finding's `confidence` may be capped at `medium` when tool calling was emulated,
-because emulated calls are more error-prone; the cap is applied in `finding`, not by the
-model.
+`Native` has exactly two consumers, and the agent loop is neither of them: the report
+header records it so a reader knows which features were emulated, and `finding` reads
+`Native.ToolCalling` to cap a finding's `confidence` at `medium` when tool calling was
+emulated, because parsed-from-text calls are more error-prone. The cap is applied in
+`finding`, never by the model, and the loop must not branch on any field of `Native`.
 
 ### 5.4 Egress control
 
@@ -539,12 +590,16 @@ Taken from `policy.Budgets` (§4.4). Streaming is always used, so the CLI can sh
 progress. The loop ends when the model stops calling tools, or on any budget. A
 truncated run is reported as `status: incomplete`, never as a clean bill of health.
 
+`run.mode: single-pass` (§7.4) is this same loop with `MaxIterations: 1`, not a second
+implementation. That is what makes the comparison in §12 criterion 10 a one-variable
+experiment: same prompt, same tools, same facts, different iteration budget.
+
 ### 5.7 Tool surface (three tools, deliberately small)
 
 | Tool | Input | Behaviour |
 |---|---|---|
 | `run_check` | `id: string`, `params: object`, `rationale: string` | Looks up the catalog entry, validates params by kind, applies path policy, executes, redacts, truncates. Unknown id or invalid param → error result listing the valid ids/kinds. `rationale` is logged, not sent back. |
-| `read_file` | `path: string` | Sugar for `text.cat {path}` with the same path policy; returns contents or metadata-only for sensitive paths. Exists as a separate tool because models use it far more reliably than a parameterised check. |
+| `read_file` | `path: string` | Sugar for `text.cat {path}` with the same path policy; returns contents or metadata-only for sensitive paths. Exists as a separate tool because models use it far more reliably than a parameterised check. It is a caller of `runner.Run` like any other: its audit record is byte-identical to the equivalent `text.cat` binding apart from the tool name, which is the test that keeps it from becoming a second enforcement path (§4). |
 | `report_finding` | the finding schema below (§7) | Validated and stored. Invalid → error result with the validation message so the model can correct it. The model does **not** supply `severity`. |
 
 The catalog's ids, parameters and one-line descriptions are rendered into the tool
@@ -817,7 +872,10 @@ human** — `scheck` never runs them.
 ### 7.4 Report envelope and run artifacts
 
 The JSON report is shaped so that a future fleet tool can concatenate reports without
-a translation step, even though v1 audits one host per invocation:
+a translation step, even though v1 audits one host per invocation. The example below
+shows the planned M1.7–M2 shape, not the current binary's complete schema. Current
+M1.6 fields are described below it and validated by `docs/report-schema.json`;
+`summary`, `assessments`, typed records and non-empty findings arrive in later slices:
 
 ```json
 {
@@ -856,7 +914,19 @@ model's prompt. The envelope is validated against `docs/report-schema.json` in t
 Findings are a flat array keyed by catalog id, never nested under a host, so
 concatenation is trivial.
 
-Pre-release schema history: `1.0` is the M1 envelope; `1.1` (M1.7, M1.8) introduces
+Current M1.6 reports explicitly set `run.assessment: "none"`; an empty findings
+array is not a security verdict. Facts expose `attempted` and optional `reason_code`
+independently of `status`. Codes are assigned by the runner: `requires_elevation`,
+`sudo_refused`, `command_missing`, `check_timeout`, `run_timeout`, `canceled`,
+`exec_error`, `exit_error`, `parse_error`, `extract_error`, `invalid_params`,
+`path_denied`, `unknown_check`, `metadata_unavailable`. Human `reason` text supplies
+details. An attempted execution need not have started a process; prerequisite probes
+are not represented by this boolean. `--include-evidence` adds an optional `evidence`
+object (`stdout`, `stderr`) to attempted facts in JSON output only. Captures remain
+redacted, bounded and extraction-filtered; persistence and default JSON omit them.
+
+Pre-release schema history: `1.0` is the M1 envelope, extended during M1.6 review with
+assessment scope, execution diagnostics and opt-in evidence; `1.1` (M1.7, M1.8) introduces
 `facts.<id>.summary`, `findings[].source`, `assessments` and the typed `parsed` shapes
 of §3. These are development revisions, not a compatibility promise.
 
@@ -986,6 +1056,12 @@ contract, pinned by golden tests per fixture (§11):
 - **Status words, not marks.** A check `ran`, was `skipped` (unavailable) or was
   `denied`. A mark column may exist for scanning, but a mark never means "posture ok":
   a fact whose rule fired shows the finding's severity, not a plus.
+- **The fact sheet is one flat table**, header row `DOMAIN STATUS CHECK READING`, one
+  row per check, rows ordered by domain and then id. Every row repeats its domain so the
+  report sorts, greps and pipes as a table; there are no section sub-headings and no box
+  drawing. Columns are sized from the data (domain capped at 24, check id at 30) and the
+  READING column wraps into continuation rows aligned under it, never truncating a
+  reason. Findings (§7.5) are rendered above the table, not inside it.
 - **One meaningful summary per check.** From the typed parser or `Unit` (§3): "26
   listening sockets", "0 SUID files", "FileVault is On.", never the first raw line. The
   same string is `summary` in the envelope (§7.4).
@@ -995,14 +1071,37 @@ contract, pinned by golden tests per fixture (§11):
 - **Human domain labels** ("Privilege escalation", not `privesc`) from a table in
   `report`. Check ids stay verbatim: they are the join key into `scheck explain`, the
   audit log and the JSON.
-- **`-v` adds each check's description; `-vv` adds its redacted output** indented under
-  the line. There is no third way to see output, and anything shown at `-vv` has been
-  through the redactor (§4.2), which the redaction test asserts.
-- **Colour only on a tty**, off under `NO_COLOR`. Severity colours are the only colours.
+- **`-v` adds each check's description and the run detail the header dropped; `-vv`
+  adds its redacted output** behind a `  | ` gutter at the left margin, where evidence
+  has room for its own alignment. This includes redacted stdout/stderr from attempted
+  checks that failed. Unattempted checks have no capture. Extraction failures withhold
+  full stdout and explain the restriction. JSON consumers use `--include-evidence`;
+  all these paths remain behind the redactor (§4.2).
+- **Target output can never drive the terminal.** Every target-derived string the text
+  report prints — header, summary, reason, warning, `-vv` output — has its control characters
+  escaped as `\xNN` first (tabs are expanded to eight-column stops, newlines split
+  lines in evidence blocks; header fields fold whitespace to one logical line). Unicode
+  control and formatting characters are escaped too. Target text must not repaint
+  the screen or forge the report structure.
+- **Colour only on a tty**, off under `NO_COLOR` (any non-empty value), and never in a
+  `--out` file or a redirected report. Severity colours are the only colours; until
+  findings exist the report styles structure alone (bold header and table head, dim
+  descriptions and evidence). Styling is applied to whole lines after wrapping, so an
+  escape sequence never counts against a line's width. The caller decides — the report
+  package inspects no file descriptor and no environment variable.
 - **Honest footer.** In `facts` mode: "assessment: posture rules only; run without
   `--stop-after` for the agentic pass" (or "agentic pass not available in this build"
-  until M2). Never "findings: none" when nothing looked.
+  until M2, and "assessment: none … posture rules and the agentic pass are not available
+  in this build" until M1.8). Never "findings: none" when nothing looked.
 - **Width.** Lines wrap at the terminal width or 100 columns; no trailing padding.
+  Wrapping prefers a space, falls back to a hard cut rather than dropping a byte, and
+  never breaks a `[REDACTED:…]` or `[TRUNCATED:…]` marker in half: the marker is the
+  only record that bytes were removed (§4.2). A hanging block counts its own prefix, so
+  a wrapped reason or remedy cannot overrun. The table's fixed columns set a floor below
+  which the layout cannot shrink.
+- **Captures are opt-in diagnostics.** `-vv` and JSON `--include-evidence` render only
+  the runner's redacted, bounded capture after catalog extraction. Default JSON and
+  persisted runs omit captures; pre-redaction bytes never leave the runner (§7.4).
 
 ---
 
@@ -1013,14 +1112,23 @@ scheck local                            # audit this machine
 scheck ssh user@host [--port] [--identity]
 scheck catalog [--profile P]            # list every check the model could run under profile P
 scheck sudoers [--platform P]           # print a least-privilege NOPASSWD rule for elevated checks (§8.1)
-scheck explain CHECK-ID                 # what a check runs, why, its parser and which posture rules read it
+scheck explain ID                       # CHECK-ID: what a check runs, why, its parser and which posture rules read it
+                                        #   FINDING-ID: the severity chain — base, context adjustments,
+                                        #   confidence cap, accepted-risk status, final (§7.2). Accepts the
+                                        #   §6.2 structured keys as flags (--exposure, --environment) so an
+                                        #   adjustment can be reproduced without a run.
+                                        #   (purpose, literal argv with its {placeholders}, typed params,
+                                        #   platform, domain, phase, elevation, parser, exit codes, path
+                                        #   use, extract; one section per platform-specific definition.
+                                        #   The posture-rule list arrives with the rules in M1.8.)
 scheck providers                        # configured providers, limits, native features
 scheck diff [A B]                       # posture drift between two runs (M4)
 scheck --format text|json|sarif  --out FILE
+       --include-evidence             # JSON facts only: optional redacted diagnostics
        --profile baseline|hardened      # severity thresholds + catalog tier (§3)
        --elevate none|sudo  (--sudo)    # elevation mechanism (§8.1)
        --only remote-access,updates     # category filter
-       --provider anthropic|openai-compatible|ollama
+       --provider openai-compatible|anthropic|ollama
        --model NAME  --base-url URL
        --local-only                     # refuse any provider that leaves the machine
        --effort low|medium|high|max
@@ -1033,9 +1141,26 @@ scheck --format text|json|sarif  --out FILE
        -v / -vv
 ```
 
-`--stop-after plan` prints the phase 1 check list and exits without contacting the
-target or the model. It cannot show phase 2 commands, which the model chooses at run
-time; the catalog (`scheck catalog`) shows everything phase 2 *could* run.
+**Machine-readable use (available from the M1.6 follow-up).** `catalog`, `explain`
+and plans honor `--format json` and `--out`. Discovery has its own `schema_version`
+and `kind` (`catalog|explain|plan`), `scheck_version`, platform, and a `checks` array.
+Entries expose argv arrays, typed params, parser, profile, elevation, accepted exits,
+path use, extraction, canary and budget overrides (milliseconds/bytes, zero means
+policy default). `any_exit` represents the wildcard exit contract without exposing an
+internal sentinel. `scheck explain FINDING-ID` uses `kind: finding` with the severity
+chain as an ordered array of `{stage, from, to, reason}` steps rather than a `checks`
+array (M2.3). Unsupported formats fail explicitly. Facts JSON goes to stdout,
+diagnostics to stderr; `--out` redirects the document. Help includes supported
+invocations and labels future flags unavailable. See the [scheck skill](../.agents/skills/scheck/SKILL.md)
+for examples, exit-code interpretation, diagnostics and the SSH planning limitation.
+
+`--stop-after plan` prints the phase 1 check list without running the baseline or
+contacting a model. Local planning executes no target commands. In the current SSH
+implementation, planning connects, verifies the canary, and detects the platform
+before printing the plan. For connection-free discovery, use
+`scheck catalog --platform linux|macos --format json`; this lists the platform catalog,
+not the configured target's exact plan. Plans cannot show phase 2 commands, which the
+model chooses at run time.
 `--stop-after facts` runs phase 1 only and needs no API key.
 
 Exit codes: `0` no open finding at or above the profile threshold · `1` findings present ·
@@ -1048,12 +1173,17 @@ exit `1`. Thresholds select the exit result, not which findings are displayed.
 Exit `3` takes precedence over `2`, which takes precedence over `1`, then `0`.
 An exit `0` is not a claim of full coverage: consult the assessments and skipped checks.
 
-Under `--stop-after facts` the findings are the posture rules' (§7.5), so the run
+From M1.8, under `--stop-after facts` the findings are the posture rules' (§7.5), so the run
 exits `1` when one is open at or above the profile threshold and `0` otherwise
 (individual `unavailable` checks do not change that), `2` when the transport failed or
 `RunTimeout` cut the run, `3` for usage, config or canary errors. One meaning per exit
 code, whichever phase produced it. `-v` and `-vv` govern both logging and how much of
 the text report is shown (§7.6).
+In the current M1.6 build, `run.assessment` is `none`, `findings` is empty, and exit
+`1` is not emitted. Successful collection returns `0` even with individual unavailable
+checks; consult `run.status`, warnings and each fact. JSON reports may accompany exit
+`2`; early setup/usage failures may have no report. See the [scheck skill](../.agents/skills/scheck/SKILL.md).
+
 Flags that belong to a later milestone are registered from day one and exit `3` with
 "not available in this build" until that milestone lands.
 
@@ -1104,9 +1234,9 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 `./scheck.yaml`, `~/.config/scheck/config.yaml`, then flags (last wins).
 
 ```yaml
-provider: anthropic           # anthropic | openai-compatible | ollama
-model: claude-opus-5
-# base_url: http://localhost:11434    # for openai-compatible / ollama
+provider: openai-compatible   # openai-compatible (default) | anthropic | ollama
+model: gpt-5                  # required for openai-compatible; the endpoint decides what exists
+# base_url: http://localhost:11434    # defaults to https://api.openai.com/v1
 effort: high
 allow_egress: true            # false forbids any non-local provider
 profile: baseline
@@ -1125,16 +1255,17 @@ context: { … }                # §6.2
 
 Every config knob narrows: it disables checks, denies paths, adds redactions. No knob
 widens what `scheck` may execute or reveal. Credentials come from the environment per
-provider (`ANTHROPIC_API_KEY` or an `ant auth login` profile / WIF for `anthropic`;
-`OPENAI_API_KEY` or `--base-url` for `openai-compatible`; nothing for `ollama`). Never
+provider (`OPENAI_API_KEY` or `--base-url` for `openai-compatible`; `ANTHROPIC_API_KEY`
+or an `ant auth login` profile / WIF for `anthropic`; nothing for `ollama`). Never
 read a key from the config file.
 
 ---
 
 ## 10. Milestones
 
-Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
-`ROADMAP.md` for the per-slice record. M1.6–M1.8 are next, then M2.
+Status (2026-09-20): M0, M1 and M1.6 including its review follow-up are implemented;
+see `ROADMAP.md` for validation and working-tree status. M1.7 typed parsers and
+summaries is next, then M1.8 posture rules and M2.
 
 - **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
   and invariants test, `policy` (path, redaction, budgets), audit log, elevation
@@ -1145,9 +1276,9 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
   the text report contract (§7.6), typed parsers and summaries (§3), posture rules and
   the finding id catalog (§7.5, §7.1), so phase 1 says what is wrong without a model.
 - **M2 — agent.** `llm` interface, the loop, three tools, system prompt, severity
-  adjustments and accepted risks on top of the M1.8 catalog, the `anthropic` provider,
-  the `mock` provider.
-- **M3 — second provider.** `openai-compatible` + `ollama` with tool-call emulation,
+  adjustments and accepted risks on top of the M1.8 catalog, operator context (§6),
+  the `openai-compatible` provider, the `mock` provider, `scheck providers`.
+- **M3 — more providers.** `anthropic` + `ollama` with tool-call emulation,
   `--local-only`, provider conformance suite. Two independent providers is what proves
   the abstraction is real.
 - **M4 — polish.** SARIF, profile tiers, category filters, `scheck diff`, golden-fixture
@@ -1185,8 +1316,11 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
   `scheck ssh --stop-after facts` against Ubuntu and Fedora with schema validation and
   an empty `docker diff` afterwards (acceptance criterion 3).
 - **Golden text reports.** One per fixture (ubuntu, fedora, macos) at default, `-v`
-  and `-vv`, committed and diffed in `go test`. A diff is a review item, not something
-  to silence; §7.6 is the contract the golden files pin.
+  and `-vv`, committed under `internal/report/testdata/golden/` and diffed in
+  `go test`; `go test ./internal/report -update` rewrites them. A diff is a review
+  item, not something to silence; §7.6 is the contract the golden files pin. Alongside
+  them, every golden is re-rendered at several widths to assert no line overruns and no
+  line carries trailing padding.
 - **Rule tests.** Table-driven: fact sheet → expected finding ids. Every rule has a
   fixture where it fires and one where it does not, plus unknown, malformed,
   unavailable, denied, redacted and truncated evidence. Test applicability, disabled
@@ -1264,11 +1398,12 @@ with a reason that beats the one recorded.
 | Custom finding ids? | Kept, capped at `medium`, flagged `custom: true`, never escalated (§7.1). | The model can surface a novel issue without driving exit codes or matching accepted risks by accident. |
 | SSH canary fails? | Abort, exit 3, no further command sent (§4.3). | Quoting is the whole boundary on SSH; do not guess around it. |
 | Elevation mechanism? | `sudo -n` only in v1, as a prefix, plus `scheck sudoers` (§8.1). Password forwarding and `doas`/`run0` deferred. | Never transmit a password; the prefix design makes the others cheap to add later. |
-| Confidence under emulated tool calling? | Capped at `medium` in code (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. |
+| Which provider is built first? | `openai-compatible` (M2.6); `anthropic` follows in M3.1 (§5.2, §10). | The widest-reach adapter should be the one the conformance suite is written against, and a second provider that is *richer* than the reference implementation tests the interface harder than a second one that matches it. The `llm` interface stays designed from the richest provider so M3.1 adds no field. |
+| Confidence under emulated tool calling? | Capped at `medium` in code, keyed on `Native.ToolCalling` (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. Per-call emulation provenance would cap more precisely in a mixed run, but no adapter emulates anything until M3.2 — revisit it there, with the emulation in front of us, rather than scaffolding it now. |
 | Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9), developed offline; live evaluation deferred until access is available. | Bounded judgments have a different contract, and waitlisted vendor access must not block the product. |
 | Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§7.5), one fact → one finding, code-graded like everything else. | Most users stop at `--stop-after facts`; a fact sheet that never says "this is wrong" is a debug artefact, not a tool. The model still owns every conclusion that needs two facts or judgement. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§8). | One meaning per exit code; CI can gate on the offline run. |
 | Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | One record shape serves the screen, the model and `scheck diff`. |
-| How does a user see a check's raw output? | `-vv` prints it, redacted, under the check line (§7.6). No `scheck show`. | One path for output, and it is the redacted one; a state-reading command can wait for `scheck diff`. |
+| How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§7.4, §7.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |
 
 No open questions remain for v1.

@@ -14,9 +14,11 @@ import (
 
 func newLocalCmd(opts *globalOpts) *cobra.Command {
 	return &cobra.Command{
-		Use:   "local",
-		Short: "Audit this machine",
-		Args:  cobra.NoArgs,
+		Use:     "local",
+		Short:   "Collect facts from this machine (assessment not yet available)",
+		Long:    "Collect read-only facts. This build requires --stop-after plan or facts; it does not assess security posture. JSON output is on stdout, diagnostics on stderr. Exit 0 means collection completed, 2 incomplete, 3 usage/policy error.",
+		Example: "  scheck local --stop-after facts --format json --no-persist\n  scheck local --stop-after facts --format json --include-evidence --no-persist\n  scheck local --stop-after plan --format json",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := opts.notInPhase1(cmd); err != nil {
 				return err
@@ -36,16 +38,19 @@ func newLocalCmd(opts *globalOpts) *cobra.Command {
 // runStopAfter executes the stage selected by --stop-after for a built
 // session. In phase 1 the only complete runs are plan and facts.
 func runStopAfter(cmd *cobra.Command, sess *session) error {
-	out, err := sess.opts.output()
+	out, closeOutput, err := sess.opts.commandOutput(cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
-	defer func() { _ = out.Close() }()
+	defer closeOutput()
 	switch sess.opts.StopAfter {
 	case "plan":
 		plan, err := sess.plan()
 		if err != nil {
 			return err
+		}
+		if sess.opts.Format == "json" {
+			return writeDiscovery(out, "plan", string(sess.runner.Target.Platform()), sess.profile.String(), string(sess.elevate), plan)
 		}
 		printPlan(out, sess.runner.Target.Platform(), sess.elevate, plan)
 		return nil

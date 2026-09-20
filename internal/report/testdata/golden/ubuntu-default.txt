@@ -1,0 +1,85 @@
+scheck test — 21859b827686 — Ubuntu 24.04.5 LTS — fixture, elevation sudo
+33 checks: 22 ran, 11 skipped
+
+DOMAIN                   STATUS   CHECK                   READING
+Host identity            ran      host.hostname           21859b827686
+Host identity            ran      host.machine_id         ef671600129d4fc6813a00cba94421a5
+Operating system         ran      os.release              13 keys
+Software updates         ran      pkg.apt_upgradable      1 line: Listing...
+Software updates         skipped  pkg.dnf_check_update    exit 127: bash: line 1: dnf: command not
+                                                          found
+Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
+                                                          not found
+Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
+                                                          or directory
+Disk encryption          ran      disk.lsblk              20 lines: NAME   TYPE FSTYPE MOUNTPOINT
+System integrity         skipped  mac.aa_status           not found: aa-status
+System integrity         skipped  mac.sestatus            exit 127: bash: line 1: sestatus: command
+                                                          not found
+Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
+                                                          command not found
+Firewall                 skipped  fw.nft                  not found: nft
+Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem running iptables:
+                                                          iptables v1.8.10 (nf_tables): Could not
+                                                          fetch rule set generation id: Permission
+                                                          denied (you must be root) [elevated]
+Network exposure         ran      net.listeners           2 lines: tcp LISTEN 0      128
+                                                          0.0.0.0:22 0.0.0.0:*
+SSH server               ran      sshd.config             91 keys [elevated]
+Remote access            ran      remote.sshd_enabled     2 lines: disabled
+Accounts                 ran      accounts.passwd         22 lines: root:x:0:0:root:/root:/bin/bash
+Accounts                 ran      accounts.passwd_status  22 lines: root L 2026-09-11 0 99999 7 -1
+                                                          [elevated]
+Accounts                 ran      accounts.shadow_meta    -rw-r-----:640:root:shadow:577
+Privilege escalation     ran      privesc.sudoers         41 lines: # [elevated]
+Privilege escalation     ran      privesc.sudoers_d       33 lines: /etc/sudoers.d/README:#
+                                                          [elevated, 7 redacted]
+Startup and persistence  ran      persist.cron            25 lines: /etc/crontab:# /etc/crontab:
+                                                          system-wide crontab
+Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Startup and persistence  ran      persist.units           15 lines: UNIT FILE               STATE
+                                                          PRESET
+Filesystem               ran      fs.suid                 9 lines: /usr/bin/newgrp
+Filesystem               ran      fs.world_writable       0 lines
+Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Logging and audit        ran      log.journal_usage       Archived and active journals take up 0B in
+                                                          the file system.
+Time synchronisation     skipped  time.timedatectl        exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Session and shell        ran      sys.platform            Linux
+Session and shell        ran      sys.shell               /bin/bash
+Session and shell        ran      sys.uid                 1001
+Session and shell        ran      sys.uname               Linux 21859b827686 7.0.12-linuxkit #1 SMP
+                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
+                                                          aarch64 aarch64 aarch64 GNU/Linux
+
+Skipped (11)
+  these checks produced no usable fact; some executed but failed
+  6 need a command this host does not have
+    fw.firewalld          exit 127: bash: line 1: firewall-cmd: command not found
+    fw.nft                nft
+    mac.aa_status         aa-status
+    mac.sestatus          exit 127: bash: line 1: sestatus: command not found
+    pkg.dnf_check_update  exit 127: bash: line 1: dnf: command not found
+    pkg.zypper_lp         exit 127: bash: line 1: zypper: command not found
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  5 exited with an error
+    disk.crypttab     exit 1: cat: /etc/crypttab: No such file or directory
+    fw.ufw            exit 1: ERROR: problem running iptables: iptables v1.8.10 (nf_tables): Could
+                      not fetch rule set generation id: Permission denied (you must be root)
+    log.auditd        exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    persist.timers    exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    time.timedatectl  exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
+
+assessment: none. Every line above reports what a command observed, not whether the host is
+configured safely. Posture rules and the agentic pass are not available in this build.

@@ -174,7 +174,9 @@ func (o *globalOpts) output() (io.WriteCloser, error) {
 	return f, nil
 }
 
-type nopCloser struct{ io.Writer }
+// nopCloser keeps stdout open when the report is not going to a --out file,
+// while still exposing Fd() so the caller can ask whether it is a terminal.
+type nopCloser struct{ *os.File }
 
 func (nopCloser) Close() error { return nil }
 
@@ -205,9 +207,9 @@ func (s *session) writeReport(w io.Writer, sheet *baseline.FactSheet) (report.En
 	}
 	switch s.opts.Format {
 	case "json":
-		return env, report.WriteJSON(w, env)
+		return env, report.WriteJSONEvidence(w, env, s.opts.IncludeEvidence)
 	case "text":
-		return env, report.WriteText(w, env)
+		return env, report.WriteText(w, env, s.opts.textOptions(w))
 	case "sarif":
 		return env, usageErr("--format sarif is not available in this build (phase 1)")
 	default:

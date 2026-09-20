@@ -1,0 +1,98 @@
+scheck test — fbf2f7a11b33 — Fedora Linux 40 (Container Image) — fixture, elevation sudo
+33 checks: 22 ran, 11 skipped
+
+DOMAIN                   STATUS   CHECK                   READING
+Host identity            ran      host.hostname           fbf2f7a11b33
+Host identity            ran      host.machine_id         172d9b861de844f9a2a5182d371b0267
+Operating system         ran      os.release              22 keys
+Software updates         skipped  pkg.apt_upgradable      exit 127: bash: line 1: apt: command not
+                                                          found
+Software updates         ran      pkg.dnf_check_update    37 lines: audit-libs.aarch64
+                                                          4.0.3-1.fc40                updates
+Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
+                                                          not found
+Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
+                                                          or directory
+Disk encryption          ran      disk.lsblk              20 lines: NAME   TYPE FSTYPE MOUNTPOINT
+System integrity         skipped  mac.aa_status           sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or
+                                                          aa-status is not installed) [elevated]
+System integrity         skipped  mac.sestatus            exit 127: bash: line 1: sestatus: command
+                                                          not found
+Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
+                                                          command not found
+Firewall                 skipped  fw.nft                  sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or nft is
+                                                          not installed) [elevated]
+Firewall                 skipped  fw.ufw                  sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or ufw is
+                                                          not installed) [elevated]
+Network exposure         ran      net.listeners           2 lines: tcp LISTEN 0      128
+                                                          0.0.0.0:22 0.0.0.0:*
+SSH server               ran      sshd.config             93 keys [elevated]
+Remote access            ran      remote.sshd_enabled     2 lines: not-found
+Accounts                 ran      accounts.passwd         22 lines: root:x:0:0:Super
+                                                          User:/root:/bin/bash
+Accounts                 ran      accounts.passwd_status  22 lines: root L 2024-01-27 0 99999 7 -1
+                                                          [elevated]
+Accounts                 ran      accounts.shadow_meta    ----------:0:root:root:580
+Privilege escalation     ran      privesc.sudoers         94 lines: ## Sudoers allows particular
+                                                          users to run various commands as
+                                                          [elevated, 1 redacted]
+Privilege escalation     ran      privesc.sudoers_d       11 lines: /etc/sudoers.d/scheck:# scheck
+                                                          elevated checks for ops on linux —
+                                                          generated from the compiled catalog.
+                                                          [elevated, 7 redacted]
+Startup and persistence  ran      persist.cron            0 lines
+Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Startup and persistence  ran      persist.units           23 lines: UNIT FILE
+                                                          STATE   PRESET
+Filesystem               ran      fs.suid                 12 lines: /usr/bin/chage
+Filesystem               ran      fs.world_writable       0 lines
+Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Logging and audit        ran      log.journal_usage       Archived and active journals take up 0B in
+                                                          the file system.
+Time synchronisation     skipped  time.timedatectl        exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+Session and shell        ran      sys.platform            Linux
+Session and shell        ran      sys.shell               /bin/bash
+Session and shell        ran      sys.uid                 1000
+Session and shell        ran      sys.uname               Linux fbf2f7a11b33 7.0.12-linuxkit #1 SMP
+                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
+                                                          aarch64 GNU/Linux
+
+Skipped (11)
+  these checks produced no usable fact; some executed but failed
+  3 were refused by sudo
+    fw.nft         sudo: a password is required (no NOPASSWD rule for this command, or nft is not
+                   installed)
+    fw.ufw         sudo: a password is required (no NOPASSWD rule for this command, or ufw is not
+                   installed)
+    mac.aa_status  sudo: a password is required (no NOPASSWD rule for this command, or aa-status is
+                   not installed)
+    remedy: install the fragment printed by `scheck sudoers`, or cache the credential with `sudo -v`
+            before the run. scheck never prompts for a password.
+  4 need a command this host does not have
+    fw.firewalld        exit 127: bash: line 1: firewall-cmd: command not found
+    mac.sestatus        exit 127: bash: line 1: sestatus: command not found
+    pkg.apt_upgradable  exit 127: bash: line 1: apt: command not found
+    pkg.zypper_lp       exit 127: bash: line 1: zypper: command not found
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  4 exited with an error
+    disk.crypttab     exit 1: cat: /etc/crypttab: No such file or directory
+    log.auditd        exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    persist.timers    exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    time.timedatectl  exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
+
+assessment: none. Every line above reports what a command observed, not whether the host is
+configured safely. Posture rules and the agentic pass are not available in this build.

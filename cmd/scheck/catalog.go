@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -17,7 +16,7 @@ func newCatalogCmd(opts *globalOpts) *cobra.Command {
 		Use:   "catalog",
 		Short: "List every check the model could run under the active profile",
 		Args:  cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			prof, ok := check.ParseProfile(opts.Profile)
 			if !ok {
 				return usageErr("--profile must be baseline|hardened")
@@ -35,7 +34,15 @@ func newCatalogCmd(opts *globalOpts) *cobra.Command {
 			default:
 				return usageErr("--platform must be linux|macos|all")
 			}
-			tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+			w, closeOutput, err := opts.commandOutput(cmd.OutOrStdout())
+			if err != nil {
+				return err
+			}
+			defer closeOutput()
+			if opts.Format == "json" {
+				return writeDiscovery(w, "catalog", platform, prof.String(), "", cs)
+			}
+			tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 			fmt.Fprintln(tw, "ID\tPLATFORM\tDOMAIN\tPHASE\tELEVATED\tPARAMS\tDESCRIPTION")
 			for _, c := range cs {
 				phase := "on-demand"
@@ -48,9 +55,11 @@ func newCatalogCmd(opts *globalOpts) *cobra.Command {
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", c.ID, c.Platform, c.Domain, phase, el, paramSpec(c), c.Description)
 			}
-			_ = tw.Flush()
-			fmt.Fprintf(os.Stdout, "\n%d checks (profile %s, platform %s)\n", len(cs), prof, platform)
-			return nil
+			if err := tw.Flush(); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(w, "\n%d checks (profile %s, platform %s)\n", len(cs), prof, platform)
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&platform, "platform", "all", "linux|macos|all")

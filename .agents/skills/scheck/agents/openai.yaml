@@ -1,0 +1,3 @@
+interface:
+  display_name: "scheck"
+  short_description: "Collect and interpret read-only host security facts"

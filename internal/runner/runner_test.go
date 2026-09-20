@@ -310,3 +310,47 @@ func TestRunExtractKeepsOnlyTheMatch(t *testing.T) {
 		t.Fatalf("no match: %+v", res)
 	}
 }
+
+func TestDiagnosticReasonsAndFilteredFailedCapture(t *testing.T) {
+	const secret = "AKIAIOSFODNN7EXAMPLE"
+	h := newHarness(t, ElevateNone,
+		fixture.Exec{Argv: []string{"pkgjson"}, Stdout: "not json " + secret, Stderr: "token=" + secret},
+		fixture.Exec{Argv: []string{"ioreg"}, Stdout: "unexpected serial number"},
+	)
+	res := h.r.Run(context.Background(), "pkg.json", nil)
+	if !res.Attempted || res.ReasonCode != "parse_error" || strings.Contains(res.Raw, secret) || !strings.Contains(res.Raw, "[REDACTED:") {
+		t.Fatalf("bad failed capture: %+v", res)
+	}
+	res = h.r.Run(context.Background(), "host.uuid", nil)
+	if res.ReasonCode != "extract_error" || res.Raw != "" {
+		t.Fatalf("extraction leaked full capture: %+v", res)
+	}
+	res = h.r.Run(context.Background(), "sshd.config", nil)
+	if res.Attempted || res.ReasonCode != "requires_elevation" {
+		t.Fatalf("gated check claims execution: %+v", res)
+	}
+}
+
+func TestDiagnosticTimeoutScope(t *testing.T) {
+	for _, scope := range []string{"check_timeout", "run_timeout", "canceled"} {
+		t.Run(scope, func(t *testing.T) {
+			h := newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"slow"}, Sleep: time.Second})
+			h.r.Budgets.PerCheckHard = 20 * time.Millisecond
+			ctx := context.Background()
+			if scope == "run_timeout" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Millisecond)
+				defer cancel()
+			}
+			if scope == "canceled" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			res := h.r.Run(ctx, "sys.slow", nil)
+			if res.ReasonCode != scope || !res.Attempted {
+				t.Fatalf("wrong timeout scope: %+v", res)
+			}
+		})
+	}
+}

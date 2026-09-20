@@ -12,10 +12,13 @@ must be true before it's done, and which spec section it implements. "Done" alwa
 includes tests, not just code — the testing strategy in `SPEC.md` §11 is distributed
 across slices below rather than saved for the end.
 
-**Status (2026-09-20):** M0 and M1 are done, one commit per slice, on `main`. Every
-slice below carries a ✅ with what actually landed where it differs from the plan.
-Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules);
-those are next, then M2.1. Before the first GitHub release, breaking changes are
+**Status (2026-09-20):** M0 and the original M1 slices are committed on `main`.
+M1.6 and its diagnostics/agent-CLI follow-up are implemented and validated in the
+working tree, not yet committed or released. Checkmarks indicate completed
+implementation; each slice records validation separately.
+Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules).
+M1.7 (typed parsers and summaries) is next, then M1.8 and M2.1.
+Before the first GitHub release, breaking changes are
 allowed without compatibility shims or mandatory major-version bumps; implement the
 spec, schema and fixture changes together (SPEC §7.4). The second-person review of
 the security boundary is still open; see `AGENTS.md` for how to work in the repo.
@@ -227,11 +230,12 @@ Added 2026-09-20 after running the M1 build on a real Mac: the fact sheet was co
 and unreadable. Every check showed `+`, including "Firewall is disabled"; summaries were
 the first raw line ("134 lines: _accessoryupdater 278"); six checks said "requires
 elevated read" with no remedy; the footer said "findings: none". Three slices fix that
-before the model exists, using the M1 pause point. The decisions behind them (posture
+before the model exists, using the M1 pause point. M1.6 fixed the marks, the remedies
+and the footer; the raw-line summaries are M1.7's job and are still there. The decisions behind them (posture
 rules in phase 1, exit `1` in facts mode, typed parsers, `-vv` for output) are in
 SPEC §13.
 
-### M1.6 — readable fact sheet
+### M1.6 — readable fact sheet ✅
 Deliver the §7.6 text contract minus anything that needs new parsers: two-line header,
 status words, skipped-by-reason groups with the remedy line, human domain labels, `-v`
 descriptions, `-vv` redacted output, colour on a tty with `NO_COLOR`, honest footer, no
@@ -244,6 +248,97 @@ the redactor; `scheck explain sshd.config`.
 `-v` and `-vv` are committed and diffed in `go test`; the end-to-end redaction test
 also covers `-vv` output.
 **Spec:** §7.6, §8.
+
+**Landed (2026-09-20).** The renderer moved out of `internal/report/render.go` into
+`text.go`, `text_layout.go`, `reasons.go` and `domains.go`; `render.go` keeps the JSON
+writer and the interim shape-level summary that M1.7 replaces.
+
+- **Two-line header** — `scheck <version> — <host> — <os> — <transport>, elevation <e>`
+  then `N checks: R ran, S skipped, D denied by policy`. `host.id`, kernel, profile,
+  mode, status, timings, remote shell, canary and the persisted path moved to `-v`.
+  The bare platform is printed only when the OS string does not already name it.
+- **Status words, not marks** — `ran` / `skipped` / `denied`, describing execution.
+  The `+`/`-`/`!` marks are gone, and so is `findings: none`.
+- **Flat table** (§7.6, revised during the slice after review of three layouts): header
+  row `DOMAIN STATUS CHECK READING`, domain repeated per row so the report greps and
+  pipes, READING wrapping into aligned continuation rows.
+- **Skipped grouped by reason with a remedy**, denials in their own section naming the
+  rule. `internal/report/reasons.go` classifies the runner's reason strings; a shell's
+  `exit 127 … command not found` is recognised as a missing binary, which is what it
+  means over SSH, so it groups with `not found:` rather than with real errors.
+- **Human domain labels** from an ordered table in `internal/report/domains.go`; check
+  ids stay verbatim, and an id the catalog does not know renders under "Other".
+- **`-v` descriptions, `-vv` redacted output** behind a `  | ` gutter. `Fact.Output`
+  carries the runner's already-redacted capture in process and is `json:"-"`.
+  Default JSON and persisted runs omit the capture; the follow-up below adds optional
+  JSON evidence and structured diagnostics without changing the audit command surface.
+- **Colour/width are the CLI's decision** (`cmd/scheck/terminal.go`, `golang.org/x/term`):
+  a tty and no `NO_COLOR`, else plain; terminal width, else 100. `internal/report`
+  reads no descriptor and no environment. Until severities exist, only structure is
+  styled (bold, dim) — severity colours stay the only colours.
+- **Honest footer** — "assessment: none … posture rules and the agentic pass are not
+  available in this build."
+- **Two things the slice added beyond the contract**, both in §7.6 now: control
+  characters in target-derived strings are escaped as `\xNN` before printing, so a
+  check's stdout cannot drive the operator's terminal; and wrapping never splits a
+  `[REDACTED:…]`/`[TRUNCATED:…]` marker.
+- **`scheck explain CHECK-ID`** (`cmd/scheck/explain.go`): purpose, literal argv with
+  its `{placeholders}`, platform, domain with its label, phase, elevation (naming the
+  `sudo -n --` prefix and what happens without it), parser, exit codes, path use,
+  extract, budget, canary and typed parameters — one section per platform-specific
+  definition, announced up front. Unknown id exits 3 pointing at `scheck catalog`.
+
+**Validation.** `make check` (vet, `go fix`, golangci-lint, `go test -race ./...`) green
+with no `go fix` rewrites and 0 lint issues. Nine golden reports under
+`internal/report/testdata/golden/` (ubuntu, fedora, macos × default/`-v`/`-vv`),
+regenerated with `go test ./internal/report -update`. Every golden is re-rendered at
+widths 60/80/100/200 asserting no overrun and no trailing padding. Focused tests cover
+status words, the footer's refusal to claim a verdict, reason grouping and remedies,
+verbosity levels, colour opt-in with escape-stripped equivalence, control-character
+escaping, marker-safe wrapping, hanging-prefix width, domain labels, unknown checks and
+warnings; `cmd/scheck` covers explain (whole entry, typed params, platform-specific
+ids, elevation, unknown id, width over every catalog entry) and the tty/`NO_COLOR`/
+`--out` decisions. `internal/state`'s end-to-end redaction test now renders `-vv` too:
+the seeded key is absent from text, `-vv` text, JSON, audit log and persisted run, and
+the marker is present in each. Verified by hand on a real Mac (`scheck local
+--stop-after facts`, `-vv`, `scheck explain sshd.config`, `scheck explain fs.stat`).
+Not run: `make integ` (needs Docker/Podman, not available in this session) — the text
+renderer is not on the integration path, but the container demo of
+`-vv | grep -c REDACTED` was verified against the recorded ubuntu fixture instead
+(7 markers in `ubuntu-vv.txt`).
+
+**Implementation validation: pass.** The demos work, golden files exist in the
+working tree and are compared in `go test`, and redaction tests cover `-vv`.
+The slice and golden files still need to be committed; no release has been made.
+
+### M1.6 review follow-up — diagnostics and agent CLI ✅
+
+- Escape target-controlled header fields and fold embedded newlines; cover Unicode
+  control/formatting characters as well as terminal escape sequences.
+- Preserve redacted diagnostics for attempted failures at `-vv`; preserve extraction
+  minimization and explain why extraction failures cannot display full stdout.
+- Assign structured diagnostic codes in the runner and distinguish per-check timeouts
+  from run deadlines/cancellation. Expose `attempted` separately from result status.
+- Add JSON for catalog, explain and plans with argv arrays and typed parameters;
+  honor output files and reject unsupported formats. Add explicit `assessment: none`
+  and opt-in JSON evidence that is not persisted.
+- Document supported agent invocations, exit-code handling and missing-coverage
+  remedies in the repository-local `scheck` skill
+  (`.agents/skills/scheck/SKILL.md`) and CLI help. The skill replaces the standalone
+  agent usage document and includes guidance for selecting targets and interpreting
+  existing reports. No new check or execution path.
+
+**Validation (2026-09-20):** `make check` passed (vet, fix, lint: 0 issues, race
+suite), using writable Go/lint caches under `/tmp` after the default cache was denied.
+Regression tests cover header injection, failed-check redaction and non-persistence,
+extraction withholding, timeout scope, JSON discovery and output routing. Updated and
+reviewed all nine golden reports. CLI smoke tests confirmed catalog, explain and local
+plans emit valid JSON; unsupported SARIF exits 3 without stdout. The updated report
+schema validates fixture reports with optional evidence. Docker integration was not
+run: the Docker API socket was inaccessible in this sandbox.
+
+M1.7 and M1.8 remain separate slices; typed posture facts and findings are not
+implemented here.
 
 ### M1.7 — typed parsers + summaries
 Deliver the typed shapes in §3 (`listeners`, `accounts`, `passwd_status`, `units`,
@@ -268,7 +363,7 @@ over a fact sheet; findings in the envelope with `source: rule`; findings-first 
 rendering; exit `1` under `--stop-after facts` when an open finding meets the profile
 threshold (`medium` for baseline, `low` for hardened). Include the `assessments`
 array and coverage rendering from §7.5; update the schema with the implementation.
-Base severity only: context adjustments, confidence caps and accepted risks stay in M2.2.
+Base severity only: context adjustments, confidence caps and accepted risks stay in M2.3.
 **Demo:** `scheck local --stop-after facts` on a Mac with the application firewall off
 shows one medium finding with the `fw.global` excerpt and the remediation, and exits
 `1`; a Linux fixture with `PasswordAuthentication yes` does the same.
@@ -290,96 +385,196 @@ seen the JSON, plus a CI job that fails (exit `1`) on a FileVault-off fixture.
 Goal: phase 2 exists and can be tested entirely offline via the `mock` provider before
 a single live API call is spent.
 
-### M2.1 — `llm` interface + `mock` provider
+Two slices here have no model dependency at all. Operator context is consumed by
+`finding` deterministically (§6.3), so M2.2 and M2.3 improve `--stop-after facts` on
+their own and can be built in parallel with M2.1 by a second person; M2.4 is the first
+slice that needs both halves. M2.2 before M2.3 is deliberate: the grader's structured
+input is a real merged context type, not a synthetic one invented ahead of its producer.
+
+**Standing rules for every slice in this milestone.** They are the spec's, repeated here
+because this is where a phase-2 implementation is most likely to breach one:
+
+- Every execution goes through `runner.Run`. `run_check` and `read_file` are callers of
+  the one enforcement point, never a second path (§4, AGENTS.md non-negotiable 3).
+- The loop branches on nothing but the chunking budget (§5.1). A provider name, a
+  `Native` flag or a capability boolean must never appear in an `if` inside `agent`;
+  adapters absorb the difference (§5.3).
+- Severity comes from code, never from the model (§7.2). `report_finding` has no
+  `severity` field and a supplied one is ignored, not rejected.
+- Any slice that changes the envelope bumps `schema_version`'s MINOR, updates
+  `docs/report-schema.json` and regenerates the golden reports in the same commit
+  (§7.4).
+
+### M2.1 — `llm` interface, `mock` provider, `scheck providers`
 Deliver the interface exactly as specified in §5.1 (`Stream`, package-level `Complete`,
-`Limits`, `Native`) and the `mock` provider that replays a recorded transcript file.
-**Demo:** a transcript fixture (JSON) driving `mock` through a 3-turn tool-calling
-exchange, asserted turn-by-turn in a test — no CLI-visible demo yet.
+`Limits`, `Native`), the `mock` provider that replays a recorded transcript file, and
+`scheck providers` (§8), which lists what is configured with each one's `Limits` and
+`Native` set. `scheck providers` is the slice's only user-visible surface and the smoke
+test that an adapter registers correctly.
+Also commit `docs/eval/phase2-criteria.md`: the success criteria M2.7 is judged against,
+written now, while nothing is built and no result is known. M2.7 cites that file;
+changing it later is a commit with a reason in the message, not a quiet edit.
+**Demo:** `scheck providers` lists `mock` and `openai-compatible` (the latter
+unconfigured, no key) with their limits; a transcript fixture drives `mock` through a
+3-turn tool-calling exchange, asserted turn-by-turn in a test.
 **Done when:** `agent`, `policy`, `check`, `finding`, `report` all compile with zero
-provider SDK import — enforce with a `go list` dependency check in CI, not just a code
-review comment.
-**Spec:** §5.1.
+provider SDK import — enforced by a `go list` dependency check in CI, not by a code
+review comment. The §11 provider conformance table exists and is green for `mock`, so
+every later adapter is written against a suite that already runs.
+**Spec:** §5.1, §5.2 selection, §8.
 
-### M2.2 — severity adjustments + accepted risks
-`finding.Def` and the base severity table exist since M1.8. Deliver the rest of the
-deterministic grader on top of them: base severity → structured-context adjustments →
-confidence cap → accepted-risk status → final severity and exit code. No model involved
-yet — feed it synthetic `(id, evidence, confidence)` tuples in tests, and assert that
-rule findings from M1.8 pass through the same chain.
-**Demo:** a small CLI test harness: `scheck-devtool grade sshd.password_auth_enabled --exposure internet`
-prints the adjustment chain.
-**Done when:** the severity test table from §11 passes, and `--ignore-context` is
-proven to reproduce base severity byte-for-byte in a test, not just by inspection.
-**Spec:** §7.1, §7.2, §11 severity tests, acceptance criterion 9 (the deterministic half).
+### M2.2 — operator context: ingestion and merge (no model)
+Deliver `--context` for all four source forms (§6.1) plus the two implicit sources
+(`scheck.yaml`'s `context:` block and `./.scheck/context/**`), the per-kind merge
+semantics, the §6.2 structured schema with validation, `Budgets.ContextBytes` truncation
+recorded in `run.context_sources`, and `--stop-after context`.
+Merge is defined per kind, not per source order: structured blocks merge as maps with
+per-key override and lists concatenated and deduplicated by natural key; prose is never
+merged and is carried verbatim under a heading naming its source. `target:PATH` is read
+through `runner.Run` and the path policy like any other file — no new read path.
+An `accepted_risks[].id` that is neither a catalog finding id nor `custom:`-prefixed is a
+usage error at config load, exit 3 (§6.2), so a typo cannot silently leave a risk
+un-accepted. Nothing in this slice reaches a model.
+**Demo:** `scheck local --context note:"public jump host" --context ./docs/arch.md
+--stop-after context` prints the merged block with per-source headings and the byte
+budget; `--format json` shows `run.context_sources` with a sha256 per source.
+**Done when:** merge order is tested per kind rather than per source; a `target:` source
+appears in the audit log as an ordinary catalog binding; an over-budget context is
+truncated with a warning and `truncated: true` in the report; an unknown accepted-risk id
+exits 3 at load. Prose is inert in this slice by construction — the injection corpus
+belongs to M2.5, where a model first sees it.
+**Spec:** §6.1, §6.2, §4.4 `ContextBytes`, §7.4 `context_sources`.
 
-### M2.3 — the three tools + agent loop, single provider-agnostic pass
-Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (§5.7),
-and the ~150-line loop (§5.6) wired to `mock` only. No real provider yet — this proves
-the loop's control flow (iteration budget, context chunking trigger, stop-on-no-tool-calls)
-against scripted transcripts.
-Rule findings (§7.5) are in the prompt; a `report_finding` on an existing rule id
-merges under §7.5: curated rule text and source remain, validated context notes and
-evidence append, and the shared grader owns severity. Test attempted replacements,
-suppression and duplicate evidence.
-**Demo:** `scheck local --provider mock --transcript fixtures/correlated-finding.json`
-producing a full report with a real finding in it, end to end through the renderers.
-**Done when:** the loop enforces every budget in `policy.Budgets` against the mock
-(assert a transcript that exceeds `MaxIterations` ends as `status: incomplete`).
-**Spec:** §5.6, §5.7, §5.8 (system prompt, provider-neutral).
+### M2.3 — severity adjustments + accepted risks
+`finding.Def` and the base severity table exist since M1.8; M2.2 now supplies real
+structured context. Deliver the rest of the deterministic grader: base severity →
+structured-context adjustments (§6.3) → confidence cap → accepted-risk status → final
+severity → exit code. Still no model: the inputs are M1.8 rule findings and M2.2 context,
+plus synthetic `(id, evidence, confidence)` tuples for the cases no rule can produce yet.
+The debug affordance is a user-facing feature, not a second binary: extend `scheck
+explain` to accept a finding id and print the adjustment chain, alongside the check ids
+it already takes (§8).
+**Demo:** `scheck explain sshd.password_auth_enabled --exposure internet` prints base →
+adjustment → cap → status → final; `scheck local --stop-after facts --context ./ctx.yaml`
+shows one finding escalated by `exposure: internet` and another at `status: accepted`,
+excluded from the exit code.
+**Done when:** the §11 severity test table passes; `--ignore-context` reproduces base
+severity byte-for-byte in a test, not by inspection; an expired `accepted_risks` entry
+produces `risk.acceptance_expired` and does **not** suppress its own finding;
+`expected_services` matching, escalation and `svc.expected_missing` each have firing and
+non-firing cases; a rule finding from M1.8 and an identical synthetic model finding grade
+to the same severity through the same chain.
+**Spec:** §6.3, §7.1, §7.2, §11 severity tests, acceptance criterion 9 (deterministic half).
 
-### M2.4 — context ingestion (structured + prose)
-Deliver `--context` parsing for all four source forms (§6.1), the per-kind merge
-semantics, the `<operator_context>` prompt block, and the context-injection corpus test
-(§11) against the mock provider.
-**Demo:** `scheck local --provider mock --context note:"public jump host" --context ./docs/arch.md --context-only`
-prints the merged block.
-**Done when:** the hostile-context corpus passes: none of the seeded prompt-injection
-strings change the auditor role, suppress findings, or alter severity.
-**Spec:** §6, §11 context-injection corpus.
+### M2.4 — three tools + agent loop, mock only
+Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (§5.7), the
+provider-neutral system prompt (§5.8), and the loop (§5.6) wired to `mock` only. No real
+provider — this slice proves control flow (iteration budget, chunking trigger,
+stop-on-no-tool-calls) against scripted transcripts.
+`run.mode` becomes `agent`, or `single-pass` when the iteration budget is 1. Single-pass
+is the same loop with `MaxIterations: 1`, not a second code path; that is what makes
+M2.7's comparison a one-variable experiment rather than two implementations.
+**Merging is owned by `finding.Store`, not by the loop** (§7.2, §7.5). A `report_finding`
+on an existing rule id keeps `source: rule`, the curated title, impact, remediation and
+rule confidence, appends validated evidence and attributed model notes without
+duplicates, and leaves severity to the grader. `agent` hands the store a candidate and
+never edits a finding — if merge logic appears in the loop, the loop has stopped being
+one path.
+This is also the slice that populates `run.provider/model/effort/native/limits/usage` and
+non-rule findings in the envelope, so it carries the schema bump and the golden
+regeneration.
+**Demo:** `scheck local --provider mock --transcript
+testdata/transcripts/correlated-finding.json` produces a full report with a model finding
+in it, end to end through both renderers.
+**Done when:**
+- every `policy.Budgets` field the loop owns is exhausted by a crafted transcript and
+  each one ends the run `status: incomplete` with exit `2`, never a clean bill of health
+  — `MaxIterations`, `AgentChecks`, `AgentWallClock`, `ModelInputTotal`, `MaxTokens`,
+  `RunTimeout`;
+- `read_file` and `text.cat {path}` produce byte-identical audit records apart from the
+  tool name — the test that stops model-facing sugar from becoming a second enforcement
+  path;
+- a transcript that calls an unknown id, an invalid param kind, a denied path and an
+  elevated check under `--elevate none` receives an error result it can correct from, and
+  the audit log carries a line for each, including the denials;
+- a `report_finding` carrying a `severity` field has it ignored, and `custom:<slug>`
+  findings are capped at `medium` and flagged (§7.1);
+- the rule-merge cases are covered: attempted text replacement, attempted suppression,
+  duplicate evidence.
+**Spec:** §5.6, §5.7, §5.8, §7.2, §7.5 merge, §7.4.
 
-### M2.5 — `anthropic` provider
-Deliver the real adapter: native tool calling, prompt caching breakpoints, effort
-mapping. First slice that costs real money.
-**Demo:** `scheck local --provider anthropic` against a real (throwaway VM) target,
-producing a real report.
-**Done when:** the provider conformance suite (§11) is green for `anthropic`; a live
-run's cost is measured and checked against the $0.50 budget (acceptance criterion 7).
+### M2.5 — operator context in the prompt + injection corpus
+Deliver the `<operator_context>` prompt block (§6.3): the structured map rendered so the
+model can reason about *why* a port is expected, prose passed through verbatim under
+per-source headings, and the §11 context-injection corpus run against `mock`.
+**Demo:** `scheck local --provider mock --transcript ... --context
+./testdata/context/hostile/` produces the same findings, the same roles and the same
+severities as the identical transcript run without the hostile context.
+**Done when:** the corpus passes — no seeded string changes the auditor role, suppresses
+findings wholesale, alters any severity, or produces a denied check attempt in the audit
+log; and a test asserts severity is unreachable from prose by construction, because the
+grader's only context input is the structured map merged in M2.2.
+**Spec:** §6.3, §5.8, §11 context-injection corpus.
+
+### M2.6 — `openai-compatible` provider
+Deliver the real adapter for a backend with native tool calling (OpenAI, or a
+vLLM/Groq/Together endpoint), selected with `--base-url` + `--model`: native tool
+calling, the `Effort` mapping, and cache breakpoints honoured where the endpoint
+supports them. This is the default provider and the reference implementation the
+conformance suite is written against, and the first slice that costs real money.
+**Demo:** `scheck local --provider openai-compatible --model ...` against a real
+(throwaway VM) target, producing a real report.
+**Done when:** the provider conformance suite (§11) is green for `openai-compatible`
+running the same table `mock` has passed since M2.1; a live run's cost is measured and
+checked against the $0.50 budget (acceptance criterion 7);
+`Block.Cacheable` and `Effort` are each either exercised by the adapter or recorded as
+unexercised in `Native`, so M3.1 does not discover that the interface cannot express a
+feature no adapter has used yet.
 **Spec:** §5.2, §5.5.
 
-### M2.6 — phase-2-earns-its-cost evaluation
-Deliver a labeled fixture suite covering clean hosts, seeded issues and incomplete
-or misleading evidence, including cases requiring follow-up catalog checks. Compare
-posture rules alone, single-pass analysis and the agent with identical initial facts,
-rule findings and context. Set success criteria before evaluating; record model and
-prompt versions and repeat model runs. Mock transcripts validate plumbing only.
+### M2.7 — phase-2-earns-its-cost evaluation
+Deliver a labeled fixture suite covering clean hosts, seeded issues, and incomplete or
+misleading evidence, including cases that can only be resolved by a follow-up catalog
+check. Compare three arms over it with identical initial facts, rule findings and
+context: **posture rules alone** (`--stop-after facts`), **single-pass**
+(`MaxIterations: 1`), and **the agent**. The only variable is the iteration budget —
+same prompt, same tools, same evidence — so a difference is attributable to
+investigation and nothing else. Repeat model runs and record model and prompt versions.
+Mock transcripts validate plumbing only and make no quality claim.
 **Demo:** a comparison report of correct additional findings, false positives, missed
-issues, justified abstentions, uncertainty resolved by follow-up checks, latency,
-tokens and cost. Do not require single-pass analysis to miss a particular example.
-**Done when:** acceptance criterion 10 is demonstrated and recorded: investigation
-produces repeatable useful gains within budget. If it does not justify its cost,
-retain posture rules and single-pass analysis and remove the loop from the design.
+issues, justified abstentions, uncertainty resolved by a follow-up check, latency, tokens
+and cost. Do not require single-pass analysis to miss any particular example.
+**Done when:** acceptance criterion 10 is demonstrated and recorded against the criteria
+frozen in `docs/eval/phase2-criteria.md` at M2.1 — investigation produces repeatable
+useful gains within budget. If it does not, the loop is removed and posture rules plus
+single-pass analysis are retained; that removal is a deletion, not a redesign, because
+severity, the envelope and the tool surface never belonged to the loop.
 **Spec:** §2.1 rationale, §12 acceptance criterion 10.
 
 **M2 exit demo:** `scheck local` and `scheck ssh` produce full agentic reports against
-the `anthropic` provider on both a clean host and the seeded fixture, with attributed
-severity adjustments visible in the JSON output. Acceptance criteria 5, 6, 7, 9 (model
-half), and 10 are all checkable at this point.
+the `openai-compatible` provider on both a clean host and the seeded fixture, with
+attributed severity adjustments visible in the JSON output. Acceptance criteria 5, 6, 7,
+9 (model half), and 10 are all checkable at this point.
 
 ---
 
-## M3 — second provider
+## M3 — more providers
 
-Goal: prove the abstraction by making it hold under a provider that lacks native tool
-calling, parallel calls, and caching — all three at once, in the worst case (`ollama`).
+Goal: prove the abstraction from both directions — a provider whose native feature set
+is *richer* than the reference implementation's (`anthropic`), and one that lacks native
+tool calling, parallel calls, and caching all at once, the worst case (`ollama`).
 
-### M3.1 — `openai-compatible` provider (native tool calling)
-Deliver the adapter for a backend that *does* support tool calling natively (OpenAI or
-a vLLM/Groq/Together endpoint) — this isolates "new provider, familiar capabilities"
-from "new provider, emulated capabilities," which M3.2 adds next.
-**Demo:** `scheck local --provider openai-compatible --base-url ... --model ...`
-against the same fixture host as M2.6.
+### M3.1 — `anthropic` provider (richer native features)
+Deliver the adapter for Claude API / Bedrock / Vertex / Foundry: adaptive thinking,
+`output_config.effort`, native prompt caching breakpoints. This isolates "a provider the
+interface must already be able to express" from "a provider whose capabilities must be
+emulated," which M3.2 adds next.
+**Demo:** `scheck local --provider anthropic` against the same fixture host as M2.7.
 **Done when:** conformance suite green; the same fixture's findings are structurally
-identical (schema, not content) to the `anthropic` run.
+identical (schema, not content) to the `openai-compatible` run; `Block.Cacheable` maps to
+a real cache breakpoint and `Effort` to `output_config.effort` with **no change to the
+`llm` interface** — if either needs a new field, §5.1 was under-designed and that is the
+finding this slice exists to produce.
 **Spec:** §5.2.
 
 ### M3.2 — tool-call emulation + `ollama`
@@ -390,8 +585,8 @@ protocol into `ToolCalls`, serialize parallel calls one at a time. Wire it under
 fixture host, showing `native.tool_calling: false` in the report header and a
 `confidence` cap of `medium` on any finding from an emulated call.
 **Done when:** conformance suite green for `ollama` running the *same* table as
-`anthropic` — no conditional skips. This is the actual proof the abstraction is real,
-not M3.1.
+`openai-compatible` — no conditional skips. This is the actual proof the abstraction is
+real, not M3.1.
 **Spec:** §5.3, §11 provider conformance suite.
 
 ### M3.3 — `--local-only` / egress control
@@ -410,14 +605,14 @@ Deliver the one conditional path the loop is allowed to have (§5.3): fact-sheet
 chunking by domain when the prefix would exceed half of `MaxContext`, plus the final
 correlation pass.
 **Demo:** run against `ollama` with a small-context model (a genuinely small local
-model, e.g. a 4K-context one) and the M2.6 fixtures; confirm supported findings still
+model, e.g. a 4K-context one) and the M2.7 fixtures; confirm supported findings still
 surface via the correlation pass despite chunking.
 **Done when:** a chunked run and an unchunked run over the same fact sheet on a
 large-context model agree on the correlated finding — chunking shouldn't lose the
-signal M2.6 exists to prove.
+signal M2.7 exists to prove.
 **Spec:** §5.3 (context size), ties back to acceptance criterion 10.
 
-**M3 exit demo:** the exact same fixture host audited by `anthropic`, `openai-compatible`,
+**M3 exit demo:** the exact same fixture host audited by `openai-compatible`, `anthropic`
 and `ollama` produces three structurally identical, schema-valid reports, with the
 report headers showing the honest `native` capability differences between them.
 
@@ -534,13 +729,20 @@ for a successful experiment or for shipping v1.
   calendar time as needed without burning budget, and are the right place to get the
   security boundary reviewed by someone other than its author before M2 starts spending
   money against it.
-- **M2.6 (phase-2-earns-its-cost) is the highest-risk slice in the roadmap.** It's
+- **M2.7 (phase-2-earns-its-cost) is the highest-risk slice in the roadmap.** It's
   placed as late as reasonably possible within M2 — after the loop, tools, and context
-  ingestion all work — so that a negative result is cheap to act on: the loop and tools
+  ingestion all work — and its success criteria are frozen in M2.1, before any of them
+  exists, so the slice cannot move its own goalposts — so that a negative result is cheap to act on: the loop and tools
   built so far are needed either way (M1's `--stop-after facts` mode and the tool
   surface used for confirmation checks), but a negative result means `agent.Session`'s
   multi-turn correlation is what gets cut, not the checks or the reporting.
-- **M3.1 before M3.2 is deliberate**, not filler: it separates "does a new provider
+- **`openai-compatible` is built before `anthropic`** (M2.6, then M3.1) because the
+  widest-reach adapter should be the one the conformance suite is written against. The
+  cost of that order is that the reference implementation is the *narrower* feature set,
+  so `Block.Cacheable` and `Effort` — fields that exist in §5.1 because of `anthropic` —
+  risk going unexercised until M3.1. The `llm` interface stays designed from the richest
+  provider, and M2.6's done-when records which fields no adapter has exercised yet.
+- **M3.1 before M3.2 is deliberate**, not filler: it separates "does a second provider
   slot into the interface at all" from "does the emulation layer work," so a conformance
   failure in M3.2 is unambiguously about emulation.
 - **Nothing in M4 blocks anything else in M4** — those five slices can run in parallel

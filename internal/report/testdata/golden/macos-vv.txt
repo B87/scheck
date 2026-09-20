@@ -1,0 +1,852 @@
+scheck test — mac-fixture.local — macOS 26.6.2 (25G83) — fixture, elevation none
+28 checks: 22 ran, 6 skipped
+host.id bc38ac67236d… · kernel 25.6.0 · profile baseline · mode facts · status complete · 1234ms
+
+DOMAIN                   STATUS   CHECK                    READING
+Host identity            ran      host.hostname            mac-fixture.local
+                                                           Hostname
+  | mac-fixture.local
+Host identity            ran      host.platform_uuid       AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
+                                                           IOPlatformUUID (hashed into host.id)
+  | AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
+Operating system         ran      os.release               3 keys
+                                                           macOS product name, version and build
+  | ProductName:            macOS
+  | ProductVersion:         26.6.2
+  | BuildVersion:           25G83
+Software updates         ran      pkg.softwareupdate       9 lines: Software Update Tool
+                                                           Pending macOS software updates (cached
+                                                           scan)
+  | Software Update Tool
+  |
+  | Scan finished with error: Error Domain=SUMacControllerError Code=7507
+  | "[SUMacControllerErrorAccessRequestDenied=7507] Access request was denied"
+  | UserInfo={NSDebugDescription=[SUMacControllerErrorAccessRequestDenied=7507] Access request was
+  | denied, NSLocalizedDescription=The software update request for this process was denied as
+  | another process is currently performing an operation. Please try again later.}
+  | Software Update found the following new or updated software:
+  | * Label: Safari27.0TahoeAuto-27.0
+  |         Title: Safari, Version: 27.0, Size: 249465KiB, Recommended: YES,
+  | * Label: macOS Tahoe 26.7-25G229
+  |         Title: macOS Tahoe 26.7, Version: 26.7, Size: 2960352KiB, Recommended: YES, Action:
+  | restart,
+  | * Label: macOS 27-26A428
+  |         Title: macOS 27, Version: 27, Size: 11727573KiB, Recommended: YES, Action: restart,
+Disk encryption          ran      disk.fdesetup            FileVault is On.
+                                                           FileVault status
+  | FileVault is On.
+System integrity         ran      integrity.csrutil        System Integrity Protection status:
+                                                           enabled.
+                                                           System Integrity Protection status
+  | System Integrity Protection status: enabled.
+System integrity         ran      integrity.spctl          assessments enabled
+                                                           Gatekeeper assessment status
+  | assessments enabled
+Firewall                 ran      fw.blockall              Firewall has block all state set to
+                                                           disabled.
+                                                           Application firewall block-all-incoming
+                                                           state
+  | Firewall has block all state set to disabled.
+Firewall                 ran      fw.global                Firewall is disabled. (State = 0)
+                                                           Application firewall global state
+  | Firewall is disabled. (State = 0)
+Firewall                 ran      fw.stealth               Firewall stealth mode is off
+                                                           Application firewall stealth mode
+  | Firewall stealth mode is off
+Network exposure         ran      net.listeners            24 lines: COMMAND     PID   USER   FD
+                                                           TYPE             DEVICE SIZE/OFF NODE
+                                                           NAME
+                                                           Listening TCP sockets with owning process
+  | COMMAND     PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+  | rapportd   1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP *:53019 (LISTEN)
+  | rapportd   1020 alice   13u  IPv6 0x6bb3003c376d2589      0t0  TCP *:53019 (LISTEN)
+  | ControlCe  1131 alice    9u  IPv4 0x4aa72d6c33f98cbb      0t0  TCP *:7000 (LISTEN)
+  | ControlCe  1131 alice   10u  IPv6 0xcf7093cf786212a4      0t0  TCP *:7000 (LISTEN)
+  | ControlCe  1131 alice   11u  IPv4 0x441f0bb26ef13b02      0t0  TCP *:5000 (LISTEN)
+  | ControlCe  1131 alice   12u  IPv6 0x564316f9c01c235e      0t0  TCP *:5000 (LISTEN)
+  | stable     1472 alice   58u  IPv4 0x87031f6ebf781151      0t0  TCP 127.0.0.1:9277 (LISTEN)
+  | Raycast    1477 alice   34u  IPv4 0x23049dd54f7e890d      0t0  TCP 127.0.0.1:7265 (LISTEN)
+  | finances   8244 alice    7u  IPv4 0x65857e264dc16e30      0t0  TCP 127.0.0.1:8099 (LISTEN)
+  | com.docke  9687 alice  130u  IPv6 0xcf2e5f583587a004      0t0  TCP *:5432 (LISTEN)
+  | com.docke  9687 alice  132u  IPv4 0x40ecd438b104258c      0t0  TCP 127.0.0.1:12434 (LISTEN)
+  | Ollama     9838 alice    5u  IPv4 0xda1130bf9d81bfaa      0t0  TCP 127.0.0.1:50275 (LISTEN)
+  | ollama    10104 alice    3u  IPv4 0xf55c0eb9c66d046a      0t0  TCP 127.0.0.1:11434 (LISTEN)
+  | Discord   12055 alice   39u  IPv4 0xc1f3a52a7674f74c      0t0  TCP 127.0.0.1:6463 (LISTEN)
+  | RiotClien 48795 alice   29u  IPv4 0xdce2cc0917d4c8b1      0t0  TCP 127.0.0.1:53325 (LISTEN)
+  | Riot\x20C 48925 alice   76u  IPv6 0xb008b8b5696bfb13      0t0  TCP *:53346 (LISTEN)
+  | Code\x20H 54130 alice   34u  IPv4 0x674efabb7dc1722c      0t0  TCP 127.0.0.1:59979 (LISTEN)
+  | postgres  59057 alice    7u  IPv6 0x41bd9df513e122bc      0t0  TCP [::1]:5433 (LISTEN)
+  | postgres  59057 alice    8u  IPv4 0x6c4a776d7d7fe155      0t0  TCP 127.0.0.1:5433 (LISTEN)
+  | Obsidian  69638 alice   30u  IPv4 0xd57dec5348b205a5      0t0  TCP 127.0.0.1:27124 (LISTEN)
+  | Obsidian  69638 alice   31u  IPv4 0xc66393e21ed471c8      0t0  TCP 127.0.0.1:27123 (LISTEN)
+  | Cursor    83644 alice   61u  IPv4 0x6bf3677f27dd09e3      0t0  TCP 127.0.0.1:29428 (LISTEN)
+  | Cursor    83644 alice   63u  IPv4 0x9ba441a685381c29      0t0  TCP 127.0.0.1:63995 (LISTEN)
+SSH server               skipped  sshd.config              requires elevated read
+                                                           Effective sshd configuration
+Remote access            ran      remote.launchd_disabled  10 lines: disabled services = {
+                                                           launchd service overrides in the system
+                                                           domain (screensharing, RemoteDesktop,
+                                                           ftpd, smbd ...)
+  |
+  |         disabled services = {
+  |                 "com.apple.CSCSupportd" => disabled
+  |                 "com.apple.mdmclient.daemon.runatboot" => disabled
+  |                 "com.apple.ftpd" => disabled
+  |                 "com.docker.socket" => enabled
+  |                 "com.docker.vmnetd" => enabled
+  |                 "com.apple.smbd" => enabled
+  |                 "com.apple.bootpd" => disabled
+  |                 "com.apple.ftp-proxy" => enabled
+  |         }
+Remote access            skipped  remote.login             requires elevated read
+                                                           Remote Login (sshd) setting
+Accounts                 ran      accounts.admins          GroupMembership: root alice
+                                                           Members of the admin group
+  | GroupMembership: root alice
+Accounts                 ran      accounts.users           134 lines: _accessoryupdater        278
+                                                           Local accounts with their UniqueID
+  | _accessoryupdater        278
+  | _amavisd                 83
+  | _analyticsd              263
+  | _aonsensed               300
+  | _appinstalld             273
+  | _appleevents             55
+  | _applepay                260
+  | _appowner                87
+  | _appserver               79
+  | _appstore                33
+  | _ard                     67
+  | _assetcache              235
+  | _astris                  245
+  | _atsserver               97
+  | _audiomxd                294
+  | _avbdeviced              229
+  | _avphidbridge            288
+  | _backgroundassets        291
+  | _biome                   289
+  | _calendar                93
+  | _captiveagent            258
+  | _ces                     32
+  | _clamav                  82
+  | _cmiodalassistants       262
+  | _coreaudiod              202
+  | _coremediaiod            236
+  | _coreml                  280
+  | _corespeechd             306
+  | _ctkd                    259
+  | _cvmsroot                212
+  | _cvs                     72
+  | _cyrus                   77
+  | _darwindaemon            284
+  | _datadetectors           257
+  | _demod                   275
+  | _devdocs                 59
+  | _devicemgr               220
+  | _diagnosticservicesd     307
+  | _diskimagesiod           271
+  | _displaypolicyd          244
+  | _distnote                241
+  | _dovecot                 214
+  | _dovenull                227
+  | _dpaudio                 215
+  | _driverkit               270
+  | _eligibilityd            297
+  | _eppc                    71
+  | _findmydevice            254
+  | _fpsd                    265
+  | _ftp                     98
+  | _gamecontrollerd         247
+  | _geod                    56
+  | _hidd                    261
+  | _iconservices            240
+  | _installassistant        25
+  | _installcoordinationd    274
+  | _installer               96
+  | _jabber                  84
+  | _kadmin_admin            218
+  | _kadmin_changepw         219
+  | _knowledgegraphd         279
+  | _krb_anonymous           234
+  | _krb_changepw            232
+  | _krb_kadmin              231
+  | _krb_kerberos            233
+  | _krb_krbtgt              230
+  | _krbfast                 246
+  | _krbtgt                  217
+  | _launchservicesd         239
+  | _lda                     211
+  | _locationd               205
+  | _logd                    272
+  | _lp                      26
+  | _mailman                 78
+  | _mbsetupuser             248
+  | _mcxalr                  54
+  | _mdnsresponder           65
+  | _mds_stores              308
+  | _mmaintenanced           283
+  | _mobileasset             253
+  | _mobilegestalthelper     293
+  | _modelmanagerd           301
+  | _mysql                   74
+  | _naturallanguaged        304
+  | _nearbyd                 268
+  | _netbios                 222
+  | _netstatistics           228
+  | _networkd                24
+  | _neuralengine            296
+  | _notification_proxy      285
+  | _nsurlsessiond           242
+  | _oahd                    441
+  | _ondemand                249
+  | _postfix                 27
+  | _postgres                216
+  | _qtss                    76
+  | _reportmemoryexception   269
+  | _reportsystemmemory      302
+  | _rmd                     277
+  | _sandbox                 60
+  | _screensaver             203
+  | _scsd                    31
+  | _securityagent           92
+  | _sntpd                   281
+  | _softwareupdate          200
+  | _spinandd                305
+  | _spotlight               89
+  | _sshd                    75
+  | _svn                     73
+  | _swtransparencyd         303
+  | _systemstatusd           298
+  | _taskgated               13
+  | _teamsserver             94
+  | _terminusd               295
+  | _timed                   266
+  | _timezone                210
+  | _tokend                  91
+  | _trustd                  282
+  | _trustevaluationagent    208
+  | _unknown                 99
+  | _update_sharing          95
+  | _usbmuxd                 213
+  | _uucp                    4
+  | _warmd                   224
+  | _webauthserver           221
+  | _windowserver            88
+  | _www                     70
+  | _wwwproxy                252
+  | _xserverdocs             251
+  | alice                   501
+  | daemon                   1
+  | nobody                   -2
+  | root                     0
+  | start9                   502
+Privilege escalation     skipped  privesc.sudoers          requires elevated read
+                                                           sudoers policy
+Privilege escalation     skipped  privesc.sudoers_d        requires elevated read
+                                                           sudoers.d drop-ins (file:line, non-empty
+                                                           lines)
+Startup and persistence  ran      persist.launch_dirs      3 lines: /Library/LaunchDaemons/com.docke
+                                                           r.vmnetd.plist
+                                                           Third-party LaunchDaemons and
+                                                           LaunchAgents
+  | /Library/LaunchDaemons/com.docker.vmnetd.plist
+  | /Library/LaunchDaemons/com.docker.socket.plist
+  | /Library/LaunchDaemons/com.nordvpn.macos.helper.plist
+Startup and persistence  ran      persist.launchctl        556 lines: PID Status Label
+                                                           Loaded launchd jobs in the session domain
+  | PID     Status  Label
+  | -       0       io.tailscale.ipn.macsys.login-item-helper
+  | -       0       com.apple.SafariHistoryServiceAgent
+  | -       -9      com.apple.progressd
+  | -       0       com.apple.enhancedloggingd
+  | 8573    -9      com.apple.cloudphotod
+  | 8590    -9      com.apple.MENotificationService
+  | 1379    0       com.apple.Finder
+  | 78266   -9      com.apple.homed
+  | 8223    -9      com.apple.dataaccess.dataaccessd
+  | -       0       com.apple.quicklook
+  | -       0       com.apple.parentalcontrols.check
+  | 1471    0       application.com.steipete.codexbar.312129618.312129624
+  | 1197    0       com.apple.mediaremoteagent
+  | 1181    0       com.apple.FontWorker
+  | 26182   -9      com.apple.bird
+  | -       0       com.apple.amp.mediasharingd
+  | -       -9      com.apple.knowledgeconstructiond
+  | 8328    -9      com.apple.inputanalyticsd
+  | -       0       com.apple.familycontrols.useragent
+  | -       0       com.apple.AssetCache.agent
+  | 9601    0       application.com.docker.docker.352890747.352891074
+  | 30748   0       application.com.apple.podcasts.1152921500311897422.1152921500311898026
+  | 27273   0       application.com.apple.Preview.1152921500311898404.1152921500311898409
+  | 11399   0       com.apple.GameController.gamecontrolleragentd
+  | 1788    0       com.apple.universalaccessAuthWarn
+  | -       0       com.apple.UserPictureSyncAgent
+  | 1018    0       com.apple.nsurlsessiond
+  | 67373   -9      com.apple.devicecheckd
+  | -       0       com.apple.syncservices.uihandler
+  | 12150   -9      com.apple.iconservices.iconservicesagent
+  | -       -9      com.apple.diagnosticextensionsd
+  | 9119    -9      com.apple.intelligenceplatformd
+  | 10844   -9      com.apple.SafariBookmarksSyncAgent
+  | -       0       com.apple.cmio.LaunchCMIOUserExtensionsAgent
+  | -       -9      com.apple.LinkedNotesUIService
+  | 8376    -9      com.apple.ndoagent
+  | 1383    0       com.apple.wallpaper.agent
+  | -       0       com.apple.bookassetd
+  | -       0       com.apple.ManagedClientAgent.agent
+  | 49021   0       application.com.apple.Terminal.1152921500311914148.1152921500311914153
+  | 8312    -9      com.apple.localizationswitcherd
+  | -       0       com.apple.screensharing.agent
+  | 7031    -9      com.apple.commerce
+  | -       0       com.apple.AddressBook.SourceSync
+  | 12009   -9      com.apple.installerauthagent
+  | 20371   0       application.sh.brew.app.354511052.354511058
+  | 84548   -9      com.apple.appleaccounttransparencyd
+  | -       0       com.apple.languageassetd
+  | -       0       com.apple.familynotificationd
+  | 8530    -9      com.apple.ManagedSettingsAgent
+  | 9838    0       application.com.electron.ollama.350858570.350858577.DE93A0F6-073A-4DEF-A381-CF7A
+  | 07604923
+  | 8494    -9      com.apple.photolibraryd
+  | -       0       com.docker.helper
+  | -       0       com.apple.xpc.otherbsd
+  | -       0       com.apple.sysdiagnose_agent
+  | -       -9      com.apple.ThreadCommissionerService
+  | 10703   -9      com.apple.tipsd
+  | 32500   0       application.org.p0deje.Maccy.352803717.352803723
+  | 80313   -9      com.apple.stickersd
+  | 8370    -9      com.apple.bluetoothuserd
+  | -       0       com.apple.timezoneupdates.tznotify
+  | 1450    0       com.apple.TextInputMenuAgent
+  | -       0       com.apple.bluetoothUIServer
+  | -       0       com.apple.accessibility.LiveTranscriptionAgent
+  | -       -9      com.apple.assistant_service
+  | -       0       com.apple.MRTa
+  | 7039    -9      com.apple.CommCenter
+  | 7986    0       com.apple.trustd.agent
+  | -       0       com.apple.MailServiceAgent
+  | -       0       com.apple.mdworker.mail
+  | 57413   0       com.apple.mdworker.shared.0C000000-0400-0000-0000-000000000000
+  | 56968   0       com.apple.mdworker.shared.04000000-0000-0000-0000-000000000000
+  | -       0       com.apple.appkit.xpc.ColorSampler
+  | 990     0       com.apple.cfprefsd.xpc.agent
+  | -       0       com.apple.coreimportd
+  | -       0       com.apple.CoreDevice.remotepairingd
+  | 56965   0       com.apple.mdworker.shared.1E000000-0000-0000-0000-000000000000
+  | 8251    -9      com.apple.TrustedPeersHelper
+  | -       0       com.apple.cvmsCompAgent3600_arm64_1
+  | -       0       com.apple.DataDetectorsLocalSources
+  | -       0       com.apple.unmountassistant.useragent
+  | -       0       com.apple.facetimemessagestored
+  | -       0       com.apple.AutoFillPanel
+  | 11847   0       com.apple.peopled
+  | -       0       com.apple.remotecompositorclientd
+  | -       0       com.apple.PosterBoard
+  | 8241    -9      com.apple.replicatord
+  | 8322    -9      com.apple.keyboardservicesd
+  | 8295    -9      com.apple.accessibility.axassetsd
+  | 8569    -9      com.apple.quicklook.ThumbnailsAgent
+  | -       -9      com.apple.Safari.PasswordBreachAgent
+  | -       0       com.apple.csuseragent
+  | -       0       com.apple.asktod
+  | 999     0       com.apple.WindowManager.agent
+  | 7037    -9      com.apple.ContextStoreAgent
+  | -       0       com.apple.AOSPushRelay
+  | -       0       com.apple.accessibility.AXVisualSupportAgent
+  | -       -9      com.apple.xpc.loginitemregisterd
+  | -       -9      com.apple.webprivacyd
+  | 8316    -9      com.apple.applespell
+  | -       0       com.apple.coreservices.UASharedPasteboardProgressUI
+  | -       0       com.apple.uarppersonalizationd
+  | -       0       com.apple.screensharing.menuextra
+  | -       0       com.apple.warmd_agent
+  | 67374   -9      com.apple.voicebankingd
+  | -       0       com.apple.gamesaved
+  | 1374    0       application.io.tailscale.ipn.macsys.310850915.310850921
+  | -       0       com.apple.universalaccesscontrol
+  | 8630    -9      com.apple.Safari.SafeBrowsing.Service
+  | -       0       com.apple.notes.exchangenotesd
+  | -       0       com.apple.findmymacmessenger
+  | -       0       com.apple.FilesystemUI
+  | -       0       com.apple.maps.destinationd
+  | 1028    0       com.apple.ScreenTimeAgent
+  | -       0       com.apple.pluginkit.pkreporter
+  | -       0       com.apple.arkitd
+  | -       0       com.apple.systemprofiler
+  | 12028   0       application.com.hnc.Discord.350896200.350896206
+  | 10223   0       com.apple.homeenergyd
+  | 8233    -9      com.apple.cloudd
+  | 10845   -9      com.apple.noticeboard.agent
+  | 12045   0       com.apple.UserNotificationCenterAgent
+  | 1107    0       com.apple.cmfsyncagent
+  | -       0       com.apple.dt.CommandLineTools.installondemand
+  | -       0       com.apple.ATS.FontValidator
+  | 1346    0       com.apple.diagnostics_agent
+  | 1466    0       application.com.apple.mail.1152921500311887063.1152921500311887068
+  | -       0       com.apple.appleseed.seedusaged
+  | -       0       com.apple.LocalAuthentication.UIAgent
+  | -       -9      com.apple.ap.adprivacyd
+  | -       0       com.apple.callhistoryd
+  | 9112    -9      com.apple.ap.promotedcontentd
+  | -       -9      com.apple.apfsuseragent
+  | 78149   -9      com.apple.intelligencetasksd
+  | 1918    -9      com.apple.networkserviceproxy
+  | 1131    0       com.apple.controlcenter
+  | 8231    -9      com.apple.contacts.postersyncd
+  | 73972   0       com.apple.AMPLibraryAgent
+  | 8207    0       com.openssh.ssh-agent
+  | 1451    0       com.lihaoyun6.AirBatteryHelper
+  | 10728   -9      com.apple.amsondevicestoraged
+  | 56967   0       com.apple.mdworker.shared.1C000000-0000-0000-0000-000000000000
+  | -       -9      com.apple.tonelibraryd
+  | -       -9      com.apple.CloudPhotosConfiguration
+  | -       0       com.apple.security.KeychainStasher
+  | 9114    -9      com.apple.ctcategories.service
+  | -       0       com.apple.CoreSimulator.SimLaunchHost-x86
+  | 8243    -9      com.apple.ctkd
+  | -       0       com.apple.package-script-service
+  | 8259    -9      com.apple.secinitd
+  | -       0       com.apple.speech.speechsynthesisd.x86_64
+  | 57409   0       com.apple.mdworker.shared.13000000-0100-0000-0000-000000000000
+  | -       0       com.apple.mediacontinuityd
+  | 11372   -9      com.apple.contacts.donation-agent
+  | -       0       com.apple.ServicesUIAgent
+  | 8320    -9      com.apple.synapse.contentlinkingd
+  | 9121    -9      com.apple.XprotectFramework.PluginService
+  | -       0       com.apple.ctkbind
+  | -       0       com.apple.mediastream.mstreamd
+  | -       0       com.apple.alf.useragent
+  | -       0       com.apple.SiriTTSTrainingAgent
+  | 8565    -9      com.apple.triald
+  | 8227    -9      com.apple.tccd
+  | -       0       com.apple.nexusd
+  | 1184    0       com.apple.StatusKitAgent
+  | -       -9      com.apple.diagnosticspushd
+  | -       0       com.anthropic.claudefordesktop.ShipIt
+  | 2669    0       com.steipete.codexbar-sparkle-updater
+  | -       78      Limitless
+  | 6980    -9      com.apple.replayd
+  | 1930    -9      com.apple.coreservices.uiagent
+  | 1068    0       com.apple.icloud.searchpartyuseragent
+  | 86878   -9      com.apple.AccessibilityVisualsAgent
+  | 98793   1       com.apple.Siri.agent
+  | -       0       com.apple.installd.user
+  | 10714   -9      com.apple.privatecloudcomputed
+  | 8247    -9      com.apple.textunderstandingd
+  | 8280    -9      com.apple.liveactivitiesd
+  | 99774   -9      com.apple.akd
+  | -       -9      com.apple.CallHistoryPluginHelper
+  | 23164   -9      com.apple.jetpackassetd
+  | 84495   -9      com.apple.homeeventsd
+  | 1442    0       com.apple.Passwords.MenuBarExtra
+  | 1914    -9      com.apple.GamePolicyAgent
+  | -       0       com.apple.mbproximityhelper
+  | 71818   -9      com.apple.appplaceholdersyncd
+  | -       0       com.apple.storeaccountd
+  | 37093   0       application.com.apple.QuickTimePlayerX.1152921500311898780.1152921500311898785
+  | -       0       com.apple.AddressBook.AssistantService
+  | -       0       com.apple.PIPAgent
+  | 1006    0       com.apple.cmio.ContinuityCaptureAgent
+  | -       0       com.apple.mbfloagent
+  | -       0       com.apple.searchtoold
+  | -       0       com.apple.printtool.agent
+  | -       0       com.apple.callintelligenced
+  | -       -9      com.apple.askpermissiond
+  | 78030   0       com.microsoft.VSCode.ShipIt
+  | -       0       com.apple.ssinvitationagent
+  | -       0       com.apple.webinspectord
+  | -       0       com.valvesoftware.steamclean
+  | 11373   -9      com.apple.avatarsd
+  | -       0       com.apple.speech.synthesisserver
+  | 8123    -9      com.apple.FeatureAccessAgent
+  | -       0       com.apple.storeuid
+  | -       0       com.apple.rcd
+  | -       0       com.apple.printuitool.agent
+  | -       0       com.apple.NVMeAgent
+  | -       0       com.apple.speech.speechdatainstallerd
+  | -       0       com.apple.AOSHeartbeat
+  | 1714    0       com.apple.CryptoTokenKit.ahp.agent
+  | -       0       com.apple.SafariNotificationAgent
+  | -       0       com.apple.coredatad
+  | 82859   0       application.com.apple.ActivityMonitor.1152921500311908412.1152921500311908417
+  | -       0       com.apple.remindd
+  | -       0       com.apple.appsleep
+  | 8237    -9      com.apple.duetexpertd
+  | 1196    0       com.apple.coreservices.useractivityd
+  | -       0       com.apple.screencaptureui.agent
+  | -       0       com.apple.cvmsCompAgent3600_x86_64_1
+  | -       0       com.apple.netauth.user.auth
+  | 1189    0       com.apple.ViewBridgeAuxiliary
+  | -       0       com.apple.mbbackgrounduseragent
+  | 53631   0       com.apple.mdworker.shared.14000000-0500-0000-0000-000000000000
+  | 57412   0       com.apple.mdworker.shared.08000000-0400-0000-0000-000000000000
+  | -       0       com.apple.cvmsCompAgent_x86_64
+  | 1011    0       com.apple.lsd
+  | 8255    -9      com.apple.siri.context.service
+  | -       0       com.apple.fskit.fskit_agent
+  | 8245    -9      com.apple.pluginkit.pkd
+  | 57414   0       com.apple.mdworker.shared.0D000000-0500-0000-0000-000000000000
+  | -       0       com.apple.CharacterPicker.RemoteGenerationViewService
+  | -       0       com.apple.security.XPCTimeStampingService
+  | -       0       com.apple.Virtualization.EventTap
+  | -       0       com.apple.webkit.webpushd
+  | -       -9      com.apple.weatherd
+  | -       0       com.discord.discord.ShipIt
+  | 8367    -9      com.apple.cache_delete
+  | -       0       com.apple.symptomsd-diag.agent
+  | 1388    0       com.apple.AMPDeviceDiscoveryAgent
+  | -       0       com.apple.accessibility.dfrhud
+  | 81196   -9      com.apple.CallHistorySyncHelper
+  | 8357    -9      com.apple.colorsync.useragent
+  | 6968    -9      com.apple.analyticsagent
+  | 8315    -9      com.apple.appleaccountd
+  | 10661   -9      com.apple.parsecd
+  | -       -9      com.apple.mlruntimed
+  | 1376    0       com.apple.Dock.agent
+  | 40846   0       com.apple.parsec-fbf
+  | 8588    -9      com.apple.dmd
+  | 32616   -9      com.apple.transparencyd
+  | -       0       com.apple.usbnotificationagent
+  | 8359    -9      com.apple.AppSSOAgent
+  | 6824    0       com.apple.mbuseragent
+  | -       0       com.apple.security.cloudkeychainproxy3
+  | 994     0       com.apple.UserEventAgent-Aqua
+  | 9612    0       application.com.openai.codex.354255576.354255582
+  | 8124    -9      com.apple.followupd
+  | 1037    0       com.apple.identityservicesd
+  | 84862   -9      com.apple.telephonyutilities.callservicesd
+  | -       0       com.apple.DwellControl
+  | 8029    -9      com.apple.generativeexperiencesd
+  | -       -9      com.apple.ScreenTimeSettingsAgent
+  | 9120    -9      com.apple.XProtect.agent.scan
+  | -       -9      com.apple.storekitagent
+  | 10260   0       com.apple.security.DiskUnmountWatcher
+  | 98706   -9      com.apple.CoreLocationAgent
+  | -       0       com.apple.StorageManagement.Service
+  | -       0       com.apple.securemessagingagent
+  | 10681   -9      com.apple.SecureBackupDaemon
+  | -       0       com.apple.security.agent
+  | -       -9      com.apple.backgroundtaskmanagement.agent
+  | -       -9      com.apple.intelligenceflowd
+  | -       0       com.apple.icloudwebd
+  | 55197   -9      com.apple.businessservicesd
+  | -       0       com.apple.cfnetwork.AuthBrokerAgent
+  | 7030    -9      com.apple.feedbackd
+  | -       0       com.apple.storedownloadd
+  | -       0       com.apple.SpacesTouchBarAgent.app
+  | 1112    0       com.apple.BTServer.cloudpairing
+  | 2674    0       com.steipete.codexbar-sparkle-progress
+  | -       0       com.apple.managedcorespotlightd
+  | 1077    0       com.apple.coreservices.sharedfilelistd
+  | 1007    0       com.apple.pboard
+  | 58461   0       application.com.apple.TextEdit.1152921500311907962.1152921500311907967
+  | -       0       com.apple.nowplayingtouchui
+  | -       -9      com.apple.MobileAccessoryUpdater.fudHelperAgent
+  | 20130   -9      com.apple.reversetemplated
+  | 8377    -9      com.apple.BTServer.le.agent
+  | -       0       com.apple.AskPermissionUI
+  | -       0       com.apple.thermaltrap
+  | 1020    0       com.apple.rapportd
+  | 10791   -9      com.apple.SoftwareUpdateNotificationManager
+  | -       0       com.apple.DistributionKit.DistributionHelper
+  | -       0       com.apple.accounts.dom
+  | 1405    0       com.apple.TextInputUI.xpc.CursorUIViewService
+  | -       0       com.apple.metadata.mdflagwriter
+  | -       -9      com.apple.DictionaryServiceHelper
+  | -       0       com.apple.mdworker.shared.03000000-0100-0000-0000-000000000000
+  | -       0       com.apple.mdworker.shared
+  | 56969   0       com.apple.mdworker.shared.11000000-0400-0000-0000-000000000000
+  | -       0       com.apple.mdworker.single.x86_64
+  | -       0       com.apple.usermanagerhelper
+  | 1039    0       com.apple.installandsetup.migrationhelper.user
+  | 1009    0       com.apple.containermanagerd
+  | 8235    -9      com.apple.imdpersistence.IMDPersistenceAgent
+  | -       0       com.apple.TrustEvaluationAgent
+  | -       0       com.apple.Notes.datastore
+  | 9098    -9      com.apple.mlhostd
+  | -       0       com.apple.preference.displays.MirrorDisplays
+  | -       -9      com.apple.IOUIAgent
+  | 99026   0       com.apple.neagent.878568F8-CCE5-4157-8315-22F20DC8FB0A
+  | -       0       com.apple.previewshellapp
+  | 9104    -9      com.apple.managedappdistributionagent
+  | 1038    0       com.apple.accountsd
+  | 8250    -9      com.apple.cdpd
+  | 1023    0       com.apple.routined
+  | 8279    -9      com.apple.siriactionsd
+  | -       0       com.apple.KeyboardAccessAgent
+  | -       0       com.apple.ecosystemagent
+  | 1010    0       com.apple.BiomeAgent
+  | -       0       com.apple.storelegacy
+  | -       -9      com.apple.OSDUIHelper
+  | 8323    -9      com.apple.audio.AudioComponentRegistrar
+  | 8281    -9      com.apple.AssetCacheLocatorService
+  | -       0       com.apple.DiagnosticsReporter
+  | 1019    0       com.apple.lockoutagent
+  | -       0       com.riot.riotclient.checkinstalls
+  | -       0       com.apple.videosubscriptionsd
+  | 8637    -9      com.apple.pbs
+  | -       0       com.apple.calendar.CalendarAgentBookmarkMigrationService
+  | 1182    0       com.apple.notificationcenterui.agent
+  | 32619   -9      com.apple.protectedcloudstorage.protectedcloudkeysyncing
+  | 1303    0       com.apple.imklaunchagent
+  | 1099    0       com.apple.FileProvider
+  | 1472    0       application.dev.warp.Warp-Stable.344050307.344050312
+  | -       0       com.apple.imcore.imtransferagent
+  | 8282    -9      com.apple.mobiletimerd
+  | -       0       com.apple.btsa
+  | 1441    0       com.apple.icdd
+  | -       0       com.apple.ckdiscretionaryd
+  | 10659   -9      com.apple.EscrowSecurityAlert
+  | -       78      homebrew.mxcl.ollama
+  | 8586    -9      com.apple.MTLAssetUpgraderD
+  | 27292   0       com.apple.ptpcamerad
+  | 25695   0       com.apple.metadata.mdwrite
+  | -       0       com.apple.loginwindow.LWWeeklyMessageTracer
+  | -       0       com.apple.dt.previewsviewservice
+  | -       0       com.apple.spotlightknowledged
+  | -       0       com.apple.securityuploadd
+  | -       -9      com.apple.lockdownmoded
+  | -       0       com.apple.companiond
+  | -       0       com.apple.RapportUIAgent
+  | 8592    -9      com.apple.siriknowledged
+  | 34186   0       com.apple.powerchime
+  | 1062    0       com.apple.sharingd
+  | 67379   -9      com.apple.seserviced
+  | -       -9      com.apple.mobilerepaird
+  | -       0       com.apple.iCloudUserNotificationsd
+  | 8684    -9      com.apple.metrickitd
+  | -       0       com.apple.storeassetd
+  | 1072    0       com.apple.familycircled
+  | 1486    -9      com.apple.filevaultd
+  | -       0       com.apple.FontRegistryUIAgent
+  | 81368   -9      com.apple.RemoteManagementAgent
+  | -       0       com.apple.sportsd
+  | -       -9      com.apple.TextInputSwitcher
+  | 12095   -9      com.apple.intelligentroutingd
+  | 73983   0       com.apple.AMPArtworkAgent
+  | 1060    0       com.apple.imagent
+  | 98797   -9      com.apple.sidecar-relay
+  | -       0       com.apple.cloudsettingssyncagent
+  | 10786   -9      com.apple.assistant_cdmd
+  | 8536    -9      com.apple.photoanalysisd
+  | -       0       com.apple.syncservices.SyncServer
+  | 69775   0       com.apple.imautomatichistorydeletionagent
+  | 1378    0       com.apple.SystemUIServer.agent
+  | -       0       com.apple.PackageUIKit.InstallStatus
+  | 8492    -9      com.apple.talagent
+  | 8246    -9      com.apple.suggestd
+  | -       0       com.apple.navd
+  | -       0       com.apple.appleidsetupd
+  | -       0       com.apple.RemoteDesktop.agent
+  | 27376   -9      com.apple.iCloudNotificationAgent
+  | 80310   -9      com.apple.amsaccountsd
+  | -       0       com.apple.VoiceOver
+  | 10683   -9      com.apple.Maps.mapssyncd
+  | 9116    -9      com.apple.swtransparencyd
+  | -       0       com.apple.gputoolsserviced
+  | 1024    0       com.apple.usernotificationsd
+  | -       -9      com.apple.FamilyControlsAgent
+  | 66795   -9      com.apple.spotlightknowledged.importer
+  | -       0       com.apple.AssistiveControl
+  | -       0       com.apple.CoreSimulator.SimulatorTrampoline
+  | -       -9      com.apple.CoreSimulator.CoreSimulatorService
+  | -       0       com.apple.mdworker.single.arm64
+  | -       0       com.apple.ContainerMigrationService
+  | 980     0       com.apple.secd
+  | 8364    -9      com.apple.hiservices-xpcservice
+  | 73982   -9      com.apple.BKAgentService
+  | 57411   0       com.apple.mdworker.shared.1A000000-0000-0000-0000-000000000000
+  | -       0       com.apple.cvmsCompAgent_x86_64_1
+  | 56966   0       com.apple.mdworker.shared.16000000-0000-0000-0000-000000000000
+  | 11037   0       application.com.brave.Browser.348430598.348430605
+  | 1089    0       com.apple.assistantd
+  | 9101    -9      com.apple.siriinferenced
+  | 2701    0       application.com.apple.shortcuts.events.1152921500312101872.1152921500312101877
+  | -       -9      com.apple.studentd
+  | -       0       com.apple.FollowUpUI
+  | 1195    0       com.apple.videoconference.camera
+  | -       0       com.apple.corespotlightservice
+  | 1191    0       com.apple.uikitsystemapp
+  | 1498    0       application.md.obsidian.344269116.344269890
+  | -       0       com.apple.controlstrip
+  | -       -9      com.apple.financed
+  | 8240    -9      com.apple.findmy.findmylocateagent
+  | 8478    -9      com.apple.mediaanalysisd
+  | -       0       com.apple.DiskArbitrationAgent
+  | -       0       com.todesktop.230313mzl4w4u92.ShipIt
+  | 7028    -9      com.apple.assessmentagent
+  | -       0       com.apple.exchange.exchangesyncd
+  | -       0       com.apple.testmanagerd
+  | -       0       com.apple.dt.AutomationModeUI
+  | 8045    -9      com.apple.scopedbookmarksagent.xpc
+  | 98792   -9      com.apple.ensemble
+  | 8511    -9      com.apple.ReportCrash
+  | -       0       com.apple.biomesyncd
+  | 10657   -9      com.apple.ciphermld
+  | 9106    -9      com.apple.UsageTrackingAgent
+  | 8252    -9      com.apple.email.maild
+  | 1477    0       application.com.raycast.macos.213636119.350196233
+  | 10700   -9      com.apple.managedcorespotlightd.F61A3499-70E9-CF87-AC79-B0232C917C8F
+  | 8238    -9      com.apple.donotdisturbd
+  | -       0       com.apple.accessorysensormgrd
+  | -       0       com.apple.locationaccessstored
+  | -       0       com.apple.menuextra.battery.helper
+  | -       0       com.apple.appleseed.seedusaged.postinstall
+  | -       0       com.apple.Maps.mapspushd
+  | -       0       com.apple.coreidvd
+  | -       0       com.apple.voicememod
+  | -       0       com.apple.gamed
+  | -       0       com.apple.STMUIHelper
+  | 1474    -9      com.apple.intelligencecontextd
+  | 1005    0       com.apple.knowledge-agent
+  | -       0       com.apple.midiserver
+  | 25221   0       application.com.anthropic.claudefordesktop.354651518.354651524
+  | -       0       com.apple.mobiledeviceupdater
+  | 1126    0       com.apple.AccessibilityUIServer
+  | 8232    -9      com.apple.communicationtrustd
+  | -       0       com.apple.helpd
+  | 98900   -9      com.apple.icloudmailagent
+  | -       0       com.apple.quicklook.ui.helper
+  | -       0       com.apple.GameOverlayUI
+  | 1051    0       com.apple.wifi.WiFiAgent
+  | -       0       com.apple.screensharing.MessagesAgent
+  | -       0       com.apple.toolkitd
+  | -       0       com.apple.diskspaced
+  | -       0       com.google.GoogleUpdater.wake
+  | 1305    0       com.apple.passd
+  | 1297    0       com.apple.DictationIM
+  | 10849   -9      com.apple.sociallayerd
+  | -       0       com.apple.mdmclient.agent
+  | -       0       com.apple.iCloudHelper
+  | -       0       com.apple.CharacterPicker.FileService
+  | 8523    -9      com.apple.keychainsharingmessagingd
+  | -       0       com.apple.MessageUIMacHelperService
+  | -       0       com.apple.cvmsCompAgent3425AMD_x86_64
+  | -       0       com.apple.gamecontroller.ConfigService
+  | -       0       com.apple.security.XPCKeychainSandboxCheck
+  | 14449   -9      com.apple.podcasts.PodcastContentService
+  | 1078    0       com.apple.CoreAuthentication.agent
+  | 90626   -9      com.apple.syncdefaultsd
+  | -       0       com.apple.sidecar-display-agent
+  | 1186    0       com.apple.chronod
+  | 9520    -9      com.apple.accessibility.heard
+  | 1140    0       com.apple.corespeechd
+  | 87318   -9      com.apple.geoanalyticsd
+  | -       0       com.apple.AMPSystemPlayerAgent
+  | 10662   -9      com.apple.itunescloudd
+  | -       0       com.apple.scrod
+  | 8363    -9      com.apple.spindump_agent
+  | 82884   -9      com.apple.frauddefensed
+  | -       0       com.apple.AquaAppearanceHelper
+  | 8338    -9      com.apple.AuthenticationServicesCore.AuthenticationServicesAgent
+  | -       0       com.apple.cvmsCompAgent_arm64
+  | 39676   -9      com.apple.milod
+  | -       0       com.apple.bookdatastored
+  | 98785   -9      com.apple.security.keychain-circle-notification
+  | -       0       com.apple.appstorecomponentsd
+  | 10724   -9      com.apple.icloud.findmydeviced.findmydevice-user-agent
+  | 34331   0       application.com.knollsoft.Rectangle.352815566.352815823
+  | -       0       com.apple.XProtect.agent.scan.startup
+  | 9111    -9      com.apple.amsengagementd
+  | 82413   -9      com.apple.betaenrollmentagent
+  | -       0       com.apple.AirPortBaseStationAgent
+  | 10793   -9      com.apple.proactiveeventtrackerd
+  | 8236    -9      com.apple.proactived
+  | 8097    -9      com.apple.ModelCatalogAgent
+  | 1003    0       com.apple.universalaccessd
+  | 8122    -9      com.apple.linkd
+  | -       0       com.apple.accessibility.MotionTrackingAgent
+  | -       0       com.apple.neagent
+  | 10854   -9      com.apple.SafariLaunchAgent
+  | -       0       com.apple.idsfoundation.IDSRemoteURLConnectionAgent
+  | 18330   -9      com.apple.textcomposerd
+  | 10336   -9      com.apple.recentsd
+  | 19592   -9      com.apple.spotlightknowledged.updater
+  | -       0       com.apple.transparencyStaticKey
+  | 10798   -9      com.apple.sirittsd
+  | 10660   -9      com.apple.dprivacyd
+  | 1022    0       com.apple.usernoted
+  | 8568    -9      com.apple.geodMachServiceBridge
+  | -       0       com.apple.Safari.History
+  | -       -9      com.apple.translationd
+  | 53970   0       application.com.microsoft.VSCode.350690593.350690599.C232B3DC-3F9E-420B-BFD7-A9D
+  | 6EBBB44D5
+  | -       0       com.apple.AddressBook.abd
+  | -       0       com.apple.bluetoothaudiod
+  | 8225    -9      com.apple.calaccessd
+  | -       0       com.apple.ScreenReaderUIServer
+  | -       0       com.apple.newsd
+  | -       0       com.apple.systemsettingsagent
+  | 8587    -9      com.apple.swcd
+  | -       0       com.apple.symptomsd.distributed-agent
+  | 1448    0       com.apple.AirPlayUIAgent
+  | -       -9      com.apple.backgroundassets.user
+  | -       0       com.apple.cvmsCompAgent_arm64_1
+  | -       0       com.apple.dt.previewsd
+  | -       -9      com.apple.shazamd
+  | 1143    0       com.apple.corespotlightd
+  | 16638   -9      com.apple.naturallanguaged
+  | -       0       com.apple.netauth.user.gui
+  | -       0       com.apple.watchlistd
+  | 1179    0       com.apple.xtyped
+  | -       0       com.apple.TMHelperAgent
+  | 82674   0       application.com.todesktop.230313mzl4w4u92.354792386.354792392
+  | 4819    0       com.apple.Spotlight
+  | 9103    -9      com.apple.appstoreagent
+  | -       0       com.apple.AMPDevicesAgent
+  | 8629    -9      com.apple.accessibility.mediaaccessibilityd
+  | 53632   0       com.apple.mdworker.shared.0A000000-0600-0000-0000-000000000000
+  | -       0       com.apple.cvmsCompAgent3425AMD_x86_64_1
+  | -       -9      com.apple.mdworker.sizing
+  | 1302    0       com.apple.SpeechRecognitionCore.brokerd
+  | 1208    0       com.apple.metadata.mdbulkimport
+  | -       0       com.apple.iokit.IOServiceAuthorizeAgent
+  | -       0       com.apple.cvmsCompAgent3600_arm64
+  | 2026    -9      com.apple.WorkflowKit.ShortcutsViewService
+  | -       -9      com.apple.carboncore.csnameddata
+  | -       0       com.apple.mdworker.application
+  | 79575   -11     com.apple.CoreSimulator.SimLaunchHost-arm64
+  | 8224    -9      com.apple.contactsd
+  | -       0       com.apple.cvmsCompAgent3600_x86_64
+  | -       0       com.apple.speech.speechsynthesisd.arm64
+  | -       0       com.apple.CoreRoutine.helperservice
+  | 972     0       com.apple.distnoted.xpc.agent
+  | 8257    -9      com.apple.geod
+Filesystem               ran      fs.suid                  0 lines
+                                                           SUID binaries under local prefixes
+                                                           (depth-capped)
+  | (no output)
+Filesystem               ran      fs.world_writable        0 lines
+                                                           World-writable entries without the sticky
+                                                           bit under system prefixes (depth-capped)
+  | (no output)
+Logging and audit        skipped  log.status               requires elevated read
+                                                           Unified logging configuration
+Time synchronisation     skipped  time.ntp                 requires elevated read
+                                                           Network time synchronisation setting
+Session and shell        ran      sys.platform             Darwin
+                                                           Kernel name (uname -s), used for platform
+                                                           detection
+  | Darwin
+Session and shell        ran      sys.shell                /bin/zsh
+                                                           Login shell of the audit session
+  | /bin/zsh
+Session and shell        ran      sys.uid                  501
+                                                           Effective uid of the audit session
+  | 501
+Session and shell        ran      sys.uname                Darwin mac-fixture.local 25.6.0 Darwin
+                                                           Kernel Version 25.6.0: Fri Jul 31
+                                                           19:16:36 PDT 2026; root:xnu-12377.161.14~
+                                                           5/RELE…
+                                                           Full kernel identification
+  | Darwin mac-fixture.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:36 PDT 2026;
+  | root:xnu-12377.161.14~5/RELEASE_ARM64_T6030 arm64
+
+Skipped (6)
+  these checks produced no usable fact; some executed but failed
+  6 need an elevated read
+    log.status, privesc.sudoers, privesc.sudoers_d, remote.login, sshd.config, time.ntp
+    remedy: re-run with --sudo. On macOS run `sudo -v` first, or install the fragment printed by
+            `scheck sudoers` so no password is needed.
+
+assessment: none. Every line above reports what a command observed, not whether the host is
+configured safely. Posture rules and the agentic pass are not available in this build.

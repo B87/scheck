@@ -2,7 +2,8 @@
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
 over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP.md` says what is
-built (M0, M1) and what is next (M1.6–M1.8 readable phase 1 and posture rules, then M2). This file is the operating manual for a coding
+built (M0, M1, M1.6 including diagnostics and JSON discovery) and what is next (M1.7 typed parsers and summaries, then M1.8
+posture rules, then M2). This file is the operating manual for a coding
 agent in this repository. The spec wins on any conflict.
 
 ## Non-negotiables
@@ -41,23 +42,28 @@ passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `local`, `ssh`, `catalog`, `sudoers`; flag parsing; exit codes |
+| `cmd/scheck` | cobra commands: `local`, `ssh`, `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
 | `internal/policy` | path policy, redactor, budgets, JSONL audit log |
 | `internal/runner` | the one exec path (see rule 3) |
 | `internal/baseline` | phase 1: plan, run, fact sheet |
-| `internal/report` | envelope (§7.4), text and JSON renderers under the §7.6 contract; `docs/report-schema.json` |
+| `internal/report` | envelope (§7.4), JSON renderer, and the text report under the §7.6 contract (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden files in `testdata/golden`; `docs/report-schema.json` |
 | `internal/finding` | (from M1.8) finding id catalog with base severities, posture rules (§7.5); reads facts, never executes |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `test/containers`, `test/integ` | Docker images and `integration`-tagged tests |
 | `testdata/fixtures/<name>` | recorded exec fixtures (`manifest.yaml` + files) |
-| `docs/` | `SPEC.md`, `ROADMAP.md`, `report-schema.json` |
+| `docs/` | `SPEC.md`, `ROADMAP.md`, `report-schema.json`; root `README.md` is the quick start |
 
 Everything is under `internal/`; nothing is importable from outside the module.
+
+For agents operating the CLI, use the `scheck` skill at
+[.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers collecting
+and interpreting host evidence, not implementation work on this repository. Prefer
+JSON, inspect `run.assessment` and coverage, and never treat exit 0 as a security verdict.
 
 ## Commands
 
@@ -70,7 +76,11 @@ go run ./cmd/scheck local --stop-after plan
 go run ./cmd/scheck local --stop-after facts --format json --audit-log /tmp/audit.jsonl
 go run ./cmd/scheck ssh user@host --stop-after facts
 go run ./cmd/scheck catalog --profile hardened
+go run ./cmd/scheck explain sshd.config --format json
+go run ./cmd/scheck catalog --platform linux --format json
+go run ./cmd/scheck local --stop-after facts --format json --include-evidence --no-persist
 go run ./cmd/scheck sudoers --platform macos
+go test ./internal/report -update    # rewrite the golden text reports, then read the diff
 ```
 
 `make check` includes the user's `fix` target (`go fix ./...`); keep it in the chain.
@@ -118,6 +128,11 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   renames, removals and type changes bump MAJOR (`docs/SPEC.md §7.4`).
 - Posture rules require recognized evidence; unknown is not safe or unsafe. Preserve
   assessment coverage in JSON and text, and test partial evidence (§7.5).
+- The text report is a contract (§7.6) pinned by the golden files. Regenerate with
+  `go test ./internal/report -update` and read the diff as a review item. Three rules
+  hold there: a status word describes execution, never posture; target-derived text is
+  control-character escaped before it is printed; and the terminal decisions (width,
+  tty, `NO_COLOR`) stay in `cmd/scheck`, never in `internal/report`.
 - Code comments cite the spec section (`docs/SPEC.md §4.3`) for anything that exists
   because of a security decision.
 - Flags for later milestones stay registered and exit 3 with "not available in this
@@ -132,7 +147,7 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 ## Out of scope until the roadmap slice that introduces them
 
-`llm`, agent loop, context adjustments and accepted risks (M2.2), `--context`,
+`llm`, agent loop, context adjustments and accepted risks (M2.3), `--context` (M2.2),
 `--only`, SARIF, `scheck diff`, `--local-only`, the optional §5.9 assessment track. The
 finding catalog and posture rules arrive in M1.8 and typed parsers in M1.7; do not
 scaffold them earlier, and do not scaffold empty abstractions for any of the above.

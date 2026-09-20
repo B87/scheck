@@ -1,0 +1,643 @@
+scheck test — fbf2f7a11b33 — Fedora Linux 40 (Container Image) — fixture, elevation sudo
+33 checks: 22 ran, 11 skipped
+host.id f7e47c01e36d… · kernel 7.0.12-linuxkit · profile baseline · mode facts · status complete ·
+1234ms
+
+DOMAIN                   STATUS   CHECK                   READING
+Host identity            ran      host.hostname           fbf2f7a11b33
+                                                          Hostname
+  | fbf2f7a11b33
+Host identity            ran      host.machine_id         172d9b861de844f9a2a5182d371b0267
+                                                          Stable machine identifier (hashed into
+                                                          host.id)
+  | 172d9b861de844f9a2a5182d371b0267
+Operating system         ran      os.release              22 keys
+                                                          Distribution identification
+  | NAME="Fedora Linux"
+  | VERSION="40 (Container Image)"
+  | ID=fedora
+  | VERSION_ID=40
+  | VERSION_CODENAME=""
+  | PLATFORM_ID="platform:f40"
+  | PRETTY_NAME="Fedora Linux 40 (Container Image)"
+  | ANSI_COLOR="0;38;2;60;110;180"
+  | LOGO=fedora-logo-icon
+  | CPE_NAME="cpe:/o:fedoraproject:fedora:40"
+  | DEFAULT_HOSTNAME="fedora"
+  | HOME_URL="https://fedoraproject.org/"
+  | DOCUMENTATION_URL="https://docs.fedoraproject.org/en-US/fedora/f40/system-administrators-guide/"
+  | SUPPORT_URL="https://ask.fedoraproject.org/"
+  | BUG_REPORT_URL="https://bugzilla.redhat.com/"
+  | REDHAT_BUGZILLA_PRODUCT="Fedora"
+  | REDHAT_BUGZILLA_PRODUCT_VERSION=40
+  | REDHAT_SUPPORT_PRODUCT="Fedora"
+  | REDHAT_SUPPORT_PRODUCT_VERSION=40
+  | SUPPORT_END=2025-05-13
+  | VARIANT="Container Image"
+  | VARIANT_ID=container
+Software updates         skipped  pkg.apt_upgradable      exit 127: bash: line 1: apt: command not
+                                                          found
+                                                          Packages with pending upgrades (apt)
+  |
+  | stderr:
+  | bash: line 1: apt: command not found
+  |
+Software updates         ran      pkg.dnf_check_update    37 lines: audit-libs.aarch64
+                                                          4.0.3-1.fc40                updates
+                                                          Packages with pending upgrades (dnf; exit
+                                                          100 means updates exist)
+  |
+  | audit-libs.aarch64                           4.0.3-1.fc40                updates
+  | dnf.noarch                                   4.23.0-1.fc40.1             updates
+  | dnf-data.noarch                              4.23.0-1.fc40.1             updates
+  | elfutils-default-yama-scope.noarch           0.192-9.fc40                updates
+  | elfutils-libelf.aarch64                      0.192-9.fc40                updates
+  | elfutils-libs.aarch64                        0.192-9.fc40                updates
+  | expat.aarch64                                2.7.1-1.fc40                updates
+  | glib2.aarch64                                2.80.5-1.fc40               updates
+  | glibc.aarch64                                2.39-38.fc40                updates
+  | glibc-common.aarch64                         2.39-38.fc40                updates
+  | glibc-minimal-langpack.aarch64               2.39-38.fc40                updates
+  | gnutls.aarch64                               3.8.9-1.fc40                updates
+  | krb5-libs.aarch64                            1.21.3-3.fc40               updates
+  | libdnf.aarch64                               0.74.0-1.fc40               updates
+  | libidn2.aarch64                              2.3.8-1.fc40                updates
+  | libsolv.aarch64                              0.7.32-4.fc40               updates
+  | libtasn1.aarch64                             4.20.0-1.fc40               updates
+  | libxcrypt.aarch64                            4.4.38-7.fc40               updates
+  | libxml2.aarch64                              2.12.10-1.fc40              updates
+  | libzstd.aarch64                              1.5.7-1.fc40                updates
+  | openldap.aarch64                             2.6.9-1.fc40                updates
+  | openssl-libs.aarch64                         1:3.2.4-1.fc40              updates
+  | publicsuffix-list-dafsa.noarch               20250116-1.fc40             updates
+  | python3.aarch64                              3.12.10-2.fc40              updates
+  | python3-dnf.noarch                           4.23.0-1.fc40.1             updates
+  | python3-hawkey.aarch64                       0.74.0-1.fc40               updates
+  | python3-libdnf.aarch64                       0.74.0-1.fc40               updates
+  | python3-libs.aarch64                         3.12.10-2.fc40              updates
+  | rpm-sequoia.aarch64                          1.7.0-5.fc40                updates
+  | sqlite-libs.aarch64                          3.45.1-3.fc40               updates
+  | tzdata.noarch                                2025b-1.fc40                updates
+  | vim-data.noarch                              2:9.1.1275-1.fc40           updates
+  | vim-minimal.aarch64                          2:9.1.1275-1.fc40           updates
+  | xz.aarch64                                   1:5.8.1-2.fc40              updates
+  | xz-libs.aarch64                              1:5.8.1-2.fc40              updates
+  | yum.noarch                                   4.23.0-1.fc40.1             updates
+  | zstd.aarch64                                 1.5.7-1.fc40                updates
+Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
+                                                          not found
+                                                          Pending patches (zypper)
+  |
+  | stderr:
+  | bash: line 1: zypper: command not found
+  |
+Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
+                                                          or directory
+                                                          Configured encrypted volumes
+  |
+  | stderr:
+  | cat: /etc/crypttab: No such file or directory
+  |
+Disk encryption          ran      disk.lsblk              20 lines: NAME   TYPE FSTYPE MOUNTPOINT
+                                                          Block devices, filesystems and crypt
+                                                          layers
+  | NAME   TYPE FSTYPE MOUNTPOINT
+  | nbd0   disk
+  | nbd1   disk
+  | nbd2   disk
+  | nbd3   disk
+  | nbd4   disk
+  | nbd5   disk
+  | nbd6   disk
+  | nbd7   disk
+  | vda    disk
+  | `-vda1 part        /etc/resolv.conf
+  | vdb    disk
+  | nbd8   disk
+  | nbd9   disk
+  | nbd10  disk
+  | nbd11  disk
+  | nbd12  disk
+  | nbd13  disk
+  | nbd14  disk
+  | nbd15  disk
+System integrity         skipped  mac.aa_status           sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or
+                                                          aa-status is not installed) [elevated]
+                                                          AppArmor profiles and enforcement
+  |
+  | stderr:
+  | sudo: a password is required
+  |
+System integrity         skipped  mac.sestatus            exit 127: bash: line 1: sestatus: command
+                                                          not found
+                                                          SELinux status
+  |
+  | stderr:
+  | bash: line 1: sestatus: command not found
+  |
+Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
+                                                          command not found
+                                                          firewalld state
+  |
+  | stderr:
+  | bash: line 1: firewall-cmd: command not found
+  |
+Firewall                 skipped  fw.nft                  sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or nft is
+                                                          not installed) [elevated]
+                                                          nftables ruleset
+  |
+  | stderr:
+  | sudo: a password is required
+  |
+Firewall                 skipped  fw.ufw                  sudo: sudo: a password is required (no
+                                                          NOPASSWD rule for this command, or ufw is
+                                                          not installed) [elevated]
+                                                          ufw status and rules
+  |
+  | stderr:
+  | sudo: a password is required
+  |
+Network exposure         ran      net.listeners           2 lines: tcp LISTEN 0      128
+                                                          0.0.0.0:22 0.0.0.0:*
+                                                          Listening TCP/UDP sockets with owning
+                                                          process
+  | tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*
+  | tcp LISTEN 0      128       [::]:22    [::]:*
+SSH server               ran      sshd.config             93 keys [elevated]
+                                                          Effective sshd configuration
+  | port 22
+  | addressfamily any
+  | listenaddress [::]:22
+  | listenaddress 0.0.0.0:22
+  | usepam yes
+  | logingracetime 120
+  | x11displayoffset 10
+  | x11maxdisplays 1000
+  | maxauthtries 6
+  | maxsessions 10
+  | clientaliveinterval 0
+  | clientalivecountmax 3
+  | requiredrsasize 2048
+  | streamlocalbindmask 0177
+  | unusedconnectiontimeout none
+  | permitrootlogin without-password
+  | ignorerhosts yes
+  | ignoreuserknownhosts no
+  | hostbasedauthentication no
+  | hostbasedusesnamefrompacketonly no
+  | pubkeyauthentication yes
+  | kerberosauthentication no
+  | kerberosorlocalpasswd yes
+  | kerberosticketcleanup yes
+  | kerberosuniqueccache no
+  | kerberosusekuserok yes
+  | gssapienablek5users no
+  | gssapiauthentication yes
+  | gssapicleanupcredentials no
+  | gssapikeyexchange no
+  | gssapistrictacceptorcheck yes
+  | gssapistorecredentialsonrekey no
+  | gssapikexalgorithms gss-curve25519-sha256-,gss-nistp256-sha256-,gss-group14-sha256-,gss-group16-
+  | sha512-
+  | passwordauthentication no
+  | kbdinteractiveauthentication no
+  | printmotd no
+  | printlastlog yes
+  | x11forwarding yes
+  | x11uselocalhost yes
+  | permittty yes
+  | permituserrc yes
+  | strictmodes yes
+  | tcpkeepalive yes
+  | permitemptypasswords no
+  | compression yes
+  | gatewayports no
+  | usedns no
+  | allowtcpforwarding yes
+  | allowagentforwarding yes
+  | disableforwarding no
+  | allowstreamlocalforwarding yes
+  | streamlocalbindunlink no
+  | fingerprinthash SHA256
+  | exposeauthinfo no
+  | pidfile /var/run/sshd.pid
+  | modulifile /etc/ssh/moduli
+  | xauthlocation /usr/bin/xauth
+  | ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr,aes128-gcm@openssh.com,a
+  | es128-ctr
+  | macs hmac-sha2-256-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-
+  | 512-etm@openssh.com,hmac-sha2-256,hmac-sha1,umac-128@openssh.com,hmac-sha2-512
+  | banner none
+  | forcecommand none
+  | chrootdirectory none
+  | trustedusercakeys none
+  | revokedkeys none
+  | securitykeyprovider internal
+  | authorizedprincipalsfile none
+  | versionaddendum none
+  | authorizedkeyscommand none
+  | authorizedkeyscommanduser none
+  | authorizedprincipalscommand none
+  | authorizedprincipalscommanduser none
+  | hostkeyagent none
+  | kexalgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp3
+  | 84,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256,diffie-
+  | hellman-group16-sha512,diffie-hellman-group18-sha512
+  | casignaturealgorithms ecdsa-sha2-nistp256,sk-ecdsa-sha2-nistp256@openssh.com,ecdsa-sha2-nistp384
+  | ,ecdsa-sha2-nistp521,ssh-ed25519,sk-ssh-ed25519@openssh.com,rsa-sha2-256,rsa-sha2-512
+  | hostbasedacceptedalgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp256-cert-v01@openssh.com,sk-ecds
+  | a-sha2-nistp256@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384,ecds
+  | a-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521,ecdsa-sha2-nistp521-cert-v01@openssh.co
+  | m,ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v0
+  | 1@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@
+  | openssh.com
+  | hostkeyalgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp256-cert-v01@openssh.com,sk-ecdsa-sha2-nis
+  | tp256@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384,ecdsa-sha2-nis
+  | tp384-cert-v01@openssh.com,ecdsa-sha2-nistp521,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25
+  | 519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.
+  | com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.co
+  | m
+  | pubkeyacceptedalgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp256-cert-v01@openssh.com,sk-ecdsa-s
+  | ha2-nistp256@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384,ecdsa-s
+  | ha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521,ecdsa-sha2-nistp521-cert-v01@openssh.com,s
+  | sh-ed25519,ssh-ed25519-cert-v01@openssh.com,sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@o
+  | penssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@ope
+  | nssh.com
+  | loglevel INFO
+  | syslogfacility AUTHPRIV
+  | authorizedkeysfile .ssh/authorized_keys
+  | hostkey /etc/ssh/ssh_host_rsa_key
+  | hostkey /etc/ssh/ssh_host_ecdsa_key
+  | hostkey /etc/ssh/ssh_host_ed25519_key
+  | authenticationmethods any
+  | channeltimeout none
+  | subsystem sftp /usr/libexec/openssh/sftp-server
+  | maxstartups 10:30:100
+  | persourcemaxstartups none
+  | persourcenetblocksize 32:128
+  | permittunnel no
+  | ipqos af21 cs1
+  | rekeylimit 0 0
+  | permitopen any
+  | permitlisten any
+  | permituserenvironment no
+  | pubkeyauthoptions none
+Remote access            ran      remote.sshd_enabled     2 lines: not-found
+                                                          Whether the ssh service is enabled at boot
+  | not-found
+  | enabled
+Accounts                 ran      accounts.passwd         22 lines: root:x:0:0:Super
+                                                          User:/root:/bin/bash
+                                                          Local accounts, shells and home
+                                                          directories
+  | root:x:0:0:Super User:/root:/bin/bash
+  | bin:x:1:1:bin:/bin:/usr/sbin/nologin
+  | daemon:x:2:2:daemon:/sbin:/usr/sbin/nologin
+  | adm:x:3:4:adm:/var/adm:/usr/sbin/nologin
+  | lp:x:4:7:lp:/var/spool/lpd:/usr/sbin/nologin
+  | sync:x:5:0:sync:/sbin:/bin/sync
+  | shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+  | halt:x:7:0:halt:/sbin:/sbin/halt
+  | mail:x:8:12:mail:/var/spool/mail:/usr/sbin/nologin
+  | operator:x:11:0:operator:/root:/usr/sbin/nologin
+  | games:x:12:100:games:/usr/games:/usr/sbin/nologin
+  | ftp:x:14:50:FTP User:/var/ftp:/usr/sbin/nologin
+  | nobody:x:65534:65534:Kernel Overflow User:/:/usr/sbin/nologin
+  | tss:x:59:59:Account used for TPM access:/:/usr/sbin/nologin
+  | dbus:x:81:81:System message bus:/:/sbin/nologin
+  | systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
+  | systemd-oom:x:999:999:systemd Userspace OOM Killer:/:/usr/sbin/nologin
+  | systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
+  | sshd:x:74:74:Privilege-separated SSH:/usr/share/empty.sshd:/usr/sbin/nologin
+  | systemd-coredump:x:998:998:systemd Core Dumper:/:/usr/sbin/nologin
+  | systemd-timesync:x:997:997:systemd Time Synchronization:/:/usr/sbin/nologin
+  | ops:x:1000:1000::/home/ops:/bin/bash
+Accounts                 ran      accounts.passwd_status  22 lines: root L 2024-01-27 0 99999 7 -1
+                                                          [elevated]
+                                                          Password status per account (NP = no
+                                                          password, L = locked)
+  | root L 2024-01-27 0 99999 7 -1
+  | bin L 2024-01-27 0 99999 7 -1
+  | daemon L 2024-01-27 0 99999 7 -1
+  | adm L 2024-01-27 0 99999 7 -1
+  | lp L 2024-01-27 0 99999 7 -1
+  | sync L 2024-01-27 0 99999 7 -1
+  | shutdown L 2024-01-27 0 99999 7 -1
+  | halt L 2024-01-27 0 99999 7 -1
+  | mail L 2024-01-27 0 99999 7 -1
+  | operator L 2024-01-27 0 99999 7 -1
+  | games L 2024-01-27 0 99999 7 -1
+  | ftp L 2024-01-27 0 99999 7 -1
+  | nobody L 2024-01-27 0 99999 7 -1
+  | tss L 2025-01-19 -1 -1 -1 -1
+  | dbus L 2026-09-20 -1 -1 -1 -1
+  | systemd-network L 2026-09-20 -1 -1 -1 -1
+  | systemd-oom L 2026-09-20 -1 -1 -1 -1
+  | systemd-resolve L 2026-09-20 -1 -1 -1 -1
+  | sshd L 2026-09-20 -1 -1 -1 -1
+  | systemd-coredump L 2026-09-20 -1 -1 -1 -1
+  | systemd-timesync L 2026-09-20 -1 -1 -1 -1
+  | ops L 2026-09-20 0 99999 7 -1
+Accounts                 ran      accounts.shadow_meta    ----------:0:root:root:580
+                                                          Permissions of /etc/shadow (metadata only,
+                                                          never contents)
+  | ----------:0:root:root:580
+Privilege escalation     ran      privesc.sudoers         94 lines: ## Sudoers allows particular
+                                                          users to run various commands as
+                                                          [elevated, 1 redacted]
+                                                          sudoers policy
+  | ## Sudoers allows particular users to run various commands as
+  | ## the root user, without needing the root password.
+  | ##
+  | ## Examples are provided at the bottom of the file for collections
+  | ## of related commands, which can then be delegated out to particular
+  | ## users or groups.
+  | ##
+  | ## This file must be edited with the 'visudo' command.
+  |
+  | ## Host Aliases
+  | ## Groups of machines. You may prefer to use hostnames (perhaps using
+  | ## wildcards for entire domains) or IP addresses instead.
+  | # Host_Alias     FILESERVERS = fs1, fs2
+  | # Host_Alias     MAILSERVERS = smtp, smtp2
+  |
+  | ## User Aliases
+  | ## These aren't often necessary, as you can use regular groups
+  | ## (ie, from files, LDAP, NIS, etc) in this file - just use %groupname
+  | ## rather than USERALIAS
+  | # User_Alias ADMINS = jsmith, mikem
+  |
+  |
+  | ## Command Aliases
+  | ## These are groups of related commands...
+  |
+  | ## Networking
+  | # Cmnd_Alias NETWORKING = /sbin/route, /sbin/ifconfig, /bin/ping, /sbin/dhclient, /usr/bin/net,
+  | /sbin/iptables, /usr/bin/rfcomm, /usr/bin/wvdial, /sbin/iwconfig, /sbin/mii-tool
+  |
+  | ## Installation and management of software
+  | # Cmnd_Alias SOFTWARE = /bin/rpm, /usr/bin/up2date, /usr/bin/yum
+  |
+  | ## Services
+  | # Cmnd_Alias SERVICES = /sbin/service, /sbin/chkconfig, /usr/bin/systemctl start,
+  | /usr/bin/systemctl stop, /usr/bin/systemctl reload, /usr/bin/systemctl restart,
+  | /usr/bin/systemctl status, /usr/bin/systemctl enable, /usr/bin/systemctl disable
+  |
+  | ## Updating the locate database
+  | # Cmnd_Alias LOCATE = /usr/bin/updatedb
+  |
+  | ## Storage
+  | # Cmnd_Alias STORAGE = /sbin/fdisk, /sbin/sfdisk, /sbin/parted, /sbin/partprobe, /bin/mount,
+  | /bin/umount
+  |
+  | ## Delegating permissions
+  | # Cmnd_Alias DELEGATING = /usr/sbin/visudo, /bin/chown, /bin/chmod, /bin/chgrp
+  |
+  | ## Processes
+  | # Cmnd_Alias PROCESSES = /bin/nice, /bin/kill, /usr/bin/kill, /usr/bin/killall
+  |
+  | ## Drivers
+  | # Cmnd_Alias DRIVERS = /sbin/modprobe
+  |
+  | # Defaults specification
+  |
+  | #
+  | # Refuse to run if unable to disable echo on the tty.
+  | #
+  | Defaults   !visiblepw
+  |
+  | #
+  | # Preserving HOME has security implications since many programs
+  | # use it when searching for configuration files. Note that HOME
+  | # is already set when the the env_reset option is enabled, so
+  | # this option is only effective for configurations where either
+  | # env_reset is disabled or HOME is present in the env_keep list.
+  | #
+  | Defaults    always_set_home
+  | Defaults    match_group_by_gid
+  |
+  | # Prior to version 1.8.15, groups listed in sudoers that were not
+  | # found in the system group database were passed to the group
+  | # plugin, if any. Starting with 1.8.15, only groups of the form
+  | # %:group are resolved via the group plugin by default.
+  | # We enable always_query_group_plugin to restore old behavior.
+  | # Disable this option for new behavior.
+  | Defaults    always_query_group_plugin
+  |
+  | Defaults    env_reset
+  | Defaults    env_keep =  "COLORS DISPLAY HOSTNAME HISTSIZE KDEDIR LS_COLORS"
+  | Defaults    env_keep += "MAIL QTDIR USERNAME LANG LC_ADDRESS LC_CTYPE"
+  | Defaults    env_keep += "LC_COLLATE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES"
+  | Defaults    env_keep += "LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE"
+  | Defaults    env_keep += "LC_TIME LC_ALL LANGUAGE LINGUAS _XKB_CHARSET XAUTHORITY"
+  |
+  | #
+  | # Adding HOME to env_keep may enable a user to run unrestricted
+  | # commands via sudo.
+  | #
+  | # Defaults   env_keep += "HOME"
+  |
+  | Defaults    secure_path = /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/
+  | snapd/snap/bin
+  |
+  | ## Next comes the main part: which users can run what software on
+  | ## which machines (the sudoers file can be shared between multiple
+  | ## systems).
+  | ## Syntax:
+  | ##
+  | ##      user    MACHINE=COMMANDS
+  | ##
+  | ## The COMMANDS section may have other options added to it.
+  | ##
+  | ## Allow root to run any commands anywhere
+  | root    ALL=(ALL)       ALL
+  |
+  | ## Allows members of the 'sys' group to run networking, software,
+  | ## service management apps and more.
+  | # %sys ALL = NETWORKING, SOFTWARE, SERVICES, STORAGE, DELEGATING, PROCESSES, LOCATE, DRIVERS
+  |
+  | ## Allows people in group wheel to run all commands
+  | %wheel  ALL=(ALL)       ALL
+  |
+  | ## Same thing without a password
+  | # %wheel        ALL=(ALL)       NOPASSWD: [REDACTED:kv-secret:21 bytes] bytes]
+  |
+  | ## Allows members of the users group to mount and unmount the
+  | ## cdrom as root
+  | # %users  ALL=/sbin/mount /mnt/cdrom, /sbin/umount /mnt/cdrom
+  |
+  | ## Allows members of the users group to shutdown this system
+  | # %users  localhost=/sbin/shutdown -h now
+  |
+  | ## Read drop-in files from /etc/sudoers.d (the # here does not mean a comment)
+  | #includedir /etc/sudoers.d
+Privilege escalation     ran      privesc.sudoers_d       11 lines: /etc/sudoers.d/scheck:# scheck
+                                                          elevated checks for ops on linux —
+                                                          generated from the compiled catalog.
+                                                          [elevated, 7 redacted]
+                                                          sudoers.d drop-ins (file:line, non-empty
+                                                          lines)
+  | /etc/sudoers.d/scheck:# scheck elevated checks for ops on linux — generated from the compiled
+  | catalog.
+  | /etc/sudoers.d/scheck:# Review, then install with: visudo -cf - < fragment && install -m 440
+  | fragment /etc/sudoers.d/scheck
+  | /etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck
+  | runs them as `sudo -n -- ...`.
+  | /etc/sudoers.d/scheck:Defaults:ops !requiretty
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] /etc/sudoers
+  | # privesc.sudoers
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -rH .
+  | /etc/sudoers.d  # privesc.sudoers_d
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -S -a  #
+  | accounts.passwd_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] ""  #
+  | mac.aa_status
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] list ruleset
+  | # fw.nft
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] -T  #
+  | sshd.config
+  | /etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: [REDACTED:kv-secret:22 bytes] bytes] status
+  | verbose  # fw.ufw
+Startup and persistence  ran      persist.cron            0 lines
+                                                          System crontab and cron.d entries
+                                                          (file:line, non-empty lines)
+  |
+  | stderr:
+  | grep: /etc/crontab: No such file or directory
+  | grep: /etc/cron.d: No such file or directory
+  |
+Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          systemd timers
+  |
+  | stderr:
+  | System has not been booted with systemd as init system (PID 1). Can't operate.
+  | Failed to connect to bus: Host is down
+  |
+Startup and persistence  ran      persist.units           23 lines: UNIT FILE
+                                                          STATE   PRESET
+                                                          Enabled systemd unit files
+  | UNIT FILE                         STATE   PRESET
+  | dbus-broker.service               enabled enabled
+  | getty@.service                    enabled enabled
+  | rpmdb-migrate.service             enabled enabled
+  | rpmdb-rebuild.service             enabled enabled
+  | sshd.service                      enabled enabled
+  | systemd-confext.service           enabled enabled
+  | systemd-homed-activate.service    enabled disabled
+  | systemd-homed.service             enabled enabled
+  | systemd-network-generator.service enabled enabled
+  | systemd-oomd.service              enabled enabled
+  | systemd-pstore.service            enabled enabled
+  | systemd-resolved.service          enabled enabled
+  | systemd-sysext.service            enabled enabled
+  | dbus.socket                       enabled enabled
+  | systemd-journald-audit.socket     enabled enabled
+  | systemd-userdbd.socket            enabled enabled
+  | reboot.target                     enabled enabled
+  | remote-cryptsetup.target          enabled enabled
+  | remote-fs.target                  enabled enabled
+  | dnf-makecache.timer               enabled enabled
+  | fstrim.timer                      enabled enabled
+  |
+  | 21 unit files listed.
+Filesystem               ran      fs.suid                 12 lines: /usr/bin/chage
+                                                          SUID binaries under system and local
+                                                          prefixes (depth-capped)
+  | /usr/bin/chage
+  | /usr/bin/newgrp
+  | /usr/bin/mount
+  | /usr/bin/umount
+  | /usr/bin/gpasswd
+  | /usr/bin/sudo
+  | /usr/bin/passwd
+  | /usr/bin/chfn
+  | /usr/bin/su
+  | /usr/bin/chsh
+  | /usr/sbin/unix_chkpwd
+  | /usr/sbin/pam_timestamp_check
+Filesystem               ran      fs.world_writable       0 lines
+                                                          World-writable files and directories
+                                                          without the sticky bit (depth-capped)
+  |
+  | stderr:
+  | find: '/etc/sudoers.d': Permission denied
+  | find: '/etc/credstore': Permission denied
+  | find: '/etc/ssh/sshd_config.d': Permission denied
+  | find: '/etc/credstore.encrypted': Permission denied
+  |
+Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          Whether auditd is active
+  |
+  | stderr:
+  | System has not been booted with systemd as init system (PID 1). Can't operate.
+  | Failed to connect to bus: Host is down
+  |
+Logging and audit        ran      log.journal_usage       Archived and active journals take up 0B in
+                                                          the file system.
+                                                          Journal disk usage
+  | Archived and active journals take up 0B in the file system.
+  | stderr:
+  | No journal files were found.
+  |
+Time synchronisation     skipped  time.timedatectl        exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          Clock, timezone and NTP synchronisation
+                                                          state
+  |
+  | stderr:
+  | System has not been booted with systemd as init system (PID 1). Can't operate.
+  | Failed to connect to bus: Host is down
+  |
+Session and shell        ran      sys.platform            Linux
+                                                          Kernel name (uname -s), used for platform
+                                                          detection
+  | Linux
+Session and shell        ran      sys.shell               /bin/bash
+                                                          Login shell of the audit session
+  | /bin/bash
+Session and shell        ran      sys.uid                 1000
+                                                          Effective uid of the audit session
+  | 1000
+Session and shell        ran      sys.uname               Linux fbf2f7a11b33 7.0.12-linuxkit #1 SMP
+                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
+                                                          aarch64 GNU/Linux
+                                                          Full kernel identification
+  | Linux fbf2f7a11b33 7.0.12-linuxkit #1 SMP PREEMPT Thu Aug 27 14:02:21 UTC 2026 aarch64 GNU/Linux
+
+Skipped (11)
+  these checks produced no usable fact; some executed but failed
+  3 were refused by sudo
+    fw.nft         sudo: a password is required (no NOPASSWD rule for this command, or nft is not
+                   installed)
+    fw.ufw         sudo: a password is required (no NOPASSWD rule for this command, or ufw is not
+                   installed)
+    mac.aa_status  sudo: a password is required (no NOPASSWD rule for this command, or aa-status is
+                   not installed)
+    remedy: install the fragment printed by `scheck sudoers`, or cache the credential with `sudo -v`
+            before the run. scheck never prompts for a password.
+  4 need a command this host does not have
+    fw.firewalld        exit 127: bash: line 1: firewall-cmd: command not found
+    mac.sestatus        exit 127: bash: line 1: sestatus: command not found
+    pkg.apt_upgradable  exit 127: bash: line 1: apt: command not found
+    pkg.zypper_lp       exit 127: bash: line 1: zypper: command not found
+    remedy: nothing to do unless you expected the tool to be installed; the subsystem it inspects
+            was not examined.
+  4 exited with an error
+    disk.crypttab     exit 1: cat: /etc/crypttab: No such file or directory
+    log.auditd        exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    persist.timers    exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    time.timedatectl  exit 1: System has not been booted with systemd as init system (PID 1). Can't
+                      operate.
+    remedy: `scheck explain <check-id>` prints the command; run it by hand to see why.
+
+assessment: none. Every line above reports what a command observed, not whether the host is
+configured safely. Posture rules and the agentic pass are not available in this build.

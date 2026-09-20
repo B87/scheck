@@ -10,8 +10,8 @@ import (
 	"github.com/b87/scheck/internal/check"
 )
 
-// SchemaVersion is MAJOR.MINOR: MINOR for an additive field, MAJOR for a
-// rename, removal or type change. Readers reject an unknown MAJOR.
+// SchemaVersion identifies the development envelope. Compatibility starts at
+// the first GitHub release (docs/SPEC.md §7.4).
 const SchemaVersion = "1.0"
 
 // Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
@@ -44,6 +44,7 @@ type Run struct {
 	DurationMS     int64           `json:"duration_ms"`
 	Status         string          `json:"status"` // complete | incomplete
 	Profile        string          `json:"profile"`
+	Assessment     string          `json:"assessment"`
 	Mode           string          `json:"mode"` // facts | agent | single-pass
 	Provider       *string         `json:"provider"`
 	Model          *string         `json:"model"`
@@ -95,6 +96,7 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 			Status:         "complete",
 			Profile:        meta.Profile,
 			Mode:           "facts",
+			Assessment:     "none",
 			ContextSources: []ContextSource{},
 			Warnings:       []string{},
 			Version:        meta.Version,

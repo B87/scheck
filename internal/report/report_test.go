@@ -56,7 +56,7 @@ func TestEnvelopeMatchesSchema(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			env := Build(sheetFor(t, name, runner.ElevateSudo), meta())
 			var buf bytes.Buffer
-			if err := WriteJSON(&buf, env); err != nil {
+			if err := WriteJSONEvidence(&buf, env, true); err != nil {
 				t.Fatal(err)
 			}
 			var doc any
@@ -96,7 +96,7 @@ func TestHostIdentityStableAndDerived(t *testing.T) {
 func TestTextRendererMentionsEveryCheck(t *testing.T) {
 	env := Build(sheetFor(t, "ubuntu", runner.ElevateSudo), meta())
 	var buf bytes.Buffer
-	if err := WriteText(&buf, env); err != nil {
+	if err := WriteText(&buf, env, Options{}); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -105,7 +105,7 @@ func TestTextRendererMentionsEveryCheck(t *testing.T) {
 			t.Errorf("%s missing from text report", id)
 		}
 	}
-	for _, want := range []string{"[sshd]", "[network]", "unavailable:", "findings: none"} {
+	for _, want := range []string{"SSH server", "Network exposure", "skipped"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing from text report:\n%s", want, out)
 		}
