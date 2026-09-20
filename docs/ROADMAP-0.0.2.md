@@ -28,6 +28,9 @@ inference). Operational features remain in [0.0.4](ROADMAP-0.0.4.md); bounded as
 remains [research](ROADMAP-RESEARCH.md). Historical milestone IDs are retained.
 Planning may proceed while 0.0.1 gates are open; 0.0.2 publication requires the 0.0.1
 release gates to be satisfied first. Product versions and report schema versions differ.
+The planned M2.6a slice in [0.0.1](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-planned)
+establishes observation references and ID-only runner execution; M4.5 records the host
+behavior this release must preserve. The M5 slices build on those contracts.
 
 ## Decisions this plan makes
 
@@ -161,8 +164,8 @@ Keep the contribution interface internal until the two real packs exercise it.
 - Make the validated catalog immutable, including nested argv/parameter slices and
   values returned to callers. Planning, runner lookup, agent menus, finding validation,
   discovery and sudoers generation consume this same composition.
-- Replace baseline's use of `Runner.RunCheck(check.Check, ...)` with ID-based execution
-  resolved by the runner. No exported path may execute a caller-supplied definition.
+- Preserve M2.6a's ID-only runner execution while replacing registry lookup with the
+  validated composition. No exported path may execute a caller-supplied definition.
 - Extract `sshd.config` for Linux and macOS and the `sshd.password_auth_enabled` and
   `sshd.root_login_enabled` findings/rules into the `sshd` pack. Leave `remote.*` checks
   and shared file primitives in core. Preserve check ordering and existing behavior.
@@ -182,7 +185,8 @@ Keep the contribution interface internal until the two real packs exercise it.
    Two catalogs can coexist in tests without global registry resets or leakage.
 3. With all packs enabled, existing fixtures retain their plans, command traces, facts,
    findings, assessments and text reports; JSON differs only by documented additive metadata
-   and volatile run fields. No renamed historical IDs or changed severities.
+   and volatile run fields. Compare against M4.5's 0.0.1 regression artifacts, preserving
+   observation links. No renamed historical IDs or changed severities.
 4. Disabling `sshd` removes its checks from the plan/menu/sudoers and prevents runner calls
    to those IDs. It removes its rules from assessment scope and records that exclusion.
    `disable_checks`, path denials and profiles still narrow the selected surface.
@@ -295,24 +299,15 @@ into security conclusions. Rules still evaluate one observation. Do not synthesi
 single “fact” by joining service, process and listener outputs to evade that boundary.
 This slice adds no generic dependency scheduler or pack-supplied execution callbacks.
 
-**Observation identity:** core assigns an immutable run-local reference to each check
-invocation/result. It records the requested check ID, parameters, execution occurrence
-and result, linking to the catalog definition and validated bindings when available.
-Retain denied/unavailable outcomes without implying they passed validation or executed. Two
-invocations remain distinct even with identical parameters; a later result never
-overwrites an earlier observation. Together with run identity, the reference is
-unambiguous in persisted reports; it is not a stable identity for cross-run comparison.
-Parameter storage follows existing policy/redaction rules and adds no raw-data channel.
-
-Baseline collection, application binding and agent calls use the same observation store.
-Findings cite observations, and the finding store validates each model excerpt against
-the exact cited observation's redacted capture. Assessments identify their supporting
-observations, or explain why none could be obtained. Application attribution references
-the binding evidence as well as the condition's evidence. Reporting and persistence keep
-these references resolvable under the existing evidence-inclusion policy; they do not
-require retaining raw captures by default. Check IDs remain visible for discovery and
-provenance. Specify the schema/tool-contract changes in this slice and apply SPEC §7.4
-versioning; do not retrofit unique executions into a map keyed only by check ID.
+**Observation identity:** reuse the store and citation contract established by
+[M2.6a](ROADMAP-0.0.1.md#m26a--pre-release-evidence-and-execution-hardening-planned).
+Application binding adds observations to the same store as baseline and agent calls;
+it does not introduce another identity scheme or a map keyed only by check ID.
+Application attribution references the binding evidence as well as the condition's
+evidence. Extend reporting and persistence with that attribution while preserving exact
+citation validation, distinct repeated observations and the existing evidence-inclusion
+policy. Specify these application additions in this slice and apply SPEC §7.4 versioning;
+the general observation/tool contract already belongs to 0.0.1.
 
 **Deliver and demonstrate:**
 
@@ -329,7 +324,7 @@ versioning; do not retrofit unique executions into a map keyed only by check ID.
   findings and coverage through the binding and observation contracts above. Preserve
   existing finding-ID merge semantics while retaining all distinct supporting observation
   references. Multiple application instances in one invocation and subject-specific
-  finding deduplication remain deferred; repeated observations are required now.
+  finding deduplication remain deferred; repeated observations reuse M2.6a's contract.
 - Read only policy-approved evidence. A project path is not a new allowed prefix; a
   deployment under `/srv` or a user's home may still be assessed from permitted runtime
   metadata, with file-based checks explicitly unavailable. Never execute `next.config.*`,
@@ -349,10 +344,9 @@ Assert labeled findings and coverage, correct attribution, redaction, unchanged 
 state and no requests to the application's HTTP endpoints. An unreadable project tree
 must not prevent reporting the runtime evidence that was collected.
 
-Exercise the same check with two parameter sets, then twice with identical parameters
-and different outputs. Assert that every observation survives, citations resolve to the
-correct execution, an excerpt found only in another observation is rejected, and JSON/persistence
-preserve attribution. Include a PID-reuse/restart fixture where observations remain
+Extend M2.6a's repeated-check and citation tests to application binding: every observation
+survives, citations resolve to the correct execution, and JSON/persistence preserve
+application attribution. Include a PID-reuse/restart fixture where observations remain
 available but application attribution cannot be established, and prove no unbounded
 recollection occurs. Disabled checks/packs and exhausted budgets must also stop dependent
 binding steps without a bypass or fabricated application assessment.
@@ -364,9 +358,10 @@ logic, generate logs or populate caches; active web testing needs a separate exp
 side-effect and target-scope contract. Do not smuggle it in as a read-only catalog command.
 
 **Spec work:** §2–§4, §6, §7.4–§7.6, §8–§9 and §11. Specify application declarations,
-parameterized baseline planning, binding ownership, observation storage and report
-attribution, plus evidence references in §5.7 and §7.3, without introducing another
-execution path or changing path-policy authority.
+parameterized baseline planning, binding ownership and application report attribution
+on M2.6a's observation contract. Update §5.7 and §7.3 where application attribution
+extends evidence references, without introducing another execution path or changing
+path-policy authority.
 
 ## M5.3 — public authoring API and an independently built example
 

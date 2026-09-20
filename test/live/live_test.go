@@ -6,6 +6,7 @@
 package live
 
 import (
+	"fmt"
 	"bytes"
 	"encoding/json"
 	"os"
@@ -81,7 +82,12 @@ func TestLiveLocalRun(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
 		t.Fatalf("%v\n%s\n%s", err, out.String(), errb.String())
 	}
-	t.Logf("status %s mode %s iterations %d ended %q usage %+v", env.Run.Status, env.Run.Mode, env.Run.Agent.Iterations, env.Run.Agent.Ended, env.Run.Usage)
+	cost := "unpriced"
+	if env.Run.Usage.CostUSD != nil {
+		cost = fmt.Sprintf("$%.4f", *env.Run.Usage.CostUSD)
+	}
+	t.Logf("status %s mode %s iterations %d ended %q input %d cache_read %d cost %s (criterion 7 record)",
+		env.Run.Status, env.Run.Mode, env.Run.Agent.Iterations, env.Run.Agent.Ended, env.Run.Usage.Input, env.Run.Usage.CacheRead, cost)
 	if env.Run.Provider != "openai-compatible" || env.Run.Mode != "agent" {
 		t.Errorf("run block: %+v", env.Run)
 	}

@@ -1,0 +1,61 @@
+version: 2
+project_name: scheck
+
+builds:
+  - id: scheck
+    main: ./cmd/scheck
+    binary: scheck
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/b87/scheck/internal/version.Version={{ .Tag }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: 'scheck_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: b87
+    name: scheck
+  draft: true
+  prerelease: auto
+  replace_existing_draft: false
+  use_existing_draft: false
+  replace_existing_artifacts: false
+  target_commitish: '{{ .Commit }}'
+  header: |
+    ## scheck {{ .Tag }}
+
+    **Draft: publication requires the completed [release checklist](https://github.com/b87/scheck/blob/{{ .Commit }}/docs/RELEASING.md).**
+
+    Commit: `{{ .Commit }}`. Report schema: **1.4** (separate from the product version).
+    Linux and macOS (`darwin` assets), each on amd64 and arm64. MIT licensed.
+    macOS binaries are unsigned and unnotarized.
+
+    Download the matching archive and `checksums.txt`. On Linux run
+    `sha256sum --ignore-missing -c checksums.txt`; on macOS run
+    `shasum -a 256 --ignore-missing -c checksums.txt`. Confirm your archive says OK,
+    then extract it with `tar -xzf ARCHIVE` and run `./scheck --version`.
+
+    Limitations: one host per run; no remediation, Windows support, additional
+    production providers, guaranteed local-only AI, or context chunking.
+    Offline rules are available with `--stop-after facts`. Coverage and evidence
+    matter: exit 0 is not a security verdict.
+
+    Before publication, replace this paragraph with links to the release workflow's
+    four native smoke results, M4.5 regression evidence, M4.6 acceptance sign-off
+    for this commit, and M2.7 live quality/adversarial/cost records. Record the
+    evaluated model and prompt version and any remaining release limitations.
+
+changelog:
+  sort: asc

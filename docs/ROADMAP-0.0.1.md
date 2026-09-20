@@ -13,13 +13,17 @@ across slices below rather than saved for the end.
 
 **Status (2026-09-20):** M0, M1 (through M1.8) and M2.1–M2.6 are committed on `main`,
 one commit per slice, `make check` green at each. M2.7's harness, suite and results
-record are committed; **its live evaluation has not been run**, so acceptance criteria
-7, 10 and 12 are undecided and the loop-versus-single-pass decision is open. Checkmarks
+record are committed; **its repeated live release evaluation remains pending**. A
+preliminary single-repeat observation is recorded under M2.7; acceptance criteria
+7, 10 and 12 remain undecided and the loop-versus-single-pass decision is open. Checkmarks
 indicate completed implementation; each slice records validation separately. M4 follows
 once the live record exists.
 
 **0.0.1 scope revision (2026-09-20):** M2 includes full-request context limits,
 real-model quality/adversarial release gates and configuration usability (M2.2a).
+M2.6a adds pre-release evidence and execution hardening before M2.7's qualifying live
+runs; it is planned, not implemented. M4.5 captures collection behavior as well as reports
+to support the later pack extraction in [0.0.2](ROADMAP-0.0.2.md).
 Existing profile behavior, regression coverage, acceptance validation and the GitHub
 release process complete the 0.0.1 scope.
 
@@ -884,7 +888,70 @@ against this machine, asserts the report shape, cost under $0.50 and no denied
 model-initiated check, but needs `SCHECK_LIVE=1` and a credential and was not
 executed in this environment. Acceptance criterion 7 is unrecorded until it is.
 
-### M2.7 — phase-2-earns-its-cost evaluation ⏳ (harness landed; live evaluation not run)
+### M2.6a — pre-release evidence and execution hardening (planned)
+
+**Depends on:** the implemented M2 tool loop. Complete before M2.7's qualifying live
+evaluation and before freezing the first published report contract. Historical slice
+IDs remain unchanged; the sequence is M2.6 → M2.6a → M2.7 live evaluation.
+
+**Outcome:** repeated parameterized checks retain independently citable evidence, and
+every caller asks the runner to execute a catalog ID. These address current behavior:
+the agent currently indexes results by check ID, so a second `text.cat` read replaces
+the first result used for citation validation. Neither fix depends on application packs.
+
+**Deliver:**
+
+- Core assigns an immutable run-local observation reference to each check invocation
+  and result. Record the requested check ID, parameters, execution occurrence and result,
+  linking to the catalog definition and validated bindings when available. Retain denied
+  and unavailable outcomes without implying they passed validation or executed. Repeated
+  calls remain distinct, including calls with identical parameters; later observations
+  never overwrite earlier ones. A reference is unique within its run, not a stable
+  cross-run identity. Parameter storage obeys the existing redaction policy.
+- Baseline and agent collection use the same observation store. Tool results expose
+  observation references; findings cite them, and `finding.Store` validates model excerpts
+  against the exact cited observation's redacted capture. Assessments identify supporting
+  observations or explain why none was obtained. Preserve finding-ID merge semantics
+  while retaining distinct supporting references. Check IDs still identify definitions.
+- Emitted and persisted reports keep observation references resolvable, including agent
+  evidence. Preserve the existing evidence-inclusion policy: raw captures are not required
+  in default JSON or persistence. Update the report schema, tool contract, prompt version,
+  mock transcripts and fixtures together; add no development-format compatibility shim.
+  Keep collected observations within existing budgets; do not truncate history silently
+  or raise limits to accommodate the new store.
+- Replace baseline's `Runner.RunCheck(check.Check, ...)` calls with ID-based execution
+  and remove that exported definition-taking path. Definition resolution remains inside
+  the runner; retain its private execution implementation and the existing registry.
+  Preserve phase-specific origin/profile checks, canary ordering and the policy pipeline.
+
+**Demo:** a fixture-backed mock session reads two different permitted files through
+`text.cat`, then reports findings citing both observations after the second read. Show
+that both references resolve in JSON and persistence and that an excerpt found only in
+the other observation is rejected. No live inference or target is needed.
+
+**Done when:** tests cover different parameters, repeated identical parameters with
+changed output, unknown references, denied/unavailable calls, cross-observation citation
+rejection, and redaction across report, audit, persistence and model input. Baseline
+findings/coverage and command traces remain unchanged; schema/golden changes are reviewed.
+Unknown catalog IDs cannot execute, no exported runner method accepts an executable
+definition, and `make check` plus relevant runner/SSH integration checks pass. M2.7's
+offline harness and transcripts use the new contract without changing frozen success
+criteria. Earlier live observations remain historical evidence, not validation of the
+changed prompt/tool contract.
+
+**Scope:** explicit pack composition, application binding, public parser contracts and
+the contribution API remain in 0.0.2, informed by M5.0's application brief. This slice
+does not introduce a plugin framework or parameterized application planning.
+
+**Spec work:** §2–§3, §4.5, §5.7–§5.8, §7.3–§7.6 and §11. Update the spec, schema and
+implementation together when implementing this slice; this roadmap is a planned change.
+
+### M2.7 — phase-2-earns-its-cost evaluation ⏳ (harness landed; repeated live evaluation pending)
+
+**Release-evaluation prerequisite:** complete M2.6a first. Record the resulting prompt/tool
+contract and build versions in the qualifying repeated runs. Preserve the frozen pass
+criteria; a preliminary run on the earlier contract does not satisfy this prerequisite.
+
 Deliver a labeled fixture suite covering clean hosts, seeded issues, and incomplete or
 misleading evidence, including cases that can only be resolved by a follow-up catalog
 check. Compare three arms over it with identical initial facts, rule findings and
@@ -953,9 +1020,29 @@ CLI features unavailable in 0.0.1 must fail explicitly rather than appear implem
 
 ### M4.5 — golden-fixture regression suite
 Deliver a committed set of golden reports (input fixtures → expected report JSON) that
-CI diffs on every change, covering at least one fixture per platform and one per
+CI diffs on every change, covering Ubuntu, Fedora and macOS and each
 0.0.1 provider (`mock` and recorded native-tool-calling adapter responses). Live model
 quality is evaluated separately in M2.7.
+
+Capture expected plans, ordered command traces, facts, findings and assessment coverage
+alongside JSON and the existing text goldens. Command traces distinguish check IDs,
+bound parameters, actual argv and outcomes, including denied calls that never execute.
+Use only policy-processed data in committed artifacts. Cover default host assessment,
+disabled checks, profile selection, incomplete evidence and M2.6a's repeated observations.
+
+Normalize only explicitly listed volatile fields, such as start times and durations.
+If observation references are generated nondeterministically, remap them consistently
+across the whole artifact, retaining occurrence order and every reference relationship.
+Do not normalize away command order, parameters, selection, coverage reasons or evidence
+links. Regeneration requires reviewing behavioral changes, not just accepting new files.
+
+**Demo:** replay the fixtures offline and obtain identical normalized artifacts; a
+deliberate command-order or coverage change produces a focused regression diff even
+when the final finding list is unchanged.
+
+**Done when:** CI checks these artifacts without target contact or model credentials,
+schema validation passes, and the fixtures preserve enough detail to verify M5.1's
+`sshd` extraction against the 0.0.1 release. No pack-aware test framework is required.
 **Spec:** §11 (ties together fixture targets, mock provider, and conformance suite into
 one CI gate).
 
@@ -968,6 +1055,13 @@ This is the 0.0.1 sign-off gate.
 **Spec:** §12, all twelve criteria.
 
 ### M4.7 — GitHub release process
+
+**Implementation prepared; hosted rehearsal pending.** GoReleaser configuration,
+CI and draft-release workflows, MIT license, artifact verification and the
+[maintainer runbook](RELEASING.md) are present. This slice remains open until an
+unpublished-tag rehearsal records successful download and execution on all four
+platforms. M4.5, M4.6 and M2.7 remain separate publication gates; no release has
+been published by this implementation.
 
 Deliver a documented, repeatable GitHub release process for `v0.0.1` and subsequent
 version tags. Add CI and a release workflow under `.github/workflows/`, plus a maintainer
@@ -1036,6 +1130,10 @@ through the documented release process.
   built so far are needed either way (M1's `--stop-after facts` mode and the tool
   surface used for confirmation checks), but a negative result means `agent.Session`'s
   multi-turn correlation is what gets cut, not the checks or the reporting.
+- **M2.6a precedes the qualifying live evaluation.** Establish observation references
+  and ID-only runner execution before spending on release evidence or publishing the
+  report contract. M4.5 then records the behavior that 0.0.2's pack extraction must
+  preserve. Application binding and extensibility design remain in M5.
 - **Configuration usability follows context ingestion.** M2.2a uses the same resolver
   as real runs and adds inspection, validation and a walkthrough before M2.3. Its
   provider-specific validation is completed with M2.6; no live model is needed to

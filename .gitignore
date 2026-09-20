@@ -6,3 +6,4 @@ coverage.*
 .DS_Store
 /scheck
 .env
+/scripts/__pycache__/

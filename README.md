@@ -14,7 +14,28 @@ skipped checks. **The model's quality has not been evaluated yet** (see
 evidence-backed candidates. This project is unreleased; interfaces may change before
 the first GitHub release.
 
-## Quick start
+## Installation
+
+Published binaries will be available from [GitHub Releases](https://github.com/b87/scheck/releases)
+for Linux and macOS on amd64 and arm64. Until the first release is published, build
+from source below. macOS assets use `darwin` in their name and are **unsigned and
+unnotarized**.
+
+Download the matching `scheck_VERSION_OS_ARCH.tar.gz` and `checksums.txt` into an
+empty directory. Verify the downloaded archive before extracting:
+
+```sh
+sha256sum --ignore-missing -c checksums.txt       # Linux
+shasum -a 256 --ignore-missing -c checksums.txt   # macOS
+```
+
+Confirm the matching archive reports `OK`, then run `tar -xzf ARCHIVE.tar.gz` and
+`./scheck --version`. Install the binary into a directory on your PATH if desired.
+On macOS, Gatekeeper may block downloaded unsigned binaries; after verifying the
+download and deciding to trust it, use macOS System Settings → Privacy & Security
+to allow the application. No Apple notarization is provided.
+
+## Build from source and quick start
 
 With the Go toolchain required by [go.mod](go.mod):
 
@@ -71,6 +92,7 @@ and partial results. For interactive inspection,
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate and its record.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.
 - [Contributor instructions](AGENTS.md): development workflow and required checks.
+- [Release runbook](docs/RELEASING.md): GoReleaser, validation evidence and manual publication.
 
 Run `make check` for vet, modernization, lint, the provider-dependency check and race
 tests. Container integration tests use `make integ` and require Docker or Podman;
