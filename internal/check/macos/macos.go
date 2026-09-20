@@ -1,4 +1,4 @@
-// Package macos registers the macOS check catalog (SPEC.md §3 baseline table).
+// Package macos registers the macOS check catalog (docs/SPEC.md §3 baseline table).
 package macos
 
 import "github.com/b87/scheck/internal/check"

@@ -1,6 +1,6 @@
 // Package runner is the single code path through which any check reaches a
 // target. Phase 1 (baseline) and phase 2 (run_check / read_file) both call
-// Run; there is no second command surface (SPEC.md §2.1, §3).
+// Run; there is no second command surface (docs/SPEC.md §2.1, §3).
 //
 // Run performs, in order: catalog lookup, typed parameter binding, symlink
 // resolution and path policy for every Path param, elevation gating, budget-
@@ -21,7 +21,7 @@ import (
 	"github.com/b87/scheck/internal/target"
 )
 
-// Elevation is how elevated checks are run (SPEC.md §8.1).
+// Elevation is how elevated checks are run (docs/SPEC.md §8.1).
 type Elevation string
 
 // Elevation modes. Root means the session already runs as uid 0.

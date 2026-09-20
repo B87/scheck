@@ -10,7 +10,7 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// globalOpts holds every flag from SPEC.md §8. Flags that belong to a later
+// globalOpts holds every flag from docs/SPEC.md §8. Flags that belong to a later
 // milestone are registered so the surface is stable, and rejected at run time.
 type globalOpts struct {
 	Format    string

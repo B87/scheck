@@ -3,7 +3,7 @@
 // A Target never receives a shell command line: it receives argv tokens that
 // come from the compiled check catalog. On the local target that contract is
 // honoured by os/exec; on SSH it is honoured by a quoter plus a canary check
-// (SPEC.md §4.3). Nothing in this package decides what may run — that is the
+// (docs/SPEC.md §4.3). Nothing in this package decides what may run — that is the
 // catalog's and the policy's job; this package only runs it and captures the
 // result within a byte cap.
 package target

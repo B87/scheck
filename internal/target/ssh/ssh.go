@@ -1,7 +1,7 @@
 // Package ssh runs catalog argv on a remote host over SSH.
 //
 // SSH hands a string to the remote login shell, so the argv contract is
-// honoured by Quote plus a runtime canary (SPEC.md §4.3): the first command
+// honoured by Quote plus a runtime canary (docs/SPEC.md §4.3): the first command
 // on any session must round-trip a string full of metacharacters byte for
 // byte, or the session aborts before anything else is sent.
 package ssh

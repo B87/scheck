@@ -1,5 +1,5 @@
 // Package sudoers generates the least-privilege NOPASSWD fragment for the
-// catalog's elevated checks (SPEC.md §8.1). The fragment is derived from the
+// catalog's elevated checks (docs/SPEC.md §8.1). The fragment is derived from the
 // catalog, so it cannot drift from what scheck actually runs; scheck prints
 // it and never installs it.
 package sudoers

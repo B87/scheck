@@ -12,7 +12,7 @@ import (
 // Placeholder syntax: a whole token equal to "{name}".
 var placeholderRe = regexp.MustCompile(`^\{([a-z][a-z0-9_]*)\}$`)
 
-// Charsets for Path and Ident kinds (SPEC.md §3). Traversal is rejected here,
+// Charsets for Path and Ident kinds (docs/SPEC.md §3). Traversal is rejected here,
 // before any policy decision, so PathPolicy only ever sees clean absolute paths.
 var (
 	pathCharsRe  = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)

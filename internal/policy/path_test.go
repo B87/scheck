@@ -2,7 +2,7 @@ package policy
 
 import "testing"
 
-// The hostile-path corpus (SPEC.md §11). Every row is a path as it would
+// The hostile-path corpus (docs/SPEC.md §11). Every row is a path as it would
 // arrive after charset validation and symlink resolution.
 func TestPathPolicyCorpus(t *testing.T) {
 	pp := NewPathPolicy([]string{"/etc/corp-secrets", "relative/ignored"})

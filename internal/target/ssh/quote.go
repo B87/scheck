@@ -11,7 +11,7 @@ const commandPrefix = "LC_ALL=C "
 // literals and parameter charsets exclude everything the shell treats
 // specially, the only character this function ever has to escape is the
 // single quote itself (present only in the canary), which keeps the input
-// domain small enough to enumerate in tests (SPEC.md §4.3).
+// domain small enough to enumerate in tests (docs/SPEC.md §4.3).
 func Quote(argv []string) string {
 	var b strings.Builder
 	b.WriteString(commandPrefix)

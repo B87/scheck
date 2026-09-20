@@ -1,4 +1,4 @@
-// Package config loads scheck.yaml (SPEC.md §9). Every knob narrows: config
+// Package config loads scheck.yaml (docs/SPEC.md §9). Every knob narrows: config
 // disables checks, denies paths and adds redactions; nothing here widens what
 // scheck may execute or reveal, and no credential is ever read from a file.
 package config

@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// Exit codes per SPEC.md §8.
+// Exit codes per docs/SPEC.md §8.
 const (
 	exitOK         = 0 // no open finding at or above the profile threshold
 	exitFindings   = 1 // findings present

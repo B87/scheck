@@ -1,4 +1,4 @@
-// Package linux registers the Linux check catalog (SPEC.md §3 baseline table).
+// Package linux registers the Linux check catalog (docs/SPEC.md §3 baseline table).
 package linux
 
 import "github.com/b87/scheck/internal/check"

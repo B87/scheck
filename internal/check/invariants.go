@@ -37,12 +37,12 @@ const (
 )
 
 // BaselineTierCap is the maximum number of on-demand checks visible under the
-// baseline profile (SPEC.md §3, tiers).
+// baseline profile (docs/SPEC.md §3, tiers).
 const BaselineTierCap = 40
 
 // literalRe is the whole character set a literal token may use. Everything
 // the POSIX shell treats specially is outside it, which is what keeps the SSH
-// quoter's input domain small (SPEC.md §4.3). An empty literal is allowed
+// quoter's input domain small (docs/SPEC.md §4.3). An empty literal is allowed
 // (`grep -rH "" dir`).
 var literalRe = regexp.MustCompile(`^[A-Za-z0-9._/,:=+%@-]*$`)
 

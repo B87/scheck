@@ -1,5 +1,5 @@
 // Package baseline is phase 1: run the platform's Baseline checks through the
-// runner and collect a fact sheet (SPEC.md §2.1). No model is involved.
+// runner and collect a fact sheet (docs/SPEC.md §2.1). No model is involved.
 package baseline
 
 import (

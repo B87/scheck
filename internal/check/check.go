@@ -1,5 +1,5 @@
 // Package check defines the check catalog: the entire set of commands scheck
-// can execute on a target, in either phase (SPEC.md §3).
+// can execute on a target, in either phase (docs/SPEC.md §3).
 //
 // A Check is a read-only command template with typed holes. The model (phase
 // 2) and the baseline runner (phase 1) both pick a check by id and bind
@@ -20,7 +20,7 @@ type Platform = target.Platform
 // Any marks a check that runs unchanged on every platform.
 const Any Platform = "any"
 
-// Profile gates which checks the model may see (SPEC.md §3, tiers).
+// Profile gates which checks the model may see (docs/SPEC.md §3, tiers).
 type Profile int
 
 // Profiles, ordered: a check is visible when MinProfile <= active profile.
@@ -128,7 +128,7 @@ const (
 	DomainText         Domain = "text"
 )
 
-// Check is one catalog entry. See SPEC.md §3 for field semantics.
+// Check is one catalog entry. See docs/SPEC.md §3 for field semantics.
 type Check struct {
 	ID          string
 	Description string // one line, rendered into the model's menu
@@ -139,7 +139,7 @@ type Check struct {
 	Parser      ParserKind
 	Baseline    bool    // runs in phase 1
 	MinProfile  Profile // model sees this check only at or above this profile
-	Elevated    bool    // needs the elevation prefix (SPEC.md §8.1)
+	Elevated    bool    // needs the elevation prefix (docs/SPEC.md §8.1)
 	Budget      Budget
 	// ExitOK lists exit codes that still count as a successful read. nil means
 	// {0}; AnyExit means every code (for `systemctl is-enabled` and friends,

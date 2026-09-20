@@ -14,7 +14,7 @@ import (
 // rename, removal or type change. Readers reject an unknown MAJOR.
 const SchemaVersion = "1.0"
 
-// Envelope is the JSON report (SPEC.md §7.4), shaped so a fleet tool can
+// Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
 type Envelope struct {
 	SchemaVersion string          `json:"schema_version"`

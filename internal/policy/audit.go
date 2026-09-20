@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// AuditEntry is one attempted check (SPEC.md §4.5). A denied call is a logged
+// AuditEntry is one attempted check (docs/SPEC.md §4.5). A denied call is a logged
 // line, never a silent drop.
 type AuditEntry struct {
 	Time       time.Time         `json:"time"`

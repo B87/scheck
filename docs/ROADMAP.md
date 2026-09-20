@@ -12,6 +12,11 @@ must be true before it's done, and which spec section it implements. "Done" alwa
 includes tests, not just code — the testing strategy in `SPEC.md` §11 is distributed
 across slices below rather than saved for the end.
 
+**Status (2026-09-20):** M0 and M1 are done, one commit per slice, on `main`. Every
+slice below carries a ✅ with what actually landed where it differs from the plan.
+Next: M2.1. The M1 pause point (real usage feedback, a second-person review of the
+security boundary) is open; see `AGENTS.md` for how to work in the repo.
+
 ---
 
 ## M0 — walking skeleton (no model)
@@ -20,7 +25,7 @@ Goal: prove the security boundary and the transport layer before a single line o
 agent code exists. Everything here is testable without any LLM and without a real SSH
 target.
 
-### M0.1 — `target.Target` over local exec
+### M0.1 — `target.Target` over local exec ✅
 Deliver `target/local`: `Exec(ctx, argv) (stdout, stderr, code, error)` via `os/exec`,
 no shell, with per-call timeout from a hardcoded budget.
 **Demo:** a throwaway `main.go` that runs `target.Local{}.Exec(ctx, []string{"uname", "-a"})` and prints the result.
@@ -29,8 +34,11 @@ truncation at a byte cap. No shell metacharacter in an argv element is ever
 special-cased — prove it by running `Exec(ctx, []string{"echo", "$(whoami)"})` and
 asserting the literal string comes back.
 **Spec:** §2, §4.
+**Landed:** `internal/target` (interface, `CapWriter`, sentinel errors) and
+`internal/target/local`. Also `internal/target/fixture`, the replay target every unit
+test uses, which the plan had under M1.2.
 
-### M0.2 — check type + catalog invariants test
+### M0.2 — check type + catalog invariants test ✅
 Deliver the `check.Check` / `check.Param` types (§3) and the invariants test that scans
 whatever catalog exists so far: no literal token contains shell metacharacters, every
 `{placeholder}` binds exactly one typed `Param`, no binary from a hardcoded write-capable
@@ -42,8 +50,11 @@ watch the invariants test fail with a specific rule name.
 violation class: metacharacter in literal, unbound placeholder, multiply-bound
 placeholder, mutating flag, disallowed binary.
 **Spec:** §3 invariants, §11.
+**Landed:** `internal/check` with `Bind` (charset, absolute path, `..` rejection) and
+`Validate` (named rules incl. `canary-count`, `baseline-tier-cap`, `bad-extract`).
+The struct gained `ExitOK`, `PathUse`, `Canary`, `Extract`, `Description` (spec §3).
 
-### M0.3 — `policy.PathPolicy`
+### M0.3 — `policy.PathPolicy` ✅
 Deliver path classification: allowed prefix / denied / sensitive-metadata-only, plus
 symlink resolution before the decision and traversal rejection at the charset level.
 **Demo:** a CLI-less test binary that takes a path on argv and prints
@@ -51,8 +62,10 @@ symlink resolution before the decision and traversal rejection at the charset le
 **Done when:** the hostile-path corpus from §11 passes — traversal, symlink escape,
 sensitive path via a resolved symlink from an allowed prefix.
 **Spec:** §4.1.
+**Landed:** `internal/policy/path.go`. Symlink resolution happens in the runner via the
+`fs.realpath` check on the target, not in the policy, since the path lives remotely.
 
-### M0.4 — redactor with markers
+### M0.4 — redactor with markers ✅
 Deliver the redaction pipeline: private keys, `AKIA…`, bearer tokens, `password=`-style
 values, `redact_extra` regexes — every match replaced with
 `[REDACTED:<rule>:<n bytes>]`, never silently dropped.
@@ -61,8 +74,11 @@ through the redactor and diff before/after.
 **Done when:** seeded-secret test passes for every rule class, and a redaction always
 leaves a marker (assert no rule produces empty output).
 **Spec:** §4.2, §11 redaction tests.
+**Landed:** `internal/policy/redact.go`, single pass over the original bytes so markers
+are never re-matched. Rules: private-key, aws-access-key, github-token, slack-token,
+bearer, jwt, kv-secret (trivial values like `password=no` are kept), `extra:<i>`.
 
-### M0.5 — budgets + audit log
+### M0.5 — budgets + audit log ✅
 Deliver `policy.Budgets` as one struct (§4.4) and the JSONL audit logger: every
 attempted check, decision, exit code, duration, output hash.
 **Demo:** run three `Exec` calls (one allowed, one denied, one that hits the hard
@@ -71,8 +87,11 @@ timeout) and `cat` the resulting audit log.
 `decision: denied:<rule>`, and the hard-timeout call is logged as `unavailable`, not
 as a crash.
 **Spec:** §4.4, §4.5.
+**Landed:** `internal/policy/{budgets,audit}.go` and `internal/runner`, the single
+enforcement point: bind → realpath → path policy → elevation → budgeted exec → redact
+→ truncate → extract → parse → audit. Phase 2's `run_check` must call `Runner.Run`.
 
-### M0.6 — first real checks + `scheck catalog`
+### M0.6 — first real checks + `scheck catalog` ✅
 Wire M0.1–M0.5 together: define ~10 real baseline checks (OS/kernel, listening sockets,
 sshd config for one platform — pick Linux first), and ship `scheck catalog` printing
 every check's id, params, and platform.
@@ -81,8 +100,12 @@ every check's id, params, and platform.
 **Done when:** acceptance criterion 2's proof starts here — the catalog invariants test
 now runs over real content, not a dummy entry.
 **Spec:** §3 baseline table (Linux rows), §8 (`--stop-after plan`, `scheck catalog`).
+**Landed:** `internal/check/common` (canary, platform, uname, uid, shell, hostname,
+which, realpath, stat, list, cat, head), a Linux starter set, `internal/baseline`,
+the `catalog` command and `--stop-after plan`. Session facts (`sys.*`) and host
+identity (`host.*`) are catalog checks, not side channels, so they are audited.
 
-### M0.7 — SSH transport + canary
+### M0.7 — SSH transport + canary ✅
 Deliver `target/ssh` and the canary check (§4.3): first command on any session is the
 round-trip string; a mismatch aborts with exit 3 before any other command is sent.
 **Demo:** `scheck ssh user@vm --stop-after plan` against a real VM, and the same command
@@ -91,8 +114,12 @@ against a container whose login shell is `fish`, showing the abort.
 with the documented pass/fail split, and the quoting function's test covers the full
 enumerable domain from the M0.6 catalog's literals and param charsets.
 **Spec:** §4.3, §11 quoting tests, acceptance criterion 11.
+**Landed:** `internal/target/ssh` and `test/containers/shell-matrix`. Two findings
+changed the canary: fish only fails on a doubled backslash, and rbash only fails on a
+path-qualified binary. Host-key algorithms are derived from `known_hosts` so the
+server offers the key type the file holds (plain and `|1|` hashed entries).
 
-### M0.8 — elevation prefix + `scheck sudoers`
+### M0.8 — elevation prefix + `scheck sudoers` ✅
 Deliver `--elevate none|sudo` as an argv prefix, `unavailable: requires elevated read`
 for gated checks under `none`, and `scheck sudoers` generating the NOPASSWD fragment
 from every `Elevated: true` catalog entry.
@@ -102,6 +129,10 @@ elevated check going from `unavailable` to populated.
 **Done when:** `sudo -n` failure (no NOPASSWD configured) degrades to `unavailable`
 rather than hanging or prompting.
 **Spec:** §8.1.
+**Landed:** `internal/sudoers` and `test/integ/sudoers_test.go` (visudo + elevated flip
+in the Ubuntu container). The runner pre-checks the binary with `sys.which` because
+sudo reports a missing binary as "a password is required". `grep -rH .` replaces the
+empty-pattern form, which sudoers cannot express.
 
 **M0 exit demo:** `scheck local --stop-after plan` and `scheck ssh user@vm --stop-after plan`
 both print a real, non-empty check plan; `scheck catalog` and `scheck sudoers` both
@@ -116,14 +147,17 @@ nothing yet writes to the target by construction).
 
 Goal: `scheck` is useful today, offline, before phase 2 exists at all.
 
-### M1.1 — macOS baseline checks
+### M1.1 — macOS baseline checks ✅
 Port every macOS row of the baseline table (§3) through the M0 machinery.
 **Demo:** `scheck local --stop-after facts` on a Mac.
 **Done when:** platform detection picks the right check set automatically; fixture
 tests exist for macOS parsing (no live Mac required in CI).
 **Spec:** §3 baseline table (macOS rows).
+**Landed:** `internal/check/macos`, 33 checks visible at the baseline profile;
+`testdata/fixtures/macos` recorded from a developer Mac and scrubbed.
+`host.platform_uuid` uses `Extract` to keep one line of `ioreg` output.
 
-### M1.2 — remaining Linux baseline checks
+### M1.2 — remaining Linux baseline checks ✅
 Fill in the rest of the Linux baseline table (accounts, sudoers, persistence units,
 SUID scan, logging, time sync) — M0.6 only did a starter subset.
 **Demo:** `scheck local --stop-after facts` on Ubuntu and on Fedora, diffing the
@@ -131,8 +165,12 @@ fact sheet shape between distros (apt vs. dnf pending-updates parsing).
 **Done when:** fixture targets exist for both distros; a probe failure on one
 (`ufw` absent on a `firewalld` box) shows up as `unavailable: <reason>`, never fatal.
 **Spec:** §3 baseline table (Linux rows), acceptance criterion 1 (Ubuntu + Fedora).
+**Landed:** `internal/check/linux`, 38 checks at the baseline profile;
+`testdata/fixtures/{ubuntu,fedora}` recorded from `test/containers` via
+`make fixtures`. `ExitOK`/`AnyExit` cover `dnf check-update` (100), `find` (1),
+`systemctl is-*`.
 
-### M1.3 — parsers (kv / lines / json / raw)
+### M1.3 — parsers (kv / lines / json / raw) ✅
 Deliver the four parser kinds as a tested, reusable component rather than ad hoc
 per-check string munging — this should have been factored out already by M1.2, so this
 slice is really "extract and harden" plus edge-case tests (empty output, truncated
@@ -141,8 +179,10 @@ output, malformed json from a check that unexpectedly changed format upstream).
 **Done when:** a malformed-input fixture for each parser kind degrades to
 `unavailable: parse error`, never a panic.
 **Spec:** §3 (`Parser` field).
+**Landed:** `internal/check/parse.go`. `kv` splits on the first of `=`, `:`, space or
+tab (needed for `sshd -T`), skips comments and redaction/truncation marker lines.
 
-### M1.4 — report envelope + text/JSON renderers
+### M1.4 — report envelope + text/JSON renderers ✅
 Deliver the `schema_version`-tagged envelope (§7.4): `host`, `run`, `facts`, empty
 `findings` (phase 2 doesn't exist yet, so this is always `[]`). Text and JSON renderers.
 **Demo:** `scheck local --stop-after facts --format json | jq .host` and
@@ -150,8 +190,10 @@ Deliver the `schema_version`-tagged envelope (§7.4): `host`, `run`, `facts`, em
 **Done when:** `host.id` is stable across two consecutive runs on the same machine;
 JSON validates against a schema doc committed alongside the renderer.
 **Spec:** §7.4, acceptance criterion 4.
+**Landed:** `internal/report` and `docs/report-schema.json`, validated in tests with
+`santhosh-tekuri/jsonschema`. `run.mode` is `facts` in this milestone.
 
-### M1.5 — run persistence
+### M1.5 — run persistence ✅
 Deliver the state directory writer: every run lands at
 `<state-dir>/runs/<host.id>/<started>.json`, honoring `--state-dir` / `--no-persist`,
 redacted the same as the report.
@@ -160,12 +202,19 @@ two persisted files by hand to confirm the shape that `scheck diff` will need la
 **Done when:** persistence never blocks the run (a full disk degrades to a logged
 warning, not a failure).
 **Spec:** §7.4.
+**Landed:** `internal/state` (atomic temp+rename, mode 0600, `run.persisted` flag) and
+the end-to-end redaction test over report, audit log and persisted run.
 
 **M1 exit demo:** `scheck local --stop-after facts` and `scheck ssh user@vm --stop-after facts`
 produce a complete, correctly-shaped report with zero API key configured, satisfying
 acceptance criterion 4 outright. This is a shippable tool on its own — worth flagging to
 whoever's tracking scope, since it's a natural place to pause and get real usage
 feedback before M2 adds cost and variance.
+
+**M1 exit evidence (2026-09-20):** `test/integ/facts_test.go` runs `scheck ssh
+--stop-after facts` against the Ubuntu and Fedora containers, validates the report
+against the schema, checks every audited argv is a catalog binding, and asserts an
+empty `docker diff` afterwards. `make check` (vet, fix, lint, race tests) is green.
 
 ---
 

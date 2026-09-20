@@ -1,4 +1,4 @@
-// Package report holds the run envelope (SPEC.md §7.4) and its renderers.
+// Package report holds the run envelope (docs/SPEC.md §7.4) and its renderers.
 package report
 
 import (

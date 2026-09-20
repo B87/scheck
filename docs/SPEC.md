@@ -4,7 +4,7 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: draft v0.2 · Language: Go · Inference: provider-agnostic (default `anthropic` /
+Status: v0.3 — M0 and M1 implemented (2026-09-20), M2+ design · Language: Go · Inference: provider-agnostic (default `anthropic` /
 `claude-opus-5`; OpenAI-compatible and local models supported)
 
 **Changes from v0.1** (from design review):
@@ -32,6 +32,25 @@ Status: draft v0.2 · Language: Go · Inference: provider-agnostic (default `ant
   the catalog is tiered by profile.
 - Elevation is `sudo -n` only, configured as `elevate:` with a `scheck sudoers`
   generator for least-privilege grants (§8.1).
+
+**Changes from v0.2** (from building M0 and M1; see `ROADMAP.md`):
+
+- `check.Check` gained `Description`, `ExitOK`, `PathUse`, `Canary` and `Extract` (§3).
+  The first two are needed by the model menu and by checks whose exit code is the
+  answer; the last three are part of the security boundary and are enforced by the
+  invariants test.
+- The canary string and the `remote_shell` mechanism are pinned down (§4.3): the string
+  carries a doubled backslash so fish is detected, and is printed by `/usr/bin/printf`
+  so rbash is detected.
+- Redaction runs before truncation over a slightly larger capture window (§4.2), so a
+  secret straddling the cap is replaced rather than leaked as a prefix.
+- The runner substitutes `fs.stat` for a content read of a sensitive path (§4.1) and
+  runs a `which` pre-check before an elevated command (§8.1).
+- Phase 1 alone has exit codes `0|2|3` and reports `mode: "facts"` (§7.4, §8).
+- `scheck sudoers` uses `grep -rH .` rather than an empty-string pattern, because sudoers
+  cannot express an empty argument (§8.1).
+- A hidden `--record-fixtures DIR` flag and a fixture manifest format exist for tests (§11).
+- All packages live under `internal/`; the security boundary is not importable.
 
 ---
 
@@ -128,16 +147,21 @@ target, in either phase.
 package check
 
 type Check struct {
-    ID        string            // "sshd.config", "fs.suid_scan", "pkg.pending_updates"
-    Platform  Platform          // macos | linux | any
-    Domain    string            // for chunking and --only filtering
-    Argv      []string          // literal tokens; "{name}" placeholders bind Params
-    Params    []Param           // typed; every placeholder must bind exactly one Param
-    Parser    Parser            // raw | lines | kv | json
-    Baseline  bool              // runs in phase 1
-    MinProfile Profile          // baseline | hardened; the model only sees checks at or below the active profile
-    Elevated  bool              // needs elevation (§8.1); otherwise "unavailable: requires elevated read"
-    Budget    Budget            // per-check overrides, bounded by policy.Budgets (§4.4)
+    ID          string          // "sshd.config", "fs.suid", "pkg.apt_upgradable"
+    Description string          // one line, rendered into the model's menu
+    Platform    Platform        // macos | linux | any
+    Domain      Domain          // for chunking and --only filtering
+    Argv        []string        // literal tokens; a token that is exactly "{name}" binds a Param
+    Params      []Param         // typed; every placeholder must bind exactly one Param
+    Parser      ParserKind      // raw | lines | kv | json
+    Baseline    bool            // runs in phase 1
+    MinProfile  Profile         // baseline | hardened; the model only sees checks at or below the active profile
+    Elevated    bool            // needs elevation (§8.1); otherwise "unavailable: requires elevated read"
+    Budget      Budget          // per-check overrides, bounded by policy.Budgets (§4.4)
+    ExitOK      []int           // exit codes that are a successful read; nil = {0}, AnyExit = every code
+    PathUse     PathUse         // content | metadata: what a check with a Path param returns (§4.1)
+    Canary      bool            // the one entry whose literal contains metacharacters (§4.3)
+    Extract     string          // optional regexp with one group; only the group is kept as output
 }
 
 type Param struct {
@@ -150,10 +174,20 @@ type Param struct {
 }
 ```
 
-**Invariants, enforced by a test over the whole catalog:**
+`ExitOK` exists because a non-zero exit is often the answer, not a failure:
+`dnf check-update` returns 100 when updates exist, `systemctl is-enabled` returns 1 for
+disabled. `Extract` exists for chatty commands (`ioreg`) whose one useful line should
+be all the model sees. `PathUse` lets the runner substitute `fs.stat` for a content
+read of a sensitive path (§4.1). `Canary` exempts exactly one entry from the
+metacharacter invariant (§4.3).
+
+**Invariants, enforced by a test over the whole catalog** (`internal/check/invariants.go`,
+run over every registered check by `internal/check/all`; each rule has a name that
+appears in the failure):
 
 - Every `Argv` token is either a literal or a single `{name}` placeholder. No token is
-  built by concatenation. No literal token contains shell metacharacters.
+  built by concatenation. No literal token contains shell metacharacters. Exactly one
+  entry carries `Canary: true` and is exempt from the metacharacter rule.
 - No check names a binary that writes, and no literal flag mutates (`find` never has
   `-exec`/`-delete`; `systemctl` only `is-*`/`list-*`/`show`; package managers only
   query subcommands). Because flags are literals, this is checked once at catalog
@@ -175,13 +209,18 @@ type Param struct {
 | Firewall | `socketfilterfw --getglobalstate` (+`--getblockall`) | `ufw status`, `firewall-cmd --state`, `nft list ruleset` |
 | Listening sockets | `lsof -nP -iTCP -sTCP:LISTEN` | `ss -tulpnH` |
 | sshd config | `sshd -T` | `sshd -T` |
-| Accounts | `dscl . -list /Users UniqueID` | `/etc/passwd`; `/etc/shadow` via metadata-only policy (§4.1) |
-| Privilege escalation | `/etc/sudoers`, `/etc/sudoers.d/*` | same |
-| Remote access | `systemsetup -getremotelogin`, screen sharing plist | `systemctl is-enabled sshd vnc*` |
-| Persistence units | `launchctl list`, `/Library/Launch*` | `systemctl list-unit-files --state=enabled`, cron dirs |
+| Accounts | `dscl . -list /Users UniqueID`, admin group | `/etc/passwd`; `/etc/shadow` via metadata-only policy (§4.1); `passwd -S -a` (elevated) |
+| Privilege escalation | `/etc/sudoers`, `grep -rH . /etc/sudoers.d` (elevated) | same |
+| Remote access | `systemsetup -getremotelogin`, `launchctl print-disabled system` | `systemctl is-enabled ssh sshd` |
+| Persistence units | `launchctl list`, `/Library/Launch*` | `systemctl list-unit-files --state=enabled`, timers, cron dirs |
 | SUID / world-writable | `find` on `/usr/local`, `/opt`, PATH dirs (depth-capped) | same |
 | Logging / audit | `log config --status` | `systemctl is-active auditd`, `journalctl --disk-usage` |
 | Time sync | `systemsetup -getusingnetworktime` | `timedatectl` |
+| Host identity | `ioreg -rd1 -c IOPlatformExpertDevice` (`Extract` IOPlatformUUID) | `/etc/machine-id` |
+| Session | `uname -s`, `id -u`, `printenv SHELL`, canary (§4.3) | same |
+
+The exact argv of every entry is the catalog itself (`internal/check/{common,linux,macos}`),
+printed by `scheck catalog`. The table is the intent; the code is the contract.
 
 **On-demand checks** (`Baseline: false`, callable by the model) are parameterised
 variants: `fs.stat {path}`, `fs.list {path}`, `text.head {path} {lines}`,
@@ -225,6 +264,14 @@ Applies to every `Path`-typed parameter in every check and to `read_file` identi
 
 The deny list is compiled in. Config may add to it (`deny_paths:`), never remove.
 
+**Metadata-only mechanics.** `PathPolicy.Decide(resolved)` returns `allow`,
+`deny(rule)` or `metadata-only(rule)`. The runner resolves a `Path` param with
+`fs.realpath` on the target before deciding, so a symlink from an allowed prefix into a
+sensitive file is judged by where it points. Under `metadata-only`, a check declared
+`PathUse: content` is rewritten to the platform's `fs.stat` check and the result is
+tagged `reason: metadata-only:<rule>`; the audit line records the substituted argv.
+This is how the baseline learns `/etc/shadow`'s mode and owner without ever reading it.
+
 ### 4.2 Redaction
 
 Every byte of check output passes the redactor before the model, the report, the audit
@@ -241,6 +288,14 @@ The v0.1 "base64 blobs over N bytes" rule is dropped: it removes certificates an
 payloads the model legitimately needs. Base64 is redacted only inside a matched key or
 token context.
 
+**Redact, then truncate.** The runner captures up to `PerCheckOutput` plus a 4 KiB
+slack window, runs the redactor over the captured bytes in a single pass over the
+original input (so a marker is never re-matched by a later rule), then cuts at
+`PerCheckOutput` with `[TRUNCATED:<n bytes>]`. A cut never lands inside a marker. A
+secret straddling the cap is therefore replaced before the cut instead of leaking a
+prefix. Nothing downstream (report, audit log, persisted run, `-vv`) sees
+pre-redaction bytes; the audit log stores a hash of the redacted output.
+
 ### 4.3 The SSH trust boundary
 
 On the local target, `Exec(argv)` is `os/exec` with no shell. On SSH, the protocol hands
@@ -251,13 +306,24 @@ honoured by a quoting function plus verification:
 - Argv is quoted for POSIX `sh` by one audited function. Because catalog tokens are
   literals or strictly-charset parameters, the quoter's input domain is small and
   fully enumerable in tests.
-- **Canary first.** The first command on any SSH session is a catalog check whose output
-  must round-trip a fixed string containing quotes, spaces, `$`, backticks and `;`. If
-  the echo does not match byte-for-byte, the session aborts with exit code 3 before any
-  other command runs. This detects a non-POSIX or restricted login shell rather than
-  assuming one.
-- The report header records `transport: local|ssh` and, for SSH, the remote `$SHELL`
-  and canary result.
+- **Canary first.** The first command on any SSH session is the `sys.canary` catalog
+  check, `/usr/bin/printf %s <string>`, whose output must round-trip a fixed string
+  containing quotes, spaces, `$`, backticks, `;`, `|`, globs and a doubled backslash.
+  If the echo does not match byte-for-byte, the session aborts with exit code 3 before
+  any other command runs, and the attempt is audited as `denied:canary`. Two details
+  are load-bearing and were found in the shell matrix test: fish collapses `\\`
+  inside single quotes, which is what makes it fail (fish otherwise round-trips our
+  quoting); rbash refuses a command name containing `/`, which is why the binary is
+  path-qualified. Every command is prefixed `LC_ALL=C` so parsers see one locale.
+- The quoter wraps every token in single quotes, spelling an embedded quote as `'\''`.
+  Its test runs every literal in the catalog, samples of the `Path` and `Ident`
+  charsets, and the canary string through a local `sh -c`.
+- The report header records `transport: local|ssh` and, for SSH, the remote login shell
+  (from the `sys.shell` check, `printenv SHELL`, so no `$` expansion is needed) and the
+  canary result. Host keys are verified strictly against `~/.ssh/known_hosts`; an
+  unknown host exits 3 with an `ssh-keyscan` hint. There is no bypass flag.
+  Authentication is an `--identity` file or the `SSH_AUTH_SOCK` agent; password
+  authentication is not offered.
 
 This is stated plainly rather than hidden: local and SSH have the same UX and the same
 catalog, but the SSH boundary rests on quoting plus a runtime check, not on the absence
@@ -290,7 +356,9 @@ bill of health.
 Every attempted check is written to `--audit-log` as JSONL with check id, bound
 parameters, resolved argv, decision (`run | denied:<rule> | unavailable:<reason>`),
 exit code, duration, and output hash. A denied call returns an error `tool_result` to
-the model naming the rule — never a silent drop.
+the model naming the rule — never a silent drop. Phase 1 writes the same lines; the
+canary appears as `run` or `denied:canary`, and a metadata-only substitution records
+the `fs.stat` argv that actually ran.
 
 ---
 
@@ -702,7 +770,7 @@ a translation step, even though v1 audits one host per invocation:
   },
   "run": {
     "started": "…", "duration_ms": 41200, "status": "complete|incomplete",
-    "profile": "baseline", "mode": "agent|single-pass",
+    "profile": "baseline", "mode": "facts|agent|single-pass",
     "provider": "…", "model": "…", "effort": "high", "native": {…}, "limits": {…},
     "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
     "context_sources": [{"source": "…", "sha256": "…", "truncated": false}]
@@ -713,7 +781,10 @@ a translation step, even though v1 audits one host per invocation:
 ```
 
 `host.id` is stable across runs and hostname changes; it is the key a fleet
-aggregator or a drift diff would join on. Findings are a flat array keyed by
+aggregator or a drift diff would join on. `run.mode` is `facts` when the run stopped
+after phase 1 (`--stop-after facts`); in that mode `provider`, `model`, `effort`,
+`native`, `limits` and `context_sources` are null or empty, `usage` is all zeros, and
+`findings` is `[]`. The envelope is validated against `docs/report-schema.json` in tests. Findings are a flat array keyed by
 catalog id, never nested under a host, so concatenation is trivial.
 
 `schema_version` is `MAJOR.MINOR`, bumped on any change to this envelope: MINOR for
@@ -765,7 +836,13 @@ time; the catalog (`scheck catalog`) shows everything phase 2 *could* run.
 
 Exit codes: `0` no open finding at or above the profile threshold · `1` findings present ·
 `2` run incomplete (check/agent/transport failure, budget exhausted) · `3` usage or policy
-error (including a failed SSH canary or an unknown accepted-risk id).
+error (including a failed SSH canary, an unknown host key, or an unknown accepted-risk id).
+
+Under `--stop-after facts` there are no findings, so the run exits `0` when the fact
+sheet was produced (individual `unavailable` checks do not change that), `2` when the
+transport failed or `RunTimeout` cut the run, `3` for usage, config or canary errors.
+Flags that belong to a later milestone are registered from day one and exit `3` with
+"not available in this build" until that milestone lands.
 
 ### 8.1 Elevation
 
@@ -780,6 +857,17 @@ argv; the catalog invariants apply to the full argv after the prefix.
 | `none` (default) | Elevated checks report `unavailable: requires elevated read`. The run continues. |
 | `sudo` (`--sudo` is shorthand) | Prefix `sudo -n --`. Non-interactive only: `scheck` never prompts for, reads, or transmits a password. If sudo would prompt, the check is `unavailable` with the sudo error as the reason. |
 
+Before prefixing, the runner runs the platform's `sys.which` check for the binary,
+because `sudo -n` reports a missing binary as "a password is required" and that
+message would mislead the operator. When `which` itself is absent (minimal Fedora),
+the runner assumes the binary is present and lets sudo decide. A sudo failure is
+reported as `unavailable: <sudo stderr> (no NOPASSWD rule for this command, or X is not
+installed)`.
+
+To exercise `--sudo` on a workstation where sudo prompts, either cache the credential
+first (`sudo -v && scheck local --sudo …`, valid for the tty's timestamp window) or
+install the `scheck sudoers` fragment.
+
 Running the session as root (`scheck ssh root@host`) needs no prefix and is recorded as
 `elevation: root` in the header. The prefix design leaves room for `doas`, `run0`
 or a custom prefix later without touching the catalog or the loop; they are out of
@@ -790,7 +878,11 @@ exactly the argv of every `Elevated: true` check on the given platform, as liter
 command lines with their fixed flags. Parameterised elevated checks are listed with
 sudo's wildcard syntax limited to the parameter's charset. `scheck` prints the fragment
 and never installs it. The fragment is regenerated from the catalog, so it cannot drift
-from what `scheck` actually runs.
+from what `scheck` actually runs. Binaries are resolved to absolute paths from a
+per-platform table because sudoers requires them; generation fails on an unknown
+binary rather than guessing. Because sudoers cannot express an empty argument, the
+sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also sets
+`Defaults:<user> !requiretty`, since `scheck ssh` allocates no tty.
 
 ---
 
@@ -828,6 +920,9 @@ read a key from the config file.
 
 ## 10. Milestones
 
+Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
+`ROADMAP.md` for the per-slice record. M2 is next.
+
 - **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
   and invariants test, `policy` (path, redaction, budgets), audit log, elevation
   prefix, `scheck local --stop-after plan`, `scheck catalog`, `scheck sudoers`. No model.
@@ -861,7 +956,19 @@ read a key from the config file.
   containers, asserting abort on the ones that fail.
 - **Fixture targets.** A `target.Target` implementation backed by recorded
   stdout/stderr/exit-code fixtures per platform. Check parsing and report rendering
-  are tested with zero network and zero API calls.
+  are tested with zero network and zero API calls. A fixture is a directory with
+  `manifest.yaml` (`platform`, then `execs: [{argv, stdout|stdout_file,
+  stderr|stderr_file, code, sleep}]`); an argv with no recording replays exit 127,
+  which models a missing binary. Fixtures are recorded from real targets with the
+  hidden `--record-fixtures DIR` flag, which captures post-redaction bytes only;
+  `make fixtures` re-records `testdata/fixtures/{ubuntu,fedora}` from the containers in
+  `test/containers`. The macOS fixture was recorded from a developer machine and
+  scrubbed of hostname, user and serial numbers.
+- **Integration tests** (`make integ`, build tag `integration`, need Docker or Podman)
+  cover what fixtures cannot: the canary matrix, `visudo -cf` on the generated
+  fragment plus an elevated run flipping `sshd.config` to populated, and
+  `scheck ssh --stop-after facts` against Ubuntu and Fedora with schema validation and
+  an empty `docker diff` afterwards (acceptance criterion 3).
 - **Severity tests.** Table-driven: (finding id, structured context) → expected
   severity, adjustments and status. `--ignore-context` asserted to equal base severity
   exactly.

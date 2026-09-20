@@ -59,7 +59,7 @@ func NewRedactor(extra []string) (*Redactor, error) {
 }
 
 // Marker is the text that replaces a redacted span. It is never empty, so a
-// reader can always tell that something was there (SPEC.md §4.2).
+// reader can always tell that something was there (docs/SPEC.md §4.2).
 func Marker(rule string, n int) string {
 	return fmt.Sprintf("[REDACTED:%s:%d bytes]", rule, n)
 }
