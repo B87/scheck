@@ -25,6 +25,8 @@ type globalOpts struct {
 	BaseURL         string
 	LocalOnly       bool
 	Effort          string
+	Transcript      string
+	MaxContext      int
 	Context         []string
 	IgnoreCtx       bool
 	StopAfter       string
@@ -67,11 +69,13 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&opts.Elevate, "elevate", "", "elevation mechanism: none|sudo (default none)")
 	pf.BoolVar(&opts.Sudo, "sudo", false, "shorthand for --elevate sudo")
 	pf.StringVar(&opts.Only, "only", "", "category filter, comma-separated")
-	pf.StringVar(&opts.Provider, "provider", "", "anthropic|openai-compatible|ollama")
+	pf.StringVar(&opts.Provider, "provider", "", "openai-compatible|mock (anthropic, ollama: post-v1)")
 	pf.StringVar(&opts.Model, "model", "", "model name")
 	pf.StringVar(&opts.BaseURL, "base-url", "", "provider base URL")
 	pf.BoolVar(&opts.LocalOnly, "local-only", false, "refuse any provider that leaves the machine")
 	pf.StringVar(&opts.Effort, "effort", "", "low|medium|high|max")
+	pf.StringVar(&opts.Transcript, "transcript", "", "mock provider: transcript file to replay")
+	pf.IntVar(&opts.MaxContext, "max-context", 0, "declare the model's context window in tokens when the adapter cannot know it")
 	pf.StringArrayVar(&opts.Context, "context", nil, "operator context: FILE | DIR | note:TEXT | target[:PATH] (repeatable)")
 	pf.BoolVar(&opts.IgnoreCtx, "ignore-context", false, "no context in the prompt, no severity adjustment")
 	pf.StringVar(&opts.StopAfter, "stop-after", "", "context|plan|facts: print that stage and exit")
@@ -112,6 +116,7 @@ func newRootCmd() *cobra.Command {
 		newCatalogCmd(opts),
 		newExplainCmd(opts),
 		newSudoersCmd(opts),
+		newProvidersCmd(opts),
 	)
 	return root
 }

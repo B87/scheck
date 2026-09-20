@@ -9,10 +9,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	_ "github.com/b87/scheck/internal/check/all" // the complete catalog
 	"github.com/b87/scheck/internal/config"
+	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
@@ -37,10 +40,12 @@ type session struct {
 	canary   string // ok | fail | n/a
 }
 
-// newSession loads config, applies flags (last wins), and builds the policy
-// objects. The target is constructed by the caller through mk because it
-// needs the capture limit from the budgets.
-func (o *globalOpts) newSession(mk func(policy.Budgets) (target.Target, error)) (*session, error) {
+// defaultProvider is the v1 production adapter (docs/SPEC.md §5.2).
+const defaultProvider = "openai-compatible"
+
+// loadConfig merges the file chain and overlays the flags that were set
+// (last wins), then validates. It is the one resolver every command uses.
+func (o *globalOpts) loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, usageErr("%v", err)
@@ -57,11 +62,46 @@ func (o *globalOpts) newSession(mk func(policy.Budgets) (target.Target, error)) 
 	if o.StateDir != "" {
 		cfg.StateDir = o.StateDir
 	}
+	if o.Provider != "" {
+		cfg.Provider = o.Provider
+	}
+	if o.Model != "" {
+		cfg.Model = o.Model
+	}
+	if o.BaseURL != "" {
+		cfg.BaseURL = o.BaseURL
+	}
+	if o.Effort != "" {
+		cfg.Effort = o.Effort
+	}
+	if o.MaxContext != 0 {
+		cfg.MaxContext = o.MaxContext
+	}
+	_ = cmd
 	if err := cfg.Validate(); err != nil {
 		return nil, usageErr("%v", err)
 	}
 	for _, src := range cfg.Sources {
 		o.logf(1, "config: loaded %s", src)
+	}
+	return cfg, nil
+}
+
+// providerConfig is what an adapter is built from: the operator's selection,
+// never a credential (docs/SPEC.md §9).
+func (o *globalOpts) providerConfig(cfg *config.Config) llm.Config {
+	effort, _ := llm.ParseEffort(cfg.Effort)
+	return llm.Config{Model: cfg.Model, BaseURL: cfg.BaseURL, MaxContext: cfg.MaxContext,
+		Transcript: o.Transcript, Effort: effort}
+}
+
+// newSession loads config, applies flags (last wins), and builds the policy
+// objects. The target is constructed by the caller through mk because it
+// needs the capture limit from the budgets.
+func (o *globalOpts) newSession(cmd *cobra.Command, mk func(policy.Budgets) (target.Target, error)) (*session, error) {
+	cfg, err := o.loadConfig(cmd)
+	if err != nil {
+		return nil, err
 	}
 	if cfg.Provider != "" || cfg.Model != "" || !cfg.Context.IsZero() {
 		o.logf(1, "config: provider/model/context are ignored in this build (phase 1)")

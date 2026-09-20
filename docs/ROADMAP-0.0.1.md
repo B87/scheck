@@ -495,7 +495,7 @@ because this is where a phase-2 implementation is most likely to breach one:
   `docs/report-schema.json` and regenerates the golden reports in the same commit
   (§7.4).
 
-### M2.1 — `llm` interface, `mock` provider, `scheck providers`
+### M2.1 — `llm` interface, `mock` provider, `scheck providers` ✅
 Deliver the interface exactly as specified in §5.1 (`Stream`, package-level `Complete`,
 `Limits`, `Native`), the `mock` provider that replays a recorded transcript file, and
 `scheck providers` (§8), which lists what is configured with each one's `Limits` and
@@ -515,6 +515,27 @@ provider SDK import — enforced by a `go list` dependency check in CI, not by a
 review comment. The §11 provider conformance table exists and is green for `mock`, so
 every later adapter is written against a suite that already runs.
 **Spec:** §5.1, §5.2 selection, §8.
+
+**Landed (2026-09-20).** `internal/llm` (`llm.go`: the contract, `Complete`/`Drain`,
+classified `Error`; `tokens.go`: `Estimate` and `CheckFit`; `registry.go`:
+`Register`/`Build`/`Providers`), `internal/llm/mock` (transcript replay with `fail`
+and `expect` turns, records every request), `internal/llm/conformance` (the §11 table
+as a `Harness`-driven suite), `internal/llm/all` (links adapters, registers the
+deferred names), `cmd/scheck/providers.go`, `scripts/depcheck.sh` wired into `make
+check`, and `docs/eval/phase2-criteria.md`.
+
+- `Provider` gained `Native()`; `scheck providers` builds each adapter from the current
+  configuration without I/O and prints its status, limits and native set, never a
+  credential value. `openai-compatible` is listed as unavailable until M2.6 so the
+  default selection fails with the same message as any other missing adapter.
+- The conformance suite is green for `mock`; every later adapter is written against a
+  suite that already runs.
+
+**Validation.** `make check` green including `depcheck`; `internal/llm` tests cover
+the estimate's monotonicity and the fit check's three answers (unknown limit is a
+configuration error, overflow, fit) and usage accumulation; the mock's transcript test
+drives a three-turn tool-calling exchange with `expect` assertions and exhaustion;
+`cmd/scheck` asserts every registered provider is listed and no credential is printed.
 
 ### M2.2 — operator context: ingestion and merge (no model)
 Deliver `--context` for all four source forms (§6.1) plus the two implicit sources

@@ -34,6 +34,7 @@ type Config struct {
 	Model         string               `yaml:"model"`
 	BaseURL       string               `yaml:"base_url"`
 	Effort        string               `yaml:"effort"`
+	MaxContext    int                  `yaml:"max_context"`
 	AllowEgress   *bool                `yaml:"allow_egress"`
 	Profile       string               `yaml:"profile"`
 	Elevate       string               `yaml:"elevate"`
@@ -91,6 +92,9 @@ func (c *Config) overlay(o *Config) {
 	setIf(&c.Model, o.Model)
 	setIf(&c.BaseURL, o.BaseURL)
 	setIf(&c.Effort, o.Effort)
+	if o.MaxContext != 0 {
+		c.MaxContext = o.MaxContext
+	}
 	setIf(&c.Profile, o.Profile)
 	setIf(&c.Elevate, o.Elevate)
 	setIf(&c.StateDir, o.StateDir)

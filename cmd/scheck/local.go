@@ -29,7 +29,7 @@ func newLocalCmd(opts *globalOpts) *cobra.Command {
 			if err := opts.notInPhase1(cmd); err != nil {
 				return err
 			}
-			sess, err := opts.newSession(func(b policy.Budgets) (target.Target, error) {
+			sess, err := opts.newSession(cmd, func(b policy.Budgets) (target.Target, error) {
 				return local.New(b.CaptureLimit()), nil
 			})
 			if err != nil {

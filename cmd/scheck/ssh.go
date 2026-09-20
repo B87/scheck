@@ -38,7 +38,7 @@ func newSSHCmd(opts *globalOpts) *cobra.Command {
 				return err
 			}
 			var st *ssh.Target
-			sess, err := opts.newSession(func(b policy.Budgets) (target.Target, error) {
+			sess, err := opts.newSession(cmd, func(b policy.Budgets) (target.Target, error) {
 				return nil, nil // placeholder; the target needs config, built below
 			})
 			if err != nil {

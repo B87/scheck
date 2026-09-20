@@ -2,7 +2,7 @@ BIN     := bin/scheck
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/b87/scheck/internal/version.Version=$(VERSION)
 
-.PHONY: build test lint vet fix check integ fixtures clean
+.PHONY: build test lint vet fix depcheck check integ fixtures clean
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o $(BIN) ./cmd/scheck
@@ -18,7 +18,12 @@ fix:
 lint:
 	golangci-lint run ./...
 
-check: vet fix lint test
+# agent, policy, check, finding and report must not depend on any provider
+# adapter or SDK (docs/SPEC.md §5.1).
+depcheck:
+	./scripts/depcheck.sh
+
+check: vet fix lint depcheck test
 
 # Integration tests need docker or podman; see test/containers.
 integ:

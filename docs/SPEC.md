@@ -131,6 +131,19 @@ Status: v0.5 — M0, M1, M1.6, M1.7 and M1.8 implemented (2026-09-20), M2+ desig
 - M2 owns request-size guards before every model call, preserving evidence and
   reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
 
+**Changes from implementing M2.1 (2026-09-20):**
+
+- `llm.Provider` gained `Native()` (§5.1): the roadmap delivers `Native` alongside
+  `Limits`, and `scheck providers` has to print it without a request. `Stream` is
+  specified as text deltas, complete tool-call events and one `Done` event; provider
+  failures are classified (`llm.Error`) so the loop ends a run without knowing the
+  provider. `llm.Register`/`llm.Build` and `internal/llm/all` are the selection
+  mechanism, and `make depcheck` enforces the no-provider-dependency rule.
+- Token accounting is a documented conservative bound in `llm` (§5.3) rather than a
+  per-model tokenizer; `max_context:` / `--max-context` declare the window when the
+  adapter cannot know it.
+- `docs/eval/phase2-criteria.md` freezes the M2.7 pass criteria (§11, §12).
+
 **Changes from implementing M1.7 and M1.8 (2026-09-20):**
 
 - `check.Parse` takes the whole `Check`, not just its `ParserKind` (§3). A typed shape
@@ -566,11 +579,19 @@ type Response struct {
 type Provider interface {
     Name() string
     Limits() Limits
+    Native() Native
     Stream(ctx context.Context, r Request) (Stream, error)
 }
 
-// Complete is a package-level helper that drains Stream. Providers do not implement it.
+// A Stream yields Text deltas and complete ToolCall events, then exactly one Done
+// event carrying the assembled Response. Complete is a package-level helper that
+// drains a Stream; Drain does the same while handing each event to an observer so the
+// CLI can show progress. Providers implement neither.
 func Complete(ctx context.Context, p Provider, r Request) (Response, error)
+
+// A provider failure is classified so the loop can end a run honestly without knowing
+// which provider it talked to: context_overflow | unsupported | auth | transport | response.
+type Error struct { Kind ErrorKind; Msg string }
 
 type Limits struct {
     MaxContext int  // the one capability the loop must know about (§5.3)
@@ -587,7 +608,21 @@ type Native struct {
 Hard rules: **no provider SDK type crosses the `llm` package boundary**, and **the agent
 loop branches on nothing but `Limits.MaxContext`.** `agent`, `policy`, `check`,
 `finding` and `report` compile without any provider dependency, which is also what
-makes them testable without a network.
+makes them testable without a network; `make depcheck` (part of `make check`) walks
+`go list -deps` for those packages and fails on any adapter or SDK edge.
+
+Providers register with `llm.Register(Info, Factory)`; `internal/llm/all` links every
+adapter and registers the deferred names so a deferred selection exits 3 "not available
+in this build" rather than "unknown provider". A `Factory` takes `llm.Config` (model,
+base URL, declared `max_context`, effort, and the mock's transcript path) and never
+performs network I/O or reads a credential's value at construction; credentials are
+looked up from the environment by the adapter when it first sends a request.
+
+Token accounting lives in `llm` (§5.3): `Estimate(Request)` is a documented
+conservative bound (3 bytes per token plus fixed per-message, per-tool-call and
+per-tool-definition framing and a request allowance), and `CheckFit(Request, Limits)`
+adds the output reservation and answers whether the request may be sent. An unknown
+`Limits.MaxContext` is an `unsupported` error, never unlimited space.
 
 ### 5.2 Providers
 
@@ -596,7 +631,7 @@ makes them testable without a network.
 | `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. No default model — the endpoint decides what exists, so `--model` is required; `--base-url` defaults to `https://api.openai.com/v1`. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). |
 | `anthropic` (post-v1 M3.1) | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
 | `ollama` (post-v1 M3.2) | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
-| `mock` | tests | Replays recorded transcripts; used by every non-live test. |
+| `mock` | tests | Replays recorded transcripts (`--transcript FILE`); used by every non-live test. A transcript declares `limits` and `native` and one turn per model call; a turn may `fail` with a classified error kind or carry `expect` assertions over the request it answers, so a test can assert what the loop sent without reaching into the provider. |
 
 Selection: `--provider`/`--model`, or `provider:` in config; v1 defaults to
 `openai-compatible`. Deferred providers fail explicitly with exit 3, "not available
@@ -1352,6 +1387,7 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 provider: openai-compatible   # v1 production adapter; anthropic / ollama post-v1
 model: gpt-5                  # required for openai-compatible; the endpoint decides what exists
 # base_url: http://localhost:11434    # defaults to https://api.openai.com/v1
+# max_context: 128000         # the model's context window when the adapter cannot know it (§5.3)
 effort: high
 allow_egress: true            # false fails explicitly in v1; local-only mode post-v1
 profile: baseline
