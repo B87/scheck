@@ -4,9 +4,11 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: v0.7 — M0, M1 (through M1.8) and M2.1–M2.6a implemented, M2.7 harness implemented
-with its live evaluation pending (2026-09-20) · Language: Go · Inference: provider-agnostic (default
-`openai-compatible`, model `gpt-5.6-luna` on OpenAI's endpoint; Anthropic and guaranteed local-only inference deferred past v1)
+Status: v0.8 — M0, M1 (through M1.8) and all of M2 (through M2.8) implemented; the live
+evaluation is recorded and **no model assesses a host in 0.0.1** (§2.1); M4.5–M4.7 remain
+(2026-09-20) · Language: Go · Inference: provider-agnostic (default `openai-compatible`,
+model `gpt-5.6-luna` on OpenAI's endpoint, reached only by the evaluation harness in this
+build; Anthropic and guaranteed local-only inference deferred past v1)
 
 **Changes in v0.7 (M2.6a):** runner-owned immutable observations preserve repeated
 invocations across both phases; model citations identify exact observations. Reports
@@ -147,6 +149,12 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   record's failures are an unused loop and per-item context judgements, which is the
   shape a System One model can answer and the shape it cannot replace. No key is held;
   the live slice stays deferred.
+
+**Changes from the 0.0.1 release validation (2026-09-20, M4):**
+
+- Acceptance criterion 3's evidence is named rather than left to a throwaway VM: the
+  container diff `make integ` already asserts, plus catalog inspection and the audit log
+  on macOS (§12). The criterion is unchanged; what satisfies it is now written down.
 
 **Changes from the phase 2 decision (2026-09-20, M2.8):**
 
@@ -1813,8 +1821,10 @@ shown with the credentials stripped. `docs/CONFIGURATION.md` is the walkthrough.
 
 ## 10. Milestones
 
-Status (2026-09-20): M0, M1, M1.6 including its review follow-up, M1.7 and M1.8 are
-implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 is next.
+Status (2026-09-20): M0, M1 including the M1.6 review follow-up, M1.7 and M1.8, and all
+of M2 through M2.8 are implemented; see `ROADMAP-0.0.1.md` for validation status. M4.5
+(golden regression artifacts), M4.6 (the recorded acceptance pass) and M4.7 (the release)
+are what remain of 0.0.1.
 
 - **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
   and invariants test, `policy` (path, redaction, budgets), audit log, elevation
@@ -1832,8 +1842,11 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
   with tool-call emulation,
   `--local-only`, small-context chunking and extension of the existing provider
   conformance suite. Additional provider coverage is not a v1 release gate.
-- **M4 — polish.** SARIF, profile tiers, category filters, `scheck diff`, golden-fixture
-  tests.
+- **M4 — regression coverage and release validation.** 0.0.1 takes three slices of it:
+  M4.5 golden-fixture artifacts (text report, JSON report and command trace per
+  fixture), M4.6 the recorded pass over every criterion in §12, M4.7 the GitHub release
+  process. Profile tiers already exist and keep their tests. SARIF, category filters
+  (`--only`) and `scheck diff` move past 0.0.1 and exit 3 until then (§8).
 - **Optional research — bounded assessment (§5.9).** Offline fixtures and harness
   first; a Jev comparison only when access is available. No M0–M4 dependency or v1 gate.
 
@@ -1941,8 +1954,14 @@ implemented; see `ROADMAP-0.0.1.md` for validation and working-tree status. M2 i
 1. `scheck local` and `scheck ssh …` produce a report on macOS and on Ubuntu + Fedora.
 2. No command outside the compiled catalog ever reaches the target — proven by the
    catalog invariants test, the hostile-input corpus, and the audit log of a live run.
-3. Nothing on the target is modified (verified by a before/after filesystem and
-   config diff on a throwaway VM).
+3. Nothing on the target is modified. **Evidence for 0.0.1**, recorded in
+   `docs/eval/acceptance-0.0.1.md`: an empty `docker diff` taken before and after a full
+   `scheck ssh` run on throwaway Ubuntu and Fedora containers, asserted by `make integ`
+   on every change, in place of a separate VM. On macOS, where there is no equivalent
+   diff, the evidence is the catalog invariants test plus the audit log of a real local
+   run, which together show that every argv that reached the host was a read-only
+   catalog command and that nothing else ran. The criterion itself does not move: a
+   write would fail the container diff.
 4. `--stop-after facts` is fully useful offline: no API key required, the text report
    follows §7.6, and a fixture host with FileVault off (macOS) or
    `PasswordAuthentication yes` (Linux) yields that finding with exit `1` and no model.
