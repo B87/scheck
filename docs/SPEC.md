@@ -4,7 +4,7 @@
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
 reasons, and reports. It never modifies the target.
 
-Status: v0.3 — M0 and M1 implemented (2026-09-20), M2+ design · Language: Go · Inference: provider-agnostic (default `anthropic` /
+Status: v0.4 — M0 and M1 implemented (2026-09-20), M1.6–M1.8 (readable phase 1) planned, M2+ design · Language: Go · Inference: provider-agnostic (default `anthropic` /
 `claude-opus-5`; OpenAI-compatible and local models supported)
 
 **Changes from v0.1** (from design review):
@@ -51,6 +51,24 @@ Status: v0.3 — M0 and M1 implemented (2026-09-20), M2+ design · Language: Go 
   cannot express an empty argument (§8.1).
 - A hidden `--record-fixtures DIR` flag and a fixture manifest format exist for tests (§11).
 - All packages live under `internal/`; the security boundary is not importable.
+
+**Changes from v0.3** (from using the M1 build on a real host, 2026-09-20):
+
+- Phase 1 emits deterministic findings from **posture rules** (§2.1, §7.5): one
+  unambiguous fact → one finding, code-graded like everything else. The model classifies
+  only what needs judgement (§7.2). `finding.Def` carries title, impact and remediation
+  text so a rule finding is complete without a model (§7.1); findings carry `source`
+  (§7.3).
+- `check.Check` gained typed parser shapes and a `Unit` noun for `lines` checks (§3), so
+  a summary reads "26 listening sockets", never "26 lines". The envelope gains
+  `facts.<id>.summary`, `findings[].source` and typed `parsed` shapes at
+  `schema_version` 1.1 (§7.4).
+- The text report has a contract (§7.6), pinned by golden tests (§11). `scheck explain`
+  exists, and `-v` / `-vv` govern how much of the report is shown (§8).
+- `--stop-after facts` exits `1` when a rule finding is open at the profile threshold
+  (§8); acceptance criterion 4 now requires the offline run to say so (§12).
+- Roadmap: M1.6–M1.8 land these before M2; M2.2 shrinks to context adjustments and
+  accepted risks (§10).
 
 ---
 
@@ -130,6 +148,14 @@ Both phases execute through the same catalog, the same policy, and the same audi
 Phase 1 is simply "the baseline subset, run unconditionally". There is no second command
 surface.
 
+**Phase 1 also judges what needs no judgement.** A small table of *posture rules*
+(§7.5) runs over the fact sheet and emits findings for facts whose meaning is
+unambiguous: FileVault off, SIP disabled, `PasswordAuthentication yes`, an account with
+an empty password. Rules never execute anything; they read facts the checks already
+produced. Their findings are the floor: phase 2 can add to them and enrich them, never
+remove or soften them. The phase 1 report is written for a person (§7.6), so
+`--stop-after facts` is a complete tool, not a debug dump.
+
 Rationale: without phase 1 the model burns tokens rediscovering the same baseline on
 every run and the results are nondeterministic. Without phase 2 this is a static
 checklist tool — which is a fine thing to be, so phase 2 must prove it adds signal
@@ -153,7 +179,7 @@ type Check struct {
     Domain      Domain          // for chunking and --only filtering
     Argv        []string        // literal tokens; a token that is exactly "{name}" binds a Param
     Params      []Param         // typed; every placeholder must bind exactly one Param
-    Parser      ParserKind      // raw | lines | kv | json
+    Parser      ParserKind      // raw | lines | kv | json | a typed shape (below)
     Baseline    bool            // runs in phase 1
     MinProfile  Profile         // baseline | hardened; the model only sees checks at or below the active profile
     Elevated    bool            // needs elevation (§8.1); otherwise "unavailable: requires elevated read"
@@ -162,6 +188,7 @@ type Check struct {
     PathUse     PathUse         // content | metadata: what a check with a Path param returns (§4.1)
     Canary      bool            // the one entry whose literal contains metacharacters (§4.3)
     Extract     string          // optional regexp with one group; only the group is kept as output
+    Unit        string          // Parser == lines: plural noun for one line ("SUID files"); the summary is "<n> <Unit>"
 }
 
 type Param struct {
@@ -180,6 +207,16 @@ disabled. `Extract` exists for chatty commands (`ioreg`) whose one useful line s
 be all the model sees. `PathUse` lets the runner substitute `fs.stat` for a content
 read of a sensitive path (§4.1). `Canary` exempts exactly one entry from the
 metacharacter invariant (§4.3).
+
+**Typed parsers.** `Parser` is `raw`, `lines`, `kv` or `json`, or one of the typed
+shapes: `listeners` (protocol, address, port, pid, process), `accounts` (name, uid,
+shell, home), `passwd_status` (name, status), `units` (name, state), `updates` (name,
+version), `launchd` (label, pid, status). A typed shape exists when something downstream
+needs fields: the summary line (§7.6), a posture rule (§7.5) or `scheck diff` (§7.4).
+Everything else stays `lines`, and `Unit` names what one line is, so the summary reads
+"0 SUID files" rather than "0 lines"; the catalog test requires `Unit` on every `lines`
+check. A per-check summariser function was considered and rejected: a typed record
+serves three consumers and is diffable, a closure serves one and is not.
 
 **Invariants, enforced by a test over the whole catalog** (`internal/check/invariants.go`,
 run over every registered check by `internal/check/all`; each rule has a name that
@@ -688,11 +725,19 @@ package finding
 
 type Def struct {
     ID           string   // "sshd.password_auth_enabled"
-    Category     string   // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs
+    Title        string   // "sshd accepts password authentication"
+    Category     string   // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs | disk | time
     BaseSeverity Severity // critical | high | medium | low | info
+    Impact       string   // one sentence; used verbatim by a rule finding, the model may sharpen it in phase 2
+    Remediation  Remediation // summary, commands, caveat (§7.3); text for the human, never executed
     References   map[string][]string // framework → citations, selected by context.compliance
 }
 ```
+
+`Title`, `Impact` and `Remediation` live on the Def, not only in the model's output,
+because a posture rule (§7.5) must produce a complete finding with no model in the
+loop. For a model finding the Def's text is the default and the model's text, when
+present, replaces `impact` and `remediation`.
 
 Ids are the join key for accepted risks, severity, dedupe and cross-run diffing, so the
 model must not invent them. `report_finding` accepts a catalog id, or `custom:<slug>`
@@ -717,6 +762,11 @@ model ──report_finding(id, evidence, confidence, impact, remediation)──�
 This is the answer to v0.1's open question. Severity in the model's hands is
 unrepeatable, unattributable, and unverifiable. In code it is a table and a test.
 
+Classification itself has two sources. Posture rules (§7.5) classify facts whose
+meaning is unambiguous, in phase 1, with no model. The model classifies everything that
+needs judgement or more than one fact, in phase 2. Both enter the same `finding.Store`
+and the same grader; a finding never bypasses the table because of where it came from.
+
 ### 7.3 Finding schema (as emitted in the report)
 
 ```json
@@ -730,6 +780,7 @@ unrepeatable, unattributable, and unverifiable. In code it is a table and a test
     {"rule": "exposure:internet", "source": "scheck.yaml#context.exposure", "delta": "+1"}
   ],
   "status": "open",
+  "source": "model",
   "confidence": "high",
   "platform": "linux",
   "evidence": [
@@ -750,8 +801,10 @@ unrepeatable, unattributable, and unverifiable. In code it is a table and a test
 The model supplies `id`, `title`, `confidence`, `evidence`, `impact`, `context_note`,
 `remediation`. `scheck` supplies everything else. `severity`:
 `critical|high|medium|low|info`. `confidence`: `high|medium|low`. `status`:
-`open|accepted`. Remediation commands are **text for the human** — `scheck` never runs
-them.
+`open|accepted`. `source`: `rule|model` (§7.5); for a rule finding `title`, `impact`
+and `remediation` come from the Def, `evidence` is the check id and the matched
+excerpt, and `confidence` is always `high`. Remediation commands are **text for the
+human** — `scheck` never runs them.
 
 ### 7.4 Report envelope and run artifacts
 
@@ -775,8 +828,9 @@ a translation step, even though v1 audits one host per invocation:
     "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
     "context_sources": [{"source": "…", "sha256": "…", "truncated": false}]
   },
-  "facts":    { "<check id>": { "status": "ok|unavailable", "reason": "…", "parsed": … } },
-  "findings": [ … ]
+  "facts":    { "<check id>": { "status": "ok|unavailable|denied", "reason": "…",
+                                "summary": "26 listening sockets", "parsed": … } },
+  "findings": [ … ]                // rule findings from phase 1, model findings from phase 2 (§7.5)
 }
 ```
 
@@ -784,8 +838,14 @@ a translation step, even though v1 audits one host per invocation:
 aggregator or a drift diff would join on. `run.mode` is `facts` when the run stopped
 after phase 1 (`--stop-after facts`); in that mode `provider`, `model`, `effort`,
 `native`, `limits` and `context_sources` are null or empty, `usage` is all zeros, and
-`findings` is `[]`. The envelope is validated against `docs/report-schema.json` in tests. Findings are a flat array keyed by
-catalog id, never nested under a host, so concatenation is trivial.
+`findings` holds rule findings only (§7.5). `summary` is the one-line, human-readable
+reading of a fact (§7.6); it is the same string on the screen, in the JSON and in the
+model's prompt. The envelope is validated against `docs/report-schema.json` in tests.
+Findings are a flat array keyed by catalog id, never nested under a host, so
+concatenation is trivial.
+
+Schema history: `1.0` is the M1 envelope; `1.1` (M1.7, M1.8) adds `facts.<id>.summary`,
+`findings[].source` and the typed `parsed` shapes of §3.
 
 `schema_version` is `MAJOR.MINOR`, bumped on any change to this envelope: MINOR for
 an additive field, MAJOR for a rename, removal, or type change. A reader (a fleet
@@ -799,7 +859,100 @@ unrecognized MAJOR rather than guessing at a shape it was never tested against.
 `facts` block is what makes posture drift diffable; `scheck diff` itself ships in M4
 and compares the two most recent runs for a host (or two named files): added and
 removed listeners, units, SUID files, and findings that appeared, disappeared, or
-changed severity.
+changed severity. Typed `parsed` shapes (§3) make that a set difference per record
+kind rather than a line diff.
+
+### 7.5 Posture rules — deterministic findings from the fact sheet
+
+A posture rule turns one fact into one finding when the fact's meaning needs no
+judgement.
+
+```go
+package finding
+
+type Rule struct {
+    Finding  string         // finding id (§7.1); the Def supplies title, severity, impact, remediation
+    Check    string         // the one check whose fact the rule reads
+    Platform check.Platform // macos | linux | any
+    When     Predicate      // KeyEquals{Key, Value} over kv | Matches{Regexp} over raw
+                            // AnyLine{Regexp} over lines | Field{Name, Value} over a typed shape
+}
+```
+
+- **Rules read the fact sheet; they never execute a command.** The command surface is
+  unchanged and the runner is untouched.
+- **One rule reads one check.** A conclusion that needs two facts (no firewall active at
+  all, password auth *and* a public listener) is the model's job in phase 2. Single-fact
+  rules stay obvious, and every one is testable with a fixture where it fires and one
+  where it does not.
+- **A rule over an `unavailable` or `denied` fact does not fire.** The report says
+  "not assessed: <check> unavailable" for that finding rather than nothing, so nobody
+  reasons from absence (§3).
+- **A rule finding is graded like any other.** `source: rule`, `confidence: high`,
+  evidence is the check id plus the matched excerpt, and the severity goes through §7.2,
+  so context adjustments and accepted risks apply.
+- **The model enriches, never overrides.** Rule findings are in the phase 2 prompt. A
+  `report_finding` with the same id merges: the rule's severity and confidence stand,
+  the model's `context_note` and extra evidence are appended.
+- **The table is compiled in** beside the finding catalog (`internal/finding`). The
+  invariants test extends to it: every `Rule.Check` is a catalog id, every
+  `Rule.Finding` is a Def, and the predicate kind matches the check's parser.
+
+Seed table (M1.8). Base severities are the §7.1 table entries for these ids:
+
+| Finding | Platform | Check | Fires when | Base |
+|---|---|---|---|---|
+| `disk.filevault_off` | macos | `disk.fdesetup` | raw does not match `FileVault is On` | high |
+| `integrity.sip_disabled` | macos | `integrity.csrutil` | raw matches `disabled` | high |
+| `integrity.gatekeeper_disabled` | macos | `integrity.spctl` | raw matches `assessments disabled` | medium |
+| `fw.app_firewall_disabled` | macos | `fw.global` | raw matches `State = 0` | medium |
+| `remote.login_enabled` | macos | `remote.login` | raw matches `: On` | info |
+| `time.ntp_disabled` | macos | `time.ntp` | raw matches `: Off` | low |
+| `sshd.password_auth_enabled` | any | `sshd.config` | `passwordauthentication` = `yes` | medium |
+| `sshd.root_login_enabled` | any | `sshd.config` | `permitrootlogin` = `yes` | high |
+| `accounts.empty_password` | linux | `accounts.passwd_status` | a record with status `NP` | critical |
+| `accounts.shadow_readable` | linux | `accounts.shadow_meta` | mode is not one of `0`, `600`, `640` | high |
+| `mac.selinux_disabled` | linux | `mac.sestatus` | `selinux status` = `disabled` | medium |
+| `log.auditd_inactive` | linux | `log.auditd` | raw is not `active` | low |
+| `time.ntp_unsynced` | linux | `time.timedatectl` | `ntpsynchronized` = `no` | low |
+| `updates.pending` | any | `pkg.*` | any `updates` record | low |
+| `fs.world_writable_present` | any | `fs.world_writable` | any line | medium |
+
+`fs.suid` deliberately has no rule: SUID files are normal, and which ones are not is
+judgement. The same applies to listeners, persistence entries and sudoers content.
+
+### 7.6 Text report — what a person sees
+
+`--format text` is the product for anyone who runs `--stop-after facts`, so it has a
+contract, pinned by golden tests per fixture (§11):
+
+- **Header, two lines.** Who was audited and how (hostname, OS, transport, elevation),
+  then the result in one sentence: "3 findings (1 high), 22 checks ran, 6 skipped".
+  `host.id`, profile, mode, kernel and timings move to `-v`.
+- **Findings first, then facts.** Rule findings (and, in phase 2, model findings) come
+  before the fact sheet, ordered by severity: title, severity, the evidence excerpt with
+  its check id, the remediation summary. Not-assessed findings close the section, each
+  naming the unavailable check.
+- **Status words, not marks.** A check `ran`, was `skipped` (unavailable) or was
+  `denied`. A mark column may exist for scanning, but a mark never means "posture ok":
+  a fact whose rule fired shows the finding's severity, not a plus.
+- **One meaningful summary per check.** From the typed parser or `Unit` (§3): "26
+  listening sockets", "0 SUID files", "FileVault is On.", never the first raw line. The
+  same string is `summary` in the envelope (§7.4).
+- **Skipped checks grouped by reason, with the remedy.** "6 checks need elevated read:
+  re-run with `--sudo` (on macOS run `sudo -v` first, or install the `scheck sudoers`
+  fragment)". Denied-by-policy is its own group and names the rule.
+- **Human domain labels** ("Privilege escalation", not `privesc`) from a table in
+  `report`. Check ids stay verbatim: they are the join key into `scheck explain`, the
+  audit log and the JSON.
+- **`-v` adds each check's description; `-vv` adds its redacted output** indented under
+  the line. There is no third way to see output, and anything shown at `-vv` has been
+  through the redactor (§4.2), which the redaction test asserts.
+- **Colour only on a tty**, off under `NO_COLOR`. Severity colours are the only colours.
+- **Honest footer.** In `facts` mode: "assessment: posture rules only; run without
+  `--stop-after` for the agentic pass" (or "agentic pass not available in this build"
+  until M2). Never "findings: none" when nothing looked.
+- **Width.** Lines wrap at the terminal width or 100 columns; no trailing padding.
 
 ---
 
@@ -810,6 +963,7 @@ scheck local                            # audit this machine
 scheck ssh user@host [--port] [--identity]
 scheck catalog [--profile P]            # list every check the model could run under profile P
 scheck sudoers [--platform P]           # print a least-privilege NOPASSWD rule for elevated checks (§8.1)
+scheck explain CHECK-ID                 # what a check runs, why, its parser and which posture rules read it
 scheck providers                        # configured providers, limits, native features
 scheck diff [A B]                       # posture drift between two runs (M4)
 scheck --format text|json|sarif  --out FILE
@@ -838,9 +992,12 @@ Exit codes: `0` no open finding at or above the profile threshold · `1` finding
 `2` run incomplete (check/agent/transport failure, budget exhausted) · `3` usage or policy
 error (including a failed SSH canary, an unknown host key, or an unknown accepted-risk id).
 
-Under `--stop-after facts` there are no findings, so the run exits `0` when the fact
-sheet was produced (individual `unavailable` checks do not change that), `2` when the
-transport failed or `RunTimeout` cut the run, `3` for usage, config or canary errors.
+Under `--stop-after facts` the findings are the posture rules' (§7.5), so the run
+exits `1` when one is open at or above the profile threshold and `0` otherwise
+(individual `unavailable` checks do not change that), `2` when the transport failed or
+`RunTimeout` cut the run, `3` for usage, config or canary errors. One meaning per exit
+code, whichever phase produced it. `-v` and `-vv` govern both logging and how much of
+the text report is shown (§7.6).
 Flags that belong to a later milestone are registered from day one and exit `3` with
 "not available in this build" until that milestone lands.
 
@@ -928,10 +1085,12 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
   prefix, `scheck local --stop-after plan`, `scheck catalog`, `scheck sudoers`. No model.
 - **M1 — baseline.** Linux + macOS baseline checks, fact sheet, report envelope with
   host identity, run persistence (§7.4), text/JSON renderers. `--stop-after facts`
-  produces a useful report on its own.
-- **M2 — agent.** `llm` interface, the loop, three tools, system prompt, finding id
-  catalog, severity assignment and context adjuster, the `anthropic` provider, the
-  `mock` provider.
+  produces a useful report on its own. M1.6–M1.8 (added after using the M1 build):
+  the text report contract (§7.6), typed parsers and summaries (§3), posture rules and
+  the finding id catalog (§7.5, §7.1), so phase 1 says what is wrong without a model.
+- **M2 — agent.** `llm` interface, the loop, three tools, system prompt, severity
+  adjustments and accepted risks on top of the M1.8 catalog, the `anthropic` provider,
+  the `mock` provider.
 - **M3 — second provider.** `openai-compatible` + `ollama` with tool-call emulation,
   `--local-only`, provider conformance suite. Two independent providers is what proves
   the abstraction is real.
@@ -969,6 +1128,12 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
   fragment plus an elevated run flipping `sshd.config` to populated, and
   `scheck ssh --stop-after facts` against Ubuntu and Fedora with schema validation and
   an empty `docker diff` afterwards (acceptance criterion 3).
+- **Golden text reports.** One per fixture (ubuntu, fedora, macos) at default, `-v`
+  and `-vv`, committed and diffed in `go test`. A diff is a review item, not something
+  to silence; §7.6 is the contract the golden files pin.
+- **Rule tests.** Table-driven: fact sheet → expected finding ids. Every rule has a
+  fixture where it fires and one where it does not; an `unavailable` fact never fires a
+  rule and renders "not assessed". The catalog invariants test covers rules (§7.5).
 - **Severity tests.** Table-driven: (finding id, structured context) → expected
   severity, adjustments and status. `--ignore-context` asserted to equal base severity
   exactly.
@@ -996,7 +1161,9 @@ Status (2026-09-20): M0 and M1 are implemented and their exit demos pass; see
    catalog invariants test, the hostile-input corpus, and the audit log of a live run.
 3. Nothing on the target is modified (verified by a before/after filesystem and
    config diff on a throwaway VM).
-4. `--stop-after facts` is fully useful offline: no API key required.
+4. `--stop-after facts` is fully useful offline: no API key required, the text report
+   follows §7.6, and a fixture host with FileVault off (macOS) or
+   `PasswordAuthentication yes` (Linux) yields that finding with exit `1` and no model.
 5. Every finding carries evidence traceable to a check id.
 6. Seeded secrets never appear in any output artifact, and every redaction is marked.
 7. One `scheck local` run on a clean host costs under $0.50 at default effort.
@@ -1033,5 +1200,9 @@ with a reason that beats the one recorded.
 | Elevation mechanism? | `sudo -n` only in v1, as a prefix, plus `scheck sudoers` (§8.1). Password forwarding and `doas`/`run0` deferred. | Never transmit a password; the prefix design makes the others cheap to add later. |
 | Confidence under emulated tool calling? | Capped at `medium` in code (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. |
 | Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9), developed offline; live evaluation deferred until access is available. | Bounded judgments have a different contract, and waitlisted vendor access must not block the product. |
+| Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§7.5), one fact → one finding, code-graded like everything else. | Most users stop at `--stop-after facts`; a fact sheet that never says "this is wrong" is a debug artefact, not a tool. The model still owns every conclusion that needs two facts or judgement. |
+| Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§8). | One meaning per exit code; CI can gate on the offline run. |
+| Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | One record shape serves the screen, the model and `scheck diff`. |
+| How does a user see a check's raw output? | `-vv` prints it, redacted, under the check line (§7.6). No `scheck show`. | One path for output, and it is the redacted one; a state-reading command can wait for `scheck diff`. |
 
 No open questions remain for v1.

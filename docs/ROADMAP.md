@@ -14,8 +14,9 @@ across slices below rather than saved for the end.
 
 **Status (2026-09-20):** M0 and M1 are done, one commit per slice, on `main`. Every
 slice below carries a ✅ with what actually landed where it differs from the plan.
-Next: M2.1. The M1 pause point (real usage feedback, a second-person review of the
-security boundary) is open; see `AGENTS.md` for how to work in the repo.
+Using the M1 build on a real Mac produced M1.6–M1.8 (readable phase 1, posture rules);
+those are next, then M2.1. The second-person review of the security boundary is still
+open; see `AGENTS.md` for how to work in the repo.
 
 ---
 
@@ -218,6 +219,65 @@ empty `docker diff` afterwards. `make check` (vet, fix, lint, race tests) is gre
 
 ---
 
+## M1, continued — readable before agentic
+
+Added 2026-09-20 after running the M1 build on a real Mac: the fact sheet was correct
+and unreadable. Every check showed `+`, including "Firewall is disabled"; summaries were
+the first raw line ("134 lines: _accessoryupdater 278"); six checks said "requires
+elevated read" with no remedy; the footer said "findings: none". Three slices fix that
+before the model exists, using the M1 pause point. The decisions behind them (posture
+rules in phase 1, exit `1` in facts mode, typed parsers, `-vv` for output) are in
+SPEC §13.
+
+### M1.6 — readable fact sheet
+Deliver the §7.6 text contract minus anything that needs new parsers: two-line header,
+status words, skipped-by-reason groups with the remedy line, human domain labels, `-v`
+descriptions, `-vv` redacted output, colour on a tty with `NO_COLOR`, honest footer, no
+trailing padding. Plus `scheck explain <check-id>` (description, platform, domain, argv
+with placeholders, params, elevation, parser). No security surface changes.
+**Demo:** `scheck local --stop-after facts` on this Mac reads top to bottom without the
+JSON; `scheck local --stop-after facts -vv | grep -c REDACTED` shows `-vv` went through
+the redactor; `scheck explain sshd.config`.
+**Done when:** golden text reports for the ubuntu, fedora and macos fixtures at default,
+`-v` and `-vv` are committed and diffed in `go test`; the end-to-end redaction test
+also covers `-vv` output.
+**Spec:** §7.6, §8.
+
+### M1.7 — typed parsers + summaries
+Deliver the typed shapes in §3 (`listeners`, `accounts`, `passwd_status`, `units`,
+`updates`, `launchd`), the `Unit` field on every `lines` check (catalog test enforces),
+the `summary` string per fact in the envelope, and `schema_version` 1.1 with
+`docs/report-schema.json` updated.
+**Demo:** `scheck local --stop-after facts` shows "26 listening sockets", "0 SUID
+files", "3 updates available"; `--format json | jq '.facts["net.listeners"].parsed[0]'`
+shows a record with named fields.
+**Done when:** every baseline check on all three fixtures has a summary that is not
+"N lines"; parser edge tests (empty, truncated mid-record, header-only, CRLF) pass;
+the fixtures re-recorded with `make fixtures` show no diff in recorded bytes, only in
+golden output.
+**Spec:** §3 typed parsers, §7.4 schema 1.1.
+
+### M1.8 — posture rules + finding id catalog
+Deliver `internal/finding`: `Def` with title, base severity, impact and remediation
+text (§7.1) for the seed ids in §7.5; `Rule` and its predicate kinds; the evaluator
+over a fact sheet; findings in the envelope with `source: rule`; findings-first text
+rendering; exit `1` under `--stop-after facts` when an open finding meets the profile
+threshold. Base severity only: context adjustments, confidence caps and accepted risks
+stay in M2.2.
+**Demo:** `scheck local --stop-after facts` on a Mac with the application firewall off
+shows one medium finding with the `fw.global` excerpt and the remediation, and exits
+`1`; a Linux fixture with `PasswordAuthentication yes` does the same.
+**Done when:** every rule has a firing and a non-firing fixture; an `unavailable` fact
+renders "not assessed" and never a finding; the invariants test extends to rules (every
+`Rule.Check` is a catalog id, every `Rule.Finding` a Def, predicate kind matches the
+check's parser); acceptance criterion 4 passes as reworded in §12.
+**Spec:** §7.1, §7.5, §8 exit codes, §12 criterion 4.
+
+**M1 readability exit demo:** the M1 exit demo commands, read by someone who has not
+seen the JSON, plus a CI job that fails (exit `1`) on a FileVault-off fixture.
+
+---
+
 ## M2 — agent (model enters the picture)
 
 Goal: phase 2 exists and can be tested entirely offline via the `mock` provider before
@@ -233,11 +293,12 @@ provider SDK import — enforce with a `go list` dependency check in CI, not jus
 review comment.
 **Spec:** §5.1.
 
-### M2.2 — finding id catalog + severity assignment
-Deliver `finding.Def` (§7.1) with the base severity table, plus the deterministic
-grader: base severity → structured-context adjustments → confidence cap → accepted-risk
-status → final severity and exit code. No model involved yet — feed it synthetic
-`(id, evidence, confidence)` tuples in tests.
+### M2.2 — severity adjustments + accepted risks
+`finding.Def` and the base severity table exist since M1.8. Deliver the rest of the
+deterministic grader on top of them: base severity → structured-context adjustments →
+confidence cap → accepted-risk status → final severity and exit code. No model involved
+yet — feed it synthetic `(id, evidence, confidence)` tuples in tests, and assert that
+rule findings from M1.8 pass through the same chain.
 **Demo:** a small CLI test harness: `scheck-devtool grade sshd.password_auth_enabled --exposure internet`
 prints the adjustment chain.
 **Done when:** the severity test table from §11 passes, and `--ignore-context` is
@@ -249,6 +310,8 @@ Deliver `run_check`, `read_file`, `report_finding` as the closed tool surface (�
 and the ~150-line loop (§5.6) wired to `mock` only. No real provider yet — this proves
 the loop's control flow (iteration budget, context chunking trigger, stop-on-no-tool-calls)
 against scripted transcripts.
+Rule findings (§7.5) are in the prompt; a `report_finding` on an existing rule id
+merges (severity and confidence stand, the model's context note and evidence append).
 **Demo:** `scheck local --provider mock --transcript fixtures/correlated-finding.json`
 producing a full report with a real finding in it, end to end through the renderers.
 **Done when:** the loop enforces every budget in `policy.Budgets` against the mock
@@ -373,7 +436,8 @@ checks and narrowing the model's menu to those domains.
 
 ### M4.4 — `scheck diff`
 Deliver drift detection over two persisted runs (§7.4): added/removed listeners, units,
-SUID files, and findings that appeared, disappeared, or changed severity.
+SUID files, and findings that appeared, disappeared, or changed severity. The typed
+records from M1.7 make this a set difference per record kind, not a line diff.
 **Demo:** run `scheck local` on a VM, install an unexpected package that opens a port,
 run again, `scheck diff` between the two persisted files.
 **Spec:** §7.4, §10 M4.

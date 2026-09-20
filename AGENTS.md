@@ -2,7 +2,7 @@
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
 over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP.md` says what is
-built (M0, M1) and what is next (M2). This file is the operating manual for a coding
+built (M0, M1) and what is next (M1.6–M1.8 readable phase 1 and posture rules, then M2). This file is the operating manual for a coding
 agent in this repository. The spec wins on any conflict.
 
 ## Non-negotiables
@@ -48,7 +48,8 @@ passes.
 | `internal/policy` | path policy, redactor, budgets, JSONL audit log |
 | `internal/runner` | the one exec path (see rule 3) |
 | `internal/baseline` | phase 1: plan, run, fact sheet |
-| `internal/report` | envelope (§7.4), text and JSON renderers; `docs/report-schema.json` |
+| `internal/report` | envelope (§7.4), text and JSON renderers under the §7.6 contract; `docs/report-schema.json` |
+| `internal/finding` | (from M1.8) finding id catalog with base severities, posture rules (§7.5); reads facts, never executes |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
@@ -124,8 +125,11 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   same commit and add a line to its change list. The spec is the contract; silent
   drift is a bug.
 
-## Out of scope until the roadmap says otherwise
+## Out of scope until the roadmap slice that introduces them
 
-`llm`, agent loop, finding catalog, severity, `--context`, `--only`, SARIF,
-`scheck diff`, `--local-only`, the optional §5.9 assessment track. Do not scaffold
-empty abstractions for them.
+`llm`, agent loop, context adjustments and accepted risks (M2.2), `--context`,
+`--only`, SARIF, `scheck diff`, `--local-only`, the optional §5.9 assessment track. The
+finding catalog and posture rules arrive in M1.8 and typed parsers in M1.7; do not
+scaffold them earlier, and do not scaffold empty abstractions for any of the above.
+A posture rule reads the fact sheet only; if a rule seems to need a new command, add a
+catalog check first and keep the rule single-fact (§7.5).
