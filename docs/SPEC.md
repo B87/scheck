@@ -162,8 +162,9 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   because filing on silence is what produced the phase 2 false positives. And a bounded
   follow-up read is not a per-item attempt: code lists `/etc/systemd/system` once and
   reads only the unit files a host actually defines.
-- A question that names a state field is not asked when that field is empty: the candidate
-  is `insufficient` instead. A listener whose capture does not name the owning process is
+- A question that names a state field is not asked when that field is empty, or when the
+  command that produced it is known to degrade it (`lsof` shortens a process name to nine
+  characters without `+c 0`): the candidate is `insufficient` instead. A listener whose capture does not name the owning process is
   the worked example — `ss` names it only for a privileged session — and asking anyway
   answers "not a recognized component" for every listener on an unprivileged run, which
   refiles the phase 2 false positive by another route. This generalizes the existing rule

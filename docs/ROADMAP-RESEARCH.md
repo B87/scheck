@@ -197,6 +197,7 @@ directories.
 | `root` as an admin candidate | root *is* the account uid 0 names |
 | `%sudo`, `%wheel`, `%admin` | A distribution's own administrative principals; the accounts behind them are candidates through their own records |
 | A sudoers principal whose grant lists specific commands | `accounts.unexpected_admin` means "can escalate to root". scheck's own `/etc/sudoers.d/scheck` fragment is the worked example: seven named commands, no `ALL`, so `ops` is filtered |
+| A listener whose capture came from `lsof` without `+c 0` | The name is there but shortened to nine characters, so "ControlCenter" arrives as "ControlCe". Worse than absent: it looks like an answer. The test reads the argv that produced the capture, so it disappears by itself once the catalog entry is fixed |
 | A listener whose capture does not name the owning process | Nothing to recognize. `ss` names the process only for a privileged session, so asking would answer "not a known component" for every Linux listener on an unprivileged run. Recorded `insufficient` — see "The defect the probe found" |
 | Source check `unavailable`, `Truncated`, `Redactions > 0`, or `check.HasMarker` in the capture or the item's own line | Bytes were removed; what was removed cannot be judged. Recorded `insufficient`, never sent, never filed |
 
@@ -394,16 +395,24 @@ single-fact rules already require. R4 cites this; nothing is scaffolded for it n
   `unavailable` for all three plists, so those items are judged on path and label alone.
   Re-record the macOS fixture with `--record-fixtures` including
   `cat /Library/LaunchDaemons/<label>.plist`, or accept it and say so in the record.
-- **`net.listeners` truncates the process name on macOS, and it is the R3 blocker.**
-  `lsof` caps its COMMAND column at nine characters, so the state says `ControlCe`, and
-  the probe's only two false positives were exactly the two listeners with a truncated
-  name. `lsof -nP -iTCP -sTCP:LISTEN +c 0` disables it. This is a catalog argv change:
-  it needs a macOS fixture re-record (`--record-fixtures`, scrubbed) and a command-trace
-  golden update, and it changes what reaches the target, so it is a product change to be
-  made deliberately rather than folded into the experiment. Until it lands, the listener
-  kind on macOS files false positives with real answers, and the listener kind on Linux is
-  `insufficient` without elevation — which together mean **`net.unexpected_listener` has
-  no working population today**.
+- **`net.listeners` shortens the process name on macOS.** `lsof` caps its COMMAND column
+  at nine characters, so the state says `ControlCe`, and the probe's only two false
+  positives were exactly the two listeners with a shortened name. `lsof -nP +c 0 -iTCP
+  -sTCP:LISTEN` disables it; verified on a Mac, `ControlCe` becomes `ControlCenter`.
+
+  This was first written down here as "the R3 blocker", which overstated it: nothing
+  stops R2 or R3 from running. What is true is that **until the capture improves, any
+  live record carries listener false positives**, so the choice is to fix the evidence or
+  to stop asking. Both are now done — code stops asking when the producing argv is the
+  shortening form, and the catalog entry is fixed — and the two are independent, which is
+  the point: the guard is what protects a kind whose evidence degrades, and it costs
+  nothing when the evidence is good.
+
+  On Linux the same kind is `insufficient` for a different reason: unprivileged `ss`
+  names no process at all. Until that is addressed — a `ps -p <pid> -o comm=` follow-up
+  check is the obvious way, and would serve the report as much as the model —
+  `net.unexpected_listener` has a working population only on macOS, and only with the
+  fixed capture.
 - **Only `linux-unit-in-tmp` records `ls -la /etc/systemd/system`.** On every other
   Linux case the shared directory listing comes back `unavailable`, so **no unit
   definition is ever read there** — the units are judged on their names alone. That is a

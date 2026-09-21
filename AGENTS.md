@@ -251,10 +251,12 @@ a change that breaks one is wrong even if the arm scores better:
 - **The follow-up table is a table.** No model picks a check, a path or an argument, and
   every read goes through `runner.RunAs` with the arm's `Origin`.
 
-A question that names a state field must not be asked when that field is empty: the
-candidate is `insufficient` instead. A listener with no owning process is the worked
-example, and skipping it is what keeps the phase 2 false positive from returning by
-another route.
+A question that names a state field must not be asked when that field is empty, or when
+the command that produced it is known to degrade it: the candidate is `insufficient`
+instead. Listeners are the worked example both ways — `ss` names no process unprivileged,
+and `lsof` shortens the name without `+c 0` — and the second test reads the argv that
+produced the capture, so it lifts by itself when the catalog entry improves. Skipping
+these is what keeps the phase 2 false positive from returning by another route.
 
 Questions, criteria and thresholds are versioned data (`bounded.QuestionsVersion`);
 changing any of them invalidates a threshold measured against the old ones. Answer

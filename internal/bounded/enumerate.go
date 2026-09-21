@@ -157,6 +157,14 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 			// expected_services matching is §6.3's, in code. Reporting a
 			// declared listener anyway was a phase 2 false positive.
 			it = filtered(it, "declared in expected_services as "+declaredService(declared, key))
+		case truncatesProcessName(res.Argv):
+			// The name is there but shortened, which is worse than absent: a
+			// reader or a model is handed "ControlCe" and cannot recognize
+			// it. Tying the test to the argv that produced the evidence keeps
+			// it deterministic — no "nine characters looks suspicious"
+			// heuristic — and self-healing: when the catalog entry gains
+			// `+c 0` the question is asked again with no code change.
+			it.Status, it.Reason = StatusInsufficient, "lsof shortened the process name; the capture was taken without +c 0"
 		case rec[check.FieldProcess] == "":
 			// Without the owning process there is nothing to recognize: on
 			// Linux `ss` names it only when the session is privileged. Asking
@@ -169,6 +177,22 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 		out = append(out, it)
 	}
 	return out
+}
+
+// truncatesProcessName reports whether a capture came from a command that
+// shortens the process name. lsof pads COMMAND to nine characters unless
+// `+c 0` is given, so "ControlCenter" arrives as "ControlCe" (found by the
+// R3 probe: docs/ROADMAP-RESEARCH.md, "The defect the probe found").
+func truncatesProcessName(argv []string) bool {
+	if len(argv) == 0 || pathBase(argv[0]) != "lsof" {
+		return false
+	}
+	for i, a := range argv {
+		if a == "+c" && i+1 < len(argv) && argv[i+1] == "0" {
+			return false
+		}
+	}
+	return true
 }
 
 // declaredService returns the purpose of the expected_services entry

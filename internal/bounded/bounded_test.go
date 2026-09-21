@@ -187,6 +187,27 @@ func TestListenerWithoutAProcessIsNotJudged(t *testing.T) {
 	}
 }
 
+// A shortened process name is worse than an absent one: "ControlCe" looks
+// like an answer and is not. The test is tied to the argv that produced the
+// capture, so it disappears by itself when the catalog entry gains `+c 0`.
+func TestTruncatedProcessNameIsNotJudged(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want bool
+	}{
+		{"lsof without +c 0", []string{"lsof", "-nP", "-iTCP", "-sTCP:LISTEN"}, true},
+		{"lsof with +c 0", []string{"lsof", "-nP", "+c", "0", "-iTCP", "-sTCP:LISTEN"}, false},
+		{"absolute lsof", []string{"/usr/sbin/lsof", "-nP", "-iTCP"}, true},
+		{"ss names no width", []string{"ss", "-tulpnH"}, false},
+		{"nothing", nil, false},
+	} {
+		if got := truncatesProcessName(tc.argv); got != tc.want {
+			t.Errorf("%s: truncatesProcessName = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 // One state holds one item. Accuracy falls as unrelated detail grows
 // (jev-1.13 limitation 5), and an item's judgement must not depend on
 // another item's evidence.
@@ -341,29 +362,26 @@ func TestSilenceAloneFilesNothing(t *testing.T) {
 // observation, and the severity the catalog assigns — never one a model
 // proposed (docs/SPEC.md §7.1).
 func TestFiledFindingIsValidatedAndGradedByCode(t *testing.T) {
-	// macOS names the owning process, so a listener there can be judged.
 	h := newHarness(t, filepath.Join("..", "..", "testdata", "eval", "cases", "macos-filevault-off"), runner.ElevateNone)
+	plist := "launchd:/Library/LaunchDaemons/com.nordvpn.macos.helper.plist"
 	rec := &recorder{answers: benign, byKey: map[string]map[string]float64{
-		"listener:7000/tcp": {QExplained: 0, QVendor: 0.05, QHallmarks: 0, QSensitive: 0.95, QPerson: 1},
+		plist: {QExplained: 0, QVendor: 0.05, QHallmarks: 0.95, QSensitive: 0, QPerson: 1},
 	}}
 	res := run(t, h, rec, nil)
-	if len(res.Filed) != 1 || res.Filed[0] != finding.IDUnexpectedListener {
+	if len(res.Filed) != 1 || res.Filed[0] != finding.IDUnexpectedPersist {
 		t.Fatalf("filed %v", res.Filed)
 	}
 	var f finding.Finding
 	for _, x := range h.store.Findings() {
-		if x.ID == finding.IDUnexpectedListener {
+		if x.ID == finding.IDUnexpectedPersist {
 			f = x
 		}
 	}
 	if f.Severity != finding.SevMedium || f.SeverityBase != finding.SevMedium {
 		t.Errorf("severity = %s/%s, want the catalog's", f.Severity, f.SeverityBase)
 	}
-	if len(f.Evidence) == 0 || !strings.Contains(f.Evidence[0].Excerpt, ":7000") {
+	if len(f.Evidence) == 0 || !strings.Contains(f.Evidence[0].Excerpt, "com.nordvpn.macos.helper.plist") {
 		t.Errorf("evidence = %+v", f.Evidence)
-	}
-	if f.Service == nil || f.Service.Port != 7000 {
-		t.Errorf("service = %+v", f.Service)
 	}
 	obs, ok := h.run.Observations().Get(f.Evidence[0].Observation)
 	if !ok || !strings.Contains(obs.Raw, f.Evidence[0].Excerpt) {
