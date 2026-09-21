@@ -44,7 +44,7 @@ func init() {
 		base("fw.stealth", "Application firewall stealth mode", check.DomainFirewall, check.ParseRaw, socketfilterfw, "--getstealthmode"),
 
 		// Listening sockets
-		exitOK(base("net.listeners", "Listening TCP sockets with owning process", check.DomainNetwork, check.ParseListeners, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN"), 0, 1),
+		exitOK(base("net.listeners", "Listening TCP sockets with owning process", check.DomainNetwork, check.ParseListeners, "lsof", "-nP", "+c", "0", "-iTCP", "-sTCP:LISTEN"), 0, 1),
 
 		// sshd
 		elevated(unit(base("sshd.config", "Effective sshd configuration", check.DomainSSHD, check.ParseKV, "sshd", "-T"), "settings")),

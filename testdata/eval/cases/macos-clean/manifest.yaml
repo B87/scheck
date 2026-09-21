@@ -21,15 +21,14 @@ execs:
 - argv:
   - lsof
   - -nP
+  - +c
+  - "0"
   - -iTCP
   - -sTCP:LISTEN
-  stdout: 'COMMAND     PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-
-    rapportd   1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP 127.0.0.1:53019 (LISTEN)
-
-    Raycast    1477 alice   34u  IPv4 0x23049dd54f7e890d      0t0  TCP 127.0.0.1:7265 (LISTEN)
-
-    '
+  stdout: |
+    COMMAND    PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+    rapportd  1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP 127.0.0.1:53019 (LISTEN)
+    Raycast   1477 alice   34u  IPv4 0x23049dd54f7e890d      0t0  TCP 127.0.0.1:7265 (LISTEN)
   code: 0
 - argv:
   - /usr/libexec/ApplicationFirewall/socketfilterfw

@@ -7,6 +7,9 @@ correct assessment reports (`expect_model`), what it must not (`forbid`,
 follow-up case the on-demand check that resolves it (`resolving_check`); `context/`
 holds the operator context the case runs with. `transcripts/<arm>.json`, when present,
 scripts the mock provider for that arm; mock runs validate the harness, never quality.
+`bounded.yaml` holds the research arm's scripted answers for that case (defaults per
+candidate kind, overridden per item key); they exercise `internal/bounded` end to end
+and are never a model's answers.
 
 `scheck eval --suite testdata/eval --model MODEL --repeat 3 --out results.json` runs
 the three arms of `docs/eval/phase2-criteria.md` and the adversarial pairs from

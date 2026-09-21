@@ -6,7 +6,7 @@ reasons, and reports. It never modifies the target.
 
 Status: v0.8 — M0, M1 (through M1.8) and all of M2 (through M2.8) implemented; the live
 evaluation is recorded and **no model assesses a host in 0.0.1** (§2.1); M4.5–M4.7 remain
-(2026-09-20) · Language: Go · Inference: provider-agnostic (default `openai-compatible`,
+(2026-09-20; the research track's R1 arm is implemented offline, 2026-09-21) · Language: Go · Inference: provider-agnostic (default `openai-compatible`,
 model `gpt-5.6-luna` on OpenAI's endpoint, reached only by the evaluation harness in this
 build; Anthropic and guaranteed local-only inference deferred past v1)
 
@@ -149,6 +149,32 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   record's failures are an unused loop and per-item context judgements, which is the
   shape a System One model can answer and the shape it cannot replace. No key is held;
   the live slice stays deferred.
+
+**Changes from implementing the research track's R1 (2026-09-21):**
+
+- §5.9 gains three decisions taken while building the bounded arm
+  (`internal/bounded`, reachable from `scheck eval --arms bounded` alone). A candidate
+  is judged by **two or three independent yes/no questions answered in one request**
+  and combined by a rule in code, not by one "is this unexpected?" question: that
+  question asks a literal reader to recognize the thing and relate it to the context in
+  one hop, which is the failure mode the vendor's limitations page names. Nothing is
+  filed from **the absence of an explanation**; every rule needs an affirmative signal,
+  because filing on silence is what produced the phase 2 false positives. And a bounded
+  follow-up read is not a per-item attempt: code lists `/etc/systemd/system` once and
+  reads only the unit files a host actually defines.
+- A question that names a state field is not asked when that field is empty, or when the
+  command that produced it is known to degrade it (`lsof` shortens a process name to nine
+  characters without `+c 0`): the candidate is `insufficient` instead. A listener whose capture does not name the owning process is
+  the worked example — `ss` names it only for a privileged session — and asking anyway
+  answers "not a recognized component" for every listener on an unprivileged run, which
+  refiles the phase 2 false positive by another route. This generalizes the existing rule
+  that missing, denied, redacted or truncated evidence is never sent.
+- The arm's scope is the four judgement ids and nothing else. `fw.no_firewall_active`,
+  `sshd.password_auth_exposed` and a drop-in's `sshd.password_auth_enabled` are
+  deterministic correlations across two checks, not context judgements; the comparison
+  report names them as outside the arm's design rather than letting a reader read a miss
+  as a failure. `ROADMAP-RESEARCH.md` proposes them as a rules change for a later
+  release, which would be a change to §7.5's one-rule-one-check contract.
 
 **Changes from the 0.0.1 release validation (2026-09-20, M4):**
 
@@ -1061,9 +1087,11 @@ Provider-neutral, no vendor-specific phrasing:
 TypeSafe's Jev is a candidate for semantic judgments over collected evidence, such as
 whether an observed service is explained by operator notes or a persistence entry
 warrants investigation. It is an optional research track, not a prerequisite for M0–M4
-or v1. Access is currently waitlisted; development, default CI and release gates must
-not require a Jev account, credentials, network access to TypeSafe, or recorded Jev
-responses. The existing generative-provider plan remains the production path.
+or v1. A key exists as of 2026-09-21, and it changes nothing about this rule:
+development, default CI and release gates must not require a Jev account, credentials,
+network access to TypeSafe, or recorded Jev responses. The offline arm (R1) runs in
+`make check` with scripted answers and no network. The existing generative-provider
+plan remains the production path.
 
 If implemented for evaluation, keep assessment separate from `llm.Provider`: bounded
 decisions do not implement its conversational streaming and tool-generation contract.
@@ -1072,12 +1100,14 @@ provider framework. Its domain-level input is policy-filtered evidence plus oper
 context; its output is candidate assessments tied to existing evidence identifiers.
 The implementation owns question wording, batching and vendor response conversion.
 
-Initial scope: one yes/no judgement per candidate item for the context-dependent
-judgement ids (`persist.unexpected_entry`, `net.unexpected_listener`,
-`fs.suid_unexpected`, `accounts.unexpected_admin`), where code enumerates the
-candidates, applies the deterministic filters, runs any bounded follow-up read through
-the runner from a fixed per-kind table, builds a per-item state, and decides what to
-file. `expected_services` matching and `svc.expected_missing` stay with §6.3. Code
+Initial scope: the context-dependent judgement ids (`persist.unexpected_entry`,
+`net.unexpected_listener`, `fs.suid_unexpected`, `accounts.unexpected_admin`), where
+code enumerates the candidates, applies the deterministic filters, runs any bounded
+follow-up read through the runner from a fixed per-kind table, builds a per-item state,
+and decides what to file. Each candidate is judged by two or three independent yes/no
+questions in one request, combined by a rule in code; every rule requires an affirmative
+signal and none files from the absence of an explanation. No other finding id may be
+filed from this path. `expected_services` matching and `svc.expected_missing` stay with §6.3. Code
 retains explicit status and completeness metadata, resolves evidence references, and
 performs exact parsing, counting and comparisons. Missing, denied, redacted or truncated
 evidence must not imply a negative finding and is never sent. Assessment results neither

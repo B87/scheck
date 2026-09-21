@@ -1,9 +1,13 @@
 # scheck — roadmap to 0.0.2
 
-**Status (2026-09-20):** proposed, not implemented. The first application is deliberately
-undecided; M5.0 must select it and freeze its assessment scope before pack implementation.
-The decisions below are the proposed release contract, not descriptions of current CLI
-behavior. `SPEC.md` remains authoritative until each implementing slice updates it.
+**Status (2026-09-20, amended 2026-09-21):** proposed, not implemented. The first
+application is deliberately undecided; M5.0 must select it and freeze its assessment scope
+before pack implementation. The decisions below are the proposed release contract, not
+descriptions of current CLI behavior. `SPEC.md` remains authoritative until each
+implementing slice updates it. The 2026-09-21 amendment adds the assessment-surface
+forward-compatibility note and a proposed core provenance check; it changes no slice's
+scope and adds no deliverable. The `net.listeners` capture fix it briefly carried landed
+outside this release on 2026-09-22 and was removed from M5.1 again.
 
 ## What this release delivers
 
@@ -60,6 +64,25 @@ grant file access or make a claimed framework/runtime state an observed fact. Th
 sees and may report only
 the selected finding definitions (plus the existing `custom:` path); it cannot reactivate
 a disabled pack by naming one of its findings.
+
+**Forward compatibility of the assessment surface.** This release's pack contract is
+checks, parsers, finding definitions and *single-fact* posture rules. Do not document that
+as permanent: the [research track](ROADMAP-RESEARCH.md) may yet propose a bounded
+judgement layer whose candidate kinds, questions and thresholds would be a further
+contribution, and a multi-fact rule tier is separately proposed there. Neither is in this
+release and neither is promised. The requirement here is only that no pack, document or
+test depends on the *absence* of a broader assessment surface; adding one later is a
+contribution API major bump, which the versioning decision above already allows. That
+track's R4 decision lands before M5.1 freezes the API, so this is a question answered with
+evidence rather than left open.
+
+One small item is carried into this release from that track, and it does not depend on
+the track succeeding: package provenance as a proposed reviewed **core** check
+(`dpkg -S`, `rpm -qf`, `codesign -dv`) supporting a single-fact rule for a SUID binary no
+package owns. It is a candidate core addition with its own review, not a pack and not a
+commitment of this release. (The `net.listeners` `+c 0` capture fix that track also
+surfaced landed before this release rather than inside it, so the host baseline this
+release must preserve already includes it.)
 
 ## Security and evidence requirements for every slice
 
@@ -441,7 +464,7 @@ public API; keep security enforcement private.
 |---|---|
 | Useful assessment | M5.0 brief, supported deployment matrix and M5.2 expected/actual findings and coverage. |
 | Custom application | M5.2a's Next.js local/SSH demo using the official binary, runtime finding/abstention fixtures, bounded binding and restart/PID-reuse attribution tests; no app code execution or HTTP probing. |
-| Preserved host behavior | Before/after fixture comparison for Ubuntu, Fedora and macOS; reviewed schema/golden diffs. |
+| Preserved host behavior | Before/after fixture comparison for Ubuntu, Fedora and macOS; reviewed schema/golden diffs. No intentional capture change is in scope for this release; every diff is a regression. |
 | Closed execution surface | Composition failures, mutation isolation, disabled-ID denials, canary, redaction and budget tests. |
 | Read-only collection | Local/SSH integration results on every claimed application deployment; empty controlled filesystem diffs and sudoers validation where applicable. |
 | External authoring | Separate-module build and validation using only the documented API, including its own parser consumed by core predicates, summaries and persistence. |
@@ -489,7 +512,9 @@ Do not ship a framework-only release under the same completion claim.
 - Arbitrary scripts, a generic rule language, cross-fact deterministic rules, a dynamic
   parser runtime or dependency resolution between optional packs.
 - Additional providers, emulation, local-only inference or small-context chunking (0.0.3).
-- Category filtering, SARIF and posture diff (0.0.4), and mandatory bounded assessment.
+- Category filtering, SARIF and posture diff (0.0.4), and bounded assessment in any form:
+  the [research track](ROADMAP-RESEARCH.md) records why it runs in parallel with this
+  release and ships, if ever, no earlier than 0.0.3.
 
 Runtime declarative packs need a separate command-admission design after real authoring
 experience. A signature identifies a publisher; it does not prove a command is read-only.

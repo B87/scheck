@@ -270,7 +270,7 @@ var judgementDefs = map[string]Def{
 			"the service is down, the context is stale, or the host is not the one the context describes.",
 		Remediation: Remediation{
 			Summary:  "Confirm the service is meant to run here and start it, or correct expected_services in the context.",
-			Commands: []string{"# review first:", "ss -tulpn   # Linux", "lsof -nP -iTCP -sTCP:LISTEN   # macOS"},
+			Commands: []string{"# review first:", "ss -tulpn   # Linux", "lsof -nP +c 0 -iTCP -sTCP:LISTEN   # macOS"},
 		},
 	},
 	IDAcceptanceExpired: {

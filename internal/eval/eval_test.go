@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/b87/scheck/internal/bounded"
 	"github.com/b87/scheck/internal/check"
 	_ "github.com/b87/scheck/internal/check/all"
 )
@@ -210,5 +212,127 @@ func TestCaseManifestsRecordEachArgvOnce(t *testing.T) {
 			}
 			seen[key] = true
 		}
+	}
+}
+
+// The bounded research arm (docs/ROADMAP-RESEARCH.md R1) runs beside the
+// three frozen arms on the same cases, facts, rule findings and context.
+// Scripted answers exercise it; they make no quality claim, and the record
+// says so.
+func TestBoundedArmRunsOnScriptedAnswers(t *testing.T) {
+	s := load(t)
+	res, err := Execute(context.Background(), Options{Suite: s, Provider: MockProvider, Answers: ScriptedAnswers,
+		Arms: Arms, Profile: check.ProfileBaseline, Repeat: 1, Log: func(f string, a ...any) { t.Logf(f, a...) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.BoundedSource != "scripted" || !strings.HasPrefix(res.BoundedQuestions, "bq-") {
+		t.Errorf("record: source %q questions %q", res.BoundedSource, res.BoundedQuestions)
+	}
+	byCase := map[string]Run{}
+	for _, r := range res.Runs {
+		if r.Arm == ArmBounded {
+			byCase[r.Case] = r
+		}
+	}
+	if len(byCase) != len(s.Cases) {
+		t.Fatalf("%d bounded runs for %d cases", len(byCase), len(s.Cases))
+	}
+	// The two follow-up cases the arm's judgement ids cover are resolved by
+	// a read code ran, and the SUID correlation is filed.
+	for _, tc := range []struct {
+		name     string
+		filed    []string
+		resolved bool
+	}{
+		{"linux-unit-in-tmp", []string{"persist.unexpected_entry"}, true},
+		{"linux-cron-fetch", []string{"persist.unexpected_entry"}, true},
+		{"linux-suid-in-world-writable", []string{"fs.suid_unexpected"}, false},
+	} {
+		r := byCase[tc.name]
+		if strings.Join(r.ModelIDs, ",") != strings.Join(tc.filed, ",") || r.Metrics.Resolved != tc.resolved {
+			t.Errorf("%s: filed %v resolved %v, want %v %v", tc.name, r.ModelIDs, r.Metrics.Resolved, tc.filed, tc.resolved)
+		}
+		if r.Bounded == nil || r.Bounded.Source != "scripted" || r.Bounded.Requests == 0 {
+			t.Errorf("%s: bounded record %+v", tc.name, r.Bounded)
+		}
+	}
+	// No case reports a forbidden id, and every case that should abstain
+	// does: a candidate nothing explains is not a finding.
+	for name, r := range byCase {
+		if r.Metrics.FalsePositives != 0 {
+			t.Errorf("%s: %d false positives (%v)", name, r.Metrics.FalsePositives, r.ModelIDs)
+		}
+		if r.Status != "complete" {
+			t.Errorf("%s: status %q", name, r.Status)
+		}
+	}
+	if r := byCase["linux-truncated-listeners"]; r.Bounded == nil || r.Bounded.Counts()[bounded.StatusInsufficient] == 0 {
+		t.Errorf("truncated listeners: %+v", r.Bounded)
+	}
+	if r := byCase["linux-context-explains"]; r.Bounded == nil || r.Bounded.Counts()[bounded.StatusFiltered] == 0 {
+		t.Errorf("context-explains: %+v", r.Bounded)
+	}
+	// Rule findings are the same in every arm: the arms differ in what they
+	// add, never in what the rules concluded (criteria §1).
+	for _, c := range s.Cases {
+		var sig string
+		for _, r := range res.Runs {
+			if r.Case != c.Name {
+				continue
+			}
+			got := ruleSignature(r.Findings)
+			if sig == "" {
+				sig = got
+			} else if got != sig {
+				t.Errorf("%s: %s arm rule findings %q differ from %q", c.Name, r.Arm, got, sig)
+			}
+		}
+	}
+	md := res.Markdown()
+	for _, want := range []string{"## Bounded arm", "answer source `scripted`", "not** a quality claim", "| bounded |", "Outside this arm's design", "linux-no-firewall (fw.no_firewall_active)"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown lacks %q", want)
+		}
+	}
+}
+
+// A record without the agent and single-pass arms states no phase 2
+// verdict: the frozen criteria compare those two.
+func TestVerdictsNeedTheFrozenArms(t *testing.T) {
+	s, err := load(t).Select([]string{"linux-clean"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Execute(context.Background(), Options{Suite: s, Arms: []Arm{ArmRules, ArmBounded}, Answers: ScriptedAnswers,
+		Profile: check.ProfileBaseline})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := res.Verdicts()
+	if len(v) != 1 || v[0].Pass || !strings.Contains(v[0].Criterion, "not evaluated") {
+		t.Errorf("verdicts: %+v", v)
+	}
+	if len(res.ArmsRun) != 2 {
+		t.Errorf("arms: %v", res.ArmsRun)
+	}
+}
+
+// ParseArms keeps comparison order and rejects a name that is not an arm.
+func TestParseArms(t *testing.T) {
+	got, err := ParseArms([]string{"bounded", "rules"})
+	if err != nil || len(got) != 2 || got[0] != ArmRules || got[1] != ArmBounded {
+		t.Errorf("%v %v", got, err)
+	}
+	// An unqualified run compares the frozen three; the research arm is
+	// asked for by name.
+	if def, err := ParseArms(nil); err != nil || len(def) != 3 || slices.Contains(def, ArmBounded) {
+		t.Errorf("default arms: %v %v", def, err)
+	}
+	if all, err := ParseArms([]string{"rules", "single-pass", "agent", "bounded"}); err != nil || len(all) != 4 {
+		t.Errorf("all arms: %v %v", all, err)
+	}
+	if _, err := ParseArms([]string{"llm"}); err == nil {
+		t.Error("unknown arm accepted")
 	}
 }
