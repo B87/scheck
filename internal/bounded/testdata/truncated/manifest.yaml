@@ -1,0 +1,13 @@
+# A listeners capture that lost bytes: the marker is what the runner leaves
+# behind after truncation. Every listener enumerated from it is insufficient.
+platform: linux
+execs:
+  - argv: [uname, -s]
+    stdout: "Linux\n"
+    code: 0
+  - argv: [ss, -tulpnH]
+    stdout: |
+      tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=700,fd=3))
+      tcp LISTEN 0      128    0.0.0.0:9999 0.0.0.0:* users:(("unknown-agent",pid=901,fd=7))
+      [TRUNCATED:4096 bytes]
+    code: 0

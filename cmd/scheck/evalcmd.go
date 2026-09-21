@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -20,12 +21,14 @@ import (
 // release gate needs. It runs against fixtures only, never a live target.
 func newEvalCmd(opts *globalOpts) *cobra.Command {
 	var (
-		suiteDir string
-		repeat   int
-		corpus   string
-		advCase  string
-		noPairs  bool
-		cases    []string
+		suiteDir    string
+		repeat      int
+		corpus      string
+		advCase     string
+		noPairs     bool
+		cases       []string
+		armNames    []string
+		boundedFrom string
 	)
 	cmd := &cobra.Command{
 		Use:    "eval",
@@ -43,6 +46,10 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			if missing := suite.Validate(); len(missing) > 0 {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: suite below the frozen minimums: %v\n", missing)
 			}
+			arms, err := eval.ParseArms(armNames)
+			if err != nil {
+				return usageErr("%v", err)
+			}
 			cfg, err := opts.loadConfig(cmd)
 			if err != nil {
 				return err
@@ -53,13 +60,30 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			}
 			// Progress goes to stderr unconditionally: a live run is minutes
 			// long and its record lands in --out or stdout when it is done.
-			o := eval.Options{Suite: suite, Repeat: repeat, Model: cfg.Model, Version: version.Version,
+			o := eval.Options{Suite: suite, Repeat: repeat, Arms: arms, Model: cfg.Model, Version: version.Version,
 				Log: func(f string, a ...any) { fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) }}
+			if slices.Contains(arms, eval.ArmBounded) {
+				// The research arm's answer sources arrive with their own
+				// roadmap slices (docs/ROADMAP-RESEARCH.md R2 and R3); the
+				// flag is registered now and refuses what does not exist.
+				switch boundedFrom {
+				case "scripted":
+					o.Answers = eval.ScriptedAnswers
+				case "openai", "jev":
+					return usageErr("--bounded-source %s is not available in this build", boundedFrom)
+				default:
+					return usageErr("--bounded-source must be scripted, openai or jev")
+				}
+			}
 			o.Effort, _ = llm.ParseEffort(cfg.Effort)
 			o.Profile, _ = check.ParseProfile(cfg.Profile)
-			if name == "mock" {
+			modelArms := slices.Contains(arms, eval.ArmSingle) || slices.Contains(arms, eval.ArmAgent)
+			switch {
+			case !modelArms:
+				// rules and bounded need no provider at all.
+			case name == "mock":
 				o.Provider = eval.MockProvider
-			} else {
+			default:
 				if opts.LocalOnly || (cfg.AllowEgress != nil && !*cfg.AllowEgress) {
 					return usageErr("--local-only and allow_egress: false are not available in this build")
 				}
@@ -123,6 +147,8 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 	cmd.Flags().StringVar(&advCase, "adversarial-case", "linux-password-auth-public", "the case the adversarial pairs run on")
 	cmd.Flags().BoolVar(&noPairs, "no-pairs", false, "skip the adversarial pairs")
 	cmd.Flags().StringSliceVar(&cases, "cases", nil, "run only these cases (comma-separated names); the record is then below the minimums")
+	cmd.Flags().StringSliceVar(&armNames, "arms", nil, "arms to run; default rules,single-pass,agent — the research arm is added with bounded")
+	cmd.Flags().StringVar(&boundedFrom, "bounded-source", "scripted", "where the bounded arm's answers come from (scripted; openai and jev arrive with R2 and R3)")
 	return cmd
 }
 

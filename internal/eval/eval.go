@@ -23,6 +23,7 @@ import (
 
 	"github.com/b87/scheck/internal/agent"
 	"github.com/b87/scheck/internal/baseline"
+	"github.com/b87/scheck/internal/bounded"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/finding"
@@ -148,13 +149,55 @@ type Arm string
 
 // Arms, in the order they are compared.
 const (
-	ArmRules  Arm = "rules"
-	ArmSingle Arm = "single-pass"
-	ArmAgent  Arm = "agent"
+	ArmRules   Arm = "rules"
+	ArmSingle  Arm = "single-pass"
+	ArmAgent   Arm = "agent"
+	ArmBounded Arm = "bounded"
 )
 
-// Arms lists the arms in comparison order.
-var Arms = []Arm{ArmRules, ArmSingle, ArmAgent}
+// Arms lists the arms in comparison order. The first three are the frozen
+// criteria's (docs/eval/phase2-criteria.md §1); bounded is the research
+// track's fourth arm (docs/ROADMAP-RESEARCH.md R1), compared on the same
+// cases, facts, rule findings and context.
+var Arms = []Arm{ArmRules, ArmSingle, ArmAgent, ArmBounded}
+
+// DefaultArms are the arms an unqualified run compares: the frozen three.
+// The research arm is asked for by name, so a live record never carries a
+// research column nobody asked for.
+var DefaultArms = []Arm{ArmRules, ArmSingle, ArmAgent}
+
+// ParseArms reads a comma-separated arm list, keeping comparison order.
+func ParseArms(names []string) ([]Arm, error) {
+	if len(names) == 0 {
+		return DefaultArms, nil
+	}
+	want := map[Arm]bool{}
+	for _, n := range names {
+		a := Arm(strings.TrimSpace(n))
+		if !slices.Contains(Arms, a) {
+			return nil, fmt.Errorf("eval: no arm %q; arms are %v", n, Arms)
+		}
+		want[a] = true
+	}
+	var out []Arm
+	for _, a := range Arms {
+		if want[a] {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// AnswererFor supplies the bounded arm's answer source for a case. R1 has
+// one implementation, the scripted one; R2 and R3 add the generative and
+// Jev sources behind the same seam.
+type AnswererFor func(c Case) (bounded.Answerer, error)
+
+// ScriptedAnswers loads <case>/bounded.yaml. Scripted answers exercise the
+// arm and make no quality claim.
+func ScriptedAnswers(c Case) (bounded.Answerer, error) {
+	return bounded.LoadScripted(filepath.Join(c.Dir, "bounded.yaml"))
+}
 
 // ProviderFor supplies the provider for a model arm of a case. It is called
 // once per run so a transcript-backed provider starts fresh.
@@ -175,11 +218,15 @@ func MockProvider(c Case, arm Arm) (llm.Provider, error) {
 type Options struct {
 	Suite    *Suite
 	Provider ProviderFor
-	Repeat   int
-	Model    string
-	Effort   llm.Effort
-	Budgets  policy.Budgets
-	Profile  check.Profile
+	// Answers supplies the bounded arm's answer source; nil skips that arm.
+	Answers AnswererFor
+	// Arms selects which arms run; empty runs all of them.
+	Arms    []Arm
+	Repeat  int
+	Model   string
+	Effort  llm.Effort
+	Budgets policy.Budgets
+	Profile check.Profile
 	// Corpus is the injection corpus directory (testdata/context); "" skips
 	// the adversarial pairs. AdversarialCase names the case they run on.
 	Corpus          string
@@ -211,6 +258,7 @@ type Run struct {
 	ModelIDs   []string          `json:"model_ids"`
 	Findings   []finding.Finding `json:"findings"`
 	RuledOut   []string          `json:"ruled_out,omitempty"` // ids closed through verdict: ruled_out; never scored
+	Bounded    *bounded.Result   `json:"bounded,omitempty"`   // the bounded arm's per-item record
 	Text       string            `json:"text,omitempty"`
 	Metrics    Metrics           `json:"metrics"`
 	Error      string            `json:"error,omitempty"`
@@ -241,16 +289,19 @@ type PairRun struct {
 
 // Results is the record of one evaluation.
 type Results struct {
-	Started       time.Time `json:"started"`
-	Live          bool      `json:"live"`
-	Model         string    `json:"model"`
-	Provider      string    `json:"provider"`
-	PromptVersion string    `json:"prompt_version"`
-	Version       string    `json:"scheck_version"`
-	Repeat        int       `json:"repeat"`
-	Suite         []Case    `json:"suite"`
-	Runs          []Run     `json:"runs"`
-	Pairs         []PairRun `json:"pairs"`
+	Started          time.Time `json:"started"`
+	Live             bool      `json:"live"`
+	Model            string    `json:"model"`
+	Provider         string    `json:"provider"`
+	PromptVersion    string    `json:"prompt_version"`
+	Version          string    `json:"scheck_version"`
+	Repeat           int       `json:"repeat"`
+	ArmsRun          []Arm     `json:"arms"`
+	BoundedSource    string    `json:"bounded_source,omitempty"`
+	BoundedQuestions string    `json:"bounded_questions_version,omitempty"`
+	Suite            []Case    `json:"suite"`
+	Runs             []Run     `json:"runs"`
+	Pairs            []PairRun `json:"pairs"`
 	// Baseline measures natural run-to-run drift: per repeat, one benign
 	// control run again against itself. Hostile holds the second benign
 	// run. It is what §4.4's bound is read against, not a criterion.
@@ -270,8 +321,17 @@ func Execute(ctx context.Context, o Options) (*Results, error) {
 	if o.Budgets == (policy.Budgets{}) {
 		o.Budgets = policy.DefaultBudgets()
 	}
+	if len(o.Arms) == 0 {
+		o.Arms = DefaultArms
+	}
+	if o.Answers == nil {
+		o.Arms = slices.DeleteFunc(slices.Clone(o.Arms), func(a Arm) bool { return a == ArmBounded })
+	}
 	res := &Results{Started: time.Now(), Live: o.Live, Model: o.Model, Version: o.Version, PromptVersion: agent.PromptVersion, Repeat: o.Repeat,
-		Suite: o.Suite.Cases, Runs: []Run{}, Pairs: []PairRun{}, Baseline: []PairRun{}, Notes: []string{}}
+		ArmsRun: o.Arms, Suite: o.Suite.Cases, Runs: []Run{}, Pairs: []PairRun{}, Baseline: []PairRun{}, Notes: []string{}}
+	if slices.Contains(o.Arms, ArmBounded) {
+		res.BoundedQuestions = bounded.QuestionsVersion()
+	}
 	checkpoint := func() {
 		if o.Checkpoint != nil {
 			o.Checkpoint(res)
@@ -281,7 +341,7 @@ func Execute(ctx context.Context, o Options) (*Results, error) {
 		res.Notes = append(res.Notes, "mock provider: this record validates the harness and makes no quality or resistance claim")
 	}
 	for _, c := range o.Suite.Cases {
-		for _, arm := range Arms {
+		for _, arm := range o.Arms {
 			reps := o.Repeat
 			if arm == ArmRules {
 				reps = 1 // deterministic
@@ -291,8 +351,11 @@ func Execute(ctx context.Context, o Options) (*Results, error) {
 				if err != nil {
 					return nil, err
 				}
-				if res.Provider == "" && run.Arm != ArmRules {
+				if res.Provider == "" && run.Arm != ArmRules && run.Arm != ArmBounded {
 					res.Provider = o.providerName(c, arm)
+				}
+				if run.Arm == ArmBounded && run.Bounded != nil && res.BoundedSource == "" {
+					res.BoundedSource = run.Bounded.Source
 				}
 				res.Runs = append(res.Runs, run)
 				checkpoint()
@@ -303,7 +366,7 @@ func Execute(ctx context.Context, o Options) (*Results, error) {
 			}
 		}
 	}
-	if o.Corpus != "" {
+	if o.Corpus != "" && slices.Contains(o.Arms, ArmAgent) {
 		if err := o.pairs(ctx, res, checkpoint); err != nil {
 			return nil, err
 		}
@@ -374,6 +437,31 @@ func (o Options) run(ctx context.Context, c Case, arm Arm, repeat int, contextFl
 		run.Metrics = score(c, run, nil)
 		return run, nil
 	}
+	if arm == ArmBounded {
+		if o.Answers == nil {
+			return run, errors.New("eval: the bounded arm needs an answer source")
+		}
+		answers, err := o.Answers(c)
+		if err != nil {
+			return run, fmt.Errorf("eval case %s %s: %w", c.Name, arm, err)
+		}
+		bctx, cancel := context.WithTimeout(ctx, b.RunTimeout)
+		bres, err := bounded.Run(bctx, bounded.Options{Sheet: sheet, Runner: r, Store: store, Context: merged,
+			Profile: o.Profile, Answers: answers, Budgets: b})
+		cancel()
+		if err != nil {
+			return run, fmt.Errorf("eval case %s %s: %w", c.Name, arm, err)
+		}
+		run.LatencyMS = time.Since(start).Milliseconds()
+		run.Bounded = bres
+		run.Status, run.Ended = "complete", bres.Ended
+		if bres.Ended != "complete" {
+			run.Status = "incomplete"
+		}
+		run.Iterations, run.Checks = bres.Requests, bres.FollowUps
+		o.finish(c, &run, store, audit.Bytes())
+		return run, nil
+	}
 	if o.Provider == nil {
 		return run, errors.New("eval: a provider is required for the model arms")
 	}
@@ -392,6 +480,14 @@ func (o Options) run(ctx context.Context, c Case, arm Arm, repeat int, contextFl
 	if out.Complete() {
 		run.Ended = "model stopped"
 	}
+	o.finish(c, &run, store, audit.Bytes())
+	return run, nil
+}
+
+// finish collects what an arm reported and scores it: the ids the arm added
+// beyond the rules, what it ruled out, the denied tool calls in its audit
+// log, and the case metrics. Every arm but rules ends here.
+func (o Options) finish(c Case, run *Run, store *finding.Store, auditLog []byte) {
 	result := store.Result()
 	run.Findings = result.Findings
 	ruleSet := map[string]bool{}
@@ -408,14 +504,13 @@ func (o Options) run(ctx context.Context, c Case, arm Arm, repeat int, contextFl
 		run.RuledOut = append(run.RuledOut, r.ID)
 	}
 	sort.Strings(run.RuledOut)
-	entries := auditEntries(audit.Bytes())
+	entries := auditEntries(auditLog)
 	for _, e := range entries {
 		if e.Tool != "" && strings.HasPrefix(e.Decision, "denied:") {
 			run.Denied++
 		}
 	}
-	run.Metrics = score(c, run, entries)
-	return run, nil
+	run.Metrics = score(c, *run, entries)
 }
 
 func auditEntries(raw []byte) []policy.AuditEntry {

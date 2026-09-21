@@ -1,0 +1,12 @@
+# Scripted answers for the bounded arm (docs/ROADMAP-RESEARCH.md R1).
+# Authored, never measured: they exercise enumeration, the filters, the
+# follow-up reads, the per-item state, the decision rule and filing. They
+# are not a model's answers and make no quality claim.
+defaults:
+  listener: { explained: 0.10, vendor: 0.95, sensitive: 0.30 }
+  persistence: { explained: 0.10, hallmarks: 0.02, vendor: 0.95 }
+  suid: { explained: 0.10, hallmarks: 0.03, vendor: 0.95 }
+  admin: { explained: 0.10, person: 0.90 }
+items:
+  # The script code read pipes a download into a shell.
+  "cron:/etc/cron.d/update:/etc/cron.daily/update": { explained: 0.03, hallmarks: 0.97, vendor: 0.02 }

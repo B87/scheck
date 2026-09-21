@@ -70,6 +70,7 @@ passes.
 | `internal/operator` | operator context: sources, the §6.2 schema, per-kind merge, budget, the `<operator_context>` block |
 | `internal/agent` | phase 2: the system prompt, the three tools, the loop; every execution through `runner.RunAs`, every finding through `finding.Store`. No CLI run reaches it in 0.0.1; `internal/eval` is its only caller |
 | `internal/eval` | the M2.7 harness: arms, metrics, adversarial pairs, the comparison report |
+| `internal/bounded` | the research track's R1 (`docs/ROADMAP-RESEARCH.md`, §5.9): code enumerates candidates, runs a fixed follow-up table through `runner.RunAs`, asks a few yes/no questions per item and decides in code. Offline, scripted answers, `internal/eval` its only caller |
 | `testdata/context`, `testdata/eval`, `testdata/transcripts` | injection corpus with benign controls; labeled evaluation cases (`base:` a recorded fixture); mock transcripts |
 | `docs/eval` | the frozen phase 2 criteria and the results record |
 | `test/live` | opt-in tests that spend real money (`make live`, build tag `live`) |
@@ -105,6 +106,7 @@ go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
 go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
 go run ./cmd/scheck local                         # facts + posture rules; no model, no key, free
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
+go run ./cmd/scheck eval --provider mock --arms rules,bounded --no-pairs   # the research arm, scripted
 go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
 make live                                        # opt-in live tests
 go test ./internal/report -update    # rewrite the golden text and JSON reports, then read the diff
@@ -112,7 +114,8 @@ go test ./internal/baseline -update  # rewrite the golden command traces, then r
 ```
 
 `make check` also runs `scripts/depcheck.sh`: `agent`, `policy`, `check`, `finding`,
-`report` and `llm` must have no adapter or SDK in their dependency graph.
+`report`, `llm` and `bounded` must have no adapter or SDK in their dependency graph, and
+none of the first six may import `internal/bounded`.
 
 `make check` includes the user's `fix` target (`go fix ./...`); keep it in the chain.
 If `go fix` proposes conflicting rewrites and never converges, apply the modernization
@@ -234,11 +237,29 @@ still wrong.
 - A model flag on `local` or `ssh` exits 3 (`modelFlags` in `cmd/scheck/root.go`); the
   provider pre-flight lives in `cmd/scheck/evalcmd.go`. Keep both there.
 
+## The research arm (`internal/bounded`)
+
+R1 of `docs/ROADMAP-RESEARCH.md` is implemented and offline. Three rules hold there, and
+a change that breaks one is wrong even if the arm scores better:
+
+- **Nothing is filed from the absence of an explanation.** Every decision rule needs an
+  affirmative signal; "nobody declared this" is a property of the operator's notes, not
+  of the host, and it is what produced the phase 2 false positives.
+- **Insufficient evidence is never sent and never filed.** An `unavailable`, truncated
+  or redacted record is settled by code as `insufficient` before any question exists.
+- **The follow-up table is a table.** No model picks a check, a path or an argument, and
+  every read goes through `runner.RunAs` with the arm's `Origin`.
+
+Questions, criteria and thresholds are versioned data (`bounded.QuestionsVersion`);
+changing any of them invalidates a threshold measured against the old ones. Answer
+sources are attributed separately in every record — scripted answers make no quality
+claim of any kind.
+
 ## Out of scope until the roadmap slice that introduces them
 
 `--only`, SARIF, `scheck diff`, `--local-only` and `allow_egress: false` (exit 3 now),
 `anthropic` and `ollama` (registered, exit 3), tool-call emulation, chunking, the
-optional §5.9 assessment track. Do not scaffold empty abstractions for any of them.
+§5.9 track's R2 and R3 answer sources (`--bounded-source openai|jev`, exit 3 now). Do not scaffold empty abstractions for any of them.
 A posture rule reads the fact sheet only; if a rule seems to need a new command, add a
 catalog check first and keep the rule single-fact (§7.5). A conclusion that needs two
 facts is the model's, through a judgement finding id in `internal/finding/catalog.go`.
