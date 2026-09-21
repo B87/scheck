@@ -34,6 +34,11 @@ integ:
 live:
 	SCHECK_LIVE=1 go test -tags live -count=1 -v ./test/live/
 
+# The R3 pre-flight recall probe (docs/ROADMAP-RESEARCH.md): needs
+# TYPESAFE_API_KEY, spends a fraction of a cent, sends recorded fixture data only.
+probe:
+	SCHECK_LIVE=1 go test -tags live -count=1 -v -run TestJevVendorRecallProbe ./test/live/
+
 # Re-record testdata/fixtures/{ubuntu,fedora} from the containers in test/containers.
 fixtures:
 	SCHECK_RECORD=1 go test -tags integration -count=1 -run TestRecordFixtures ./test/integ/

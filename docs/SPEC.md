@@ -162,6 +162,12 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   because filing on silence is what produced the phase 2 false positives. And a bounded
   follow-up read is not a per-item attempt: code lists `/etc/systemd/system` once and
   reads only the unit files a host actually defines.
+- A question that names a state field is not asked when that field is empty: the candidate
+  is `insufficient` instead. A listener whose capture does not name the owning process is
+  the worked example — `ss` names it only for a privileged session — and asking anyway
+  answers "not a recognized component" for every listener on an unprivileged run, which
+  refiles the phase 2 false positive by another route. This generalizes the existing rule
+  that missing, denied, redacted or truncated evidence is never sent.
 - The arm's scope is the four judgement ids and nothing else. `fw.no_firewall_active`,
   `sshd.password_auth_exposed` and a drop-in's `sshd.password_auth_enabled` are
   deterministic correlations across two checks, not context judgements; the comparison

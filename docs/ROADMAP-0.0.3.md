@@ -13,7 +13,10 @@
 
 Operational features are tentatively assigned to [0.0.4](ROADMAP-0.0.4.md).
 Optional bounded assessment lives in the [research roadmap](ROADMAP-RESEARCH.md),
-with no promised shipping version or dependency on this release.
+with no promised shipping version or dependency on this release. That track's ordering
+decision names this release as the candidate home *if* its R4 gate ever recommends
+integration, because the inference contract lives here; that is a candidacy, not a
+commitment, and nothing in this release plan depends on it.
 
 Historical M3 slice IDs are preserved even though M5 ships first. Product release
 numbers are separate from the report's `schema_version`.

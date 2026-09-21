@@ -1,11 +1,13 @@
 # scheck — optional research roadmap
 
 **Status (2026-09-21):** R1 is **implemented** (`internal/bounded`, the `bounded` arm of
-`scheck eval`, offline, scripted answers, no quality claim). R2 and R3 are proposed and
+`scheck eval`, offline, scripted answers, no quality claim). The pre-R3 recall probe has
+**run against `jev-1.13.0`** and its result is recorded below. R2 and R3 are proposed and
 not started. A **TypeSafe key now exists**, so R3 is no longer deferred for want of
-access; it stays gated on R1 being reviewed and on R2 freezing the question set. No
-product release version or delivery date is assigned, and no product release gate
-depends on anything here.
+access; it is gated on the `net.listeners` capture fix, on R1 being reviewed and on R2
+freezing the question set. **Ordering is decided**: the research runs now, any production
+integration waits until after 0.0.2 — see "Ordering" below. No product release version or
+delivery date is assigned, and no product release gate depends on anything here.
 
 This file is the **only home of this experiment's knowledge**: what was decided and why,
 what the vendor's API and limits are, what R1 actually built, what it does on the
@@ -20,6 +22,11 @@ This track explores bounded assessment under [SPEC.md §5.9](SPEC.md). It is ind
 of the product sequence: [0.0.1](ROADMAP-0.0.1.md), [0.0.2](ROADMAP-0.0.2.md),
 [0.0.3](ROADMAP-0.0.3.md) and tentative [0.0.4](ROADMAP-0.0.4.md).
 No ordinary audit, default CI job or product release gate depends on this experiment.
+
+The order relative to [0.0.2](ROADMAP-0.0.2.md)'s pack system is decided and recorded
+under "Ordering: research now, integration after 0.0.2" below: the research slices run in
+parallel with M5.0 and M5.1 because they touch no product code, and any integration waits
+for the contracts 0.0.2 builds.
 
 M2.7's real-model quality evaluation and the adversarial tests for shipped AI remain
 mandatory in 0.0.1. They validate the production approach; this track explores an
@@ -190,6 +197,7 @@ directories.
 | `root` as an admin candidate | root *is* the account uid 0 names |
 | `%sudo`, `%wheel`, `%admin` | A distribution's own administrative principals; the accounts behind them are candidates through their own records |
 | A sudoers principal whose grant lists specific commands | `accounts.unexpected_admin` means "can escalate to root". scheck's own `/etc/sudoers.d/scheck` fragment is the worked example: seven named commands, no `ALL`, so `ops` is filtered |
+| A listener whose capture does not name the owning process | Nothing to recognize. `ss` names the process only for a privileged session, so asking would answer "not a known component" for every Linux listener on an unprivileged run. Recorded `insufficient` — see "The defect the probe found" |
 | Source check `unavailable`, `Truncated`, `Redactions > 0`, or `check.HasMarker` in the capture or the item's own line | Bytes were removed; what was removed cannot be judged. Recorded `insufficient`, never sent, never filed |
 
 Listeners are deduplicated by `port/proto`, keeping the first record. **Known limitation:**
@@ -334,11 +342,12 @@ repeat, scripted answers — plumbing, not quality:
 | agent (mock transcripts) | 2 | 1 | 4 | 8 | 1 |
 | **bounded (scripted)** | **3** | **0** | 3, all outside its design | 9 | 2 of 2 in scope |
 
-Enumeration volume, which is what R2 and R3 will pay for: **387 requests over the 15
-cases at one repeat**, 28–30 per Linux case, 1 for `macos-clean`, 9 for
-`macos-filevault-off`. The filters settle 4 to 6 candidates per Linux case, 3 of 4 on
-`macos-clean` and 15 of 24 on `macos-filevault-off` (loopback listeners, mostly), and one
-candidate in the whole suite is `insufficient` (`linux-truncated-listeners`). Follow-up reads are rare by design. Counted per item, and audited in full
+Enumeration volume, which is what R2 and R3 will pay for: **377 requests over the 15
+cases at one repeat**, 28–29 per Linux case, 1 for `macos-clean`, 9 for
+`macos-filevault-off`. Over the whole suite, 377 candidates are judged, 73 are settled by
+the filters and 11 are `insufficient` (one truncated capture, and one Linux listener per
+case with no process name). A state is small — the largest in the suite is 338 bytes,
+about 84 tokens — which is the point of sending one item at a time. Follow-up reads are rare by design. Counted per item, and audited in full
 (the directory listing is shared, so it is audited but not counted against an item):
 
 | case | counted follow-ups | audited reads |
@@ -385,6 +394,16 @@ single-fact rules already require. R4 cites this; nothing is scaffolded for it n
   `unavailable` for all three plists, so those items are judged on path and label alone.
   Re-record the macOS fixture with `--record-fixtures` including
   `cat /Library/LaunchDaemons/<label>.plist`, or accept it and say so in the record.
+- **`net.listeners` truncates the process name on macOS, and it is the R3 blocker.**
+  `lsof` caps its COMMAND column at nine characters, so the state says `ControlCe`, and
+  the probe's only two false positives were exactly the two listeners with a truncated
+  name. `lsof -nP -iTCP -sTCP:LISTEN +c 0` disables it. This is a catalog argv change:
+  it needs a macOS fixture re-record (`--record-fixtures`, scrubbed) and a command-trace
+  golden update, and it changes what reaches the target, so it is a product change to be
+  made deliberately rather than folded into the experiment. Until it lands, the listener
+  kind on macOS files false positives with real answers, and the listener kind on Linux is
+  `insufficient` without elevation — which together mean **`net.unexpected_listener` has
+  no working population today**.
 - **Only `linux-unit-in-tmp` records `ls -la /etc/systemd/system`.** On every other
   Linux case the shared directory listing comes back `unavailable`, so **no unit
   definition is ever read there** — the units are judged on their names alone. That is a
@@ -395,6 +414,254 @@ single-fact rules already require. R4 cites this; nothing is scaffolded for it n
   `linux-truncated-listeners`). Every other case answers `explained` against
   `"not declared"`, which exercises the conservative half of each rule and never the
   "context explains it" half. R2 should add context to at least one case per kind.
+
+## Is Jev a good fit? (assessment, 2026-09-21)
+
+Asked directly, before R2 or R3 has run. The answer has three parts and the middle one
+matters most.
+
+**The shape fits, and that is not a small claim.** Phase 2 failed because the model had to
+choose actions and did not, in 45 of 45 runs. In this design nothing asks it to: planning,
+tool selection and generation are code's, and what is left — one bounded yes/no about one
+item against a few hundred tokens — is what a System One model is built for. The known
+failure mode is designed out rather than mitigated. Cost and latency are not constraints
+(a real host is ~40 requests, fractions of a cent against a $0.50 criterion), typed output
+removes the whole "model wrote prose instead of calling a tool" class, and a probability
+per item gives §4.4 a continuous drift measure that binary findings never gave it.
+
+**Nothing here says it works.** R1 ran on scripted answers. The 3-correct / 0-false-positive
+line is a statement about the decision rules, not about any model, and it must never be
+quoted as one.
+
+**The risk that could sink it is `vendor`.** That question asks Jev to recall what the
+world ships — is `/usr/bin/sudo` a standard SUID binary, is `rapportd` an Apple component,
+is `com.docker.vmnetd.plist` deliberately installed software. The vendor's own framing is
+judgment *over supplied state*; "context rot" and the state-centric docs describe a model
+tuned to reason about content it is handed, not to be a knowledge base about system
+binaries. `vendor` is the one question in the set that leans on recall, and it is load-
+bearing: of the four phase 2 false-positive classes, code now kills two deterministically
+(the declared listener, and the firewall ids this arm cannot file at all) and the other
+two — third-party launch daemons on a workstation, `sshd` on `0.0.0.0:22` — rest entirely
+on `vendor` coming back high.
+
+**A cheaper answer may exist for half of it.** `dpkg -S <path>` and `rpm -qf <path>` answer
+"did a package install this?" deterministically, and `codesign -dv` gives the macOS
+equivalent for a bundle. A package-provenance catalog check would turn most of `vendor`
+into a code fact and leave the model only the genuinely contextual half (`explained`,
+`hallmarks`). That would make the design better and the case for Jev smaller at once,
+which is the honest shape of this assessment: every time work moved into code, the
+model's addressable share shrank.
+
+**Verdict after the probe ran (2026-09-21): yes, with one blocker that is ours, not the
+vendor's.** The recall risk above did not materialise the way it was feared, and the
+decomposition absorbed the case where it did. The remaining failure is a capture defect in
+`net.listeners`. Details in the probe result below; the short form is that Jev answered
+well wherever scheck handed it a clean identifier or readable evidence, and badly where
+scheck handed it a truncated string. R3 is worth building once the listener capture is
+fixed and R2 has frozen the questions.
+
+### Ordering: research now, integration after 0.0.2 (decided 2026-09-21)
+
+The question was whether to introduce Jev before or after [0.0.2](ROADMAP-0.0.2.md)'s
+pack system. It splits in two, because finishing the research and shipping the feature
+are different acts.
+
+**R2, R3 and R4 run now, in parallel with M5.0 and M5.1.** They touch no product code:
+`internal/bounded` is imported by `internal/eval` alone and `scripts/depcheck.sh` enforces
+that in both directions, so the whole track produces records in `docs/eval`, not features.
+They cost cents. Deferring them behind a five-slice release would let the question set,
+the probe and the vendor facts go stale for no gain, and R4's answer is an **input** to
+M5.1's API design rather than a consequence of it.
+
+**Any production integration waits until after 0.0.2**, for three reasons that point the
+same way:
+
+1. **M5.1's parser-shape and completeness contracts are what this arm needs.** The probe's
+   only two false positives came from a truncated capture, and R1's fix was a hand-written
+   special case (a listener with no process name is `insufficient`). M5.1 separates parser
+   identity from output shape and attaches completeness metadata to the shape, which turns
+   that special case into a general rule: *a question naming a field is not asked when the
+   shape reports that field incomplete*. Judgement built on that contract is safer than
+   judgement retrofitted to it.
+2. **M5.2a's binding workflow is the same architecture, and a prerequisite.** It is a
+   bounded core workflow resolving service → process → listener through catalog IDs, and
+   it deliberately stops short of cross-fact conclusions ("Comparing separate service,
+   listener and proxy facts remains phase 2 work"). That is the gap a judgement layer
+   fills, and it cannot be filled before the binding exists: without a bound subject there
+   is nothing to ask a question about.
+3. **Packs multiply the capture surface.** Every pack is another chance to hand a model a
+   mangled or absent field, which is where this design's failures actually come from.
+   Mature the capture contract before judgement becomes cross-cutting.
+
+The converse holds too. Introducing Jev first would force 0.0.2 to answer "may a pack
+contribute a candidate kind, its questions and its thresholds?" — a far larger
+contribution API than the one it proposes (no execution hooks, no orchestration,
+single-fact rules), frozen around a single untested consumer.
+
+**If R4 says integrate, the home is [0.0.3](ROADMAP-0.0.3.md)**, which is already the
+inference release (providers, emulation, local-only inference). A bounded answer source
+belongs beside that contract, not bolted onto the pack release. Both roadmaps already say
+bounded assessment ships on no promised version; this records *why* the order is what it
+is. The middle path to avoid is half-integrating Jev into 0.0.2 to keep momentum, which
+shapes the pack API around an experiment that has not passed its own gate.
+
+**What 0.0.2 carries for this**, both recorded in that roadmap and neither dependent on
+the experiment succeeding:
+
+- the `net.listeners` `+c 0` capture fix, riding the macOS fixture re-record M5.4 already
+  requires (it can also be done standalone sooner, if R3 runs first — it is R3's blocker);
+- a forward-compatibility note so the contribution API does not promise packs that the
+  assessment surface is single-fact rules forever.
+
+### A check that would serve both arms: package provenance
+
+`dpkg -S <path>`, `rpm -qf <path>` and `codesign -dv` answer "did a package install this?"
+deterministically and read-only. It is a **core catalog check**, not a pack and not part of
+this experiment, and it pays off twice:
+
+- **Without any model**, it supports a single-fact posture rule that fits §7.5 exactly — a
+  SUID binary that no package owns — which is most of what the `suid` kind is for.
+- **With the model**, it removes the question this experiment is least sure of. The probe
+  showed `vendor` recall is good, but a fact beats a probability, and moving provenance
+  into code leaves the model only the genuinely contextual half (`explained`, `hallmarks`).
+
+Proposing it here because the experiment surfaced it; implementing it is ordinary catalog
+work under AGENTS.md's "adding a catalog check", with its own review, fixtures and rule
+fixtures. It shrinks the model's addressable share, which is the honest direction of this
+whole track.
+
+### The recall probe (pre-R3 gate)
+
+`make probe` — `test/live/jev_probe_test.go`, build tag `live`, needs
+`TYPESAFE_API_KEY`, sends **recorded fixture data only**, costs a fraction of a cent.
+
+It is deliberately not an adapter. It enumerates 30 labeled candidates from the committed
+fixtures exactly as a run would, sends each one's **real state** (`bounded.StateFor`) and
+the **frozen question wording** (`bounded.Questions`) to `jev-1.13.0`, and reads the
+`vendor` answer. What it measures is therefore what a run would send, not a paraphrase.
+
+The labels split into what a correct answer calls standard — Ubuntu's nine SUID binaries,
+its thirteen enabled units, macOS's own listeners, and the three third-party
+LaunchDaemons an administrator installed on purpose — and the two planted ones,
+`unit:agent.service` and `suid:/opt/tool/bin/helper`, which nothing ships.
+
+**The gate is what the decision rules do, not whether `vendor` separates on its own.**
+That was the probe's first design and it was wrong: the whole claim of this arm is that
+code combines several answers, so a weak `vendor` is survivable when an affirmative signal
+carries the decision — and that is exactly what happened. The probe therefore fails on a
+false positive or an uncaught planted item, and reports `vendor` separation as a
+diagnostic. It prints every item with all its answers, so a failing run is still a
+readable record.
+
+Two fidelity rules the probe learned the hard way, both worth keeping: it must send the
+state **after** follow-up reads (it now captures the real `bounded.Request` through a
+capturing `Answerer` rather than rebuilding state by hand), and it must use
+`bounded.Questions`, never a paraphrase. The first version violated the first rule and
+measured something a run would never send — see the note at the end of this section.
+
+#### Result — 2026-09-21, `jev-1.13.0`, 30 items, 19,405 input tokens, $0.0008, 8.5s
+
+```
+item                                                     want      vendor  other answers
+unit:cron.service                                        standard   0.96   explained 0.02  hallmarks 0.03
+unit:ssh.socket                                          standard   0.96   explained 0.02  hallmarks 0.03
+unit:getty@.service                                      standard   0.97   explained 0.02  hallmarks 0.03
+unit:ufw.service                                         standard   0.94   explained 0.02  hallmarks 0.03
+unit:remote-fs.target                                    standard   0.95   explained 0.02  hallmarks 0.03
+unit:e2scrub_all.timer / e2scrub_reap.service            standard   0.93–0.94
+unit:apt-daily.timer / apt-daily-upgrade.timer           standard   0.95–0.96
+unit:dpkg-db-backup.timer / fstrim.timer / motd-news…    standard   0.94–0.95
+unit:systemd-pstore.service                              standard   0.92   explained 0.02  hallmarks 0.04
+unit:agent.service                                       planted    0.39 <<explained 0.02  hallmarks 0.96
+suid:/usr/bin/sudo / su / passwd                         standard   0.96–0.97
+suid:/usr/bin/gpasswd / chfn / newgrp / mount            standard   0.84–0.94
+suid:/usr/bin/chsh                                       standard   0.69
+suid:/usr/bin/umount                                     standard   0.47
+suid:/opt/tool/bin/helper                                planted    0.10   explained 0.02  hallmarks 0.19
+launchd:com.docker.vmnetd / com.docker.socket            standard   0.90–0.93
+launchd:com.nordvpn.macos.helper                         standard   0.88   explained 0.03  hallmarks 0.06
+listener:53019/tcp  (rapportd)                           standard   0.55   explained 0.03  sensitive 0.17
+listener:7000/tcp   (ControlCe)                          standard   0.27 <<explained 0.03  sensitive 0.40
+listener:5000/tcp   (ControlCe)                          standard   0.20 <<explained 0.04  sensitive 0.34
+
+decision rules: 2 planted items caught, 2 false positives over 30 items
+  caught: suid:/opt/tool/bin/helper — not one this platform ships (0.10), directory /opt/tool/bin is world-writable
+  caught: unit:agent.service — the entry's command shows hallmarks of persistence used by an intruder (0.96)
+  FALSE POSITIVE: listener:5000/tcp — the listening program is not a recognized component (0.20)…
+  FALSE POSITIVE: listener:7000/tcp — the listening program is not a recognized component (0.27)…
+```
+
+**What this establishes.**
+
+- **Recall is strong where the identifier is clean.** All thirteen Ubuntu units 0.92–0.97,
+  all nine standard SUID binaries 0.47–0.97 against the planted one at 0.10, and — the
+  phase 2 false-positive class — all three third-party macOS LaunchDaemons at 0.88–0.93,
+  correctly *not* filed. The fear that `vendor` asks for knowledge Jev does not have was
+  largely wrong.
+- **The decomposition did its job on the one case where `vendor` was wrong.** The planted
+  `agent.service` got `vendor` 0.39 — a wrong answer, it is not a standard unit — but with
+  the unit file in state `hallmarks` came back **0.96** and the rule
+  (`hallmarks ≥ 0.8` files on its own) caught it anyway. This is the design's central
+  claim, tested against a real model and holding: no single answer is load-bearing.
+- **`hallmarks` is the sharpest signal in the set**: 0.03–0.07 across every legitimate
+  unit and plist, 0.96 on the planted one. Nearly two orders of magnitude of separation.
+- **`explained` is uniformly ~0.02–0.04** because no probe item carried operator context.
+  That is the conservative half of every rule and says nothing about the other half;
+  see the suite finding about context coverage.
+- **Both false positives are scheck's fault, not Jev's.** `lsof` truncates its COMMAND
+  column to nine characters, so the state for the AirPlay listeners says the process is
+  **`ControlCe`** — a mangled token nothing can recognize. Jev scored the one unmangled
+  macOS process (`rapportd`, 0.55) roughly twice as high as the two truncated ones. Fix
+  the capture, not the question: `lsof -nP -iTCP -sTCP:LISTEN **+c 0**` disables the
+  truncation. That is a catalog argv change to `net.listeners` on macOS, which needs a
+  macOS fixture re-record and a command-trace golden update — a product change, not a
+  research one, and **the blocker on R3**.
+- **Run-to-run variance is small but real**: across three runs `vendor` on
+  `unit:agent.service` was 0.77 / 0.40 / 0.39, on `listener:7000/tcp` 0.26 / 0.22 / 0.27.
+  (The 0.77 is the first, non-faithful run — see below.) A record needs the frozen three
+  repeats; a single run is an indication.
+
+**Cost and latency, measured:** 30 requests, 19.4k input tokens, **$0.0008**, 8.5 seconds
+wall-clock sequential. Extrapolating, the full suite at three repeats is roughly 1,130
+requests and **under two cents**. Cost is not a consideration for this design.
+
+#### The probe's own first result, and why it is not the record
+
+The first run sent state built straight from `bounded.Enumerate`, **without the follow-up
+reads a real run performs**. `unit:agent.service` was therefore judged on its name alone
+and scored `vendor` 0.77 and `hallmarks` 0.05 — it looks like a plausible vendor unit if
+all you see is "agent.service". Adding the follow-up moved `hallmarks` 0.05 → 0.96.
+
+Keep the number: it is the measured value of the follow-up table. Reading a single unit
+file turned an item the model would have waved through into the most confident detection
+in the set. It also says something about the listener and admin kinds, which have no
+follow-up: they are judged on an identifier alone, which is precisely where the two false
+positives landed.
+
+### The defect the probe found before it ran
+
+Building the probe was worth it before a single request was sent. Its dry run printed the
+state for `listener:22/tcp` from the Ubuntu fixture and the `process` field was **empty**:
+`ss -tulpnH` names the owning process only for a privileged session, and `net.listeners`
+is not an elevated check.
+
+The `vendor` question names `item.process`, and its `false` criterion reads "or no program
+name was captured" — so a real model would have answered low for **every Linux listener on
+every unprivileged run**, and with `explained` low by default the rule would have filed
+`net.unexpected_listener`. That is the phase 2 false positive (`sshd` on `0.0.0.0:22` with
+no context) reproduced by a different route, in a design whose whole premise is that it
+had fixed that class. It would have fired on `linux-clean`, where the id is forbidden.
+
+Fixed: a listener whose capture does not name the owning process is `insufficient` —
+unknown is neither safe nor unsafe (§7.5). `TestListenerWithoutAProcessIsNotJudged` pins
+it. macOS is unaffected, because `lsof` names the command.
+
+Two lessons worth keeping. **A question that names a state field must not be asked when
+that field is empty** — the rest of the question set should be audited against this before
+R2, and validation belongs in code, not in a criterion's wording. And **the listener kind
+is effectively macOS-only without elevation**, which bears directly on the assessment
+above: one of the four judgement ids barely has an addressable population on Linux, and it
+is the id with no positive case in the suite.
 
 ## Open questions for R2
 
@@ -416,7 +683,27 @@ Recorded so they are decided with evidence rather than rediscovered:
    loopback on one address family and to a wildcard on the other is decided by whichever
    line the tool printed first. Fix it by folding both records into one candidate whose
    `reachable` field is the widest of the two.
-6. **Item volume on a real host is unmeasured.** 30 candidates per case is a container
+6. **Can Jev answer `vendor` at all?** **Answered 2026-09-21: yes, where the identifier
+   is clean** (units 0.92–0.97, standard SUID 0.47–0.97, third-party plists 0.88–0.93,
+   planted SUID 0.10). It answers badly where scheck's capture is mangled, which is a
+   capture bug. See the probe result above. What remains open is whether `vendor` still
+   earns its tokens once package provenance is available in code.
+7. **The suite cannot measure recall.** Three positive labels exist in scope, and two of
+   the four judgement ids have **none**:
+
+   | judgement id | cases expecting it | cases forbidding it |
+   |---|---|---|
+   | `net.unexpected_listener` | **0** | 5 |
+   | `persist.unexpected_entry` | 2 | 2 |
+   | `fs.suid_unexpected` | 1 | 2 |
+   | `accounts.unexpected_admin` | **0** | 2 |
+
+   So the suite measures precision and abstention well (377 judged candidates, almost all
+   of which should file nothing) and sensitivity hardly at all. An R3 record on today's
+   suite could only say "it did not cry wolf" — worth something, not adoption evidence,
+   and not enough to hold any case out for calibration. R2 adds a positive case for the
+   two ids that have none before any threshold is called calibrated.
+8. **Item volume on a real host is unmeasured.** 30 candidates per case is a container
    fixture; a workstation or a busy server will enumerate more, and `MaxItems` (128) has
    never been reached. Measure it before anyone proposes this for a production path.
 
@@ -455,8 +742,12 @@ before R3.
 **Spec:** §5.9, §11.
 
 ### R3 — Jev adapter and live evaluation
-A key exists; this slice is ready to start once R1 is reviewed and R2 has frozen the
-questions. A small net/http adapter inside the experiment package, built against the
+A key exists and **`make probe` has passed on substance** (2026-09-21): both planted items
+caught, 28 of 30 correctly left alone, and the two failures traced to a capture defect
+rather than to the model. Gated now on three things, in order: the `net.listeners` `+c 0`
+fix, R1 being reviewed, and R2 freezing the questions. Build the adapter against the
+vendor facts above — the probe already exercises the request and response shapes, the
+pinned model id, the error classes and the backoff, so it is the working reference. A small net/http adapter inside the experiment package, built against the
 vendor facts above: `TYPESAFE_API_KEY` read from the environment at request time and
 never printed, the model pinned to `jev-1.13.0` (never an alias) and the response's
 `model` field recorded per answer. Validate every answer's id, type and range; classify
@@ -479,7 +770,9 @@ experimental assessment into a finding filter or an investigation gate. The deci
 says what to do with the multi-fact rule tier above, which is cheaper than any model and
 covers three of the suite's cases.
 **Done when:** the decision cites the R2 and, if run, R3 records; no integration is
-required for a successful experiment or for shipping a product release.
+required for a successful experiment or for shipping a product release. Land it before
+M5.1 freezes the contribution API, so "may a pack contribute a candidate kind?" is
+answered with evidence rather than guessed at (see "Ordering" above).
 **Spec:** §5.9.
 
 ## Completion evidence

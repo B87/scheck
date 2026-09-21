@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestFiltersSettleWhatCodeKnows(t *testing.T) {
 	h := ubuntu(t)
 	items := Enumerate(h.sheet, nil)
 	for _, tc := range []struct{ key, status, reason string }{
-		{"listener:22/tcp", StatusJudged, ""},
+		{"listener:22/tcp", StatusInsufficient, "the capture does not name the owning process"},
 		{"admin:root", StatusFiltered, "root is the account uid 0 names"},
 		{"admin:%sudo", StatusFiltered, "a distribution's own administrative principal"},
 		{"admin:ops", StatusFiltered, "the sudo grant lists specific commands, not ALL"},
@@ -159,6 +160,30 @@ func TestInsufficientEvidenceIsNeverSentOrFiled(t *testing.T) {
 	}
 	if len(res.Filed) != 0 {
 		t.Errorf("filed %v from insufficient evidence", res.Filed)
+	}
+}
+
+// A listener whose capture does not name the owning process cannot be
+// judged: `ss` names it only for a privileged session, and asking anyway
+// answers "not a known component" for every listener on an unprivileged run,
+// which is the phase 2 false positive (sshd on 0.0.0.0:22) refiled by a
+// different route. Found by the R3 probe's dry run, 2026-09-21.
+func TestListenerWithoutAProcessIsNotJudged(t *testing.T) {
+	h := ubuntu(t)
+	damning := map[string]float64{QExplained: 0, QVendor: 0, QHallmarks: 1, QSensitive: 1, QPerson: 0}
+	rec := &recorder{answers: damning}
+	res := run(t, h, rec, nil)
+	it, ok := find(res.Items, "listener:22/tcp")
+	if !ok || it.Status != StatusInsufficient {
+		t.Fatalf("listener:22/tcp = %+v, want insufficient", it)
+	}
+	for _, req := range rec.seen {
+		if req.Kind == KindListener {
+			t.Errorf("a listener with no process name was sent: %s", req.ItemKey)
+		}
+	}
+	if slices.Contains(res.Filed, finding.IDUnexpectedListener) {
+		t.Errorf("filed %v", res.Filed)
 	}
 }
 
@@ -316,9 +341,10 @@ func TestSilenceAloneFilesNothing(t *testing.T) {
 // observation, and the severity the catalog assigns — never one a model
 // proposed (docs/SPEC.md §7.1).
 func TestFiledFindingIsValidatedAndGradedByCode(t *testing.T) {
-	h := ubuntu(t)
+	// macOS names the owning process, so a listener there can be judged.
+	h := newHarness(t, filepath.Join("..", "..", "testdata", "eval", "cases", "macos-filevault-off"), runner.ElevateNone)
 	rec := &recorder{answers: benign, byKey: map[string]map[string]float64{
-		"listener:22/tcp": {QExplained: 0, QVendor: 0.05, QHallmarks: 0, QSensitive: 0.95, QPerson: 1},
+		"listener:7000/tcp": {QExplained: 0, QVendor: 0.05, QHallmarks: 0, QSensitive: 0.95, QPerson: 1},
 	}}
 	res := run(t, h, rec, nil)
 	if len(res.Filed) != 1 || res.Filed[0] != finding.IDUnexpectedListener {
@@ -333,10 +359,10 @@ func TestFiledFindingIsValidatedAndGradedByCode(t *testing.T) {
 	if f.Severity != finding.SevMedium || f.SeverityBase != finding.SevMedium {
 		t.Errorf("severity = %s/%s, want the catalog's", f.Severity, f.SeverityBase)
 	}
-	if len(f.Evidence) == 0 || !strings.Contains(f.Evidence[0].Excerpt, ":22") {
+	if len(f.Evidence) == 0 || !strings.Contains(f.Evidence[0].Excerpt, ":7000") {
 		t.Errorf("evidence = %+v", f.Evidence)
 	}
-	if f.Service == nil || f.Service.Port != 22 {
+	if f.Service == nil || f.Service.Port != 7000 {
 		t.Errorf("service = %+v", f.Service)
 	}
 	obs, ok := h.run.Observations().Get(f.Evidence[0].Observation)

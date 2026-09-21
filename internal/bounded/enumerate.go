@@ -153,16 +153,35 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 		case it.Status != StatusJudged:
 		case loopback(addr):
 			it = filtered(it, "bound to loopback")
-		default:
-			if s, declaredHere := declared[strings.ToLower(key)]; declaredHere {
-				// expected_services matching is §6.3's, in code. Reporting a
-				// declared listener anyway was a phase 2 false positive.
-				it = filtered(it, "declared in expected_services as "+s.Purpose)
-			}
+		case declaredService(declared, key) != "":
+			// expected_services matching is §6.3's, in code. Reporting a
+			// declared listener anyway was a phase 2 false positive.
+			it = filtered(it, "declared in expected_services as "+declaredService(declared, key))
+		case rec[check.FieldProcess] == "":
+			// Without the owning process there is nothing to recognize: on
+			// Linux `ss` names it only when the session is privileged. Asking
+			// anyway would answer "not a known component" for every listener
+			// on an unprivileged run and refile the phase 2 false positive
+			// (sshd on 0.0.0.0:22). Unknown is neither safe nor unsafe
+			// (docs/SPEC.md §7.5).
+			it.Status, it.Reason = StatusInsufficient, "the capture does not name the owning process"
 		}
 		out = append(out, it)
 	}
 	return out
+}
+
+// declaredService returns the purpose of the expected_services entry
+// matching this port and protocol, or "".
+func declaredService(declared map[string]operator.Service, key string) string {
+	s, ok := declared[strings.ToLower(key)]
+	if !ok {
+		return ""
+	}
+	if s.Purpose == "" {
+		return "a declared service"
+	}
+	return s.Purpose
 }
 
 func servicePort(it Item) (int, string, bool) {

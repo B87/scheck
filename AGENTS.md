@@ -109,6 +109,7 @@ go run ./cmd/scheck eval --provider mock          # the harness on the mock; no 
 go run ./cmd/scheck eval --provider mock --arms rules,bounded --no-pairs   # the research arm, scripted
 go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
 make live                                        # opt-in live tests
+make probe                                       # the R3 recall probe; needs TYPESAFE_API_KEY, spends cents
 go test ./internal/report -update    # rewrite the golden text and JSON reports, then read the diff
 go test ./internal/baseline -update  # rewrite the golden command traces, then read the diff
 ```
@@ -249,6 +250,11 @@ a change that breaks one is wrong even if the arm scores better:
   or redacted record is settled by code as `insufficient` before any question exists.
 - **The follow-up table is a table.** No model picks a check, a path or an argument, and
   every read goes through `runner.RunAs` with the arm's `Origin`.
+
+A question that names a state field must not be asked when that field is empty: the
+candidate is `insufficient` instead. A listener with no owning process is the worked
+example, and skipping it is what keeps the phase 2 false positive from returning by
+another route.
 
 Questions, criteria and thresholds are versioned data (`bounded.QuestionsVersion`);
 changing any of them invalidates a threshold measured against the old ones. Answer
