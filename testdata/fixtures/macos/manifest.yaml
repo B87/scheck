@@ -94,9 +94,16 @@ execs:
         - --status
       stdout_file: 013-spctl.stdout
       code: 0
+    # Re-recorded for `+c 0` (docs/ROADMAP-RESEARCH.md): without it lsof pads
+    # COMMAND to nine characters. The five shortened names in this capture were
+    # widened from their live counterparts on the recording host, each an
+    # unambiguous prefix match, and the column re-laid out the way lsof does it
+    # (longest name + 1). No other byte of the capture changed.
     - argv:
         - lsof
         - -nP
+        - +c
+        - "0"
         - -iTCP
         - -sTCP:LISTEN
       stdout_file: 014-lsof.stdout

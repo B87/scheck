@@ -101,30 +101,44 @@ Firewall                 ran      fw.stealth               Firewall stealth mode
   | Firewall stealth mode is off
 Network exposure         ran      net.listeners            23 listening sockets
                                                            Listening TCP sockets with owning process
-  | COMMAND     PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-  | rapportd   1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP *:53019 (LISTEN)
-  | rapportd   1020 alice   13u  IPv6 0x6bb3003c376d2589      0t0  TCP *:53019 (LISTEN)
-  | ControlCe  1131 alice    9u  IPv4 0x4aa72d6c33f98cbb      0t0  TCP *:7000 (LISTEN)
-  | ControlCe  1131 alice   10u  IPv6 0xcf7093cf786212a4      0t0  TCP *:7000 (LISTEN)
-  | ControlCe  1131 alice   11u  IPv4 0x441f0bb26ef13b02      0t0  TCP *:5000 (LISTEN)
-  | ControlCe  1131 alice   12u  IPv6 0x564316f9c01c235e      0t0  TCP *:5000 (LISTEN)
-  | stable     1472 alice   58u  IPv4 0x87031f6ebf781151      0t0  TCP 127.0.0.1:9277 (LISTEN)
-  | Raycast    1477 alice   34u  IPv4 0x23049dd54f7e890d      0t0  TCP 127.0.0.1:7265 (LISTEN)
-  | finances   8244 alice    7u  IPv4 0x65857e264dc16e30      0t0  TCP 127.0.0.1:8099 (LISTEN)
-  | com.docke  9687 alice  130u  IPv6 0xcf2e5f583587a004      0t0  TCP *:5432 (LISTEN)
-  | com.docke  9687 alice  132u  IPv4 0x40ecd438b104258c      0t0  TCP 127.0.0.1:12434 (LISTEN)
-  | Ollama     9838 alice    5u  IPv4 0xda1130bf9d81bfaa      0t0  TCP 127.0.0.1:50275 (LISTEN)
-  | ollama    10104 alice    3u  IPv4 0xf55c0eb9c66d046a      0t0  TCP 127.0.0.1:11434 (LISTEN)
-  | Discord   12055 alice   39u  IPv4 0xc1f3a52a7674f74c      0t0  TCP 127.0.0.1:6463 (LISTEN)
-  | RiotClien 48795 alice   29u  IPv4 0xdce2cc0917d4c8b1      0t0  TCP 127.0.0.1:53325 (LISTEN)
-  | Riot\x20C 48925 alice   76u  IPv6 0xb008b8b5696bfb13      0t0  TCP *:53346 (LISTEN)
-  | Code\x20H 54130 alice   34u  IPv4 0x674efabb7dc1722c      0t0  TCP 127.0.0.1:59979 (LISTEN)
-  | postgres  59057 alice    7u  IPv6 0x41bd9df513e122bc      0t0  TCP [::1]:5433 (LISTEN)
-  | postgres  59057 alice    8u  IPv4 0x6c4a776d7d7fe155      0t0  TCP 127.0.0.1:5433 (LISTEN)
-  | Obsidian  69638 alice   30u  IPv4 0xd57dec5348b205a5      0t0  TCP 127.0.0.1:27124 (LISTEN)
-  | Obsidian  69638 alice   31u  IPv4 0xc66393e21ed471c8      0t0  TCP 127.0.0.1:27123 (LISTEN)
-  | Cursor    83644 alice   61u  IPv4 0x6bf3677f27dd09e3      0t0  TCP 127.0.0.1:29428 (LISTEN)
-  | Cursor    83644 alice   63u  IPv4 0x9ba441a685381c29      0t0  TCP 127.0.0.1:63995 (LISTEN)
+  | COMMAND              PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+  | rapportd            1020 alice   10u  IPv4 0xf442d598091222ee      0t0  TCP *:53019 (LISTEN)
+  | rapportd            1020 alice   13u  IPv6 0x6bb3003c376d2589      0t0  TCP *:53019 (LISTEN)
+  | ControlCenter       1131 alice    9u  IPv4 0x4aa72d6c33f98cbb      0t0  TCP *:7000 (LISTEN)
+  | ControlCenter       1131 alice   10u  IPv6 0xcf7093cf786212a4      0t0  TCP *:7000 (LISTEN)
+  | ControlCenter       1131 alice   11u  IPv4 0x441f0bb26ef13b02      0t0  TCP *:5000 (LISTEN)
+  | ControlCenter       1131 alice   12u  IPv6 0x564316f9c01c235e      0t0  TCP *:5000 (LISTEN)
+  | stable              1472 alice   58u  IPv4 0x87031f6ebf781151      0t0  TCP 127.0.0.1:9277
+  | (LISTEN)
+  | Raycast             1477 alice   34u  IPv4 0x23049dd54f7e890d      0t0  TCP 127.0.0.1:7265
+  | (LISTEN)
+  | finances            8244 alice    7u  IPv4 0x65857e264dc16e30      0t0  TCP 127.0.0.1:8099
+  | (LISTEN)
+  | com.docker.backend  9687 alice  130u  IPv6 0xcf2e5f583587a004      0t0  TCP *:5432 (LISTEN)
+  | com.docker.backend  9687 alice  132u  IPv4 0x40ecd438b104258c      0t0  TCP 127.0.0.1:12434
+  | (LISTEN)
+  | Ollama              9838 alice    5u  IPv4 0xda1130bf9d81bfaa      0t0  TCP 127.0.0.1:50275
+  | (LISTEN)
+  | ollama             10104 alice    3u  IPv4 0xf55c0eb9c66d046a      0t0  TCP 127.0.0.1:11434
+  | (LISTEN)
+  | Discord            12055 alice   39u  IPv4 0xc1f3a52a7674f74c      0t0  TCP 127.0.0.1:6463
+  | (LISTEN)
+  | RiotClientServices 48795 alice   29u  IPv4 0xdce2cc0917d4c8b1      0t0  TCP 127.0.0.1:53325
+  | (LISTEN)
+  | Riot\x20Client     48925 alice   76u  IPv6 0xb008b8b5696bfb13      0t0  TCP *:53346 (LISTEN)
+  | Code\x20Helper     54130 alice   34u  IPv4 0x674efabb7dc1722c      0t0  TCP 127.0.0.1:59979
+  | (LISTEN)
+  | postgres           59057 alice    7u  IPv6 0x41bd9df513e122bc      0t0  TCP [::1]:5433 (LISTEN)
+  | postgres           59057 alice    8u  IPv4 0x6c4a776d7d7fe155      0t0  TCP 127.0.0.1:5433
+  | (LISTEN)
+  | Obsidian           69638 alice   30u  IPv4 0xd57dec5348b205a5      0t0  TCP 127.0.0.1:27124
+  | (LISTEN)
+  | Obsidian           69638 alice   31u  IPv4 0xc66393e21ed471c8      0t0  TCP 127.0.0.1:27123
+  | (LISTEN)
+  | Cursor             83644 alice   61u  IPv4 0x6bf3677f27dd09e3      0t0  TCP 127.0.0.1:29428
+  | (LISTEN)
+  | Cursor             83644 alice   63u  IPv4 0x9ba441a685381c29      0t0  TCP 127.0.0.1:63995
+  | (LISTEN)
 SSH server               skipped  sshd.config              requires elevated read
                                                            Effective sshd configuration
 Remote access            ran      remote.launchd_disabled  10 service overrides

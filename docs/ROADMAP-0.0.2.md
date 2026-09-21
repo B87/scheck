@@ -5,8 +5,9 @@ application is deliberately undecided; M5.0 must select it and freeze its assess
 before pack implementation. The decisions below are the proposed release contract, not
 descriptions of current CLI behavior. `SPEC.md` remains authoritative until each
 implementing slice updates it. The 2026-09-21 amendment adds the assessment-surface
-forward-compatibility note, M5.1's `net.listeners` capture fix and its M5.4 gate clause;
-it changes no slice's scope and adds no deliverable beyond that one-line argv fix.
+forward-compatibility note and a proposed core provenance check; it changes no slice's
+scope and adds no deliverable. The `net.listeners` capture fix it briefly carried landed
+outside this release on 2026-09-22 and was removed from M5.1 again.
 
 ## What this release delivers
 
@@ -75,11 +76,13 @@ contribution API major bump, which the versioning decision above already allows.
 track's R4 decision lands before M5.1 freezes the API, so this is a question answered with
 evidence rather than left open.
 
-Two small items carried into this release from that track, neither depending on it
-succeeding: the `net.listeners` capture fix in M5.1, and package provenance as a proposed
-reviewed **core** check (`dpkg -S`, `rpm -qf`, `codesign -dv`) supporting a single-fact
-rule for a SUID binary no package owns. The provenance check is a candidate core addition
-with its own review, not a pack and not a commitment of this release.
+One small item is carried into this release from that track, and it does not depend on
+the track succeeding: package provenance as a proposed reviewed **core** check
+(`dpkg -S`, `rpm -qf`, `codesign -dv`) supporting a single-fact rule for a SUID binary no
+package owns. It is a candidate core addition with its own review, not a pack and not a
+commitment of this release. (The `net.listeners` `+c 0` capture fix that track also
+surfaced landed before this release rather than inside it, so the host baseline this
+release must preserve already includes it.)
 
 ## Security and evidence requirements for every slice
 
@@ -189,13 +192,6 @@ Keep the contribution interface internal until the two real packs exercise it.
 - Extract `sshd.config` for Linux and macOS and the `sshd.password_auth_enabled` and
   `sshd.root_login_enabled` findings/rules into the `sshd` pack. Leave `remote.*` checks
   and shared file primitives in core. Preserve check ordering and existing behavior.
-- Fix one capture defect while the fixtures are being re-recorded anyway:
-  `net.listeners` on macOS runs `lsof` without `+c 0`, so its COMMAND column is truncated
-  to nine characters and the owning process is recorded as, for example, `ControlCe`. Add
-  `+c 0`. This is an intentional argv change, so it is reviewed as a command-trace diff and
-  a macOS fixture re-record, never regenerated past. It improves every consumer of that
-  evidence — operator, rule and report alike — and is independent of the research track
-  that found it (`ROADMAP-RESEARCH.md`, the probe result).
 - Establish identity now: stable pack ID, pack version, contribution API major, supported
   platforms and source/build identity. Reserve core and existing IDs; new external check,
   finding and parser IDs must use their pack's namespace under the existing ID grammar.
@@ -468,7 +464,7 @@ public API; keep security enforcement private.
 |---|---|
 | Useful assessment | M5.0 brief, supported deployment matrix and M5.2 expected/actual findings and coverage. |
 | Custom application | M5.2a's Next.js local/SSH demo using the official binary, runtime finding/abstention fixtures, bounded binding and restart/PID-reuse attribution tests; no app code execution or HTTP probing. |
-| Preserved host behavior | Before/after fixture comparison for Ubuntu, Fedora and macOS; reviewed schema/golden diffs. Exactly one intentional capture change is in scope (M5.1's `net.listeners` `+c 0` on macOS), reviewed as a change with its rationale; every other diff is a regression. |
+| Preserved host behavior | Before/after fixture comparison for Ubuntu, Fedora and macOS; reviewed schema/golden diffs. No intentional capture change is in scope for this release; every diff is a regression. |
 | Closed execution surface | Composition failures, mutation isolation, disabled-ID denials, canary, redaction and budget tests. |
 | Read-only collection | Local/SSH integration results on every claimed application deployment; empty controlled filesystem diffs and sudoers validation where applicable. |
 | External authoring | Separate-module build and validation using only the documented API, including its own parser consumed by core predicates, summaries and persistence. |

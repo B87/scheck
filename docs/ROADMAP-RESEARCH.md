@@ -2,10 +2,11 @@
 
 **Status (2026-09-21):** R1 is **implemented** (`internal/bounded`, the `bounded` arm of
 `scheck eval`, offline, scripted answers, no quality claim). The pre-R3 recall probe has
-**run against `jev-1.13.0`** and its result is recorded below. R2 and R3 are proposed and
+**run against `jev-1.13.0`** and, after the capture defect it found was fixed, **passes**:
+0 false positives over 30 items, both planted items caught. Both results are below. R2 and R3 are proposed and
 not started. A **TypeSafe key now exists**, so R3 is no longer deferred for want of
-access; it is gated on the `net.listeners` capture fix, on R1 being reviewed and on R2
-freezing the question set. **Ordering is decided**: the research runs now, any production
+access; it is gated on R1 being reviewed and on R2 freezing the
+question set; the capture defect that blocked it is fixed. **Ordering is decided**: the research runs now, any production
 integration waits until after 0.0.2 — see "Ordering" below. No product release version or
 delivery date is assigned, and no product release gate depends on anything here.
 
@@ -395,10 +396,14 @@ single-fact rules already require. R4 cites this; nothing is scaffolded for it n
   `unavailable` for all three plists, so those items are judged on path and label alone.
   Re-record the macOS fixture with `--record-fixtures` including
   `cat /Library/LaunchDaemons/<label>.plist`, or accept it and say so in the record.
-- **`net.listeners` shortens the process name on macOS.** `lsof` caps its COMMAND column
-  at nine characters, so the state says `ControlCe`, and the probe's only two false
-  positives were exactly the two listeners with a shortened name. `lsof -nP +c 0 -iTCP
-  -sTCP:LISTEN` disables it; verified on a Mac, `ControlCe` becomes `ControlCenter`.
+- **`net.listeners` shortened the process name on macOS — fixed 2026-09-22.** `lsof` caps
+  its COMMAND column at nine characters, so the state said `ControlCe`, and the probe's
+  only two false positives were exactly the two listeners with a shortened name. The
+  catalog entry now passes `+c 0`. The macOS fixture was updated by widening its five
+  shortened names to their live counterparts on the recording host — each an unambiguous
+  prefix match, no invented evidence — and the command trace, report and JSON goldens were
+  regenerated and reviewed: exactly one command changed. Operators get the full name in
+  the report too, which is the part that would have mattered without any model.
 
   This was first written down here as "the R3 blocker", which overstated it: nothing
   stops R2 or R3 from running. What is true is that **until the capture improves, any
@@ -461,13 +466,14 @@ into a code fact and leave the model only the genuinely contextual half (`explai
 which is the honest shape of this assessment: every time work moved into code, the
 model's addressable share shrank.
 
-**Verdict after the probe ran (2026-09-21): yes, with one blocker that is ours, not the
-vendor's.** The recall risk above did not materialise the way it was feared, and the
-decomposition absorbed the case where it did. The remaining failure is a capture defect in
-`net.listeners`. Details in the probe result below; the short form is that Jev answered
-well wherever scheck handed it a clean identifier or readable evidence, and badly where
-scheck handed it a truncated string. R3 is worth building once the listener capture is
-fixed and R2 has frozen the questions.
+**Verdict after the probe ran (2026-09-21) and its blocker was fixed (2026-09-22): yes,
+on this evidence.** The recall risk above did not materialise the way it was feared, the
+decomposition absorbed the one case where it did, and the only failures were a capture
+defect of ours — fixed, with the probe then passing at 0 false positives over 30 items.
+The short form is that Jev answers well wherever scheck hands it a clean identifier or
+readable evidence, and badly where scheck hands it a mangled one, which makes evidence
+quality the lever rather than model choice. R3 is worth building once R2 has frozen the
+questions. This is one run of 30 items on one model, not a calibration.
 
 ### Ordering: research now, integration after 0.0.2 (decided 2026-09-21)
 
@@ -600,7 +606,32 @@ decision rules: 2 planted items caught, 2 false positives over 30 items
   FALSE POSITIVE: listener:7000/tcp — the listening program is not a recognized component (0.27)…
 ```
 
-**What this establishes.**
+#### Result — 2026-09-22, the same probe after the capture fix
+
+One input changed: `net.listeners` on macOS gained `+c 0`, so the three macOS listeners
+carry full process names. Nothing else moved — same questions, same thresholds, same
+fixtures, same model.
+
+```
+listener:7000/tcp   ControlCe -> ControlCenter        vendor 0.27 -> 0.65
+listener:5000/tcp   ControlCe -> ControlCenter        vendor 0.20 -> 0.64
+listener:53019/tcp  rapportd  -> rapportd (unchanged) vendor 0.55 -> 0.53
+
+decision rules: 2 planted items caught, 0 false positives over 30 items   PASS
+```
+
+`rapportd` is the control: the one macOS name that was never shortened, and the one score
+that did not move. The two that were shortened roughly tripled. That is about as close to
+a controlled experiment as this setup allows, and it says the failure was the evidence,
+not the judgement.
+
+Two cautions against over-reading it. `vendor` separation is still narrow — the lowest
+standard item is 0.44 and the planted unit sits at 0.43 — so `vendor` remains a weak
+signal that only works because code combines it with others; on its own it would be a
+coin-flip on that pair. And this is one run of 30 items: the frozen three repeats belong
+to R2 and R3.
+
+**What the first result establishes.**
 
 - **Recall is strong where the identifier is clean.** All thirteen Ubuntu units 0.92–0.97,
   all nine standard SUID binaries 0.47–0.97 against the planted one at 0.10, and — the
@@ -751,10 +782,9 @@ before R3.
 **Spec:** §5.9, §11.
 
 ### R3 — Jev adapter and live evaluation
-A key exists and **`make probe` has passed on substance** (2026-09-21): both planted items
-caught, 28 of 30 correctly left alone, and the two failures traced to a capture defect
-rather than to the model. Gated now on three things, in order: the `net.listeners` `+c 0`
-fix, R1 being reviewed, and R2 freezing the questions. Build the adapter against the
+A key exists and **`make probe` passes** (2026-09-22): both planted items caught, 30 of
+30 correct once the capture defect it found was fixed. Gated now on R1 being reviewed and
+R2 freezing the questions. Build the adapter against the
 vendor facts above — the probe already exercises the request and response shapes, the
 pinned model id, the error classes and the backoff, so it is the working reference. A small net/http adapter inside the experiment package, built against the
 vendor facts above: `TYPESAFE_API_KEY` read from the environment at request time and
