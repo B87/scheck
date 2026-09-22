@@ -32,6 +32,11 @@ def output(*args, **kwargs):
 
 def refuse_existing(tag, pages):
     # Include drafts and all pages. API/authentication failures must fail closed.
+    # What the caller can see depends on its token: the releases list omits drafts
+    # for a `contents: read` token, so preflight in a read-only job refuses only
+    # published releases. That is the case that must never be overwritten, and it
+    # is caught early and cheaply; the draft job reruns this under `contents: write`
+    # and is the check that also sees an existing draft (docs/RELEASING.md).
     require(not any(r["tag_name"] == tag for page in pages for r in page),
             "release already exists; never overwrite it (see docs/RELEASING.md)")
 

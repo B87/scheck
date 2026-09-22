@@ -1240,18 +1240,22 @@ has to be repeated at the release commit before publication.
 
 ### M4.7 — GitHub release process
 
-**Implementation prepared; hosted rehearsal pending.** GoReleaser configuration,
-CI and draft-release workflows, MIT license, artifact verification and the
-[maintainer runbook](RELEASING.md) are present. This slice remains open until an
-unpublished-tag rehearsal records successful download and, on the platforms below,
-execution. M4.5, M4.6 and M2.7 remain separate publication gates; no release has
-been published by this implementation.
+**Implementation and hosted rehearsal complete (2026-09-22); publication pending.**
+GoReleaser configuration, CI and draft-release workflows, MIT license, artifact
+verification and the [maintainer runbook](RELEASING.md) are present, and the
+unpublished-tag rehearsal is recorded in [RELEASING.md](RELEASING.md#rehearsal-and-recovery):
+`v0.0.1-rehearsal.2` at `840f93a` created a correct draft, all four native runners
+downloaded, verified and executed their own archive, and re-dispatching the same tag
+was refused before GoReleaser ran. The first attempt failed and is kept in that record
+— it found a permissions defect that no local validation could reach. Neither
+rehearsal draft was published. M4.5, M4.6 and M2.7 remain separate publication gates;
+no release has been published by this implementation.
 
-**Relaxed for 0.0.1:** execution evidence is required on the two platforms available
-here — `linux/amd64` (the CI runner) and `darwin/arm64` (the development machine).
-`linux/arm64` and `darwin/amd64` are built and checksum-verified only, and the release
-notes must say exactly that rather than imply a smoke test that did not happen. Every
-other gate in this slice stands.
+**Relaxed for 0.0.1, and the relaxation went unused:** execution evidence was required
+only on `linux/amd64` (the CI runner) and `darwin/arm64` (the development machine),
+with `linux/arm64` and `darwin/amd64` built and checksum-verified only. Hosted runners
+turned out to cover all four, so the workflow executes each archive on its own native
+runner and the release notes claim exactly that. Every other gate in this slice stands.
 
 Deliver a documented, repeatable GitHub release process for `v0.0.1` and subsequent
 version tags. Add CI and a release workflow under `.github/workflows/`, plus a maintainer
