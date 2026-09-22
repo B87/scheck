@@ -2,7 +2,9 @@
 
 `scheck` is a CLI that performs an **agentic security posture check** of a single
 macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
-reasons, and reports. It never modifies the target.
+reasons, and reports. It changes no configuration, package, unit, credential or
+security state on the target; the three runtime artefacts its own commands leave
+behind are named and measured in §1.
 
 Status: v0.8 — M0, M1 (through M1.8) and all of M2 (through M2.8) implemented; the live
 evaluation is recorded and **no model assesses a host in 0.0.1** (§2.1); M4.5–M4.7 remain
@@ -187,11 +189,12 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   provider — and needs no reference remapping, since references replay identically.
 - The acceptance pass is recorded in `docs/eval/acceptance-0.0.1.md` (§12). It found one
   write scheck can cause: `dnf -q check-update`, run unprivileged, creates and leaves a
-  metadata cache under `/var/tmp/dnf-<user>-<random>/`. No configuration, package, unit
-  or credential is touched, and the container diff shows nothing else changes — but §1
-  promises no modification without qualification, and that entry and the promise are
-  not yet reconciled. The options are recorded in the pass; the decision belongs to
-  M4.7, before publication.
+  metadata cache under `/var/tmp/dnf-<user>-<random>/`. **Reconciled in M4.7
+  (2026-09-22):** the check is kept and the write is documented in §1, because no argv
+  avoids it and pending security updates are a finding operators act on. Tightening the
+  integration assertion to an exact allowlist at the same time revealed two further
+  artefacts nobody had recorded — sudo's timestamp directory and ufw's lock file — so §1
+  now names three, and the test enforces the whole set.
 
 **Changes from the phase 2 decision (2026-09-20, M2.8):**
 
@@ -435,6 +438,24 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
   mode or small-context chunking; these belong to post-v1 M3.
 - No free-form command composition by the model. If a check is not in the catalog, the
   model cannot run it; adding a check is a code change with a test.
+
+**What "read-only" means exactly.** scheck changes no configuration, package, unit,
+credential or security state. Three of its commands leave a record of their own
+invocation, all of it runtime or cache state. They are listed rather than qualified
+away, because a promise with an unstated exception is worse than a narrower promise:
+
+| Cause | Artefact | Why it cannot be avoided |
+|---|---|---|
+| `pkg.dnf_check_update` (`dnf -q check-update`) | dnf4: `/var/tmp/dnf-<user>-<random>/` (metadata, `*.solv`, four logs, a lock dir); dnf5: `~/.cache/libdnf5/` and `~/.local/state/dnf5.log` | Measured 2026-09-22: `--cacheonly` still creates the directory and writes its logs, and pinning `cachedir`/`logdir` at the system paths fails with `Permission denied` *and* creates the directory anyway. The write is structural to dnf, not a missing flag. |
+| Elevation (`sudo -n --`) | `/run/sudo/ts/<uid>` | sudo records its timestamp before running anything. Only with `--sudo`. |
+| `fw.ufw` (`ufw status verbose`) | `/run/ufw.lock` | ufw takes its lock to read status. Only with `--sudo`. |
+
+`test/integ` asserts this set exactly: after a full run the container diff may contain
+an ssh login's own noise and these named paths, and nothing else. Any other write fails
+the test. That is what makes the claim checkable rather than aspirational — until
+2026-09-22 the assertion tolerated whole `/run`, `/var` and `/home` trees, which is how
+the dnf cache reached the M4.6 pass as a reading of the log rather than a failure, and
+how the sudo and ufw artefacts went unrecorded altogether.
 
 ---
 

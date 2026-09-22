@@ -7,3 +7,4 @@ coverage.*
 /scheck
 .env
 /scripts/__pycache__/
+.*.rswp

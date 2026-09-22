@@ -206,3 +206,42 @@ func TestOpenAIEndpointDefaultsToLuna(t *testing.T) {
 		t.Errorf("custom endpoint invented a model: %+v", doc.Settings["model"])
 	}
 }
+
+// A target that names no port is rendered as "-" and omits the JSON field: a
+// port of 0 is not configuration, it is the absence of it, and printing 0
+// reads as a port the operator wrote. The M4.6 acceptance pass carried this
+// as open item 2 (`docs/eval/acceptance-0.0.1.md`).
+func TestConfigShowRendersAnUnsetPortAsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "scheck.yaml"),
+		"targets:\n  plain:\n    host: a.example\n    user: ops\n  explicit:\n    host: b.example\n    user: ops\n    port: 2222\n")
+
+	out, code := runIn(t, dir, "config", "show", "--format", "json")
+	if code != exitOK {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	var doc inspection
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if got := doc.Targets["plain"].Port; got != 0 {
+		t.Errorf("unset port decoded as %d, want the field absent", got)
+	}
+	if !strings.Contains(out, `"host": "a.example"`) || strings.Contains(out, `"port": 0`) {
+		t.Errorf("json still carries a zero port:\n%s", out)
+	}
+	if got := doc.Targets["explicit"].Port; got != 2222 {
+		t.Errorf("explicit port %d, want 2222", got)
+	}
+
+	text, code := runIn(t, dir, "config", "show")
+	if code != exitOK {
+		t.Fatalf("text exit %d:\n%s", code, text)
+	}
+	if !strings.Contains(text, "ops@a.example port - identity") {
+		t.Errorf("unset port is not rendered as a dash:\n%s", text)
+	}
+	if !strings.Contains(text, "ops@b.example port 2222 identity") {
+		t.Errorf("explicit port is not rendered:\n%s", text)
+	}
+}

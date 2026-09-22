@@ -317,7 +317,68 @@ Neither is a blocker for the release; both are decisions to take before publishi
    cache is cold.
 2. **`config show` prints `port 0`** for a target with no explicit port. Display-only.
 
+## M4.7 resolution of the open items (2026-09-22)
+
+Both open items are closed here, before publication, as M4.7 requires. The first pass
+above is left as written.
+
+### Open item 1 — the dnf cache
+
+**Decision: keep the check and document the write.** `-C`/`--cacheonly` was tried first
+and is refuted by measurement, so the choice was between documenting the write and
+losing Fedora's pending-update coverage entirely.
+
+Measured 2026-09-22 with `docker diff`, unprivileged, on both dnf generations:
+
+| Attempt | Result |
+|---|---|
+| `dnf -q -C check-update` on Fedora 40 (dnf 4.22) | still creates `/var/tmp/dnf-ops-<random>/`, adds a lock file and appends to `dnf.log`, `dnf.librepo.log`, `dnf.rpm.log`, `hawkey.log`. Exit 1 on a cold cache |
+| `dnf -q -C check-update` on Fedora 44 (dnf5) | the write moves rather than disappearing: 30+ files under `~/.cache/libdnf5/` plus `~/.local/state/dnf5.log` |
+| `dnf -q -C --setopt=cachedir=/var/cache/dnf --setopt=logdir=/var/log/dnf check-update` | `Config error: [Errno 13] Permission denied: '/var/log/dnf'`, exit 1 — **and the per-user directory is created anyway**, before config resolution |
+
+The write is structural to dnf. `docs/SPEC.md §1` now states it, the README repeats it
+and the release notes carry it.
+
+### Two further artefacts, found by tightening the assertion
+
+Documenting one exception is only worth anything if the test enforces the rest, and it
+did not. `test/integ/facts_test.go` tolerated any diff line beginning `C /run`, `A /run`,
+`C /var`, `A /var`, `C /home`, `A /home` or `C /etc` — whole trees. That is how the dnf
+cache reached the first pass as a reading of the logged noise rather than a test failure.
+
+The tolerance is now an exact allowlist of an ssh login's own artefacts plus a named
+pattern per documented write, with a table test (`TestReadOnlyDiffClassification`)
+asserting that plausible check-caused writes — `/etc/sudoers.d/evil`, `/run/nginx.pid`,
+`/var/lib/nginx/body`, `/home/ops/.ssh/authorized_keys`, `/var/tmp/not-dnf` — are
+rejected. Writing it caught one regexp of my own that was too loose.
+
+Running it immediately failed `TestSudoersFragmentOnUbuntu` with five previously hidden
+lines, and two of them are scheck's own writes that nobody had recorded:
+
+| Cause | Artefact | Condition |
+|---|---|---|
+| Elevation, `sudo -n --` | `C /run/sudo`, `A /run/sudo/ts`, `A /run/sudo/ts/<uid>` | `--sudo` only |
+| `fw.ufw`, `ufw status verbose` | `A /run/ufw.lock` | `--sudo` only |
+
+(The fifth, `/run/sshd.pid`, is the container's own sshd and is login noise.)
+
+So the count in `SPEC.md §1` is **three documented writes, not one**. None is
+configuration, a package, a unit or a credential; all are a tool's record of its own
+invocation in runtime or cache state. Criterion 3's verdict is unchanged — its subject,
+the target's configuration and system state, is intact — but what satisfies it is now
+enforced by the test instead of asserted in prose.
+
+### Open item 2 — `config show` prints `port 0`
+
+**Closed.** An unset port renders as `-` in text and is omitted from JSON, covered by
+`TestConfigShowRendersAnUnsetPortAsAbsent`. A port of 0 is the absence of configuration,
+and printing 0 read as a port the operator had written.
+
 ## Change log
 
 - 2026-09-21 — first pass, on `scheck 683aac2` (committed 2026-09-20). All twelve criteria pass; one exception
   and one cosmetic defect recorded above.
+- 2026-09-22 — M4.7 resolution of both open items. The dnf write is documented after
+  `--cacheonly` was measured and refuted; tightening the read-only assertion to an exact
+  allowlist revealed two further scheck-caused artefacts (sudo's timestamp directory,
+  ufw's lock file), so `SPEC.md §1` now documents three. No criterion's verdict changes.

@@ -22,10 +22,13 @@ passes.
 
 1. **The tool never modifies the target.** No check may write, and no code path may
    run anything that is not a catalog entry. Integration tests diff the container before
-   and after a full run and fail on any change outside sshd's own login noise, which
-   they log; keep that assertion true and never widen its tolerances. One write is known
-   and unresolved: `dnf -q check-update` run unprivileged leaves a metadata cache under
-   `/var/tmp` (`docs/eval/acceptance-0.0.1.md`, open item 1).
+   and after a full run and fail on any change outside sshd's own login noise and an
+   exact list of documented artefacts, both of which they log; keep that assertion true
+   and never widen its tolerances. Three writes are known, documented in `docs/SPEC.md
+   §1` and enforced as an exact allowlist in `test/integ/facts_test.go`: dnf's
+   package-manager cache (`pkg.dnf_check_update`), sudo's timestamp directory
+   (`sudo -n --`) and ufw's lock file (`fw.ufw`). Adding a fourth needs a decision
+   recorded in the spec, not a wider pattern.
 2. **The catalog is the whole command surface.** Every executable command is a
    `check.Check` with literal argv tokens and typed `{name}` placeholders. Never build
    argv by concatenation, never accept a command string from a model or a user, never

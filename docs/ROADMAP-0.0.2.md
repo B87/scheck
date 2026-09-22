@@ -1,9 +1,9 @@
 # scheck — roadmap to 0.0.2
 
-**Status (2026-09-20, amended 2026-09-21):** proposed, not implemented. The first
-application is deliberately undecided; M5.0 must select it and freeze its assessment scope
-before pack implementation. The decisions below are the proposed release contract, not
-descriptions of current CLI behavior. `SPEC.md` remains authoritative until each
+**Status (2026-09-20, amended 2026-09-21 and 2026-09-22):** proposed, not implemented.
+M5.0 is complete: [`docs/packs/first-application.md`](packs/first-application.md) selects the
+**`docker` pack** and freezes its assessment scope. No slice below is built yet. The
+decisions below are the proposed release contract, not descriptions of current CLI behavior. `SPEC.md` remains authoritative until each
 implementing slice updates it. The 2026-09-21 amendment adds the assessment-surface
 forward-compatibility note and a proposed core provenance check; it changes no slice's
 scope and adds no deliverable. The `net.listeners` capture fix it briefly carried landed
@@ -41,7 +41,7 @@ behavior this release must preserve. The M5 slices build on those contracts.
 | Question | Proposed decision |
 |---|---|
 | First existing domain? | `sshd`: both platform definitions of `sshd.config`, its two posture rules and their finding definitions. Keep existing IDs, evidence, grading and default behavior. |
-| First new application? | Selected in M5.0 using a written assessment brief; no placeholder application may survive that gate. |
+| First new application? | **Docker Engine daemon configuration**, assessed from files with no daemon contact ([M5.0 brief](packs/first-application.md)). nginx was measured and rejected; the brief records the tradeoff and the revisit condition. |
 | Custom applications? | Operator declarations bind one named running service per invocation to reviewed checks. Ship a Next.js deployment example; declarations contain identifiers and expected behavior, never commands or executable rules. |
 | Who resolves a running application? | A bounded core workflow owns service/process binding and its uncertainty. It invokes catalog IDs through the runner; packs supply no orchestration hooks. |
 | What identifies evidence? | A run-local observation reference identifies one check invocation, including its bound parameters and execution occurrence. Check IDs identify definitions, not individual observations. |

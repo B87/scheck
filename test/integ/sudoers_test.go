@@ -63,13 +63,14 @@ func TestSudoersFragmentOnUbuntu(t *testing.T) {
 	if parsed["passwordauthentication"] != "no" {
 		t.Errorf("sshd -T not parsed: %v", parsed)
 	}
-	// Elevated read must not have widened anything: the fragment we installed
-	// is the only filesystem change caused by the tests.
+	// Elevated read must not have widened anything: the fragment this test
+	// installed is the only change beyond an ssh login's own noise. The lists
+	// are exact for the reason facts_test.go gives — a prefix match on /etc,
+	// /run, /var and /home tolerated whole trees.
+	installed := map[string]bool{"C /etc": true, "C /etc/sudoers.d": true, "A /etc/sudoers.d/scheck": true}
 	for _, line := range strings.Split(strings.TrimSpace(c.Diff(t)), "\n") {
-		if line == "" || strings.HasPrefix(line, "C /etc/sudoers.d") || strings.HasPrefix(line, "A /etc/sudoers.d/scheck") ||
-			strings.HasPrefix(line, "C /etc") || strings.HasPrefix(line, "C /run") || strings.HasPrefix(line, "C /var") ||
-			strings.HasPrefix(line, "A /run") || strings.HasPrefix(line, "A /var") || strings.HasPrefix(line, "C /home") ||
-			strings.HasPrefix(line, "A /home") || strings.HasPrefix(line, "C /root") || strings.HasPrefix(line, "A /root") {
+		if line == "" || installed[line] || loginNoise[line] || homeNoise.MatchString(line) ||
+			runtimeArtifacts.MatchString(line) {
 			continue
 		}
 		t.Errorf("unexpected change on target: %s", line)
