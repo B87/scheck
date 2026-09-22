@@ -8,3 +8,4 @@ coverage.*
 .env
 /scripts/__pycache__/
 .*.rswp
+scheck.yaml

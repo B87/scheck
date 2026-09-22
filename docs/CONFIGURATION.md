@@ -18,6 +18,9 @@ configure `scheck providers` and the project's evaluation harness only. A model 
 `local` or `ssh` exits 3; the same keys in a file are unused and cannot fail a run, so
 a configuration written for an earlier build keeps working.
 
+[`scheck.example.yaml`](../scheck.example.yaml) is every knob in one annotated file;
+copy it to `scheck.yaml` and delete what you do not need. An empty file is valid.
+
 `scheck config show` prints the effective result with the source of every value, and
 `scheck config validate` applies the same rules a run applies. Both are local: neither
 contacts a model or a target.
