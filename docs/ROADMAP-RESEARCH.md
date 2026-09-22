@@ -4,9 +4,9 @@
 `scheck eval`, offline, scripted answers, no quality claim). The pre-R3 recall probe has
 **run against `jev-1.13.0`** and, after the capture defect it found was fixed, **passes**:
 0 false positives over 30 items, both planted items caught. Both results are below. R2 and R3 are proposed and
-not started. A **TypeSafe key now exists**, so R3 is no longer deferred for want of
-access; it is gated on R1 being reviewed and on R2 freezing the
-question set; the capture defect that blocked it is fixed. **Ordering is decided**: the research runs now, any production
+not started. R3 is no longer deferred for want of access; it is gated on R1 being
+reviewed and on R2 freezing the question set. The capture defect that blocked the
+probe is fixed. **Ordering is decided**: the research runs now, any production
 integration waits until after 0.0.2 — see "Ordering" below. No product release version or
 delivery date is assigned, and no product release gate depends on anything here.
 

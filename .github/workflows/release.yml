@@ -32,6 +32,9 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
           persist-credentials: false
+      # This job stays read-only, so its preflight sees published releases only.
+      # The draft job repeats it with `contents: write`, which is where an
+      # existing draft is refused. Both orderings fail before anything is built.
       - name: Verify tag, clean checkout and absent release
         id: commit
         env:

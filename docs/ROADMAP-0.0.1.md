@@ -11,13 +11,14 @@ must be true before it's done, and which spec section it implements. "Done" alwa
 includes tests, not just code — the testing strategy in `SPEC.md` §11 is distributed
 across slices below rather than saved for the end.
 
-**Status (2026-09-20):** M0, M1 (through M1.8) and all of M2 (through M2.8) are
+**Status (2026-09-22):** M0, M1 (through M1.8) and all of M2 (through M2.8) are
 committed on `main`, one commit per slice, `make check` green at each. The repeated live
 release evaluation M2.7 called for is recorded in `docs/eval/phase2-results.md`: it
 failed the frozen criteria, and M2.8 acted on it — **no model assesses a host in
 0.0.1** (`SPEC.md` §2.1). That resolves acceptance criteria 7, 10 and 12 and closes the
-loop-versus-single-pass question for this release. Checkmarks indicate completed
-implementation; each slice records validation separately. M4.5–M4.7 are what remains.
+loop-versus-single-pass question for this release. M4.5 and M4.6 are done. M4.7 is
+implemented and rehearsed; publishing the release is what remains. Checkmarks indicate
+completed implementation; each slice below is the historical record of that work.
 
 **0.0.1 scope revision (2026-09-20):** M2 includes full-request context limits,
 real-model quality/adversarial release gates and configuration usability (M2.2a).
@@ -1024,9 +1025,9 @@ frozen verdicts, the markdown comparison), the hidden `scheck eval` command,
 observation runs against `gpt-5.6-luna` found a redaction false positive on sudoers
 `NOPASSWD:` lines, two gaps in `finding.Store` (another platform's id, an id the rule
 had disproved) and the model filing ruled-out hypotheses through `report_finding`;
-those are fixed in the spec's "first live evaluation" change entry. The three-repeat
-record (`docs/eval/results-2026-09-20-gpt-5.6-luna.{json,md}`, summarized in
-`docs/eval/phase2-results.md`) then fails §3.1 decisively: in 9 of 9 follow-up agent
+those are fixed in the spec's change list and in §4.2 and §5.7. The three-repeat
+record (summarized in `docs/eval/phase2-results.md`; the harness dump is not
+committed) then fails §3.1 decisively: in 9 of 9 follow-up agent
 runs the model made no tool call, so the loop was not used. §3.2, §3.5 and §4.4 also
 fail, for reasons the record separates into model behaviour, label questions and
 natural drift. Single-pass fails its own bar. Criterion 7 passes (`make live`,
@@ -1062,8 +1063,7 @@ decision, without loosening a criterion:
    nothing to flag without context), and a declared listener reported as
    `net.unexpected_listener` is a false positive at any severity.
 4. **Run the gate at three repeats** — done (2026-09-20, the deciding record in
-   `docs/eval/phase2-results.md`, raw `results-2026-09-20-gpt-5.6-luna-ruledout.*`;
-   `make live` $0.0071). §3.2, §3.3, §3.5, §3.7 and all of §4 pass; §3.1 fails because
+   `docs/eval/phase2-results.md`; `make live` $0.0071). §3.2, §3.3, §3.5, §3.7 and all of §4 pass; §3.1 fails because
    the loop made no `run_check`/`read_file` call in 45 of 45 runs, spending its
    iterations on `ruled_out` verdicts instead; single-pass fails its own bar (forbidden
    ids in 5 of 45 runs against the rules arm's zero; one correlated case of three in the
@@ -1230,28 +1230,30 @@ or 11.
 **Spec:** §12, all twelve criteria.
 
 **Delivered (2026-09-21):** `docs/eval/acceptance-0.0.1.md`, walked against
-`scheck 683aac2`. All twelve criteria pass. Two items are carried out of the pass rather
-than closed by it, both decisions for M4.7: `pkg.dnf_check_update` run unprivileged
-leaves a dnf metadata cache under `/var/tmp`, which is the one write scheck can cause
-and is not reconciled with §1's unqualified promise; and `config show` displays
-`port 0` for a target with no explicit port. The integration test now logs the diff
-lines it tolerates, so criterion 3's evidence is visible rather than implied. The pass
-has to be repeated at the release commit before publication.
+`scheck 683aac2`. All twelve criteria pass. Two items were carried out of that pass
+for M4.7: the dnf metadata cache, and `config show` printing `port 0`. M4.7 closed
+both on 2026-09-22. §1 documents three writes, an unset port renders as absent, and
+the integration diff is an exact allowlist. The pass has to be repeated at the
+release commit before publication.
 
 ### M4.7 — GitHub release process
 
-**Implementation prepared; hosted rehearsal pending.** GoReleaser configuration,
-CI and draft-release workflows, MIT license, artifact verification and the
-[maintainer runbook](RELEASING.md) are present. This slice remains open until an
-unpublished-tag rehearsal records successful download and, on the platforms below,
-execution. M4.5, M4.6 and M2.7 remain separate publication gates; no release has
-been published by this implementation.
+**Implementation and hosted rehearsal complete (2026-09-22); publication pending.**
+GoReleaser configuration, CI and draft-release workflows, MIT license, artifact
+verification and the [maintainer runbook](RELEASING.md) are present, and the
+unpublished-tag rehearsal is recorded in [RELEASING.md](RELEASING.md#rehearsal-and-recovery):
+`v0.0.1-rehearsal.2` at `840f93a` created a correct draft, all four native runners
+downloaded, verified and executed their own archive, and re-dispatching the same tag
+was refused before GoReleaser ran. The first attempt failed and is kept in that record
+— it found a permissions defect that no local validation could reach. Neither
+rehearsal draft was published. M4.5, M4.6 and M2.7 remain separate publication gates;
+no release has been published by this implementation.
 
-**Relaxed for 0.0.1:** execution evidence is required on the two platforms available
-here — `linux/amd64` (the CI runner) and `darwin/arm64` (the development machine).
-`linux/arm64` and `darwin/amd64` are built and checksum-verified only, and the release
-notes must say exactly that rather than imply a smoke test that did not happen. Every
-other gate in this slice stands.
+**Relaxed for 0.0.1, and the relaxation went unused:** execution evidence was required
+only on `linux/amd64` (the CI runner) and `darwin/arm64` (the development machine),
+with `linux/arm64` and `darwin/amd64` built and checksum-verified only. Hosted runners
+turned out to cover all four, so the workflow executes each archive on its own native
+runner and the release notes claim exactly that. Every other gate in this slice stands.
 
 Deliver a documented, repeatable GitHub release process for `v0.0.1` and subsequent
 version tags. Add CI and a release workflow under `.github/workflows/`, plus a maintainer

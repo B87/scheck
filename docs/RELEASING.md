@@ -5,10 +5,11 @@ and left as drafts in [b87/scheck](https://github.com/b87/scheck/releases).
 A maintainer publishes manually. Creating a draft does not satisfy the acceptance
 gate or establish a claim about model quality.
 
-M4.7 automation is implemented; its hosted rehearsal found and fixed one defect
-and is being repeated (see **Rehearsal and recovery**). M4.5, M4.6 and M2.7 remain
-independent prerequisites for publishing 0.0.1. No passing live evaluation or
-acceptance sign-off is supplied by this automation.
+M4.7 automation is implemented and rehearsed: the first hosted rehearsal found a
+defect, and the second passed on all four native runners with the overwrite guard
+exercised (see **Rehearsal and recovery**). M4.5, M4.6 and M2.7 remain independent
+prerequisites for publishing 0.0.1. No passing live evaluation or acceptance
+sign-off is supplied by this automation.
 
 ## Repository setup and tool pins
 
@@ -144,7 +145,11 @@ artifact smoke results, and recovery test outcome here or in an attached record.
 Do not publish the rehearsal draft or treat it as acceptance sign-off.
 
 Manually dispatch the same tag again after draft creation to confirm it refuses to
-overwrite the draft. The same guard rejects published releases. A GitHub API or
+overwrite the draft. The refusal lands in the **draft** job's recheck, not in
+`validate`: listing drafts requires push access, so `validate`'s read-only preflight
+sees published releases only. That ordering is deliberate — overwriting a *published*
+release is the unrecoverable case and is refused first and cheapest, while a draft is
+refused by the only job that could create one, before GoReleaser runs. A GitHub API or
 authentication error also fails closed; it is not interpreted as release absence.
 
 For an upload/build failure:
@@ -163,8 +168,38 @@ Tag-level concurrency serializes workflows but cannot prevent a maintainer from
 editing a release concurrently. Do not manually create, edit or publish it during
 an active release run. After publication, corrections require a new version.
 
-**Rehearsal status:** first hosted attempt run 2026-09-22 and **failed, by design of
-the exercise**: it found a defect no local validation could.
+**Rehearsal status: passed on the second attempt, 2026-09-22.** The first attempt
+failed and is kept below, because the defect it found is the reason the rehearsal
+exists. Neither draft was published.
+
+### Attempt 2 — `v0.0.1-rehearsal.2` (passed)
+
+Tag `v0.0.1-rehearsal.2` at `840f93a` (the fix commit, an ancestor of `main` through
+PR #3) — [run 35773384573](https://github.com/B87/scheck/actions/runs/35773384573),
+all seven jobs `success`.
+
+| Stage | Result |
+|---|---|
+| `validate` | `make check`, clean-tree diff, release guard tests, actionlint, `make integ` |
+| `draft` | `draft: true`, `prerelease: true`, `target_commitish` `840f93a`, exactly the five expected assets |
+| `smoke` ×4 | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15-intel`, `macos-15` — each downloaded the draft assets, verified inventory, SHA-256 and archive contents, and ran its own binary's `--version`, `catalog` and `explain` |
+| `review` | reached, so no job failed or was skipped |
+
+Execution evidence therefore exists on all four advertised platforms, which exceeds
+this slice's relaxation (execution required on `linux/amd64` and `darwin/arm64` only).
+The generated notes' "four native smoke results" wording is accurate as written.
+
+**Overwrite guard exercised.** The same tag was dispatched again
+([run 35774070425](https://github.com/B87/scheck/actions/runs/35774070425)):
+`validate` passed, the **draft** job's recheck failed with
+`ValueError: release already exists; never overwrite it`, and `smoke` and `review`
+were skipped. GoReleaser never ran and the existing draft was untouched — same
+creation time, same five assets. See the dispatch paragraph above for why the
+refusal lands in `draft` rather than `validate`.
+
+### Attempt 1 — `v0.0.1-rehearsal.1` (failed, by design of the exercise)
+
+It found a defect no local validation could.
 
 `v0.0.1-rehearsal.1` at `922f9a4` — [run 35772009972](https://github.com/B87/scheck/actions/runs/35772009972).
 `validate` and `draft` passed; GoReleaser produced the correct draft (`draft: true`,
@@ -181,8 +216,8 @@ in the workflow.
 
 This is the value of the rehearsal: the defect is invisible to `goreleaser check`, to a
 snapshot build and to `--skip=publish`, because none of them exercises a second job
-downloading a draft with a scoped token. Per the recovery rules the tag was not moved;
-a new rehearsal tag follows the fix.
+downloading a draft with a scoped token. Per the recovery rules the tag was not moved
+and the failed draft was not reused; attempt 2 ran on a new tag.
 
 **Local validation (2026-09-20):** `make check`, Docker `make integ`, the five release
 guard tests, GoReleaser configuration validation and actionlint 1.7.12 passed.
