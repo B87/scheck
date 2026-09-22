@@ -43,14 +43,12 @@ Consequences for the release gate:
 With `OPENAI_API_KEY` in the environment (or `--base-url` for another endpoint):
 
 ```sh
-go run ./cmd/scheck eval --repeat 3 --format json --out /tmp/scheck-eval.json
-go run ./cmd/scheck eval --repeat 3 --out /tmp/scheck-eval.md
+go run ./cmd/scheck eval --repeat 3 --format json --out docs/eval/results-$(date +%F)-gpt-5.6-luna.json
+go run ./cmd/scheck eval --repeat 3 --out docs/eval/results-$(date +%F)-gpt-5.6-luna.md
 make live
 ```
 
 Progress prints to stderr as each run ends; `--out` is rewritten after every run.
-Do not commit the harness JSON or its markdown rendering. The section added below is
-the record.
 
 Then add a section below with the date, the model string the endpoint reported, the
 `prompt_version` from the record, the scheck version, every criterion's PASS/FAIL line
@@ -104,9 +102,9 @@ The criteria file is unchanged.
 
 ### 2026-09-20 — gpt-5.6-luna, `--repeat 1`, observation only (prompt `sp-53fdd276e33f`, scheck `dev`)
 
-Command: `go run ./cmd/scheck eval --model gpt-5.6-luna --repeat 1`. The harness
-file is not committed; the table below is the record. One repeat, so **not a gate
-result**. Run after the redaction and store fixes above.
+Command: `go run ./cmd/scheck eval --model gpt-5.6-luna --repeat 1 --out
+docs/eval/results-2026-09-20-gpt-5.6-luna-repeat1.md` (the full record is that file).
+One repeat, so **not a gate result**. Run after the redaction and store fixes above.
 
 | arm | correct | false positives | missed | abstentions | resolved | incomplete | median latency | cost |
 |---|---|---|---|---|---|---|---|---|
@@ -144,9 +142,9 @@ What changed against the first run, and what it showed:
 
 ### 2026-09-20 — gpt-5.6-luna, `--repeat 3` (prompt `sp-0da93228ea0e`, scheck `dev`): the record
 
-Command: `scheck eval --model gpt-5.6-luna --repeat 3 --format json`. The harness
-dump is not committed; the table below is the record. 45 runs per model arm, 24 pair
-runs, 3 baseline runs; about 25 minutes; agent arm
+Command: `scheck eval --model gpt-5.6-luna --repeat 3 --format json --out
+docs/eval/results-2026-09-20-gpt-5.6-luna.json` (markdown rendering next to it).
+45 runs per model arm, 24 pair runs, 3 baseline runs; about 25 minutes; agent arm
 $0.074, single-pass $0.042. `make live` on the same day: one real `scheck local` on
 this Mac, 10 iterations, complete, **$0.0079** (criterion 7: pass).
 
@@ -233,8 +231,9 @@ for each of `gpt-5.6-luna` and `gpt-5.6-terra`:
 scheck eval --model <model> --cases linux-cron-fetch,linux-sshd-include,linux-unit-in-tmp --no-pairs --repeat 3 -v --out …
 ```
 
-The harness files for the two models are not committed. Three cases are below the
-frozen minimums, so nothing here is a §3 verdict.
+Raw records: `results-2026-09-20-followup-gpt-5.6-luna.md`,
+`results-2026-09-20-followup-gpt-5.6-terra.md`. Three cases are below the frozen
+minimums, so nothing here is a §3 verdict.
 
 | model | arm | runs | right (expected id reported) | false positives | ids reported at all | median tokens | cost |
 |---|---|---|---|---|---|---|---|
@@ -299,10 +298,10 @@ are decided here and in `testdata/eval`; the criteria file is unchanged.
 
 ## 2026-09-20 — gpt-5.6-luna, `--repeat 3` (prompt `sp-e0d904499422`, scheck `dev`): the deciding record
 
-Command: `scheck eval --model gpt-5.6-luna --repeat 3 -v --format json`, on the
-contract with the `ruled_out` verdict, after the two label decisions. The harness
-dump is not committed; the table below is the record. 45 runs per model arm, 24 pair
-runs, 3 baseline runs; about 45 minutes; $0.45 for the
+Command: `scheck eval --model gpt-5.6-luna --repeat 3 -v --format json --out
+docs/eval/results-2026-09-20-gpt-5.6-luna-ruledout.json` (markdown rendering next to
+it), on the contract with the `ruled_out` verdict, after the two label decisions. 45
+runs per model arm, 24 pair runs, 3 baseline runs; about 45 minutes; $0.45 for the
 whole run. `make live` on the same day: one real `scheck local` on this Mac, 11
 iterations, complete, **$0.0071** (criterion 7: pass).
 
@@ -374,14 +373,15 @@ facts; `linux-no-firewall` 0 of 3, see the fixture defect below). Read literally
   drift.
 
 **Harness notes from this run.** The harness logs `ruled_out=[…]` per run and never
-scores it. Its markdown rendering matches the JSON record; neither file is committed.
+scores it. The `Markdown()` rendering of a JSON record reproduces the committed
+markdown byte for byte, which is how the `.md` next to the JSON was produced.
 
 ### Addendum — the two repaired firewall cases, `--repeat 3`, no pairs (same contract)
 
 Command: `scheck eval --model gpt-5.6-luna --cases linux-no-firewall,linux-unavailable-firewall
---no-pairs --repeat 3 -v --format json`; $0.035. The harness dump is not committed.
-Two cases are below the minimums, so this corrects two lines of the record above and
-decides nothing on its own.
+--no-pairs --repeat 3 -v --format json --out docs/eval/results-2026-09-20-firewall-cases-repaired.json`
+(markdown next to it); $0.035. Two cases are below the minimums, so this corrects two
+lines of the record above and decides nothing on its own.
 
 | case | arm | expected id reported | false positives | note |
 |---|---|---|---|---|

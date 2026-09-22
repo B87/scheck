@@ -375,6 +375,82 @@ enforced by the test instead of asserted in prose.
 `TestConfigShowRendersAnUnsetPortAsAbsent`. A port of 0 is the absence of configuration,
 and printing 0 read as a port the operator had written.
 
+## Re-verification at the release commit `285587f` (2026-09-22)
+
+`docs/RELEASING.md` and `SPEC.md` §12 require the pass to be repeated at the commit
+that is published. This section is that repeat. It is a *targeted* re-verification:
+the deltas since the first pass are re-run, and the rest of the evidence is reused
+with the argument for why it still applies. Nothing below upgrades a verdict — all
+twelve criteria passed at `683aac2` and all twelve pass here.
+
+The measurements below were taken at `285587f`. The commit that carries the published
+tag adds exactly this section and the restored evidence pointers in
+`docs/eval/phase2-results.md` and `docs/ROADMAP-0.0.1.md` on top of it — documentation
+only. No code, test, fixture, golden, script or workflow differs between the measured
+commit and the published one, which `git diff --stat 285587f <release-commit>` shows.
+
+### Why most evidence carries over
+
+Every package that implements the security boundary is **byte-identical** to
+`683aac2`:
+
+```
+internal/target  internal/runner  internal/policy  internal/config  internal/state
+internal/operator  internal/check/{linux,common}  internal/check/typed.go
+internal/finding/rule.go  internal/report/text.go
+```
+
+So the single exec path, the path policy, the redactor, the budgets, the SSH canary
+and quoter, the Linux catalog, the posture rules and the text report contract are the
+same artefacts the first pass walked. What changed is confined to:
+
+| Change | Bearing on acceptance |
+|---|---|
+| `internal/check/macos/macos.go` — `net.listeners` gains `+c 0` | One macOS argv. Re-run natively below (criteria 1, 2, 3). |
+| `internal/finding/catalog.go` — the matching remediation string | Text only; same command as above. |
+| `cmd/scheck/configcmd.go` — unset port renders `-` | Closed open item 2; display only, covered by `make check`. |
+| `test/integ/facts_test.go`, `sudoers_test.go` | The criterion 3 assertion became **stricter**, not looser. |
+| Goldens and macOS fixtures re-recorded | Consequences of the `+c 0` argv; `make check` green is the assertion. |
+| `internal/bounded`, `internal/eval`, `cmd/scheck/evalcmd.go`, `testdata/eval/**` | The research track (§5.9). Offline, reachable only from the hidden `scheck eval`; `scripts/depcheck.sh` fails the build if any of `agent policy check finding report llm` imports it. No `local` or `ssh` run reaches it. |
+| `Makefile`, `scripts/`, `.github/workflows/`, `.gitignore` | Build and release machinery; no target-facing behaviour. |
+
+### What was re-run at `285587f`
+
+| Evidence | Result |
+|---|---|
+| `make check` (vet, `go fix`, lint, `-race`, depcheck) | green |
+| `make integ` (Ubuntu + Fedora containers) | `ok  test/integ  26.2s` |
+| `scheck local --format json` on macOS 15 (Darwin 25.6.0) | `run.status complete`, `run.assessment "rules"`, 2 findings, exit 1 |
+| Audit log of that run | `net.listeners` argv recorded as `["lsof","-nP","+c","0","-iTCP","-sTCP:LISTEN"]` |
+| `--model` / `--provider` on `local` and `ssh`; `--local-only` | exit 3 in all four |
+| `schema_version` agreement | `SPEC.md` §7.4 = `docs/report-schema.json` = `internal/report/envelope.go:24` = **1.6** |
+
+### Criteria 1–12 at `285587f`
+
+| # | Verdict | Basis at this commit |
+|---|---|---|
+| 1 | PASS | macOS `local` re-run today; Ubuntu + Fedora re-run by `make integ`. macOS `ssh` reused — `internal/target` is unchanged, and the container SSH path is exercised by `make integ`. |
+| 2 | PASS | Catalog invariants and the injection corpus in `make check`; the audit log of today's live macOS run shows only catalog argv, including the changed `lsof` line. |
+| 3 | PASS | `make integ` with the exact-allowlist diff assertion — **stronger evidence than the first pass**, which tolerated whole `/run`, `/var` and `/home` trees. The three writes are those in `SPEC.md` §1. |
+| 4 | PASS | Fixture-driven, in `make check`; the re-recorded macOS goldens are part of that green. |
+| 5 | PASS | `make check`: report tests and `finding.Store` excerpt validation, both unchanged. |
+| 6 | PASS | `make check`: `internal/state/redaction_test.go` and the policy tests; `internal/policy` is unchanged. |
+| 7 | PASS | By construction — no model assesses a host, and the four model-flag paths exit 3 as re-verified above. A host run costs $0. |
+| 8 | PASS | `make check` runs the conformance suite for `mock` and `openai`; `internal/llm` is unchanged. |
+| 9 | PASS | `make check`: golden reports including the `--ignore-context` byte-for-byte case; `internal/operator` is unchanged. |
+| 10 | PASS (decided) | The comparison was run and acted on; the record is `docs/eval/phase2-results.md`, whose evidence pointers this commit restores. |
+| 11 | PASS | Canary tests in `make check` and `make integ`; `internal/target/ssh` is unchanged. |
+| 12 | PASS (decided) | `docs/eval/phase2-results.md`, unchanged in substance. It bounds nothing for a release that sends no evidence to a model. |
+
+### What this re-verification does not claim
+
+A fresh macOS **SSH** walkthrough and a fresh throwaway-host filesystem comparison
+were not performed at this commit; they are reused from the first pass on the argument
+above — the transport, runner and policy code is identical, and the Linux equivalent of
+the filesystem comparison was re-run and tightened. Anyone who wants that reuse
+re-examined should start with `internal/target` and `internal/runner`, and will find
+the same bytes the first pass walked.
+
 ## Change log
 
 - 2026-09-21 — first pass, on `scheck 683aac2` (committed 2026-09-20). All twelve criteria pass; one exception
@@ -383,3 +459,7 @@ and printing 0 read as a port the operator had written.
   `--cacheonly` was measured and refuted; tightening the read-only assertion to an exact
   allowlist revealed two further scheck-caused artefacts (sudo's timestamp directory,
   ufw's lock file), so `SPEC.md §1` now documents three. No criterion's verdict changes.
+- 2026-09-22 — re-verification at the release commit `285587f`, recorded above.
+  Targeted: every security-boundary package is byte-identical to `683aac2`, so the
+  deltas were re-run and the remainder reused with the argument stated. All twelve
+  criteria pass. Two reuses are named as reuses rather than implied.
