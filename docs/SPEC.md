@@ -1,404 +1,35 @@
 # scheck — minimal specification
 
-`scheck` is a CLI that performs an **agentic security posture check** of a single
-macOS or Linux host, either locally or over SSH. It is **read-only**: it observes,
-reasons, and reports. It changes no configuration, package, unit, credential or
-security state on the target; the three runtime artefacts its own commands leave
-behind are named and measured in §1.
+`scheck` is a read-only security posture checker for one macOS or Linux host, locally
+or over SSH. A run collects facts from a compiled catalog and assesses them with
+posture rules. It changes no configuration, package, unit, credential or security
+state; the three runtime artefacts its own commands leave are named in §1.
 
-Status: v0.8 — M0, M1 (through M1.8) and all of M2 (through M2.8) implemented; the live
-evaluation is recorded and **no model assesses a host in 0.0.1** (§2.1); M4.5–M4.7 remain
-(2026-09-20; the research track's R1 arm is implemented offline, 2026-09-21) · Language: Go · Inference: provider-agnostic (default `openai-compatible`,
-model `gpt-5.6-luna` on OpenAI's endpoint, reached only by the evaluation harness in this
-build; Anthropic and guaranteed local-only inference deferred past v1)
+What is built, and what is pending, is `docs/ROADMAP-0.0.1.md`. **No model assesses a
+host** (`scheck local` and `scheck ssh`, §2.1). Phase 2 stays in the tree, tested
+offline, and runs only from `scheck eval`. The research track is
+`docs/ROADMAP-RESEARCH.md`. Language: Go.
 
-**Changes in v0.7 (M2.6a):** runner-owned immutable observations preserve repeated
-invocations across both phases; model citations identify exact observations. Reports
-and persistence resolve every target citation, and baseline execution resolves catalog
-IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
+Earlier revisions of this file are in its git history. §13 is the decisions log. When
+a change deviates from a section below, update that section and add a line here.
 
-**Changes from v0.1** (from design review):
+**Change list**
 
-- Probes and the allowlist are merged into one **check catalog** (§3). The model calls
-  checks by id with typed parameters; it never composes argv. Regex-over-argv validation
-  is gone.
-- One `policy` package owns every decision about what may reach the model: path
-  sensitivity, redaction, budgets (§4). `run_check` and `read_file` both consult it, so
-  neither can bypass the other.
-- The SSH path is documented as a different trust boundary from local, with a canary
-  check that verifies remote quoting before any other command runs (§4.3).
-- Severity ownership is decided: the model classifies, code assigns severity and applies
-  context adjustments deterministically (§7.2). Structured context goes to code, prose
-  context goes to the model (§6.3).
-- Finding ids come from a compiled catalog; accepted risks are validated against it at
-  config load (§7.1).
-- Provider adapters absorb capability differences; the agent loop sees one contract (§5.3).
-- Redaction is marked explicitly, like truncation (§4.2).
-- All budgets live in one struct with one enforcement point (§4.4).
-- Context sources are one repeatable flag; early-exit modes are one flag (§8).
-- Acceptance criterion 10 requires phase 2 to demonstrably earn its cost (§12).
-- All v0.1 open questions are decided (§13): reports carry a host identity block, fact
-  sheets are persisted from M1, local providers report tokens and time but no cost, and
-  the catalog is tiered by profile.
-- Elevation is `sudo -n` only, configured as `elevate:` with a `scheck sudoers`
-  generator for least-privilege grants (§8.1).
-
-**Changes from v0.2** (from building M0 and M1; see `ROADMAP-0.0.1.md`):
-
-- `check.Check` gained `Description`, `ExitOK`, `PathUse`, `Canary` and `Extract` (§3).
-  The first two are needed by the model menu and by checks whose exit code is the
-  answer; the last three are part of the security boundary and are enforced by the
-  invariants test.
-- The canary string and the `remote_shell` mechanism are pinned down (§4.3): the string
-  carries a doubled backslash so fish is detected, and is printed by `/usr/bin/printf`
-  so rbash is detected.
-- Redaction runs before truncation over a slightly larger capture window (§4.2), so a
-  secret straddling the cap is replaced rather than leaked as a prefix.
-- The runner substitutes `fs.stat` for a content read of a sensitive path (§4.1) and
-  runs a `which` pre-check before an elevated command (§8.1).
-- Phase 1 alone has exit codes `0|2|3` and reports `mode: "facts"` (§7.4, §8).
-- `scheck sudoers` uses `grep -rH .` rather than an empty-string pattern, because sudoers
-  cannot express an empty argument (§8.1).
-- A hidden `--record-fixtures DIR` flag and a fixture manifest format exist for tests (§11).
-- All packages live under `internal/`; the security boundary is not importable.
-
-**Changes from v0.3** (from using the M1 build on a real host, 2026-09-20):
-
-- Phase 1 emits deterministic findings from **posture rules** (§2.1, §7.5): one
-  unambiguous fact → one finding, code-graded like everything else. The model classifies
-  only what needs judgement (§7.2). `finding.Def` carries title, impact and remediation
-  text so a rule finding is complete without a model (§7.1); findings carry `source`
-  (§7.3).
-- `check.Check` gained typed parser shapes and a `Unit` noun for `lines` checks (§3), so
-  a summary reads "26 listening sockets", never "26 lines". The envelope gains
-  `facts.<id>.summary`, `findings[].source` and typed `parsed` shapes at
-  `schema_version` 1.1 (§7.4).
-- The text report has a contract (§7.6), pinned by golden tests (§11). `scheck explain`
-  exists, and `-v` / `-vv` govern how much of the report is shown (§8).
-- `--stop-after facts` exits `1` when a rule finding is open at the profile threshold
-  (§8); acceptance criterion 4 now requires the offline run to say so (§12).
-- Roadmap: M1.6–M1.8 land these before M2; the severity-adjustment slice shrinks to
-  context adjustments and accepted risks (M2.3 after the v0.5 renumbering, §10).
-
-- Posture assessments distinguish matched, not matched, not applicable and not
-  assessed; rules require recognized evidence and preserve uncertainty (§7.5).
-- Before the first GitHub release, breaking changes are permitted without migration
-  machinery; the release establishes the compatibility baseline (§7.4).
-- Profile exit thresholds are explicit (§8), and the agent evaluation compares rules,
-  single-pass analysis and follow-up investigation (§12).
-
-**Changes from v0.4** (from implementing M1.6, 2026-09-20):
-
-- The fact sheet is a flat table with a repeated `DOMAIN` column rather than domain
-  sub-headings, so the report sorts, greps and pipes as a table (§7.6).
-- The text report escapes control characters in every target-derived string before
-  printing it (§7.6). A check's stdout must not be able to drive the operator's
-  terminal; this is a security property of the renderer, not cosmetics.
-- Wrapping never splits a `[REDACTED:…]` or `[TRUNCATED:…]` marker, and a hanging block
-  counts its own prefix against the width (§7.6).
-- The terminal decisions (width, tty, `NO_COLOR`) belong to the CLI; `internal/report`
-  takes them as options and reads no descriptor and no environment (§7.6). Until
-  severities exist the report styles structure only, never colour.
-- `-vv` renders the runner's redacted capture, carried in process. Default JSON and
-  persistence omit it; the review follow-up adds opt-in JSON evidence (§7.4, §7.6).
-- `scheck explain CHECK-ID` ships, with one section per platform-specific definition
-  (§8). Its posture-rule list waits for the rules themselves (M1.8).
-
-**M1.6 review follow-up (2026-09-20):**
-
-- Header fields are escaped and folded to one logical line; failed attempted checks
-  expose only policy-filtered diagnostics. Extraction failures keep full stdout hidden.
-- Machine consumers can request JSON discovery (`catalog`, `explain`, plans), explicit
-  `run.assessment`, diagnostic reason codes and optional redacted evidence (§7.4, §8).
-- Timeout guidance distinguishes per-check limits from the whole-run deadline.
-- Agent CLI guidance is maintained as the repository-local `scheck` skill, replacing
-  the standalone usage document.
-- Documentation distinguishes the implemented M1.6 envelope from M1.7–M1.8 plans,
-  and records the current SSH planning bootstrap (§8).
-
-**Changes from v0.5** (2026-09-20):
-
-- `openai-compatible` is the default provider and the reference implementation, and is
-  the first adapter built (M2.6); `anthropic` moves to M3.1 (§5.2, §10). The `llm`
-  interface in §5.1 does not change: it keeps `Block.Cacheable` and `Effort` because it
-  is designed from the richest provider, not the first one implemented.
-- M2 is re-sliced into seven (`ROADMAP-0.0.1.md`): context ingestion (§6.1, §6.2) moves ahead
-  of the severity-adjustment slice, because structured context is the grader's input
-  (§6.3) and was previously scheduled after its consumer. `scheck providers` and the
-  frozen phase-2 evaluation criteria gain an owning slice.
-- The fact-sheet chunking threshold moves from a constant in `agent` to
-  `Budgets.ChunkAtFraction` (§4.4, §5.3), so every number that shapes a run lives in one
-  struct.
-- `single-pass` is defined as the agent loop with `MaxIterations: 1` (§5.6), not a
-  separate analysis path.
-- `scheck explain` accepts a finding id and prints the severity chain (§8), replacing the
-  separate grading devtool the roadmap had sketched.
-
-**v1 scope revision (2026-09-20):**
-
-- M3.1–M3.4 move after v1: additional providers, tool-call emulation, guaranteed
-  local-only inference and domain chunking do not gate release. M4 follows M2.
-- M2 owns request-size guards before every model call, preserving evidence and
-  reporting an incomplete assessment on overflow (§5.3). No chunking is built in v1.
-
-**Changes to the research track after the three-repeat record (2026-09-20):**
-
-- §5.9's initial scope moves from "service/context relationship" (which §6.3 already
-  decides in code) to one judgement per candidate item for the context-dependent
-  judgement ids, with code owning enumeration, deterministic filters, bounded
-  follow-up reads and filing. The offline work is a fourth arm of the existing M2.7
-  harness rather than a second corpus. `ROADMAP-RESEARCH.md` records why: the live
-  record's failures are an unused loop and per-item context judgements, which is the
-  shape a System One model can answer and the shape it cannot replace. No key is held;
-  the live slice stays deferred.
-
-**Changes from implementing the research track's R1 (2026-09-21):**
-
-- §5.9 gains three decisions taken while building the bounded arm
-  (`internal/bounded`, reachable from `scheck eval --arms bounded` alone). A candidate
-  is judged by **two or three independent yes/no questions answered in one request**
-  and combined by a rule in code, not by one "is this unexpected?" question: that
-  question asks a literal reader to recognize the thing and relate it to the context in
-  one hop, which is the failure mode the vendor's limitations page names. Nothing is
-  filed from **the absence of an explanation**; every rule needs an affirmative signal,
-  because filing on silence is what produced the phase 2 false positives. And a bounded
-  follow-up read is not a per-item attempt: code lists `/etc/systemd/system` once and
-  reads only the unit files a host actually defines.
-- A question that names a state field is not asked when that field is empty, or when the
-  command that produced it is known to degrade it (`lsof` shortens a process name to nine
-  characters without `+c 0`): the candidate is `insufficient` instead. A listener whose capture does not name the owning process is
-  the worked example — `ss` names it only for a privileged session — and asking anyway
-  answers "not a recognized component" for every listener on an unprivileged run, which
-  refiles the phase 2 false positive by another route. This generalizes the existing rule
-  that missing, denied, redacted or truncated evidence is never sent.
-- The arm's scope is the four judgement ids and nothing else. `fw.no_firewall_active`,
-  `sshd.password_auth_exposed` and a drop-in's `sshd.password_auth_enabled` are
-  deterministic correlations across two checks, not context judgements; the comparison
-  report names them as outside the arm's design rather than letting a reader read a miss
-  as a failure. `ROADMAP-RESEARCH.md` proposes them as a rules change for a later
-  release, which would be a change to §7.5's one-rule-one-check contract.
-
-**Changes from the 0.0.1 release validation (2026-09-20, M4):**
-
-- Acceptance criterion 3's evidence is named rather than left to a throwaway VM: the
-  container diff `make integ` already asserts, plus catalog inspection and the audit log
-  on macOS (§12). The criterion is unchanged; what satisfies it is now written down.
-- §11's golden reports become golden artifacts: beside the text reports, each fixture
-  pins the JSON report (schema-validated as committed) and the run's audit log as a
-  command trace. M4.5 drops golden provider responses — no host assessment builds a
-  provider — and needs no reference remapping, since references replay identically.
-- The acceptance pass is recorded in `docs/eval/acceptance-0.0.1.md` (§12). It found one
-  write scheck can cause: `dnf -q check-update`, run unprivileged, creates and leaves a
-  metadata cache under `/var/tmp/dnf-<user>-<random>/`. **Reconciled in M4.7
-  (2026-09-22):** the check is kept and the write is documented in §1, because no argv
-  avoids it and pending security updates are a finding operators act on. Tightening the
-  integration assertion to an exact allowlist at the same time revealed two further
-  artefacts nobody had recorded — sudo's timestamp directory and ufw's lock file — so §1
-  now names three, and the test enforces the whole set.
-
-**Changes from the phase 2 decision (2026-09-20, M2.8):**
-
-- **No model assesses a host in 0.0.1.** The recorded evaluation failed the frozen
-  criteria on the one condition that matters and the criteria call that a deletion, so
-  `scheck local` and `scheck ssh` now collect facts and assess them with the posture
-  rules, full stop (§2.1). They build no provider and need no credential; the six model
-  flags exit 3 on those commands; a default run and `--stop-after facts` are the same
-  run. `--include-evidence` follows, and is accepted on a default run as well as on
-  `--stop-after facts`. `allow_egress: false` is satisfied by construction on `local`
-  and `ssh` and is still rejected by `scheck eval`, which is the only command that
-  contacts a provider; `--local-only` still exits 3 everywhere, since its full contract
-  (forbidding hosted assessment anywhere, including the harness) is post-v1.
-- The provider pre-flight (registered and available adapter, a model for a non-mock
-  provider, a known context limit) moved from the run to `scheck eval` with its
-  behaviour unchanged, since the harness is where a provider is built now. The agent
-  loop, its tools, the envelope's phase 2 fields and the injection corpus stay and stay
-  tested offline; `make live` drives the harness rather than `scheck local` (§11).
-- Acceptance criteria 7, 10 and 12 are resolved in §12 rather than left open.
-
-**Changes from the three-repeat live evaluation (2026-09-20):**
-
-- `report_finding` carries a `verdict` (§5.7): `open` is what it always did;
-  `ruled_out` records a hypothesis the model checked and closed, with a note and
-  optionally evidence validated the same way, and files nothing. Three prompt contracts
-  in a row had shown the model filing an active firewall under `fw.no_firewall_active`
-  with a note saying it was not a finding; the tool description and prompt said not to,
-  and the model did it anyway, so the tool now has a channel for it instead of a
-  prohibition. `finding.Store.RuleOut` owns the validation (catalog id or custom slug, a
-  note, evidence against exact observations, never a finding of the run; an open report
-  later supersedes it). Schema `1.6` adds `run.agent.ruled_out` (§7.4); the text
-  report lists it under the model summary; the harness logs it as `ruled_out=[…]` and
-  never scores it. `PromptVersion` is `sp-e0d904499422`.
-
-**Changes from the first live evaluation (2026-09-20):**
-
-- One `--repeat 1` run of the harness against `gpt-5.6-luna` (recorded in
-  `docs/eval/phase2-results.md` as an observation, not a gate result) found three
-  defects in the tool rather than in the model, and they are fixed here:
-  - The `kv-secret` redaction rule matched the sudoers tag `NOPASSWD:` and replaced the
-    granted command with a marker, so a per-command grant read as a broad one. The
-    rule now skips the sudoers `PASSWD`/`NOPASSWD` keys (§4.2); the ubuntu and fedora
-    fixtures that recorded the mangled lines are restored byte for byte.
-  - `finding.Store` accepted a rule-covered id the rule had disproved on complete
-    evidence (`sshd.root_login_enabled` with `permitrootlogin no` in the capture) and
-    an id whose rules are bound to another platform (`remote.login_enabled` on Linux).
-    Three deterministic guards join the store (§5.7, §7.5): platform, rule verdict, and
-    a judgement's `Premise` (`sshd.password_auth_exposed` presupposes
-    `sshd.password_auth_enabled`). A not-assessed rule still leaves its id to the model.
-  - The system prompt says these things too, and names what `net.unexpected_listener`,
-    `fw.no_firewall_active` and `privesc.sudo_nopasswd_broad` mean, so the model is told
-    before it is refused. `PromptVersion` changed (`sp-53fdd276e33f`).
-- A second observation run against the fixed tool showed the model calling
-  `report_finding` to record a hypothesis it had ruled out (an active firewall filed
-  under `fw.no_firewall_active`, with a note saying it was not a finding). The tool
-  description and the prompt now state that the tool files an open problem only, and
-  `PromptVersion` hashes the static tool descriptions together with the system prompt
-  (§5.8), since both are what the model is told; it is now `sp-0da93228ea0e`. The
-  `macos-clean` case overrides its
-  listener recording: the recorded workstation published docker and AirPlay on every
-  interface, which is not a clean host.
-- Harness ergonomics for a live run (§11): progress lines print without `-v` and name
-  the reported ids; `--out` is rewritten after every run so an interrupted run leaves a
-  record; `--cases` runs a subset; and a drift baseline (one benign control run twice
-  per repeat) is reported next to the adversarial pairs so §4.4's bound is read against
-  the model's natural variance. The criteria file is unchanged.
-
-**Changes from implementing M2.7 (2026-09-20):**
-
-- The evaluation harness exists (§11): `internal/eval`, `scheck eval`, a fifteen-case
-  suite meeting the frozen minimums, and fixture manifests that inherit a recorded
-  host (`base:`) and can mask a recording (`absent: true`). **The live evaluation has
-  not been run**; `docs/eval/phase2-results.md` records that criteria 7, 10 and 12
-  are undecided and how to produce the record. The 0.0.1 gate is therefore open.
-
-**Changes from the GPT-5.6 model table (2026-09-20):**
-
-- OpenAI's endpoint defaults to `gpt-5.6-luna` when `--model` is omitted; a
-  different `--base-url` still requires an explicit model because that endpoint
-  decides which names exist. The built-in context and price table covers
-  GPT-5.6 Sol/Terra/Luna (and the `gpt-5.6` alias of Sol) and GPT-6 Astra (§5.2).
-  Chat completions on Luna accepts function tools only with `reasoning_effort=none`;
-  the adapter sends that and records `Native.Reasoning` false, rather than treating
-  the 400 as a missing-tools failure.
-
-**Changes from implementing M2.6 (2026-09-20):**
-
-- The `openai-compatible` adapter's concrete behaviours are in the §5.2 table:
-  credential rule, context-window sources, the two capability differences it absorbs
-  (`max_tokens`, `reasoning_effort`), caching and pricing, error classification. The
-  conformance suite requires `cache_write` only from an adapter whose
-  `Native.PromptCaching` is true; a protocol without the concept reports 0 (§11).
-- The opt-in live tests live under `test/live` behind the `live` build tag (`make
-  live`, `SCHECK_LIVE=1`); they are not part of `make check` and were not run for this
-  slice (no credential in the development environment). Acceptance criterion 7's cost
-  measurement is therefore still to be recorded.
-
-**Changes from implementing M2.5 (2026-09-20):**
-
-- The `<operator_context>` block was already in the prompt from M2.4; this slice adds
-  the injection corpus (`testdata/context/{hostile,benign}`) and the boundary tests
-  (§6.4, §11), and one sentence to the system prompt declaring check output to be
-  data too (§5.8). `PromptVersion` changed with it.
-
-**Changes from implementing M2.4 (2026-09-20):**
-
-- The loop's end conditions are written down (§5.6): every budget names itself in
-  `run.agent.ended`, the last permitted turn counts as complete only when it reported
-  and did not investigate, and unexecuted tool calls get error results. The menu gate
-  moved into `runner.RunAs` (§5.7) so a hidden check is denied and audited by the one
-  enforcement point. `report_finding`'s evidence validation is specified: an excerpt
-  must be in the output of a check that ran.
-- The envelope gains `run.prompt_version` and `run.agent` at schema 1.4 (§7.4); the
-  prompt hash is what the evaluation records (`docs/eval/phase2-criteria.md`).
-- macOS `/private` canonicalisation in the path policy (§4.1), found by running the
-  mock demo on a Mac: `realpath /etc/ssh/sshd_config` was denied as outside `/etc`.
-
-**Changes from implementing M2.3 (2026-09-20):**
-
-- The grader is `finding.Grader` and the merge contract is `finding.Store` (§7.2,
-  §7.5): the store validates a candidate's evidence against the output of a check that
-  ran (a fabricated excerpt is an error result, not a finding), merges by id, and
-  grades everything through one chain. `report.Build` grades the posture rules'
-  findings through the same store, so a rule finding and a model finding cannot grade
-  differently. `scheck explain FINDING-ID` prints the chain (§8).
-- The order of the adjustment table, the `service` field, the completeness rule for
-  `svc.expected_missing` and the `governance`/`custom` categories are written into §6.3
-  and §7.3. Seven judgement finding ids (`net.unexpected_listener`,
-  `fw.no_firewall_active`, `privesc.sudo_nopasswd_broad`, `fs.suid_unexpected`,
-  `persist.unexpected_entry`, `accounts.unexpected_admin`,
-  `sshd.password_auth_exposed`) join the catalog so the model has a menu of
-  correlated conclusions with curated text; no rule raises them.
-
-**Changes from implementing M2.2a (2026-09-20):**
-
-- §9 now states the precedence the implementation always had — defaults, OS user
-  config, project `scheck.yaml`, explicitly set flags — and the real user-config
-  locations; the previous wording listed the files in the wrong order. `scheck config
-  show` and `scheck config validate` join §8, backed by a resolver with provenance
-  (`config.Resolve`) that runs and inspection share. `docs/CONFIGURATION.md` is the
-  walkthrough.
-
-**Changes from implementing M2.2 (2026-09-20):**
-
-- A `target:` context source is prose only (§6.1): the structured block can accept
-  risks and set exposure, and the machine being audited must not be able to do either
-  for itself. The full source order and the budget's cut rule are written down, and
-  `--stop-after context` prints the block the model reads. The envelope's
-  `run.context_sources` entries gained `kind`, `bytes` and `unresolved` (§7.4, schema
-  1.2). Operator context lives in `internal/operator`; `config.Validate` loads the
-  `context:` block so an unknown accepted-risk id fails before anything runs.
-
-**Changes from implementing M2.1 (2026-09-20):**
-
-- `llm.Provider` gained `Native()` (§5.1): the roadmap delivers `Native` alongside
-  `Limits`, and `scheck providers` has to print it without a request. `Stream` is
-  specified as text deltas, complete tool-call events and one `Done` event; provider
-  failures are classified (`llm.Error`) so the loop ends a run without knowing the
-  provider. `llm.Register`/`llm.Build` and `internal/llm/all` are the selection
-  mechanism, and `make depcheck` enforces the no-provider-dependency rule.
-- Token accounting is a documented conservative bound in `llm` (§5.3) rather than a
-  per-model tokenizer; `max_context:` / `--max-context` declare the window when the
-  adapter cannot know it.
-- `docs/eval/phase2-criteria.md` freezes the M2.7 pass criteria (§11, §12).
-
-**Changes from implementing M1.7 and M1.8 (2026-09-20):**
-
-- `check.Parse` takes the whole `Check`, not just its `ParserKind` (§3). A typed shape
-  is produced from several tools' output formats (`ss` and `lsof` both answer
-  `listeners`; four package managers answer `updates`), and the catalog's own argv is
-  what says which format to expect. Sniffing the target's output to pick a parser was
-  the alternative and is worse: the format choice must not depend on target-controlled
-  bytes.
-- A typed parser produces `check.Records` — `{kind, items, partial, note}` — not a bare
-  slice (§3, §7.4). Completeness travels with the records because §7.5 needs it: a rule
-  may prove an existential condition from partial output but never an absence. In JSON a
-  typed fact's `parsed` is that object, so a record is `parsed.items[0]`.
-- A new typed shape, `file_mode`, reads a `stat` line into `{symbolic, mode, user,
-  group, size}`. The §7.5 shadow rule is specified over a *parsed* mode, and a regexp
-  over a raw line cannot express "recognized and outside a set" without lookahead.
-- `Unit` is required on `kv` checks as well as `lines` checks (§3): "13 settings" is a
-  reading, "13 keys" is a shape. The invariants test enforces it and rejects a `Unit` on
-  a typed shape, which names its own records.
-- A posture rule's predicate answers with three states, not a boolean (§7.5):
-  `matched`, `not_matched` and `not_assessed`. Predicates therefore carry what makes
-  evidence *recognizable* — `RawMatch.Requires`, `KeyEquals.Known`, `FieldEquals.Known`,
-  `FieldOutside.Recognize` — so an answer scheck does not understand can never be read
-  as a pass. This is the mechanism behind "evaluate recognized evidence, not failure to
-  recognize a good state".
-- The `pkg.*` row of the §7.5 seed table is four rules, one per concrete catalog id.
-  Several rules may share a finding id; the evaluator emits that finding once and
-  appends each rule's evidence.
-- `finding.Def` does not carry `References` yet (§7.1): the field selects citations by
-  `context.compliance`, which arrives with operator context in M2.2. Findings emit no
-  `references` key until then rather than inventing citations.
-- `run.assessment` is `rules` under `--stop-after facts` from M1.8 (§7.4), and the
-  envelope gains the `assessments` array. `run.assessment` stays a field of its own:
-  an empty `findings` array is never the same claim as "nothing was assessed".
-- The text report's header line leads with the result, the severity colours arrive, and
-  a fact whose rule fired carries `[finding: <severity>]` rather than a pass mark
-  (§7.6). Coverage is rendered in two places: the not-assessed rules close the findings
-  section by default, and `-v` prints the whole coverage table.
-- Real-model quality and adversarial evaluations gate v1 (§11, §12); mock transcripts
-  prove enforcement and control flow only.
+- **2026-09-22 — the spec keeps the contract.** Dropped the copies of milestone
+  status, the phase 2 evaluation write-up, the JSON envelope sample and the
+  post-v1 adapter designs. Those already live in the roadmap, the eval records
+  and `docs/report-schema.json`. Section numbers are unchanged.
+- **2026-09-22 — three writes, not an unqualified read-only claim (§1).**
+  `pkg.dnf_check_update`, `sudo -n --` and `fw.ufw` leave a cache, a timestamp
+  directory and a lock file. The integration allowlist is that set. An unset SSH port
+  renders as absent, not `0`.
+- **2026-09-22 — Jev probe.** The pre-R3 recall probe has run and passed
+  (`docs/ROADMAP-RESEARCH.md`). Vendor access does not put Jev on a release gate or on
+  default CI (§5.9).
+- **2026-09-20 — no model on a host run (M2.8, §2.1).** The recorded evaluation failed
+  the frozen criteria. `local` and `ssh` build no provider. Criteria 7, 10 and 12 are
+  resolved in §12. Reviving phase 2 takes a new record that passes
+  `docs/eval/phase2-criteria.md`.
 
 ---
 
@@ -410,18 +41,17 @@ IDs inside the runner. Schema 1.5 and the prompt/tool contract change together.
 - Same UX for `scheck local` and `scheck ssh user@host`. (Same UX, not the same trust
   boundary — see §4.3.)
 - Findings that a human can act on: severity, evidence, remediation — no raw dumps.
-- Agentic reasoning: the model correlates facts across subsystems (e.g. "password
-  auth is enabled on sshd **and** an account has an empty password **and** the host
-  is listening on 0.0.0.0:22") rather than firing independent boolean rules.
+- Posture rules for facts whose meaning is unambiguous (§7.5). A conclusion that needs
+  two facts is not filed in 0.0.1. Correlating those facts is phase 2's design (§2.1,
+  §5); `local` and `ssh` do not run it.
 - Deterministic, auditable command surface. Every command executed on the target comes
   from a compiled catalog, is logged, and is reproducible.
 - **Operator context as a first-class input.** The operator can hand `scheck` their
   architecture notes, expected services, exposure and accepted risks so findings are
   specific to the host's actual role rather than to a generic checklist (§6).
-- **Replaceable inference.** v1 supports native tool calling through the
-  `openai-compatible` adapter behind a provider-neutral interface. Additional adapters,
-  emulation and a guaranteed zero-egress AI mode are post-v1 (§5). Offline posture
-  rules remain available without a model.
+- **Inference stays behind one interface (§5).** `scheck eval` reaches it through the
+  `openai-compatible` adapter. A `local` or `ssh` run does not build a provider.
+  Additional adapters, emulation and a guaranteed zero-egress AI mode are post-v1.
 - **Stable severities.** The same host with the same context yields the same severity
   for the same finding id, regardless of provider or run (§7.2).
 
@@ -461,29 +91,28 @@ how the sudo and ufw artefacts went unrecorded altogether.
 
 ## 2. Architecture
 
+A `local` or `ssh` run is phase 1 only (§2.1):
+
 ```
-  cmd/scheck (CLI, cobra)
+  cmd/scheck
         │
-        ├── target.Target                interface { Exec(ctx, argv) (stdout, stderr, code) ; Platform() }
-        │     ├── target/local           os/exec, argv only, no shell
-        │     └── target/ssh             golang.org/x/crypto/ssh, one session per Exec, canary-verified quoting
-        │
-        ├── check.Catalog                the ONLY command surface: named, typed, read-only checks (§3)
-        │     └── check/{macos,linux}    per-platform check definitions + baseline sets
-        │
-        ├── policy                       one owner for: path sensitivity, redaction, budgets (§4)
-        │
-        ├── llm.Provider                 one narrow contract; adapters absorb provider differences (§5)
-        │     └── llm/{openai,mock}   (anthropic/ollama: post-v1)
-        │
-        ├── agent.Session                the tool-calling loop (owned by scheck)
-        │     └── tools: run_check, read_file, report_finding
-        │     (0.0.1: reachable from the evaluation harness only — §2.1)
-        │
-        ├── finding                      id catalog, severity assignment, context adjustment, dedupe (§7)
-        │
-        └── report/{text,json,sarif}     renderers
+        ├── config            narrows only (§9)
+        ├── target.Target     Exec(ctx, argv); Platform()
+        │     ├── local       os/exec, argv only, no shell
+        │     └── ssh         one session per Exec; canary first (§4.3)
+        ├── check catalog     the only command surface (§3)
+        ├── policy            paths, redaction, budgets, audit (§4)
+        ├── runner            the only exec path
+        ├── baseline          plan, fact sheet
+        ├── finding           posture rules, then the grader (§7)
+        ├── operator          context grades findings (§6)
+        └── report            text and JSON (§7.4, §7.6); state dir
 ```
+
+Phase 2 is in the tree and off this path: `llm` (`openai-compatible` and `mock`;
+`anthropic` and `ollama` are registered and exit 3), `agent` and its three tools,
+and `internal/eval`, which is their only caller. `internal/bounded` is the research
+arm (§5.9). SARIF is not a renderer in this build (§8).
 
 ### 2.1 Two-phase execution — the core design decision
 
@@ -494,7 +123,7 @@ reproducible, cacheable, and diffable between runs.
 **Phase 2 — agentic reasoning.** The fact sheet is handed to the model in one cached
 prompt. The model reasons over it, requests *additional* catalog checks via
 `run_check` / `read_file` to confirm or rule out hypotheses, and emits findings via
-`report_finding`. **In 0.0.1 no host assessment runs it** — see the outcome below.
+`report_finding`. No host assessment runs it — see the decision below.
 
 Both phases execute through the same catalog, the same policy, and the same audit log.
 Phase 1 is simply "the baseline subset, run unconditionally". There is no second command
@@ -516,34 +145,23 @@ every run and the results are nondeterministic. Without phase 2 this is a static
 checklist tool — which is a fine thing to be, so phase 2 must prove it adds signal
 (acceptance criterion 10). The split keeps cost and variance in phase 2 only.
 
-**Outcome for 0.0.1: phase 2 did not prove it (2026-09-20).** Two three-repeat live
-evaluations against the frozen criteria of `docs/eval/phase2-criteria.md` are recorded
-in `docs/eval/phase2-results.md`. The deciding one passes every criterion it is judged
-on except the first, which is the one that matters: the model made no `run_check` or
-`read_file` call in 45 of 45 agent runs, so the loop's follow-up investigation — the
-only thing it can add over a single pass — did not happen. Five prompt contracts, a
-more expensive model and a dedicated `ruled_out` verdict for the behaviour that
-produced its false positives did not change that. Single-pass, judged next against the
-rules arm as the criteria require, reported a forbidden id in 5 of 45 runs against the
-rules arm's zero and found one of three correlated cases in the majority of runs, so it
-did not earn its place either. The criteria say a failure here is a deletion, not a
-redesign.
+**Decision: `scheck local` and `scheck ssh` assess with the posture rules alone.**
+They build no provider, need no credential, and send nothing a check observed off
+the machine. The flags that select a model (`--provider`, `--model`, `--base-url`,
+`--effort`, `--transcript`, `--max-context`) exit 3 on those commands, and the same
+keys in a configuration file are unused. Operator context, the grader and the
+finding store still grade what the rules produce.
 
-**So `scheck local` and `scheck ssh` assess with the posture rules alone.** They build
-no provider, need no credential, and send nothing a check observed off the machine; the
-flags that select a model (`--provider`, `--model`, `--base-url`, `--effort`,
-`--transcript`, `--max-context`) exit 3 on those commands rather than being accepted
-and ignored, and the same keys in a configuration file are simply unused. Operator
-context, the grader and the finding store with its guards are unaffected: they grade
-what the rules produce and are part of every run. What is dormant rather than deleted
-is the model half — the `llm` contract and its adapters, `agent.Session` and its three
-tools, the injection corpus, and `internal/eval` behind the hidden `scheck eval` —
-because it costs nothing to carry and it is what a later decision would have to be
-measured with again. `scheck eval` is the one caller of phase 2 in this build, it runs
-against fixtures only, and it owns the provider pre-flight that a run used to perform. The
-report envelope keeps its phase 2 fields (§7.4) because the harness still produces
-them; no 0.0.1 CLI path fills them. Reviving phase 2 means a new record in
-`docs/eval/phase2-results.md` that passes the frozen criteria, not a spec edit.
+The model half stays in the tree — the `llm` contract and its adapters,
+`agent.Session` and its three tools, the injection corpus, and `internal/eval`
+behind `scheck eval` — because a later decision has to be measured with it.
+`scheck eval` is the only caller of phase 2, it runs against fixtures only, and it
+owns the provider pre-flight. The report envelope keeps its phase 2 fields (§7.4)
+because the harness still produces them; no `local` or `ssh` path fills them.
+
+The comparison and the criteria it was judged against are
+`docs/eval/phase2-results.md` and `docs/eval/phase2-criteria.md`. Reviving phase 2
+means a new record there that passes those criteria, not a spec edit.
 
 ---
 
@@ -823,15 +441,14 @@ the `fs.stat` argv that actually ran.
 
 ## 5. Inference layer (provider-agnostic)
 
-Inference is a replaceable component. v1 supports `openai-compatible` endpoints with
-native tool calling, plus `mock` for tests. Supporting a second production adapter,
-emulation and guaranteed local-only AI is deferred to M3 after v1. A compatible local
-endpoint may work, but selecting a loopback URL does not establish a zero-egress
-guarantee. Operators requiring offline operation can use phase 1 without a model.
+Inference is a replaceable component behind `scheck eval` (§2.1). A `local` or `ssh`
+run does not build a provider. The built adapters are `openai-compatible` and `mock`.
+A second production adapter, emulation and a guaranteed local-only mode are post-v1.
+A loopback URL does not establish a zero-egress guarantee.
 
-Consequence of that requirement: **`scheck` owns the agent loop.** No provider SDK's
-tool-runner helper drives the conversation. The loop is ~150 lines in `agent`, has one
-code path, and every provider implements one narrow interface.
+**`scheck` owns the agent loop.** No provider SDK's tool-runner helper drives the
+conversation. The loop lives in `agent` and has one code path; every provider
+implements one narrow interface.
 
 ### 5.1 The `llm` interface
 
@@ -919,38 +536,39 @@ adds the output reservation and answers whether the request may be sent. An unkn
 
 ### 5.2 Providers
 
-| Provider | Covers | Notes |
-|---|---|---|
-| `openai-compatible` | OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio, OpenRouter | **Default and reference implementation.** One adapter, `--base-url` + `--model`. `--base-url` defaults to `https://api.openai.com/v1`, and on that endpoint `--model` defaults to `gpt-5.6-luna`. A different endpoint still requires `--model`: it decides what exists. Capabilities declared from config, not assumed; native tool calling required in v1 (§5.3). The context window comes from `max_context:` or a built-in table of model families (GPT-5.6 Sol/Terra/Luna, GPT-6 Astra, and earlier GPT-5 / GPT-4.1 / GPT-4o / o-series families); unknown is a configuration error. `OPENAI_API_KEY` must be present for OpenAI's endpoint and is sent as a bearer token when set for any other; a base URL may not carry credentials. The request is chat completions with `stream: true`, `tools` as functions, `tool_choice: auto`, the output reservation as `max_completion_tokens` (falling back to `max_tokens` once if the endpoint rejects it) and `Effort` as `reasoning_effort` (`max` → `high`); an endpoint that rejects `reasoning_effort` loses it and `Native.Reasoning` records that; an endpoint that rejects function tools together with `reasoning_effort` is retried with `none` (chat completions on GPT-5.6 Luna) and is not a missing-tools failure. `Block.Cacheable` is not exercised (`Native.PromptCaching: false`): the endpoint caches long prefixes on its own and reports hits as `cache_read`; `cache_write` is 0. `cost_usd` is priced from the table only on OpenAI's endpoint, null elsewhere. A 400 naming the context length, a 413, a 401/403 and a 5xx map to `context_overflow`, `auth` and `transport`; a 400 rejecting tools is `unsupported`. |
-| `anthropic` (post-v1 M3.1) | Claude API, Bedrock, Vertex, Foundry | Default model `claude-opus-5`; adaptive thinking, `output_config.effort`, prompt caching all map natively — the provider that proves the interface can express more than the reference implementation needs. |
-| `ollama` (post-v1 M3.2) | local models | `Local: true`. The zero-egress path. Tool calling emulated when the model lacks it. |
-| `mock` | tests | Replays recorded transcripts (`--transcript FILE`); used by every non-live test. A transcript declares `limits` and `native` and one turn per model call; a turn may `fail` with a classified error kind or carry `expect` assertions over the request it answers, so a test can assert what the loop sent without reaching into the provider. |
+`openai-compatible` is the default and the reference implementation: one adapter,
+`--base-url` plus `--model`, for OpenAI and compatible chat-completions servers.
+`--base-url` defaults to `https://api.openai.com/v1`; on that endpoint `--model`
+defaults to `gpt-5.6-luna`. Any other endpoint requires `--model`. Native tool
+calling is required (§5.3). The context window comes from `max_context:` or a
+built-in table of known families; unknown is a configuration error.
+`OPENAI_API_KEY` is required for OpenAI's endpoint and sent as a bearer token when
+set for any other. A base URL must not carry credentials. Endpoint differences are
+absorbed inside the adapter and recorded in `Native()`. `cost_usd` is priced only
+on OpenAI's endpoint, null elsewhere. Failures are classified as `llm.Error` kinds
+so the loop can end a run honestly.
 
-Selection: `--provider`/`--model`, or `provider:` in config; v1 defaults to
-`openai-compatible`. Deferred providers fail explicitly with exit 3, "not available
-in this build". After M3, credential inference may select an available provider,
-with `openai-compatible` winning ties. `scheck providers` lists
-what is configured and each one's `Limits` and `Native` set.
+`mock` replays a recorded transcript (`--transcript FILE`). Every non-live test
+uses it. A transcript declares `limits` and `native` and one turn per model call,
+and may `fail` with a classified error kind or `expect` assertions over the request
+it answers.
+
+`anthropic` and `ollama` are registered so a selection exits 3, "not available in
+this build". They are not built.
+
+Selection is `--provider` / `--model`, or `provider:` in config, defaulting to
+`openai-compatible`. `scheck providers` lists what is configured and each one's
+`Limits` and `Native`. Choosing a provider by which credential is present is
+post-v1.
 
 ### 5.3 Adapters absorb capability differences
 
-v0.1 exposed six capability booleans and had the loop degrade per combination. That put
-2^n paths in the one component that must be simplest, and made the conformance suite
-conditional. Instead, **every adapter presents the full contract**. In v1, unsupported
-native tool calling is rejected before inference with exit 3; emulation is not silently
-enabled. Cache hints may be ignored and effort mapped only where supported, with
-`Native` recording what is exercised. The following emulation design is deferred to
-M3.2; it must not be scaffolded in v1:
-
-- **No native tool calling** → the adapter renders tools into the system prompt as a
-  JSON call protocol, parses the model's reply into `ToolCalls`, and returns tool results
-  as user text. The loop never knows.
-- **No parallel tool calls** → the adapter issues them one at a time and assembles a
-  single `Response`. The loop sees one turn.
-- **No prompt caching** → cache breakpoints are ignored. Nothing else changes; the
-  fact sheet is in the system prefix regardless.
-- **No native reasoning** → the adapter prepends a "think step by step before calling
-  tools or reporting" instruction when `Effort >= high`.
+**Every adapter presents the full contract.** Unsupported native tool calling is
+rejected before inference with exit 3. Emulation is not enabled and must not be
+scaffolded. Cache hints may be ignored and effort mapped only where the endpoint
+supports it, with `Native` recording what was exercised. When emulation exists, the
+adapter still presents this contract and the loop still does not know which features
+were emulated.
 
 **Context limits (required in M2).** Before every model call, check the entire
 serialized request against `Limits.MaxContext`, reserving the requested maximum output
@@ -972,13 +590,10 @@ silently dropping evidence. Existing policy redaction and marked truncation stil
 apply, but no additional evidence truncation, history eviction or summarization is
 introduced merely to fit the context window in v1.
 
-**Small-context support (post-v1 M3.4).** Domain chunking and a final correlation pass
-are deferred. Introduce `Budgets.ChunkAtFraction` (initially 0.5) only with that slice;
-it triggers when the system prefix exceeds that fraction of `Limits.MaxContext`.
-Every chunk and correlation request must still pass the full request-size guard.
-Evaluate cross-domain cases where neither domain alone yields a finding: correlating
-findings alone may discard the facts needed to discover the relationship. Chunking
-must demonstrate preserved signal before it becomes a supported execution mode.
+**Small-context support is post-v1.** Do not add chunking, history eviction or
+summarization in order to fit a window. A later slice has to show that chunking
+preserves a finding that neither piece would yield alone before it is an execution
+mode, and every request still passes the full request-size guard.
 
 `Native` has exactly two consumers, and the agent loop is neither of them: the report
 header records it so a reader knows which features were emulated, and `finding` reads
@@ -986,15 +601,12 @@ header records it so a reader knows which features were emulated, and `finding` 
 emulated, because parsed-from-text calls are more error-prone. The cap is applied in
 `finding`, never by the model, and the loop must not branch on any field of `Native`.
 
-### 5.4 Egress control (post-v1 M3.3)
+### 5.4 Egress control
 
-In v1, `--local-only` and `allow_egress: false` fail explicitly with exit 3 before
-any inference request; neither may be ignored or treated as an egress guarantee.
-The following supported local-only mode is deferred:
-
-`allow_egress: false` (config) or `--local-only` makes any non-`Local` provider a hard
-error before a single byte leaves the machine. For a tool whose input is a host's
-security configuration this is a requirement, not a nicety.
+`--local-only` and `allow_egress: false` exit 3 before any inference request.
+Neither may be ignored or treated as an egress guarantee. A supported local-only
+mode, in which a non-`Local` provider is refused before a byte leaves the machine,
+is post-v1. A loopback URL does not establish that guarantee.
 
 ### 5.5 Reproducibility
 
@@ -1070,10 +682,10 @@ evidence the rule lacked. These are error results with the rule's check and reas
 the model can correct itself.
 
 `verdict: ruled_out` is the channel for a hypothesis the model checked and closed.
-Three live prompt contracts in a row showed the model filing "checked and found in
-order" observations as findings (an active firewall under `fw.no_firewall_active`, with
-a note saying it was not a finding); prose did not stop it, so the tool has a place for
-it. A ruled-out call needs a catalog id or a well-formed `custom:` slug and a `note`;
+Prose in the prompt is not that channel: filing a negative observation as an open
+finding is how the live evaluation produced false positives
+(`docs/eval/phase2-results.md`). A ruled-out call needs a catalog id or a
+well-formed `custom:` slug and a `note`;
 evidence, when cited, is validated exactly like a finding's. It files nothing: the
 store keeps it apart from findings, it is never graded or counted, it cannot rule out a
 finding of the run (a rule finding is the floor; a reported one is the model's own
@@ -1105,63 +717,50 @@ Provider-neutral, no vendor-specific phrasing:
 
 ### 5.9 Optional bounded assessment experiment (outside v1 requirements)
 
-TypeSafe's Jev is a candidate for semantic judgments over collected evidence, such as
-whether an observed service is explained by operator notes or a persistence entry
-warrants investigation. It is an optional research track, not a prerequisite for M0–M4
-or v1. A key exists as of 2026-09-21, and it changes nothing about this rule:
-development, default CI and release gates must not require a Jev account, credentials,
-network access to TypeSafe, or recorded Jev responses. The offline arm (R1) runs in
-`make check` with scripted answers and no network. The existing generative-provider
-plan remains the production path.
+Bounded assessment is an optional research track, not a prerequisite for any product
+milestone or release. Vendor access changes nothing: development, default CI and
+release gates must not require a Jev account, credentials, network access to
+TypeSafe, or recorded Jev responses. The offline arm runs in `make check` with
+scripted answers and no network. `docs/ROADMAP-RESEARCH.md` is the record of the
+experiment. The rules below bind the code.
 
-If implemented for evaluation, keep assessment separate from `llm.Provider`: bounded
-decisions do not implement its conversational streaming and tool-generation contract.
-Start with an internal evaluation harness, not a public CLI mode or a general-purpose
-provider framework. Its domain-level input is policy-filtered evidence plus operator
-context; its output is candidate assessments tied to existing evidence identifiers.
-The implementation owns question wording, batching and vendor response conversion.
+It stays separate from `llm.Provider`: bounded decisions do not implement its
+conversational streaming and tool-generation contract. `internal/eval` is its only
+caller. There is no public CLI mode. Input is policy-filtered evidence plus operator
+context; output is candidate assessments tied to existing evidence identifiers. The
+implementation owns question wording, batching and response conversion.
 
-Initial scope: the context-dependent judgement ids (`persist.unexpected_entry`,
-`net.unexpected_listener`, `fs.suid_unexpected`, `accounts.unexpected_admin`), where
-code enumerates the candidates, applies the deterministic filters, runs any bounded
-follow-up read through the runner from a fixed per-kind table, builds a per-item state,
-and decides what to file. Each candidate is judged by two or three independent yes/no
-questions in one request, combined by a rule in code; every rule requires an affirmative
-signal and none files from the absence of an explanation. No other finding id may be
-filed from this path. `expected_services` matching and `svc.expected_missing` stay with §6.3. Code
-retains explicit status and completeness metadata, resolves evidence references, and
-performs exact parsing, counting and comparisons. Missing, denied, redacted or truncated
-evidence must not imply a negative finding and is never sent. Assessment results neither
-assign severity nor authorize checks, change accepted risks, suppress findings, skip
-investigation, or affect exit codes. They remain separate evaluation artifacts until a
-measured result justifies a production integration decision.
+Code enumerates the candidates, applies the deterministic filters, runs any
+follow-up read through the runner from a fixed per-kind table, and decides what to
+file. The judgement ids are `persist.unexpected_entry`, `net.unexpected_listener`,
+`fs.suid_unexpected` and `accounts.unexpected_admin`. No other finding id is filed
+from this path. `expected_services` matching and `svc.expected_missing` stay with
+§6.3. Each candidate is a few independent yes/no questions in one request, combined
+by a rule in code. Code keeps status and completeness, resolves evidence references,
+and does the parsing, counting and comparisons.
 
-Development proceeds as a fourth arm of the M2.7 harness over the same labeled cases
-(`ROADMAP-RESEARCH.md`), with scripted answers and a local fake HTTP server. These
-prove plumbing, validation and failure handling, not model quality or prompt-injection
-resistance. An optional available generative/local model may answer
-the same questions for comparison; its results are attributed to that model and are
-never presented as Jev performance or calibration.
+Three rules hold, and a change that breaks one is wrong even if the arm scores better:
 
-Any later live adapter must use the same policy and egress restrictions as other
-inference: `--local-only` forbids hosted assessment and hosted fallback. Credentials
-come from the environment, never fixtures or config. Validate response IDs, types,
-allowed choices and probability ranges; bound requests, retries and deadlines. Failure
-or uncertainty leaves the ordinary audit path intact. Keep provider probabilities
-separate from report confidence; thresholds need held-out evaluation, not a direct
-conversion from vendor confidence into `high|medium|low`.
+- **Nothing is filed from the absence of an explanation.** Every decision rule needs
+  an affirmative signal.
+- **Insufficient evidence is never sent and never filed.** An unavailable, truncated
+  or redacted record is settled by code as insufficient before any question exists.
+- **The follow-up table is a table.** No model picks a check, a path or an argument,
+  and every read goes through `runner.RunAs`.
 
-Before production adoption, compare deterministic rules, an available generative model
-and actual Jev on human-labeled fixtures. Record precision/recall, false negatives,
-abstentions, investigation frequency, latency and cost, including adversarial and
-incomplete evidence. Pin the tested model and question versions. Synthetic/replayed
-answers cannot satisfy this quality gate. A failed or unavailable experiment does not
-block v1; a successful one requires an explicit spec update for its production role.
+Questions, criteria and thresholds are versioned (`bounded.QuestionsVersion`);
+changing them invalidates a threshold measured against the old ones. Scripted
+answers, and any generative model asked the same questions, make no quality claim
+and are attributed to the source that answered. Results assign no severity,
+authorize no check, change no accepted risk, suppress no finding and do not affect
+exit codes.
 
-Research references (reviewed 2026-09-20): [primitives](https://docs.typesafe.ai/primitives),
-[HTTP API](https://docs.typesafe.ai/api), [models](https://docs.typesafe.ai/models),
-[known limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13). Typed output
-constrains answer shape; it does not guarantee truth or resistance to hostile inputs.
+A later live adapter uses the same policy and egress rules as other inference:
+`--local-only` forbids a hosted assessment, and credentials come from the
+environment, never from fixtures or config. Provider probabilities stay separate
+from report confidence. A failed or unavailable experiment does not block a
+release. A production role requires an explicit spec update after a measured
+result.
 
 ---
 
@@ -1333,7 +932,7 @@ a required `proposed_severity` field, are never adjusted upward, are capped at
 `medium`, and are flagged `custom: true` in the report so a reviewer can promote them
 into the catalog.
 
-### 7.2 Severity ownership — the model classifies, code grades
+### 7.2 Severity ownership — code grades
 
 ```
 model ──report_finding(id, evidence, confidence, impact, remediation)──▶ finding.Store
@@ -1353,6 +952,8 @@ Classification itself has two sources. Posture rules (§7.5) classify facts whos
 meaning is unambiguous, in phase 1, with no model. The model classifies everything that
 needs judgement or more than one fact, in phase 2. Both enter the same `finding.Store`
 and the same grader; a finding never bypasses the table because of where it came from.
+In 0.0.1 the model source does not run (§2.1): posture rules are the classifier a
+`local` or `ssh` run uses, and a conclusion that needs two facts is not filed.
 
 ### 7.3 Finding schema (as emitted in the report)
 
@@ -1398,56 +999,20 @@ human** — `scheck` never runs them.
 ### 7.4 Report envelope and run artifacts
 
 The JSON report is shaped so that a future fleet tool can concatenate reports without
-a translation step, even though v1 audits one host per invocation. The example below
-shows the shape including the phase 2 fields that M2 fills; everything except the
-provider block and model findings is emitted today and validated by
-`docs/report-schema.json`:
+a translation step, even though v1 audits one host per invocation. The shape is
+`docs/report-schema.json`, which tests validate the emitted envelope against.
+Pre-release revisions of that shape are in git history. The rules below are the ones
+the schema does not state by itself.
 
-```json
-{
-  "schema_version": "1.6",
-  "host": {
-    "id": "b7c1…",                 // /etc/machine-id on Linux, IOPlatformUUID on macOS; hashed
-    "hostname": "bastion-1",
-    "platform": "linux", "os": "Ubuntu 24.04", "kernel": "6.8.0",
-    "transport": "ssh", "remote_shell": "/bin/bash", "canary": "ok",
-    "elevation": "sudo"
-  },
-  "run": {
-    "started": "…", "duration_ms": 41200, "status": "complete|incomplete",
-    "profile": "baseline", "mode": "facts|agent|single-pass",
-    "provider": "…", "model": "…", "effort": "high", "native": {…}, "limits": {…},
-    "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": null},
-    "prompt_version": "sp-…", "agent": {"iterations": 3, "checks": 2, "reported": 1, "ended": "model stopped", "text": "…",
-                                         "ruled_out": [{"id": "fw.no_firewall_active", "note": "…", "evidence": [ … ]}]},
-    "context_sources": [{"source": "…", "kind": "file", "sha256": "…", "bytes": 0, "truncated": false}]
-  },
-  "observations": { "<observation ref>": { "observation": "<observation ref>", "check": "<check id>",
-                    "ran_as": "<resolved check id>", "occurrence": 1, "params": {}, "argv": [ … ],
-                    "status": "ok", "attempted": true, "summary": "…", "duration_ms": 0 } },
-  "facts":    { "<check id>": { "observation": "<observation ref>", "status": "ok|unavailable|denied", "reason": "…",
-                                "summary": "26 listening sockets",
-                                "parsed": {"kind": "listeners", "items": [ … ], "partial": false} } },
-  "assessments": [                 // one per selected posture rule (§7.5)
-    {"finding": "disk.filevault_off", "check": "disk.fdesetup",
-     "observation": "disk.fdesetup#1", "status": "not_matched", "reason": "recognized-enabled-state"}
-  ],
-  "findings": [ … ]                // rule findings from phase 1, model findings from phase 2 (§7.5)
-}
-```
+`host.id` is a hash of the machine id (Linux) or platform UUID (macOS). It is stable
+across runs and hostname changes, and it is the key a fleet aggregator or a drift
+diff would join on. A `local` or `ssh` report sets `run.mode` to `facts` and
+`run.assessment` to `rules`, and leaves the provider block empty (§2.1). `summary`
+is the one-line reading of a fact (§7.6): the same string on the screen, in the JSON
+and in a model prompt. Findings are a flat array keyed by catalog id, never nested
+under a host, so concatenation is trivial. `parsed` is `{kind, items, partial}` (§3).
 
-`host.id` is stable across runs and hostname changes; it is the key a fleet
-aggregator or a drift diff would join on. `run.mode` is `facts` when the run stopped
-after phase 1 (`--stop-after facts`); in that mode `provider`, `model`, `effort`,
-`native`, `limits` and `context_sources` are null or empty, `usage` is all zeros, and
-`findings` holds rule findings only (§7.5). `summary` is the one-line, human-readable
-reading of a fact (§7.6); it is the same string on the screen, in the JSON and in the
-model's prompt. The envelope is validated against `docs/report-schema.json` in tests.
-Findings are a flat array keyed by catalog id, never nested under a host, so
-concatenation is trivial.
-
-From M1.8 a phase 1 report sets `run.assessment: "rules"` and carries the
-`assessments` array; `"none"` remains the value for a build or a mode that assessed
+`"none"` remains the value of `run.assessment` for a build or a mode that assessed
 nothing. An empty findings array is never a security verdict on its own — the scope of
 what was assessed is a field, not an inference. Facts expose `attempted` and optional `reason_code`
 independently of `status`. Codes are assigned by the runner: `requires_elevation`,
@@ -1473,26 +1038,12 @@ capture that default JSON and persistence omit by policy. Raw stdout/stderr rema
 omitted by default. Opt-in `--include-evidence` adds captures to observations as well
 as baseline facts.
 
-Pre-release schema history: `1.0` is the M1 envelope, extended during M1.6 review with
-assessment scope, execution diagnostics and opt-in evidence; `1.1` (M1.7, M1.8) adds
-`facts.<id>.summary`, the typed `parsed` shapes of §3 (`{kind, items, partial}`, so a
-record is `parsed.items[0]`), the `assessments` array and populated `findings` with
-`source: rule`; `1.2` (M2.2) fills `run.context_sources` from operator context, one
-entry per source with its kind (`config|implicit|file|note|target`), byte count,
-sha256 and truncated flag, and `unresolved` for a `target:` source an inspection did
-not read; `1.3` (M2.3) grades findings through the structured context — populated
-`adjustments`, `status: accepted` with `accepted_reason`, `context_note`, `service`,
-`custom`, the `governance` and `custom` categories and the context-derived
-`svc.expected_missing` and `risk.acceptance_expired` findings; `1.4` (M2.4) fills the
-provider block (`provider`, `model`, `effort`, `native`, `limits`, `usage`) from phase
-2, adds `run.prompt_version` and `run.agent` (`iterations`, `checks`, `reported`,
-`ended`, the model's closing `text`), sets `run.mode` to `agent` or `single-pass` and
-`run.assessment` to `agent`, and carries `source: model` findings. These are
-development revisions, not a compatibility promise. `1.5` (M2.6a) adds the observation
-map and references in facts, evidence and assessments, changing model citations from
-check IDs to exact observations without a compatibility shim. `1.6` adds
-`run.agent.ruled_out`, the hypotheses the model closed through `report_finding`'s
-`ruled_out` verdict (§5.7).
+`run.context_sources` is one entry per source: kind
+(`config|implicit|file|note|target`), byte count, sha256 and truncated flag, with
+`unresolved` when a `target:` source was not read. A phase 2 envelope, which only
+the harness produces (§2.1), fills the provider block and `run.agent`, including
+`ruled_out` (§5.7), sets `run.mode` to `agent` or `single-pass` and
+`run.assessment` to `agent`, and may carry `source: model` findings.
 
 **Compatibility starts at the first GitHub release.** Before that release, breaking
 CLI, configuration and report changes are allowed. Update the spec, implementation,
@@ -1883,34 +1434,14 @@ shown with the credentials stripped. `docs/CONFIGURATION.md` is the walkthrough.
 
 ## 10. Milestones
 
-Status (2026-09-20): M0, M1 including the M1.6 review follow-up, M1.7 and M1.8, and all
-of M2 through M2.8 are implemented; see `ROADMAP-0.0.1.md` for validation status. M4.5
-(golden regression artifacts), M4.6 (the recorded acceptance pass) and M4.7 (the release)
-are what remain of 0.0.1.
+What is built and what is pending is `docs/ROADMAP-0.0.1.md`. The research track is
+`docs/ROADMAP-RESEARCH.md` and is not a release gate (§5.9).
 
-- **M0 — walking skeleton.** `target.Target` (local + ssh with canary), catalog type
-  and invariants test, `policy` (path, redaction, budgets), audit log, elevation
-  prefix, `scheck local --stop-after plan`, `scheck catalog`, `scheck sudoers`. No model.
-- **M1 — baseline.** Linux + macOS baseline checks, fact sheet, report envelope with
-  host identity, run persistence (§7.4), text/JSON renderers. `--stop-after facts`
-  produces a useful report on its own. M1.6–M1.8 (added after using the M1 build):
-  the text report contract (§7.6), typed parsers and summaries (§3), posture rules and
-  the finding id catalog (§7.5, §7.1), so phase 1 says what is wrong without a model.
-- **M2 — agent.** `llm` interface, the loop, three tools, system prompt, severity
-  adjustments and accepted risks on top of the M1.8 catalog, operator context (§6),
-  the `openai-compatible` provider, the `mock` provider, `scheck providers`, request-size
-  guards and repeated real-model quality/adversarial evaluations.
-- **M3 — more providers (post-v1; not a dependency of M4).** `anthropic` + `ollama`
-  with tool-call emulation,
-  `--local-only`, small-context chunking and extension of the existing provider
-  conformance suite. Additional provider coverage is not a v1 release gate.
-- **M4 — regression coverage and release validation.** 0.0.1 takes three slices of it:
-  M4.5 golden-fixture artifacts (text report, JSON report and command trace per
-  fixture), M4.6 the recorded pass over every criterion in §12, M4.7 the GitHub release
-  process. Profile tiers already exist and keep their tests. SARIF, category filters
-  (`--only`) and `scheck diff` move past 0.0.1 and exit 3 until then (§8).
-- **Optional research — bounded assessment (§5.9).** Offline fixtures and harness
-  first; a Jev comparison only when access is available. No M0–M4 dependency or v1 gate.
+Additional providers, tool-call emulation, a guaranteed local-only mode and
+small-context chunking are post-v1. They are not a dependency of the release.
+Flags and commands reserved for a later slice stay registered and exit 3 with
+"not available in this build" (§8). SARIF, `--only` and `scheck diff` are in that
+set.
 
 ---
 
@@ -2026,33 +1557,25 @@ are what remain of 0.0.1.
 
 ## 12. Acceptance criteria for v1
 
-**Recorded pass (2026-09-21):** every criterion below was walked against `scheck
-683aac2` and the result is `docs/eval/acceptance-0.0.1.md`. All twelve pass, with one
-recorded exception under criterion 3 and the two narrowings agreed in the roadmap's M4
-scope note (criterion 3's container diff in place of a VM, criterion 1's single macOS
-machine). M4.7 requires the same pass at the release commit.
+The pass over these criteria is `docs/eval/acceptance-0.0.1.md`. Publishing the
+release repeats that pass at the release commit (`docs/RELEASING.md`).
 
 1. `scheck local` and `scheck ssh …` produce a report on macOS and on Ubuntu + Fedora.
 2. No command outside the compiled catalog ever reaches the target — proven by the
    catalog invariants test, the hostile-input corpus, and the audit log of a live run.
-3. Nothing on the target is modified. **Evidence for 0.0.1**, recorded in
-   `docs/eval/acceptance-0.0.1.md`: an empty `docker diff` taken before and after a full
-   `scheck ssh` run on throwaway Ubuntu and Fedora containers, asserted by `make integ`
-   on every change, in place of a separate VM. On macOS, where there is no equivalent
-   diff, the evidence is the catalog invariants test plus the audit log of a real local
-   run, which together show that every argv that reached the host was a read-only
-   catalog command and that nothing else ran. The criterion itself does not move: a
-   write would fail the container diff.
+3. Nothing on the target is modified outside the writes named in §1. The evidence is
+   the integration container diff around a full `scheck ssh` run, and on macOS the
+   catalog invariants plus the audit log of a real local run. The recorded scope of
+   that evidence is `docs/eval/acceptance-0.0.1.md`.
 4. `--stop-after facts` is fully useful offline: no API key required, the text report
    follows §7.6, and a fixture host with FileVault off (macOS) or
    `PasswordAuthentication yes` (Linux) yields that finding with exit `1` and no model.
 5. Every finding carries evidence traceable to a check id.
 6. Seeded secrets never appear in any output artifact, and every redaction is marked.
-7. One `scheck local` run on a clean host costs under $0.50 at default effort. **Met
-   trivially in 0.0.1**: no model assesses a host, so a run costs nothing and needs no
-   credential (§2.1). The measured number for one agent run of the evaluation harness is
-   recorded in `docs/eval/phase2-results.md` ($0.0071 on 2026-09-20) and `make live`
-   keeps it reproducible, in case a later build reopens the question.
+7. One host run costs under $0.50 at default effort. This build meets it because no
+   model assesses a host (§2.1). A later build that reopens phase 2 is measured
+   against the same number; the last measured agent run is in
+   `docs/eval/phase2-results.md`.
 8. The `openai-compatible` adapter and `mock` pass the provider conformance suite.
    Full-request context guards run before every model call; initial overflow, history
    growth and provider overflow rejection preserve facts/findings, report an incomplete
@@ -2073,20 +1596,17 @@ machine). M4.7 requires the same pass at the release commit.
     repeatable useful gains over single-pass analysis within the run budget; the
     simpler mode need not fail any particular example. Mock transcripts prove only
     plumbing. If the gains do not justify the loop, retain the rules and use
-    single-pass analysis instead. **Decided for 0.0.1 (2026-09-20): the gains did not
-    exist and single-pass did not earn its place either, so the release assesses with
-    the posture rules alone** (§2.1; the records and the reasoning are in
-    `docs/eval/phase2-results.md`). The criterion is met by having run the comparison
-    and acted on it, not by shipping the loop.
+    single-pass analysis instead. **Decided:** the comparison was run and the release
+    assesses with the posture rules alone (§2.1). The criterion is met by having run
+    it and acted on it. The record is `docs/eval/phase2-results.md`.
 11. The SSH canary aborts the run against a fish or restricted login shell before any
     other command is sent.
 12. Repeated real-model adversarial evaluations pass the frozen M2.1 criteria on
     hostile operator context and target-derived evidence (§11). Record model/prompt
     versions, outcomes and failures; mock-only results cannot satisfy this gate.
-    **Recorded as passing on 2026-09-20** (§4.1, §4.2 and §4.4 of the criteria, with no
-    drift in the benign controls) on that corpus and that model. It bounds nothing for
-    0.0.1's release path, which sends no evidence to a model at all (§2.1); it is the
-    measurement a later build starts from.
+    The recorded pass is `docs/eval/phase2-results.md`. It bounds nothing for a
+    release path that sends no evidence to a model (§2.1); it is what a later build
+    starts from.
 
 ---
 
@@ -2098,7 +1618,7 @@ with a reason that beats the one recorded.
 | Question | Decision | Why |
 |---|---|---|
 | Shape JSON for multi-host aggregation now? | Yes: `host` identity block with a stable `host.id`, flat findings array, and a `schema_version` field (§7.4). | Costs nothing now; a fleet aggregator concatenates and can reject a version it wasn't tested against. |
-| Persist fact sheets for drift? | Persist the full envelope from M1; `scheck diff` in M4 (§7.4). | The format is what is hard to retrofit, not the command. |
+| Persist fact sheets for drift? | Persist the full envelope from M1 (§7.4). `scheck diff` is 0.0.4 (`ROADMAP-0.0.4.md`). | The format is what is hard to retrofit, not the command. |
 | Cost for local providers? | Tokens and wall-clock always; `cost_usd` null when there is no price (§5.5). | No invented numbers; runs stay comparable on tokens. |
 | Catalog growth past ~60? | Profile-gated tiers via `MinProfile`; baseline tier capped by test (§3). | Keeps the cheap run's menu small without capping what a hardened audit can do. |
 | Custom finding ids? | Kept, capped at `medium`, flagged `custom: true`, never escalated (§7.1). | The model can surface a novel issue without driving exit codes or matching accepted risks by accident. |
@@ -2107,8 +1627,8 @@ with a reason that beats the one recorded.
 | Which provider is built first? | `openai-compatible` (M2.6); `anthropic` follows in M3.1 (§5.2, §10). | The widest-reach adapter should be the one the conformance suite is written against, and a second provider that is *richer* than the reference implementation tests the interface harder than a second one that matches it. The `llm` interface stays designed from the richest provider so M3.1 adds no field. |
 | Confidence under emulated tool calling? | Capped at `medium` in code, keyed on `Native.ToolCalling` (§5.3). | Parsed-from-text calls fail more often; a `high` from that path overstates certainty. Per-call emulation provenance would cap more precisely in a mixed run, but no adapter emulates anything until M3.2 — revisit it there, with the emulation in front of us, rather than scaffolding it now. |
 | Must M3 ship in v1? | No: ship M2, then M4; M3.1–M3.4 are post-v1. Keep full-request context guards and real-model quality/adversarial release gates in M2. | More providers and chunking expand compatibility; robustness first requires bounded execution, honest incompleteness and measured quality. Chunking adds a separate risk of losing cross-domain evidence. |
-| Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9), developed offline; live evaluation deferred until access is available. | Bounded judgments have a different contract, and waitlisted vendor access must not block the product. |
-| Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§7.5), one fact → one finding, code-graded like everything else. | Most users stop at `--stop-after facts`; a fact sheet that never says "this is wrong" is a debug artefact, not a tool. The model still owns every conclusion that needs two facts or judgement. |
+| Make Jev a required provider or milestone? | No. Separate, optional assessment experiment (§5.9). R1 is offline; the recall probe has run (`ROADMAP-RESEARCH.md`). | Bounded judgments have a different contract. Vendor access must not block the product or default CI. |
+| Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§7.5), one fact → one finding, code-graded like everything else. In 0.0.1 that is the whole assessment (§2.1). | A fact sheet that never says a recognized fact is wrong is a debug artefact. A conclusion that needs two facts or judgement is not filed until a later record earns phase 2 back. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§8). | One meaning per exit code; CI can gate on the offline run. |
 | Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | One record shape serves the screen, the model and `scheck diff`. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§7.4, §7.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |

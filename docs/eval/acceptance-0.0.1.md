@@ -303,9 +303,10 @@ One cosmetic defect found: `config show` renders a `targets:` entry with no expl
 port as `ops@10.0.0.5 port 0`, where 0 means "unset, use 22". It is display-only —
 resolution defaults the port correctly — and it is listed below.
 
-## Open items
+## Open items from the first pass
 
-Neither is a blocker for the release; both are decisions to take before publishing.
+Both were closed on 2026-09-22, in the next section. The list is the first pass, left
+as it was written.
 
 1. **`pkg.dnf_check_update` leaves a metadata cache on the target** (criterion 3).
    `dnf -q check-update` run unprivileged writes `/var/tmp/dnf-<user>-<random>/` and

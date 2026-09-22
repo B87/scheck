@@ -20,6 +20,49 @@ reasoning are recorded in
 sends nothing a check observed off the machine. This project is unreleased; interfaces
 may change before the first GitHub release.
 
+## How a run works
+
+`scheck local` and `scheck ssh` build one session and then follow the same path.
+The catalog is the only command surface, and the runner is the only code that
+executes a check. Posture rules read the fact sheet the run produces and do not
+execute anything. Operator context grades the findings. No model is on this path.
+
+```mermaid
+flowchart TD
+  cli["scheck local or scheck ssh"] --> config["config<br/>narrows checks, paths and redaction"]
+
+  config --> transport{"target"}
+  transport -->|this machine| local["local<br/>os/exec, argv only, no shell"]
+  transport -->|over SSH| ssh["ssh<br/>strict host key, then sys.canary"]
+
+  catalog["catalog<br/>compiled checks, literal argv"] --> plan["baseline plan<br/>this platform, minus disabled checks"]
+  local --> plan
+  ssh --> plan
+
+  plan --> bind
+
+  subgraph runner ["runner: the only exec path"]
+    bind["bind typed arguments"] --> pathpol["path policy"]
+    pathpol --> elevate["elevation<br/>none, sudo -n, or already root"]
+    elevate --> execn["budgeted exec on the target"]
+    execn --> redact["redact, then truncate"]
+    redact --> parsed["extract and parse"]
+    parsed --> audit["audit log"]
+  end
+
+  audit --> sheet["fact sheet"]
+  sheet --> rules["posture rules<br/>one fact each, no execution"]
+  context["operator context<br/>role, exposure, accepted risks"] --> grade["grader"]
+  rules --> grade
+  grade --> report["report<br/>facts, assessments, findings"]
+  report --> rendered["text or JSON"]
+  report --> state["state directory"]
+```
+
+A context file that lives on the target is read before the baseline, through the
+runner, as the `text.cat` check. The state directory copy is skipped with
+`--no-persist`. An SSH canary mismatch stops the run before any other command.
+
 ## Installation
 
 Published binaries will be available from [GitHub Releases](https://github.com/b87/scheck/releases)
@@ -92,7 +135,7 @@ and partial results. For interactive inspection,
 ## Project documentation
 
 - [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status and validation; M2 is built and evaluated, M4 is next.
+- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status. M0 through M2, M4.5 and M4.6 are done; M4.7 is rehearsed and unpublished.
 - [Configuration walkthrough](docs/CONFIGURATION.md): preferences, restrictions and context.
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.

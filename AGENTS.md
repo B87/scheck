@@ -2,8 +2,8 @@
 
 scheck is a **read-only** security posture checker for one macOS or Linux host, local or
 over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP-0.0.1.md` says what is
-built (M0, M1 through M1.8, and M2 including its live evaluation and M2.8's decision)
-and what is pending (M4). This file is the operating manual for a coding agent in this
+built (M0 through M2, M4.5 and M4.6) and what is pending (publishing the rehearsed M4.7
+release). This file is the operating manual for a coding agent in this
 repository. The spec wins on any conflict.
 
 **No model assesses a host in this build.** The live evaluation failed the frozen
@@ -199,8 +199,7 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   build". Do not remove them and do not half-implement them.
 - Design lens: keep modules deep, pull complexity into the runner and policy rather
   than out to callers, and define errors out of existence where the spec allows
-  (`unavailable` is a result, not an error). The `.claude/skills/software-design-philosophy`
-  skill has the vocabulary.
+  (`unavailable` is a result, not an error).
 - When the implementation has to deviate from the spec, update `docs/SPEC.md` in the
   same commit and add a line to its change list. The spec is the contract; silent
   drift is a bug.

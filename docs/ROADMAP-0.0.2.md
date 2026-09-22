@@ -167,6 +167,10 @@ rejected alternative's tradeoff in the brief.
 observation references and parser shapes. This gate records the design; implementation
 and corresponding spec updates belong to M5.1, M5.2 and M5.2a.
 
+**Delivered (2026-09-22):** [`docs/packs/first-application.md`](packs/first-application.md)
+selects the `docker` pack and records why nginx was rejected. Nothing in that brief is
+built yet; implementation is M5.1, M5.2 and M5.2a.
+
 ## M5.1 — explicit composition, pack identity and the sshd extraction
 
 **Depends on:** M5.0, so the internal boundary is informed by the new application's needs.
