@@ -44,11 +44,19 @@ With `OPENAI_API_KEY` in the environment (or `--base-url` for another endpoint):
 
 ```sh
 go run ./cmd/scheck eval --repeat 3 --format json --out docs/eval/results-$(date +%F)-gpt-5.6-luna.json
-go run ./cmd/scheck eval --repeat 3 --out docs/eval/results-$(date +%F)-gpt-5.6-luna.md
 make live
 ```
 
 Progress prints to stderr as each run ends; `--out` is rewritten after every run.
+
+**Run the gate once.** `--format json` writes only the JSON path, but the markdown
+rendering beside each committed record was produced from that same JSON by
+`Results.Markdown()`, not by a second evaluation — see "Harness notes" in the deciding
+record below. Invoking `eval` again without `--format json` would run the whole gate a
+second time, pay for it a second time, and produce a markdown file describing a
+*different* execution from the JSON next to it. There is no CLI flag that re-renders an
+existing record; until there is, the markdown companion is produced from the JSON rather
+than re-run.
 
 Then add a section below with the date, the model string the endpoint reported, the
 `prompt_version` from the record, the scheck version, every criterion's PASS/FAIL line
