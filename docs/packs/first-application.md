@@ -82,6 +82,7 @@ requirement is: **the assessable configuration must fit in one command's capture
 | Elevation | none | none | none | new credential mechanism |
 | ≥3 deterministic findings | yes (§3) | yes, but see below | 2, and they are M5.2a's | yes |
 | Fixture reproducibility | files in the existing images; **no docker-in-docker** | containers | M5.2a's | needs a seeded server |
+| Probed | Ubuntu: all three checks. Fedora: layout only (see §2) | both distributions | n/a | no |
 | Operator value | host root on compromise | high | already delivered by M5.2a | high |
 
 **Next.js is excluded as the pack** because M5.2a already delivers it and the release
@@ -133,7 +134,7 @@ pack and neither is promised here. Record it against 0.0.3 or later.
 | Contribution API major | 1 (set by M5.1) |
 | Intended operator | anyone running Docker on a Linux host they administer — the deployment where a daemon misconfiguration is equivalent to host root |
 | Platform | `linux` only. macOS Docker Desktop runs the daemon in a VM; `/etc/docker` on the Mac is not the daemon's configuration, so the pack contributes no checks on macOS and says so in discovery. |
-| Supported matrix | **Ubuntu 24.04 / `docker.io` 29.1.3** and **Fedora 41 / `moby-engine`**, local and over SSH. Both were probed for file layout. |
+| Supported matrix | **Ubuntu 24.04 / `docker.io` 29.1.3**, local and over SSH — the deployment all three checks were probed against. **Fedora 40 / `moby-engine` 24.0.5** is supported for `docker.group` only: measured 2026-09-22, a default install creates no `/etc/docker` directory and no `docker.service.d`, so both file checks are legitimately absent there (§5). |
 | Elevation | **none.** Every check runs as the audit user. No sudoers fragment entry. |
 | Excluded layouts, explicitly | Docker Desktop (any OS); rootless Docker (`~/.config/docker/daemon.json` is under `/home`, which is metadata-only by policy — the pack reports no coverage rather than guessing); Podman; Snap-packaged Docker (`/var/snap/...`, outside path policy); containers as the *target* of a scheck run. |
 
@@ -475,8 +476,12 @@ M5.0 records the design; the implementing slices update the spec.
    distinction that separates it from the phase 2 false positives. Operators who have
    accepted the membership use the accepted-risk mechanism, which exists for exactly
    this. The §3.4 candidates stay unused, so the pack ships three findings, not four.
-2. **Fedora `moby-engine` version** is pinned in §2 by layout probe but not by a recorded
-   fixture yet; M5.2 must record one and confirm the drop-in directory convention matches
-   Ubuntu's.
+2. **Fedora contributes almost no evidence.** Measured 2026-09-22 on Fedora 40 with
+   `moby-engine` 24.0.5: no `/etc/docker`, no `/etc/systemd/system/docker.service.d`, and
+   `docker:x:998:` with no members. Only `docker.group` returns anything. That is the
+   §5 "absent installation" path working correctly rather than a defect — and it makes
+   Fedora the natural fixture for that case — but it means the pack's assessed surface on
+   Fedora is one check until an operator configures the daemon. M5.2 should record the
+   Fedora fixture as the absence case and not claim broader Fedora coverage.
 3. **nginx revisit condition** (§1.4) should be filed against 0.0.3 or later so the coverage
    loss is tracked rather than forgotten.
