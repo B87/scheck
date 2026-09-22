@@ -5,18 +5,23 @@ and left as drafts in [b87/scheck](https://github.com/b87/scheck/releases).
 A maintainer publishes manually. Creating a draft does not satisfy the acceptance
 gate or establish a claim about model quality.
 
-M4.7 automation is implemented; its hosted rehearsal is still pending. M4.5,
-M4.6 and M2.7 remain independent prerequisites for publishing 0.0.1. No passing
-live evaluation or acceptance sign-off is supplied by this automation.
+M4.7 automation is implemented; its hosted rehearsal found and fixed one defect
+and is being repeated (see **Rehearsal and recovery**). M4.5, M4.6 and M2.7 remain
+independent prerequisites for publishing 0.0.1. No passing live evaluation or
+acceptance sign-off is supplied by this automation.
 
 ## Repository setup and tool pins
 
 1. Make `b87/scheck` a public GitHub repository, push the source and workflows, and
    use `main` as the default branch. If this clone has no remote, add
    `git remote add origin git@github.com:b87/scheck.git`.
-2. Enable Actions. Use read-only default workflow permissions; the draft job alone
-   requests `contents: write`. The workflow uses `GITHUB_TOKEN`, not a PAT or a
-   model credential. Never use `pull_request_target` to execute contributed code.
+2. Enable Actions. Use read-only default workflow permissions. Two jobs request
+   `contents: write`: `draft`, which creates the draft, and `smoke`, which cannot
+   otherwise see it — a draft release is invisible to a token without push access, so
+   a read-only token reports "release not found" rather than a permission error. The
+   smoke jobs download and verify only; they never create, edit or publish a release.
+   The workflow uses `GITHUB_TOKEN`, not a PAT or a model credential. Never use
+   `pull_request_target` to execute contributed code.
 3. Protect `main` with the CI check and integration jobs. Restrict creation of `v*`
    tags to maintainers and prohibit their deletion/update through a tag ruleset.
    Published tags and assets must never be moved or replaced. Enable GitHub release
@@ -158,9 +163,26 @@ Tag-level concurrency serializes workflows but cannot prevent a maintainer from
 editing a release concurrently. Do not manually create, edit or publish it during
 an active release run. After publication, corrections require a new version.
 
-**Rehearsal status:** pending. During implementation, the local checkout had no
-remote and the authenticated GitHub API returned 404 for `b87/scheck`; no remote tag,
-draft or publication was created. Local tests do not substitute for hosted evidence.
+**Rehearsal status:** first hosted attempt run 2026-09-22 and **failed, by design of
+the exercise**: it found a defect no local validation could.
+
+`v0.0.1-rehearsal.1` at `922f9a4` — [run 35772009972](https://github.com/B87/scheck/actions/runs/35772009972).
+`validate` and `draft` passed; GoReleaser produced the correct draft (`draft: true`,
+`prerelease: true` from the hyphen, target commit `922f9a4`, exactly the five expected
+assets). **All four smoke jobs then failed identically** with `release not found` from
+`gh release download`.
+
+Cause: the `smoke` job declared no `permissions` and inherited the workflow default
+`contents: read`. A draft release is not returned by the get-release-by-tag API and
+listing drafts requires push access, so a read-only token cannot see a draft at all —
+and reports absence rather than a permission error, which is why the failure looks like
+a missing release. Fixed by granting `smoke` `contents: write`, with the reason recorded
+in the workflow.
+
+This is the value of the rehearsal: the defect is invisible to `goreleaser check`, to a
+snapshot build and to `--skip=publish`, because none of them exercises a second job
+downloading a draft with a scoped token. Per the recovery rules the tag was not moved;
+a new rehearsal tag follows the fix.
 
 **Local validation (2026-09-20):** `make check`, Docker `make integ`, the five release
 guard tests, GoReleaser configuration validation and actionlint 1.7.12 passed.

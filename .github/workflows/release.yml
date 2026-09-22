@@ -84,6 +84,14 @@ jobs:
 
   smoke:
     needs: [validate, draft]
+    # A draft release is invisible to a token without push access: the
+    # get-release-by-tag API excludes drafts, and listing them requires
+    # write. `contents: read` therefore fails with "release not found"
+    # rather than a permission error, which is how the v0.0.1-rehearsal.1
+    # rehearsal failed on all four runners. This job downloads and verifies;
+    # it never creates, edits or publishes a release.
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
