@@ -2,7 +2,12 @@
 
 A read-only security posture checker for one macOS or Linux host, locally or over
 SSH. Every target command comes from a compiled catalog and runs through the same
-policy, redaction and audit path. scheck never applies hardening changes.
+policy, redaction and audit path. scheck never applies hardening changes: it changes
+no configuration, package, unit, credential or security state. Three of its commands
+leave a record of their own invocation — `dnf check-update` writes a package-manager
+cache, `sudo -n --` writes its timestamp directory, and `ufw status` takes a lock file.
+They are listed in [docs/SPEC.md §1](docs/SPEC.md) and the integration suite asserts
+that nothing else on the target changes.
 
 **Current build:** collects facts, assesses them with compiled-in posture rules and
 grades findings through operator context. A rule reads one fact, so exit 0 and an empty

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -123,7 +124,7 @@ type inspectedEntry struct {
 type inspectedTarget struct {
 	Host     string `json:"host"`
 	User     string `json:"user"`
-	Port     int    `json:"port"`
+	Port     int    `json:"port,omitempty"`
 	Identity string `json:"identity"`
 	Source   string `json:"source"`
 }
@@ -333,7 +334,7 @@ func printInspection(w io.Writer, insp *inspection) {
 		fmt.Fprintln(w, "\ntargets")
 		for _, n := range names {
 			t := insp.Targets[n]
-			fmt.Fprintf(w, "  %s  %s@%s port %d identity %s  <- %s\n", n, t.User, t.Host, t.Port, orDash(t.Identity), t.Source)
+			fmt.Fprintf(w, "  %s  %s@%s port %s identity %s  <- %s\n", n, t.User, t.Host, portOrDash(t.Port), orDash(t.Identity), t.Source)
 		}
 	}
 	fmt.Fprintln(w, "\ncredentials (presence only; values are read from the environment at run time, never from a file)")
@@ -387,6 +388,16 @@ func printInspection(w io.Writer, insp *inspection) {
 	if insp.Error != "" {
 		fmt.Fprintf(w, "\nerror: %s\n", insp.Error)
 	}
+}
+
+// portOrDash renders an unset port as "-" rather than 0: no port was
+// configured, so the transport's default applies, and printing a port number
+// nobody wrote would read as configuration that exists.
+func portOrDash(p int) string {
+	if p == 0 {
+		return "-"
+	}
+	return strconv.Itoa(p)
 }
 
 func orDash(s string) string {
