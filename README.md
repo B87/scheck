@@ -65,13 +65,25 @@ runner, as the `text.cat` check. The state directory copy is skipped with
 
 ## Installation
 
-Published binaries will be available from [GitHub Releases](https://github.com/b87/scheck/releases)
-for Linux and macOS on amd64 and arm64. Until the first release is published, build
-from source below. macOS assets use `darwin` in their name and are **unsigned and
-unnotarized**.
+Binaries are published on [GitHub Releases](https://github.com/b87/scheck/releases)
+for Linux and macOS on amd64 and arm64. macOS assets use `darwin` in their name and
+are **unsigned and unnotarized**.
 
-Download the matching `scheck_VERSION_OS_ARCH.tar.gz` and `checksums.txt` into an
-empty directory. Verify the downloaded archive before extracting:
+[`scripts/install.sh`](scripts/install.sh) does the download, the checksum
+verification and the install:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/B87/scheck/main/scripts/install.sh | sh
+```
+
+It installs into `/usr/local/bin` when that is writable and `~/.local/bin`
+otherwise; `--dir DIR` and `--version TAG` override both. It compares the archive's
+SHA-256 against the release's `checksums.txt` before extracting anything and has no
+flag to skip that. Read it before piping it to a shell — it is ~150 lines of POSIX
+`sh`.
+
+To do the same by hand, download the matching `scheck_VERSION_OS_ARCH.tar.gz` and
+`checksums.txt` into an empty directory and verify the archive before extracting:
 
 ```sh
 sha256sum --ignore-missing -c checksums.txt       # Linux
@@ -101,7 +113,8 @@ Operator context (`--context FILE|DIR|note:TEXT|target[:PATH]`, a `context:` blo
 `scheck.yaml`, files under `.scheck/context/`) declares the host's role, exposure,
 expected services and accepted risks; findings are graded through it with every
 change attributed, and `scheck explain FINDING-ID --exposure internet` shows the
-chain. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+chain. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and the annotated
+[scheck.example.yaml](scheck.example.yaml).
 
 SSH uses strict host-key verification and key/agent authentication. Checks needing
 privileges are unavailable unless the session is root or authorized non-interactive
