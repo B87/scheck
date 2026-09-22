@@ -1026,8 +1026,8 @@ observation runs against `gpt-5.6-luna` found a redaction false positive on sudo
 `NOPASSWD:` lines, two gaps in `finding.Store` (another platform's id, an id the rule
 had disproved) and the model filing ruled-out hypotheses through `report_finding`;
 those are fixed in the spec's change list and in §4.2 and §5.7. The three-repeat
-record (summarized in `docs/eval/phase2-results.md`; the harness dump is not
-committed) then fails §3.1 decisively: in 9 of 9 follow-up agent
+record (`docs/eval/results-2026-09-20-gpt-5.6-luna.{json,md}`, summarized in
+`docs/eval/phase2-results.md`) then fails §3.1 decisively: in 9 of 9 follow-up agent
 runs the model made no tool call, so the loop was not used. §3.2, §3.5 and §4.4 also
 fail, for reasons the record separates into model behaviour, label questions and
 natural drift. Single-pass fails its own bar. Criterion 7 passes (`make live`,
@@ -1063,7 +1063,8 @@ decision, without loosening a criterion:
    nothing to flag without context), and a declared listener reported as
    `net.unexpected_listener` is a false positive at any severity.
 4. **Run the gate at three repeats** — done (2026-09-20, the deciding record in
-   `docs/eval/phase2-results.md`; `make live` $0.0071). §3.2, §3.3, §3.5, §3.7 and all of §4 pass; §3.1 fails because
+   `docs/eval/phase2-results.md`, raw `results-2026-09-20-gpt-5.6-luna-ruledout.*`;
+   `make live` $0.0071). §3.2, §3.3, §3.5, §3.7 and all of §4 pass; §3.1 fails because
    the loop made no `run_check`/`read_file` call in 45 of 45 runs, spending its
    iterations on `ruled_out` verdicts instead; single-pass fails its own bar (forbidden
    ids in 5 of 45 runs against the rules arm's zero; one correlated case of three in the
@@ -1233,8 +1234,10 @@ or 11.
 `scheck 683aac2`. All twelve criteria pass. Two items were carried out of that pass
 for M4.7: the dnf metadata cache, and `config show` printing `port 0`. M4.7 closed
 both on 2026-09-22. §1 documents three writes, an unset port renders as absent, and
-the integration diff is an exact allowlist. The pass has to be repeated at the
-release commit before publication.
+the integration diff is an exact allowlist. The pass was repeated at the release
+commit on 2026-09-22 — a targeted re-verification, recorded in the same file: every
+security-boundary package is byte-identical to `683aac2`, so the deltas were re-run
+and the remainder reused with the argument stated.
 
 ### M4.7 — GitHub release process
 
