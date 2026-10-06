@@ -23,8 +23,9 @@ sends nothing a check observed off the machine. v0.0.1 is released; see [Install
 CLI: an engagement that starts from what you tell it about your setup and assesses
 cloud accounts, SaaS tools, repositories, hosts and websites. The host checker
 described here becomes one of its collectors. See [docs/VISION.md](docs/VISION.md);
-none of that is built yet. The [roadmap](docs/ROADMAP.md) plans the first engagement for
-0.0.2, cloud and identity for 0.0.3, and judgement and depth for 0.0.4.
+none of that is built yet. The [roadmap](docs/ROADMAP.md) plans the first engagement
+for 0.0.2 (Google Workspace, GitHub, the domain and a host, reading only), GCP, probes
+and run comparison for 0.0.3, and judgement and depth for 0.0.4.
 
 ## How a run works
 

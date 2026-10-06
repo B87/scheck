@@ -15,7 +15,7 @@ operating manual for a coding agent in this repository.
 | Document | Role |
 |---|---|
 | `docs/VISION.md` | What scheck is for and its principles. Wins on direction. |
-| `docs/ROADMAP.md` | 0.0.2 (first engagement), 0.0.3 (GCP and Google Workspace), 0.0.4 (model, scans, `auto`): slices and release gates |
+| `docs/ROADMAP.md` | 0.0.2 (first engagement: Workspace, GitHub, domain, host; reading only), 0.0.3 (GCP, probes, host depth, comparing runs), 0.0.4 (model, scans, `auto`): slices and release gates |
 | `docs/spec/host-collector.md` | Contract of the built host collector. Wins on any conflict about host collection. |
 | `docs/spec/engagement.md`, `docs/spec/scope.md` | Designs for the engagement and its scope rules; each section becomes contract when its release lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
@@ -58,7 +58,7 @@ test passes.
 3. **`runner.Runner.Run` is the single enforcement point.** Bind → realpath → path
    policy → elevation → budgeted exec → redact → truncate → extract → parse → audit.
    The model path's `run_check` and `read_file` tools go through it. Do not add a second
-   path "for a special case". New collectors (web, GitHub, GCP, Workspace) get one
+   path "for a special case". New collectors (GitHub, Workspace, web, GCP) get one
    scope gate of their own with the same duties (`docs/ROADMAP.md`, "Rules for every
    release"); no collector calls the network any other way.
 4. **Policy owns sensitivity, redaction and budgets** (`internal/policy`). Config knobs
@@ -108,7 +108,31 @@ test passes.
 
 Everything is under `internal/`; nothing is importable from outside the module. New
 engagement packages arrive slice by slice with `docs/ROADMAP.md`; do not create them
-ahead of their slice.
+ahead of their slice. Where each lands, decided before E1 so that slices do not argue
+about it:
+
+| Path | Owns | Slice |
+|---|---|---|
+| `internal/engagement` | the engagement file (schema, validation, the interview's questions and their consumers), the stages, the run directory and resume (`docs/spec/engagement.md`, "Runs, state and configuration") | E1, E9 |
+| `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit | E3 |
+| `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E4 |
+| `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
+| `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E8 |
+| `cmd/scheck` | `init` and `run` beside the host commands | E1 |
+
+`scripts/depcheck.sh` grows with E1 and E3: `internal/engagement/...` and
+`internal/collector/...` must have no `internal/llm`, `internal/agent` or
+`internal/bounded` in their dependency graph (rules only through 0.0.3); no file under
+`internal/collector` may import `net/http` or `net` directly, only the gate does; and no
+collector imports another collector. A collector that needs something from another's
+facts gets it through a multi-fact rule in `internal/engagement`, never by import.
+
+For the practitioner's view of what to build, use the `security-consultant` subagent
+([.agents/agents/security-consultant.md](.agents/agents/security-consultant.md)): the
+consultant whose work scheck automates. Ask it in *define* mode before a slice's checks,
+rules, interview questions or report wording are fixed, and in *review* mode on the
+result. Its *seed* and *rank* modes are blind and run only in a session that has not
+read the collector code; never run them as a subagent of an implementing session.
 
 For agents operating the CLI, use the `scheck` skill at
 [.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers collecting
@@ -204,7 +228,10 @@ If a rule seems to need a new command, add a catalog check first.
 ## Conventions
 
 - One commit per roadmap slice, `make check` green at every commit, message in the
-  imperative describing the slice.
+  imperative describing the slice. 0.0.2 slices are pull requests into
+  `release/v0.0.2`, one per slice, with CI green; the branch merges into `main` once the
+  0.0.2 gates are recorded in `docs/eval/acceptance-0.0.2.md`. `main` stays at v0.0.1
+  behaviour until then.
 - Exit codes: 0 ok, 1 findings, 2 incomplete, 3 usage/policy/canary. Do not invent a
   fifth.
 - The host report's `schema_version` is `MAJOR.MINOR` since v0.0.1: additions bump

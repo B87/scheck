@@ -421,7 +421,9 @@ All sources are given with one repeatable flag, `--context SOURCE`, where `SOURC
 Plus two implicit sources: the `context:` block in `scheck.yaml` (§5.2), and
 `./.scheck/context/**`. Nothing else is read implicitly: `SECURITY.md`,
 `ARCHITECTURE.md`, ADRs and runbooks are useful input but must be named, so a run is
-never silently influenced by a file the operator forgot about.
+never silently influenced by a file the operator forgot about. Inside an engagement
+neither implicit source nor `target:` is read: the host's context is the four fields of
+its asset entry (`engagement.md`, "Host context").
 
 **Merge semantics are defined per kind, not by order:**
 

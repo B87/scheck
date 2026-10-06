@@ -23,11 +23,14 @@ and the one person on the team who "does security". It is for assessing systems 
 own or are authorized to assess, never anyone else's.
 
 **What it replaces, honestly.** scheck automates the collection and first-pass
-judgement of an engagement: the external surface, configuration of cloud, SaaS and
-hosts, secrets, and the links between them. It does not replace authenticated testing
-of your application's logic, a review of your processes, or a human who signs the
+judgement of an engagement: identity and access, secrets, configuration of cloud, SaaS
+and hosts, the external surface, and the links between them. That is roughly half of
+what a small company pays a consultant for, and it is the half that is scripted today.
+It does not replace authenticated testing of your application's logic, a review of
+your processes, the conversation that gets things fixed, or a human who signs the
 report. It should make a consultant's time go further, or make the first one
-affordable.
+affordable. Until a model earns its place ([ROADMAP.md](ROADMAP.md), 0.0.4), the plan
+is a checklist narrowed by your context, not hypotheses, and the report says so.
 
 ## How it works
 
@@ -35,9 +38,9 @@ A run is an **engagement**:
 
 **Intake → Scope → Recon → Plan → Check → Analyze → (back to Plan) → Report**
 
-You answer an interview once (`scheck init`), which writes an engagement file,
-including who authorized the assessment. Each later stage produces something you can
-read, edit, stop at or resume from. The loop ends when every hypothesis is settled or
+You answer an interview once (`scheck init`), which writes an engagement file, and,
+before anything beyond reading, who authorized it. Each later stage produces something
+you can read, edit, stop at or resume from. The loop ends when no follow-up is open or
 a limit is reached. The report puts first what matters most for your setup.
 
 scheck assesses **assets and the links between them**, because the risk is usually in
@@ -54,15 +57,20 @@ production, and that repository holds the payment provider's key.* Assets are:
 ## Principles
 
 1. **Context first.** What you tell scheck decides what it examines and in what order,
-   not only how severe a finding is afterwards. Without context it still runs, as a
-   generic baseline, and the report says so.
+   not only how severe a finding is afterwards. Every question the interview asks is
+   read by a rule, cited by a coverage reason or printed in the report; a question
+   nothing consumes is not asked. Without context it still runs, as a generic
+   baseline, and the report says so.
 2. **Explicit, authorized scope, enforced in code.** You name the domains, networks,
-   accounts and hosts that are yours, and who authorized the assessment. scheck
+   accounts and hosts that are yours and, before scheck probes or scans, who
+   authorized it. scheck
    checks what is under them unless you exclude it, contacts nothing outside them,
-   and only probes an asset once it has evidence the asset is really yours. Probing
-   beyond reading is opt-in, and every run is throttled and has a timeout and a cost
-   limit. scheck never exploits, never modifies a target, and never generates load
-   you did not ask for.
+   and only probes an asset once it has evidence the asset is really yours. Where that
+   evidence is your own confirmation, the guarantee is only as good as your word, and
+   the report names which evidence it relied on. Probing beyond reading is opt-in, and
+   every run is throttled and has a timeout and a cost limit unless you turn one off by
+   name. scheck never exploits,
+   never modifies a target, and never generates load you did not ask for.
 3. **Useful without a model; better with one.** With rules alone, the plan is a
    checklist per asset type and links come from deterministic rules that combine
    facts. A model adds what rules cannot: hypotheses drawn from your own words,
@@ -101,7 +109,7 @@ should.
 
 | Document | What it covers |
 |---|---|
-| [ROADMAP.md](ROADMAP.md) | 0.0.2 the first engagement, 0.0.3 cloud and identity, 0.0.4 judgement and depth |
+| [ROADMAP.md](ROADMAP.md) | 0.0.2 the first engagement (Workspace, GitHub, domain, host), 0.0.3 cloud, probes and follow-up, 0.0.4 judgement and depth |
 | [spec/engagement.md](spec/engagement.md) | The stages, the engagement file, the report's coverage, and where rules and the model each act |
 | [spec/scope.md](spec/scope.md) | Authorization, roots and exclusions, impact levels per asset type, active modes and limits |
 | [spec/host-collector.md](spec/host-collector.md) | The host collector released in v0.0.1: catalog, runner, policy, SSH, posture rules, host report |
