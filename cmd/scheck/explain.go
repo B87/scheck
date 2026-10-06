@@ -24,7 +24,7 @@ func newExplainCmd(opts *globalOpts) *cobra.Command {
 			"its output is parsed and which posture rules read the fact. A check id that is " +
 			"defined per platform prints one section per platform.\n\n" +
 			"explain FINDING-ID prints the severity chain — base, context adjustments, confidence " +
-			"cap, accepted-risk status, final — for that finding id. The §6.2 structured keys are " +
+			"cap, accepted-risk status, final — for that finding id. The docs/spec/host-collector.md §5.2 structured keys are " +
 			"accepted as flags (--exposure, --environment, --expected-service, --accepted) and are " +
 			"layered over any --context sources, so an adjustment can be reproduced without a run.",
 		Example: "  scheck explain sshd.config\n  scheck explain sshd.password_auth_enabled --exposure internet\n" +
@@ -114,7 +114,7 @@ func writeExplainEntry(w io.Writer, c check.Check, opt report.Options) {
 	field("elevation", explainElevation(c))
 	field("parser", explainParser(c.Parser))
 	// Which conclusions depend on this check, so an operator who sees it
-	// skipped knows what went unassessed (docs/SPEC.md §7.5, §8).
+	// skipped knows what went unassessed (docs/spec/host-collector.md §6.5, §7).
 	if rules := rulesFor(c); len(rules) > 0 {
 		verb, them := "rules read", "them"
 		if len(rules) == 1 {
@@ -139,7 +139,7 @@ func writeExplainEntry(w io.Writer, c check.Check, opt report.Options) {
 	}
 	if c.Canary {
 		field("canary", "the one entry whose literal contains shell metacharacters; it verifies "+
-			"remote quoting before any other command runs (docs/SPEC.md §4.3)")
+			"remote quoting before any other command runs (docs/spec/host-collector.md §4.3)")
 	}
 	if len(c.Params) == 0 {
 		field("params", "none — the argv above is the whole command")

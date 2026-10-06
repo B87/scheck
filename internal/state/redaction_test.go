@@ -40,7 +40,7 @@ func TestSeededSecretNeverPersists(t *testing.T) {
 	persisted, _ := os.ReadFile(path)
 	var text, verbose, js bytes.Buffer
 	_ = report.WriteText(&text, env, report.Options{})
-	// Verbose text exposes check output (docs/SPEC.md §7.6); it must show
+	// Verbose text exposes check output (docs/spec/host-collector.md §6.6); it must show
 	// the marker, not the key. Opt-in JSON evidence is covered below.
 	_ = report.WriteText(&verbose, env, report.Options{Verbose: 2, Width: 200})
 	_ = report.WriteJSON(&js, env)
@@ -67,7 +67,7 @@ func TestSeededSecretNeverPersists(t *testing.T) {
 }
 
 // Failed checks retain only policy-filtered diagnostics. Opt-in JSON evidence
-// must never introduce raw captures into persisted runs (SPEC §4.2, §7.4).
+// must never introduce raw captures into persisted runs (docs/spec/host-collector.md §4.2, §6.4).
 func TestFailedDiagnosticsRedactedAndNotPersisted(t *testing.T) {
 	const secret = "AKIAIOSFODNN7EXAMPLE"
 	fx := fixture.New(check.Linux, fixture.Exec{Argv: []string{"uname", "-a"}, Stdout: "failure key=" + secret, Stderr: "error key=" + secret, Code: 1})
@@ -113,7 +113,7 @@ func TestFailedDiagnosticsRedactedAndNotPersisted(t *testing.T) {
 
 // A posture rule's evidence excerpt is target text like any other: it comes
 // from the runner's already-redacted capture, so a secret in a matching line
-// cannot reach the finding, the report or the persisted run (SPEC §4.2, §7.5).
+// cannot reach the finding, the report or the persisted run (docs/spec/host-collector.md §4.2, §6.5).
 func TestFindingEvidenceIsRedacted(t *testing.T) {
 	const secret = "AKIAIOSFODNN7EXAMPLE"
 	fx := fixture.New(check.Linux,

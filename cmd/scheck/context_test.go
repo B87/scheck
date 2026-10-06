@@ -36,7 +36,7 @@ func contextSession(t *testing.T, fx *fixture.Target, flags ...string) (*session
 
 // A target: source is read as the text.cat catalog binding through the
 // runner: it is in the audit log like any other check, under the path
-// policy, and never a second read path (docs/SPEC.md §6.1).
+// policy, and never a second read path (docs/spec/host-collector.md §5.1).
 func TestTargetContextIsAnOrdinaryCatalogBinding(t *testing.T) {
 	fx := fixture.New(check.Linux,
 		fixture.Exec{Argv: []string{"realpath", "/etc/scheck/context.md"}, Stdout: "/etc/scheck/context.md\n"},
@@ -158,7 +158,7 @@ func TestStopAfterContextPrintsMergedBlock(t *testing.T) {
 }
 
 // An unknown accepted-risk id exits 3 whether it comes from a --context
-// file or from scheck.yaml (docs/SPEC.md §6.2).
+// file or from scheck.yaml (docs/spec/host-collector.md §5.2).
 func TestUnknownAcceptedRiskExitsThree(t *testing.T) {
 	dir := t.TempDir()
 	bad := filepath.Join(dir, "bad.yaml")

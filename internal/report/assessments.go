@@ -8,7 +8,7 @@ import (
 )
 
 // assessmentClass turns an evaluator reason code into words an operator can
-// act on. The codes are the evaluator's contract (docs/SPEC.md §7.5); the
+// act on. The codes are the evaluator's contract (docs/spec/host-collector.md §6.5); the
 // words are the report's.
 type assessmentClass struct {
 	text   string // "<check> reported a value this rule does not recognise"

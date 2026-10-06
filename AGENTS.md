@@ -1,45 +1,71 @@
 # Working on scheck as an agent
 
-scheck is a **read-only** security posture checker for one macOS or Linux host, local or
-over SSH. Read `docs/SPEC.md` before changing anything; `docs/ROADMAP-0.0.1.md` says what is
-built (M0 through M2, M4.5 and M4.6) and what is pending (publishing the rehearsed M4.7
-release). This file is the operating manual for a coding agent in this
-repository. The spec wins on any conflict.
+scheck is becoming a **security consultant in a CLI**: an engagement (intake → scope →
+recon → plan → check → analyze → report) across cloud accounts, SaaS tenants,
+repositories, hosts and websites, driven by context only the operator knows. Read
+`docs/VISION.md` first, then `docs/ROADMAP.md` for what is being built in which release.
 
-**No model assesses a host in this build.** The live evaluation failed the frozen
-criteria and the criteria called that a deletion (`docs/SPEC.md §2.1`,
-`docs/eval/phase2-results.md`), so `scheck local` and `scheck ssh` collect facts and
-assess them with the posture rules. Phase 2 — `internal/agent`, the three tools, the
-`llm` adapters — is kept, tested offline, and reachable only from the hidden `scheck
-eval`. Do not wire it back into a run, and do not delete it either: reviving it takes a
-new record that passes the criteria, and removing it would throw away what that record
-has to be produced with.
+What exists today, released as v0.0.1, is the **host collector**: a read-only posture
+checker for one macOS or Linux host, local or over SSH. It becomes the collector for
+host assets in the engagement and its guarantees do not change. This file is the
+operating manual for a coding agent in this repository.
+
+## Documents
+
+| Document | Role |
+|---|---|
+| `docs/VISION.md` | What scheck is for and its principles. Wins on direction. |
+| `docs/ROADMAP.md` | 0.0.2 (first engagement), 0.0.3 (GCP and Google Workspace), 0.0.4 (model, scans, `auto`): slices and release gates |
+| `docs/spec/host-collector.md` | Contract of the built host collector. Wins on any conflict about host collection. |
+| `docs/spec/engagement.md`, `docs/spec/scope.md` | Designs for the engagement and its scope rules; each section becomes contract when its release lands |
+| `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
+| `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
+| `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
+| `docs/CONFIGURATION.md`, `docs/RELEASING.md` | Host configuration walkthrough; release runbook |
+
+Code comments cite specs as `docs/spec/<file>.md §N` for anything that exists because
+of a security decision. When implementation has to deviate from a spec, update that
+spec in the same commit; history is git history. Silent drift is a bug.
+
+**No model assesses a host in this build.** The live evaluation failed its frozen
+criteria (`docs/spec/host-collector.md §2.1`, `docs/eval/phase2-results.md`), so
+`scheck local` and `scheck ssh` collect facts and assess them with posture rules. The
+model path — `internal/agent`, its three tools, the `llm` adapters — is kept, tested
+offline and reachable only from the hidden `scheck eval`. Do not wire it into a run and
+do not delete it: 0.0.4 plans to reuse it for Plan and Analyze, and only a passing record
+against frozen criteria puts a model on a default path.
 
 ## Non-negotiables
 
-These are the security boundary. A change that weakens one is wrong even if every test
-passes.
+These are the host collector's security boundary, and the model for every new
+collector: one enforcement point, a declared surface, redaction before output, nothing
+outside scope (`docs/spec/scope.md`). A change that weakens one is wrong even if every
+test passes.
 
 1. **The tool never modifies the target.** No check may write, and no code path may
    run anything that is not a catalog entry. Integration tests diff the container before
    and after a full run and fail on any change outside sshd's own login noise and an
    exact list of documented artefacts, both of which they log; keep that assertion true
-   and never widen its tolerances. Three writes are known, documented in `docs/SPEC.md
-   §1` and enforced as an exact allowlist in `test/integ/facts_test.go`: dnf's
-   package-manager cache (`pkg.dnf_check_update`), sudo's timestamp directory
-   (`sudo -n --`) and ufw's lock file (`fw.ufw`). Adding a fourth needs a decision
-   recorded in the spec, not a wider pattern.
+   and never widen its tolerances. Three writes are known, documented in
+   `docs/spec/host-collector.md §1` and enforced as an exact allowlist in
+   `test/integ/facts_test.go`: dnf's package-manager cache (`pkg.dnf_check_update`),
+   sudo's timestamp directory (`sudo -n --`) and ufw's lock file (`fw.ufw`). Adding a
+   fourth needs a decision recorded in the spec, not a wider pattern.
 2. **The catalog is the whole command surface.** Every executable command is a
    `check.Check` with literal argv tokens and typed `{name}` placeholders. Never build
    argv by concatenation, never accept a command string from a model or a user, never
    call `target.Exec` from anywhere but `internal/runner`.
 3. **`runner.Runner.Run` is the single enforcement point.** Bind → realpath → path
    policy → elevation → budgeted exec → redact → truncate → extract → parse → audit.
-   Phase 2's `run_check` and `read_file` tools must go through it. Do not add a second
-   path "for a special case".
+   The model path's `run_check` and `read_file` tools go through it. Do not add a second
+   path "for a special case". New collectors (web, GitHub, GCP, Workspace) get one
+   scope gate of their own with the same duties (`docs/ROADMAP.md`, "Rules for every
+   release"); no collector calls the network any other way.
 4. **Policy owns sensitivity, redaction and budgets** (`internal/policy`). Config knobs
    only narrow (disable checks, deny paths, add redactions). Never add a knob that
-   widens what may run or what may be revealed.
+   widens what may run or what may be revealed. The engagement's opt-in levels (probe,
+   scan, full scope) are scope decisions recorded in the engagement file and audit log,
+   never config knobs that loosen policy.
 5. **Redact before truncate; mark everything.** Output is redacted as
    `[REDACTED:<rule>:<n bytes>]` and cut as `[TRUNCATED:<n bytes>]`. Nothing downstream
    (report, audit log, persisted run, verbose output, fixtures) may see pre-redaction
@@ -48,7 +74,8 @@ passes.
    exits 3 before any other command. Do not weaken the canary string or make the quoter
    "smarter"; both are tested over the whole catalog.
 7. **Elevation is `sudo -n --` as a prefix, nothing else.** Never prompt for, read, or
-   transmit a password. Never read credentials from a config file.
+   transmit a password. Never read credentials from a config file or the engagement
+   file; API credentials come from the environment or the provider's own login.
 8. **Exactly one catalog entry has `Canary: true`.** It is the only literal allowed to
    contain shell metacharacters. The invariants test enforces this; do not add
    exemptions.
@@ -62,26 +89,26 @@ passes.
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
 | `internal/policy` | path policy, redactor, budgets, JSONL audit log |
-| `internal/runner` | the one exec path (see rule 3) |
-| `internal/baseline` | phase 1: plan, run, fact sheet; the golden command traces in `testdata/golden` (M4.5) |
-| `internal/report` | envelope (§7.4), JSON renderer, and the text report under the §7.6 contract (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden text and JSON reports in `testdata/golden`; `docs/report-schema.json` |
-| `internal/finding` | finding id catalog with base severities, posture rules and their evaluator (§7.1, §7.5); reads the fact sheet, never executes. `ValidateRules` is its invariants test |
+| `internal/runner` | the one exec path (rule 3) |
+| `internal/baseline` | the host plan, run and fact sheet; the golden command traces in `testdata/golden` |
+| `internal/report` | the host report envelope, JSON renderer and text report (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden text and JSON reports in `testdata/golden`; `docs/report-schema.json` |
+| `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
-| `internal/llm` | the provider contract (§5.1), token accounting (`CheckFit`), the registry; `mock` (transcript replay), `openai` (the default adapter), `conformance` (the suite every adapter passes), `all` (links adapters, registers deferred names) |
-| `internal/operator` | operator context: sources, the §6.2 schema, per-kind merge, budget, the `<operator_context>` block |
-| `internal/agent` | phase 2: the system prompt, the three tools, the loop; every execution through `runner.RunAs`, every finding through `finding.Store`. No CLI run reaches it in 0.0.1; `internal/eval` is its only caller |
-| `internal/eval` | the M2.7 harness: arms, metrics, adversarial pairs, the comparison report |
-| `internal/bounded` | the research track's R1 (`docs/ROADMAP-RESEARCH.md`, §5.9): code enumerates candidates, runs a fixed follow-up table through `runner.RunAs`, asks a few yes/no questions per item and decides in code. Offline, scripted answers, `internal/eval` its only caller |
-| `testdata/context`, `testdata/eval`, `testdata/transcripts` | injection corpus with benign controls; labeled evaluation cases (`base:` a recorded fixture); mock transcripts |
-| `docs/eval` | the frozen phase 2 criteria and the results record |
+| `internal/operator` | operator context for the host collector: sources, schema, per-kind merge, budget, the `<operator_context>` block |
+| `internal/llm` | the provider contract, token accounting (`CheckFit`), the registry; `mock`, `openai` (the default adapter), `conformance`, `all` |
+| `internal/agent` | the model path's system prompt, three tools and loop; every execution through `runner.RunAs`, every finding through `finding.Store`; `internal/eval` is its only caller |
+| `internal/eval` | the evaluation harness: arms, metrics, adversarial pairs, the comparison report |
+| `internal/bounded` | the bounded arm (R1 of `docs/spec/bounded.md`): code enumerates candidates, runs a fixed follow-up table through `runner.RunAs`, asks a few yes/no questions per item and decides in code. Offline, scripted answers, `internal/eval` its only caller |
+| `testdata/context`, `testdata/eval`, `testdata/transcripts` | injection corpus with benign controls; labeled evaluation cases; mock transcripts |
+| `testdata/fixtures/<name>` | recorded exec fixtures (`manifest.yaml` + files) |
 | `test/live` | opt-in tests that spend real money (`make live`, build tag `live`) |
 | `test/containers`, `test/integ` | Docker images and `integration`-tagged tests |
-| `testdata/fixtures/<name>` | recorded exec fixtures (`manifest.yaml` + files) |
-| `docs/` | `SPEC.md`, `ROADMAP-0.0.1.md`, `report-schema.json`; root `README.md` is the quick start |
 
-Everything is under `internal/`; nothing is importable from outside the module.
+Everything is under `internal/`; nothing is importable from outside the module. New
+engagement packages arrive slice by slice with `docs/ROADMAP.md`; do not create them
+ahead of their slice.
 
 For agents operating the CLI, use the `scheck` skill at
 [.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers collecting
@@ -100,19 +127,16 @@ go run ./cmd/scheck local --stop-after facts --format json --audit-log /tmp/audi
 go run ./cmd/scheck ssh user@host --stop-after facts
 go run ./cmd/scheck catalog --profile hardened
 go run ./cmd/scheck explain sshd.config --format json
-go run ./cmd/scheck catalog --platform linux --format json
 go run ./cmd/scheck local --stop-after facts --format json --include-evidence --no-persist
 go run ./cmd/scheck sudoers --platform macos
-go run ./cmd/scheck providers
 go run ./cmd/scheck config show --format json
 go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
 go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
 go run ./cmd/scheck local                         # facts + posture rules; no model, no key, free
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
-go run ./cmd/scheck eval --provider mock --arms rules,bounded --no-pairs   # the research arm, scripted
-go run ./cmd/scheck eval --cases linux-clean --no-pairs --out /tmp/r.md   # one case, live; spends money
-make live                                        # opt-in live tests
-make probe                                       # the R3 recall probe; needs TYPESAFE_API_KEY, spends cents
+go run ./cmd/scheck eval --provider mock --arms rules,bounded --no-pairs   # the bounded arm, scripted
+make live                                        # opt-in live tests; spends money
+make probe                                       # the Jev recall probe; needs TYPESAFE_API_KEY, spends cents
 go test ./internal/report -update    # rewrite the golden text and JSON reports, then read the diff
 go test ./internal/baseline -update  # rewrite the golden command traces, then read the diff
 ```
@@ -144,24 +168,30 @@ by hand (this happened with `slices.Contains` in `internal/check`).
    serial numbers before committing.
 5. Keep the baseline tier at or under the cap (40 on-demand entries at `baseline`).
 
-## Adding a posture rule
+## Adding a rule
+
+Host posture rules read one fact (`docs/spec/host-collector.md §6.5`). Engagement rules
+may combine facts from several checks or assets (`docs/spec/engagement.md`, "Multi-fact
+rules"). Both must declare exactly what they read and abstain when it is unknown.
 
 1. Add or reuse a `finding.Def` in `internal/finding/catalog.go`: a rule finding has no
    model to write its text, so title, category, base severity, impact and remediation
    are all required.
-2. Add the `Rule` in `internal/finding/rule.go`. One rule reads one check; a conclusion
-   needing two facts is phase 2's job. Pick the predicate that matches the check's
-   parser and fill in what makes the evidence *recognizable* (`Requires`, `Known`,
-   `Recognize`) — without it the predicate cannot abstain, and an answer scheck does not
-   understand would be read as a pass (§7.5).
+2. Add the `Rule` in `internal/finding/rule.go`. Pick the predicate that matches the
+   check's parser and fill in what makes the evidence *recognizable* (`Requires`,
+   `Known`, `Recognize`) — without it the predicate cannot abstain, and an answer scheck
+   does not understand would be read as a pass.
 3. Add all three fixtures to `TestEveryRuleFiresDisprovesAndAbstains`: firing,
    disproved, and insufficient evidence. The test fails when a rule has no fixtures.
 4. Run `make check`; `ValidateRules` names the invariant you broke. Regenerate the
    golden reports and read the diff.
 
+If a rule seems to need a new command, add a catalog check first.
+
 ## Testing rules
 
-- Unit tests never touch the network or a real target; use `internal/target/fixture`.
+- Unit tests never touch the network or a real target; use `internal/target/fixture`
+  for hosts and `httptest` fake servers for HTTP and API collectors.
 - Anything that needs a real shell, sshd or sudo goes in `test/integ` behind the
   `integration` build tag and runs in `test/containers`.
 - A seeded secret in any fixture must be asserted absent from report, audit log and
@@ -177,99 +207,88 @@ by hand (this happened with `slices.Contains` in `internal/check`).
   imperative describing the slice.
 - Exit codes: 0 ok, 1 findings, 2 incomplete, 3 usage/policy/canary. Do not invent a
   fifth.
-- Until the first GitHub release, breaking CLI, config and report changes are allowed;
-  do not build compatibility shims or migrations for development artifacts. Keep the
-  spec, implementation, schema and fixtures aligned when implementing a change.
-  After that release, report `schema_version` is `MAJOR.MINOR`: additions bump MINOR;
-  renames, removals and type changes bump MAJOR (`docs/SPEC.md §7.4`).
-- Posture rules require recognized evidence; unknown is not safe or unsafe. Preserve
-  assessment coverage in JSON and text, and test partial evidence (§7.5).
-- The text report is a contract (§7.6) pinned by the golden files. Regenerate with
-  `go test ./internal/report -update` and read the diff as a review item. Two more
-  goldens sit beside it (§11): the JSON report, validated against
-  `docs/report-schema.json` as committed, and the command trace in `internal/baseline`,
-  which is the run's audit log — argv, decision and output hash per attempted check, in
-  order. A diff there means what reaches the target changed; explain it or fix it, never
-  regenerate past it. Three rules hold for the text report: a status word describes execution, never posture; target-derived text is
-  control-character escaped before it is printed; and the terminal decisions (width,
-  tty, `NO_COLOR`) stay in `cmd/scheck`, never in `internal/report`.
-- Code comments cite the spec section (`docs/SPEC.md §4.3`) for anything that exists
-  because of a security decision.
-- Flags for later milestones stay registered and exit 3 with "not available in this
+- The host report's `schema_version` is `MAJOR.MINOR` since v0.0.1: additions bump
+  MINOR; renames, removals and type changes bump MAJOR
+  (`docs/spec/host-collector.md §6.4`). The engagement file and engagement report are
+  new in 0.0.2 and may change freely until 0.0.2 is published; do not build
+  compatibility shims or migrations for them.
+- Rules require recognized evidence; unknown is not safe or unsafe. Preserve coverage
+  in JSON and text, and test partial evidence.
+- The host text report is a contract (`docs/spec/host-collector.md §6.6`) pinned by the
+  golden files. Regenerate with `go test ./internal/report -update` and read the diff as
+  a review item. Two more goldens sit beside it (`docs/spec/host-collector.md §9`): the
+  JSON report, validated against `docs/report-schema.json` as committed, and the command
+  trace in `internal/baseline`, which is the run's audit log — argv, decision and output
+  hash per attempted check, in order. A diff there means what reaches the target
+  changed; explain it or fix it, never regenerate past it.
+- In every report: a status word describes execution, never posture; target-derived
+  text is control-character escaped before it is printed; and terminal decisions
+  (width, tty, `NO_COLOR`) stay in `cmd/scheck`, never in `internal/report`.
+- Flags reserved for later stay registered and exit 3 with "not available in this
   build". Do not remove them and do not half-implement them.
-- Design lens: keep modules deep, pull complexity into the runner and policy rather
-  than out to callers, and define errors out of existence where the spec allows
-  (`unavailable` is a result, not an error).
-- When the implementation has to deviate from the spec, update `docs/SPEC.md` in the
-  same commit and add a line to its change list. The spec is the contract; silent
-  drift is a bug.
+- Design lens: keep modules deep, pull complexity into the runner, the scope gate and
+  policy rather than out to callers, and define errors out of existence where the spec
+  allows (`unavailable` is a result, not an error).
 
-## Adding a provider adapter
+## Model path rules
 
-1. Implement `llm.Provider` under `internal/llm/<name>` with net/http, not an SDK, and
-   register it in `init` with `llm.Register`; import it from `internal/llm/all`.
-   Construction takes `llm.Config` and performs no I/O; credentials are read from the
-   environment at request time and never printed.
-2. Absorb capability differences inside the adapter (§5.3) and record what was not
-   exercised in `Native()`. Never add a provider name or capability boolean to an `if`
-   in `internal/agent`.
-3. Pass `conformance.Run` through a fake server that speaks the protocol the way the
-   endpoint does; classify failures as `llm.Error` kinds so the loop can end a run
-   honestly.
+These hold for `internal/agent`, `internal/llm` and the harness that drives them. The
+code is tested offline in `make check`, and a change that breaks one is still wrong.
 
-## Phase 2 rules
-
-These hold for `internal/agent` and the harness that drives it. They are not dead
-letters: the code is tested offline in `make check`, and a change that breaks one is
-still wrong.
-
-- `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate (profile
-  tier, no canary) is enforced there, not in the tool. `report_finding` goes through
-  `finding.Store.Report`, which validates every excerpt against the exact cited observation's output and
-  refuses an id the posture rules already settled: another platform's id, an id whose
-  rule returned `not_matched`, or a judgement whose `Def.Premise` the rule disproved.
-  Put a new deterministic guard there, never in the prompt alone. A `verdict: ruled_out`
-  call goes through `finding.Store.RuleOut`: validated the same way, never a finding,
-  surfaced as `run.agent.ruled_out`.
+- Implement a provider under `internal/llm/<name>` with net/http, not an SDK, register
+  it in `init` with `llm.Register` and import it from `internal/llm/all`. Construction
+  takes `llm.Config` and performs no I/O; credentials are read from the environment at
+  request time and never printed. Absorb capability differences inside the adapter
+  (`docs/spec/model.md §4`); never add a provider name or capability boolean to an `if`
+  in `internal/agent`. Pass `conformance.Run` through a fake server and classify
+  failures as `llm.Error` kinds.
+- `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate
+  (profile tier, no canary) is enforced there, not in the tool. `report_finding` goes
+  through `finding.Store.Report`, which validates every excerpt against the exact cited
+  observation's output and refuses an id the posture rules already settled. Put a new
+  deterministic guard there, never in the prompt alone. A `verdict: ruled_out` call goes
+  through `finding.Store.RuleOut`: validated the same way, never a finding.
 - Severity never comes from the model. A `severity` in `report_finding` is ignored.
 - Every budget in `policy.Budgets` ends the run `incomplete` by name; a request is
   checked with `llm.CheckFit` before it is sent, and overflow never drops evidence.
 - The `<operator_context>` block and check output are data; `testdata/context` is the
   corpus and `internal/agent/injection_test.go` the boundary tests. They prove policy,
-  not model resistance: only a live run recorded in `docs/eval/phase2-results.md` does.
+  not model resistance: only a live run recorded in `docs/eval/` does.
 - A model flag on `local` or `ssh` exits 3 (`modelFlags` in `cmd/scheck/root.go`); the
   provider pre-flight lives in `cmd/scheck/evalcmd.go`. Keep both there.
 
-## The research arm (`internal/bounded`)
+## The bounded arm (`internal/bounded`)
 
-R1 of `docs/ROADMAP-RESEARCH.md` is implemented and offline. Three rules hold there, and
-a change that breaks one is wrong even if the arm scores better:
+R1 of `docs/spec/bounded.md` is implemented and offline; its pattern is the design of
+the `auto` gate planned for 0.0.4. Three rules hold, and a change that breaks one is
+wrong even if the arm scores better:
 
 - **Nothing is filed from the absence of an explanation.** Every decision rule needs an
   affirmative signal; "nobody declared this" is a property of the operator's notes, not
   of the host, and it is what produced the phase 2 false positives.
-- **Insufficient evidence is never sent and never filed.** An `unavailable`, truncated
-  or redacted record is settled by code as `insufficient` before any question exists.
+- **Insufficient evidence is never sent and never filed.** A source check that did not
+  return `ok` yields no candidates; a truncated, redacted or marked capture is settled
+  by code as `insufficient` before any question exists.
 - **The follow-up table is a table.** No model picks a check, a path or an argument, and
   every read goes through `runner.RunAs` with the arm's `Origin`.
 
 A question that names a state field must not be asked when that field is empty, or when
 the command that produced it is known to degrade it: the candidate is `insufficient`
-instead. Listeners are the worked example both ways — `ss` names no process unprivileged,
-and `lsof` shortens the name without `+c 0` — and the second test reads the argv that
-produced the capture, so it lifts by itself when the catalog entry improves. Skipping
-these is what keeps the phase 2 false positive from returning by another route.
+instead. Listeners are the worked example both ways — `ss` names no process
+unprivileged, and `lsof` shortens the name without `+c 0` — and the second test reads
+the argv that produced the capture, so it lifts by itself when the catalog entry
+improves.
 
 Questions, criteria and thresholds are versioned data (`bounded.QuestionsVersion`);
 changing any of them invalidates a threshold measured against the old ones. Answer
 sources are attributed separately in every record — scripted answers make no quality
 claim of any kind.
 
-## Out of scope until the roadmap slice that introduces them
+## Not in the current build
 
-`--only`, SARIF, `scheck diff`, `--local-only` and `allow_egress: false` (exit 3 now),
-`anthropic` and `ollama` (registered, exit 3), tool-call emulation, chunking, the
-§5.9 track's R2 and R3 answer sources (`--bounded-source openai|jev`, exit 3 now). Do not scaffold empty abstractions for any of them.
-A posture rule reads the fact sheet only; if a rule seems to need a new command, add a
-catalog check first and keep the rule single-fact (§7.5). A conclusion that needs two
-facts is the model's, through a judgement finding id in `internal/finding/catalog.go`.
+Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
+`allow_egress: false`, the `anthropic` and `ollama` providers, and
+`--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
+engagement (`scheck init`, `scheck run`), its collectors, probes, scans, full scope and
+`auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
+for any of them ahead of their slice.

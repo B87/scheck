@@ -11,7 +11,7 @@ import (
 
 // shapeOnly is the reading M1.6 produced and M1.7 replaced: a count of lines
 // or keys, or the first raw line of a chatty command. No fact may read that
-// way any more (docs/SPEC.md §7.6, roadmap M1.7).
+// way any more (docs/spec/host-collector.md §6.6, roadmap M1.7).
 var shapeOnly = regexp.MustCompile(`^\d+ (lines?|keys?|items?|records?)\b`)
 
 // Every check that ran on every recorded fixture says something a person can
@@ -40,7 +40,7 @@ func TestEveryFactHasAMeaningfulSummary(t *testing.T) {
 }
 
 // A count from incomplete output is labelled partial rather than presented as
-// an exact total (docs/SPEC.md §7.5).
+// an exact total (docs/spec/host-collector.md §6.5).
 func TestPartialCountsAreLabelled(t *testing.T) {
 	c, _ := check.Lookup("net.listeners", check.Linux)
 	parsed, err := check.Parse(c, []byte("tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\n[TRUNCATED:900 bytes]"))
@@ -54,7 +54,7 @@ func TestPartialCountsAreLabelled(t *testing.T) {
 }
 
 // The summary of a check that did not run is why it did not run, escaped:
-// target text can never forge a line of the report (docs/SPEC.md §7.6).
+// target text can never forge a line of the report (docs/spec/host-collector.md §6.6).
 func TestSummaryOfUnavailableFactIsItsReason(t *testing.T) {
 	c, _ := check.Lookup("sshd.config", check.Linux)
 	got := Summarize(c, Fact{Status: "unavailable", Reason: "requires elevated read"})
@@ -71,7 +71,7 @@ func TestSummaryOfUnavailableFactIsItsReason(t *testing.T) {
 }
 
 // The text report and the JSON envelope read the same string, because it is
-// the same string (docs/SPEC.md §7.4).
+// the same string (docs/spec/host-collector.md §6.4).
 func TestTextAndJSONShareTheSummary(t *testing.T) {
 	sheet := sheetFor(t, "ubuntu", runner.ElevateSudo)
 	env := Build(sheet, goldenMeta(runner.ElevateSudo))

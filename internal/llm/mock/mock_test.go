@@ -26,7 +26,7 @@ func harness(t *testing.T, s conformance.Script) llm.Provider {
 	return New(tr)
 }
 
-// The mock passes the same table every real adapter must pass (docs/SPEC.md §11).
+// The mock passes the same table every real adapter must pass (docs/spec/host-collector.md §9).
 func TestConformance(t *testing.T) { conformance.Run(t, Name, harness) }
 
 // A transcript file drives a three-turn tool-calling exchange, asserted

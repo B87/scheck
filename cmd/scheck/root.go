@@ -11,7 +11,7 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// globalOpts holds every flag from docs/SPEC.md §8. Flags that belong to a later
+// globalOpts holds every flag from docs/spec/host-collector.md §7. Flags that belong to a later
 // milestone, or to a stage this build does not run, are registered so the
 // surface is stable, and rejected at run time.
 type globalOpts struct {
@@ -44,12 +44,12 @@ type globalOpts struct {
 }
 
 // unavailableFlags lists the flags that exist for surface stability but
-// have no implementation in this build (docs/SPEC.md §8). Setting any of
+// have no implementation in this build (docs/spec/host-collector.md §7). Setting any of
 // them is a usage error, never a silent no-op.
 var unavailableFlags = []string{"only", "local-only"}
 
 // modelFlags select and configure an inference provider. The model-assessed
-// pass did not earn its place in 0.0.1 (docs/SPEC.md §2.1, recorded in
+// pass did not earn its place in 0.0.1 (docs/spec/host-collector.md §2.1, recorded in
 // docs/eval/phase2-results.md), so `local` and `ssh` assess with the posture
 // rules alone and reject these flags rather than accepting them and
 // quietly ignoring them. They still configure `scheck providers` and the
@@ -121,7 +121,7 @@ func newRootCmd() *cobra.Command {
 	pf.Lookup("stop-after").Usage = "context|plan|facts: print that stage and exit"
 	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules.\n" +
 		"No model assesses a host in this build, so no API key is needed and nothing a check\n" +
-		"observed leaves the machine (docs/SPEC.md §2.1).\n" +
+		"observed leaves the machine (docs/spec/host-collector.md §2.1).\n" +
 		"Exit codes: 0 no finding at or above the profile threshold (not a claim of full\n" +
 		"coverage — read the assessments and skipped checks), 1 findings, 2 incomplete run,\n" +
 		"3 usage/policy error. JSON goes to stdout; diagnostics to stderr."

@@ -7,7 +7,7 @@ import (
 )
 
 // The packages that consume the contract compile with no provider
-// dependency (docs/SPEC.md §5.1): no adapter, no SDK. The Makefile's
+// dependency (docs/spec/model.md §2): no adapter, no SDK. The Makefile's
 // depcheck target runs the same check in CI; this keeps it in `go test` too.
 func TestConsumersHaveNoProviderDependency(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {

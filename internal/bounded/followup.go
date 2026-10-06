@@ -29,7 +29,7 @@ type resolver struct {
 
 // plan returns the one bounded read for an item, or ok=false when the kind
 // has none. It is a table, not a decision: no model picks a check, a path or
-// an argument. docs/ROADMAP-RESEARCH.md ("The follow-up table") carries the
+// an argument. docs/spec/bounded.md ("The follow-up table") carries the
 // table and what was tried before it.
 //
 // Two kinds have no entry. A listener's owning process is not a file, and a

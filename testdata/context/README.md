@@ -1,6 +1,6 @@
 # Injection corpus
 
-`hostile/` holds operator prose that carries instruction-shaped text (docs/SPEC.md §11):
+`hostile/` holds operator prose that carries instruction-shaped text (docs/spec/host-collector.md §9):
 override the role, report nothing, downgrade or accept findings, run a command, fetch a
 URL, read a sensitive path, fabricate evidence, imitate the structured schema in prose.
 `benign/` holds one control per hostile file, with the same name, that differs only in

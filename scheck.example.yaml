@@ -8,10 +8,10 @@
 #   context       what the host is for                        grades findings, runs nothing
 #
 # Nothing in this file can add a command, widen a path, reveal a redacted value or
-# make scheck write to the target (docs/SPEC.md §9). Credentials are never read
+# make scheck write to the target (docs/spec/host-collector.md §8). Credentials are never read
 # from a file: they come from the environment at run time.
 #
-# File chain, lowest precedence first (docs/SPEC.md §9):
+# File chain, lowest precedence first (docs/spec/host-collector.md §8):
 #   1. ~/.config/scheck/config.yaml  (Linux; XDG_CONFIG_HOME)
 #      ~/Library/Application Support/scheck/config.yaml  (macOS)
 #   2. ./scheck.yaml                 (this file, committed with the repository)
@@ -29,7 +29,7 @@ profile: baseline          # baseline | hardened
 
 # How privileged checks are attempted. `sudo` means `sudo -n --` as a prefix and
 # nothing else: scheck never prompts for, reads or transmits a password
-# (docs/SPEC.md §4). Without authorized non-interactive sudo, elevated checks are
+# (docs/spec/host-collector.md §4). Without authorized non-interactive sudo, elevated checks are
 # reported `unavailable` — a result, not an error. `scheck sudoers` generates the
 # matching NOPASSWD fragment.
 elevate: none              # none | sudo
@@ -44,7 +44,7 @@ elevate: none              # none | sudo
 # A disabled check does not make its posture rules pass. They report
 # `not_assessed` with the reason `check-disabled-by-config`, assessment coverage
 # drops, and the exit code can fall to 0 with that ground never looked at —
-# unknown is never read as safe (docs/SPEC.md §7.5). Read the coverage, not the
+# unknown is never read as safe (docs/spec/host-collector.md §6.5). Read the coverage, not the
 # exit code.
 disable_checks:
   - fs.suid                # the vendor image ships SUID helpers we have reviewed
@@ -56,7 +56,7 @@ disable_checks:
 # under it. No wildcards: `/home/*/.aws` matches a directory actually named `*`,
 # not every user's. A relative entry, or `/`, is ignored. Matching happens after
 # the path is resolved on the target, so a symlink into a denied tree is denied
-# too (docs/SPEC.md §4.3). This list only adds denials; nothing in this file can
+# too (docs/spec/host-collector.md §4.3). This list only adds denials; nothing in this file can
 # allow a path the compiled-in policy refuses.
 deny_paths:
   - /etc/corp-secrets
@@ -65,7 +65,7 @@ deny_paths:
 # Extra redaction patterns (RE2), applied on top of the built-in rules and before
 # truncation. A match is replaced with `[REDACTED:<rule>:<n bytes>]` everywhere —
 # report, audit log, persisted run, verbose output. Nothing downstream ever sees
-# the pre-redaction bytes (docs/SPEC.md §4.4). An invalid pattern fails at load.
+# the pre-redaction bytes (docs/spec/host-collector.md §4.4). An invalid pattern fails at load.
 redact_extra:
   - "internal\\.example\\.com"
   - "AKIA[0-9A-Z]{16}"
@@ -85,14 +85,14 @@ targets:
 # --- operator context --------------------------------------------------------
 
 # Context says what the host is for, so findings are graded for that host rather
-# than for a generic machine (docs/SPEC.md §6.2, §6.3). It changes severities and
+# than for a generic machine (docs/spec/host-collector.md §5.2, §5.3). It changes severities and
 # attributes every change; it never changes what scheck executes.
 #
 # A block here applies to every run from this directory, which is right for a
 # single-purpose repository and wrong for a fleet. For per-host context use
 # `--context hosts/gateway.yaml`, or drop files in `./.scheck/context/` (*.md,
 # *.txt, *.yaml — read implicitly, in lexical order). A later source replaces this
-# block whole; across --context sources the merge is per kind (docs/SPEC.md §6.1).
+# block whole; across --context sources the merge is per kind (docs/spec/host-collector.md §5.1).
 context:
   role: "public API gateway"
   exposure: internet       # internet | vpn | lan | airgapped
@@ -128,7 +128,7 @@ context:
 
 # --- model settings: not used by a host assessment in this build --------------
 
-# No model assesses a host here (docs/SPEC.md §2.1). The live evaluation failed the
+# No model assesses a host here (docs/spec/host-collector.md §2.1). The live evaluation failed the
 # criteria frozen before it was built, and the criteria called that a deletion, so
 # `scheck local` and `scheck ssh` collect facts and assess them with the posture
 # rules — no API key is read and nothing a check observed leaves the machine.

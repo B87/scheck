@@ -1,7 +1,7 @@
 // Package all links every provider adapter into the binary and registers the
 // deferred ones, so `scheck providers` lists the whole surface and a
 // deferred selection exits 3 "not available in this build" rather than
-// "unknown provider" (docs/SPEC.md §5.2).
+// "unknown provider" (docs/spec/model.md §3).
 package all
 
 import (

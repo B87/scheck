@@ -8,7 +8,7 @@ import (
 
 // ck is a throwaway check with a parser and an argv, which is what Parse
 // needs: a typed shape is read differently depending on which tool produced
-// it (docs/SPEC.md §3).
+// it (docs/spec/host-collector.md §3).
 func ck(kind ParserKind, argv ...string) Check {
 	if len(argv) == 0 {
 		argv = []string{"true"}
@@ -31,7 +31,7 @@ func TestParseKV(t *testing.T) {
 // A colon-terminated label is the only key form that may contain spaces, and
 // it must not steal a value that merely contains a colon. Both shapes appear
 // in the catalog: `sestatus` prints the first, `sshd -T` the second, and the
-// SELinux posture rule (docs/SPEC.md §7.5) reads a key with a space in it.
+// SELinux posture rule (docs/spec/host-collector.md §6.5) reads a key with a space in it.
 func TestParseKVKeysWithSpacesAndValuesWithColons(t *testing.T) {
 	in := "SELinux status:                 enabled\n" +
 		"Current mode:                   enforcing\n" +
@@ -123,7 +123,7 @@ func records(t *testing.T, c Check, in string) Records {
 	return r
 }
 
-// The typed shapes of docs/SPEC.md §3: one record per thing, with the fields
+// The typed shapes of docs/spec/host-collector.md §3: one record per thing, with the fields
 // a summary, a posture rule or a future diff needs by name.
 func TestTypedShapes(t *testing.T) {
 	t.Run("listeners/ss", func(t *testing.T) {
@@ -229,7 +229,7 @@ func TestTypedShapes(t *testing.T) {
 
 // Incomplete evidence stays labelled, because a posture rule may prove an
 // existential condition from a partial record set but never a negative one
-// (docs/SPEC.md §7.5).
+// (docs/spec/host-collector.md §6.5).
 func TestTypedShapesRecordIncompleteness(t *testing.T) {
 	c := ck(ParsePasswdStatus, "passwd", "-S", "-a")
 	truncated := records(t, c, "root L 2026-09-11\n[TRUNCATED:812 bytes]")

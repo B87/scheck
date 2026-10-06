@@ -1,11 +1,11 @@
-// Package openai is the openai-compatible llm.Provider (docs/SPEC.md §5.2):
+// Package openai is the openai-compatible llm.Provider (docs/spec/model.md §3):
 // one adapter for OpenAI, vLLM, llama.cpp server, Groq, Together, LM Studio
 // and OpenRouter, selected with --base-url and --model. It speaks the chat
 // completions protocol with streaming and native tool calling over
 // net/http; no SDK, and nothing of it crosses the llm boundary.
 //
 // Native tool calling is required in v1: an endpoint that rejects tools
-// fails with an unsupported error, never with silent emulation (§5.3).
+// fails with an unsupported error, never with silent emulation (docs/spec/model.md §4).
 package openai
 
 import (
@@ -30,12 +30,12 @@ import (
 // Name is the provider name.
 const Name = "openai-compatible"
 
-// DefaultBaseURL is OpenAI's endpoint (docs/SPEC.md §5.2).
+// DefaultBaseURL is OpenAI's endpoint (docs/spec/model.md §3).
 const DefaultBaseURL = "https://api.openai.com/v1"
 
 // DefaultModel is selected when the operator omitted --model and the
 // endpoint is OpenAI's. A different --base-url still requires an explicit
-// model: that endpoint decides which names exist (docs/SPEC.md §5.2).
+// model: that endpoint decides which names exist (docs/spec/model.md §3).
 const DefaultModel = "gpt-5.6-luna"
 
 // ResolveModel returns the model the adapter will send. An empty result
@@ -57,7 +57,7 @@ func openAIEndpoint(base string) bool {
 	return strings.TrimRight(base, "/") == DefaultBaseURL
 }
 
-// keyVar is the environment variable the credential is read from (§9).
+// keyVar is the environment variable the credential is read from (docs/spec/host-collector.md §8).
 // It is the variable's name, never a value.
 const keyVar = "OPENAI_API_KEY" //nolint:gosec // an environment variable name
 
@@ -94,7 +94,7 @@ type Provider struct {
 // endpoint defaults the model to DefaultModel; any other endpoint requires
 // --model because it decides which names exist. The context window comes
 // from max_context or the model table and an unknown window is a
-// configuration error (§5.3). The credential is checked for presence only
+// configuration error (docs/spec/model.md §4). The credential is checked for presence only
 // when the endpoint is OpenAI's; its value is read at request time.
 func New(cfg llm.Config) (*Provider, error) {
 	cfg.Model = ResolveModel(cfg.Model, cfg.BaseURL)
@@ -123,7 +123,7 @@ func New(cfg llm.Config) (*Provider, error) {
 		maxCtx = info.maxContext
 	}
 	if maxCtx <= 0 {
-		return nil, fmt.Errorf("the context window of model %q is unknown; set max_context: or --max-context (docs/SPEC.md §5.3)", cfg.Model)
+		return nil, fmt.Errorf("the context window of model %q is unknown; set max_context: or --max-context (docs/spec/model.md §4)", cfg.Model)
 	}
 	if base == DefaultBaseURL {
 		if _, ok := env(keyVar); !ok {
@@ -200,7 +200,7 @@ type wireRequest struct {
 	ReasoningEffort     string         `json:"reasoning_effort,omitempty"`
 }
 
-// encode maps the neutral request onto the wire (docs/SPEC.md §5.1). System
+// encode maps the neutral request onto the wire (docs/spec/model.md §2). System
 // blocks become one system message in order; tool results become `tool`
 // messages; the output reservation is max_completion_tokens.
 func (p *Provider) encode(r llm.Request, legacy, reasoning, none bool) wireRequest {
@@ -267,7 +267,7 @@ func (p *Provider) encode(r llm.Request, legacy, reasoning, none bool) wireReque
 	return w
 }
 
-// mapEffort is the Effort mapping (docs/SPEC.md §5.1): the endpoint knows
+// mapEffort is the Effort mapping (docs/spec/model.md §2): the endpoint knows
 // low|medium|high, so max is high.
 func mapEffort(e llm.Effort) string {
 	if e == llm.EffortMax {
@@ -289,7 +289,7 @@ func (p *Provider) Stream(ctx context.Context, r llm.Request) (llm.Stream, error
 		if err == nil {
 			return newStream(resp.Body, p), nil
 		}
-		// Capability differences the adapter absorbs (docs/SPEC.md §5.3)
+		// Capability differences the adapter absorbs (docs/spec/model.md §4)
 		// rather than the loop: an endpoint that only knows max_tokens,
 		// one that rejects reasoning_effort outright, and one that accepts
 		// function tools only with reasoning_effort=none. Each is retried
@@ -396,7 +396,7 @@ func errorMessage(raw []byte) string {
 	return s
 }
 
-// classify maps an HTTP failure onto llm.ErrorKind (docs/SPEC.md §5.1).
+// classify maps an HTTP failure onto llm.ErrorKind (docs/spec/model.md §2).
 func classify(status int, msg, body string) error {
 	low := strings.ToLower(msg + " " + body)
 	switch {

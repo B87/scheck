@@ -1,4 +1,4 @@
-# Five login shells behind one sshd, for the canary matrix (SPEC.md §11).
+# Five login shells behind one sshd, for the canary matrix (docs/spec/host-collector.md §9).
 FROM ubuntu:24.04
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssh-server zsh fish \

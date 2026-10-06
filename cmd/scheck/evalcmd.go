@@ -63,9 +63,9 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			o := eval.Options{Suite: suite, Repeat: repeat, Arms: arms, Model: cfg.Model, Version: version.Version,
 				Log: func(f string, a ...any) { fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) }}
 			if slices.Contains(arms, eval.ArmBounded) {
-				// The research arm's answer sources arrive with their own
-				// roadmap slices (docs/ROADMAP-RESEARCH.md R2 and R3); the
-				// flag is registered now and refuses what does not exist.
+				// The bounded arm's live answer sources are planned with
+				// the auto gate (docs/ROADMAP.md, 0.0.4 J5); the flag is
+				// registered now and refuses what does not exist.
 				switch boundedFrom {
 				case "scripted":
 					o.Answers = eval.ScriptedAnswers
@@ -90,7 +90,7 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 				// The harness is the one caller of phase 2 left in this build,
 				// so the provider pre-flight lives here: a missing model, an
 				// unavailable adapter or an unknown context limit is a usage
-				// error before a single case runs (docs/SPEC.md §5.2, §5.3).
+				// error before a single case runs (docs/spec/model.md §3, §4).
 				if err := validateProvider(cfg); err != nil && cfg.Model == "" && name != "mock" {
 					return usageErr("%v", err)
 				}
@@ -100,7 +100,7 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 					return usageErr("provider %s: %v", name, err)
 				}
 				if p.Limits().MaxContext <= 0 {
-					return usageErr("provider %s: the context limit for model %q is unknown; set max_context: or --max-context (docs/SPEC.md §5.3)", name, cfg.Model)
+					return usageErr("provider %s: the context limit for model %q is unknown; set max_context: or --max-context (docs/spec/model.md §4)", name, cfg.Model)
 				}
 				o.Live = true
 				o.Provider = func(eval.Case, eval.Arm) (llm.Provider, error) { return llm.Build(name, pcfg) }

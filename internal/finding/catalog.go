@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// Def is a finding id's compiled-in definition (docs/SPEC.md §7.1). Title,
+// Def is a finding id's compiled-in definition (docs/spec/host-collector.md §6.1). Title,
 // Impact and Remediation live here rather than only in a model's output,
 // because a posture rule must produce a complete finding with no model in the
 // loop.
@@ -18,7 +18,7 @@ type Def struct {
 	Remediation  Remediation
 	// Premise lists rule-covered finding ids this judgement presupposes. When
 	// a posture rule has disproved a premise on complete evidence, the store
-	// rejects a model candidate for this id (§7.5): a correlation cannot
+	// rejects a model candidate for this id (docs/spec/host-collector.md §6.5): a correlation cannot
 	// stand on a fact the rule read and found the other way.
 	Premise []string
 }
@@ -42,12 +42,12 @@ const (
 	IDUpdatesPending       = "updates.pending"
 	IDWorldWritablePresent = "fs.world_writable_present"
 
-	// Context-derived findings (docs/SPEC.md §6.3), produced by the grader.
+	// Context-derived findings (docs/spec/host-collector.md §5.3), produced by the grader.
 	IDExpectedMissing   = "svc.expected_missing"
 	IDAcceptanceExpired = "risk.acceptance_expired"
 
 	// Judgement findings: no single-fact rule produces these; the model
-	// classifies them in phase 2 from correlated evidence (§2.1, §7.2).
+	// classifies them in phase 2 from correlated evidence (docs/spec/host-collector.md §2.1, §6.2).
 	IDUnexpectedListener  = "net.unexpected_listener"
 	IDNoFirewallActive    = "fw.no_firewall_active"
 	IDSudoNopasswdBroad   = "privesc.sudo_nopasswd_broad" //nolint:gosec // a finding id, not a credential
@@ -67,7 +67,7 @@ func IDs() []string {
 	return out
 }
 
-// defs is the finding catalog. Base severities are the §7.1 table's.
+// defs is the finding catalog. Base severities are the docs/spec/host-collector.md §6.1 table's.
 var defs = map[string]Def{
 	IDFileVaultOff: {
 		ID: IDFileVaultOff, Title: "FileVault disk encryption is off",
@@ -261,7 +261,7 @@ func init() {
 
 // judgementDefs are the findings only correlated evidence or operator
 // context can produce. Their text is the default a model finding carries
-// when the model supplies none (§7.1).
+// when the model supplies none (docs/spec/host-collector.md §6.1).
 var judgementDefs = map[string]Def{
 	IDExpectedMissing: {
 		ID: IDExpectedMissing, Title: "A declared service is not listening",

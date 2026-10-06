@@ -6,7 +6,7 @@ policy, redaction and audit path. scheck never applies hardening changes: it cha
 no configuration, package, unit, credential or security state. Three of its commands
 leave a record of their own invocation — `dnf check-update` writes a package-manager
 cache, `sudo -n --` writes its timestamp directory, and `ufw status` takes a lock file.
-They are listed in [docs/SPEC.md §1](docs/SPEC.md) and the integration suite asserts
+They are listed in [docs/spec/host-collector.md §1](docs/spec/host-collector.md) and the integration suite asserts
 that nothing else on the target changes.
 
 **Current build:** collects facts, assesses them with compiled-in posture rules and
@@ -17,8 +17,14 @@ exists in the codebase and was measured against criteria frozen before it was bu
 did not earn its cost, and is therefore not part of this build — the evaluation and the
 reasoning are recorded in
 [docs/eval/phase2-results.md](docs/eval/phase2-results.md). A run needs no API key and
-sends nothing a check observed off the machine. This project is unreleased; interfaces
-may change before the first GitHub release.
+sends nothing a check observed off the machine. v0.0.1 is released; see [Installation](#installation).
+
+**Direction:** scheck is growing from a host checker into a security consultant in a
+CLI: an engagement that starts from what you tell it about your setup and assesses
+cloud accounts, SaaS tools, repositories, hosts and websites. The host checker
+described here becomes one of its collectors. See [docs/VISION.md](docs/VISION.md);
+none of that is built yet. The [roadmap](docs/ROADMAP.md) plans the first engagement for
+0.0.2, cloud and identity for 0.0.3, and judgement and depth for 0.0.4.
 
 ## How a run works
 
@@ -147,8 +153,12 @@ and partial results. For interactive inspection,
 
 ## Project documentation
 
-- [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status. M0 through M2, M4.5 and M4.6 are done; M4.7 is rehearsed and unpublished.
+- [Vision](docs/VISION.md): what scheck is becoming and the principles behind it.
+- [Roadmap](docs/ROADMAP.md): 0.0.2, 0.0.3 and 0.0.4.
+- [Specifications](docs/spec/): [host collector](docs/spec/host-collector.md) (what this
+  build does), [engagement](docs/spec/engagement.md) and [scope](docs/spec/scope.md)
+  (designs for 0.0.2), [model path](docs/spec/model.md) and
+  [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Configuration walkthrough](docs/CONFIGURATION.md): preferences, restrictions and context.
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Run report schema](docs/report-schema.json): implemented JSON report shape.

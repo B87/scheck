@@ -9,7 +9,7 @@ import (
 )
 
 // Colour is for a terminal only, and NO_COLOR wins even there. A redirected
-// report and a --out file are always plain (docs/SPEC.md §7.6).
+// report and a --out file are always plain (docs/spec/host-collector.md §6.6).
 func TestTextOptionsColorAndWidth(t *testing.T) {
 	o := &globalOpts{Verbose: 2}
 

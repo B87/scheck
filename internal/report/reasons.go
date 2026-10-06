@@ -8,7 +8,7 @@ import (
 // reasonClass describes one family of "this check produced no fact", with the
 // words a person can act on. The runner's reason strings are the input
 // (internal/runner); the classes here are the report's contract with the
-// reader (docs/SPEC.md §7.6).
+// reader (docs/spec/host-collector.md §6.6).
 type reasonClass struct {
 	prefix string // runner reason prefix that selects this class
 	title  string // "6 <title>"
@@ -18,7 +18,7 @@ type reasonClass struct {
 	detailed bool
 	// match claims a reason the prefix does not, for a condition the runner
 	// cannot see: a remote shell reports a missing binary as exit 127, not as
-	// an exec error (docs/SPEC.md §4.3 — over SSH the shell runs the command).
+	// an exec error (docs/spec/host-collector.md §4.3 — over SSH the shell runs the command).
 	match func(string) bool
 	// strip removes prefix from the per-check detail, because the group
 	// heading already said it.

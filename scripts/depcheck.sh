@@ -1,8 +1,8 @@
 #!/bin/sh
 # The packages that consume the llm contract must compile with no provider
-# adapter and no provider SDK in their dependency graph (docs/SPEC.md §5.1),
+# adapter and no provider SDK in their dependency graph (docs/spec/model.md §2),
 # and none of them may depend on the bounded assessment experiment, which is
-# reachable from internal/eval alone (docs/SPEC.md §5.9).
+# reachable from internal/eval alone (docs/spec/bounded.md).
 # Run from the module root; exits 1 naming the offending edge.
 set -eu
 status=0

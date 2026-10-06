@@ -1,5 +1,5 @@
-// Package agent is phase 2: the tool-calling loop scheck owns (docs/SPEC.md
-// §2.1, §5.6). It has one code path. Every execution goes through
+// Package agent is phase 2: the tool-calling loop scheck owns (docs/spec/host-collector.md
+// docs/spec/host-collector.md §2.1, docs/spec/model.md §7). It has one code path. Every execution goes through
 // runner.RunAs, every finding through finding.Store, every model call
 // through llm.CheckFit and llm.Provider; the loop branches on nothing but
 // Limits.MaxContext and its own budgets. Single-pass mode is this loop with
@@ -48,7 +48,7 @@ type Session struct {
 	stop     *stopReason
 }
 
-// Mode names the loop's configuration for the report (docs/SPEC.md §5.6).
+// Mode names the loop's configuration for the report (docs/spec/model.md §7).
 func (s *Session) Mode() string {
 	if s.Budgets.MaxIterations == 1 {
 		return "single-pass"
@@ -94,7 +94,7 @@ func (s *Session) account(n int) bool {
 }
 
 // Run drives the loop until the model stops calling tools or a budget ends
-// the run (docs/SPEC.md §5.6).
+// the run (docs/spec/model.md §7).
 func (s *Session) Run(ctx context.Context) Outcome {
 	s.ctx = ctx
 	out := Outcome{Status: "incomplete", Warnings: []string{}}
@@ -130,7 +130,7 @@ func (s *Session) Run(ctx context.Context) Outcome {
 			MaxTokens: s.Budgets.MaxTokens, Effort: s.Effort}
 		// The whole serialized request plus the output reservation is checked
 		// against the context limit before any byte leaves the machine
-		// (docs/SPEC.md §5.3). Overflow sends nothing and ends the run.
+		// (docs/spec/model.md §4). Overflow sends nothing and ends the run.
 		if fit, err := llm.CheckFit(req, limits); err != nil {
 			if llm.KindOf(err) == llm.ErrUnsupported {
 				out.Reason = "context limit unknown: " + err.Error()
@@ -218,7 +218,7 @@ func startOrContinue(iter int) string {
 
 // providerFailure words a classified provider error for the report. A
 // context overflow the provider caught is the same incomplete answer as
-// one caught locally, never a retry with less evidence (docs/SPEC.md §5.3).
+// one caught locally, never a retry with less evidence (docs/spec/model.md §4).
 func providerFailure(err error) string {
 	switch llm.KindOf(err) {
 	case llm.ErrContextOverflow:

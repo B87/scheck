@@ -26,7 +26,7 @@ var fixtureElevation = map[string]runner.Elevation{
 	"macos":  runner.ElevateNone,
 }
 
-// The text report is a contract (docs/SPEC.md §7.6), so it is pinned per
+// The text report is a contract (docs/spec/host-collector.md §6.6), so it is pinned per
 // fixture at every verbosity. Regenerate with `go test ./internal/report
 // -update` and read the diff: a change here is a change to what an operator
 // reads.
@@ -51,7 +51,7 @@ func TestGoldenTextReports(t *testing.T) {
 // that tie them together. It deliberately renders without --include-evidence:
 // the captured bytes live in testdata/fixtures, and the command trace golden
 // in internal/baseline pins the hash of what redaction produced from them, so
-// repeating them here would add bulk and no signal (docs/SPEC.md §11).
+// repeating them here would add bulk and no signal (docs/spec/host-collector.md §9).
 func TestGoldenJSONReports(t *testing.T) {
 	schema := reportSchema(t)
 	for name, elev := range fixtureElevation {
@@ -80,7 +80,7 @@ func TestGoldenJSONReports(t *testing.T) {
 }
 
 // No rendered line may exceed the wrap width, and none may carry trailing
-// padding (docs/SPEC.md §7.6). Checked over every golden at several widths.
+// padding (docs/spec/host-collector.md §6.6). Checked over every golden at several widths.
 func TestTextReportRespectsWidth(t *testing.T) {
 	for name, elev := range fixtureElevation {
 		env := normalize(Build(sheetFor(t, name, elev), goldenMeta(elev)))

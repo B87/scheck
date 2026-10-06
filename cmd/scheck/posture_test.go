@@ -53,7 +53,7 @@ func platformSheet(t *testing.T, platform check.Platform, raw map[string]string)
 	return fs
 }
 
-// Acceptance criterion 4 (docs/SPEC.md §12): offline, with no API key and no
+// Acceptance criterion 4 (docs/spec/host-collector.md §10): offline, with no API key and no
 // model, a host with FileVault off or PasswordAuthentication yes yields that
 // finding, with its evidence and remediation, and exits 1.
 func TestAcceptanceCriterion4(t *testing.T) {
@@ -99,7 +99,7 @@ func exitCodeOf(err error) int {
 
 // A completed run with an open finding at or above the profile threshold
 // exits 1; the same host under a profile whose threshold is higher exits 0.
-// The report is written either way (docs/SPEC.md §8).
+// The report is written either way (docs/spec/host-collector.md §7).
 func TestExitCodeFollowsProfileThreshold(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -127,7 +127,7 @@ func TestExitCodeFollowsProfileThreshold(t *testing.T) {
 }
 
 // Exit 2 takes precedence over exit 1: an incomplete run's silence is not a
-// verdict, whatever the rules that did run concluded (docs/SPEC.md §8).
+// verdict, whatever the rules that did run concluded (docs/spec/host-collector.md §7).
 func TestIncompleteRunOutranksFindings(t *testing.T) {
 	sess, out := postureSession(t, check.ProfileBaseline, "text")
 	sheet := postureSheet(t, map[string]string{"sshd.config": "passwordauthentication yes"})

@@ -178,5 +178,5 @@ and name the gaps and appropriate next step. Treat remediation as advice for the
 not authorization to change the host.
 
 When working from this repository, consult `docs/report-schema.json` for the current
-run schema and `docs/SPEC.md` for the contract. Locate them in the project checkout;
+run schema and `docs/spec/host-collector.md` for the contract. Locate them in the project checkout;
 they are not required for ordinary CLI use or when the skill is installed separately.

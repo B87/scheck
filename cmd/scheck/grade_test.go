@@ -96,7 +96,7 @@ func TestContextGradesTheFactsReport(t *testing.T) {
 }
 
 // --ignore-context reproduces base severities byte-for-byte: the findings
-// of an ignoring run equal those of a run with no context at all (§6.4).
+// of an ignoring run equal those of a run with no context at all (docs/spec/host-collector.md §5.4).
 func TestIgnoreContextReproducesBaseSeverity(t *testing.T) {
 	dir := t.TempDir()
 	ctxFile := filepath.Join(dir, "gateway.yaml")
@@ -132,8 +132,8 @@ func TestIgnoreContextReproducesBaseSeverity(t *testing.T) {
 	}
 }
 
-// scheck explain FINDING-ID prints the chain and honours the §6.2 keys as
-// flags (docs/SPEC.md §8).
+// scheck explain FINDING-ID prints the chain and honours the docs/spec/host-collector.md §5.2 keys as
+// flags (docs/spec/host-collector.md §7).
 func TestExplainFinding(t *testing.T) {
 	run := func(args ...string) (string, int) {
 		root := newRootCmd()

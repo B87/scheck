@@ -13,7 +13,7 @@ import (
 // only meaningful for the exact question it was measured on.
 //
 // The wording follows jev-1.13's documented limitations, which
-// docs/ROADMAP-RESEARCH.md tabulates against the place each one is handled:
+// docs/spec/bounded.md tabulates against the place each one is handled:
 // it states its conditions literally, names the state field it is about,
 // asks for no counting, no date arithmetic and no second hop, and never asks
 // "is this unexpected?", which is two judgements in one.
@@ -107,7 +107,7 @@ func Questions(k Kind) []Question { return questions[k] }
 
 // validAnswers keeps one probability per asked question and rejects an
 // answer set that is missing one or carries a value outside [0,1]: a
-// malformed answer files nothing (docs/ROADMAP-RESEARCH.md R1). A Noul
+// malformed answer files nothing (docs/spec/bounded.md R1). A Noul
 // answer is a bare probability with no separate confidence, so this range
 // test is the whole of what an answer may be.
 func validAnswers(qs []Question, in map[string]float64) (map[string]float64, error) {
@@ -130,7 +130,7 @@ func validAnswers(qs []Question, in map[string]float64) (map[string]float64, err
 // QuestionsVersion identifies everything a probability depends on: the
 // question wording, the decision thresholds and the state builder. A record
 // carries it so no threshold is ever read against a different question
-// (docs/SPEC.md §5.9).
+// (docs/spec/bounded.md).
 func QuestionsVersion() string {
 	forms := map[Kind][]string{}
 	for k, qs := range questions {

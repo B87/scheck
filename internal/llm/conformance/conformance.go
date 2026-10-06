@@ -1,5 +1,5 @@
 // Package conformance is the one table every llm.Provider must pass
-// (docs/SPEC.md §11): tool-call round trip, error results, several calls in
+// (docs/spec/host-collector.md §9): tool-call round trip, error results, several calls in
 // one turn, every StopReason, MaxTokens truncation, usage normalization and
 // Limits reporting. An adapter's own test supplies a Harness that turns a
 // Script into a provider — a transcript for mock, a fake HTTP server for

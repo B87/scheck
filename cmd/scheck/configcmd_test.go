@@ -181,7 +181,7 @@ func TestConfigShowLeaksNothing(t *testing.T) {
 }
 
 // OpenAI's endpoint defaults to gpt-5.6-luna; a different base URL does not
-// invent a model name (docs/SPEC.md §5.2).
+// invent a model name (docs/spec/model.md §3).
 func TestOpenAIEndpointDefaultsToLuna(t *testing.T) {
 	dir := t.TempDir()
 	out, code := runIn(t, dir, "config", "show", "--format", "json")

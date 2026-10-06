@@ -40,7 +40,7 @@ func schemaFor(t *testing.T) *jsonschema.Schema {
 }
 
 // envelope builds the report a phase 2 pass produces, the way the harness
-// does. No CLI path reaches this in 0.0.1 (docs/SPEC.md §2.1); the envelope
+// does. No CLI path reaches this in 0.0.1 (docs/spec/host-collector.md §2.1); the envelope
 // contract still has to hold for the evaluation harness and for whatever
 // revives the loop, so it is pinned here rather than in cmd/scheck.
 func envelope(t *testing.T, h *harness, out Outcome) report.Envelope {
@@ -123,7 +123,7 @@ func TestAgentEnvelopeValidatesAgainstSchema(t *testing.T) {
 
 // A pass that hits a context limit leaves an incomplete report that keeps
 // the facts and the rule findings and says what happened, without dropping
-// evidence to make the request fit (docs/SPEC.md §5.3).
+// evidence to make the request fit (docs/spec/model.md §4).
 func TestIncompleteAgentEnvelopeKeepsFacts(t *testing.T) {
 	h := newHarness(t, mock.Transcript{Limits: llm.Limits{MaxContext: 500}, Turns: []mock.Turn{{Text: "never"}}}, nil)
 	out := h.sess.Run(context.Background())

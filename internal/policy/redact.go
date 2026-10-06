@@ -23,7 +23,7 @@ type redactRule struct {
 	// keyGroup and skipKey skip a match whose key (submatch keyGroup) is a
 	// known non-secret: a sudoers tag such as `NOPASSWD:` is followed by a
 	// command, and redacting it hides exactly what the model must judge
-	// (docs/SPEC.md §4.2).
+	// (docs/spec/host-collector.md §4.2).
 	keyGroup int
 	skipKey  *regexp.Regexp
 }
@@ -69,7 +69,7 @@ func NewRedactor(extra []string) (*Redactor, error) {
 }
 
 // Marker is the text that replaces a redacted span. It is never empty, so a
-// reader can always tell that something was there (docs/SPEC.md §4.2).
+// reader can always tell that something was there (docs/spec/host-collector.md §4.2).
 func Marker(rule string, n int) string {
 	return fmt.Sprintf("[REDACTED:%s:%d bytes]", rule, n)
 }

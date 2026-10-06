@@ -152,7 +152,7 @@ func TestCorrelatedFindingEndToEnd(t *testing.T) {
 
 // read_file and text.cat produce byte-identical audit records apart from
 // the tool name: the sugar is a caller of the one enforcement point, not a
-// second path (docs/SPEC.md §5.7).
+// second path (docs/spec/model.md §8).
 func TestReadFileIsTextCat(t *testing.T) {
 	h := newHarness(t, turns(
 		mock.Turn{ToolCalls: []mock.Call{
@@ -258,7 +258,7 @@ func TestErrorResultsAreAudited(t *testing.T) {
 
 // A report_finding with a severity has it ignored; custom findings are
 // capped at medium and flagged; text replacement and suppression of a rule
-// finding are refused; duplicate evidence collapses (docs/SPEC.md §7.1, §7.5).
+// finding are refused; duplicate evidence collapses (docs/spec/host-collector.md §6.1, §6.5).
 func TestReportFindingContract(t *testing.T) {
 	h := newHarness(t, turns(
 		mock.Turn{ToolCalls: []mock.Call{
@@ -296,7 +296,7 @@ func TestReportFindingContract(t *testing.T) {
 }
 
 // Every loop-owned budget, exhausted by a crafted transcript, ends the run
-// incomplete (docs/SPEC.md §4.4, §5.6).
+// incomplete (docs/spec/host-collector.md §4.4, docs/spec/model.md §7).
 func TestEveryBudgetEndsIncomplete(t *testing.T) {
 	investigate := func(id string) mock.Turn {
 		return mock.Turn{ToolCalls: []mock.Call{call(id, "read_file", readFileInput{Path: "/etc/hosts"})}}
@@ -351,7 +351,7 @@ func TestEveryBudgetEndsIncomplete(t *testing.T) {
 
 // Before every model call the whole request plus the output reservation is
 // checked against the context limit; overflow sends nothing, keeps the
-// facts and findings, and ends incomplete (docs/SPEC.md §5.3).
+// facts and findings, and ends incomplete (docs/spec/model.md §4).
 func TestContextLimitGuards(t *testing.T) {
 	t.Run("initial overflow", func(t *testing.T) {
 		tr := turns(mock.Turn{Text: "never"})
@@ -462,7 +462,7 @@ func TestContextBlockInPrompt(t *testing.T) {
 	}
 }
 
-// verdict: ruled_out through the loop (docs/SPEC.md §5.7): a ruled-out id
+// verdict: ruled_out through the loop (docs/spec/model.md §8): a ruled-out id
 // files nothing, is not counted as reported, reaches the report next to the
 // model's summary, and a rule finding cannot be ruled out.
 func TestRuledOutVerdict(t *testing.T) {

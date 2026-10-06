@@ -30,7 +30,7 @@ func loadContext(t *testing.T, dir string) *operator.Merged {
 	return m
 }
 
-// Every hostile file has a benign control of the same name (§11).
+// Every hostile file has a benign control of the same name (docs/spec/host-collector.md §9).
 func TestCorpusIsPaired(t *testing.T) {
 	hostile, err := filepath.Glob(filepath.Join(corpus, "hostile", "*.md"))
 	if err != nil || len(hostile) < 8 {
@@ -44,7 +44,7 @@ func TestCorpusIsPaired(t *testing.T) {
 	}
 }
 
-// Hostile operator prose is inert by construction (docs/SPEC.md §6.4): the
+// Hostile operator prose is inert by construction (docs/spec/host-collector.md §5.4): the
 // identical transcript run with the hostile corpus, the benign corpus and
 // no context produces the same findings with the same severities, and the
 // prose reaches the grader nowhere.
@@ -163,7 +163,7 @@ func TestHostileToolCallsCannotBypassPolicy(t *testing.T) {
 // Rule findings cannot be suppressed or softened through report_finding,
 // whatever the prose asked: severity and status fields are ignored, an
 // empty or fabricated evidence list is refused, and the rule finding keeps
-// its grade (docs/SPEC.md §7.5).
+// its grade (docs/spec/host-collector.md §6.5).
 func TestRuleFindingsCannotBeSuppressed(t *testing.T) {
 	h := newHarness(t, turns(
 		mock.Turn{ToolCalls: []mock.Call{

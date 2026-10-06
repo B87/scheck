@@ -23,13 +23,13 @@ type Result struct {
 	Findings    []Finding
 	Assessments []Assessment
 	// RuledOut lists the hypotheses the model checked and closed through
-	// report_finding's verdict: ruled_out (docs/SPEC.md §5.7). Nothing here
+	// report_finding's verdict: ruled_out (docs/spec/model.md §8). Nothing here
 	// is a finding; it is surfaced with the model's summary.
 	RuledOut []RuledOut
 }
 
 // Evaluate runs every applicable posture rule over the fact sheet
-// (docs/SPEC.md §7.5). Rules outside the target's platform are omitted
+// (docs/spec/host-collector.md §6.5). Rules outside the target's platform are omitted
 // entirely; every other rule produces exactly one assessment, and only a
 // matched one produces a finding.
 func Evaluate(in Input) Result {
@@ -70,7 +70,7 @@ func Evaluate(in Input) Result {
 			SeverityBase: def.BaseSeverity, Severity: def.BaseSeverity,
 			Adjustments: []Adjustment{}, Status: StatusOpen, Source: SourceRule,
 			// A rule fires only on recognized evidence, so its confidence is
-			// not a judgement call (docs/SPEC.md §7.5).
+			// not a judgement call (docs/spec/host-collector.md §6.5).
 			Confidence: ConfidenceHigh, Platform: string(platform),
 			Evidence: []Evidence{ev}, Impact: def.Impact, Remediation: def.Remediation,
 		})
@@ -87,7 +87,7 @@ func Evaluate(in Input) Result {
 // evalRule decides whether the rule could be assessed at all before its
 // predicate ever sees a value. Applicability must be known: a platform gate
 // or the catalog answers "not applicable"; a check that did not produce a
-// usable fact answers "not assessed", never a pass (docs/SPEC.md §7.5).
+// usable fact answers "not assessed", never a pass (docs/spec/host-collector.md §6.5).
 func evalRule(rule Rule, platform check.Platform, disabled map[string]bool, sheet *baseline.FactSheet) Verdict {
 	c, ok := check.Lookup(rule.Check, platform)
 	if !ok || !c.AppliesTo(platform) {
@@ -124,7 +124,7 @@ func appendEvidence(have []Evidence, ev Evidence) []Evidence {
 }
 
 // OpenAtOrAbove counts the open findings that meet a severity threshold; it
-// is what decides exit 1 (docs/SPEC.md §8).
+// is what decides exit 1 (docs/spec/host-collector.md §7).
 func OpenAtOrAbove(fs []Finding, t Severity) int {
 	n := 0
 	for _, f := range fs {

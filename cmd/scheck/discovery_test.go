@@ -120,7 +120,7 @@ func TestFactsJSONWithEvidenceFromFixture(t *testing.T) {
 	}
 	// Phase 1 assesses with the posture rules and says so; the assessment
 	// scope is a field of its own, never inferred from an empty findings
-	// array (docs/SPEC.md §7.4).
+	// array (docs/spec/host-collector.md §6.4).
 	if doc["run"].(map[string]any)["assessment"] != "rules" {
 		t.Fatalf("assessment scope: %v", doc["run"].(map[string]any)["assessment"])
 	}

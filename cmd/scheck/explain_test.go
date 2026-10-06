@@ -27,7 +27,7 @@ func explain(t *testing.T, args ...string) (string, error) {
 }
 
 // explain prints one catalog entry verbatim: the literal argv, the parser,
-// the elevation and the typed parameters (docs/SPEC.md §8).
+// the elevation and the typed parameters (docs/spec/host-collector.md §7).
 func TestExplainShowsTheWholeEntry(t *testing.T) {
 	out, err := explain(t, "sshd.config")
 	if err != nil {

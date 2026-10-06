@@ -1,5 +1,5 @@
-// Package bounded is the R1 experiment of docs/ROADMAP-RESEARCH.md, under
-// docs/SPEC.md §5.9: code owns the workflow and a System One model answers
+// Package bounded is the R1 experiment of docs/spec/bounded.md, under
+// docs/spec/bounded.md: code owns the workflow and a System One model answers
 // one narrow question per candidate item.
 //
 // It exists because the phase 2 record (docs/eval/phase2-results.md) failed
@@ -42,7 +42,7 @@ import (
 
 // Kind is one candidate kind. Each kind has its own enumeration, its own
 // follow-up read, its own questions and its own decision rule, and maps to
-// exactly one judgement finding id (docs/SPEC.md §5.9).
+// exactly one judgement finding id (docs/spec/bounded.md).
 type Kind string
 
 // The four kinds, in enumeration order.
@@ -187,7 +187,7 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 	}
 	if o.Store.Output == nil {
 		// Evidence is validated against the exact observation it cites
-		// (§5.7); without this the store accepts nothing.
+		// (docs/spec/model.md §8); without this the store accepts nothing.
 		o.Store.Output = o.Runner.Observations().Get
 	}
 	rv := &resolver{opts: o}
@@ -247,7 +247,7 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 }
 
 // candidate turns a decision into the report_finding-shaped candidate the
-// store validates. Severity is absent on purpose: it is code's (§7.1), and
+// store validates. Severity is absent on purpose: it is code's (docs/spec/host-collector.md §6.1), and
 // the confidence word is derived from the decision, never from the model.
 func candidate(it Item, d Decision) finding.Candidate {
 	c := finding.Candidate{

@@ -215,7 +215,7 @@ func TestCaseManifestsRecordEachArgvOnce(t *testing.T) {
 	}
 }
 
-// The bounded research arm (docs/ROADMAP-RESEARCH.md R1) runs beside the
+// The bounded research arm (docs/spec/bounded.md R1) runs beside the
 // three frozen arms on the same cases, facts, rule findings and context.
 // Scripted answers exercise it; they make no quality claim, and the record
 // says so.

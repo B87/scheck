@@ -1,5 +1,5 @@
-// Package finding holds the compiled-in finding catalog (docs/SPEC.md §7.1),
-// the posture rules that turn one fact into one finding (§7.5), and the
+// Package finding holds the compiled-in finding catalog (docs/spec/host-collector.md §6.1),
+// the posture rules that turn one fact into one finding (docs/spec/host-collector.md §6.5), and the
 // evaluator that runs them over a phase 1 fact sheet.
 //
 // Nothing here executes anything. A rule reads the fact sheet the runner
@@ -11,7 +11,7 @@ package finding
 import "github.com/b87/scheck/internal/check"
 
 // Severity is the graded seriousness of a finding. Code owns it, never a
-// model (docs/SPEC.md §7.2).
+// model (docs/spec/host-collector.md §6.2).
 type Severity string
 
 // Severities, ordered by Rank.
@@ -44,7 +44,7 @@ func (s Severity) Rank() int {
 func (s Severity) AtLeast(other Severity) bool { return s.Rank() >= other.Rank() }
 
 // Threshold is the severity at which an open finding fails the run for a
-// profile: `baseline` fails on medium, `hardened` on low (docs/SPEC.md §8).
+// profile: `baseline` fails on medium, `hardened` on low (docs/spec/host-collector.md §7).
 // `info` findings stay visible and never set the exit code.
 func Threshold(p check.Profile) Severity {
 	if p == check.ProfileHardened {
@@ -54,7 +54,7 @@ func Threshold(p check.Profile) Severity {
 }
 
 // Remediation is text for the human. scheck never runs a command from here
-// (docs/SPEC.md §7.3).
+// (docs/spec/host-collector.md §6.3).
 type Remediation struct {
 	Summary  string   `json:"summary"`
 	Commands []string `json:"commands,omitempty"`
@@ -69,8 +69,8 @@ type Evidence struct {
 	Excerpt     string `json:"excerpt"`
 }
 
-// RuledOut is a hypothesis the model investigated and closed (docs/SPEC.md
-// §5.7): the id it would have reported, why it does not apply, and any
+// RuledOut is a hypothesis the model investigated and closed (docs/spec/host-collector.md
+// docs/spec/model.md §8): the id it would have reported, why it does not apply, and any
 // validated evidence. It is never a finding, never graded, never counted.
 type RuledOut struct {
 	ID       string     `json:"id"`
@@ -79,16 +79,16 @@ type RuledOut struct {
 }
 
 // Adjustment records one severity change and where it came from
-// (docs/SPEC.md §6.3, §6.4): every change is attributed.
+// (docs/spec/host-collector.md §5.3, §5.4): every change is attributed.
 type Adjustment struct {
 	Rule   string `json:"rule"`
 	Source string `json:"source"`
 	Delta  string `json:"delta"`
 }
 
-// Finding is what the report emits (docs/SPEC.md §7.3). A rule finding
+// Finding is what the report emits (docs/spec/host-collector.md §6.3). A rule finding
 // carries the Def's curated title, impact and remediation; the model may add
-// evidence and notes in phase 2 but never replaces them (§7.5).
+// evidence and notes in phase 2 but never replaces them (docs/spec/host-collector.md §6.5).
 type Finding struct {
 	ID           string       `json:"id"`
 	Title        string       `json:"title"`
@@ -106,17 +106,17 @@ type Finding struct {
 	Impact         string      `json:"impact"`
 	Remediation    Remediation `json:"remediation"`
 	// ContextNote is the model's attributed note on how operator context
-	// bears on this finding; it never changes severity (§6.3).
+	// bears on this finding; it never changes severity (docs/spec/host-collector.md §5.3).
 	ContextNote string `json:"context_note,omitempty"`
 	// Service is the listener a network finding is about, graded against
-	// expected_services (§6.3).
+	// expected_services (docs/spec/host-collector.md §5.3).
 	Service *ServiceRef `json:"service,omitempty"`
 	// Custom marks a custom:<slug> finding: capped at medium, never
-	// escalated, flagged for a reviewer to promote into the catalog (§7.1).
+	// escalated, flagged for a reviewer to promote into the catalog (docs/spec/host-collector.md §6.1).
 	Custom bool `json:"custom,omitempty"`
 }
 
-// Confidence levels (§7.3).
+// Confidence levels (docs/spec/host-collector.md §6.3).
 const (
 	ConfidenceHigh   = "high"
 	ConfidenceMedium = "medium"

@@ -18,8 +18,8 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// explainFlags reproduce a grading without a run (docs/SPEC.md §8): the
-// §6.2 structured keys as flags, layered over any --context sources.
+// explainFlags reproduce a grading without a run (docs/spec/host-collector.md §7): the
+// docs/spec/host-collector.md §5.2 structured keys as flags, layered over any --context sources.
 type explainFlags struct {
 	Exposure      string
 	Environment   string
@@ -42,7 +42,7 @@ func (f *explainFlags) register(cmd *cobra.Command) {
 }
 
 // explainFinding prints the severity chain for one finding id: base →
-// adjustments → cap → status → final (docs/SPEC.md §7.2, §8).
+// adjustments → cap → status → final (docs/spec/host-collector.md §6.2, §7).
 func (o *globalOpts) explainFinding(cmd *cobra.Command, w io.Writer, def finding.Def, ef explainFlags) error {
 	ctx, origins, err := o.explainContext(cmd, ef)
 	if err != nil {
@@ -86,7 +86,7 @@ func (o *globalOpts) explainFinding(cmd *cobra.Command, w io.Writer, def finding
 	fmt.Fprintf(w, "%s — %s\n", def.ID, def.Title)
 	fmt.Fprintf(w, "  category   %s\n", def.Category)
 	fmt.Fprintf(w, "  severity   %s (base %s), status %s, confidence %s\n", graded.Severity, graded.SeverityBase, graded.Status, graded.Confidence)
-	fmt.Fprintln(w, "  chain      severity is graded by code, never by the model (docs/SPEC.md §7.2):")
+	fmt.Fprintln(w, "  chain      severity is graded by code, never by the model (docs/spec/host-collector.md §6.2):")
 	for _, st := range steps {
 		arrow := st.To
 		if st.From != "" && st.From != st.To {

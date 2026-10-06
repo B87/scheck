@@ -37,7 +37,7 @@ func configNode(t *testing.T, body string) yaml.Node {
 	return doc.Context
 }
 
-// Merge is defined per kind, not per source order (docs/SPEC.md §6.1):
+// Merge is defined per kind, not per source order (docs/spec/host-collector.md §5.1):
 // scalars override per key, lists concatenate and deduplicate by natural key
 // with the later entry winning, prose is never merged.
 func TestMergePerKind(t *testing.T) {
@@ -111,7 +111,7 @@ notes: "a yaml key that is not context"
 }
 
 // An accepted-risk id that is neither a catalog finding nor custom: is a
-// usage error at load, so a typo cannot leave a risk un-accepted (§6.2).
+// usage error at load, so a typo cannot leave a risk un-accepted (docs/spec/host-collector.md §5.2).
 func TestUnknownAcceptedRiskFailsLoad(t *testing.T) {
 	cases := map[string]string{
 		"typo":        "context:\n  accepted_risks:\n    - { id: sshd.pasword_auth_enabled }\n",
@@ -138,7 +138,7 @@ func TestUnknownAcceptedRiskFailsLoad(t *testing.T) {
 }
 
 // Over-budget prose is truncated with a marker and recorded per source;
-// nothing disappears silently (§6.1, §4.4).
+// nothing disappears silently (docs/spec/host-collector.md §5.1, §4.4).
 func TestBudgetTruncation(t *testing.T) {
 	dir := t.TempDir()
 	first := write(t, dir, "1.md", strings.Repeat("a", 100))

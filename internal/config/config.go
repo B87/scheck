@@ -1,4 +1,4 @@
-// Package config loads scheck.yaml (docs/SPEC.md §9). Every knob narrows: config
+// Package config loads scheck.yaml (docs/spec/host-collector.md §8). Every knob narrows: config
 // disables checks, denies paths and adds redactions; nothing here widens what
 // scheck may execute or reveal, and no credential is ever read from a file.
 package config
@@ -47,7 +47,7 @@ type Config struct {
 	Context       yaml.Node            `yaml:"context"`
 	// ContextSource is the file whose context: block won (a later file
 	// replaces the block whole; per-key merging happens across --context
-	// sources, docs/SPEC.md §6.1).
+	// sources, docs/spec/host-collector.md §5.1).
 	ContextSource string `yaml:"-"`
 
 	// Sources lists the files that contributed, in merge order.
@@ -55,7 +55,7 @@ type Config struct {
 }
 
 // Paths returns the default file chain, lowest precedence first: the OS
-// user config, then the project file (docs/SPEC.md §9).
+// user config, then the project file (docs/spec/host-collector.md §8).
 func Paths() []string {
 	var out []string
 	if p, err := UserConfigPath(); err == nil {
@@ -132,14 +132,14 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: max_context %d is negative", c.MaxContext)
 	}
 	// The context: block is validated at load so an unknown accepted-risk id
-	// is a usage error before anything runs (docs/SPEC.md §6.2).
+	// is a usage error before anything runs (docs/spec/host-collector.md §5.2).
 	if _, err := operator.Load(operator.Options{ConfigContext: c.Context, ConfigSource: c.ContextSource, KnownFinding: KnownFinding}); err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
 	return nil
 }
 
-// KnownFinding is the accepted_risks id check (docs/SPEC.md §6.2).
+// KnownFinding is the accepted_risks id check (docs/spec/host-collector.md §5.2).
 func KnownFinding(id string) bool {
 	_, ok := finding.Lookup(id)
 	return ok

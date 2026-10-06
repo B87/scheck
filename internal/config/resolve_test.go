@@ -6,7 +6,7 @@ import (
 )
 
 // Precedence is defaults → user file → project file → explicit flags, and
-// every value knows where it came from (docs/SPEC.md §9).
+// every value knows where it came from (docs/spec/host-collector.md §8).
 func TestResolveProvenance(t *testing.T) {
 	user := write(t, "user.yaml", "model: gpt-5\nprofile: hardened\ndisable_checks: [net.listeners]\nredact_extra: ['corp\\.example']\n")
 	proj := write(t, "scheck.yaml", "profile: baseline\nelevate: sudo\ndisable_checks: [net.listeners, sshd.config]\ntargets:\n  bastion: {host: 10.0.0.5, user: ops}\ncontext:\n  role: gateway\n")

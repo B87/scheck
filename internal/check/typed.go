@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// Typed parser shapes (docs/SPEC.md §3). A shape exists when something
-// downstream needs fields rather than text: the summary line (§7.6), a
-// posture rule (§7.5) or, later, `scheck diff` (§7.4).
+// Typed parser shapes (docs/spec/host-collector.md §3). A shape exists when something
+// downstream needs fields rather than text: the summary line (docs/spec/host-collector.md §6.6), a
+// posture rule (docs/spec/host-collector.md §6.5) or, later, `scheck diff` (docs/spec/host-collector.md §6.4).
 const (
 	ParseListeners    ParserKind = "listeners"
 	ParseAccounts     ParserKind = "accounts"
@@ -20,7 +20,7 @@ const (
 )
 
 // Field names of the typed shapes. A rule predicate names one of these
-// (docs/SPEC.md §7.5), so they are constants rather than literals.
+// (docs/spec/host-collector.md §6.5), so they are constants rather than literals.
 const (
 	FieldProtocol = "protocol"
 	FieldAddress  = "address"
@@ -51,7 +51,7 @@ type Record map[string]string
 // known to be incomplete — the output was truncated, carried a redaction, or
 // held a line the format's parser did not recognise. A posture rule may prove
 // an existential condition from a partial set but never a negative one
-// (docs/SPEC.md §7.5), so completeness travels with the records.
+// (docs/spec/host-collector.md §6.5), so completeness travels with the records.
 type Records struct {
 	Kind    ParserKind `json:"kind"`
 	Items   []Record   `json:"items"`
@@ -364,6 +364,6 @@ func parseFileMode(lines []string) ([]Record, error) {
 func IsMarkerLine(s string) bool { return isMarkerLine(s) }
 
 // HasMarker reports whether a value carries a redaction or truncation marker
-// (docs/SPEC.md §4.2). A consumer that would otherwise draw a conclusion from
+// (docs/spec/host-collector.md §4.2). A consumer that would otherwise draw a conclusion from
 // the value's exact content has to treat it as incomplete evidence.
 func HasMarker(s string) bool { return hasMarker(s) }

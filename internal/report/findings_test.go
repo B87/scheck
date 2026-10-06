@@ -37,7 +37,7 @@ func postureEnv(t *testing.T, platform check.Platform, raw map[string]string) En
 }
 
 // Findings come before the fact sheet, with the evidence excerpt, the check
-// it came from and the remediation summary (docs/SPEC.md §7.6).
+// it came from and the remediation summary (docs/spec/host-collector.md §6.6).
 func TestFindingsRenderFirstWithEvidenceAndRemedy(t *testing.T) {
 	env := postureEnv(t, check.Linux, map[string]string{
 		"sshd.config":       "passwordauthentication yes\npermitrootlogin yes",
@@ -88,7 +88,7 @@ func TestFindingVerbosity(t *testing.T) {
 
 // Coverage is reported separately from findings: a rule that could not be
 // evaluated is named, with the remedy of the check that let it down, and it
-// is never counted as a finding (docs/SPEC.md §7.5).
+// is never counted as a finding (docs/spec/host-collector.md §6.5).
 func TestNotAssessedRulesAreNamedWithARemedy(t *testing.T) {
 	sheet := postureSheet(t, check.MacOS, map[string]string{"disk.fdesetup": "FileVault is On."})
 	sheet.Results["sshd.config"] = runner.Result{CheckID: "sshd.config", Status: runner.StatusUnavailable,
@@ -178,7 +178,7 @@ func TestJSONAndTextAgreeOnAssessment(t *testing.T) {
 }
 
 // The exit-code question the CLI asks the envelope: which findings are open
-// at or above the profile's threshold (docs/SPEC.md §8).
+// at or above the profile's threshold (docs/spec/host-collector.md §7).
 func TestOpenFindingsPerProfile(t *testing.T) {
 	// Remote Login on a Mac is an info finding: visible, never fatal.
 	env := postureEnv(t, check.MacOS, map[string]string{"remote.login": "Remote Login: On"})
@@ -203,7 +203,7 @@ func TestOpenFindingsPerProfile(t *testing.T) {
 }
 
 // Findings carry target-derived excerpts, which are escaped like every other
-// target string before they reach a terminal (docs/SPEC.md §7.6).
+// target string before they reach a terminal (docs/spec/host-collector.md §6.6).
 func TestFindingEvidenceIsEscaped(t *testing.T) {
 	env := postureEnv(t, check.Linux, map[string]string{
 		"sshd.config": "passwordauthentication yes\x1b[2J",

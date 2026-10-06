@@ -19,7 +19,7 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// `scheck config show` and `scheck config validate` (docs/SPEC.md §8, §9)
+// `scheck config show` and `scheck config validate` (docs/spec/host-collector.md §7, §8)
 // inspect local configuration through the same resolver and validation an
 // ordinary run uses. Neither contacts a model or a target: a target: context
 // source is reported as unresolved, credentials are checked for presence

@@ -9,7 +9,7 @@ import (
 
 // Thresholds are the probabilities a decision rule compares against. They
 // are provisional: nothing here is calibrated until a live record measures
-// them on held-out cases (docs/ROADMAP-RESEARCH.md, "Decision rules and
+// them on held-out cases (docs/spec/bounded.md, "Decision rules and
 // thresholds", and R3). They are part of QuestionsVersion, so a record
 // always says which numbers produced it.
 type Thresholds struct {
@@ -40,7 +40,7 @@ type Decision struct {
 }
 
 // Decide applies the kind's rule to that item's probabilities. The rules are
-// tabulated in docs/ROADMAP-RESEARCH.md ("Decision rules and thresholds");
+// tabulated in docs/spec/bounded.md ("Decision rules and thresholds");
 // keep the two together.
 //
 // Every rule needs an affirmative signal. Nothing is filed because the

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Precedence (docs/SPEC.md §9): built-in defaults, then the OS user config,
+// Precedence (docs/spec/host-collector.md §8): built-in defaults, then the OS user config,
 // then the project scheck.yaml, then flags the operator explicitly set. A
 // flag's registered default never overrides a file, which is why Overrides
 // carries pointers: nil means "not given".
@@ -49,7 +49,7 @@ type Resolved struct {
 	Entries map[string]map[string]string // list key -> entry -> "src1, src2"
 }
 
-// Defaults is the built-in layer (docs/SPEC.md §9).
+// Defaults is the built-in layer (docs/spec/host-collector.md §8).
 func Defaults() Config {
 	return Config{
 		Provider:    "openai-compatible",

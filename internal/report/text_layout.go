@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultWidth is the wrap column when the caller does not know the terminal
-// width (docs/SPEC.md §7.6).
+// width (docs/spec/host-collector.md §6.6).
 const DefaultWidth = 100
 
 // minWidth keeps the layout usable in a very narrow terminal; below it the
@@ -25,7 +25,7 @@ type Options struct {
 	// Width is the wrap column; 0 means DefaultWidth.
 	Width int
 	// Color enables styling. The caller sets it only for a terminal that is
-	// not under NO_COLOR (docs/SPEC.md §7.6).
+	// not under NO_COLOR (docs/spec/host-collector.md §6.6).
 	Color bool
 }
 
@@ -43,7 +43,7 @@ func (o Options) normalize() Options {
 }
 
 // style renders emphasis: bold headings, dim evidence, and the severity
-// colours, which are the only colours in the contract (docs/SPEC.md §7.6).
+// colours, which are the only colours in the contract (docs/spec/host-collector.md §6.6).
 // Everything here is a no-op when Color is false.
 type style struct{ on bool }
 
@@ -51,7 +51,7 @@ func (s style) bold(t string) string { return s.wrap(t, "\x1b[1m") }
 func (s style) dim(t string) string  { return s.wrap(t, "\x1b[2m") }
 
 // severity is the one colour in the report that carries meaning
-// (docs/SPEC.md §7.6). info is left unstyled: it is information, not alarm.
+// (docs/spec/host-collector.md §6.6). info is left unstyled: it is information, not alarm.
 func (s style) severity(sev finding.Severity, t string) string {
 	switch sev {
 	case finding.SevCritical:
@@ -102,7 +102,7 @@ func isControl(r rune) bool {
 // uncertain origin (`scheck config show`, `scheck explain`).
 func Sanitize(s string) string { return sanitize(s) }
 
-// inline prevents target-derived fields from forging report structure (§7.6).
+// inline prevents target-derived fields from forging report structure (docs/spec/host-collector.md §6.6).
 func inline(s string) string { return strings.Join(strings.Fields(sanitize(s)), " ") }
 
 // expandTabs replaces tabs with spaces to the next eight-column stop, so a
@@ -136,7 +136,7 @@ func Wrap(s string, width int) []string { return wrap(s, width) }
 
 // wrap breaks s into lines of at most width runes, preferring a break at a
 // space and falling back to a hard cut, so no byte of evidence is silently
-// dropped (docs/SPEC.md §7.6). Lines carry no trailing padding.
+// dropped (docs/spec/host-collector.md §6.6). Lines carry no trailing padding.
 func wrap(s string, width int) []string {
 	if width < 1 {
 		width = 1
@@ -190,7 +190,7 @@ var markerPrefixes = []string{"[REDACTED:", "[TRUNCATED:"}
 
 // avoidMarkerSplit pulls cut back to the start of a redaction or truncation
 // marker it would otherwise break. The marker is the only record that bytes
-// were removed (docs/SPEC.md §4.2); a reader has to be able to see it whole.
+// were removed (docs/spec/host-collector.md §4.2); a reader has to be able to see it whole.
 // A marker wider than the column is still cut, because dropping it would be
 // worse than splitting it.
 func avoidMarkerSplit(r []rune, cut int) int {
@@ -248,7 +248,7 @@ func wrapHanging(first, indent, s string, width int) []string {
 }
 
 // pad right-pads s to n runes. It is only ever used between columns, never at
-// the end of a line (docs/SPEC.md §7.6: no trailing padding).
+// the end of a line (docs/spec/host-collector.md §6.6: no trailing padding).
 func pad(s string, n int) string {
 	if d := n - len([]rune(s)); d > 0 {
 		return s + strings.Repeat(" ", d)

@@ -10,7 +10,7 @@ import (
 )
 
 // Rule turns one fact into one finding when the fact's meaning needs no
-// judgement (docs/SPEC.md §7.5). One rule reads one check: a conclusion that
+// judgement (docs/spec/host-collector.md §6.5). One rule reads one check: a conclusion that
 // needs two facts is the model's job in phase 2.
 type Rule struct {
 	Finding  string         // finding id; the Def supplies title, severity, impact, remediation
@@ -19,7 +19,7 @@ type Rule struct {
 	When     Predicate
 }
 
-// Assessment statuses (docs/SPEC.md §7.5). Only Matched emits a finding, and
+// Assessment statuses (docs/spec/host-collector.md §6.5). Only Matched emits a finding, and
 // NotMatched means this predicate was disproved by sufficient evidence — not
 // that the host or the domain is secure.
 const (
@@ -59,7 +59,7 @@ func notAssessed(reason string) Verdict { return Verdict{Status: NotAssessed, Re
 // recognized value proving its condition, and may report "not matched" only
 // when the evidence disproves it. Unknown output, a missing field, a redacted
 // value or a truncated capture is `not_assessed` — never a pass
-// (docs/SPEC.md §7.5).
+// (docs/spec/host-collector.md §6.5).
 type Predicate interface {
 	Eval(parsed any) Verdict
 	// Accepts reports whether this predicate can read a check parsed that
@@ -305,7 +305,7 @@ func recordExcerpt(rec check.Record) string {
 	return strings.Join(parts, " ")
 }
 
-// rules is the compiled-in posture rule table (docs/SPEC.md §7.5 seed table).
+// rules is the compiled-in posture rule table (docs/spec/host-collector.md §6.5 seed table).
 // Every entry is validated against the check catalog and the finding catalog
 // by ValidateRules.
 var rules = []Rule{

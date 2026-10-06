@@ -28,7 +28,7 @@ func newSSHCmd(opts *globalOpts) *cobra.Command {
 		Short:   "Audit a remote host over SSH (NAME resolves a `targets:` entry from config)",
 		Example: "  scheck ssh user@host --format json --no-persist\n  scheck ssh user@host --format json --sudo",
 		Long: "Collect read-only facts over SSH and assess them with the compiled-in posture rules. " +
-			"No model is involved in this build (docs/SPEC.md §2.1). SSH host keys " +
+			"No model is involved in this build (docs/spec/host-collector.md §2.1). SSH host keys " +
 			"are verified; elevation uses sudo -n and never prompts. JSON goes to stdout, diagnostics " +
 			"to stderr. Exit 0 no finding at or above the profile threshold, 1 findings, 2 incomplete, " +
 			"3 usage/policy error.",

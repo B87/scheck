@@ -31,7 +31,7 @@ var loginNoise = map[string]bool{
 var homeNoise = regexp.MustCompile(`^[CA] (/root|/home/[^/]+)(/\.cache(/motd\.legal-displayed)?)?$`)
 
 // runtimeArtifacts matches every write scheck itself is known to cause: the
-// documented exceptions to "it never modifies the target" (docs/SPEC.md §1).
+// documented exceptions to "it never modifies the target" (docs/spec/host-collector.md §1).
 // All of them are a tool's record of its own invocation in runtime or cache
 // state; none is configuration, a package, a unit or a credential. They are
 // named exactly, so any other write fails the assertion.
@@ -107,14 +107,14 @@ func TestSSHFactsReport(t *testing.T) {
 			}
 			// Criterion 3: nothing modified on the target beyond the noise an
 			// ssh login itself produces, plus the one write scheck is known to
-			// cause and documents (docs/SPEC.md §1). Both sets are exact: an
+			// cause and documents (docs/spec/host-collector.md §1). Both sets are exact: an
 			// earlier prefix match on /run, /var and /home tolerated whole
 			// trees, so a check writing into one of them would have passed
 			// unnoticed — which is how the dnf cache reached the M4.6 pass as
 			// a reading of the log rather than a test failure. The classified
 			// lines are logged so the acceptance record can show what a
 			// read-only run leaves behind
-			// (docs/SPEC.md §12, docs/eval/acceptance-0.0.1.md).
+			// (docs/spec/host-collector.md §10, docs/eval/acceptance-0.0.1.md).
 			var noise, documented []string
 			for _, line := range strings.Split(strings.TrimSpace(c.Diff(t)), "\n") {
 				if line == "" || strings.Contains(before, line) {

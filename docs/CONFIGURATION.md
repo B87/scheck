@@ -9,10 +9,10 @@ scheck reads three kinds of input, and it helps to keep them apart:
 | **Context** | what the host is for, what should be listening, which risks are accepted | `context:` block, `./.scheck/context/`, `--context` | no — it changes how findings are graded, never what runs |
 
 Nothing in any file can add a command, widen a path or reveal a redacted value
-(`SPEC.md` §9). Credentials are never read from a file: they come from the environment
+(`spec/host-collector.md` §8). Credentials are never read from a file: they come from the environment
 (`OPENAI_API_KEY`) at run time.
 
-**No model assesses a host in this build** (`SPEC.md` §2.1): `scheck local` and `scheck
+**No model assesses a host in this build** (`spec/host-collector.md` §2.1): `scheck local` and `scheck
 ssh` collect facts and assess them with the posture rules, and the model settings below
 configure `scheck providers` and the project's evaluation harness only. A model flag on
 `local` or `ssh` exits 3; the same keys in a file are unused and cannot fail a run, so
@@ -85,7 +85,7 @@ disable_checks (accumulated; every source that listed an entry is named)
 ## 3. Per-host context files
 
 Context describes the host so findings are specific to its role. The structured block
-(`SPEC.md` §6.2) is consumed by code, deterministically; everything else is prose,
+(`spec/host-collector.md` §5.2) is consumed by code, deterministically; everything else is prose,
 which in this build is carried in the run's context sources and shown by `--stop-after
 context` rather than read by anything.
 
@@ -138,7 +138,7 @@ An explicit flag overrides both files and is attributed as `flag` in `config sho
 flag left at its registered default never overrides a file, so `--profile` only counts
 when you pass it.
 
-Merge is defined per kind, not by source order (`SPEC.md` §6.1):
+Merge is defined per kind, not by source order (`spec/host-collector.md` §5.1):
 
 - scalars (`role`, `exposure`, …): the later source wins, per key;
 - `expected_services`: concatenated, deduplicated by `port/proto`, the later entry wins;
@@ -152,14 +152,12 @@ for that source.
 
 ## 5. Expected services and expiring accepted risks
 
-`expected_services` and `accepted_risks` feed the deterministic grader (`SPEC.md`
-§6.3): an expected listener grades to `info`, an undeclared one is escalated one step,
+`expected_services` and `accepted_risks` feed the deterministic grader (`spec/host-collector.md` §5.3): an expected listener grades to `info`, an undeclared one is escalated one step,
 a declared service that is not listening is its own finding, an accepted risk is still
 reported with `status: accepted` and excluded from the exit code, and an acceptance
 whose `expires` date has passed no longer suppresses anything and produces
 `risk.acceptance_expired`. `scheck explain FINDING-ID --exposure internet` shows the
-chain for one finding without a run. (Grading lands with M2.3; until then the context
-is merged, recorded and validated but does not move a severity.)
+chain for one finding without a run.
 
 An `accepted_risks[].id` must be a catalog finding id (`scheck explain ID`) or start
 with `custom:`. A typo is an error at load, not a silently un-accepted risk:
@@ -176,7 +174,7 @@ $ echo $?
 `config show` and `config validate` label these honestly rather than pretending:
 
 - The model-assessed pass itself: it did not earn its cost against criteria frozen
-  before it was built (`SPEC.md` §2.1, `docs/eval/phase2-results.md`). The six model
+  before it was built (`spec/host-collector.md` §2.1, `docs/eval/phase2-results.md`). The six model
   flags exit 3 on `local` and `ssh`.
 - `--local-only` fails explicitly (post-v1). `allow_egress: false` is satisfied by
   construction on `local` and `ssh`, which contact nothing, and is rejected by the

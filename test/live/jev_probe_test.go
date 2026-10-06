@@ -25,9 +25,9 @@ import (
 	"github.com/b87/scheck/internal/target/fixture"
 )
 
-// The recall probe of docs/ROADMAP-RESEARCH.md ("Open questions for R2",
-// question 7): before anyone builds the R3 adapter, find out whether Jev can
-// answer the `vendor` question at all.
+// The recall probe of docs/spec/bounded.md ("The recall probe"; the
+// `vendor` question is open question 6): before anyone builds a live Jev
+// adapter, find out whether Jev can answer the `vendor` question at all.
 //
 // That question asks the model to recall what the world ships — is
 // /usr/bin/sudo a standard SUID binary, is rapportd an Apple component, is

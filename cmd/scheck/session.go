@@ -45,11 +45,11 @@ type session struct {
 	context *operator.Merged
 }
 
-// defaultProvider is the v1 production adapter (docs/SPEC.md §5.2).
+// defaultProvider is the v1 production adapter (docs/spec/model.md §3).
 const defaultProvider = "openai-compatible"
 
 // loadConfig resolves the effective configuration the way every command
-// does (docs/SPEC.md §9): defaults, user file, project file, then the flags
+// does (docs/spec/host-collector.md §8): defaults, user file, project file, then the flags
 // the operator explicitly set. It validates and returns the result with its
 // provenance, so `config show` and a run cannot disagree.
 func (o *globalOpts) loadConfig(cmd *cobra.Command) (*config.Config, error) {
@@ -81,7 +81,7 @@ func (o *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Resolved, error)
 
 // applyOpenAIModelDefault fills gpt-5.6-luna when the operator left model
 // unset and the endpoint is OpenAI's, so config show, providers and a run
-// agree. A different base URL still requires --model (docs/SPEC.md §5.2).
+// agree. A different base URL still requires --model (docs/spec/model.md §3).
 func applyOpenAIModelDefault(r *config.Resolved) {
 	c := r.Config
 	if c.Model != "" || (c.Provider != "" && c.Provider != openai.Name) {
@@ -131,9 +131,9 @@ func (o *globalOpts) overrides(cmd *cobra.Command) config.Overrides {
 }
 
 // providerConfig is what an adapter is built from: the operator's selection,
-// never a credential (docs/SPEC.md §9). Its callers are `scheck providers`
+// never a credential (docs/spec/host-collector.md §8). Its callers are `scheck providers`
 // and the evaluation harness; no host assessment builds a provider in this
-// build (docs/SPEC.md §2.1).
+// build (docs/spec/host-collector.md §2.1).
 func (o *globalOpts) providerConfig(cfg *config.Config) llm.Config {
 	effort, _ := llm.ParseEffort(cfg.Effort)
 	return llm.Config{Model: cfg.Model, BaseURL: cfg.BaseURL, MaxContext: cfg.MaxContext,
@@ -188,7 +188,7 @@ func (s *session) close() {
 	}
 }
 
-// loadContext reads every operator-context source (docs/SPEC.md §6.1). A
+// loadContext reads every operator-context source (docs/spec/host-collector.md §5.1). A
 // target: source is read through the runner as the text.cat check, so it is
 // subject to the path policy and appears in the audit log like any other
 // binding — there is no second read path. --ignore-context reads nothing.

@@ -13,7 +13,7 @@ import (
 // as `unavailable: parse error`, never as a panic; the raw text is kept.
 //
 // The whole check is the input, not just its ParserKind, because a typed
-// shape (docs/SPEC.md §3) is produced from several tools' output formats and
+// shape (docs/spec/host-collector.md §3) is produced from several tools' output formats and
 // the catalog's own argv is what says which one to expect.
 func Parse(c Check, raw []byte) (any, error) {
 	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // BOM

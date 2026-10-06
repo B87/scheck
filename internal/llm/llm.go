@@ -1,7 +1,7 @@
-// Package llm is the provider-neutral inference contract (docs/SPEC.md §5.1).
+// Package llm is the provider-neutral inference contract (docs/spec/model.md §2).
 //
 // Every adapter presents the full contract; the agent loop branches on
-// nothing but Limits.MaxContext (§5.3). No provider SDK type crosses this
+// nothing but Limits.MaxContext (docs/spec/model.md §4). No provider SDK type crosses this
 // package boundary, and the packages that consume it (agent, finding,
 // report) compile with no provider dependency at all — the Makefile's
 // depcheck target proves it.
@@ -109,7 +109,7 @@ const (
 )
 
 // Usage is normalized token accounting. CostUSD is nil when the provider has
-// no price (docs/SPEC.md §5.5); tokens are always present.
+// no price (docs/spec/model.md §6); tokens are always present.
 type Usage struct {
 	Input      int      `json:"input"`
 	Output     int      `json:"output"`
@@ -120,7 +120,7 @@ type Usage struct {
 
 // Add accumulates u2 into u. Cost is summed only when every accumulated
 // turn carried a price; one unpriced turn makes the total nil, so a partial
-// price is never reported as the run's cost (docs/SPEC.md §5.5).
+// price is never reported as the run's cost (docs/spec/model.md §6).
 func (u *Usage) Add(u2 Usage) {
 	fresh := u.Input == 0 && u.Output == 0 && u.CacheRead == 0 && u.CacheWrite == 0 && u.CostUSD == nil
 	u.Input += u2.Input
@@ -147,8 +147,8 @@ type Response struct {
 	Usage      Usage
 }
 
-// Limits is the one capability the loop must know about (docs/SPEC.md §5.3),
-// plus whether the provider leaves the machine (§5.4).
+// Limits is the one capability the loop must know about (docs/spec/model.md §4),
+// plus whether the provider leaves the machine (docs/spec/model.md §5).
 type Limits struct {
 	MaxContext int  `json:"max_context"`
 	Local      bool `json:"local"`

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// No model assesses a host in this build (docs/SPEC.md §2.1): every flag
+// No model assesses a host in this build (docs/spec/host-collector.md §2.1): every flag
 // that selects one is a usage error on local and ssh, with nothing
 // executed and no report written. The same settings in a configuration
 // file are simply unused, since a run never builds a provider.
@@ -51,7 +51,7 @@ func TestModelFlagsAreRejectedByLocalAndSSH(t *testing.T) {
 // The evaluation harness is the one caller of phase 2 left, so it owns the
 // provider pre-flight: a deferred or unknown adapter, a missing transcript,
 // a missing credential and an unknown context window each exit 3 before a
-// case runs (docs/SPEC.md §5.2, §5.3).
+// case runs (docs/spec/model.md §3, §4).
 func TestEvalProviderPreflightExitsThree(t *testing.T) {
 	dir := t.TempDir()
 	suite := filepath.Join("..", "..", "testdata", "eval")

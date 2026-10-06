@@ -111,7 +111,7 @@ var sensitiveRules = []sensitiveRule{
 // `realpath /etc/ssh/sshd_config` is `/private/etc/ssh/sshd_config`; the
 // policy's prefixes and sensitive patterns name `/etc/...`, and a sensitive
 // file must not escape them by its canonical spelling. The runner applies
-// this for macOS targets only (docs/SPEC.md §4.1).
+// this for macOS targets only (docs/spec/host-collector.md §4.1).
 func Canonical(p string, macOS bool) string {
 	if macOS {
 		for _, root := range []string{"/private/etc", "/private/var", "/private/tmp"} {

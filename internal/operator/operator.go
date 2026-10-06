@@ -1,10 +1,10 @@
-// Package operator ingests operator-supplied context (docs/SPEC.md §6): the
+// Package operator ingests operator-supplied context (docs/spec/host-collector.md §5): the
 // structured block that code consumes deterministically and the prose the
 // model reads. Nothing here reaches a model, and nothing here executes: a
 // `target:` source is read by the caller through runner.Run like any other
 // file, and handed in as text.
 //
-// Context is untrusted data (§6.4). The worst a hostile source can do is
+// Context is untrusted data (docs/spec/host-collector.md §5.4). The worst a hostile source can do is
 // distort classification; it cannot widen the command surface, and the only
 // way it can move a severity is through the attributed adjustment table.
 package operator
@@ -26,13 +26,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Exposure and environment vocabularies (docs/SPEC.md §6.2).
+// Exposure and environment vocabularies (docs/spec/host-collector.md §5.2).
 var (
 	Exposures    = []string{"internet", "vpn", "lan", "airgapped"}
 	Environments = []string{"prod", "staging", "dev"}
 )
 
-// Structured is the §6.2 schema. Every field is optional; unknown fields are
+// Structured is the docs/spec/host-collector.md §5.2 schema. Every field is optional; unknown fields are
 // preserved in Extra and passed through as prose.
 type Structured struct {
 	Role               string         `yaml:"role,omitempty" json:"role,omitempty"`
@@ -54,7 +54,7 @@ func (s Structured) IsZero() bool {
 }
 
 // Service is one expected listener. Source names the context source that
-// declared it, for attribution (§6.4) and for `scheck config show`.
+// declared it, for attribution (docs/spec/host-collector.md §5.4) and for `scheck config show`.
 type Service struct {
 	Port     int    `yaml:"port" json:"port"`
 	Proto    string `yaml:"proto,omitempty" json:"proto"`
@@ -63,10 +63,10 @@ type Service struct {
 	Source   string `yaml:"-" json:"source,omitempty"`
 }
 
-// Key is the natural key lists are deduplicated by (§6.1).
+// Key is the natural key lists are deduplicated by (docs/spec/host-collector.md §5.1).
 func (s Service) Key() string { return fmt.Sprintf("%d/%s", s.Port, s.Proto) }
 
-// Risk is one accepted finding id (§6.2, §6.3).
+// Risk is one accepted finding id (docs/spec/host-collector.md §5.2, §5.3).
 type Risk struct {
 	ID      string `yaml:"id" json:"id"`
 	Reason  string `yaml:"reason,omitempty" json:"reason,omitempty"`
@@ -87,7 +87,7 @@ func (r Risk) Expired(now time.Time) bool {
 	return now.After(t.Add(24 * time.Hour))
 }
 
-// Source records one context input in the report header (§7.4).
+// Source records one context input in the report header (docs/spec/host-collector.md §6.4).
 type Source struct {
 	Name      string `json:"source"`
 	Kind      string `json:"kind"` // config | implicit | file | note | target
@@ -111,7 +111,7 @@ type Prose struct {
 type Merged struct {
 	Structured Structured `json:"structured"`
 	// Origins maps a structured scalar or list key to the source that set
-	// it last (per-key override, §6.1). List entries carry their own Source.
+	// it last (per-key override, docs/spec/host-collector.md §5.1). List entries carry their own Source.
 	Origins  map[string]string `json:"origins"`
 	Prose    []Prose           `json:"prose"`
 	Sources  []Source          `json:"sources"`
@@ -142,14 +142,14 @@ type Options struct {
 	// silently treated as read.
 	ReadTarget func(path string) (string, error)
 	// KnownFinding reports whether an accepted_risks id is a catalog finding
-	// id; a custom: prefix is always accepted (§6.2).
+	// id; a custom: prefix is always accepted (docs/spec/host-collector.md §5.2).
 	KnownFinding func(id string) bool
 }
 
-// DefaultTargetPath is what a bare `target:` reads (§6.1).
+// DefaultTargetPath is what a bare `target:` reads (docs/spec/host-collector.md §5.1).
 const DefaultTargetPath = "/etc/scheck/context.md"
 
-// DefaultImplicitDir is the implicit per-project source (§6.1).
+// DefaultImplicitDir is the implicit per-project source (docs/spec/host-collector.md §5.1).
 const DefaultImplicitDir = ".scheck/context"
 
 // Load reads every source in its defined order — config block, implicit
@@ -302,7 +302,7 @@ func readFlag(arg string, readTarget func(string) (string, error)) ([]piece, err
 		}
 		// On-target context is prose only, whatever its extension: a host
 		// must not be able to accept its own risks or declare its own
-		// exposure (docs/SPEC.md §6.4).
+		// exposure (docs/spec/host-collector.md §5.4).
 		return []piece{{name: name, kind: "target", raw: []byte(text)}}, nil
 	}
 	info, err := os.Stat(arg)
@@ -421,7 +421,7 @@ func validate(s *Structured, known func(string) bool) error {
 
 func oneOf(v string, set []string) bool { return slices.Contains(set, v) }
 
-// merge applies per-kind semantics (§6.1): scalars override per key, lists
+// merge applies per-kind semantics (docs/spec/host-collector.md §5.1): scalars override per key, lists
 // concatenate and deduplicate by natural key with the later entry winning.
 func (m *Merged) merge(s Structured, source string) {
 	set := func(key string, dst *string, v string) {
@@ -496,7 +496,7 @@ func appendOrigin(have, source string) string {
 // structured block first (it is what code consumes), then prose in source
 // order. A piece that crosses the budget is cut with a marker; later pieces
 // are dropped with their source marked truncated. Nothing is removed
-// silently (§6.1).
+// silently (docs/spec/host-collector.md §5.1).
 func (m *Merged) applyBudget() {
 	used := len(m.StructuredText())
 	if m.Budget <= 0 {
@@ -535,7 +535,7 @@ func (m *Merged) markTruncated(source string) {
 }
 
 // StructuredText renders the merged structured block as YAML, which is both
-// what `--stop-after context` prints and what the model sees (§6.3).
+// what `--stop-after context` prints and what the model sees (docs/spec/host-collector.md §5.3).
 func (m *Merged) StructuredText() string {
 	if m == nil || m.Structured.IsZero() {
 		return ""

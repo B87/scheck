@@ -157,7 +157,7 @@ const (
 
 // Arms lists the arms in comparison order. The first three are the frozen
 // criteria's (docs/eval/phase2-criteria.md §1); bounded is the research
-// track's fourth arm (docs/ROADMAP-RESEARCH.md R1), compared on the same
+// track's fourth arm (docs/spec/bounded.md R1), compared on the same
 // cases, facts, rule findings and context.
 var Arms = []Arm{ArmRules, ArmSingle, ArmAgent, ArmBounded}
 

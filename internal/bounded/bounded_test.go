@@ -118,7 +118,7 @@ func TestFiltersSettleWhatCodeKnows(t *testing.T) {
 	}
 }
 
-// A declared service is §6.3's answer, in code. Asking about it produced a
+// A declared service is docs/spec/host-collector.md §5.3's answer, in code. Asking about it produced a
 // phase 2 false positive (docs/eval/phase2-results.md).
 func TestDeclaredServiceIsNeverAsked(t *testing.T) {
 	h := ubuntu(t)
@@ -360,7 +360,7 @@ func TestSilenceAloneFilesNothing(t *testing.T) {
 
 // A filed finding carries evidence the store validated against the exact
 // observation, and the severity the catalog assigns — never one a model
-// proposed (docs/SPEC.md §7.1).
+// proposed (docs/spec/host-collector.md §6.1).
 func TestFiledFindingIsValidatedAndGradedByCode(t *testing.T) {
 	h := newHarness(t, filepath.Join("..", "..", "testdata", "eval", "cases", "macos-filevault-off"), runner.ElevateNone)
 	plist := "launchd:/Library/LaunchDaemons/com.nordvpn.macos.helper.plist"

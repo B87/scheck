@@ -1,6 +1,6 @@
 // Package runner is the single code path through which any check reaches a
 // target. Phase 1 (baseline) and phase 2 (run_check / read_file) both call
-// Run; there is no second command surface (docs/SPEC.md §2.1, §3).
+// Run; there is no second command surface (docs/spec/host-collector.md §2.1, §3).
 //
 // Run performs, in order: catalog lookup, typed parameter binding, symlink
 // resolution and path policy for every Path param, elevation gating, budget-
@@ -21,7 +21,7 @@ import (
 	"github.com/b87/scheck/internal/target"
 )
 
-// Elevation is how elevated checks are run (docs/SPEC.md §8.1).
+// Elevation is how elevated checks are run (docs/spec/host-collector.md §7.1).
 type Elevation string
 
 // Elevation modes. Root means the session already runs as uid 0.
@@ -96,7 +96,7 @@ const (
 // initiated call (phase 2's run_check / read_file) names its tool and
 // carries the model's rationale into the audit log, and is gated to the
 // checks the model may see: the active profile's tier, never the canary
-// (docs/SPEC.md §3 tiers, §4.3). The gate lives here, in the one
+// (docs/spec/host-collector.md §3 tiers, docs/spec/host-collector.md §4.3). The gate lives here, in the one
 // enforcement point, not in the tool.
 type Origin struct {
 	Tool      string
@@ -222,7 +222,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 	res.Stderr = stderr
 	res.Redactions += n
 
-	// Extract is also an output minimization boundary (docs/SPEC.md §3). Failed commands
+	// Extract is also an output minimization boundary (docs/spec/host-collector.md §3). Failed commands
 	// must not expose the full capture just because verbose diagnostics are enabled.
 	if c.Extract != "" && (execErr != nil || !c.ExitAllowed(exec.Code)) {
 		res.Raw = ""

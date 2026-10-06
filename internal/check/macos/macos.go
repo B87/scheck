@@ -1,4 +1,4 @@
-// Package macos registers the macOS check catalog (docs/SPEC.md §3 baseline table).
+// Package macos registers the macOS check catalog (docs/spec/host-collector.md §3 baseline table).
 package macos
 
 import "github.com/b87/scheck/internal/check"
@@ -18,7 +18,7 @@ func extract(c check.Check, re string) check.Check { c.Extract = re; return c }
 func output(c check.Check, n int) check.Check { c.Budget.Output = n; return c }
 
 // unit names what one line or key of a check means, so the fact's reading is
-// "3 launchd plists" rather than "3 lines" (docs/SPEC.md §3).
+// "3 launchd plists" rather than "3 lines" (docs/spec/host-collector.md §3).
 func unit(c check.Check, noun string) check.Check { c.Unit = noun; return c }
 
 func init() {

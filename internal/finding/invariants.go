@@ -18,7 +18,7 @@ type Violation struct {
 
 func (v Violation) String() string { return v.Subject + ": " + v.Rule + ": " + v.Detail }
 
-// Invariant rule names (docs/SPEC.md §7.5, last bullet).
+// Invariant rule names (docs/spec/host-collector.md §6.5, last bullet).
 const (
 	RuleUnknownFinding = "rule-finding-not-in-catalog"
 	RuleUnknownCheck   = "rule-check-not-in-catalog"
@@ -31,7 +31,7 @@ const (
 	RuleDefPremise     = "finding-def-premise-not-rule-covered"
 )
 
-// Categories a Def may carry (docs/SPEC.md §7.1), plus the two the grader
+// Categories a Def may carry (docs/spec/host-collector.md §6.1), plus the two the grader
 // and custom findings introduce.
 var Categories = []string{
 	CategoryRemoteAccess, CategoryNetwork, "accounts", "privesc", "integrity", "updates",
@@ -56,7 +56,7 @@ func regexpFields(p Predicate) []string {
 	return nil
 }
 
-// ValidateRules applies the §7.5 invariants over the compiled-in tables:
+// ValidateRules applies the docs/spec/host-collector.md §6.5 invariants over the compiled-in tables:
 // every Rule.Finding is a Def, every Rule.Check is a catalog id for the
 // rule's platform, and the predicate kind matches the check's parser. It
 // never panics on a broken entry; that is the point.

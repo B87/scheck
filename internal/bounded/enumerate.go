@@ -15,9 +15,9 @@ import (
 // Enumerate lists the candidates of every kind from the fact sheet and
 // applies the deterministic filters. It never executes anything and never
 // consults a model: an item that leaves here as anything but StatusJudged
-// has been settled by code and is never sent (docs/SPEC.md §5.9).
+// has been settled by code and is never sent (docs/spec/bounded.md).
 //
-// docs/ROADMAP-RESEARCH.md tabulates the sources per platform, every filter
+// docs/spec/bounded.md tabulates the sources per platform, every filter
 // and the reason for it, and the two sources deliberately left out
 // (persist.timers duplicates persist.units; macOS launchctl is dominated by
 // Apple's own loaded jobs, so the plists on disk are the inventory).
@@ -43,7 +43,7 @@ func Enumerate(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 
 // source reads one check's result and says whether its evidence may be
 // judged at all. Truncated, redacted or unparsed output is insufficient:
-// bytes were removed, and what was removed cannot be judged (§4.2, §7.5).
+// bytes were removed, and what was removed cannot be judged (docs/spec/host-collector.md §4.2, §6.5).
 func source(sheet *baseline.FactSheet, id string) (runner.Result, string, bool) {
 	res, ok := sheet.Get(id)
 	if !ok || res.Status != runner.StatusOK {
@@ -154,7 +154,7 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 		case loopback(addr):
 			it = filtered(it, "bound to loopback")
 		case declaredService(declared, key) != "":
-			// expected_services matching is §6.3's, in code. Reporting a
+			// expected_services matching is docs/spec/host-collector.md §5.3's, in code. Reporting a
 			// declared listener anyway was a phase 2 false positive.
 			it = filtered(it, "declared in expected_services as "+declaredService(declared, key))
 		case truncatesProcessName(res.Argv):
@@ -171,7 +171,7 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 			// anyway would answer "not a known component" for every listener
 			// on an unprivileged run and refile the phase 2 false positive
 			// (sshd on 0.0.0.0:22). Unknown is neither safe nor unsafe
-			// (docs/SPEC.md §7.5).
+			// (docs/spec/host-collector.md §6.5).
 			it.Status, it.Reason = StatusInsufficient, "the capture does not name the owning process"
 		}
 		out = append(out, it)
@@ -182,7 +182,7 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 // truncatesProcessName reports whether a capture came from a command that
 // shortens the process name. lsof pads COMMAND to nine characters unless
 // `+c 0` is given, so "ControlCenter" arrives as "ControlCe" (found by the
-// R3 probe: docs/ROADMAP-RESEARCH.md, "The defect the probe found").
+// R3 probe: docs/spec/bounded.md, "The defect the probe found").
 func truncatesProcessName(argv []string) bool {
 	if len(argv) == 0 || pathBase(argv[0]) != "lsof" {
 		return false

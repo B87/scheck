@@ -7,14 +7,14 @@ import (
 )
 
 // Summary is the one-line reading of a parsed fact: "26 listening sockets",
-// "0 SUID files", "FileVault is On." (docs/SPEC.md §7.6). The same string is
+// "0 SUID files", "FileVault is On." (docs/spec/host-collector.md §6.6). The same string is
 // `summary` in the envelope, the line in the text report, and — from phase 2
 // — what the model reads, so it is produced here beside the parsers rather
 // than in a renderer.
 //
 // It is a reading, never a verdict: it says what the command observed, not
 // whether the host is configured well. That judgement belongs to the posture
-// rules (§7.5).
+// rules (docs/spec/host-collector.md §6.5).
 func Summary(c Check, parsed any) string {
 	switch v := parsed.(type) {
 	case Records:
@@ -200,7 +200,7 @@ var nologinShells = map[string]bool{
 func isLoginShell(s string) bool { return !nologinShells[strings.TrimSpace(s)] }
 
 // countOf writes "1 SUID file" rather than "1 SUID files"; Unit is a plural
-// noun (docs/SPEC.md §3).
+// noun (docs/spec/host-collector.md §3).
 func countOf(n int, plural string) string {
 	if n == 1 {
 		return "1 " + singularize(plural)

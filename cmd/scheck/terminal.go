@@ -10,7 +10,7 @@ import (
 )
 
 // textOptions answers the terminal questions that internal/report refuses to
-// ask itself (docs/SPEC.md §7.6): how wide to wrap, and whether to style.
+// ask itself (docs/spec/host-collector.md §6.6): how wide to wrap, and whether to style.
 // Colour is on only when the report goes to a terminal and NO_COLOR is unset;
 // a redirected report and a --out file are always plain.
 func (o *globalOpts) textOptions(w io.Writer) report.Options {

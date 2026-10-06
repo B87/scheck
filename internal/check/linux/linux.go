@@ -1,4 +1,4 @@
-// Package linux registers the Linux check catalog (docs/SPEC.md §3 baseline table).
+// Package linux registers the Linux check catalog (docs/spec/host-collector.md §3 baseline table).
 package linux
 
 import "github.com/b87/scheck/internal/check"
@@ -12,7 +12,7 @@ func elevated(c check.Check) check.Check { c.Elevated = true; return c }
 func exitOK(c check.Check, codes ...int) check.Check { c.ExitOK = codes; return c }
 
 // unit names what one line or key of a check means, so the fact's reading is
-// "9 SUID files" rather than "9 lines" (docs/SPEC.md §3).
+// "9 SUID files" rather than "9 lines" (docs/spec/host-collector.md §3).
 func unit(c check.Check, noun string) check.Check { c.Unit = noun; return c }
 
 func init() {

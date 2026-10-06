@@ -14,7 +14,7 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// providerStatus is one row of `scheck providers` (docs/SPEC.md §5.2, §8):
+// providerStatus is one row of `scheck providers` (docs/spec/model.md §3, docs/spec/host-collector.md §7):
 // what is registered, whether this environment can use it, and what it
 // declares. Nothing here contacts a provider or reads a credential's value.
 type providerStatus struct {

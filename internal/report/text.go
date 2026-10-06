@@ -10,7 +10,7 @@ import (
 	"github.com/b87/scheck/internal/finding"
 )
 
-// WriteText renders the report a person reads (docs/SPEC.md §7.6): a two-line
+// WriteText renders the report a person reads (docs/spec/host-collector.md §6.6): a two-line
 // header, the facts grouped by domain with an explicit execution status, the
 // checks that did not run grouped by reason with a remedy, and a footer that
 // says what this build did not assess.
@@ -56,7 +56,7 @@ func (t *textReport) hang(first, indent, s string) {
 	}
 }
 
-// header is the two lines of docs/SPEC.md §7.6: who was audited and how, then
+// header is the two lines of docs/spec/host-collector.md §6.6: who was audited and how, then
 // what the run did. host.id, kernel, profile, mode and timings move to -v.
 func (t *textReport) header() {
 	h, r := t.env.Host, t.env.Run
@@ -174,7 +174,7 @@ const (
 // facts prints the fact sheet as one flat table: every row carries its domain,
 // so the output sorts, greps and pipes as a table rather than a document. The
 // status word says what the command did, never whether the host is configured
-// well (docs/SPEC.md §7.6).
+// well (docs/spec/host-collector.md §6.6).
 func (t *textReport) facts() {
 	rows := t.rows()
 	if len(rows) == 0 {
@@ -247,7 +247,7 @@ func (t *textReport) detail(r row) string {
 	var flags []string
 	// A check whose rule fired shows the finding's severity: a status word
 	// describes execution and must never read as "posture ok"
-	// (docs/SPEC.md §7.6).
+	// (docs/spec/host-collector.md §6.6).
 	for _, sev := range t.severitiesFor(r.id) {
 		flags = append(flags, "finding: "+string(sev))
 	}
@@ -270,7 +270,7 @@ func (t *textReport) detail(r row) string {
 }
 
 // output prints the check's stdout at -vv. It is the redacted, truncated
-// capture the runner produced (docs/SPEC.md §4.2); there is no other way to
+// capture the runner produced (docs/spec/host-collector.md §4.2); there is no other way to
 // see a check's output and nothing here has bypassed the redactor.
 func (t *textReport) output(r row) {
 	if !r.fact.Attempted && r.fact.Status != "ok" {
@@ -296,7 +296,7 @@ func (t *textReport) output(r row) {
 // notRun explains every check that produced no fact. Skipped checks are
 // grouped by why, each group with the remedy; policy denials are their own
 // section because nothing on the host needs changing for them
-// (docs/SPEC.md §7.6).
+// (docs/spec/host-collector.md §6.6).
 func (t *textReport) notRun() {
 	var skipped, denied []row
 	for _, r := range t.rows() {
@@ -364,7 +364,7 @@ func (t *textReport) modelSummary() {
 		return
 	}
 	// Ruled-out ids are the model's negative claims: shown, never graded,
-	// never a finding (docs/SPEC.md §5.7).
+	// never a finding (docs/spec/model.md §8).
 	t.line("")
 	t.para("  ", fmt.Sprintf("ruled out by the model (%d, nothing filed):", len(a.RuledOut)))
 	for _, r := range a.RuledOut {
@@ -373,7 +373,7 @@ func (t *textReport) modelSummary() {
 }
 
 // footer never claims an absence of problems: it says what assessed the
-// host and what did not (docs/SPEC.md §7.6).
+// host and what did not (docs/spec/host-collector.md §6.6).
 func (t *textReport) footer() {
 	t.line("")
 	r := t.env.Run

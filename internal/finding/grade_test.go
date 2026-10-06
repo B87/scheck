@@ -21,7 +21,7 @@ func base(id string) Finding {
 		Evidence: []Evidence{{Check: "x", Excerpt: "y"}}, Impact: def.Impact, Remediation: def.Remediation}
 }
 
-// The §11 severity table: (finding id, structured context) → severity,
+// The docs/spec/host-collector.md §9 severity table: (finding id, structured context) → severity,
 // adjustments and status. Every adjustment is attributed to its source.
 func TestSeverityTable(t *testing.T) {
 	origins := map[string]string{"exposure": "hosts/gw.yaml", "environment": "scheck.yaml#context", "expected_services": "hosts/gw.yaml", "accepted_risks": "hosts/gw.yaml"}
@@ -83,7 +83,7 @@ func TestSeverityTable(t *testing.T) {
 }
 
 // The delta strings in the report are signed and the accepted reason is
-// carried; JSON shows base and final side by side (§6.4).
+// carried; JSON shows base and final side by side (docs/spec/host-collector.md §5.4).
 func TestAdjustmentAttributionInJSON(t *testing.T) {
 	g := Grader{Context: &operator.Structured{Exposure: "internet", AcceptedRisks: []operator.Risk{{ID: IDRootLoginEnabled, Reason: "jump host only", Source: "gw.yaml"}}},
 		Origins: map[string]string{"exposure": "scheck.yaml#context"}, Now: now}
@@ -100,7 +100,7 @@ func TestAdjustmentAttributionInJSON(t *testing.T) {
 }
 
 // --ignore-context is a nil Context: grading reproduces the base severity
-// exactly, with no adjustments and no acceptance (§6.4).
+// exactly, with no adjustments and no acceptance (docs/spec/host-collector.md §5.4).
 func TestNilContextIsUnadjusted(t *testing.T) {
 	g := Grader{Now: now}
 	for _, d := range Defs() {
@@ -111,7 +111,7 @@ func TestNilContextIsUnadjusted(t *testing.T) {
 	}
 }
 
-// Custom findings are capped at medium and never escalated (§7.1).
+// Custom findings are capped at medium and never escalated (docs/spec/host-collector.md §6.1).
 func TestCustomFindingCaps(t *testing.T) {
 	f := Finding{ID: "custom:vendor-agent", Custom: true, Category: CategoryNetwork, SeverityBase: SevMedium, Severity: SevMedium,
 		Source: SourceModel, Confidence: ConfidenceHigh, Status: StatusOpen}
@@ -136,7 +136,7 @@ func TestCustomFindingCaps(t *testing.T) {
 }
 
 // Emulated tool calling caps a model finding's confidence at medium, never
-// a rule finding's (§5.3).
+// a rule finding's (docs/spec/model.md §4).
 func TestConfidenceCap(t *testing.T) {
 	g := Grader{EmulatedToolCalling: true, Now: now}
 	model := base(IDPasswordAuthEnabled)
@@ -153,7 +153,7 @@ func TestConfidenceCap(t *testing.T) {
 }
 
 // An expired acceptance is a finding in its own right and does not
-// suppress the finding it named (§6.3).
+// suppress the finding it named (docs/spec/host-collector.md §5.3).
 func TestExpiredAcceptanceFinding(t *testing.T) {
 	g := Grader{Context: &operator.Structured{AcceptedRisks: []operator.Risk{
 		{ID: IDPasswordAuthEnabled, Reason: "old", Expires: "2026-01-01", Source: "gw.yaml"},

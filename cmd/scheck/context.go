@@ -10,7 +10,7 @@ import (
 )
 
 // writeContext prints the merged operator context (`--stop-after context`,
-// docs/SPEC.md §8): in text, the same block the model will read plus the
+// docs/spec/host-collector.md §7): in text, the same block the model will read plus the
 // accounting line; in JSON, the structured map, the prose pieces and the
 // per-source hashes and budget.
 func writeContext(w io.Writer, m *operator.Merged, format string) error {

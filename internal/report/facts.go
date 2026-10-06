@@ -1,4 +1,4 @@
-// Package report holds the run envelope (docs/SPEC.md §7.4) and its renderers.
+// Package report holds the run envelope (docs/spec/host-collector.md §6.4) and its renderers.
 package report
 
 import (
@@ -17,7 +17,7 @@ type Fact struct {
 	Reason      string `json:"reason,omitempty"`
 	// Summary is the one-line human reading of this fact: the same string on
 	// the screen, in the JSON and (from phase 2) in the model's prompt
-	// (docs/SPEC.md §7.4, §7.6).
+	// (docs/spec/host-collector.md §6.4, §6.6).
 	Summary    string `json:"summary"`
 	Parsed     any    `json:"parsed,omitempty"`
 	Truncated  bool   `json:"truncated,omitempty"`
@@ -25,8 +25,8 @@ type Fact struct {
 	Elevated   bool   `json:"elevated,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
 	// Output is the check's stdout after redaction and truncation
-	// (docs/SPEC.md §4.2). It is deliberately not part of the JSON envelope,
-	// which carries `parsed`, not raw bytes (§7.4); it exists so the text
+	// (docs/spec/host-collector.md §4.2). It is deliberately not part of the JSON envelope,
+	// which carries `parsed`, not raw bytes (docs/spec/host-collector.md §6.4); it exists so the text
 	// renderer can show evidence at -vv or with --include-evidence. Default
 	// JSON and persistence omit it. Extraction still minimizes this value.
 	Output string `json:"-"`
@@ -44,7 +44,7 @@ func FactsFrom(sheet *baseline.FactSheet) map[string]Fact {
 
 // Summarize is the one-line reading of a fact: what the check observed, or
 // why it observed nothing. It is never a verdict — posture is the rules' job
-// (docs/SPEC.md §7.5, §7.6).
+// (docs/spec/host-collector.md §6.5, §6.6).
 func Summarize(c check.Check, f Fact) string {
 	if f.Status != "ok" {
 		if f.Reason == "" {
@@ -71,7 +71,7 @@ type Observation struct {
 // each invocation's metadata, outcome and summary, not its parsed value:
 // for a baseline check that would duplicate `facts`, and for a file read
 // (a raw parser) it would be the whole capture, which default JSON and
-// persistence omit by policy (docs/SPEC.md §7.4). Output stays on the
+// persistence omit by policy (docs/spec/host-collector.md §6.4). Output stays on the
 // struct for the opt-in evidence writer.
 func observationsFrom(sheet *baseline.FactSheet) map[string]Observation {
 	out := map[string]Observation{}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Token accounting lives here, not in the agent loop (docs/SPEC.md §5.3):
+// Token accounting lives here, not in the agent loop (docs/spec/model.md §4):
 // the loop asks whether a request fits and never learns how a request is
 // serialized. The estimate is a documented conservative bound rather than a
 // per-model tokenizer, so it errs on the side of refusing to send.
@@ -64,8 +64,8 @@ func (f Fit) String() string {
 }
 
 // CheckFit decides, before any bytes leave the machine, whether the entire
-// request plus its output reservation fits the provider's context (docs/SPEC.md
-// §5.3). An unknown limit is a configuration error, never unlimited space.
+// request plus its output reservation fits the provider's context (docs/spec/host-collector.md
+// docs/spec/model.md §4). An unknown limit is a configuration error, never unlimited space.
 func CheckFit(r Request, l Limits) (Fit, error) {
 	if l.MaxContext <= 0 {
 		return Fit{}, Errorf(ErrUnsupported, "context limit unknown: set max_context for this model")

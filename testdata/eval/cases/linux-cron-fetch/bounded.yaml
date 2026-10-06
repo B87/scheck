@@ -1,4 +1,4 @@
-# Scripted answers for the bounded arm (docs/ROADMAP-RESEARCH.md R1).
+# Scripted answers for the bounded arm (docs/spec/bounded.md R1).
 # Authored, never measured: they exercise enumeration, the filters, the
 # follow-up reads, the per-item state, the decision rule and filing. They
 # are not a model's answers and make no quality claim.

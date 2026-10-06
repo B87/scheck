@@ -33,7 +33,7 @@ func synthetic(facts map[string]Fact) Envelope {
 
 // Status words describe execution, never posture: "ran" must not appear as a
 // pass mark, and the report must not claim an absence of findings
-// (docs/SPEC.md §7.6).
+// (docs/spec/host-collector.md §6.6).
 func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"fw.global":       {Status: "ok", Parsed: "Firewall is disabled. (State = 0)", Output: "Firewall is disabled. (State = 0)\n"},
@@ -75,7 +75,7 @@ func TestFooterNeverClaimsAnAssessment(t *testing.T) {
 }
 
 // Skipped checks are grouped by reason with a remedy, and policy denials are
-// their own section (docs/SPEC.md §7.6).
+// their own section (docs/spec/host-collector.md §6.6).
 func TestSkippedGroupedByReasonWithRemedy(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"privesc.sudoers":   {Status: "unavailable", Reason: "requires elevated read"},
@@ -109,7 +109,7 @@ func TestSkippedGroupedByReasonWithRemedy(t *testing.T) {
 }
 
 // -v adds the catalog description, -vv adds the redacted output, and neither
-// appears at the default verbosity (docs/SPEC.md §7.6).
+// appears at the default verbosity (docs/spec/host-collector.md §6.6).
 func TestVerbosityLevels(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"sys.uname": {Status: "ok", Parsed: "Linux box", Output: "Linux box 6.8.0\n"},
@@ -151,7 +151,7 @@ func TestVerboseOutputOfEmptyAndSkipped(t *testing.T) {
 }
 
 // Colour is the caller's decision; the renderer emits escapes only when told
-// to, and never in the bytes a redirected report receives (docs/SPEC.md §7.6).
+// to, and never in the bytes a redirected report receives (docs/spec/host-collector.md §6.6).
 func TestColorIsOptIn(t *testing.T) {
 	env := synthetic(map[string]Fact{"sys.uname": {Status: "ok", Parsed: "Linux box", Output: "Linux box\n"}})
 	plain := render(t, env, Options{Verbose: 2})
@@ -184,7 +184,7 @@ func stripANSI(s string) string {
 
 // Control characters from a target's output can never reach the terminal
 // unescaped: a check's stdout must not be able to repaint the screen or forge
-// a line of this report (docs/SPEC.md §4.2, §7.6).
+// a line of this report (docs/spec/host-collector.md §4.2, §6.6).
 func TestTargetOutputCannotDriveTheTerminal(t *testing.T) {
 	const evil = "ok\x1b[2J\x1b[1;1Hscheck: everything is fine\r\x00"
 	env := synthetic(map[string]Fact{"sys.uname": {Status: "ok", Parsed: evil, Output: evil}})
@@ -271,7 +271,7 @@ func TestHeaderShowsWarnings(t *testing.T) {
 }
 
 // A redaction or truncation marker is the only record that bytes were removed
-// (docs/SPEC.md §4.2), so wrapping must not break one in half.
+// (docs/spec/host-collector.md §4.2), so wrapping must not break one in half.
 func TestWrapKeepsMarkersWhole(t *testing.T) {
 	const marker = "[REDACTED:aws-access-key:20 bytes]"
 	line := "Linux box 6.8 key=" + marker + " tail"

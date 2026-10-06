@@ -15,7 +15,7 @@ import (
 	"github.com/b87/scheck/internal/runner"
 )
 
-// systemPrompt is the provider-neutral contract of docs/SPEC.md §5.8. It
+// systemPrompt is the provider-neutral contract of docs/spec/model.md §9. It
 // never names a vendor, and it says what the tools are for rather than how
 // a particular model likes to be asked.
 const systemPrompt = `You are scheck's read-only security auditor for one host that the operator owns and has authorized you to assess. You observe, reason and report; you never change anything.
@@ -53,7 +53,7 @@ var PromptVersion = func() string {
 // factsBlock renders the fact sheet for the model: every baseline check, its
 // status, its one-line reading and its redacted output. It is the same
 // redacted capture the report shows at -vv; nothing the model sees has
-// bypassed the redactor (docs/SPEC.md §4.2).
+// bypassed the redactor (docs/spec/host-collector.md §4.2).
 func factsBlock(sheet *baseline.FactSheet) string {
 	var b strings.Builder
 	b.WriteString("<facts>\n")
@@ -134,7 +134,7 @@ func catalogBlock() string {
 
 // menu is the run_check description: the checks the model may call at the
 // active profile, with their parameters and one-line descriptions
-// (docs/SPEC.md §5.7). The catalog is compiled in; this is a rendering of
+// (docs/spec/model.md §8). The catalog is compiled in; this is a rendering of
 // it, never a source of truth.
 func menu(platform check.Platform, profile check.Profile) (string, []string) {
 	var b strings.Builder
@@ -180,7 +180,7 @@ func paramKind(p check.Param) string {
 }
 
 // contextBlock is the operator context exactly as --stop-after context
-// prints it (docs/SPEC.md §6.3), or nothing.
+// prints it (docs/spec/host-collector.md §5.3), or nothing.
 func contextBlock(m *operator.Merged) string {
 	if m == nil || m.IsEmpty() {
 		return ""

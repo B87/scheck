@@ -18,12 +18,12 @@ import (
 // coverage array; 1.2 fills `run.context_sources` from operator context;
 // 1.3 grades findings through operator context (adjustments, accepted
 // status, context-derived findings); 1.4 fills the provider block and
-// `run.agent` from phase 2 and carries model findings (docs/SPEC.md §7.4).
+// `run.agent` from phase 2 and carries model findings (docs/spec/host-collector.md §6.4).
 // 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
 const SchemaVersion = "1.6"
 
-// Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
+// Envelope is the JSON report (docs/spec/host-collector.md §6.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
 type Envelope struct {
 	SchemaVersion string                 `json:"schema_version"`
@@ -33,13 +33,13 @@ type Envelope struct {
 	Observations  map[string]Observation `json:"observations"`
 	// Assessments is one entry per selected posture rule, findings or not:
 	// coverage is reported separately from findings, because "no finding"
-	// and "not assessed" are different answers (docs/SPEC.md §7.5).
+	// and "not assessed" are different answers (docs/spec/host-collector.md §6.5).
 	Assessments []finding.Assessment `json:"assessments"`
 	Findings    []finding.Finding    `json:"findings"`
 }
 
 // OpenFindings counts the open findings at or above the profile threshold:
-// the number that makes the run exit 1 (docs/SPEC.md §8).
+// the number that makes the run exit 1 (docs/spec/host-collector.md §7).
 func (e Envelope) OpenFindings(p check.Profile) int {
 	return finding.OpenAtOrAbove(e.Findings, finding.Threshold(p))
 }
@@ -92,7 +92,7 @@ type Run struct {
 	Version        string            `json:"scheck_version"`
 }
 
-// AgentRun is how phase 2 ended (docs/SPEC.md §5.6): a pass that hit any
+// AgentRun is how phase 2 ended (docs/spec/model.md §7): a pass that hit any
 // budget is incomplete and says which one.
 type AgentRun struct {
 	Iterations int    `json:"iterations"`
@@ -103,7 +103,7 @@ type AgentRun struct {
 	// through the same escaping as target output.
 	Text string `json:"text,omitempty"`
 	// RuledOut lists the ids the model checked and closed with
-	// report_finding's ruled_out verdict (docs/SPEC.md §5.7). None is a
+	// report_finding's ruled_out verdict (docs/spec/model.md §8). None is a
 	// finding; they are shown with the summary so a reader sees what was
 	// looked at and dismissed.
 	RuledOut []finding.RuledOut `json:"ruled_out,omitempty"`
@@ -134,10 +134,10 @@ type Meta struct {
 	Profile   string
 	Version   string
 	// Disabled is config `disable_checks`: a rule whose check was disabled is
-	// not assessed, and says so (docs/SPEC.md §7.5).
+	// not assessed, and says so (docs/spec/host-collector.md §6.5).
 	Disabled []string
 	// Context is the merged operator context, or nil under --ignore-context
-	// or when none was supplied (docs/SPEC.md §6).
+	// or when none was supplied (docs/spec/host-collector.md §5).
 	Context *operator.Merged
 	// Result, when set, is the finding store's graded outcome (phase 2 adds
 	// model findings to it). When nil, Build grades the posture rules'
@@ -145,13 +145,13 @@ type Meta struct {
 	Result *finding.Result
 	// Now is the grader's clock for accepted-risk expiry; zero means now.
 	Now time.Time
-	// Phase2 is set after the agentic pass ran (docs/SPEC.md §7.4).
+	// Phase2 is set after the agentic pass ran (docs/spec/host-collector.md §6.4).
 	Phase2 *Phase2
 }
 
-// Grader builds the severity chain from the meta's context (docs/SPEC.md
-// §7.2): nil context means unadjusted, which under --ignore-context is a
-// precise claim (§6.4).
+// Grader builds the severity chain from the meta's context (docs/spec/host-collector.md
+// docs/spec/host-collector.md §6.2): nil context means unadjusted, which under --ignore-context is a
+// precise claim (docs/spec/host-collector.md §5.4).
 func (m Meta) Grader() finding.Grader {
 	g := finding.Grader{Now: m.Now}
 	if m.Context != nil && !m.Context.Structured.IsZero() {

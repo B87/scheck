@@ -11,7 +11,7 @@ import (
 // The compiled-in rule table is validated against the compiled-in check
 // catalog: a rule can only name a check that exists on its platform, a
 // finding that has a definition, and a predicate that can read that check's
-// parser (docs/SPEC.md §7.5).
+// parser (docs/spec/host-collector.md §6.5).
 func TestRuleTableInvariants(t *testing.T) {
 	if vs := ValidateRules(); len(vs) != 0 {
 		for _, v := range vs {
@@ -63,7 +63,7 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 }
 
 // A rule finding has no model to write its text, so every definition carries
-// its own title, impact and remediation (docs/SPEC.md §7.1).
+// its own title, impact and remediation (docs/spec/host-collector.md §6.1).
 func TestEveryDefIsComplete(t *testing.T) {
 	for _, d := range Defs() {
 		if d.BaseSeverity.Rank() < 0 || d.Title == "" || d.Impact == "" || d.Remediation.Summary == "" {

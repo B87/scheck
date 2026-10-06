@@ -19,7 +19,7 @@ func newLocalCmd(opts *globalOpts) *cobra.Command {
 		Short: "Audit this machine with the compiled-in posture rules",
 		Long: "Collect read-only facts and assess them with the compiled-in posture rules, graded " +
 			"through operator context. No model is involved and no API key is needed: the " +
-			"model-assessed pass did not earn its cost in this build (docs/SPEC.md §2.1). A rule " +
+			"model-assessed pass did not earn its cost in this build (docs/spec/host-collector.md §2.1). A rule " +
 			"reads one fact, so exit 0 means no rule fired, not that the host is secure — read the " +
 			"assessment coverage and the skipped checks. JSON output is on stdout, diagnostics on " +
 			"stderr. Exit 0 no finding at or above the profile threshold, 1 findings, 2 incomplete, " +
@@ -45,7 +45,7 @@ func newLocalCmd(opts *globalOpts) *cobra.Command {
 // reportAndExit renders the report and turns the run into an exit code. One
 // meaning per code, and the more serious answer wins: 2 (the run could not
 // finish) outranks 1 (it finished and found something), because an
-// incomplete run's silence is not a clean bill of health (docs/SPEC.md §8).
+// incomplete run's silence is not a clean bill of health (docs/spec/host-collector.md §7).
 func reportAndExit(sess *session, out io.Writer, sheet *baseline.FactSheet) error {
 	env, err := sess.writeReport(out, sheet)
 	if err != nil {
@@ -64,7 +64,7 @@ func reportAndExit(sess *session, out io.Writer, sheet *baseline.FactSheet) erro
 // runStopAfter executes the stage selected by --stop-after for a built
 // session. Without --stop-after the run collects the facts and assesses
 // them with the posture rules, which is what the whole run is in this
-// build: no model stage follows it (docs/SPEC.md §2.1).
+// build: no model stage follows it (docs/spec/host-collector.md §2.1).
 func runStopAfter(cmd *cobra.Command, sess *session) error {
 	out, closeOutput, err := sess.opts.commandOutput(cmd.OutOrStdout())
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 const severityColumn = 8 // len("critical")
 
 // findings renders the findings first, ahead of the fact sheet: what the run
-// concluded, then what it observed (docs/SPEC.md §7.6). Each one is its
+// concluded, then what it observed (docs/spec/host-collector.md §6.6). Each one is its
 // title, the evidence excerpt with the check it came from, and the
 // remediation summary; -v adds the impact and the remediation commands.
 func (t *textReport) findings() {
@@ -35,7 +35,7 @@ func (t *textReport) findings() {
 		for i, l := range wrapHanging(head, indent, title, t.opt.Width) {
 			if i == 0 {
 				// Colour the severity word only: it is the one thing in the
-				// report whose colour carries meaning (docs/SPEC.md §7.6).
+				// report whose colour carries meaning (docs/spec/host-collector.md §6.6).
 				l = "  " + t.st.severity(f.Severity, pad(string(f.Severity), severityColumn)) + sp +
 					strings.TrimPrefix(l, head)
 			}
@@ -57,7 +57,7 @@ func (t *textReport) findings() {
 		}
 		t.hang(indent+"fix       ", indent+"          ", sanitize(f.Remediation.Summary))
 		if t.opt.Verbose >= 1 {
-			// Every severity change is attributed (docs/SPEC.md §6.4).
+			// Every severity change is attributed (docs/spec/host-collector.md §5.4).
 			if len(f.Adjustments) > 0 {
 				parts := make([]string, 0, len(f.Adjustments))
 				for _, a := range f.Adjustments {
@@ -67,7 +67,7 @@ func (t *textReport) findings() {
 			}
 			t.hang(indent+"impact    ", indent+"          ", sanitize(f.Impact))
 			// Commands are text for the human; scheck never runs one
-			// (docs/SPEC.md §7.3). They keep their own lines rather than
+			// (docs/spec/host-collector.md §6.3). They keep their own lines rather than
 			// being wrapped into prose, so they can be copied.
 			for i, c := range f.Remediation.Commands {
 				label := "          "
@@ -86,7 +86,7 @@ func (t *textReport) findings() {
 // coverage closes the findings section with the rules that could not be
 // evaluated. A rule that was not assessed is not a rule that passed, so it is
 // named, grouped by the check that let it down, with that check's own remedy
-// (docs/SPEC.md §7.5).
+// (docs/spec/host-collector.md §6.5).
 func (t *textReport) coverage() {
 	na := t.env.NotAssessed()
 	if len(na) > 0 {
@@ -129,7 +129,7 @@ func (t *textReport) coverage() {
 }
 
 // findingsLine is the header's one-sentence result: what was concluded before
-// what was executed (docs/SPEC.md §7.6).
+// what was executed (docs/spec/host-collector.md §6.6).
 func (t *textReport) findingsLine() string {
 	fs := t.env.Findings
 	if len(fs) == 0 {

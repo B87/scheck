@@ -42,7 +42,7 @@ func assessmentFor(res Result, findingID, checkID string) (Assessment, bool) {
 	return Assessment{}, false
 }
 
-// Every rule in the seed table (docs/SPEC.md §7.5) needs three fixtures: one
+// Every rule in the seed table (docs/spec/host-collector.md §6.5) needs three fixtures: one
 // where it fires, one where the evidence disproves it, and one where the
 // evidence does not settle the question. The third is the one that matters:
 // an answer scheck does not recognise is never read as a pass.
@@ -150,7 +150,7 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 }
 
 // Evidence that is missing, refused, incomplete or unreadable leaves a rule
-// not assessed — never matched and never passed (docs/SPEC.md §7.5).
+// not assessed — never matched and never passed (docs/spec/host-collector.md §6.5).
 func TestInsufficientEvidenceIsNeverAPass(t *testing.T) {
 	const id = IDPasswordAuthEnabled
 	cases := []struct {
@@ -192,7 +192,7 @@ func TestInsufficientEvidenceIsNeverAPass(t *testing.T) {
 }
 
 // A truncated capture can still prove an existential condition, but never
-// its absence (docs/SPEC.md §7.5).
+// its absence (docs/spec/host-collector.md §6.5).
 func TestPartialEvidenceProvesPresenceNotAbsence(t *testing.T) {
 	present := Evaluate(Input{Sheet: sheet(t, check.Linux, map[string]string{
 		"fs.world_writable": "/opt/shared\n[TRUNCATED:400 bytes]"})})
@@ -210,7 +210,7 @@ func TestPartialEvidenceProvesPresenceNotAbsence(t *testing.T) {
 
 // Applicability must be known: a rule whose check does not exist on this
 // platform is not applicable, a rule whose check was disabled or never ran is
-// not assessed, and neither is a pass (docs/SPEC.md §7.5).
+// not assessed, and neither is a pass (docs/spec/host-collector.md §6.5).
 func TestApplicabilityAndDisabledChecks(t *testing.T) {
 	// disk.fdesetup is macOS-only, so its rule cannot apply to a Linux host.
 	// The platform gate omits it; a rule bound to a check the platform
@@ -257,7 +257,7 @@ func TestSameFindingFromTwoChecksMergesEvidence(t *testing.T) {
 }
 
 // Severity comes from the table, the profile decides what fails the run, and
-// info never does (docs/SPEC.md §7.2, §8).
+// info never does (docs/spec/host-collector.md §6.2, §7).
 func TestSeverityThresholdsPerProfile(t *testing.T) {
 	if Threshold(check.ProfileBaseline) != SevMedium || Threshold(check.ProfileHardened) != SevLow {
 		t.Fatal("profile thresholds")
@@ -297,7 +297,7 @@ func TestFindingsSortedBySeverity(t *testing.T) {
 }
 
 // A marker line is a record of removed bytes, never a line of output: it must
-// not satisfy an existential predicate (docs/SPEC.md §4.2, §7.5).
+// not satisfy an existential predicate (docs/spec/host-collector.md §4.2, §6.5).
 func TestTruncationMarkerIsNotEvidence(t *testing.T) {
 	res := Evaluate(Input{Sheet: sheet(t, check.Linux, map[string]string{
 		"fs.world_writable": "[TRUNCATED:900 bytes]"})})

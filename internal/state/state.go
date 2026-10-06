@@ -1,5 +1,5 @@
 // Package state persists run envelopes under the state directory
-// (docs/SPEC.md §7.4): <state-dir>/runs/<host.id>/<started>.json. Persistence
+// (docs/spec/host-collector.md §6.4): <state-dir>/runs/<host.id>/<started>.json. Persistence
 // never blocks a run; a failure is returned for the caller to report as a
 // warning.
 package state

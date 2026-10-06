@@ -7,7 +7,7 @@ import (
 )
 
 // Config is what a provider needs to be built: the operator's selection
-// (docs/SPEC.md §5.2, §9). Credentials are never here; an adapter reads
+// (docs/spec/model.md §3, docs/spec/host-collector.md §8). Credentials are never here; an adapter reads
 // them from the environment itself.
 type Config struct {
 	Model      string
@@ -73,7 +73,7 @@ func Lookup(name string) (Info, Factory, bool) {
 }
 
 // Build constructs the named provider. A deferred provider fails here with
-// the usage message the CLI prints (docs/SPEC.md §5.2).
+// the usage message the CLI prints (docs/spec/model.md §3).
 func Build(name string, cfg Config) (Provider, error) {
 	info, f, ok := Lookup(name)
 	if !ok {

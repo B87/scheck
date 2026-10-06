@@ -11,7 +11,7 @@ import (
 )
 
 // The reference adapter passes the same table mock has passed since M2.1
-// (docs/SPEC.md §11, acceptance criterion 8).
+// (docs/spec/host-collector.md §9, acceptance criterion 8).
 func TestConformance(t *testing.T) { conformance.Run(t, Name, harness) }
 
 func provider(t *testing.T, f *fakeServer, url string, cfg llm.Config) *Provider {
@@ -124,7 +124,7 @@ func TestRequestEncoding(t *testing.T) {
 // Capability differences are absorbed by the adapter, never by the loop:
 // an endpoint that only knows max_tokens gets it; one that rejects
 // reasoning_effort loses it and Native records that; one that rejects tools
-// fails as unsupported (docs/SPEC.md §5.3).
+// fails as unsupported (docs/spec/model.md §4).
 func TestAdapterAbsorbsCapabilityDifferences(t *testing.T) {
 	f, srv := newFake(t, []conformance.Turn{{Text: "ok"}, {Text: "ok"}})
 	defer srv.Close()

@@ -4,7 +4,7 @@ import "github.com/b87/scheck/internal/check"
 
 // domainLabels maps a catalog domain to the words a person reads, in the
 // order the report presents them: who the host is, then what protects it,
-// then what exposes it, then the plumbing (docs/SPEC.md §7.6). Check ids are
+// then what exposes it, then the plumbing (docs/spec/host-collector.md §6.6). Check ids are
 // never translated — they are the join key into `scheck explain`, the audit
 // log and the JSON.
 var domainLabels = []struct {
