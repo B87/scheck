@@ -60,8 +60,11 @@ it, or a report field that prints it. "Printed in the report" counts only for wh
 reader needs to interpret the findings: the trigger, authorization, scope and accepted
 risks. A question nothing consumes is removed from the interview, not kept for a later
 release; an operator who answers questions that change nothing stops answering
-carefully. The mapping from question to consumer is code, and a test proves every
-consumer exists.
+carefully. The mapping from question to consumer is code: each question declares its
+consumers by id, with the slice that owns each. Consumers arrive with their slices
+(rules in E5 to E9, coverage reasons in E4), so a test proves at every commit that each
+declaration is well formed and that every consumer owned by a slice already merged
+exists, and the release gate proves they all do. A consumer is never stubbed to pass.
 
 | Topic | Question | Consumed by |
 |---|---|---|

@@ -40,7 +40,9 @@ Hypotheses drawn from the operator's own words, the part of the job that earns t
 - **Every interview question has a consumer.** A question in `scheck init` exists
   because a rule reads its answer, a coverage reason cites it, or the report prints it
   (`spec/engagement.md`, "Intake"). A question nothing reads is removed, not kept for
-  later.
+  later. Each question declares its consumers and the slice that owns each; a slice is
+  not done until the consumers it owns exist, and a consumer is never stubbed to pass
+  that test.
 - **The lab comes before the checks it measures.** Each release's lab is seeded by
   someone who does not write that release's checks, and its labels are sealed before
   the first collector slice starts. One author cannot be blind to their own seeding.
@@ -105,8 +107,9 @@ usage error that names the detector and never prints the value; a probe or scan 
 other than `off`, `scope: full` and `max_cost` exit 3 with "not available in this
 build"; a timestamp without seconds or an offset, and a limit of `0`, are rejected;
 `engagement.name` outside `^[a-z0-9][a-z0-9-]{0,62}$` is rejected; every interview
-question maps in code to a consumer a test proves exists; no code path in this slice
-contacts a target.
+question declares its consumers in code by id and owning slice, and a test checks each
+declaration is well formed and that consumers owned by merged slices exist (in E1,
+none are); no code path in this slice contacts a target.
 
 ### E2 — the lab, sealed
 
@@ -300,6 +303,8 @@ asset unchanged; a loop fixture terminates.
    integration diff stays the exact allowlist of `spec/host-collector.md §1`.
 8. `make check` is green, and the host collector's reports and command traces are
    unchanged.
+9. **Consumers:** every consumer declared by an interview question exists, and the
+   test that checks it no longer skips anything.
 
 **Sequence:** E1 → E2 → E3 → E4 → {E5, E6, E7, E8} → E9. The lab and the report come
 before any collector so that recall is measured, not confirmed, and so each collector

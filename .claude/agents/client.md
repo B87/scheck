@@ -1,0 +1,1 @@
+../../.agents/agents/client.md

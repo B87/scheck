@@ -134,6 +134,15 @@ rules, interview questions or report wording are fixed, and in *review* mode on 
 result. Its *seed* and *rank* modes are blind and run only in a session that has not
 read the collector code; never run them as a subagent of an implementing session.
 
+For the operator's view, use the `client` subagent
+([.agents/agents/client.md](.agents/agents/client.md)): the CTO, founder or lone IT
+person who answers `scheck init` and acts on the report, played from a fixed company
+profile in `.agents/clients/`. Run its *interview* mode whenever interview wording
+changes, and its *fixture* mode for the engagement files that interview tests use; its
+improvised and wrong answers are the point, so do not tidy them. Run its *report* mode
+on report wording (E4 and later). It never reads code, and it does not judge security;
+the security-consultant does.
+
 For agents operating the CLI, use the `scheck` skill at
 [.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers collecting
 and interpreting host evidence, not implementation work on this repository. Prefer
