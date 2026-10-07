@@ -87,7 +87,7 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `local`, `ssh`, `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `local`, `ssh`, `run` (`--stop-after intake` only, until E1b), `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
@@ -98,6 +98,7 @@ test passes.
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a) |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `internal/operator` | operator context for the host collector: sources, schema, per-kind merge, budget, the `<operator_context>` block |
 | `internal/llm` | the provider contract, token accounting (`CheckFit`), the registry; `mock`, `openai` (the default adapter), `conformance`, `all` |
@@ -123,9 +124,13 @@ about it:
 | `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1b |
 | `cmd/scheck` | `run --stop-after intake` (E1a); `run` and `--host` (E1b); `--jump` (E1c); `local` and `ssh` as aliases of `run --host`, and `config` removed with `internal/config` (E2); `init` (E8) | E1a–E1c, E2, E8 |
 
-`scripts/depcheck.sh` grows with E1a and E4: `internal/engagement/...` and
-`internal/collector/...` must have no `internal/llm`, `internal/agent` or
-`internal/bounded` in their dependency graph (rules only through 0.0.3); no file under
+`scripts/depcheck.sh` holds the engagement's rules from E1a: `internal/engagement/...` and
+`internal/collector/...` have no `internal/llm`, `internal/agent` or `internal/bounded`
+in their dependency graph (rules only through 0.0.3), and none but
+`internal/engagement/hostasset` imports `internal/runner` or `internal/target` directly
+(the catalogs import them, so the rule cannot be on the whole graph). `internal/report`
+imports `internal/llm` for the envelope's model fields, so E2 has to cut that edge
+before the engagement report can embed the host envelope. E4 adds the rest: no file under
 `internal/collector` may import `net/http` or `net` directly, only the gate does; and no
 collector imports another collector. A collector that needs something from another's
 facts gets it through a multi-fact rule in `internal/engagement`, never by import.
@@ -159,6 +164,7 @@ make build      # bin/scheck
 make integ      # integration tests; needs Docker or Podman running
 make fixtures   # re-record testdata/fixtures/{ubuntu,fedora} from the containers
 go run ./cmd/scheck local --stop-after plan
+go run ./cmd/scheck run engagement.yaml --stop-after intake   # validate, print resolved; contacts nothing
 go run ./cmd/scheck local --stop-after facts --format json --audit-log /tmp/audit.jsonl
 go run ./cmd/scheck ssh user@host --stop-after facts
 go run ./cmd/scheck catalog --profile hardened
@@ -179,7 +185,8 @@ go test ./internal/baseline -update  # rewrite the golden command traces, then r
 
 `make check` also runs `scripts/depcheck.sh`: `agent`, `policy`, `check`, `finding`,
 `report`, `llm` and `bounded` must have no adapter or SDK in their dependency graph, and
-none of the first six may import `internal/bounded`.
+none of the first six may import `internal/bounded`. It also holds the engagement rules
+above.
 
 `make check` includes the user's `fix` target (`go fix ./...`); keep it in the chain.
 If `go fix` proposes conflicting rewrites and never converges, apply the modernization
@@ -328,6 +335,7 @@ claim of any kind.
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
 `allow_egress: false`, the `anthropic` and `ollama` providers, and
 `--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
-engagement (`scheck init`, `scheck run`), its collectors, probes, scans, full scope and
+engagement's stages after intake (`scheck run` validates and prints the file only),
+`scheck init`, its collectors, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.

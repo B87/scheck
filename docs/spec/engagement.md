@@ -131,6 +131,7 @@ exclude:
   - domain: legacy-billing.example.com
   - url: https://shop.example.com/checkout/
   - repo: github:example-org/client-nda   # an API asset: dropped before anything is stored
+# scope: full                        # scope.md "Full scope"; 0.0.2 rejects it: "not available in this build"
 
 defaults:                             # every asset, declared or discovered
   probe: off                          # 0.0.2 accepts only off
@@ -238,7 +239,7 @@ assets:                               # per-asset settings; the key is the name 
 | Kind | Root or entry | Id |
 |---|---|---|
 | domain | `domain: example.com` | `domain:example.com` (lowercase, no trailing dot) |
-| url | `url: https://shop.example.com/` | `url:https://shop.example.com/` (lowercase host, default port dropped, path kept) |
+| url | `url: https://shop.example.com/` | `url:https://shop.example.com/` (lowercase host, default port dropped, path kept with dot segments removed and percent-encoding normalized) |
 | host | `host: deploy@203.0.113.5` or `host: local` | `host:203.0.113.5:22`, bound to the collector's `host.id` after first contact; the SSH user is a connection setting, not part of the id |
 | network | `network: 203.0.113.0/28` | `network:203.0.113.0/28`; an address found in it is a `host` |
 | saas | `saas: github:example-org`, `saas: google-workspace:example.com` | `saas:github:example-org`; a Workspace tenant is bound to its customer id after first contact |
@@ -247,7 +248,22 @@ assets:                               # per-asset settings; the key is the name 
 
 A host locator is `[user@]address[:port]`, with IPv6 in brackets; `host: local` is the
 machine running scheck. The port is part of the locator; there is no separate `port`
-key.
+key, and the locator never carries a password. A single-label name (`web1`) is a name,
+resolved the way ssh resolves it; a name whose last label is all digits
+(`203.0.113.05`) is refused, since a resolver reads it as an address. A `jump` is a
+host locator other than `local`. A `network` is written with its host bits zero. A
+`url` is a prefix: no query, fragment or credentials. A `repo` is `github:owner/name`; a local checkout (`repo: ./`) is not
+accepted until the gate decides how history is read (0.0.2 E4).
+
+**Names.** `engagement.name`, `assets` names and `people` handles all match
+`^[a-z0-9][a-z0-9-]{0,62}$`. A throttle rate is `N/s` or `N/m`.
+
+**An asset's settings follow its kind.** `jump`, `identity`, `elevate`, `profile`,
+`disable_checks`, `deny_paths` and `context` are host settings; `first_party` is
+taken by a domain, url or host; `deploys_to` (`production | staging | development`)
+and `ci` (a tool named under `tools`) by a repository. A setting on the wrong kind
+exits 3, and so do two `assets` entries for the same id and an entry for an asset an
+`exclude` covers, whose settings could never apply.
 
 In the file, an asset reference (`secrets[].asset`, `data.matters_most[].asset`,
 `accepted_risks[].asset`, the keys of `access.admins`, `access.mfa[].where`) is an
@@ -335,9 +351,35 @@ relative or `/`.
   report is the built-in redactor, not a copy of the secret in the file.
 - A name-based `exclude` (domain, url, repo, organizational unit) that falls under no
   root exits 3. A `network` exclude is always accepted, since it only narrows and an
-  address's root is known only once resolved. A `cloud` project exclude is accepted
-  when an organization root exists. Whether any exclude matched something is known only
-  after Scope, which reports it.
+  address's root is known only once resolved; so is a `host` exclude written as an
+  address, while one written as a name must fall under a root. A `cloud` project
+  exclude is accepted when an organization root exists. Whether any exclude matched
+  something is known only after Scope, which reports it.
+- Two roots written alike (`domain: example.com` and `host: example.com`) exit 3,
+  since a reference names a root by its value as written.
+- References name what they must: the keys of `access.admins` and `access.mfa[].where`
+  a SaaS tenant; `accepted_by`, `confirmed_by` and the lists under `access.admins` a
+  handle under `people`. Two handles with the same Workspace address or GitHub login
+  exit 3, since no rule could tell them apart. `org` is taken by a contractor or an
+  agency.
+- A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
+  and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
+  under a root.
+- An accepted risk needs `id`, `asset`, `reason` and `accepted_by`.
+- The file is one YAML document, written out: a second document, anchors, aliases,
+  merge keys, explicit tags (`!!binary`) and a key repeated in a mapping exit 3, so
+  nothing in the file is dropped or decoded from text the credential check did not
+  read as written.
+- The file is checked in two passes, and each reports every error it finds, in line
+  order. Structure and credentials come first; a file that fails them is not read
+  further, so a credential is never echoed by a later message. A message quotes a
+  value only after the credential check has passed it, and a locator with a password
+  before `@` is refused without being quoted.
+
+`scheck run engagement.yaml --stop-after intake` validates the file and prints it
+resolved (YAML, or JSON with `--format json`): every locator as its canonical id,
+every root as an asset (named by its `assets` entry, or by its id), the defaults
+applied, and `redact_extra` as a count of patterns.
 
 ## Severity in context
 
