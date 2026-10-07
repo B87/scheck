@@ -194,7 +194,15 @@ host asset's collector envelope whole. Built before any network collector so eve
 later slice renders into the real report. Because the only real asset at this point is
 a host, the schema is reviewed by the `security-consultant` and the `client` (report
 mode) against at least one non-host finding shape, a person, a token or an OAuth grant,
-before it is frozen.
+before it is frozen. The content and wording were defined with the `security-consultant`
+and read by the `client` on 2026-10-07 (`spec/engagement.md`, "The report", "Severity in
+context"): one finding record per instance keyed `{id, asset, subject}`, with `area` and
+`exposure_finding` required on every finding definition and observed evidence on every
+finding; host coverage marked from the rules that decided, never from the checks that
+ran, with the reasons `unavailable:<code>` and `no_rule` and a population per row;
+plain words for marks and reasons in text, tokens in JSON; a summary of what was checked
+and the top five before the full table; a closed table of context adjustments; and the
+command trace always in the JSON.
 
 **Done when:** golden text and JSON reports are committed for a one-host engagement
 from a fixture (the hosts area marked from what ran, every other area *not assessed*
@@ -203,8 +211,15 @@ whose only root has no collector (`collector_not_built`, exit 2); the JSON valid
 against the schema as committed; target-derived text is control-character escaped;
 `scheck ssh user@host` and `scheck run --host user@host` produce the same report and
 the same command trace; a one-host run exits as the 0.0.1 command did for the same
-findings and failures; `--format json --no-persist --include-evidence` still prints the
-host's facts with their captures; no code path reads a config file.
+findings and failures, except a host that never answered (2, not 3, `spec/engagement.md`,
+"Exit codes"); `--format json --no-persist --include-evidence` still prints the
+host's facts with their captures; no code path reads a config file. Goldens also pin a
+lost session (exit 2, the checks after the loss *not run*), a refused host (exit 3), a
+Linux host whose Firewall and Network exposure rows are `no_rule`, and the apt, dnf and
+zypper family leaving Software updates *checked*; `ValidateRules` fails on a finding
+definition without `area` or `exposure_finding`; the `--host` paste's `asset` validates
+against what `--write-engagement` writes; and no reason or mark token appears in the
+text report outside `-v`.
 
 **Carried from the E1b review** (security-consultant and code review, 2026-10-07),
 decided here so E2 does not unpick E1b: `findings.json` and the report's JSON carry the
@@ -221,6 +236,18 @@ warns when a declared locator or asset name matches a `redact_extra` pattern, si
 stage documents carry them as written; the coverage reason `refused` is rendered; and
 `session` in `cmd/scheck` calls `hostasset` instead of its own copy of the baseline run
 when `local` and `ssh` become aliases.
+
+**Carried from the E2 review** (security-consultant, client and code review,
+2026-10-08), each to the slice that owns it: `--write-engagement` writes `trigger:
+routine` only so the file validates, and should say so in a comment and show a
+`people:` example (E8); the host fact sheet's status word "skipped" covers commands that
+ran and failed, which it should call "failed" (0.0.3 host depth); and
+`accounts.empty_password` is anchored critical as "a usable empty password" but fires on
+any `NP` status without checking for a login shell, so the rule or its anchor changes
+(E9, or 0.0.3 host depth). The text report still names engagement-file keys by path
+(`assets.macos.disable_checks[0]`, `intent.accepted_risks[2]`, "roots"), which an
+operator who did not write the file cannot read; E8, which adds the interview and its
+words, replaces them with plain descriptions in text and keeps the paths in JSON.
 
 ### E3 — the lab, sealed
 
@@ -305,6 +332,9 @@ keys with write access, pending invitations, and Dependabot and secret-scanning 
 where the token can read them. A secret scan of repository history, through the
 transport decided in E4, redacted in every output. A token with more than read access
 is itself reported. People are matched by login only (`spec/engagement.md`, "People").
+Before E5 starts, the `security-consultant` reviews and freezes the base severity
+anchors (`spec/engagement.md`, "Severity in context"), and every base E5 assigns is
+placed against them.
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
 two-factor requirement is visible only to an owner's token, and whether a fine-grained

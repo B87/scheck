@@ -153,5 +153,5 @@ if [ "$os" = darwin ]; then
 fi
 
 say ""
-say "Next: scheck local --no-persist    # facts + posture rules; no model, no key, free"
-say "Exit 0 is not a security verdict; read the assessment coverage."
+say "Next: scheck run --host local --no-persist   # this machine; read-only, no model, no key (v0.0.1: scheck local)"
+say "Exit 0 is not a security verdict; the report says what was not checked."

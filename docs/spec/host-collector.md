@@ -562,6 +562,8 @@ type Def struct {
     ID           string   // "sshd.password_auth_enabled"
     Title        string   // "sshd accepts password authentication"
     Category     string   // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs | disk | time
+    Area         Area     // the engagement report's risk area; every host finding is hosts
+    Exposure     Exposure // NotExposure | IsExposure; every host finding is NotExposure
     BaseSeverity Severity // critical | high | medium | low | info
     Impact       string   // one sentence; used verbatim by a rule finding, the model may sharpen it in phase 2
     Remediation  Remediation // summary, commands, caveat (§6.3); text for the human, never executed
@@ -572,7 +574,8 @@ type Def struct {
 
 `Title`, `Impact` and `Remediation` live on the Def, not only in the model's output,
 because a posture rule (§6.5) must produce a complete finding with no model in the
-loop. For a model-only finding the Def's text is the default and the model's text, when
+loop. `Area` and `Exposure` are required for the engagement report
+(`engagement.md`, "Severity in context"); they do not appear in the host envelope. For a model-only finding the Def's text is the default and the model's text, when
 present, replaces `impact` and `remediation`. For an existing rule finding, the merge
 contract in §6.5 applies: its curated text is retained.
 
@@ -701,7 +704,9 @@ than guess at an unsupported shape. The release notes identify the schema versio
 shipped. Update the spec, implementation, `docs/report-schema.json` and fixtures
 together when a change is implemented.
 
-**Persistence.** Every run writes this envelope to
+**Persistence.** *From 0.0.2 (E2) nothing is written under `runs/<host.id>/`: the
+envelope is the host asset's evidence file in the engagement's run directory
+(engagement.md, "Runs, state and configuration"). As built in 0.0.1:* every run wrote this envelope to
 `<state-dir>/runs/<host.id>/<started>.json` (default state dir
 `~/.local/state/scheck`, or `$XDG_STATE_HOME/scheck`; `--state-dir` overrides,
 `--no-persist` disables). Persisted files pass the same redactor as the report. The
@@ -813,9 +818,12 @@ judgement. The same applies to listeners, persistence entries and sudoers conten
 
 ### 6.6 Text report — what a person sees
 
-> **Superseded in 0.0.2 (ROADMAP E2).** The engagement report replaces it; the JSON
+> **Retired in 0.0.2 (ROADMAP E2).** The engagement report replaces it; the JSON
 > envelope (§6.4) stays, as the host asset's evidence file in the run directory, and
-> `runs/<host.id>/` persistence stops.
+> `runs/<host.id>/` persistence stopped. The fact table survives as the fact sheet the
+> engagement report prints per host at `-v` (descriptions) and `-vv` (redacted
+> captures), pinned by `internal/report/testdata/golden/*-facts-*.txt`; the status-word,
+> escaping, width and colour rules below apply to it. The rest records 0.0.1.
 
 `--format text` is the product for anyone who runs `--stop-after facts`, so it has a
 contract, pinned by golden tests per fixture (§9):
@@ -887,10 +895,12 @@ contract, pinned by golden tests per fixture (§9):
 
 ## 7. CLI
 
-> **Superseded in 0.0.2 (ROADMAP E2).** `scheck local` and `scheck ssh` become aliases
-> of `scheck run --host` for 0.0.2 and are removed in 0.0.3; the flag mapping is in
-> engagement.md, "One command, one file". `catalog`, `explain`, `sudoers` and the exit
-> codes stay; `config` is removed with §8.
+> **Superseded in 0.0.2 (ROADMAP E2).** `scheck local` and `scheck ssh` are aliases of
+> `scheck run --host` for 0.0.2, print a deprecation line, and are removed in 0.0.3; the
+> flag mapping is in engagement.md, "One command, one file" (`--context`,
+> `--ignore-context`, `--audit-log` and `--stop-after plan` exit 3 naming their
+> replacement). `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
+> `config` was removed with §8. The block below records 0.0.1.
 
 ```
 scheck local                            # audit this machine: facts + posture rules, no model (§2.1)
@@ -1036,11 +1046,13 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 
 ## 8. Configuration
 
-> **Superseded in 0.0.2 (ROADMAP E1b, E2).** scheck reads no configuration file. Each
-> key below has a home in the engagement file or a flag (engagement.md, "One command,
-> one file"); a file found where this section reads one makes `scheck run` exit 3,
-> naming where each key moved. The narrowing semantics below are what the engagement's
-> `disable_checks`, `deny_paths` and `redact_extra` keep.
+> **Removed in 0.0.2 (ROADMAP E1b, E2).** scheck reads no configuration file:
+> `internal/config`, `scheck config` and `docs/CONFIGURATION.md` are gone. Each key below
+> has a home in the engagement file or a flag (engagement.md, "One command, one file");
+> a file found where this section reads one makes `scheck run` and its aliases exit 3,
+> naming where each key moved. The model keys are flags on `scheck providers` and the
+> hidden `scheck eval`. The narrowing semantics below are what the engagement's
+> `disable_checks`, `deny_paths` and `redact_extra` keep; the rest records 0.0.1.
 
 Precedence, lowest first: built-in defaults → the OS user config file → the project
 `./scheck.yaml` → flags the operator explicitly set. A flag's registered default never
@@ -1119,9 +1131,10 @@ shown with the credentials stripped. `docs/CONFIGURATION.md` is the walkthrough.
   an empty `docker diff` afterwards (acceptance criterion 3).
 - **Golden artifacts.** Three per fixture (ubuntu, fedora, macos), diffed in
   `go test`:
-  - the **text report** at default, `-v` and `-vv` under
-    `internal/report/testdata/golden/`, the §6.6 contract, re-rendered at several
-    widths to assert no line overruns and none carries trailing padding;
+  - the **fact sheet** at default, `-v` and `-vv` under
+    `internal/report/testdata/golden/` (`*-facts-*.txt`), what the engagement report
+    prints per host (§6.6), re-rendered at several widths to assert no line overruns
+    and none carries trailing padding;
   - the **JSON report** beside it, without `--include-evidence`: facts, findings,
     assessment coverage reasons and the observation references between them. The
     committed file is validated against `docs/report-schema.json`, so a golden left

@@ -109,14 +109,13 @@ func TestAgentEnvelopeValidatesAgainstSchema(t *testing.T) {
 	if model == nil || model.ID != finding.IDUnexpectedListener || model.Severity != finding.SevMedium || model.Service == nil {
 		t.Fatalf("model finding: %+v", model)
 	}
-	var text bytes.Buffer
-	if err := report.WriteText(&text, env, report.Options{}); err != nil {
+	var js bytes.Buffer
+	if err := report.WriteJSON(&js, env); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"net.unexpected_listener", "Model summary", "sshd is the only listener",
-		"agent pass (mock, mock-model; 3 turns, 1 model-initiated check", "Model findings carry code-assigned severity"} {
-		if !strings.Contains(text.String(), want) {
-			t.Errorf("text lacks %q:\n%s", want, text.String())
+	for _, want := range []string{"net.unexpected_listener", "sshd is the only listener", `"provider": "mock"`} {
+		if !strings.Contains(js.String(), want) {
+			t.Errorf("JSON lacks %q:\n%s", want, js.String())
 		}
 	}
 }

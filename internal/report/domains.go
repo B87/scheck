@@ -50,3 +50,7 @@ func domainOrder(d check.Domain) int {
 	}
 	return len(domainLabels)
 }
+
+// DomainRank is d's place in the report's domain order; unknown domains
+// sort last. The engagement report expands a host's coverage in this order.
+func DomainRank(d check.Domain) int { return domainOrder(d) }

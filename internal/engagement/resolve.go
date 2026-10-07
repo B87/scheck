@@ -2,8 +2,11 @@ package engagement
 
 import (
 	"cmp"
+	"fmt"
 	"maps"
+	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -86,6 +89,11 @@ type Resolved struct {
 	Intent        Intent            `json:"intent,omitzero" yaml:"intent,omitempty"`
 	Authorization *Authorization    `json:"authorization,omitempty" yaml:"authorization,omitempty"`
 
+	// Warnings are for the operator, on stderr: a file that validates but
+	// would reveal something it means to hide. They never quote a pattern
+	// or the string it matched.
+	Warnings []string `json:"-" yaml:"-"`
+
 	redactExtra []string
 	timeout     time.Duration
 	refs        map[string]Ref
@@ -103,6 +111,20 @@ func (r *Resolved) Timeout() time.Duration { return r.timeout }
 func (r *Resolved) Lookup(ref string) (Ref, bool) {
 	ref2, ok := r.refs[ref]
 	return ref2, ok
+}
+
+// AssetID is the canonical id an accepted risk's asset names: through
+// Lookup, or as a canonical id under a root and no exclude.
+func (r *Resolved) AssetID(ref string) (string, bool) {
+	if found, ok := r.Lookup(ref); ok {
+		return found.ID, true
+	}
+	id, ok := ParseID(ref)
+	if !ok || !slices.ContainsFunc(r.Roots, func(root Ref) bool { return Under(id, root) }) ||
+		slices.ContainsFunc(r.Exclude, func(x Ref) bool { return x.OrgUnit == "" && Under(id, x) }) {
+		return "", false
+	}
+	return id.ID, true
 }
 
 func or[T comparable](v, def T) T {
@@ -184,7 +206,45 @@ func (v *validator) resolve(assets map[string]Ref) *Resolved {
 	}
 	slices.SortFunc(under, func(a, b ResolvedAsset) int { return cmp.Compare(a.Name, b.Name) })
 	res.Assets = append(res.Assets, under...)
+	res.Warnings = redactExtraNames(f, res)
 	return res
+}
+
+// redactExtraNames warns when a root or an asset's name or locator matches
+// a redact_extra pattern: redaction applies to what collectors read, and
+// stage documents and the report carry names and locators as written, so
+// the string would appear in them unredacted (docs/spec/engagement.md,
+// "Narrowing travels with the engagement"). Neither the pattern nor the
+// matching value is quoted; positions name them.
+func redactExtraNames(f *File, res *Resolved) []string {
+	var out []string
+	for i, pat := range f.RedactExtra {
+		re, err := regexp.Compile(pat)
+		if err != nil {
+			continue // validated
+		}
+		var where []string
+		for j, root := range res.Roots {
+			if re.MatchString(root.Written) || re.MatchString(root.ID) {
+				where = append(where, fmt.Sprintf("roots[%d]", j))
+			}
+		}
+		n := 0
+		for name, a := range f.Assets {
+			l := a.Locator
+			if re.MatchString(name) || re.MatchString(l.Domain+l.Host+l.URL+l.Network+l.Cloud+l.SaaS+l.Repo) {
+				n++
+			}
+		}
+		if n > 0 {
+			where = append(where, fmt.Sprintf("%d assets %s", n, map[bool]string{true: "entry", false: "entries"}[n == 1]))
+		}
+		if len(where) > 0 {
+			out = append(out, fmt.Sprintf("%s match redact_extra[%d]: names and locators are written into the stage documents "+
+				"and the report as declared, unredacted; rename the asset or narrow the pattern", strings.Join(where, " and "), i))
+		}
+	}
+	return out
 }
 
 // asset applies the defaults to one asset. A host's SSH user comes from its

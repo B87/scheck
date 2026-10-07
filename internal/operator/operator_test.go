@@ -239,6 +239,19 @@ func TestRiskExpiry(t *testing.T) {
 	if (Risk{}).Expired(now) {
 		t.Error("no date never expires")
 	}
+	// A date lasts until the end of that day in its zone: at 22:30 UTC on
+	// the 20th it is already the 21st in Madrid.
+	madrid, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Skip("no tz database")
+	}
+	late := time.Date(2026, 9, 20, 22, 30, 0, 0, time.UTC)
+	if (Risk{Expires: "2026-09-20"}).Expired(late) {
+		t.Error("in UTC the 20th has not ended at 22:30")
+	}
+	if !(Risk{Expires: "2026-09-20", Zone: madrid}).Expired(late) {
+		t.Error("in Madrid the 20th has ended at 22:30 UTC")
+	}
 }
 
 func TestUnknownStructuredKeysBecomeExtra(t *testing.T) {

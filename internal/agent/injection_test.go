@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/b87/scheck/internal/check"
-	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/llm/mock"
@@ -23,7 +22,7 @@ const corpus = "../../testdata/context"
 
 func loadContext(t *testing.T, dir string) *operator.Merged {
 	t.Helper()
-	m, err := operator.Load(operator.Options{Flags: []string{dir}, Budget: policy.DefaultBudgets().ContextBytes, KnownFinding: config.KnownFinding})
+	m, err := operator.Load(operator.Options{Flags: []string{dir}, Budget: policy.DefaultBudgets().ContextBytes, KnownFinding: finding.Known})
 	if err != nil {
 		t.Fatal(err)
 	}

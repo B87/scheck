@@ -47,10 +47,11 @@ var runtimeArtifacts = regexp.MustCompile(`^[CA] (` +
 	`|/run/ufw\.lock` +
 	`)$`)
 
-// M1 exit demo: `scheck ssh … --stop-after facts` against Ubuntu and Fedora
-// produces a schema-valid, persisted report with no API key, the audit log
-// names only catalog argv, and the target's filesystem is untouched
-// (acceptance criteria 2, 3 and 4).
+// M1 exit demo, through the 0.0.2 alias: `scheck ssh … --stop-after facts`
+// against Ubuntu and Fedora runs the one-host engagement, whose report embeds
+// a schema-valid host envelope persisted as the asset's evidence file, with
+// no API key; the run directory's audit log names only catalog argv, and the
+// target's filesystem is untouched (acceptance criteria 2, 3 and 4).
 func TestSSHFactsReport(t *testing.T) {
 	bin := containers.BuildScheck(t)
 	schema := loadSchema(t)
@@ -59,16 +60,12 @@ func TestSSHFactsReport(t *testing.T) {
 			c := containers.Start(t, name)
 			before := c.Diff(t)
 			stateDir := t.TempDir()
-			audit := filepath.Join(t.TempDir(), "audit.jsonl")
 			out, errOut, code := containers.Run(t, bin, "ssh", "ops@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-				"--stop-after", "facts", "--format", "json", "--state-dir", stateDir, "--audit-log", audit)
+				"--stop-after", "facts", "--format", "json", "--state-dir", stateDir)
 			if code != 0 {
 				t.Fatalf("exit %d\n%s", code, errOut)
 			}
-			var doc map[string]any
-			if err := json.Unmarshal([]byte(out), &doc); err != nil {
-				t.Fatal(err)
-			}
+			doc := envelopeOf(t, out)
 			if err := schema.Validate(doc); err != nil {
 				t.Fatalf("schema: %v", err)
 			}
@@ -77,15 +74,24 @@ func TestSSHFactsReport(t *testing.T) {
 				t.Errorf("host block: %v", host)
 			}
 			run := doc["run"].(map[string]any)
-			if run["status"] != "complete" || run["persisted"] == nil {
+			if run["status"] != "complete" {
 				t.Errorf("run block: %v", run)
 			}
-			if _, err := os.Stat(run["persisted"].(string)); err != nil {
-				t.Errorf("persisted file missing: %v", err)
+			// The envelope is persisted as the asset's evidence file in the
+			// run directory, and nothing under runs/<host.id>/ any more.
+			dirs, _ := filepath.Glob(filepath.Join(stateDir, "engagements", "*", "*"))
+			if len(dirs) != 1 {
+				t.Fatalf("run directories: %q", dirs)
+			}
+			if ev, _ := filepath.Glob(filepath.Join(dirs[0], "evidence", "*.json")); len(ev) != 1 {
+				t.Errorf("evidence files: %q", ev)
+			}
+			if old, _ := filepath.Glob(filepath.Join(stateDir, "runs", "*")); len(old) != 0 {
+				t.Errorf("0.0.1 persistence still written: %q", old)
 			}
 			// Audit log: every line is a catalog check that either ran, was
 			// unavailable, or was the canary; nothing else reached the host.
-			raw, err := os.ReadFile(audit)
+			raw, err := os.ReadFile(filepath.Join(dirs[0], "audit.jsonl"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -148,9 +154,29 @@ func assertReadOnly(t *testing.T, c *containers.Container, before, name string) 
 	}
 }
 
-func loadSchema(t *testing.T) *jsonschema.Schema {
+func loadSchema(t *testing.T) *jsonschema.Schema { return loadSchemaFile(t, "report-schema.json") }
+
+// envelopeOf is the one host's collector envelope inside an engagement
+// report printed with --format json.
+func envelopeOf(t *testing.T, out string) map[string]any {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "report-schema.json"))
+	var rep struct {
+		Assets []struct {
+			Envelope map[string]any `json:"envelope"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("not an engagement report: %v\n%s", err, out)
+	}
+	if len(rep.Assets) != 1 || rep.Assets[0].Envelope == nil {
+		t.Fatalf("want one host with an envelope:\n%s", out)
+	}
+	return rep.Assets[0].Envelope
+}
+
+func loadSchemaFile(t *testing.T, name string) *jsonschema.Schema {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,10 +185,10 @@ func loadSchema(t *testing.T) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("report-schema.json", doc); err != nil {
+	if err := c.AddResource(name, doc); err != nil {
 		t.Fatal(err)
 	}
-	s, err := c.Compile("report-schema.json")
+	s, err := c.Compile(name)
 	if err != nil {
 		t.Fatal(err)
 	}

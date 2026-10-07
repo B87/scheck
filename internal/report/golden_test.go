@@ -26,20 +26,21 @@ var fixtureElevation = map[string]runner.Elevation{
 	"macos":  runner.ElevateNone,
 }
 
-// The text report is a contract (docs/spec/host-collector.md §6.6), so it is pinned per
-// fixture at every verbosity. Regenerate with `go test ./internal/report
-// -update` and read the diff: a change here is a change to what an operator
-// reads.
-func TestGoldenTextReports(t *testing.T) {
+// The fact sheet is what the engagement report prints per host at -v and
+// -vv (docs/spec/host-collector.md §6.6), so it is pinned per fixture at
+// every verbosity. Regenerate with `go test ./internal/report -update` and
+// read the diff: a change here is a change to what an operator reads.
+func TestGoldenFactSheets(t *testing.T) {
 	for name, elev := range fixtureElevation {
-		for _, v := range []int{0, 1, 2} {
+		// The engagement report prints the fact sheet at -v and -vv only.
+		for _, v := range []int{1, 2} {
 			t.Run(name+verbSuffix(v), func(t *testing.T) {
 				env := Build(sheetFor(t, name, elev), goldenMeta(elev))
 				var buf bytes.Buffer
-				if err := WriteText(&buf, normalize(env), Options{Verbose: v}); err != nil {
+				if err := WriteFactSheet(&buf, normalize(env), Options{Verbose: v}); err != nil {
 					t.Fatal(err)
 				}
-				compareGolden(t, name+verbSuffix(v)+".txt", buf.String())
+				compareGolden(t, name+"-facts"+verbSuffix(v)+".txt", buf.String())
 			})
 		}
 	}
@@ -81,12 +82,12 @@ func TestGoldenJSONReports(t *testing.T) {
 
 // No rendered line may exceed the wrap width, and none may carry trailing
 // padding (docs/spec/host-collector.md §6.6). Checked over every golden at several widths.
-func TestTextReportRespectsWidth(t *testing.T) {
+func TestFactSheetRespectsWidth(t *testing.T) {
 	for name, elev := range fixtureElevation {
 		env := normalize(Build(sheetFor(t, name, elev), goldenMeta(elev)))
 		for _, width := range []int{0, 60, 80, 100, 200} {
 			var buf bytes.Buffer
-			if err := WriteText(&buf, env, Options{Verbose: 2, Width: width}); err != nil {
+			if err := WriteFactSheet(&buf, env, Options{Verbose: 2, Width: width}); err != nil {
 				t.Fatal(err)
 			}
 			want := width

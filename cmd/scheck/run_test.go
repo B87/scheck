@@ -146,7 +146,6 @@ func TestRunRefusesWhatThisBuildDoesNotRun(t *testing.T) {
 		args []string
 		msg  string
 	}{
-		{"report stage", []string{path, "--stop-after", "report"}, "--stop-after report is not available in this build"},
 		{"unknown stage", []string{path, "--stop-after", "facts"}, "must be one of intake|scope|recon|plan|check|analyze|report"},
 		{"reach flag on a file", []string{path, "--sudo"}, "--sudo is accepted only with --host"},
 		{"timeout on a file", []string{path, "--timeout", "1m"}, "--timeout is accepted only with --host"},
@@ -157,6 +156,7 @@ func TestRunRefusesWhatThisBuildDoesNotRun(t *testing.T) {
 		{"file and host", []string{path, "--host", "local"}, "an engagement file or --host, not both"},
 		{"neither", nil, "one engagement file, or --host LOCATOR"},
 		{"write without host", []string{path, "--write-engagement", filepath.Join(dir, "x.yaml")}, "it needs --host"},
+		{"write with an output flag", []string{"--host", "local", "--write-engagement", filepath.Join(dir, "y.yaml"), "--out", filepath.Join(dir, "r.json")}, "do not apply to it"},
 		{"bad host", []string{"--host", "deploy:hunter2@203.0.113.5"}, "never carries a password"},
 		{"bad profile", []string{"--host", "local", "--profile", "paranoid"}, "--profile: "},
 		{"missing file", []string{filepath.Join(dir, "nope.yaml")}, "no such file"},
@@ -206,7 +206,7 @@ func runDir(t *testing.T, state, name string) string {
 }
 
 // A host run writes every stage's output into a private run directory, and
-// --format json prints findings.json as written.
+// --format json prints the engagement report as written to report.json.
 func TestRunOnAHostWritesTheRunDirectory(t *testing.T) {
 	state := hermetic(t)
 	calls := collectFrom(t, recorded(t, "ubuntu"))
@@ -215,15 +215,32 @@ func TestRunOnAHostWritesTheRunDirectory(t *testing.T) {
 
 	out, msg, code := runEngagement(t, path, "--format", "json")
 	dir := runDir(t, state, "acme")
-	written, err := os.ReadFile(filepath.Join(dir, "findings.json"))
+	written, err := os.ReadFile(filepath.Join(dir, "report.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if out != string(written) {
-		t.Errorf("stdout is not findings.json")
+		t.Errorf("stdout is not report.json")
+	}
+	var rep struct {
+		Exit   struct{ Code int } `json:"exit"`
+		Assets []struct {
+			Name  string            `json:"name"`
+			Trace []json.RawMessage `json:"trace"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal(written, &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Assets) != 1 || rep.Assets[0].Name != "deploy" || len(rep.Assets[0].Trace) == 0 || rep.Exit.Code != code {
+		t.Fatalf("report.json: %+v, exit %d", rep, code)
 	}
 	var doc engagement.FindingsDoc
-	if err := json.Unmarshal(written, &doc); err != nil {
+	b, err := os.ReadFile(filepath.Join(dir, "findings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
 	want := exitOK
@@ -239,7 +256,8 @@ func TestRunOnAHostWritesTheRunDirectory(t *testing.T) {
 	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o700 {
 		t.Errorf("run directory mode %v", fi.Mode().Perm())
 	}
-	for _, f := range []string{"engagement.yaml", "scope.json", "recon.json", "plan.json", "findings.json", "audit.jsonl", "evidence/deploy.json"} {
+	for _, f := range []string{"engagement.yaml", "scope.json", "recon.json", "plan.json", "findings.json", "audit.jsonl",
+		"evidence/deploy.json", "report.json", "report.txt"} {
 		fi, err := os.Stat(filepath.Join(dir, f))
 		if err != nil || fi.Mode().Perm() != 0o600 {
 			t.Errorf("%s: %v %v", f, err, fi)
@@ -303,12 +321,28 @@ func TestRunSeededSecretNeverReachesTheRunDirectory(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"recon.json", "deploy.json"} {
+	for _, want := range []string{"recon.json", "deploy.json", "report.json", "stdout"} {
 		for _, m := range []string{"[REDACTED:aws-access-key:20 bytes]", "[REDACTED:extra:0:17 bytes]"} {
 			if !markers[m+" in "+want] {
 				t.Errorf("%s lacks %s", want, m)
 			}
 		}
+	}
+	// The report counts what was redacted and never names a pattern.
+	var rep struct {
+		Redaction struct {
+			Builtin  map[string]int `json:"builtin"`
+			Operator struct{ Rules, Matches int }
+		} `json:"redaction"`
+	}
+	if err := json.Unmarshal([]byte(outputs["report.json"]), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if rep.Redaction.Builtin["aws-access-key"] == 0 || rep.Redaction.Operator.Rules != 1 || rep.Redaction.Operator.Matches == 0 {
+		t.Errorf("redaction counts %+v", rep.Redaction)
+	}
+	if !strings.Contains(outputs["report.txt"], "Your redact_extra rules:") {
+		t.Errorf("report.txt does not count the operator's redactions:\n%s", outputs["report.txt"])
 	}
 }
 
@@ -323,8 +357,8 @@ func TestRunHostAndGitHubIsIncompleteWithFindings(t *testing.T) {
 	if code != exitIncomplete || !strings.Contains(msg, "saas:github:example-org: collector_not_built") {
 		t.Fatalf("exit %d: %s", code, msg)
 	}
-	if !strings.Contains(out, "github:example-org  not_collected (collector_not_built)") {
-		t.Errorf("summary:\n%s", out)
+	if !strings.Contains(out, "INCOMPLETE: saas:github:example-org (GitHub organization): this version of scheck does not read it.") {
+		t.Errorf("report:\n%s", out)
 	}
 	var doc engagement.FindingsDoc
 	b, err := os.ReadFile(filepath.Join(runDir(t, state, "acme"), "findings.json"))
@@ -378,7 +412,7 @@ func TestRunFailuresSetTheExitCode(t *testing.T) {
 		return nil, &hostasset.Error{Usage: true, Err: errors.New("ssh canary mismatch")}
 	}
 	out, msg, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--no-persist")
-	if code != exitUsage || !strings.Contains(msg, "refused:") || !strings.Contains(out, "refused (refused)") {
+	if code != exitUsage || !strings.Contains(msg, "refused:") || !strings.Contains(out, "REFUSED: host-203-0-113-5: ssh canary mismatch.") {
 		t.Fatalf("canary: exit %d: %s\n%s", code, msg, out)
 	}
 

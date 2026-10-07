@@ -45,10 +45,3 @@ func WriteJSONEvidence(w io.Writer, env Envelope, include bool) error {
 		Observations map[string]any `json:"observations"`
 	}{env, facts, observations})
 }
-
-func short(id string) string {
-	if len(id) > 12 {
-		return id[:12] + "…"
-	}
-	return id
-}

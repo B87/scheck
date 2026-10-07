@@ -30,6 +30,7 @@ import (
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/runner"
 	"github.com/b87/scheck/internal/target"
+	"github.com/b87/scheck/internal/target/fixture"
 	"github.com/b87/scheck/internal/target/local"
 	"github.com/b87/scheck/internal/target/ssh"
 )
@@ -66,6 +67,14 @@ type Options struct {
 	Audit   *policy.Audit
 	Log     func(format string, args ...any)
 	Version string
+	// RecordFixtures, when set, writes every exec of the run to that
+	// directory as a fixture manifest (the hidden --record-fixtures flag);
+	// the recorder sees post-redaction bytes only.
+	RecordFixtures string
+	// Now is the time accepted risks are graded at: an engagement's
+	// collection time (docs/spec/engagement.md, "Accepted risks"); zero is
+	// when the envelope is built.
+	Now time.Time
 }
 
 // Error is a host that was not collected. Usage marks a refusal on a
@@ -78,6 +87,15 @@ type Options struct {
 type Error struct {
 	Usage bool
 	Err   error
+	// Kind names a refusal for the report: host_key_unknown,
+	// host_key_changed, access (identity, known_hosts, authentication) or
+	// canary; "" for a transport failure.
+	Kind string
+	// Echo is what a remote shell returned in place of the canary,
+	// redacted and cut, kept apart from Err so a report can carry it in
+	// JSON and never print it (docs/spec/engagement.md, "Incompleteness
+	// and refusals").
+	Echo string
 }
 
 func (e *Error) Error() string { return e.Err.Error() }
@@ -87,6 +105,12 @@ func usage(format string, args ...any) error {
 	return &Error{Usage: true, Err: fmt.Errorf(format, args...)}
 }
 
+// accessRefused is a host the operator's own access cannot reach: no SSH
+// user, an unusable identity, known_hosts or credentials.
+func accessRefused(format string, args ...any) error {
+	return &Error{Usage: true, Kind: "access", Err: fmt.Errorf(format, args...)}
+}
+
 func failed(format string, args ...any) error {
 	return &Error{Err: fmt.Errorf(format, args...)}
 }
@@ -94,6 +118,7 @@ func failed(format string, args ...any) error {
 // Collection is a host's facts, ready for the posture rules.
 type Collection struct {
 	sheet   *baseline.FactSheet
+	planned []string
 	meta    report.Meta
 	profile check.Profile
 	env     *report.Envelope
@@ -136,20 +161,45 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 	r := &runner.Runner{Paths: policy.NewPathPolicy(o.DenyPaths), Redactor: redactor, Budgets: budgets,
 		Audit: o.Audit, Elevate: elevate, Log: logf}
 	canary := "n/a"
+	record := func(t target.Target) target.Target {
+		if o.RecordFixtures == "" {
+			return t
+		}
+		logf("recording fixtures into %s", o.RecordFixtures)
+		return &fixture.Recorder{Inner: t, Dir: o.RecordFixtures, Redact: func(b []byte) []byte {
+			out, _ := redactor.Redact(b)
+			return out
+		}}
+	}
 	switch {
 	case o.Target != nil:
-		r.Target = o.Target
+		r.Target = record(o.Target)
 	case o.Local:
-		r.Target = local.New(budgets.CaptureLimit())
+		r.Target = record(local.New(budgets.CaptureLimit()))
 	default:
 		st, err := dial(ctx, o, budgets.CaptureLimit(), logf)
 		if err != nil {
 			return nil, err
 		}
 		defer func() { _ = st.Close() }()
-		r.Target = st
-		if err := VerifyCanary(ctx, st, o.Audit, redactor, logf); err != nil {
-			return nil, &Error{Usage: true, Err: err}
+		r.Target = record(st)
+		// The canary gets a check's own deadline: a login shell that never
+		// answers is a host that could not be read, not one that altered
+		// output.
+		canaryCtx, cancel := context.WithTimeout(ctx, budgets.PerCheckHard)
+		err = VerifyCanary(canaryCtx, st, o.Audit, redactor, logf)
+		cancel()
+		if err != nil {
+			if errors.Is(err, target.ErrTransport) || errors.Is(err, target.ErrTimeout) || ctx.Err() != nil {
+				// The session was lost, or never answered, while the canary
+				// ran: nothing was shown to be altered, so this is a
+				// transport failure (docs/spec/engagement.md, "Exit codes").
+				return nil, &Error{Err: err}
+			}
+			if ce, ok := errors.AsType[*CanaryError](err); ok {
+				return nil, &Error{Usage: true, Kind: "canary", Err: ce.Err, Echo: ce.Echo}
+			}
+			return nil, &Error{Usage: true, Kind: "canary", Err: err}
 		}
 		canary = "ok"
 		logf("ssh: canary ok")
@@ -170,9 +220,15 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 		logf("session runs as root; elevated checks need no prefix")
 	}
 	sheet := baseline.Run(runCtx, r, plan, func(res runner.Result) {
-		logf("%-28s %-12s %6dms %s", res.CheckID, res.Status, res.Duration.Milliseconds(), res.Reason)
+		// A reason can carry the first line of a target's stderr: escaped
+		// before it reaches a terminal (docs/spec/host-collector.md §6.6).
+		logf("%-28s %-12s %6dms %s", res.CheckID, res.Status, res.Duration.Milliseconds(), report.Sanitize(res.Reason))
 	})
-	return &Collection{sheet: sheet, profile: profile, meta: report.Meta{
+	planned := make([]string, len(plan))
+	for i, c := range plan {
+		planned[i] = c.ID
+	}
+	return &Collection{sheet: sheet, planned: planned, profile: profile, meta: report.Meta{
 		Started:   started,
 		Transport: string(r.Target.Transport()),
 		Canary:    canary,
@@ -181,6 +237,7 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 		Version:   o.Version,
 		Disabled:  o.DisableChecks,
 		Context:   merged(o.Context, o.ContextSource),
+		Now:       o.Now,
 	}}, nil
 }
 
@@ -189,13 +246,13 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 // is a usage error, as `scheck ssh` treats it.
 func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...any)) (*ssh.Target, error) {
 	if o.User == "" {
-		return nil, usage("host %s has no SSH user: write it into the locator as user@%s", o.Host, o.Host)
+		return nil, accessRefused("host %s has no SSH user: write it into the locator as user@%s", o.Host, o.Host)
 	}
 	identity := o.Identity
 	if strings.HasPrefix(identity, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, usage("identity: %v", err)
+			return nil, accessRefused("identity: %v", err)
 		}
 		identity = filepath.Join(home, identity[2:])
 	}
@@ -203,7 +260,16 @@ func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...an
 	st, err := ssh.Dial(ctx, ssh.Options{Host: o.Host, Port: o.Port, User: o.User, Identity: identity,
 		KnownHosts: o.KnownHosts, MaxOutput: maxOutput})
 	if err != nil {
-		return nil, &Error{Usage: errors.Is(err, target.ErrAccess), Err: err}
+		e := &Error{Usage: errors.Is(err, target.ErrAccess), Err: err}
+		switch {
+		case errors.Is(err, target.ErrHostKeyChanged):
+			e.Kind = "host_key_changed"
+		case errors.Is(err, target.ErrHostKeyUnknown):
+			e.Kind = "host_key_unknown"
+		case e.Usage:
+			e.Kind = "access"
+		}
+		return nil, e
 	}
 	return st, nil
 }
@@ -231,10 +297,21 @@ func VerifyCanary(ctx context.Context, st *ssh.Target, audit *policy.Audit, red 
 		if len(out) > 120 {
 			out = append(out[:120:120], "…"...)
 		}
-		err = fmt.Errorf("%w; it echoed %q", err, out)
+		return &CanaryError{Err: err, Echo: fmt.Sprintf("%q", out)}
 	}
 	return err
 }
+
+// CanaryError is a canary mismatch and what the remote shell echoed,
+// redacted, cut and quoted. Collect keeps the two apart, so the echo
+// reaches the report's JSON and never its text.
+type CanaryError struct {
+	Err  error
+	Echo string
+}
+
+func (e *CanaryError) Error() string { return e.Err.Error() + "; it echoed " + e.Echo }
+func (e *CanaryError) Unwrap() error { return e.Err }
 
 // DetectPlatform reads `uname -s` through the runner and records the
 // platform on the SSH target.
@@ -262,6 +339,10 @@ func (c *Collection) Envelope() report.Envelope {
 	}
 	return *c.env
 }
+
+// Planned is the plan's check ids, so the report counts the checks a cut
+// collection never reached.
+func (c *Collection) Planned() []string { return slices.Clone(c.planned) }
 
 // Complete reports whether every planned check ran.
 func (c *Collection) Complete() bool { return !c.sheet.Incomplete }

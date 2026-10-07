@@ -123,7 +123,7 @@ func New(cfg llm.Config) (*Provider, error) {
 		maxCtx = info.maxContext
 	}
 	if maxCtx <= 0 {
-		return nil, fmt.Errorf("the context window of model %q is unknown; set max_context: or --max-context (docs/spec/model.md §4)", cfg.Model)
+		return nil, fmt.Errorf("the context window of model %q is unknown; set --max-context (docs/spec/model.md §4)", cfg.Model)
 	}
 	if base == DefaultBaseURL {
 		if _, ok := env(keyVar); !ok {

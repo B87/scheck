@@ -24,6 +24,9 @@ type HostFlags struct {
 	Profile    string // "", baseline or hardened
 }
 
+// hostSource is the source path of an engagement --host built in memory.
+const hostSource = "--host"
+
 // ForHost builds the engagement `scheck run --host LOCATOR` runs: one host
 // root, one asset carrying the flags, defaults and limits as `scheck init`
 // writes them, a name derived from the locator and the machine's time zone,
@@ -61,7 +64,7 @@ func ForHost(locator string, h HostFlags, opts Options) (*Resolved, []byte, erro
 		return nil, nil, err
 	}
 	raw := buf.Bytes()
-	res, err := Parse("--host", raw, opts)
+	res, err := Parse(hostSource, raw, opts)
 	if err != nil {
 		if errs, ok := errors.AsType[Errors](err); ok {
 			// Only the flags can be wrong here; name them, not the line.

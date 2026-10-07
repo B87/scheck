@@ -1,0 +1,212 @@
+scheck engagement report: host-macos
+Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        not declared (one-host check)
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+INCOMPLETE: macos: the connection was lost after 26 of 28 checks; 2 were not run. What was read
+  before is kept and assessed. scheck only reads; an interrupted run leaves nothing half-changed.
+Findings are also open on macos; see Findings below.
+
+SUMMARY
+Checked in part  Hosts (macos, 4 of 13 areas judged).
+Not requested    A one-host check reads this host only. Your accounts, code, cloud, domains and
+                 email were not looked at.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  medium    The macOS application firewall is disabled (macos)
+Nothing else open ranks at medium or above among what was checked. Below: 1 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: hosts. On macos, 4 of 13 host areas were judged, each only on the settings named under
+Coverage; 5 have no rule in this version and 4 had no usable evidence. Nothing but this host was
+looked at. Anything not checked is unknown, not fine.
+
+COVERAGE
+Hosts                    checked in part
+  macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, 07:12-07:12
+  checks 28: 21 ran, 5 unknown, 2 not run. rules 10: 5 decided, 5 had no usable evidence.
+    Software updates         checked (pending updates): 1 open finding (see Findings)
+    Disk encryption          checked (FileVault): nothing found by these rules
+    System integrity         checked (Gatekeeper, System Integrity Protection): nothing found by
+                             these rules
+    Firewall                 checked (the application firewall): 1 open finding (see Findings); also
+                             read, not judged: Firewall has block all state set to disabled.;
+                             Firewall stealth mode is off
+    Network exposure         not judged: this version of scheck has no rule for it (read: 23
+                             listening sockets)
+    SSH server               not checked: not run: scheck's connection to the host dropped before
+                             this check (sshd.config: not run, the connection was lost)
+    Remote access            not checked: the access scheck was given cannot read this; it needs
+                             sudo (remote.login: requires elevated read); also read, not judged: 10
+                             service overrides
+    Accounts                 not judged: this version of scheck has no rule for it (read:
+                             GroupMembership: root alice; 134 accounts)
+    Privilege escalation     not judged: this version of scheck has no rule for it (not read:
+                             privesc.sudoers, privesc.sudoers_d)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 3 launchd
+                             plists; 555 launchd jobs, 284 running)
+    Filesystem               not checked: not run: scheck's connection to the host dropped before
+                             this check (fs.world_writable: not run, the connection was lost); also
+                             read, not judged: 0 SUID files
+    Logging and audit        not judged: this version of scheck has no rule for it (not read:
+                             log.status)
+    Time synchronisation     not checked: the access scheck was given cannot read this; it needs
+                             sudo (time.ntp: requires elevated read)
+Not requested            A one-host check reads this host only. Your accounts, code, cloud, domains
+                         and email were not looked at.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 2 open (1 medium, 1 low), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  medium  The macOS application firewall is disabled (macos) [fw.app_firewall_disabled]
+   Observed      fw.global#1 (07:12, as deploy): Firewall is disabled. (State = 0)
+   Severity      medium
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Turn the application firewall on in System Settings > Network > Firewall, or from
+                 the command line.
+                 Caveat: This is a per-application filter, not a packet filter; it does not replace
+                   a network firewall.
+                 Commands (review before running):
+                   sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+
+2  low  Software updates are pending (macos) [updates.pending]
+   Observed      pkg.softwareupdate#1 (07:12, as deploy): name=Safari27.0TahoeAuto-27.0 version=27.0
+                 (+2 more)
+   Severity      low
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Review the pending updates and apply them with the host's package manager.
+                 Caveat: Some updates need a restart to take effect; schedule accordingly.
+                 Commands (review before running):
+                   # review the list first, then apply with apt / dnf / zypper / softwareupdate
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # The macOS application firewall is disabled (macos)
+    - id: fw.app_firewall_disabled
+      asset: macos
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # Software updates are pending (macos)
+    - id: updates.pending
+      asset: macos
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  Run again: macos: the connection was lost after 26 of 28 checks; 2 were not run. What was read
+    before is kept and assessed. scheck only reads; an interrupted run leaves nothing half-changed.
+  On macos, 5 checks need root: log.status, privesc.sudoers, privesc.sudoers_d, remote.login,
+    time.ntp. To read them, run again with --sudo.
+  On macos, this version of scheck has no rule for network exposure, accounts, privilege escalation,
+    startup and persistence, logging and audit. What was read is in the JSON report (--format json)
+    for a person to look at.
+  To run again: scheck run --host deploy@macos (with the same flags)
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+FACTS READ ON MACOS
+
+DOMAIN                   STATUS   CHECK                    READING
+Host identity            ran      host.hostname            mac-fixture.local
+                                                           Hostname
+Host identity            ran      host.platform_uuid       AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
+                                                           IOPlatformUUID (hashed into host.id)
+Operating system         ran      os.release               3 settings
+                                                           macOS product name, version and build
+Software updates         ran      pkg.softwareupdate       3 updates available [finding: low]
+                                                           Pending macOS software updates (cached
+                                                           scan)
+Disk encryption          ran      disk.fdesetup            FileVault is On.
+                                                           FileVault status
+System integrity         ran      integrity.csrutil        System Integrity Protection status:
+                                                           enabled.
+                                                           System Integrity Protection status
+System integrity         ran      integrity.spctl          assessments enabled
+                                                           Gatekeeper assessment status
+Firewall                 ran      fw.blockall              Firewall has block all state set to
+                                                           disabled.
+                                                           Application firewall block-all-incoming
+                                                           state
+Firewall                 ran      fw.global                Firewall is disabled. (State = 0)
+                                                           [finding: medium]
+                                                           Application firewall global state
+Firewall                 ran      fw.stealth               Firewall stealth mode is off
+                                                           Application firewall stealth mode
+Network exposure         ran      net.listeners            23 listening sockets
+                                                           Listening TCP sockets with owning process
+Remote access            ran      remote.launchd_disabled  10 service overrides
+                                                           launchd service overrides in the system
+                                                           domain (screensharing, RemoteDesktop,
+                                                           ftpd, smbd ...)
+Remote access            skipped  remote.login             requires elevated read
+                                                           Remote Login (sshd) setting
+Accounts                 ran      accounts.admins          GroupMembership: root alice
+                                                           Members of the admin group
+Accounts                 ran      accounts.users           134 accounts
+                                                           Local accounts with their UniqueID
+Privilege escalation     skipped  privesc.sudoers          requires elevated read
+                                                           sudoers policy
+Privilege escalation     skipped  privesc.sudoers_d        requires elevated read
+                                                           sudoers.d drop-ins (file:line, non-empty
+                                                           lines)
+Startup and persistence  ran      persist.launch_dirs      3 launchd plists
+                                                           Third-party LaunchDaemons and
+                                                           LaunchAgents
+Startup and persistence  ran      persist.launchctl        555 launchd jobs, 284 running
+                                                           Loaded launchd jobs in the session domain
+Filesystem               ran      fs.suid                  0 SUID files
+                                                           SUID binaries under local prefixes
+                                                           (depth-capped)
+Logging and audit        skipped  log.status               requires elevated read
+                                                           Unified logging configuration
+Time synchronisation     skipped  time.ntp                 requires elevated read
+                                                           Network time synchronisation setting
+Session and shell        ran      sys.platform             Darwin
+                                                           Kernel name (uname -s), used for platform
+                                                           detection
+Session and shell        ran      sys.shell                /bin/zsh
+                                                           Login shell of the audit session
+Session and shell        ran      sys.uid                  501
+                                                           Effective uid of the audit session
+Session and shell        ran      sys.uname                Darwin mac-fixture.local 25.6.0 Darwin
+                                                           Kernel Version 25.6.0: Fri Jul 31
+                                                           19:16:36 PDT 2026; root:xnu-12377.161.14~
+                                                           5/RELE…
+                                                           Full kernel identification
+
+FOR AUTOMATION
+Exit 2: incomplete: macos lost its connection part-way. Exit 2 takes precedence over exit 1, so a
+pipeline that gates on exit 1 will not see the 1 open finding. Exit 0 is not a clean result either:
+it means only that no rule that could decide found an open problem at or above threshold.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

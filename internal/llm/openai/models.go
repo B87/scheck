@@ -5,7 +5,7 @@ import "strings"
 // modelInfo is what the adapter knows about a model family: the context
 // window (docs/spec/model.md §4: known from validated configuration or reliable
 // metadata, never assumed) and the list price per million tokens for the
-// cost line (docs/spec/model.md §6). A model outside the table needs max_context: and reports
+// cost line (docs/spec/model.md §6). A model outside the table needs --max-context and reports
 // cost null. Prices are the published OpenAI list prices at the time of
 // writing and are only used to fill usage.cost_usd; an operator on another
 // endpoint gets tokens and null cost, never an invented number.

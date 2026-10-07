@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/b87/scheck/internal/finding"
 )
 
 // Vocabularies of the engagement file (docs/spec/engagement.md).
@@ -24,13 +26,21 @@ var (
 	Exposures     = []string{"internet", "vpn", "lan", "airgapped"}
 	Environments  = []string{"prod", "staging", "dev"}
 	Protos        = []string{"tcp", "udp"}
-	Areas         = []string{"identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"}
+	Areas         = areaKeys() // finding.Areas: one list for not_used and the report
 	Profiles      = []string{"baseline", "hardened"}
 	Elevations    = []string{"none", "sudo"}
 	DeployTargets = []string{"production", "staging", "development"}
 	// Modes are the probe and scan modes; this build runs only off.
 	Modes = []string{"off", "confirm", "auto", "all"}
 )
+
+func areaKeys() []string {
+	out := make([]string, len(finding.Areas))
+	for i, a := range finding.Areas {
+		out[i] = string(a)
+	}
+	return out
+}
 
 // Defaults a file does not set, as `scheck init` writes them.
 const (
@@ -589,6 +599,25 @@ func (v *validator) resolveRef(key, ref string) (Ref, bool) {
 	return Ref{}, false
 }
 
+// acceptedAsset resolves an accepted risk's asset: a reference as the file
+// writes one, or the canonical id of an asset under a root and no exclude,
+// as the report prints it for an asset found by discovery
+// (docs/spec/engagement.md, "Identity, references and validation").
+func (v *validator) acceptedAsset(key, ref string) {
+	if ref == "" || v.assets[ref].ID != "" || v.refs[ref].ID != "" {
+		v.resolveRef(key, ref)
+		return
+	}
+	r, ok := ParseID(ref)
+	if !ok || v.rootOf(r) == nil {
+		v.fail(key, "%q is neither an assets name, a root as written under roots, nor the canonical id of an asset under a root", ref)
+		return
+	}
+	if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return x.OrgUnit == "" && Under(r, x) }); i >= 0 {
+		v.fail(key, "%s is excluded by %s, so nothing on it is read or accepted", r.ID, v.excludes[i].ID)
+	}
+}
+
 // tenantRef resolves a reference that must name a SaaS tenant.
 func (v *validator) tenantRef(key, ref string) {
 	if r, ok := v.resolveRef(key, ref); ok && r.Kind != KindSaaS {
@@ -716,7 +745,7 @@ func (v *validator) intent() {
 				v.fail(key+".id", "%q is neither a catalog finding id nor a custom: id", a.ID)
 			}
 		}
-		v.resolveRef(key+".asset", a.Asset)
+		v.acceptedAsset(key+".asset", a.Asset)
 		v.required(key+".reason", a.Reason)
 		v.handle(key+".accepted_by", a.AcceptedBy)
 		v.date(key+".expires", a.Expires)

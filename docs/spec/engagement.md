@@ -72,7 +72,7 @@ exists, and the release gate proves they all do. A consumer is never stubbed to 
 
 | Topic | Question | Consumed by |
 |---|---|---|
-| Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted" |
+| Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted", worded in "The report" |
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
 | Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is *insufficient evidence* for the sending rules, never treated as non-sending. The severity of DMARC `p=none` depends on whether the domain sends |
 | Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
@@ -270,7 +270,10 @@ exits 3, and so do two `assets` entries for the same id and an entry for an asse
 In the file, an asset reference (`secrets[].asset`, `data.matters_most[].asset`,
 `accepted_risks[].asset`, the keys of `access.admins`, `access.mfa[].where`) is an
 `assets` name or a root's value exactly as written under `roots`. A reference that
-resolves to neither exits 3. `data.backups[].account` is a declaration, not a
+resolves to neither exits 3. `accepted_risks[].asset` may also be a canonical id that
+falls under a declared root and no `exclude`, checked as an intent URL is, since a
+finding on an asset found by discovery (a repository under an organization root) is
+named by its canonical id and must be acceptable as the report prints it. `data.backups[].account` is a declaration, not a
 reference: it may name an account outside scope, and the coverage row then says
 "declared, outside scope, not verified".
 
@@ -303,11 +306,21 @@ members as a `people` stanza to fill in. `service` and `break_glass` accounts ar
 exempt from the stale and never-logged-in rules and counted apart from human admins;
 the report lists them.
 
+Three traps the people rules must not fall into, each tested in the rule's fixtures: a
+`left` date that has not yet passed in `engagement.timezone` (a person serving notice)
+makes the left-person rule abstain until it has; a suspended account is correct
+offboarding, never "still active"; and an account created recently that has never
+signed in is a new hire, not a stale account, so the never-signed-in rule reads the
+creation date.
+
 **Accepted risks** follow `host-collector.md §5.2` for `id` (a catalog finding id or
 `custom:`) and add `asset`, `subject`, `accepted_by` and `expires`. `subject` is the
 finding's instance key (a login, a repository, `port/proto`); without it the acceptance
 covers every instance of that id on that asset, and the report says so. Past `expires`,
-the adjustment stops and the report says so.
+the adjustment stops and the report says so; `expires` is a date in
+`engagement.timezone`, compared with the collection time, never the time the report is
+rendered. The report prints a ready-to-paste entry under each open finding ("The
+report", "Findings").
 
 **Time.** A timestamp is RFC 3339 with seconds and an explicit offset. A date lasts
 until the end of that day (24:00) in `engagement.timezone`, which is required. Both are
@@ -370,7 +383,8 @@ relative or `/`.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
   under a root.
-- An accepted risk needs `id`, `asset`, `reason` and `accepted_by`.
+- An accepted risk needs `id`, `asset`, `reason` and `accepted_by`; an empty `reason`
+  counts as missing.
 - The file is one YAML document, written out: a second document, anchors, aliases,
   merge keys, explicit tags (`!!binary`) and a key repeated in a mapping exit 3, so
   nothing in the file is dropped or decoded from text the credential check did not
@@ -388,21 +402,58 @@ applied, and `redact_extra` as a count of patterns.
 
 ## Severity in context
 
-Context moves severity in code, attributed as `host-collector.md §5.4` describes, never
-by a model.
+Context moves severity in code, attributed as `host-collector.md §5.3` and §6.2
+describe, never by a model. A severity nobody can explain starts with an adjustment
+nobody listed, so the engagement's adjustments are a closed table:
+
+| Rule | Source | Moves | Step |
+|---|---|---|---|
+| `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` |
+| `data_matters_most` | the declaration, `data.matters_most[i]` | findings on that asset in the identity and access, secrets, data stores and external surface areas | +1 |
+| `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 |
+| `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience) | the finding for the weakness declared absent | +1 |
+| `attribute:<name>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute of its subject or of who it affects (`attribute:admin` on a left person's account, `attribute:admin_grantor` on an OAuth app a super admin or break-glass account granted) | +1 |
 
 - **Exposed on purpose** applies only to exposure findings: those whose whole claim is
   that a URL answers or names its software (reachable, version or technology
   disclosed), on that exact URL. A finding about what the response contains (a secret,
   a file, a debug page) is not one. Every finding definition declares whether it is
-  one. Secrets, TLS and configuration findings on the same asset never move: an exposed
-  `.env` on a public-on-purpose site is still high. Listeners on a host are governed by
-  its `expected_services`, not by intent.
-- **Data that matters most** raises findings on that asset by one step in the identity
-  and access, secrets, data stores and external surface areas. Findings in other areas
-  (headers, email, host hardening) do not move.
+  one (`exposure_finding`). Secrets, TLS and configuration findings on the same asset
+  never move: an exposed `.env` on a public-on-purpose site is still high. Listeners on
+  a host are governed by its `expected_services`, not by intent.
+- **Data that matters most** leaves findings in other areas (headers, email, host
+  hardening) where they are. A finding's area is a required field of its definition.
+  Whether a host's remote-access and account findings move on the host that holds the
+  data is decided in E9, with the lab.
+- **A contradiction** raises because someone believes they are protected, which makes
+  the weakness worse than the same one never declared.
+- **An attribute raise or a separate id.** When the fix is the same and only the stakes
+  differ (a person who left and is an admin), the definition declares an attribute
+  raise; when the fix differs (an admin without 2-step verification is enrolled, the
+  organization's enforcement is switched on), the findings are separate ids.
 - **Accepted risks** keep the finding in the report with `status: accepted`, the
   reason and who accepted it, and out of the exit code.
+
+**Stacking.** A collector's own table applies first and is the collector's (`by:
+collector`; the host's in `host-collector.md §5.3`). The engagement's rules follow in
+the table's order (`by: engagement`), each at most once per finding instance and one
+step each. Severity never rises past critical, and a step that cannot move it is
+recorded in the chain but not as an adjustment. The engagement's table only raises,
+except `exposed_on_purpose`, which only lowers, and only an exposure finding, and only
+to `info`.
+
+**Base severity anchors.** With rules only, the ranking is the base-severity table plus
+context, so bases must agree across collectors or "Fix these first" fails whatever the
+renderer does. Each anchor is a base before context, with the context step that moves
+it beside it. The `security-consultant` reviews and freezes them before E5 assigns the
+first network collector's bases, and every later base is placed against them:
+
+| Base | Anchors |
+|---|---|
+| critical | a usable empty password; a credential in a public repository or its history; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
+| high | 2-step verification not enforced at the identity provider; a person who left still active (+1 `attribute:admin`); Owner on a human or service account; a public bucket; an admin without 2-step verification; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); a write-all default workflow token with actions not pinned to a commit |
+| medium | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC `p=none` on a domain that sends (a domain under `mail.no_mail` falls under the non-sending rules instead); an OAuth app with a broad scope (+1 `attribute:admin_grantor`) |
+| low | missing HSTS; pending updates of unknown class |
 
 ## Reachability and vantage
 
@@ -482,7 +533,11 @@ output of every collector, through the runner for hosts and through the scope ga
 API and web evidence. A disabled check's rules are *not assessed*, and coverage names
 each entry that removed something under `excluded_by_operator`, so a narrowed run never
 reads as a clean one. The report says how many operator redaction rules matched and
-never prints a pattern, since a pattern is often the very string it hides.
+never prints a pattern, since a pattern is often the very string it hides. Redaction
+applies to what collectors read; names and locators are written into the stage
+documents and the report as declared, so validation warns when a root, an asset's name
+or its locator matches a pattern, naming their positions and the pattern's index, never
+either string.
 
 **The aliases, for 0.0.2 only.** `scheck local` is `scheck run --host local` and
 `scheck ssh user@host` is `scheck run --host user@host`; each prints a deprecation line
@@ -491,11 +546,12 @@ other exits 3 naming its replacement:
 
 | 0.0.1 flag | Under `scheck run --host` |
 |---|---|
-| `--user`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator; `--identity`, `--known-hosts` |
-| `--sudo`, `--elevate`, `--profile` | the same |
+| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (`--port` wins over a port in the argument, as in 0.0.1); `--identity`, `--known-hosts`. `scheck ssh local` exits 3: `local` is this machine, `scheck run --host local` |
+| `--sudo`, `--elevate`, `--profile` | the same, except that `--sudo` with `--elevate none` exits 3, where 0.0.1 let `--elevate` win |
 | `--timeout` | the same: the host collector's run timeout, not `limits.timeout` |
 | `--format`, `--out`, `-v`, `-vv`, `--state-dir`, `--no-persist` | the same; `--format json` prints the engagement report |
-| `--include-evidence`, `--record-fixtures` | the same, on the host asset's evidence file |
+| `--include-evidence` | the same: with `--format json`, the hosts' redacted captures inside each embedded envelope, on stdout only |
+| `--record-fixtures` (hidden) | the same: every exec of the host written to a fixture directory, post-redaction |
 | `--stop-after context` | `--stop-after intake` |
 | `--stop-after plan` | exits 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
 | `--stop-after facts` | no flag: it is the run |
@@ -504,7 +560,9 @@ other exits 3 naming its replacement:
 | the model flags, `--only`, `--local-only`, `--format sarif` | exit 3, as in 0.0.1 |
 
 `scheck catalog`, `scheck explain` and `scheck sudoers` stay; `scheck config` goes with
-the file it read.
+the file it read. A 0.0.1 `./.scheck/context/` directory, which `local` and `ssh` read
+implicitly, is refused like the configuration file, so its accepted risks never vanish
+without a word.
 
 **Exit codes.** The four codes keep their meanings (`host-collector.md §7`), and an
 engagement fixes how they are reached:
@@ -520,28 +578,35 @@ engagement fixes how they are reached:
 - `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
   `0`.
 
-For a host, exit 3 is a positive list: no SSH user in the locator, an unknown or
-changed host key, an unreadable identity or known_hosts file, failed authentication,
-and a canary mismatch. That host is recorded as `refused`; the other assets are still
-collected and every stage is written before the run exits 3, so nothing already read
-from a client's host is discarded. Every other failure to reach a host (a name that
+For a host, exit 3 is a positive list. A host asset with no SSH user is refused by
+Scope before any target is contacted, so nothing is read and no run directory is
+created. An unknown or changed host key, an unreadable identity or known_hosts file,
+failed authentication and a canary mismatch are found on contact: that host is recorded
+as `refused`, the other assets are still collected and every stage is written before
+the run exits 3, so nothing already read from a client's host is discarded. A canary
+that never answers is not a mismatch: nothing was shown to be altered, so it is a
+transport failure. Every other failure to reach a host (a name that
 does not resolve, TCP refused or timed out, a handshake reset, cut off or past its
 deadline) is a transport failure: the asset is `failed` and the run exits 2. A session
 lost after it worked stops that host's plan where it was lost, keeps what was read, and
-is `incomplete` with reason `failed`: never a complete run of unavailable checks. Until
-E2 makes them aliases, `scheck ssh` keeps exiting 3 on any connection failure, and
-shares the lost-session rule (`host-collector.md §7`). The canary's echo is printed
-only after redaction, and cut short.
+is `incomplete` with reason `failed`: never a complete run of unavailable checks. A
+session lost while the canary itself ran is a transport failure too, not a canary
+mismatch: nothing was shown to be altered. As aliases of `scheck run --host`, `scheck
+ssh` and `scheck local` follow these rules too: a host that never answered now exits 2
+where 0.0.1 exited 3, the one change a CI job gating on `scheck ssh` sees. The canary's
+echo is printed only after redaction, and cut short, in the JSON only.
 
 So a one-host run exits as the 0.0.1 command did for the same findings and the same
-failures, and a CI job gating on `scheck ssh` keeps its meaning.
+failures, except a host that never answered (2, a transport failure, where 0.0.1 said
+3), and a CI job gating on `scheck ssh` keeps its meaning.
 
 **JSON consumers.** The engagement report's JSON carries each host asset's collector
 envelope (`host-collector.md §6.4`) whole, under that asset, with its own
 `schema_version`; `run.assessment`, `assessments` and `facts` keep their shape one
 level down. The report on stdout is complete without the run directory, so
 `--no-persist` loses nothing, and `--include-evidence` adds captures to the embedded
-envelope. The aliases' deprecation line names the new path of `run.assessment`.
+envelope. The engagement's own findings are authoritative where their severity differs
+from the envelope's ("The report", "Findings"). The aliases' deprecation line names the new path of `run.assessment`.
 
 ## Runs, state and configuration
 
@@ -560,7 +625,8 @@ and locked while a run holds it:
                        for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
-  plan.json            stage 4: the checklist per asset (with a model, hypotheses too)
+  plan.json            stage 4: the checklist per asset, and each host's planned and
+                       disabled checks (with a model, hypotheses too)
   evidence/            stages 3 and 5: one file per result, redacted and truncated
   findings.json        stage 6: rule outcomes and follow-ups opened and settled
   report.json          stage 7, with report.txt
@@ -578,12 +644,12 @@ carries its collection time and the principal it was read as. A host asset's own
 JSON lands under `evidence/`, not under the host collector's `runs/<host.id>/`, so an
 engagement never mixes with standalone host runs.
 
-**In 0.0.2 E1b.** `<started>` is the start time in UTC, RFC 3339 to the second. The
+**In 0.0.2 (E1b, E2).** `<started>` is the start time in UTC, RFC 3339 to the second. The
 lock is an `flock` on `.lock` in the directory, released when the run ends or its
 process dies; a second run on a locked directory exits 3, and so does a directory that
 already holds a finished run until resume exists (E4). `--stop-after intake` validates
 and prints the file and creates no directory; without `--stop-after` a run goes through
-the last stage built, Analyze, until the report arrives (E2). Scope writes the declared
+Report, which writes `report.json` and `report.txt` ("The report"). Scope writes the declared
 roots as written and refuses, before any target is contacted, a host asset with a
 `jump` or without an SSH user. Every asset of kind `host`, a root or an `assets` entry,
 is collected; an asset of any other kind is `not_collected` with reason
@@ -594,12 +660,18 @@ collector's envelope; its `context_sources` names `<file> assets.<name>` with ki
 name the asset by catalog id without a `subject`, each attributed to its own entry
 (`<file> intent.accepted_risks[i]`), a later entry for the same id winning. The host
 grader accepts a whole id, so a `subject` acceptance is not widened into one: it is
-listed under `acceptances_not_applied` in `findings.json` and printed as a warning,
-and becomes applicable when host findings carry instance keys. Scope's refusals (a
+listed under `acceptances_not_applied` in `findings.json`, printed as a warning and in
+the report as not applied, and becomes applicable when host findings carry instance
+keys. Accepted risks are graded at the run's start time, in `engagement.timezone`.
+Recon writes every asset's commands to `audit.jsonl` and keeps each asset's entries for
+the report's trace, so the trace survives `--no-persist`. A canary mismatch's echo is
+kept apart from its detail (`echo` in `recon.json` and the report's JSON). Scope's refusals (a
 `jump`, a host without an SSH user) happen before the run directory is created, so a
-refused run leaves nothing behind. With `--format json` stdout is the last stage's
-document (`--stop-after check` prints one that no file holds, since Check writes none
-until E9); text is a summary per asset until the report.
+refused run leaves nothing behind. Stdout is the report, as text or with `--format json`
+as `report.json` (`--include-evidence` adds the hosts' captures to stdout only); a run
+stopped earlier prints that stage's document with `--format json` (`--stop-after check`
+prints one that no file holds, since Check writes none until E9), and a summary per
+asset as text.
 
 **Stop and resume.** `--stop-after <stage>` ends the run after that stage's file is
 written. `scheck run <directory>` resumes:
@@ -628,59 +700,545 @@ discovered asset is first-party, scheck writes an `assets` entry with
 after `scheck init`, and records the new hash. A run with no terminal prints the stanza
 instead and leaves the asset without first-party evidence.
 
-## The report's coverage
+## The report
 
-The report opens with a coverage table, before any finding, so a short list of
-findings cannot be read as a clean result. The marks are mechanical, so a test can
-check them:
+The report is what the engagement delivers, and its first page decides what a small
+team fixes this week. It has two jobs: put the few things to fix first in front of the
+reader, and stop a short list from being read as cover where there is none. It is
+written for the operator, not for their customers; a version to hand out is a later
+audience option. Defined with the `security-consultant` (define and review modes) and
+read by the `client` (report mode) for 0.0.2 E2; `report.txt` and `report.json` are
+stage 7 of the run directory, and stdout carries the same report under
+`--no-persist`.
 
-| Mark | Means |
+**Words, not tokens.** The text report is read by someone who has not read this spec,
+on a busy day. It prints plain words for marks and reasons ("Reason wording" below);
+the tokens (`partial`, `no_rule`, `insufficient_permission:<scope>`) are the JSON's
+and `-v`'s, where a consumer or a person searching for them reads them. In text a mark
+is *checked*, *checked in part*, *not checked*, *not applicable* or *outside scheck*.
+Templates never use a gendered pronoun: a person is named by handle or address, or
+"the person".
+
+### Order
+
+| # | Section | Present |
+|---|---|---|
+| 1 | Header: name, operator, collection span, version, trigger, method, authorization, handling notice | always |
+| 2 | Run status: what was refused, then what is incomplete, or which systems were read | always |
+| 3 | Summary: what was checked and what was not, "Fix these first", the not-a-clean-bill statement | always |
+| 4 | Coverage: the full table, the Hosts row expanded, the fold line, *Other declared SaaS* and *outside scheck* rows | always |
+| 5 | Findings: ranked open findings, then informational, then accepted | always; "0 open findings" is written out |
+| 6 | Not checked, grouped by what would close the gap | when anything was not checked |
+| 7 | Excluded, narrowed and not run | always; probes and scans are one line in 0.0.2 |
+| 8 | Notes for the readout | when any note exists |
+| 9 | Close: the exit code and why, for automation; where the files are | always |
+
+Coverage is read before any finding: the summary says, in two to five lines of plain
+words, what was checked and what was not, above "Fix these first", and the full table
+follows the summary so the top five stay on the first screen once the Hosts row
+expands. Run status sits above the summary, so an incomplete or refused run is the
+first thing read; with trigger `incident`, the incident block stays above it.
+
+**Header.** The engagement name and `engagement.operator`; the collection span in
+`engagement.timezone`, the zone named; the scheck version; the trigger (`not declared
+(one-host check)` for `--host`); a stage document edited by hand and a principal that
+changed on resume ("Stop and resume"). Fixed lines:
+
+- Method, in 0.0.2: `rules only: a fixed checklist per asset type, no model, no
+  hypotheses. Reading only: nothing was probed, scanned, exploited or changed. Not a
+  penetration test.` A questionnaire asks for the date of the last penetration test,
+  and this report's date must not be written there.
+- Authorization absent: `none recorded. This run only read, with access you already
+  hold; scheck requires a record only for probes and scans.` Holding access is not
+  authorization, and the line must not teach that it is. Present: `by`, `date`, each
+  window, `source` and `note`, and the levels used (`levels used: passive, observe.
+  probe off, scan off.`). The block is the operator's declaration, never presented as
+  verified ([scope.md](scope.md#authorization)).
+- Handling notice: `Handle with care: this report names people, accounts, internal
+  hosts and services, and says where weaknesses are. Keep it as private as a
+  list of passwords. It is written for you, not for your customers.`
+- Trigger `incident` adds, under the trigger: `This is not incident response. scheck
+  does not look for signs of intrusion, and evidence read from a possibly compromised
+  system cannot be trusted. This report lists weaknesses in what scheck could read; it
+  cannot tell you whether you are safe now or how the incident happened. For that you
+  need an incident responder; what this report can do is list weaknesses to close.`
+
+**Run status.** One block per condition, refused before incomplete, each row `{asset,
+reason, detail}` in words ("Incompleteness and refusals" below). When findings are
+open and the exit code is 2 or 3: `Findings are also open: N at or above their asset's
+threshold; see Findings below.` With nothing refused or cut, the block names what
+was read and how much of it was judged, never "complete", "OK", "passed" or a sentence
+that reassures before anything is read: `Read: deploy, google-workspace (checked only in
+part: deploy, 4 of 13 host areas judged). See Coverage for what was not checked.` Only
+collected assets are named as read: an asset no collector reads that is not a root (so
+the run is not incomplete) is named apart, `Not read: shop (this version of scheck does
+not read it)`. With nothing open at medium or above, the summary names per host how many
+checks gave no answer, so "nothing open" is never read as a clean host.
+
+**Summary.** Two to five lines, `Checked` and `Not checked`, naming areas and systems
+in plain words; then "Fix these first" ("Ranking" below); then the not-a-clean-bill
+statement with this run's numbers:
+
+```
+A short list is not a clean bill of health. scheck reports only what its rules could
+decide. Checked in part: hosts. On deploy, 4 of 13 host areas were judged, each only on
+the settings named under Coverage; 6 have no rule in this version and 3 had no usable
+evidence. Not checked: identity and access, secrets, cloud configuration, … Anything not
+checked is unknown, not fine.
+```
+
+Risk areas are named, never given as a fraction, which reads as a score; a host's areas
+are counted, because "Hosts: checked in part" hides that most of a host was never
+judged (the summary line reads `Hosts (deploy, 4 of 13 areas judged)`). Areas declared
+under `not_used` are named as not applicable. On a `--host` run the not-checked list is
+`Nothing but this host was looked at.` With nothing
+open at medium or above the lead is `Nothing open ranks at medium or above among what
+was checked.`, never "no findings", "all clear" or "nothing to fix". The summary has no
+score, grade, percentage or compliance claim.
+
+**Not checked, and what would close the gap.** Grouped by the action that closes it,
+as the host report groups by remedy (`host-collector.md §6.6`): re-run with elevation;
+for missing access, the permission needed, read-only where the provider offers it, and
+where to look by hand for the one setting it hides ("GitHub > Settings >
+Authentication security"), never "give scheck an owner's token" as the default; or
+"this version of scheck does not read it; assess it by other means until it does". No
+manual checklist is printed for a root without a collector: it would be a second,
+unreviewed catalog.
+
+**Excluded, narrowed and not run.** Every `exclude` entry and whether it matched
+anything (before discovery: "not matched: no discovery in this version"); every
+narrowing entry, as "narrowed in the engagement file", and what it removed; redaction
+counts, built-in rules by rule and `redact_extra` as rules and matches, never a
+pattern; for `deny_paths`, the reads each entry denied, each counted once under the
+longest entry its requested path falls under, and any none accounts for (a symlink
+into a denied prefix) under `deny_paths` as a whole; probes and scans (in 0.0.2: `none exist in this version; nothing beyond
+reading was attempted.`, and from 0.0.3 the probes that would have applied, as *not
+run*); acceptances not applied, with why.
+
+**Notes for the readout.** Not findings, and not counted: what each acceptance came to
+when it was not applied ("Acceptances" below), acceptances that expire within 30 days
+or have no `expires`; a listed admin who is not one; a declared person or system
+scheck found no trace of; declarations scheck could not verify; the count of
+unattributed members; the service and break-glass accounts, listed ("People").
+
+**Close.** For automation, and for whoever wires scheck into a pipeline: the exit code
+and why, then where `report.txt`, `report.json`, `audit.jsonl` and the evidence are.
+
+| Exit | Line |
 |---|---|
-| *assessed* | every sub-item of the area ran with recognized evidence on every in-scope asset it applies to |
-| *partial* | some did; the row names what ran and what did not |
-| *not assessed* | none did; the row gives the reason |
-| *not applicable* | the operator declared under `not_used` that the area does not apply (`not_used: [hosts, cloud]`); printed as their declaration |
-| *outside scheck* | scheck does not cover this area in any mode |
+| 0 | `Exit 0: no open finding at or above threshold among the N rules that could decide. That is not a clean result: M rules had no usable evidence, and K areas were not checked.` |
+| 1 | `Exit 1: N open findings at or above their asset's threshold (<asset>: <severity>, profile <p>; every other asset: medium). Exit 0 would not have meant a clean result either.` |
+| 2 | `Exit 2: incomplete.` and why; with open findings, `Exit 2 takes precedence over exit 1, so a pipeline that gates on exit 1 will not see the N open findings.`; then the exit-0 sentence |
+| 3 | `Exit 3: <asset> was not assessed: <reason in words>.`, then `The other assets were read and are reported above.` only when there are other assets, and the precedence sentence with `Exit 3` when findings are open |
+
+Under `--no-persist` the close says that no run directory or audit log was written and
+that the command trace is in the JSON report.
+
+### Coverage
+
+The marks are mechanical, computed beside the rules and tested, never inferred by a
+renderer:
+
+| Mark | Text | Means |
+|---|---|---|
+| `assessed` | checked | every sub-item of the area decided with recognized evidence on every in-scope asset it applies to |
+| `partial` | checked in part | some did; the row names what decided and what did not |
+| `not_assessed` | not checked | none did; the row gives the reason |
+| `not_applicable` | not applicable | the operator declared under `not_used` that the area does not apply (`not_used: [hosts, cloud]`); printed as their declaration |
+| `outside_scheck` | outside scheck | scheck does not cover this area in any mode |
+
+**A sub-item is a rule, never a check.** A rule that is not applicable on a platform
+is no answer about the host: it leaves the count, and a family whose only applicable
+member could not decide is *not assessed*. For a network collector it is a rule (or a
+family of rules sharing a finding id) applied to an asset. For a host it is a finding
+id on that host: a host domain is *assessed* when every selected rule in it decided
+(matched, not matched, or not applicable on recognized evidence), *partial* when some
+did, *not assessed* when none did. A domain whose checks ran but that no rule judges is
+*not assessed* with reason `no_rule`, and its detail names what was read ("2 listening
+sockets read; whether they should be reachable is not judged"): rules alone judge no
+Linux listener and no host firewall (`host-collector.md §6.5`), and "check ran" must
+never read as "risk judged". Rules that share a finding id on one host are a family:
+when one decided on complete evidence (`updates.pending` through apt), the others
+failing with `command_missing` (dnf, zypper) do not lower the domain's mark and are
+listed only under `-v`. Host domains that carry no rule (host identity, operating
+system, session and shell, text utilities) are not coverage at all: they are absent
+from the table and its JSON, and their facts stay in the host's envelope.
+
+**A mark counts its population.** Each row and sub-item carries `population: {kind,
+in_scope, read}`: the assets (or repositories, users, entry points) of the kind it
+reads that are in scope, and how many were read. A row is *assessed* only when every
+in-scope one was; CI/CD read on two repositories of an organization with 120 in scope
+is *partial*, with "2 of 120 repositories". A cap carries its `selection` ("the 40
+most recently pushed"), since a sample nobody can name cannot be compared between
+runs.
 
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
 `not_on_plan:<feature>`, `collector_not_built`, `refused` (a host refused us on the
-positive list of "Exit codes"), `not_declared` (no root of the kind
-this area reads was declared), `excluded_by_operator`, `limit_reached`, `failed` or
-`sampled`, with a detail line. `sampled` makes a row at most *partial*. Each row also prints the
-assets covered and those excluded by name, the principal the data was read as, the
-collection span, caps and sampling ("history of 40 of 120 repositories; blobs over
-5 MB skipped"), and declared facts scheck did not verify ("backups declared in
-gcp:example-backups, not verified").
+positive list of "Exit codes"), `not_declared` (no root of the kind this area reads was
+declared), `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
+`unavailable:<reason_code>` (a collector's own per-read reason, kept verbatim after the
+colon) or `no_rule` (read, but no rule in this version judges it), with a detail line.
+A row that is not *assessed* always carries its reasons: a *partial* row usually has
+several (a permission, an excluded unit, a sample), so a row holds a list, never one
+"main" reason. `sampled` makes a row at most *partial*. Only `failed` and
+`limit_reached` on a cut collection, and a declared root with no successful read,
+change the exit code ("Exit codes"); an `unavailable` read makes coverage *partial* and
+does not. A host's `reason_code`s (`host-collector.md §6.4`) map as follows:
+
+| Host `reason_code` or cause | Coverage reason |
+|---|---|
+| `requires_elevation`, `sudo_refused` | `insufficient_permission:sudo` |
+| `run_timeout`, `canceled` | `limit_reached` |
+| `path_denied` by the asset's `deny_paths`; a check in `disable_checks` | `excluded_by_operator` |
+| a check above the asset's profile | `not_on_plan:profile=<profile>` |
+| `path_denied` by compiled policy | `unavailable:path_denied` |
+| `command_missing`, `check_timeout`, `exec_error`, `exit_error`, `parse_error`, `extract_error`, `metadata_unavailable` | `unavailable:<reason_code>` |
+| `unknown_check`, `invalid_params` | `unavailable:<reason_code>`; a defect, never expected in a report |
+| the check ran, but its rule could not read what it returned (`unrecognized-value`, `partial-output`, …, `host-collector.md §6.5`) | `unavailable:<reason>`, hyphens as underscores |
+| a fact read that no rule judges | `no_rule` |
+| the session lost after it worked | `failed`; the checks after the loss are `not_run`, never `unavailable` |
+
+**Reason wording.** The text prints each reason as a fixed phrase, with the detail.
+Each phrase says what is unknown and what would change it; none reads as a verdict on
+the target:
+
+| Reason | Text |
+|---|---|
+| `no_credentials` | no access was given for it |
+| `insufficient_permission:<scope>` | the access scheck was given cannot read this; it needs `<scope>`, read-only where the provider offers it |
+| `not_on_plan:<feature>` | your plan with the provider does not include `<feature>`; for a host profile, not in the checks you chose (profile `<p>`) |
+| `collector_not_built` | this version of scheck does not read `<kind>` |
+| `refused` | refused before any check ran; the host's line names the cause by kind ("its host key changed, so it was not contacted") |
+| `not_declared` | not part of this engagement; to include it, list it under `roots` in `<file>` |
+| `excluded_by_operator` | left out by the engagement file (`<entry>`) |
+| `limit_reached` | stopped by a time or size limit (`<limit>`) |
+| `failed` | not run: scheck's connection to the host dropped before this check; for a host never reached, "could not connect from this machine" |
+| `sampled` | only part was read: `<n> of <m> <unit>` (`<selection>`); the rest is unknown |
+| `unavailable:command_missing` | the tool that would tell is not installed on the host, so scheck could not tell (this is not a finding) |
+| `unavailable:<other>` | the command that reads it did not give a usable answer (`<code>`) |
+| `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
+
+A token is never wrapped across lines; the detail wraps.
+
+Each row also carries the assets covered and those excluded by name; the principal the
+data was read as (once per asset in text, per row and per piece of evidence in JSON),
+with where its permissions came from (`provider`, `declared` or `unknown`; text prints
+"permissions not readable" for `unknown`, never "read-only"); the collection span (per
+row in text only when it differs from the header's); caps and sampling, with the
+selection; narrowing that removed something; and declared facts scheck did not verify
+("backups declared in gcp:example-backups, not verified"), the line most often misread
+as verified. An excluded organizational unit is named and makes the row at most
+*partial* ([scope.md](scope.md)). Per-sub-item marks print in text only when they are
+not *assessed*; JSON carries them all, and every `not_applicable` assessment.
 
 `not_used` takes the area keys `identity`, `secrets`, `cloud`, `data`, `cicd`,
 `external`, `web`, `hosts`, `email` and `logging`, in the order of the table below.
 
 | Risk area | Sub-items |
 |---|---|
-| Identity and access | MFA and 2-step verification enforcement and enrolment, admins against `access.admins`, people attribution, stale, suspended and external accounts, OAuth grants |
+| Identity and access | MFA and 2-step verification enforcement and enrolment, admins against `access.admins`, people attribution (with the count of unattributed members), stale, suspended and external accounts, OAuth grants |
 | Secrets | secrets in repositories and their history, CI secret names, credential files on hosts. At most *partial* in 0.0.2: CI logs, chat and shared documents are not read |
 | Cloud configuration | public storage and snapshots, broad IAM, service account keys, VPC firewall rules |
 | Data stores and backups | public access to databases, backup existence and location. A declaration alone is *not assessed* |
 | CI/CD and supply chain | branch protection, workflow token permissions, deploy keys, action pinning, dependency alerts |
 | External surface | domains, subdomain takeover, exposed services, TLS |
 | Web application | headers and cookies at entry points; exposed files and debug routes from 0.0.3 |
-| Hosts | the host collector's catalog (`host-collector.md`) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below |
 | Email and domain | SPF, DKIM per declared selector, DMARC, non-sending domains |
 | Logging and incident readiness | audit logging enabled, alerting on administrative changes |
-| Endpoints and workstations | *outside scheck*: laptops are where infostealers start, and leaving the row out would imply coverage |
+| Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
 | Application logic | *outside scheck*: authenticated testing of access control and business rules |
+| Processes | *outside scheck*: whether offboarding, incident response and vendor reviews are done as written. The accounts themselves are checked under Identity and access; without the row, "Identity: checked" reads as "offboarding is handled" |
+| Lookalike and typo domains | *outside scheck*: registrations of names you do not own are outside every root ([scope.md](scope.md)), and they are the most common small-company email fraud |
 | Other declared SaaS | one row per tool in `tools` without a collector, by name |
 
-The ranking of findings is labeled as a ranking of what was assessed. A run in which a
-declared root had no successful read (no credentials, collector not built, every read
-denied or failed) exits 2, even when findings fired, so a pipeline never reads exit 0
-or 1 as "covered". A root read in part is *partial* in coverage and does not exit 2 by
-itself; a collection cut by a failure or a limit does ("Exit codes" above).
+**The Hosts row** is one block per host asset, under a mark that aggregates them (all
+*assessed*: *assessed*; none: *not assessed*; otherwise *partial*). Each block has an
+identity line (name, canonical id, operating system, principal and elevation,
+collection span), a counts line (`checks N: R ran, U unknown, X not run. rules M: D
+decided, I had no usable evidence.`, the same counts the run status uses), one sub-row
+per host domain that carries a rule, in the order of the host report's domains. A
+sub-row never prints a bare mark that reads as a pass: a checked domain names what its
+rules judged and what they found (`checked (password login, direct root login):
+nothing found by these rules`, or `: 1 open finding (see Findings)`), then what was
+read there that no rule judges (`also read, not judged: 9 SUID files`); a domain no
+rule judges reads `not judged: …` with what was read; the rest give their reasons. The
+JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
+adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
+anything, a check with no rule included; and `Declared, not verified:` for host context
+no rule consumes in this version (`expected_services` before E9). With more than three
+hosts, each block collapses to its identity and counts lines and the domains that are
+not *assessed*.
 
-The report header states the method ("rules only; the plan is a checklist" in
-0.0.2), and that the report contains personal data and internal topology. It is written
-for the operator, not for their customers; a version to hand out is a later audience
-option.
+**The fold line.** Rows whose reason is `not_declared` fold into one line, labeled `Not
+requested`, only when no declaration in the file points at the area. An area the file
+half-declares (a `tools` entry with no root, backups under `data.backups`, a
+`secrets.production` store on an undeclared asset, mail senders with no domain root)
+keeps its own row with the declaration printed, since folding it would hide the gap
+the operator half-knows about. On a `--host` run the line reads `Not requested: a
+one-host check reads this host only. Your accounts, code, cloud, domains and email were
+not looked at.` JSON never folds. The *outside scheck* rows print on every run,
+`--host` included, and never fold.
+
+### Ranking
+
+"Fix these first" ranks **items** and is labeled `Fix these first: a ranking of what
+was checked, not of all your risks`. The findings list opens with `Ranked by severity
+in your context, among what scheck checked. Areas not checked may hold worse problems
+than anything here.`
+
+- Only open findings rank. Accepted findings are listed apart; `info` is listed apart.
+- An item is of kind `finding_id`, every open instance of one id across subjects and
+  assets, at the highest severity among them, naming the assets or the count; or, from
+  E9, of kind `person`, the findings tied to one `people` handle across tenants ("carol,
+  who left on 2026-09-15, is still active in Workspace and GitHub"), since one action
+  fixes them. The findings list groups the instances of one id on one asset into one
+  block that lists the subjects; JSON never groups.
+- Order: severity after context, critical first; then risk area in the coverage
+  table's order; then an asset named in `data.matters_most` first; then more affected
+  instances; then canonical asset id and finding id. Thresholds do not enter the
+  ranking: they set the exit code, and the close names them.
+- Up to five items, open, at medium or above, never padded with low or info. With
+  fewer: `Nothing else open ranks at medium or above. Below: N low, M informational, K
+  accepted.` With more, the summary never says "nothing else": `N more open at medium or
+  above; see Findings.`, and the JSON counts them (`summary.more`).
+- Each item carries its basis (`rank_basis` in JSON: `["severity:high",
+  "area:identity", "data_matters_most:deploy"]`); the text prints one phrase of it only
+  when context moved severity ("base medium, raised: you declared deploy
+  internet-facing").
+
+With rules only, the ranking is the base-severity table plus context, so base
+severities are calibrated across collectors ("Base severity anchors" in "Severity in
+context").
+
+### Findings
+
+**One record per instance**, keyed `{id, asset, subject}`. `asset` is the canonical id
+(`host:203.0.113.5:22`, `saas:google-workspace:example.com`,
+`repo:github:example-org/shop`), declared or found under a declared root; the bound id
+(`host.id`, a Workspace customer id) is a field beside it, always present and null
+when the asset binds to nothing, so a finding whose asset changed address but not
+identity is reported as the same asset moved. `subject` is the instance key, or null for
+the asset itself; severity, acceptance and a later comparison of runs are all per
+instance, so an `instances[]` array would be reshaped the first time two instances of
+one id graded differently.
+
+| Field | Holds |
+|---|---|
+| `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
+| `asset_name`, `bound_id` | the `assets` name, or the id; the bound id or null |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `url`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `id`, `title` | `id` is the join key into `scheck explain` |
+| `area` | one of the ten area keys; required on every finding definition |
+| `category` | the collector's own grouping |
+| `exposure_finding` | required on every finding definition: whether "exposed on purpose" may move it ("Severity in context") |
+| `severity`, `severity_base`, `adjustments[]` | each adjustment `{rule, by, delta, source}`: `rule` from the closed table of "Severity in context" or the collector's own, `by` `collector` or `engagement`, `source` either `{file, key}` for a declaration or `{observation, excerpt}` for a fact; no non-base severity without its chain |
+| `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance}` |
+| `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]` |
+| `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
+| `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
+| `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
+| `impact` | from the definition |
+| `why_here[]` | templated lines from attributed context only, never free prose; empty prints "No context was declared for this asset; this is the catalog's generic assessment." |
+| `not_checked[]` | what the rule could not see that would change the conclusion ("whether a cloud firewall in front of deploy restricts port 22") |
+| `remediation` | `{summary, steps[], commands[], caveat, where}`; `where` is a console path for a SaaS finding, which has no command. Steps are in the order a responder takes them: contain first (suspend, revoke sessions and tokens), then remove access, then review what happened, then clean up |
+| `accept_template` | present exactly when the status is `open`: the ready-to-paste entry, structured; text renders it as YAML |
+
+In text a finding prints its evidence as `Observed` (an observation) and `You
+declared` (a declaration), a multi-fact finding as `Concluded from` and the facts it
+combined by reference (`people.carol.left`, `workspace.users#1`), then derived values
+in words ("last sign-in 2026-09-28, 13 days after the declared leaving date; scheck
+cannot tell who signed in"), `Severity` with its chain, `Why here`, `Not checked`,
+`Fix`, and the paste. A contradiction prints both sides on two lines, the declaration
+and the observation.
+
+**Subjects.** Host findings carry no subject in E2: no rules-only host finding names a
+listener, and the host grader accepts a whole id. A listener's subject, `{kind:
+service, key: "<port>/<proto>"}`, arrives in one slice with the listener rule and with
+host acceptance by subject. A person's account is keyed by the address rules match
+people by, with the provider's id beside it. A token is keyed by its credential id and
+labeled with its owner, name, scopes and expiry, never any part of its value; scheck's
+own principal is keyed by the name of the environment variable it came from. An OAuth
+grant is one finding per app, keyed by client id, with the users who granted it under
+`affected` and an admin or break-glass grantor under `of_note`: the fix is one action
+on the app. A secret found in a repository is keyed `<detector>:<path>@<commit, 12
+hex>` and labeled with the detector type and first commit, never a hash of the value,
+which a low-entropy secret does not survive and which would sit in every comparison of
+runs; two secrets in one file stay two findings. A subject whose key matches
+`redact_extra` renders as its marker; its paste uses `provider_id` when there is one,
+and otherwise has `by_subject: false` and says the finding cannot be accepted by
+subject while the pattern hides its name.
+
+**The paste.** Once, after the findings, under `IF YOU DECIDE NOT TO FIX A FINDING`, headed
+`Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry
+under intent.accepted_risks in <path of the engagement file> and write the reason.`,
+one entry per open finding labeled with its title (the findings list points to it
+once). Printed under every finding it made a report with seven findings twice as long
+and read as a to-do. Each entry:
+
+- `id`; `asset` as the `assets` name, or else the canonical id, which validation
+  accepts for an asset under a declared root ("Identity, references and validation");
+  `subject` when the finding has one, with a comment that omitting it accepts every
+  instance on the asset.
+- `reason: ""`, which validation rejects until it is written.
+- `accepted_by: ""`, with the candidate handles in a comment (`# a handle under
+  people: alice (admin of google-workspace)`): a risk is accepted by its owner, and a
+  prefilled name lets an edit attribute an acceptance to someone who never saw it.
+  Validation rejects it empty.
+- `expires`, the collection date plus 90 days for critical and high and 180 days
+  otherwise, in `engagement.timezone`, with the comment `# after this date the finding
+  counts again until someone re-reviews it`.
+
+An engagement without `people`, as every `--host` engagement is, is headed instead to
+write the engagement to a file (`--write-engagement FILE`), add yourself under people,
+paste, and run `scheck run FILE` from then on; its `asset` is the name
+`--write-engagement` gives the asset, which a test pins.
+
+**Accepted and adjusted findings show.** An adjusted finding prints its chain
+(`high: base medium, +1 exposure internet (assets.deploy.context.exposure)`); an
+unadjusted one prints its severity alone, and its why-here line says scheck was not told
+how the machine is used, so this is the standard rating. One
+lowered to `info` by intent is listed under informational with the operator's own
+reason, never dropped. An accepted finding is listed under accepted with the severity
+it would have had, `accepted by <handle> until <date>` (and "expires in N days" at 30
+or fewer) or `accepted by <handle>, no expiry`, the quoted reason, its entry, and
+"covers every instance of this id on this asset" when the acceptance has no `subject`.
+Past `expires` the finding is open and ranked, with `the acceptance by <handle> expired
+on <date> (<entry>); the finding is open again`, and the acceptance's outcome is
+`expired`. Notes and the not-applied list name an acceptance by the finding's title, the
+asset and who accepted it, its entry last. The host collector's own
+`risk.acceptance_expired` (`host-collector.md §5.3`) stays in its envelope; the
+engagement's findings leave it out, since it rests on the file alone and a finding
+needs observed evidence.
+
+**Acceptances.** Each `intent.accepted_risks` entry ends as one of `applied`,
+`expired`, `not_applied` (with why: a host acceptance by subject, before host findings
+carry one), `not_matched` (its rule decided on complete evidence and found no
+instance: "likely fixed. Confirm, then remove the entry"), `rule_not_decided` (its rule
+could not decide, or found nothing in only part of what is there: the acceptance still
+stands and scheck cannot say whether the problem is gone) or `subject_not_found` (the
+rule found instances, none with that subject). Only `not_matched` may say "fixed".
+
+**One severity.** The engagement's `findings[]` is authoritative. A host asset's
+embedded collector envelope stays whole as that collector's evidence and grading; an
+engagement finding's chain starts from the envelope's chain (`by: collector`) and
+appends the engagement's own adjustments (`by: engagement`), and the schema says so on
+the envelope.
+
+### Incompleteness and refusals
+
+`findings.json` and the report carry each as `{asset, asset_name, reason, detail,
+effect}`: `asset` the canonical id, `reason` from the closed list, `detail` escaped,
+post-redaction text, for a refusal its `kind` (`host_key_unknown`, `host_key_changed`,
+`access`, `canary`), which picks the sentence below and prints the raw error only at
+`-v`, and `effect` what was lost (`{checks_run, checks_unknown,
+checks_not_run, kept}` for a host, `{requests_not_sent}` for an API). They print in run
+status, refused before incomplete, each in the order of `roots`:
+
+| Case | Text | Exit |
+|---|---|---|
+| Unknown host key | `REFUSED: deploy was not contacted: its host key is not in your known_hosts file. Confirm the fingerprint with whoever runs the host, then add it.` | 3 |
+| Changed host key | `REFUSED: deploy was not contacted: the host key for 203.0.113.5 changed. A changed key can mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the host before you accept it.` | 3 |
+| No SSH user, unreadable identity or known_hosts, failed authentication | `REFUSED: deploy: scheck could not use the access it was given (authentication failed for deploy@203.0.113.5 with ~/.ssh/deploy). Nothing was read from it.` | 3 |
+| Canary mismatch | `REFUSED: deploy: scheck stopped before running any check, because the host's login shell changed what it sent back (often a login banner or a profile script that prints text). This does not by itself mean the host is compromised: ask whoever runs it to look at its login scripts. The raw reply is in report.json.` | 3 |
+| Session lost | `INCOMPLETE: deploy: the connection was lost after 18 of 33 checks; 15 were not run. What was read before is kept and assessed. scheck only reads; an interrupted run leaves nothing half-changed.` | 2 |
+| Host run timeout | `INCOMPLETE: deploy: the host collector's timeout (10m, assets.deploy.timeout) stopped it after 25 of 33 checks.` | 2 |
+| `limits.timeout` | `INCOMPLETE: limits.timeout (1h) ended the engagement: <assets> were not read.` | 2 |
+| Unreachable before contact | `INCOMPLETE: deploy: could not connect from this machine (connection timed out). This does not tell you whether it is up for anyone else. Nothing was read.` | 2 |
+| Root with no collector | `INCOMPLETE: example-org (GitHub organization): this version of scheck does not read it. Nothing was read from it.` | 2 |
+
+Counts agree everywhere they appear: "18 of 33" in run status is the checks attempted
+before the loss, and the Hosts block's counts line splits the same 33 into ran,
+unknown and not run. User text names no slice ("0.0.2 E5" is project jargon); JSON may
+carry `planned_in`. The canary echo is never printed in text: it is
+attacker-influenced output from a host that just failed its trust check, and it lives
+redacted and cut in `report.json`'s `echo` only.
+
+### What never appears
+
+In no output (report, run directory, stdout, stderr):
+
+- pre-redaction bytes; a `redact_extra` pattern; a redaction count a target could forge:
+  the runner's count per capture is the total, markers in the capture name its rules only
+  when they account for exactly that total, and the rest is counted as `unattributed`;
+- a credential, including the values of the environment variables a collector
+  authenticated with (their names, and the principal's identity and scopes, are
+  printed); any part of a secret or token value, even one a provider returns (GitHub's
+  `token_last_eight`), which collectors do not store; a hash of a secret value as an
+  identifier;
+- directory fields no rule reads (display names, recovery phone numbers and emails,
+  addresses, employee ids, photos), which the schema has no place for;
+- captures, except with `--include-evidence`, and then only in JSON (`report.txt` is
+  always rendered at default verbosity);
+- a word that states a posture verdict ("secure", "pass", "clean", "compliant", "no
+  issues", "OK" beside an area, a tick, a score, a grade, a percentage);
+- a claim that misuse, intrusion or compromise happened: a derived value states what a
+  field shows (a sign-in date), never who acted;
+- anything implying the report was reviewed or signed by a person: the operator's name
+  is the engagement's owner, not a signatory;
+- a severity without its chain; a finding without observed evidence; a finding filed
+  from the absence of a declaration;
+- unescaped text, whether derived from a target or written by the operator
+  (`authorization.note`, `reason`, `role`, `purpose`), escaped as `host-collector.md
+  §6.6` describes.
+
+The JSON carries the handling notice as `notice: {personal_data: true,
+internal_topology: true, audience: "operator"}`, so a consumer knows not to forward
+it; no pseudonymised or shareable version is claimed.
+
+### Text and JSON
+
+JSON (`docs/engagement-report-schema.json`, `schema_version` `MAJOR.MINOR`, free to
+change until 0.0.2 is published) carries what a consumer agent or a comparison of runs
+(0.0.3 G6) needs and the text leaves out:
+
+- `run: {started, directory, resumed}`, the scheck version and `rules_version`, so a
+  finding that disappears because a rule changed between versions is never read as
+  fixed; the engagement source `{path, sha256}`, where for `--host` the hash is of the
+  engagement exactly as `--write-engagement` would write it;
+- `exit: {code, reasons: [{code, why, asset}], thresholds}`, each threshold with its
+  basis (`profile:baseline`, `default`);
+- `incomplete[]` and `refused[]`;
+- every coverage row unfolded with its reasons, population, sub-items, principals,
+  spans, caps with their selection, and narrowing;
+- `findings[]` flat, one record per instance, in the order the report ranks them (open
+  by severity after context, risk area, data that matters most, asset and id; then
+  informational; then accepted), so a consumer reading in order reads the most serious
+  first;
+- `assessments[]`, one record per rule and asset: its status, its `instances` count,
+  whether it was `complete` (it decided on unmarked evidence **and** read its whole
+  population: no cap, sample, excluded unit or page limit; for a host, not a check that
+  reads a bounded sample by design such as a depth-capped `find`, not a truncated
+  capture, and not a command whose non-zero exit was tolerated), its reason, and every input
+  it read, declarations included (`declared:people.carol.left`), so a later run reads an
+  instance as *fixed* only when its rule decided on complete evidence with the same
+  declared inputs, and otherwise as *no longer observed, not assessed*;
+- `summary` with its items (`kind`, `ids[]`, `person`, member keys, severity,
+  `rank_basis`) and disjoint area counts (`assessed`, `partial`, `not_assessed`,
+  `not_applicable`, `total`);
+- `acceptances[]`, every `intent.accepted_risks` entry with its outcome and the
+  findings it touched;
+- `redaction` counts;
+- `assets[]` with name, canonical and bound ids, kind, root, status, reason, detail,
+  collector, principal, evidence path, and for a host its plan's counts (`checks`:
+  planned, ran, unknown, not run) and its collector envelope whole ("JSON consumers");
+- `notes[]` as `{kind, source, detail}`; `notice`;
+- **the command trace**, per asset, always: each check or request id, its bound
+  parameters (post-redaction), when it ran, its decision and its output hash, so a run
+  under `--no-persist` still says what touched every asset and when.
+
+Enums a later collector will extend (subject kinds, note kinds, adjustment rules, asset
+kinds, reasons' parameters) are open by design: adding a value is a MINOR change, and
+the schema's description tells consumers to tolerate one.
+
+Text only: the plain wording of marks and reasons, the summary sentences, the fold
+line, the grouping in "Fix these first", remedy phrasing, the YAML of the paste, the
+closing sentences, and colour on a tty (decided in `cmd/scheck`, `host-collector.md
+§6.6`). A host's fact sheet prints under `-v`, not by default, and `-vv` adds its
+redacted captures, as in 0.0.1.
+
+The text and JSON reports are pinned by golden files under the rules of the host
+report's (`host-collector.md §9`).
 
 ## Rules and the model
 

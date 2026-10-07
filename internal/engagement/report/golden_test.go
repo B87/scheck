@@ -1,0 +1,204 @@
+package report
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/policy"
+)
+
+var update = flag.Bool("update", false, "rewrite the golden engagement reports")
+
+// canaryRefused is a host whose remote shell altered the canary: refused,
+// its echo kept for the JSON only.
+func canaryRefused(t *testing.T) Input {
+	in := refusedHost(t)
+	in.Assets[1].Detail = "ssh canary mismatch: the remote shell returned 31 bytes, not the canary (exit 0)"
+	in.Assets[1].Echo = "\"\\x1b[2Jowned \\x1b]0;title\\x07\""
+	in.Assets[1].Refusal = "canary"
+	in.Assets[1].Trace = []policy.AuditEntry{{CheckID: "sys.canary", Decision: "denied:canary", Time: started}}
+	in.Directory = "/state/engagements/example/2026-10-07T07:12:03Z"
+	return in
+}
+
+// The engagement report is a contract like the host report
+// (docs/spec/host-collector.md §9): text and JSON are pinned per case.
+// Regenerate with `go test ./internal/engagement/report -update` and read
+// the diff: a change here is a change to what an operator reads.
+func TestGoldenReports(t *testing.T) {
+	s := schema(t)
+	cases := map[string]func(*testing.T) Input{
+		"host-ubuntu":            func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-macos":             func(t *testing.T) Input { return oneHost(t, "macos") },
+		"root-without-collector": withGitHubRoot,
+		"lost-session":           lostSession,
+		"refused-host":           canaryRefused,
+		"unreachable-host":       unreachableHost,
+		"many-findings":          manyFindings,
+		"context":                withContext,
+		"acceptances":            withAcceptances,
+	}
+	for name, mk := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := Build(mk(t))
+			validate(t, s, r)
+			for _, v := range []int{0, 1} {
+				var txt bytes.Buffer
+				if err := WriteText(&txt, r, Options{Verbose: v}); err != nil {
+					t.Fatal(err)
+				}
+				suffix := map[int]string{0: ".txt", 1: "-v.txt"}[v]
+				compareGolden(t, name+suffix, txt.String())
+			}
+			var js bytes.Buffer
+			if err := WriteJSON(&js, r, false); err != nil {
+				t.Fatal(err)
+			}
+			compareGolden(t, name+".json", elideEnvelopes(t, js.Bytes()))
+		})
+	}
+}
+
+// elideEnvelopes replaces each embedded host envelope by its schema
+// version: internal/report pins the envelope's own goldens, and repeating
+// them here would add bulk and no signal.
+func elideEnvelopes(t *testing.T, raw []byte) string {
+	t.Helper()
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range doc["assets"].([]any) {
+		asset := a.(map[string]any)
+		if env, ok := asset["envelope"].(map[string]any); ok {
+			asset["envelope"] = map[string]any{"schema_version": env["schema_version"], "elided": "pinned by internal/report goldens"}
+		}
+	}
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out) + "\n"
+}
+
+func compareGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", "golden", name)
+	if *update {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("%v (run with -update to create it)", err)
+	}
+	if string(want) != got {
+		t.Errorf("%s differs from the golden; run with -update and read the diff.\n--- got ---\n%s", name, got)
+	}
+}
+
+// The text report never prints a reason or mark token, never prints the
+// canary echo, and escapes every control character a target sent
+// (docs/spec/engagement.md, "Words, not tokens", "What never appears").
+func TestTextIsWordsAndSafe(t *testing.T) {
+	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
+		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {
+		r := Build(mk(t))
+		var buf bytes.Buffer
+		if err := WriteText(&buf, r, Options{}); err != nil {
+			t.Fatal(err)
+		}
+		out := buf.String()
+		for _, token := range []string{"not_assessed", "no_rule", "not_declared", "collector_not_built", "insufficient_permission",
+			"unavailable:", "limit_reached", "outside_scheck", "partial"} {
+			if strings.Contains(out, token) {
+				t.Errorf("%s: the text prints the token %q", r.Engagement.Name, token)
+			}
+		}
+		if strings.Contains(out, "owned") || strings.ContainsRune(out, '\x1b') || strings.ContainsRune(out, '\x07') {
+			t.Errorf("%s: the canary echo or a control character reached the text", r.Engagement.Name)
+		}
+		for l := range strings.SplitSeq(out, "\n") {
+			if len([]rune(l)) > 100 {
+				t.Errorf("%s: line over 100 columns: %q", r.Engagement.Name, l)
+			}
+		}
+	}
+}
+
+// unreachableHost is a declared host that never answered: failed before
+// contact, exit 2, worded as unreachable, never as a lost connection.
+func unreachableHost(t *testing.T) Input {
+	in := oneHost(t, "ubuntu")
+	in.FromHost, in.Path, in.Rerun = false, "engagement.yaml", "scheck run engagement.yaml"
+	in.Assets = append(in.Assets, AssetInput{Name: "deploy", ID: "host:203.0.113.5:22", Kind: "host", Root: true,
+		Status: "failed", Reason: "failed", Detail: "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)", Profile: "baseline"})
+	return in
+}
+
+// manyFindings has six open finding ids at medium or above, each with the
+// evidence its own rule reads: five rank, and the summary says one more does.
+func manyFindings(t *testing.T) Input {
+	in := oneHost(t, "ubuntu")
+	env := &in.Assets[0].Host.Envelope
+	for _, f := range []struct{ id, check, excerpt string }{
+		{finding.IDEmptyPassword, "accounts.passwd_status", "backup NP 2026-09-11"},
+		{finding.IDShadowPermissions, "accounts.shadow_meta", "-rw-r--rw-:646:root:shadow"},
+		{finding.IDRootLoginEnabled, "sshd.config", "permitrootlogin yes"},
+		{finding.IDPasswordAuthEnabled, "sshd.config", "passwordauthentication yes"},
+		{finding.IDWorldWritablePresent, "fs.world_writable", "/opt/app/uploads"},
+		{finding.IDSELinuxDisabled, "mac.sestatus", "SELinux status: disabled"},
+	} {
+		def, _ := finding.Lookup(f.id)
+		env.Findings = append(env.Findings, finding.Finding{ID: f.id, Title: def.Title, Category: def.Category,
+			SeverityBase: def.BaseSeverity, Severity: def.BaseSeverity, Adjustments: []finding.Adjustment{}, Status: finding.StatusOpen,
+			Source: finding.SourceRule, Confidence: finding.ConfidenceHigh, Platform: "linux",
+			Evidence: []finding.Evidence{{Observation: f.check + "#1", Check: f.check, Excerpt: f.excerpt}},
+			Impact:   def.Impact, Remediation: def.Remediation})
+	}
+	return in
+}
+
+// withContext is an engagement file that exercises the context path: an
+// incident trigger, a host declared internet-facing (its firewall finding
+// raised), narrowing, an operator redaction rule, data that matters most, an
+// acceptance with no expiry, a declared tool no collector reads and an
+// exclude.
+func withContext(t *testing.T) Input {
+	in := oneHost(t, "macos")
+	in.FromHost, in.Path, in.Rerun, in.People = false, "engagement.yaml", "scheck run engagement.yaml", true
+	in.Operator, in.Trigger, in.RedactExtra = "platform-team", "incident", 1
+	in.Candidates = []Candidate{{Handle: "alice", Why: "employee"}}
+	in.DataMattersMost = []string{"host:macos:22"}
+	in.OtherTools = []string{"stripe"}
+	in.Excludes = []string{"repo:github:example-org/old"}
+	in.Declarations = []Declaration{{Area: "data", Source: "engagement.yaml data.backups[0]",
+		Detail: "backups declared in a nightly snapshot (gcp:example-backups), not verified"}}
+	a := &in.Assets[0]
+	a.Host.Disabled = []Entry{{Value: "fs.suid", Source: "engagement.yaml assets.macos.disable_checks[0]"}}
+	env := &a.Host.Envelope
+	for i, f := range env.Findings {
+		switch f.ID {
+		case finding.IDAppFirewallDisabled:
+			env.Findings[i].Severity = finding.SevHigh
+			env.Findings[i].Adjustments = []finding.Adjustment{{Rule: "exposure:internet",
+				Source: "engagement.yaml assets.macos#context.exposure", Delta: "+1"}}
+		case finding.IDUpdatesPending:
+			env.Findings[i].Status, env.Findings[i].AcceptedReason = finding.StatusAccepted, "the vendor ships updates monthly"
+		}
+	}
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDUpdatesPending,
+		Asset: "macos", AssetID: "host:macos:22", Reason: "the vendor ships updates monthly", AcceptedBy: "alice"}}
+	return in
+}

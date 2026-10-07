@@ -126,10 +126,10 @@ func TestHostIdentityStableAndDerived(t *testing.T) {
 	}
 }
 
-func TestTextRendererMentionsEveryCheck(t *testing.T) {
+func TestFactSheetMentionsEveryCheck(t *testing.T) {
 	env := Build(sheetFor(t, "ubuntu", runner.ElevateSudo), meta())
 	var buf bytes.Buffer
-	if err := WriteText(&buf, env, Options{}); err != nil {
+	if err := WriteFactSheet(&buf, env, Options{}); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

@@ -1,0 +1,233 @@
+scheck engagement report: host-ubuntu
+Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        not declared (one-host check)
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: ubuntu (checked only in part: ubuntu, 4 of 13 host areas judged). See Coverage for what was
+not checked.
+
+SUMMARY
+Checked in part  Hosts (ubuntu, 4 of 13 areas judged).
+Not requested    A one-host check reads this host only. Your accounts, code, cloud, domains and
+                 email were not looked at.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  critical   A local account has no password set (ubuntu)
+  2  high      /etc/shadow has an unexpected mode (ubuntu)
+  3  high      sshd permits direct root login (ubuntu)
+  4  medium    World-writable paths without the sticky bit (ubuntu)
+  5  medium    SELinux is disabled (ubuntu)
+1 more open at medium or above; see Findings. Below: 0 low, 0 informational, 0 accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings named under
+Coverage; 6 have no rule in this version and 3 had no usable evidence. Nothing but this host was
+looked at. Anything not checked is unknown, not fine.
+
+COVERAGE
+Hosts                    checked in part
+  ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
+  checks 33: 22 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+    Software updates         checked (pending updates): nothing found by these rules
+    Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
+                             devices; not read: disk.crypttab)
+    System integrity         not checked: the tool that would tell is not installed on the host, so
+                             scheck could not tell (this is not a finding)
+    Firewall                 not judged: this version of scheck has no rule for it (not read:
+                             fw.firewalld, fw.nft, fw.ufw)
+    Network exposure         not judged: this version of scheck has no rule for it (read: 2
+                             listening sockets)
+    SSH server               checked (password login, direct root login): 2 open findings (see
+                             Findings)
+    Remote access            not judged: this version of scheck has no rule for it (read: 2 service
+                             states: disabled, not-found)
+    Accounts                 checked (accounts with no password, the mode of /etc/shadow): 2 open
+                             findings (see Findings); also read, not judged: 22 accounts, 4 with a
+                             login shell
+    Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
+                             lines; 33 sudoers.d lines)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
+                             entries; 13 units, all enabled; not read: persist.timers)
+    Filesystem               checked (world-writable paths, depth-capped): 1 open finding (see
+                             Findings); also read, not judged: 9 SUID files
+    Logging and audit        not checked: the command that reads it did not give a usable answer
+                             (exit_error); also read, not judged: Archived and active journals take
+                             up 0B in the file system.
+    Time synchronisation     not checked: the command that reads it did not give a usable answer
+                             (exit_error)
+Not requested            A one-host check reads this host only. Your accounts, code, cloud, domains
+                         and email were not looked at.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 6 open (1 critical, 2 high, 3 medium), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  critical  A local account has no password set (ubuntu) [accounts.empty_password]
+   Observed      accounts.passwd_status#1 (07:12, as deploy (sudo -n)): backup NP 2026-09-11
+   Severity      critical
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Give the account a password or lock it, depending on what it is for.
+                 Caveat: Locking an account a service depends on will break that service; find out
+                   what the account is for before changing it.
+                 Commands (review before running):
+                   # inspect first:
+                   sudo passwd -S <account>
+                   # then either lock it:
+                   sudo passwd -l <account>
+
+2  high  /etc/shadow has an unexpected mode (ubuntu) [accounts.shadow_permissions_unexpected]
+   Observed      accounts.shadow_meta#1 (07:12, as deploy): -rw-r--rw-:646:root:shadow
+   Severity      high
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Restore the mode this distribution ships.
+                 Caveat: Match the distribution's own default rather than copying a mode from
+                   another system.
+                 Commands (review before running):
+                   stat -c '%A %a %U:%G' /etc/shadow
+                   # Debian and Ubuntu: 640 root:shadow — Fedora and RHEL: 000 root:root
+
+3  high  sshd permits direct root login (ubuntu) [sshd.root_login_enabled]
+   Observed      sshd.config#1 (07:12, as deploy (sudo -n)): permitrootlogin yes
+   Severity      high
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Set PermitRootLogin no and log in as a user who escalates with sudo.
+                 Caveat: Make sure an unprivileged account with sudo rights can log in first.
+                   `prohibit-password` still allows key-based root login.
+                 Commands (review before running):
+                   # set PermitRootLogin no in /etc/ssh/sshd_config or a file in /etc/ssh/sshd_config.d/
+                   sudo sshd -t && sudo systemctl reload sshd
+
+4  medium  World-writable paths without the sticky bit (ubuntu) [fs.world_writable_present]
+   Observed      fs.world_writable#1 (07:12, as deploy): /opt/app/uploads
+   Severity      medium
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Review each path and remove world write where it is not deliberate.
+                 Caveat: Shared directories that are world-writable by design (/tmp, /var/tmp) carry
+                   the sticky bit and are already excluded from this check.
+                 Commands (review before running):
+                   # review first:
+                   ls -ld <path>
+                   sudo chmod o-w <path>
+
+5  medium  SELinux is disabled (ubuntu) [mac.selinux_disabled]
+   Observed      mac.sestatus#1 (07:12, as deploy): SELinux status: disabled
+   Severity      medium
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Set SELINUX=enforcing in /etc/selinux/config, relabel, and reboot.
+                 Caveat: Switching straight to enforcing on a host that has run without SELinux can
+                   break services. Use permissive first and read the denials.
+                 Commands (review before running):
+                   # review first; a system that has run disabled needs a relabel:
+                   sudo fixfiles -F onboot
+                   # set SELINUX=permissive in /etc/selinux/config, reboot, review denials, then set enforcing
+
+6  medium  sshd accepts password authentication (ubuntu) [sshd.password_auth_enabled]
+   Observed      sshd.config#1 (07:12, as deploy (sudo -n)): passwordauthentication yes
+   Severity      medium
+   Why here      scheck was not told how this machine is used (for example, whether it faces the
+                 internet), so this is the standard rating.
+   Fix           Set PasswordAuthentication no and rely on key authentication.
+                 Caveat: Confirm at least one working key-based login first, from a second session,
+                   or you will lock yourself out.
+                 Commands (review before running):
+                   # review the effective configuration first:
+                   sudo sshd -T | grep -i passwordauthentication
+                   # then set PasswordAuthentication no in /etc/ssh/sshd_config or a file in /etc/ssh/sshd_config.d/
+                   sudo sshd -t && sudo systemctl reload sshd
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # A local account has no password set (ubuntu)
+  # critical: accept only with whoever owns the business, never to quiet the report
+    - id: accounts.empty_password
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # /etc/shadow has an unexpected mode (ubuntu)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: accounts.shadow_permissions_unexpected
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # sshd permits direct root login (ubuntu)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: sshd.root_login_enabled
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # World-writable paths without the sticky bit (ubuntu)
+    - id: fs.world_writable_present
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # SELinux is disabled (ubuntu)
+    - id: mac.selinux_disabled
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # sshd accepts password authentication (ubuntu)
+    - id: sshd.password_auth_enabled
+      asset: ubuntu
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  On ubuntu, 5 checks did not give a usable answer: disk.crypttab, fw.ufw, log.auditd,
+    persist.timers, time.timedatectl. `scheck explain <check-id>` prints each command; run it by
+    hand to see why.
+  On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding;
+    listed with -v).
+  On ubuntu, this version of scheck has no rule for disk encryption, firewall, network exposure,
+    remote access, privilege escalation, startup and persistence. What was read is in the JSON
+    report (--format json) for a person to look at.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+FOR AUTOMATION
+Exit 1: 6 open findings at or above their asset's threshold (ubuntu: medium, profile baseline). Exit
+0 would not have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).
