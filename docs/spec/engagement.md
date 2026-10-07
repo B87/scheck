@@ -66,7 +66,7 @@ risks. A question nothing consumes is removed from the interview, not kept for a
 release; an operator who answers questions that change nothing stops answering
 carefully. The mapping from question to consumer is code: each question declares its
 consumers by id, with the slice that owns each. Consumers arrive with their slices
-(the host collector's context in E1, rules in E5 to E9, coverage reasons in E2), so a test proves at every commit that each
+(the host collector's context in E1b, rules in E5 to E9, coverage reasons in E2), so a test proves at every commit that each
 declaration is well formed and that every consumer owned by a slice already merged
 exists, and the release gate proves they all do. A consumer is never stubbed to pass.
 

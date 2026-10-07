@@ -116,14 +116,14 @@ about it:
 
 | Path | Owns | Slice |
 |---|---|---|
-| `internal/engagement` | the engagement file (schema, validation, `--host` engagements built in memory), the stages, the run directory (E1), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file", "Runs, state and configuration") | E1, E4, E8, E9 |
+| `internal/engagement` | the engagement file (schema, validation: E1a; `--host` engagements built in memory: E1b), the stages and the run directory (E1b), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file", "Runs, state and configuration") | E1a, E1b, E4, E8, E9 |
 | `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit | E4 |
 | `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E2 |
 | `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
-| `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1 |
-| `cmd/scheck` | `run` and `--host` (E1); `local` and `ssh` as aliases of `run --host`, and `config` removed with `internal/config` (E2); `init` (E8) | E1, E2, E8 |
+| `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1b |
+| `cmd/scheck` | `run --stop-after intake` (E1a); `run` and `--host` (E1b); `--jump` (E1c); `local` and `ssh` as aliases of `run --host`, and `config` removed with `internal/config` (E2); `init` (E8) | E1a–E1c, E2, E8 |
 
-`scripts/depcheck.sh` grows with E1 and E4: `internal/engagement/...` and
+`scripts/depcheck.sh` grows with E1a and E4: `internal/engagement/...` and
 `internal/collector/...` must have no `internal/llm`, `internal/agent` or
 `internal/bounded` in their dependency graph (rules only through 0.0.3); no file under
 `internal/collector` may import `net/http` or `net` directly, only the gate does; and no

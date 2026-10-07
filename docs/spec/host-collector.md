@@ -12,7 +12,7 @@ what is planned next is [../ROADMAP.md](../ROADMAP.md).
 
 **Folding into `scheck run` (0.0.2).** From 0.0.2 the collector is driven by
 `scheck run`, with an engagement file or `--host` (engagement.md, "One command, one
-file"; ROADMAP E1, E2). The catalog, runner, policy, SSH boundary, elevation, posture
+file"; ROADMAP E1b, E2). The catalog, runner, policy, SSH boundary, elevation, posture
 rules, grading and the JSON envelope (§3, §4, §5.3–§5.4, §6.1–§6.5, §7.1) stay this
 collector's contract. What drives them changes: the context sources (§5.1), the text
 report (§6.6), `scheck local` and `scheck ssh` (§7) and the configuration file (§8)
@@ -419,7 +419,7 @@ feature rather than a flag.
 
 ### 5.1 Sources
 
-> **Superseded in 0.0.2 (ROADMAP E1, E2).** `scheck run` reads a host's context from
+> **Superseded in 0.0.2 (ROADMAP E1b, E2).** `scheck run` reads a host's context from
 > its asset entry only (engagement.md, "Host context"); `--context`, the implicit
 > sources and `target:` go with `scheck local` and `scheck ssh`.
 
@@ -1031,7 +1031,7 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 
 ## 8. Configuration
 
-> **Superseded in 0.0.2 (ROADMAP E1, E2).** scheck reads no configuration file. Each
+> **Superseded in 0.0.2 (ROADMAP E1b, E2).** scheck reads no configuration file. Each
 > key below has a home in the engagement file or a flag (engagement.md, "One command,
 > one file"); a file found where this section reads one makes `scheck run` exit 3,
 > naming where each key moved. The narrowing semantics below are what the engagement's
