@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,11 +69,11 @@ func Dial(ctx context.Context, opts Options) (*Target, error) {
 	}
 	hostKey, err := knownhosts.New(opts.KnownHosts)
 	if err != nil {
-		return nil, fmt.Errorf("ssh: known_hosts %s: %w", opts.KnownHosts, err)
+		return nil, fmt.Errorf("ssh: known_hosts %s: %w (%w)", opts.KnownHosts, err, target.ErrAccess)
 	}
 	auth, err := authMethods(opts.Identity)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w (%w)", err, target.ErrAccess)
 	}
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	cfg := &xssh.ClientConfig{
@@ -85,18 +86,39 @@ func Dial(ctx context.Context, opts Options) (*Target, error) {
 	d := net.Dialer{Timeout: opts.Timeout}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("ssh: dial %s: %w", addr, err)
+		return nil, fmt.Errorf("ssh: dial %s: %w (%w)", addr, err, target.ErrUnreachable)
 	}
+	// ClientConfig.Timeout bounds only xssh.Dial: a port that accepts TCP
+	// and never speaks SSH would hold the handshake forever without a
+	// deadline of its own.
+	deadline := time.Now().Add(opts.Timeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	_ = conn.SetDeadline(deadline)
 	c, chans, reqs, err := xssh.NewClientConn(conn, addr, cfg)
 	if err != nil {
 		_ = conn.Close()
-		var keyErr *knownhosts.KeyError
-		if errors.As(err, &keyErr) && len(keyErr.Want) == 0 {
-			return nil, fmt.Errorf("ssh: %s is not in %s; verify its key out of band, then: ssh-keyscan -H %s >> %s", opts.Host, opts.KnownHosts, opts.Host, opts.KnownHosts)
-		}
-		return nil, fmt.Errorf("ssh: %s: %w", addr, err)
+		return nil, handshakeErr(err, addr, opts)
 	}
+	_ = conn.SetDeadline(time.Time{})
 	return &Target{client: xssh.NewClient(c, chans, reqs), opts: opts, platform: target.Unknown}, nil
+}
+
+// handshakeErr names why the handshake failed. A host key scheck cannot
+// verify and failed authentication are ErrAccess; anything else (a reset, an
+// EOF, the deadline) is ErrUnreachable.
+func handshakeErr(err error, addr string, opts Options) error {
+	var keyErr *knownhosts.KeyError
+	switch {
+	case errors.As(err, &keyErr) && len(keyErr.Want) == 0:
+		return fmt.Errorf("ssh: %s is not in %s; verify its key out of band, then: ssh-keyscan -H %s >> %s (%w)", opts.Host, opts.KnownHosts, opts.Host, opts.KnownHosts, target.ErrAccess)
+	case errors.As(err, &keyErr):
+		return fmt.Errorf("ssh: %s: the host key does not match %s: %w (%w)", addr, opts.KnownHosts, err, target.ErrAccess)
+	case strings.Contains(err.Error(), "unable to authenticate"):
+		return fmt.Errorf("ssh: %s: %w (%w)", addr, err, target.ErrAccess)
+	}
+	return fmt.Errorf("ssh: %s: %w (%w)", addr, err, target.ErrUnreachable)
 }
 
 func authMethods(identity string) ([]xssh.AuthMethod, error) {
@@ -145,7 +167,9 @@ func (t *Target) Verify(ctx context.Context, argv []string, want string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", target.ErrCanary, err)
 	}
-	return fmt.Errorf("%w: remote shell returned %q (exit %d); login shell is not POSIX sh compatible", target.ErrCanary, res.Stdout, res.Code)
+	// The echo is target output that no redactor has seen, so it is kept
+	// on the target for the caller to redact and is never in the error.
+	return fmt.Errorf("%w: the remote shell returned %d bytes, not the canary (exit %d); login shell is not POSIX sh compatible", target.ErrCanary, len(res.Stdout), res.Code)
 }
 
 // SetPlatform records the platform once `uname -s` has been observed.
@@ -182,7 +206,7 @@ func (t *Target) Exec(ctx context.Context, argv []string) (target.Result, error)
 	start := time.Now()
 	sess, err := t.client.NewSession()
 	if err != nil {
-		return target.Result{}, fmt.Errorf("ssh: session: %w", err)
+		return target.Result{}, fmt.Errorf("ssh: session: %w (%w)", err, target.ErrTransport)
 	}
 	defer func() { _ = sess.Close() }()
 	stdout := &target.CapWriter{Max: t.opts.MaxOutput}
@@ -212,8 +236,9 @@ func (t *Target) Exec(ctx context.Context, argv []string) (target.Result, error)
 			return res, fmt.Errorf("%w: %s", target.ErrNotFound, argv[0])
 		}
 	default:
+		// No exit status came back: the session, not the command, failed.
 		res.Code = -1
-		return res, fmt.Errorf("ssh: %s: %w", argv[0], runErr)
+		return res, fmt.Errorf("ssh: %s: %w (%w)", argv[0], runErr, target.ErrTransport)
 	}
 	return res, nil
 }

@@ -466,6 +466,8 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	}
 	only("jump", a.Jump != "", KindHost)
 	only("identity", a.Identity != "", KindHost)
+	only("known_hosts", a.KnownHosts != "", KindHost)
+	only("timeout", a.Timeout != "", KindHost)
 	only("elevate", a.Elevate != "", KindHost)
 	only("profile", a.Profile != "", KindHost)
 	only("disable_checks", a.DisableChecks != nil, KindHost)
@@ -511,6 +513,16 @@ func (v *validator) hostSettings(key string, r Ref, a Asset) {
 	}
 	if a.Identity != "" && local {
 		v.fail(key+".identity", "the local host is not reached over SSH")
+	}
+	if a.KnownHosts != "" && local {
+		v.fail(key+".known_hosts", "the local host is not reached over SSH")
+	}
+	// timeout is the host collector's run timeout
+	// (docs/spec/host-collector.md §4.4), not limits.timeout.
+	if a.Timeout != "" {
+		if d, err := time.ParseDuration(a.Timeout); err != nil || d <= 0 {
+			v.fail(key+".timeout", "%q is not a positive duration such as 10m", a.Timeout)
+		}
 	}
 	if a.Elevate != "" {
 		v.enum(key+".elevate", a.Elevate, Elevations)

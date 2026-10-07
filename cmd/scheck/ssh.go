@@ -2,17 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/b87/scheck/internal/check"
-	"github.com/b87/scheck/internal/check/common"
+	"github.com/b87/scheck/internal/engagement/hostasset"
 	"github.com/b87/scheck/internal/policy"
-	"github.com/b87/scheck/internal/runner"
 	"github.com/b87/scheck/internal/target"
 	"github.com/b87/scheck/internal/target/ssh"
 )
@@ -113,25 +110,11 @@ func resolveSSHTarget(sess *session, arg string, port int, identity, knownHosts 
 }
 
 // verifyCanary is the first thing sent on the connection. Its outcome is
-// audited like any check; failure is a policy error (exit 3).
+// audited like any check; a mismatch is a policy error (exit 3). The canary
+// itself is hostasset's, so `scheck ssh` and `scheck run` verify one way.
 func verifyCanary(ctx context.Context, sess *session, st *ssh.Target) error {
-	c, ok := check.Lookup("sys.canary", check.Any)
-	if !ok {
-		return usageErr("catalog has no canary check")
-	}
-	err := st.Verify(ctx, c.Argv, common.CanaryString)
-	entry := policy.AuditEntry{CheckID: c.ID, Argv: c.Argv, Decision: "run"}
-	if err != nil {
-		entry.Decision = "denied:canary"
-	}
-	if aerr := sess.audit.Log(entry); aerr != nil {
-		sess.opts.logf(0, "audit log: %v", aerr)
-	}
-	if err != nil {
-		if errors.Is(err, target.ErrCanary) {
-			return usageErr("%v", err)
-		}
-		return incompleteErr("%v", err)
+	if err := hostasset.VerifyCanary(ctx, st, sess.audit, sess.redactor, func(f string, a ...any) { sess.opts.logf(0, f, a...) }); err != nil {
+		return usageErr("%v", err)
 	}
 	sess.canary = "ok"
 	sess.opts.logf(1, "ssh: canary ok")
@@ -139,15 +122,9 @@ func verifyCanary(ctx context.Context, sess *session, st *ssh.Target) error {
 }
 
 func detectPlatform(ctx context.Context, sess *session, st *ssh.Target) error {
-	res := sess.runner.Run(ctx, "sys.platform", nil)
-	if res.Status != runner.StatusOK {
-		return incompleteErr("ssh: cannot detect platform: %s", res.Reason)
+	if err := hostasset.DetectPlatform(ctx, sess.runner, st); err != nil {
+		return incompleteErr("%v", err)
 	}
-	p := target.PlatformFromUname(strings.TrimSpace(res.Raw))
-	if p == target.Unknown {
-		return incompleteErr("ssh: unsupported platform %q", strings.TrimSpace(res.Raw))
-	}
-	st.SetPlatform(p)
-	sess.opts.logf(1, "ssh: platform %s", p)
+	sess.opts.logf(1, "ssh: platform %s", st.Platform())
 	return nil
 }

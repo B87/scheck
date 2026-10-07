@@ -979,7 +979,12 @@ is `rules`, `findings` holds the rule findings, and `assessments` records every
 selected rule's coverage. The run exits `1` when a finding is open at or above the
 profile threshold and `0` otherwise (individual `unavailable` checks do not change
 that), `2` when the transport failed or `RunTimeout` cut the run, `3` for usage, config
-or canary errors. Exit `0` means no open finding reached the profile threshold — not
+or canary errors. A session lost mid-run (an exec whose command could not be sent or
+whose exit status never came back, including an availability probe's) stops the plan
+there: the facts read before it are kept, the run is `incomplete` with a warning that
+names the failure, and it exits `2` (0.0.2 E1b; before it, every later check read as
+`unavailable` in a run that still said `complete`). A canary mismatch error quotes the
+remote shell's echo only after redaction, cut to 120 bytes. Exit `0` means no open finding reached the profile threshold — not
 that the host is well configured, and not that everything was assessed; consult
 `assessments`, `run.status`, warnings and each fact. JSON reports may accompany exit
 `1` and `2`; early setup/usage failures may have no report.

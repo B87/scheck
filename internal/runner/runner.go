@@ -69,7 +69,10 @@ type Result struct {
 	Duration   time.Duration
 	Elevated   bool
 	PathRule   string
-	origin     Origin
+	// TransportLost marks an exec_error caused by the session failing, not
+	// the command: nothing later in the run can reach the target either.
+	TransportLost bool
+	origin        Origin
 }
 
 // Runner composes a target with the policy. All fields but Log and Audit are
@@ -180,10 +183,15 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		case ElevateSudo:
 			// sudo answers "a password is required" for a binary it cannot
 			// find, which would misreport a missing tool as a policy refusal.
-			if !r.installed(ctx, argv[0]) {
+			if ok, lost := r.installed(ctx, argv[0]); !ok {
 				res.Argv = argv
 				res.Status, res.Reason = StatusUnavailable, "not found: "+argv[0]
 				res.ReasonCode = "command_missing"
+				if lost != nil {
+					// The probe found the session gone, not the binary.
+					res.Reason, res.ReasonCode = "exec error: "+lost.Error(), "exec_error"
+					res.TransportLost = true
+				}
 				res = r.record(res, "unavailable:"+res.Reason, nil)
 				return res
 			}
@@ -245,6 +253,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		default:
 			res.Reason = "exec error: " + execErr.Error()
 			res.ReasonCode = "exec_error"
+			res.TransportLost = errors.Is(execErr, target.ErrTransport)
 		}
 		res = r.record(res, "unavailable:"+res.Reason, &res.ExitCode)
 		return res
@@ -302,18 +311,19 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 
 // installed reports whether bin is on the target's PATH, via the sys.which
 // check; a path-qualified binary or a missing sys.which is assumed present
-// and left for the exec itself to report.
-func (r *Runner) installed(ctx context.Context, bin string) bool {
+// and left for the exec itself to report. lost is the probe's error when the
+// session, not the binary, was missing.
+func (r *Runner) installed(ctx context.Context, bin string) (ok bool, lost error) {
 	if strings.HasPrefix(bin, "/") {
-		return true
+		return true, nil
 	}
-	c, ok := check.Lookup("sys.which", r.Target.Platform())
-	if !ok {
-		return true
+	c, found := check.Lookup("sys.which", r.Target.Platform())
+	if !found {
+		return true, nil
 	}
 	argv, err := c.Bind(map[string]string{"name": bin})
 	if err != nil {
-		return true
+		return true, nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
 	defer cancel()
@@ -328,12 +338,15 @@ func (r *Runner) installed(ctx context.Context, bin string) bool {
 		sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
 		sub = r.record(sub, "run", &sub.ExitCode)
 	}
+	if errors.Is(execErr, target.ErrTransport) {
+		return false, execErr
+	}
 	if errors.Is(execErr, target.ErrNotFound) || exec.Code == target.CodeNotFound {
 		// No `which` on this host (minimal images): assume present and let
 		// sudo report; the sudo failure message carries the caveat.
-		return true
+		return true, nil
 	}
-	return execErr == nil && exec.Code == 0
+	return execErr == nil && exec.Code == 0, nil
 }
 
 // resolve returns the symlink-resolved form of p via the fs.realpath check,

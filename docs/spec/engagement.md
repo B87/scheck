@@ -211,6 +211,8 @@ assets:                               # per-asset settings; the key is the name 
     host: deploy@203.0.113.5          # id host:203.0.113.5:22, bound to its host.id on first contact
     jump: ops@198.51.100.7            # a connection hop, not an asset: nothing runs on it
     identity: ~/.ssh/deploy           # a path, never a key; without it, ssh-agent
+    known_hosts: ~/acme/known_hosts   # the fingerprints the client gave; default ~/.ssh/known_hosts
+    timeout: 10m                      # the host collector's run timeout, not limits.timeout
     elevate: sudo                     # `sudo -n --` as a prefix, never a password (host-collector.md §7.1)
     profile: hardened                 # overrides defaults.profile for this host
     disable_checks: [fs.suid]         # the client's rules of engagement: only narrow
@@ -329,7 +331,10 @@ collector's other sources (`--context`, `./.scheck/context/**`, `target:`, and t
 has no consumer without a model, and a host must not describe itself
 (`host-collector.md §5.4`). The report records what was passed.
 
-**Host settings.** Beside its reach settings and context, a host asset takes `profile`
+**Host settings.** A host's reach settings are `identity`, `known_hosts` (the file its
+key is verified against; default `~/.ssh/known_hosts`), `jump` and `timeout` (the host
+collector's run timeout, `host-collector.md §4.4`; not `limits.timeout`), so a run that
+needed any of them can be repeated from its file. Beside its reach settings and context, a host asset takes `profile`
 (overriding `defaults.profile`, which only host assets read) and the narrowing lists
 `disable_checks` and `deny_paths`, with the semantics of `host-collector.md §8`: a
 check id that is not in the catalog exits 3, and so does a `deny_paths` entry that is
@@ -438,7 +443,8 @@ narrowing), which is what the 0.0.1 text report showed. `--timeout` keeps its 0.
 meaning, the host collector's run timeout (`host-collector.md §4.4`); `limits.timeout`
 bounds the whole engagement. Context,
 accepted risks and narrowing are not flags: a host that needs them is written into a
-file, and `--write-engagement FILE` writes the in-memory engagement as a starting point.
+file, and `--write-engagement FILE` writes the in-memory engagement as a starting point,
+contacts nothing and never overwrites a file.
 So every setting a run used exists as a file the operator can read, diff and resume
 from. The reach flags are accepted only with `--host`.
 
@@ -460,7 +466,9 @@ from. The reach flags are accepted only with `--host`.
 
 `scheck run` exits 3 when it finds `./scheck.yaml` or the user configuration file of
 `host-collector.md §8`, naming each key the file sets and its new home, and saying what
-to do: move the keys, then delete or rename the file. A narrowing a v0.0.1 user relied
+to do: move the keys, then delete or rename the file. The two paths that contact
+nothing, `--write-engagement` and `--stop-after intake`, print the same list as a
+warning and go on, since they are how those keys move into a file. A narrowing a v0.0.1 user relied
 on is never dropped silently, whichever release they upgrade to; the check costs two
 file lookups and stays.
 
@@ -512,6 +520,19 @@ engagement fixes how they are reached:
 - `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
   `0`.
 
+For a host, exit 3 is a positive list: no SSH user in the locator, an unknown or
+changed host key, an unreadable identity or known_hosts file, failed authentication,
+and a canary mismatch. That host is recorded as `refused`; the other assets are still
+collected and every stage is written before the run exits 3, so nothing already read
+from a client's host is discarded. Every other failure to reach a host (a name that
+does not resolve, TCP refused or timed out, a handshake reset, cut off or past its
+deadline) is a transport failure: the asset is `failed` and the run exits 2. A session
+lost after it worked stops that host's plan where it was lost, keeps what was read, and
+is `incomplete` with reason `failed`: never a complete run of unavailable checks. Until
+E2 makes them aliases, `scheck ssh` keeps exiting 3 on any connection failure, and
+shares the lost-session rule (`host-collector.md §7`). The canary's echo is printed
+only after redaction, and cut short.
+
 So a one-host run exits as the 0.0.1 command did for the same findings and the same
 failures, and a CI job gating on `scheck ssh` keeps its meaning.
 
@@ -535,7 +556,7 @@ and locked while a run holds it:
 
 ```
 <state-dir>/engagements/<engagement.name>/<started>/
-  engagement.yaml      the file as read, verbatim, with its path and hash;
+  engagement.yaml      the file as read, its redact_extra masked (below);
                        for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
@@ -546,13 +567,39 @@ and locked while a run holds it:
   audit.jsonl          every request, command and API call, in order
 ```
 
-Everything in the directory except the engagement file is post-redaction; the
-engagement file is copied verbatim because validation guarantees it holds no
-credential. Evidence keeps only the fields rules read: a full directory record carries
+Everything in the directory is post-redaction. The engagement file is copied as read,
+since validation guarantees it holds no credential, except for its `redact_extra`
+patterns, which are often the very strings they hide: each is replaced by
+`[REDACTED:redact_extra:<n bytes>]`, any other match of a pattern in the copy is
+redacted, and the copy still validates. A file without `redact_extra` is copied
+byte for byte; the original is named by path and hash in every stage document. Evidence keeps only the fields rules read: a full directory record carries
 recovery phone numbers and addresses that no rule needs. Every piece of evidence
 carries its collection time and the principal it was read as. A host asset's own run
 JSON lands under `evidence/`, not under the host collector's `runs/<host.id>/`, so an
 engagement never mixes with standalone host runs.
+
+**In 0.0.2 E1b.** `<started>` is the start time in UTC, RFC 3339 to the second. The
+lock is an `flock` on `.lock` in the directory, released when the run ends or its
+process dies; a second run on a locked directory exits 3, and so does a directory that
+already holds a finished run until resume exists (E4). `--stop-after intake` validates
+and prints the file and creates no directory; without `--stop-after` a run goes through
+the last stage built, Analyze, until the report arrives (E2). Scope writes the declared
+roots as written and refuses, before any target is contacted, a host asset with a
+`jump` or without an SSH user. Every asset of kind `host`, a root or an `assets` entry,
+is collected; an asset of any other kind is `not_collected` with reason
+`collector_not_built`, which makes the run exit 2 when the asset is a root. Plan writes an
+empty checklist and Check opens no follow-up. `evidence/<asset>.json` is the host
+collector's envelope; its `context_sources` names `<file> assets.<name>` with kind
+`config`, and the accepted risks it grades are those in `intent.accepted_risks` that
+name the asset by catalog id without a `subject`, each attributed to its own entry
+(`<file> intent.accepted_risks[i]`), a later entry for the same id winning. The host
+grader accepts a whole id, so a `subject` acceptance is not widened into one: it is
+listed under `acceptances_not_applied` in `findings.json` and printed as a warning,
+and becomes applicable when host findings carry instance keys. Scope's refusals (a
+`jump`, a host without an SSH user) happen before the run directory is created, so a
+refused run leaves nothing behind. With `--format json` stdout is the last stage's
+document (`--stop-after check` prints one that no file holds, since Check writes none
+until E9); text is a summary per asset until the report.
 
 **Stop and resume.** `--stop-after <stage>` ends the run after that stage's file is
 written. `scheck run <directory>` resumes:
@@ -596,7 +643,8 @@ check them:
 | *outside scheck* | scheck does not cover this area in any mode |
 
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
-`not_on_plan:<feature>`, `collector_not_built`, `not_declared` (no root of the kind
+`not_on_plan:<feature>`, `collector_not_built`, `refused` (a host refused us on the
+positive list of "Exit codes"), `not_declared` (no root of the kind
 this area reads was declared), `excluded_by_operator`, `limit_reached`, `failed` or
 `sampled`, with a detail line. `sampled` makes a row at most *partial*. Each row also prints the
 assets covered and those excluded by name, the principal the data was read as, the

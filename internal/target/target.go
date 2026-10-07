@@ -53,6 +53,21 @@ var (
 	ErrNotFound = errors.New("binary not found")
 	ErrTimeout  = errors.New("timed out")
 	ErrCanary   = errors.New("ssh canary mismatch")
+	// ErrAccess marks a connection refused by the operator's own
+	// configuration or by the host's answer to it: an unknown or changed
+	// host key, an unreadable identity or known_hosts file, failed
+	// authentication. It is a usage error; every other failure to connect
+	// is ErrUnreachable, a transport failure (docs/spec/engagement.md,
+	// "Exit codes").
+	ErrAccess = errors.New("access refused")
+	// ErrUnreachable marks a connection that never reached a working
+	// session for any reason other than ErrAccess: a name that does not
+	// resolve, TCP refused or timed out, a handshake reset or cut off.
+	ErrUnreachable = errors.New("host unreachable")
+	// ErrTransport marks a session lost after it worked: an Exec whose
+	// command could not be sent or whose answer never came back. The run
+	// stops there, incomplete (docs/spec/host-collector.md §7).
+	ErrTransport = errors.New("transport lost")
 )
 
 // CodeNotFound is the exit code reported when argv[0] cannot be found.

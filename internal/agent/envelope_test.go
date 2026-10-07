@@ -55,7 +55,7 @@ func envelope(t *testing.T, h *harness, out Outcome) report.Envelope {
 		Started: time.Now(), Profile: "baseline", Transport: "fixture", Elevation: "root", Canary: "n/a",
 		Result: &res,
 		Phase2: &report.Phase2{
-			Provider: p.Name(), Model: "mock-model", Native: p.Native(), Limits: p.Limits(), Usage: out.Usage,
+			Provider: p.Name(), Model: "mock-model", Native: report.ModelNative(p.Native()), Limits: report.ModelLimits(p.Limits()), Usage: report.ModelUsage(out.Usage),
 			Mode: h.sess.Mode(), PromptVersion: PromptVersion, Complete: out.Complete(), Reason: out.Reason,
 			Agent: report.AgentRun{Iterations: out.Iterations, Checks: out.Checks, Reported: out.Reported,
 				Ended: ended, Text: out.Text, RuledOut: res.RuledOut},
