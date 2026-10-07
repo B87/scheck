@@ -34,17 +34,28 @@ var trivialValue = regexp.MustCompile(`(?i)^["']?(yes|no|true|false|none|null|of
 // the granted command, never a credential.
 var sudoersTag = regexp.MustCompile(`(?i)^(no)?passwd$`)
 
+// Token shapes shared by the redactor and the credential detector
+// (credential.go), so a value the detector refuses is one the redactor would
+// have hidden. The detector's bearer shape is a narrower form of bearerToken.
+var (
+	awsAccessKey = regexp.MustCompile(`\b(AKIA|ASIA|AGPA|AIDA|AROA|ANPA)[0-9A-Z]{16}\b`)
+	githubToken  = regexp.MustCompile(`\b(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b`)
+	slackToken   = regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`)
+	bearerToken  = regexp.MustCompile(`(?i)\bbearer\s+([A-Za-z0-9\-._~+/]{8,}=*)`)
+	jwtToken     = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)
+)
+
 // compiledRules are applied in order. Private-key blocks go first so a key
 // is never partially redacted by a narrower rule.
 var compiledRules = []redactRule{
 	{name: "private-key", re: regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----`)},
 	// A block cut off by truncation is still a key: redact to the end.
 	{name: "private-key", re: regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----[\s\S]*$`)},
-	{name: "aws-access-key", re: regexp.MustCompile(`\b(AKIA|ASIA|AGPA|AIDA|AROA|ANPA)[0-9A-Z]{16}\b`)},
-	{name: "github-token", re: regexp.MustCompile(`\b(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b`)},
-	{name: "slack-token", re: regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`)},
-	{name: "bearer", re: regexp.MustCompile(`(?i)\bbearer\s+([A-Za-z0-9\-._~+/]{8,}=*)`), group: 1},
-	{name: "jwt", re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
+	{name: "aws-access-key", re: awsAccessKey},
+	{name: "github-token", re: githubToken},
+	{name: "slack-token", re: slackToken},
+	{name: "bearer", re: bearerToken, group: 1},
+	{name: "jwt", re: jwtToken},
 	{name: "kv-secret", group: 3, keepIf: trivialValue, keyGroup: 1, skipKey: sudoersTag,
 		re: regexp.MustCompile(`(?i)\b([A-Za-z0-9_.-]*(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?key)[A-Za-z0-9_.-]*)\s*[=:]\s*("[^"\n]*"|'[^'\n]*'|[^\s,;]+)`)},
 }

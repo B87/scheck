@@ -63,7 +63,7 @@ everything found can be checked without being listed one by one.
 | `url: https://shop.example.com/` | the site, when no domain root covers it |
 | `cloud: gcp:example-prod` | the GCP project (or `gcp:organizations/123` for an organization), read through read-only roles, and the resources in it |
 | `saas: github:example-org` | the tenant, read through read-only scopes; likewise `google-workspace:example.com` |
-| `repo: ./` or `repo: github:example-org/shop` | the repository and its history |
+| `repo: ./` or `repo: github:example-org/shop` | the repository and its history (a local checkout from 0.0.2 E4, when the gate decides how history is read) |
 
 ```yaml
 roots:

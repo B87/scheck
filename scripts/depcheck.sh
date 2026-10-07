@@ -25,4 +25,36 @@ for pkg in agent policy check finding report llm bounded; do
     fi
   fi
 done
+# The engagement and its collectors run on rules through 0.0.3: no model
+# path in their dependency graph (AGENTS.md, "Layout"). Only the host asset
+# imports the runner or a target; every other engagement package reaches a
+# host through it. The rule is on direct imports, since the host catalog and
+# the finding catalog themselves import target and runner.
+pkgs=""
+for tree in engagement collector; do
+  if [ -d "./internal/$tree" ]; then
+    pkgs="$pkgs $(go list "./internal/$tree/...")"
+  fi
+done
+for pkg in $pkgs; do
+  deps=$(go list -deps "$pkg")
+  model=$(printf '%s\n' "$deps" | grep -E 'internal/(llm|agent|bounded)(/|$)' || true)
+  if [ -n "$model" ]; then
+    echo "depcheck: $pkg depends on the model path:" >&2
+    printf '%s\n' "$model" | sed 's/^/  /' >&2
+    status=1
+  fi
+  case "$pkg" in
+  */internal/engagement/hostasset) ;;
+  *)
+    imports=$(go list -f '{{join .Imports "\n"}}' "$pkg")
+    reach=$(printf '%s\n' "$imports" | grep -E 'internal/(runner|target)(/|$)' || true)
+    if [ -n "$reach" ]; then
+      echo "depcheck: $pkg imports the runner or a target; only internal/engagement/hostasset may:" >&2
+      printf '%s\n' "$reach" | sed 's/^/  /' >&2
+      status=1
+    fi
+    ;;
+  esac
+done
 exit $status

@@ -143,6 +143,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(
 		newLocalCmd(opts),
 		newSSHCmd(opts),
+		newRunCmd(opts),
 		newCatalogCmd(opts),
 		newExplainCmd(opts),
 		newSudoersCmd(opts),
