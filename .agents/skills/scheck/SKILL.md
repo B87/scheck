@@ -63,6 +63,24 @@ provenance, `scheck config validate` exits 0 or 3, `scheck explain FINDING-ID
 --exposure internet` prints a severity chain, and `--stop-after context` prints the
 merged block that grades the findings.
 
+**`scheck run` is in development.** This build also has `scheck run ENGAGEMENT.yaml`
+and `scheck run --host user@host|local`, the engagement command that replaces `local`
+and `ssh` in a later build. Until its report lands, prefer `local` and `ssh` to collect
+host evidence, and use `run` when the user asks for it. Its output is interim: with
+`--format json`, stdout is `findings.json` (per asset `status`, `reason`,
+`assessments`, `findings`), not the run report described below; that report is in the
+run directory under `evidence/<asset>.json` (`-v` prints the directory), and with
+`--no-persist` it is not kept anywhere, so the facts are lost. It exits 2 also when a
+declared root has no collector yet (`not_collected`, `collector_not_built`) or a host
+could not be reached (`failed`), and 3 when a host refused us (`refused`: host key,
+authentication or canary; reported after the other assets were collected) or when a
+0.0.1 `scheck.yaml` or user configuration file exists. For the last, relay the message,
+which names where each key moves; do not delete or edit the user's file yourself. The
+reach flags (`--identity`, `--known-hosts`, `--sudo`, `--elevate`, `--profile`,
+`--timeout`) are accepted only with `--host`, and `--context`, `--ignore-context` and
+`--audit-log` exit 3 on `run`; a host's context and narrowing live in the engagement
+file (`--host … --write-engagement FILE` writes one to start from, contacting nothing).
+
 ## Run and discover
 
 Substitute `bin/scheck` for `scheck` below when using a checkout build. No model, API
@@ -128,6 +146,9 @@ not a total and an absence cannot be concluded from it. `attempted` means the ru
 it does not guarantee the executable started. It excludes prerequisite probes.
 `unavailable` may mean an attempted command failed, not just that it was skipped.
 Never treat unavailable, denied, missing, redacted or truncated evidence as a pass.
+When `run.warnings` says the connection was lost, the run stopped there and exited 2:
+the checks after it are absent from `facts` rather than `unavailable`, and their rules
+are `not_assessed` with reason `check-not-run`.
 
 For diagnostics in the same structured report:
 
