@@ -40,8 +40,12 @@ type ResolvedAsset struct {
 	Scan     string   `json:"scan" yaml:"scan"`
 	Throttle Throttle `json:"throttle" yaml:"throttle"`
 
-	Jump          string       `json:"jump,omitempty" yaml:"jump,omitempty"`
-	Identity      string       `json:"identity,omitempty" yaml:"identity,omitempty"`
+	Jump       string `json:"jump,omitempty" yaml:"jump,omitempty"`
+	Identity   string `json:"identity,omitempty" yaml:"identity,omitempty"`
+	KnownHosts string `json:"known_hosts,omitempty" yaml:"known_hosts,omitempty"`
+	// Timeout is the host collector's run timeout, or empty for its
+	// default (docs/spec/host-collector.md §4.4).
+	Timeout       string       `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 	Elevate       string       `json:"elevate,omitempty" yaml:"elevate,omitempty"`
 	Profile       string       `json:"profile,omitempty" yaml:"profile,omitempty"`
 	DisableChecks []string     `json:"disable_checks,omitempty" yaml:"disable_checks,omitempty"`
@@ -203,6 +207,8 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 	if r.Kind == KindHost {
 		out.Jump = a.Jump
 		out.Identity = a.Identity
+		out.KnownHosts = a.KnownHosts
+		out.Timeout = a.Timeout
 		out.Elevate = or(a.Elevate, "none")
 		out.Profile = or(a.Profile, d.Profile)
 		out.DisableChecks = a.DisableChecks

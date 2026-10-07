@@ -87,7 +87,7 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `local`, `ssh`, `run` (`--stop-after intake` only, until E1b), `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `local`, `ssh`, `run` (an engagement file or `--host`, through analyze until E2; `legacy.go` refuses a 0.0.1 config file), `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
@@ -98,7 +98,8 @@ test passes.
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | run persistence under the state dir |
 | `internal/config` | yaml chain, validation, narrowing only |
-| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a) |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages through analyze and the locked run directory (E1b) |
+| `internal/engagement/hostasset` | the host collector as an asset: reach (local, SSH dial, canary, platform), the baseline through the runner, the posture rules graded through the asset's context; the canary code `scheck ssh` also uses |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `internal/operator` | operator context for the host collector: sources, schema, per-kind merge, budget, the `<operator_context>` block |
 | `internal/llm` | the provider contract, token accounting (`CheckFit`), the registry; `mock`, `openai` (the default adapter), `conformance`, `all` |
@@ -129,8 +130,9 @@ about it:
 in their dependency graph (rules only through 0.0.3), and none but
 `internal/engagement/hostasset` imports `internal/runner` or `internal/target` directly
 (the catalogs import them, so the rule cannot be on the whole graph). `internal/report`
-imports `internal/llm` for the envelope's model fields, so E2 has to cut that edge
-before the engagement report can embed the host envelope. E4 adds the rest: no file under
+declares the envelope's model fields itself (`ModelNative`, `ModelLimits`, `ModelUsage`,
+which convert from the `llm` types field for field), so the engagement can carry the host
+envelope without the model path in its graph (cut in E1b). E4 adds the rest: no file under
 `internal/collector` may import `net/http` or `net` directly, only the gate does; and no
 collector imports another collector. A collector that needs something from another's
 facts gets it through a multi-fact rule in `internal/engagement`, never by import.
@@ -165,6 +167,9 @@ make integ      # integration tests; needs Docker or Podman running
 make fixtures   # re-record testdata/fixtures/{ubuntu,fedora} from the containers
 go run ./cmd/scheck local --stop-after plan
 go run ./cmd/scheck run engagement.yaml --stop-after intake   # validate, print resolved; contacts nothing
+go run ./cmd/scheck run --host local --no-persist              # one-host engagement through analyze; findings summary
+go run ./cmd/scheck run --host user@host --identity ~/.ssh/k --format json   # findings.json; run directory under the state dir
+go run ./cmd/scheck run --host local --write-engagement e.yaml # write the --host engagement as a file; contacts nothing
 go run ./cmd/scheck local --stop-after facts --format json --audit-log /tmp/audit.jsonl
 go run ./cmd/scheck ssh user@host --stop-after facts
 go run ./cmd/scheck catalog --profile hardened
@@ -335,7 +340,7 @@ claim of any kind.
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
 `allow_egress: false`, the `anthropic` and `ollama` providers, and
 `--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
-engagement's stages after intake (`scheck run` validates and prints the file only),
-`scheck init`, its collectors, probes, scans, full scope and
+engagement's report stage (`scheck run` stops after analyze, with `findings.json`), resume,
+`--jump` and `jump:`, `scheck init`, the network collectors, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.

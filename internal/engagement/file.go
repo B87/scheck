@@ -206,6 +206,8 @@ type Asset struct {
 
 	Jump          string       `yaml:"jump,omitempty" json:"jump,omitempty"`
 	Identity      string       `yaml:"identity,omitempty" json:"identity,omitempty"`
+	KnownHosts    string       `yaml:"known_hosts,omitempty" json:"known_hosts,omitempty"`
+	Timeout       string       `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Elevate       string       `yaml:"elevate,omitempty" json:"elevate,omitempty"`
 	Profile       string       `yaml:"profile,omitempty" json:"profile,omitempty"`
 	DisableChecks []string     `yaml:"disable_checks,omitempty" json:"disable_checks,omitempty"`

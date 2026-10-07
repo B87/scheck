@@ -16,8 +16,12 @@ type FactSheet struct {
 	Platform     check.Platform
 	Order        []string // check ids in execution order
 	Results      map[string]runner.Result
-	// Incomplete is set when the run context ended before every check ran.
+	// Incomplete is set when the run context ended, or the session was
+	// lost, before every check ran.
 	Incomplete bool
+	// Lost is the failure that cut the session, when that is what made
+	// the sheet incomplete.
+	Lost string
 }
 
 // Get returns the result for id.
@@ -64,6 +68,13 @@ func Run(ctx context.Context, r *runner.Runner, plan []check.Check, progress fun
 		fs.Results[c.ID] = res
 		if progress != nil {
 			progress(res)
+		}
+		// A lost session answers every later check the same way; running
+		// them would turn one transport failure into a page of unavailable
+		// facts on a run that still read as complete (docs/spec/host-collector.md §7).
+		if res.TransportLost {
+			fs.Incomplete, fs.Lost = true, res.Reason
+			break
 		}
 	}
 	return fs

@@ -9,7 +9,6 @@ import (
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
-	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/operator"
 )
 
@@ -81,9 +80,9 @@ type Run struct {
 	Provider       *string           `json:"provider"`
 	Model          *string           `json:"model"`
 	Effort         *string           `json:"effort"`
-	Native         *llm.Native       `json:"native"`
-	Limits         *llm.Limits       `json:"limits"`
-	Usage          llm.Usage         `json:"usage"`
+	Native         *ModelNative      `json:"native"`
+	Limits         *ModelLimits      `json:"limits"`
+	Usage          ModelUsage        `json:"usage"`
 	PromptVersion  string            `json:"prompt_version,omitempty"`
 	Agent          *AgentRun         `json:"agent,omitempty"`
 	ContextSources []operator.Source `json:"context_sources"`
@@ -109,14 +108,39 @@ type AgentRun struct {
 	RuledOut []finding.RuledOut `json:"ruled_out,omitempty"`
 }
 
+// ModelNative, ModelLimits and ModelUsage are llm.Native, llm.Limits and
+// llm.Usage field for field, so a caller converts with ModelNative(p.Native()).
+// The envelope declares them itself because the engagement embeds it, and
+// nothing under internal/engagement may have the model path in its
+// dependency graph (AGENTS.md, "Layout").
+type (
+	ModelNative struct {
+		ToolCalling       bool `json:"tool_calling"`
+		ParallelToolCalls bool `json:"parallel_tool_calls"`
+		PromptCaching     bool `json:"prompt_caching"`
+		Reasoning         bool `json:"reasoning"`
+	}
+	ModelLimits struct {
+		MaxContext int  `json:"max_context"`
+		Local      bool `json:"local"`
+	}
+	ModelUsage struct {
+		Input      int      `json:"input"`
+		Output     int      `json:"output"`
+		CacheRead  int      `json:"cache_read"`
+		CacheWrite int      `json:"cache_write"`
+		CostUSD    *float64 `json:"cost_usd"`
+	}
+)
+
 // Phase2 is what the caller knows after the agent ran.
 type Phase2 struct {
 	Provider      string
 	Model         string
 	Effort        string
-	Native        llm.Native
-	Limits        llm.Limits
-	Usage         llm.Usage
+	Native        ModelNative
+	Limits        ModelLimits
+	Usage         ModelUsage
 	Mode          string // agent | single-pass
 	PromptVersion string
 	Agent         AgentRun
@@ -193,7 +217,11 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 		env.Run.ContextSources = append(env.Run.ContextSources, meta.Context.Sources...)
 		env.Run.Warnings = append(env.Run.Warnings, meta.Context.Warnings...)
 	}
-	if sheet.Incomplete {
+	switch {
+	case sheet.Lost != "":
+		env.Run.Status = "incomplete"
+		env.Run.Warnings = append(env.Run.Warnings, "the connection was lost before every baseline check ran: "+sheet.Lost)
+	case sheet.Incomplete:
 		env.Run.Status = "incomplete"
 		env.Run.Warnings = append(env.Run.Warnings, "run timed out before every baseline check ran")
 	}

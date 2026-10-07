@@ -155,6 +155,8 @@ a fixture string matching the engagement's `redact_extra`; a run cut by a transp
 failure exits 2 as in 0.0.1; an engagement with a host root and a `github:` root exits
 2 with the host's findings written; a second run on a locked run directory exits 3;
 the integration diff stays the exact allowlist of `spec/host-collector.md §1`.
+The engagement's packages carry the host envelope, so `internal/report` stops importing
+`internal/llm` here rather than in E2 (AGENTS.md, "Layout").
 
 ### E1c — jump hosts
 
@@ -203,6 +205,22 @@ against the schema as committed; target-derived text is control-character escape
 the same command trace; a one-host run exits as the 0.0.1 command did for the same
 findings and failures; `--format json --no-persist --include-evidence` still prints the
 host's facts with their captures; no code path reads a config file.
+
+**Carried from the E1b review** (security-consultant and code review, 2026-10-07),
+decided here so E2 does not unpick E1b: `findings.json` and the report's JSON carry the
+run's incompleteness and refusals as `{asset, reason, detail}`, and an exit-2 line that
+also hides open findings says both; the text output shows per host asset its checks
+(ok, unavailable by reason) and rules (insufficient evidence), leads with
+incompleteness, and closes with "exit 0 is not a clean result"; `plan.json` lists each
+host asset's planned and disabled checks so it reconciles with `audit.jsonl`; one of
+`recon.json` and `evidence/<asset>.json` is named the record of a host's facts; a run
+under `--no-persist` still leaves its command trace somewhere (the report's JSON, or an
+audit path); accepted risks carry `accepted_by` to the report, and an acceptance's
+`expires` is read in `engagement.timezone` (`operator.Risk.Expired` reads UTC); validation
+warns when a declared locator or asset name matches a `redact_extra` pattern, since
+stage documents carry them as written; the coverage reason `refused` is rendered; and
+`session` in `cmd/scheck` calls `hostasset` instead of its own copy of the baseline run
+when `local` and `ssh` become aliases.
 
 ### E3 — the lab, sealed
 

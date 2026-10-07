@@ -2,11 +2,63 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/engagement"
+	"github.com/b87/scheck/internal/engagement/hostasset"
+	"github.com/b87/scheck/internal/target/fixture"
 )
+
+// hermetic gives a test its own home, config and state directories and
+// working directory, so no run reads the developer's configuration or
+// writes into their state directory. It returns the state directory.
+func hermetic(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", filepath.Join(dir, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "home", ".config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
+	t.Chdir(dir)
+	return filepath.Join(dir, "state", "scheck")
+}
+
+// collectFrom makes every host asset collect from fx, never a real host,
+// and counts the collections.
+func collectFrom(t *testing.T, fx func() *fixture.Target) *int {
+	t.Helper()
+	calls := 0
+	prev := collectHost
+	collectHost = func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
+		calls++
+		o.Target = fx()
+		return hostasset.Collect(ctx, o)
+	}
+	t.Cleanup(func() { collectHost = prev })
+	return &calls
+}
+
+// fixturesDir is resolved when the package loads, before any test changes
+// directory.
+var fixturesDir, _ = filepath.Abs(filepath.Join("..", "..", "testdata", "fixtures"))
+
+func recorded(t *testing.T, name string) func() *fixture.Target {
+	return func() *fixture.Target {
+		fx, err := fixture.Load(filepath.Join(fixturesDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fx
+	}
+}
 
 // runEngagement executes `scheck run` with args and returns stdout, the
 // error the process would print, and its exit code.
@@ -41,8 +93,9 @@ assets:
 `
 
 func TestRunStopAfterIntakePrintsTheResolvedFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "engagement.yaml")
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
 	writeFile(t, path, validEngagement)
 
 	out, msg, code := runEngagement(t, path, "--stop-after", "intake")
@@ -77,9 +130,14 @@ func TestRunStopAfterIntakePrintsTheResolvedFile(t *testing.T) {
 	if strings.Contains(out, "tangerine") {
 		t.Errorf("a redact_extra pattern was printed:\n%s", out)
 	}
+	if *calls != 0 {
+		t.Errorf("intake contacted a host %d times", *calls)
+	}
 }
 
 func TestRunRefusesWhatThisBuildDoesNotRun(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
 	dir := t.TempDir()
 	path := filepath.Join(dir, "engagement.yaml")
 	writeFile(t, path, validEngagement)
@@ -88,14 +146,20 @@ func TestRunRefusesWhatThisBuildDoesNotRun(t *testing.T) {
 		args []string
 		msg  string
 	}{
-		{"no stop-after", []string{path}, "only --stop-after intake"},
-		{"later stage", []string{path, "--stop-after", "recon"}, "not available in this build"},
+		{"report stage", []string{path, "--stop-after", "report"}, "--stop-after report is not available in this build"},
 		{"unknown stage", []string{path, "--stop-after", "facts"}, "must be one of intake|scope|recon|plan|check|analyze|report"},
-		{"host flag", []string{path, "--stop-after", "intake", "--sudo"}, "--sudo is not available for scheck run"},
-		{"context flag", []string{path, "--stop-after", "intake", "--context", "x.yaml"}, "--context is not available for scheck run"},
-		{"model flag", []string{path, "--stop-after", "intake", "--provider", "mock"}, "--provider is not available for scheck run"},
-		{"no file", []string{"--stop-after", "intake"}, "one engagement file"},
-		{"missing file", []string{filepath.Join(dir, "nope.yaml"), "--stop-after", "intake"}, "no such file"},
+		{"reach flag on a file", []string{path, "--sudo"}, "--sudo is accepted only with --host"},
+		{"timeout on a file", []string{path, "--timeout", "1m"}, "--timeout is accepted only with --host"},
+		{"context flag", []string{path, "--context", "x.yaml"}, "context is assets.<name>.context"},
+		{"audit log", []string{path, "--audit-log", "a.jsonl"}, "the run directory holds audit.jsonl"},
+		{"model flag", []string{path, "--provider", "mock"}, "--provider is not available for scheck run"},
+		{"jump", []string{"--host", "deploy@203.0.113.5", "--jump", "ops@198.51.100.7"}, "--jump is not available in this build"},
+		{"file and host", []string{path, "--host", "local"}, "an engagement file or --host, not both"},
+		{"neither", nil, "one engagement file, or --host LOCATOR"},
+		{"write without host", []string{path, "--write-engagement", filepath.Join(dir, "x.yaml")}, "it needs --host"},
+		{"bad host", []string{"--host", "deploy:hunter2@203.0.113.5"}, "never carries a password"},
+		{"bad profile", []string{"--host", "local", "--profile", "paranoid"}, "--profile: "},
+		{"missing file", []string{filepath.Join(dir, "nope.yaml")}, "no such file"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -103,13 +167,19 @@ func TestRunRefusesWhatThisBuildDoesNotRun(t *testing.T) {
 			if code != exitUsage || !strings.Contains(msg, tc.msg) || out != "" {
 				t.Fatalf("exit %d, %q, stdout %q; want exit 3 and %q", code, msg, out, tc.msg)
 			}
+			if strings.Contains(msg, "hunter2") {
+				t.Fatalf("the password was printed: %s", msg)
+			}
 		})
+	}
+	if *calls != 0 {
+		t.Errorf("a refused run contacted a host %d times", *calls)
 	}
 }
 
 func TestRunInvalidFileNamesEveryErrorAndNeverTheCredential(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "engagement.yaml")
+	hermetic(t)
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
 	writeFile(t, path, validEngagement+"    identity: AKIAIOSFODNN7EXAMPLE\ncolour: blue\n")
 	out, msg, code := runEngagement(t, path, "--stop-after", "intake")
 	if code != exitUsage || out != "" {
@@ -122,5 +192,279 @@ func TestRunInvalidFileNamesEveryErrorAndNeverTheCredential(t *testing.T) {
 	}
 	if strings.Contains(msg, "AKIAIOSFODNN7EXAMPLE") {
 		t.Fatalf("the credential was printed:\n%s", msg)
+	}
+}
+
+// runDir returns the one run directory under state for engagement name.
+func runDir(t *testing.T, state, name string) string {
+	t.Helper()
+	dirs, _ := filepath.Glob(filepath.Join(state, "engagements", name, "*"))
+	if len(dirs) != 1 {
+		t.Fatalf("run directories: %q", dirs)
+	}
+	return dirs[0]
+}
+
+// A host run writes every stage's output into a private run directory, and
+// --format json prints findings.json as written.
+func TestRunOnAHostWritesTheRunDirectory(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, validEngagement)
+
+	out, msg, code := runEngagement(t, path, "--format", "json")
+	dir := runDir(t, state, "acme")
+	written, err := os.ReadFile(filepath.Join(dir, "findings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != string(written) {
+		t.Errorf("stdout is not findings.json")
+	}
+	var doc engagement.FindingsDoc
+	if err := json.Unmarshal(written, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := exitOK
+	if doc.Open > 0 {
+		want = exitFindings
+	}
+	if code != want || *calls != 1 {
+		t.Fatalf("exit %d (%s) after %d collections; findings.json has %d open", code, msg, *calls, doc.Open)
+	}
+	if a := doc.Assets[0]; a.Name != "deploy" || a.Status != "collected" || len(a.Assessments) == 0 {
+		t.Fatalf("asset = %+v", a)
+	}
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o700 {
+		t.Errorf("run directory mode %v", fi.Mode().Perm())
+	}
+	for _, f := range []string{"engagement.yaml", "scope.json", "recon.json", "plan.json", "findings.json", "audit.jsonl", "evidence/deploy.json"} {
+		fi, err := os.Stat(filepath.Join(dir, f))
+		if err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s: %v %v", f, err, fi)
+		}
+	}
+	if audit, _ := os.ReadFile(filepath.Join(dir, "audit.jsonl")); !bytes.Contains(audit, []byte(`"check":"sys.uname"`)) {
+		t.Errorf("audit.jsonl does not record the run's commands")
+	}
+
+	// The text summary names the asset and the run directory.
+	out, _, _ = runEngagement(t, path, "--stop-after", "recon", "--no-persist")
+	if !strings.Contains(out, "deploy  host:203.0.113.5:22  collected") || !strings.Contains(out, "not persisted (--no-persist)") {
+		t.Errorf("recon summary:\n%s", out)
+	}
+}
+
+// A secret on the host and a string matching redact_extra are absent from
+// every file in the run directory and from stdout, and their markers are
+// present (docs/ROADMAP.md, E1b "Done when"). The pattern is a literal, as
+// clients write them, so the run directory's engagement.yaml is held to the
+// same rule.
+func TestRunSeededSecretNeverReachesTheRunDirectory(t *testing.T) {
+	state := hermetic(t)
+	collectFrom(t, func() *fixture.Target {
+		return fixture.New(check.Linux,
+			fixture.Exec{Argv: []string{"uname", "-a"}, Stdout: "Linux box 6.8 key=AKIAIOSFODNN7EXAMPLE codename=project-tangerine\n"},
+			fixture.Exec{Argv: []string{"cat", "/etc/machine-id"}, Stdout: "0123456789abcdef0123456789abcdef\n"},
+			fixture.Exec{Argv: []string{"uname", "-n"}, Stdout: "box\n"},
+		)
+	})
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, validEngagement)
+
+	out, msg, code := runEngagement(t, path, "--format", "json")
+	if code == exitUsage {
+		t.Fatalf("exit 3: %s", msg)
+	}
+	text, _, _ := runEngagement(t, path, "--stop-after", "recon", "--no-persist")
+	outputs := map[string]string{"stdout": out, "text": text}
+	markers := map[string]bool{}
+	err := filepath.WalkDir(runDir(t, state, "acme"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		outputs[filepath.Base(p)] = string(b)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, s := range outputs {
+		for _, secret := range []string{"AKIAIOSFODNN7EXAMPLE", "project-tangerine"} {
+			if strings.Contains(s, secret) {
+				t.Errorf("%s holds %s", name, secret)
+			}
+		}
+		for _, m := range []string{"[REDACTED:aws-access-key:20 bytes]", "[REDACTED:extra:0:17 bytes]"} {
+			if strings.Contains(s, m) {
+				markers[m+" in "+name] = true
+			}
+		}
+	}
+	for _, want := range []string{"recon.json", "deploy.json"} {
+		for _, m := range []string{"[REDACTED:aws-access-key:20 bytes]", "[REDACTED:extra:0:17 bytes]"} {
+			if !markers[m+" in "+want] {
+				t.Errorf("%s lacks %s", want, m)
+			}
+		}
+	}
+}
+
+// An engagement with a host root and a github root exits 2 with the host's
+// findings written.
+func TestRunHostAndGitHubIsIncompleteWithFindings(t *testing.T) {
+	state := hermetic(t)
+	collectFrom(t, recorded(t, "ubuntu"))
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, strings.Replace(validEngagement, "  - host: deploy@203.0.113.5\n", "  - host: deploy@203.0.113.5\n  - saas: github:example-org\n", 1))
+	out, msg, code := runEngagement(t, path)
+	if code != exitIncomplete || !strings.Contains(msg, "saas:github:example-org: collector_not_built") {
+		t.Fatalf("exit %d: %s", code, msg)
+	}
+	if !strings.Contains(out, "github:example-org  not_collected (collector_not_built)") {
+		t.Errorf("summary:\n%s", out)
+	}
+	var doc engagement.FindingsDoc
+	b, err := os.ReadFile(filepath.Join(runDir(t, state, "acme"), "findings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Assets) != 2 || doc.Assets[0].Status != "collected" || len(doc.Assets[0].Assessments) == 0 {
+		t.Fatalf("findings.json = %+v", doc.Assets)
+	}
+}
+
+func TestRunOnALockedRunDirectoryExits3(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	started := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	prev := runClock
+	runClock = func() time.Time { return started }
+	t.Cleanup(func() { runClock = prev })
+	held, err := engagement.CreateRunDir(state, "acme", started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, validEngagement)
+	_, msg, code := runEngagement(t, path)
+	if code != exitUsage || !strings.Contains(msg, "is locked by another run") || *calls != 0 {
+		t.Fatalf("exit %d after %d collections: %s", code, *calls, msg)
+	}
+}
+
+// A run cut by a transport failure or a timeout exits 2; a canary mismatch
+// exits 3, as in 0.0.1.
+func TestRunFailuresSetTheExitCode(t *testing.T) {
+	hermetic(t)
+	prev := collectHost
+	t.Cleanup(func() { collectHost = prev })
+
+	collectHost = func(context.Context, hostasset.Options) (*hostasset.Collection, error) {
+		return nil, &hostasset.Error{Err: errors.New("ssh: dial 203.0.113.5:22: connection refused (host unreachable)")}
+	}
+	_, msg, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--no-persist")
+	if code != exitIncomplete || !strings.Contains(msg, "host-203-0-113-5: failed: ssh: dial") {
+		t.Fatalf("unreachable: exit %d: %s", code, msg)
+	}
+
+	collectHost = func(context.Context, hostasset.Options) (*hostasset.Collection, error) {
+		return nil, &hostasset.Error{Usage: true, Err: errors.New("ssh canary mismatch")}
+	}
+	out, msg, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--no-persist")
+	if code != exitUsage || !strings.Contains(msg, "refused:") || !strings.Contains(out, "refused (refused)") {
+		t.Fatalf("canary: exit %d: %s\n%s", code, msg, out)
+	}
+
+	collectFrom(t, func() *fixture.Target {
+		return fixture.New(check.Linux, fixture.Exec{Argv: []string{"uname", "-a"}, Stdout: "Linux\n", Sleep: time.Second})
+	})
+	_, msg, code = runEngagement(t, "--host", "local", "--timeout", "50ms", "--no-persist")
+	if code != exitIncomplete || !strings.Contains(msg, "host-local: limit_reached") {
+		t.Fatalf("timeout: exit %d: %s", code, msg)
+	}
+}
+
+// What this build cannot reach is refused before a run directory exists,
+// so a refused run leaves nothing behind.
+func TestRunPreflightLeavesNoRunDirectory(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	_, msg, code := runEngagement(t, "--host", "203.0.113.5")
+	if code != exitUsage || !strings.Contains(msg, "has no SSH user") || *calls != 0 {
+		t.Fatalf("exit %d after %d collections: %s", code, *calls, msg)
+	}
+	if _, err := os.Stat(filepath.Join(state, "engagements")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a refused run created %s: %v", filepath.Join(state, "engagements"), err)
+	}
+}
+
+// --write-engagement writes the --host engagement, contacts nothing and
+// never overwrites; the file it writes runs as the same engagement.
+func TestRunWriteEngagement(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	args := []string{"--host", "deploy@203.0.113.5:2222", "--sudo", "--profile", "hardened", "--identity", "~/.ssh/deploy", "--write-engagement", path}
+	if _, msg, code := runEngagement(t, args...); code != exitOK {
+		t.Fatalf("exit %d: %s", code, msg)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("written file: %v %v", err, fi)
+	}
+	if _, msg, code := runEngagement(t, args...); code != exitUsage || !strings.Contains(msg, "exists") {
+		t.Fatalf("overwrite: exit %d: %s", code, msg)
+	}
+	withReach := filepath.Join(t.TempDir(), "reach.yaml")
+	if _, msg, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--known-hosts", "~/acme/known_hosts", "--timeout", "10m", "--write-engagement", withReach); code != exitOK {
+		t.Fatalf("exit %d: %s", code, msg)
+	}
+	if b, _ := os.ReadFile(withReach); !strings.Contains(string(b), "known_hosts: ~/acme/known_hosts") || !strings.Contains(string(b), "timeout: 10m0s") {
+		t.Errorf("--known-hosts and --timeout are not in the written file:\n%s", b)
+	}
+	out, msg, code := runEngagement(t, path, "--stop-after", "intake")
+	if code != exitOK {
+		t.Fatalf("exit %d: %s", code, msg)
+	}
+	for _, want := range []string{"name: host-203-0-113-5-2222", "id: host:203.0.113.5:2222", "elevate: sudo", "profile: hardened", "identity: ~/.ssh/deploy", "timeout: 1h0m0s"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("resolved lacks %q:\n%s", want, out)
+		}
+	}
+	if *calls != 0 {
+		t.Errorf("contacted a host %d times", *calls)
+	}
+}
+
+// A configuration file where 0.0.1 read one stops the run, naming each key
+// and its new home and never a value. The two paths that contact nothing,
+// which are how its keys move into a file, warn instead.
+func TestRunRefusesALegacyConfigFile(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	writeFile(t, "scheck.yaml", "deny_paths: [/srv/private]\nredact_extra: [\"acme-secret-codename\"]\ncolour: blue\n")
+	if _, msg, code := runEngagement(t, "--host", "local", "--write-engagement", "e.yaml"); code != exitOK {
+		t.Fatalf("--write-engagement: exit %d: %s", code, msg)
+	}
+	if _, msg, code := runEngagement(t, "e.yaml", "--stop-after", "intake"); code != exitOK {
+		t.Fatalf("--stop-after intake: exit %d: %s", code, msg)
+	}
+	_, msg, code := runEngagement(t, "--host", "local")
+	if code != exitUsage || *calls != 0 {
+		t.Fatalf("exit %d after %d collections: %s", code, *calls, msg)
+	}
+	for _, want := range []string{"scheck.yaml:", "deny_paths -> assets.<name>.deny_paths", "redact_extra -> redact_extra", "colour -> not read", "delete or rename the file"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message lacks %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "acme-secret-codename") || strings.Contains(msg, "/srv/private") {
+		t.Errorf("a value was printed:\n%s", msg)
 	}
 }
