@@ -196,7 +196,7 @@ the code host has its own secret scanning, its alerts are read as well.
 
 Reading history needs a git transport, and running `git` would send requests the gate
 does not see. How history is fetched (through the gate, or from a checkout the operator
-provides as a passive source) is decided with the gate in 0.0.2 E3, before the GitHub
+provides as a passive source) is decided with the gate in 0.0.2 E4, before the GitHub
 collector exists.
 
 ### Hosts

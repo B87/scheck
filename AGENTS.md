@@ -7,8 +7,11 @@ repositories, hosts and websites, driven by context only the operator knows. Rea
 
 What exists today, released as v0.0.1, is the **host collector**: a read-only posture
 checker for one macOS or Linux host, local or over SSH. It becomes the collector for
-host assets in the engagement and its guarantees do not change. This file is the
-operating manual for a coding agent in this repository.
+host assets in the engagement and its guarantees do not change. In 0.0.2, `scheck
+local`, `scheck ssh` and `scheck.yaml` fold into `scheck run` with an engagement file
+or `--host` (`docs/spec/engagement.md`, "One command, one file"); until the slice that
+replaces them lands, they behave as in v0.0.1. This file is the operating manual for a
+coding agent in this repository.
 
 ## Documents
 
@@ -21,7 +24,7 @@ operating manual for a coding agent in this repository.
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
 | `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
-| `docs/CONFIGURATION.md`, `docs/RELEASING.md` | Host configuration walkthrough; release runbook |
+| `docs/CONFIGURATION.md`, `docs/RELEASING.md` | Host configuration walkthrough (v0.0.1; removed in 0.0.2 E2); release runbook |
 
 Code comments cite specs as `docs/spec/<file>.md §N` for anything that exists because
 of a security decision. When implementation has to deviate from a spec, update that
@@ -113,14 +116,14 @@ about it:
 
 | Path | Owns | Slice |
 |---|---|---|
-| `internal/engagement` | the engagement file (schema, validation, the interview's questions and their consumers), the stages, the run directory and resume (`docs/spec/engagement.md`, "Runs, state and configuration") | E1, E9 |
-| `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit | E3 |
-| `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E4 |
+| `internal/engagement` | the engagement file (schema, validation, `--host` engagements built in memory), the stages, the run directory (E1), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file", "Runs, state and configuration") | E1, E4, E8, E9 |
+| `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit | E4 |
+| `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E2 |
 | `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
-| `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E8 |
-| `cmd/scheck` | `init` and `run` beside the host commands | E1 |
+| `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1 |
+| `cmd/scheck` | `run` and `--host` (E1); `local` and `ssh` as aliases of `run --host`, and `config` removed with `internal/config` (E2); `init` (E8) | E1, E2, E8 |
 
-`scripts/depcheck.sh` grows with E1 and E3: `internal/engagement/...` and
+`scripts/depcheck.sh` grows with E1 and E4: `internal/engagement/...` and
 `internal/collector/...` must have no `internal/llm`, `internal/agent` or
 `internal/bounded` in their dependency graph (rules only through 0.0.3); no file under
 `internal/collector` may import `net/http` or `net` directly, only the gate does; and no
@@ -140,7 +143,7 @@ person who answers `scheck init` and acts on the report, played from a fixed com
 profile in `.agents/clients/`. Run its *interview* mode whenever interview wording
 changes, and its *fixture* mode for the engagement files that interview tests use; its
 improvised and wrong answers are the point, so do not tidy them. Run its *report* mode
-on report wording (E4 and later). It never reads code, and it does not judge security;
+on report wording (E2 and later). It never reads code, and it does not judge security;
 the security-consultant does.
 
 For agents operating the CLI, use the `scheck` skill at

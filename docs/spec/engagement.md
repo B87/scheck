@@ -51,7 +51,11 @@ reproducible, diffable and reviewable, and it is what a run resumes from.
 ```
 $ scheck init                 # interviews the operator, writes engagement.yaml
 $ scheck run engagement.yaml  # scope → recon → plan → check → analyze → report
+$ scheck run --host deploy@203.0.113.5   # one host, no file: an engagement built in memory
 ```
+
+`scheck run` is the only command that assesses anything; a one-host check is an
+engagement with one root ("One command, one file" below).
 
 `scheck init` asks the questions; editing the file by hand is equally valid. The
 interview covers what a consultant draws out, not only the architecture. **Every
@@ -62,7 +66,7 @@ risks. A question nothing consumes is removed from the interview, not kept for a
 release; an operator who answers questions that change nothing stops answering
 carefully. The mapping from question to consumer is code: each question declares its
 consumers by id, with the slice that owns each. Consumers arrive with their slices
-(rules in E5 to E9, coverage reasons in E4), so a test proves at every commit that each
+(the host collector's context in E1, rules in E5 to E9, coverage reasons in E2), so a test proves at every commit that each
 declaration is well formed and that every consumer owned by a slice already merged
 exists, and the release gate proves they all do. A consumer is never stubbed to pass.
 
@@ -132,9 +136,13 @@ defaults:                             # every asset, declared or discovered
   probe: off                          # 0.0.2 accepts only off
   scan: off
   throttle: {rate: 5/s, concurrency: 2}
+  profile: baseline                   # host catalog tier, baseline | hardened (host-collector.md §3)
 limits:
   timeout: 1h                         # `none` turns it off; 0 is rejected
   # max_cost: USD of model spend. Rejected in 0.0.2: "not available in this build"
+
+redact_extra:                         # client strings to hide, RE2; added to the built-in rules
+  - "project-tangerine"               # the report counts matches and never prints a pattern
 
 people:                               # handles; every other key names people by handle
   alice:      {kind: employee, workspace: alice@example.com, github: alice-ex}
@@ -202,7 +210,10 @@ assets:                               # per-asset settings; the key is the name 
     host: deploy@203.0.113.5          # id host:203.0.113.5:22, bound to its host.id on first contact
     jump: ops@198.51.100.7            # a connection hop, not an asset: nothing runs on it
     identity: ~/.ssh/deploy           # a path, never a key; without it, ssh-agent
-    elevate: sudo                     # an explicit `elevate: none` in scheck.yaml vetoes it
+    elevate: sudo                     # `sudo -n --` as a prefix, never a password (host-collector.md §7.1)
+    profile: hardened                 # overrides defaults.profile for this host
+    disable_checks: [fs.suid]         # the client's rules of engagement: only narrow
+    deny_paths: [/srv/backups]        # literal absolute prefixes, checked after realpath
     context:                          # host-collector.md §5.2: only these four fields
       role: "web and database host"
       exposure: internet
@@ -294,13 +305,19 @@ any of the five, and the engagement passes a service's `audience` to the host co
 as that collector's free-text field. Free-text values the standalone host collector
 accepts, such as `vpc-only`, exit 3 in an engagement.
 
-**Host context.** In an engagement the host collector's context is `assets.<name>.context`
-and nothing else: `role`, `exposure`, `environment` and `expected_services`.
-Accepted risks live only under `intent.accepted_risks`, and a compliance goal is not
-read in an engagement.
-The host collector's implicit sources (the `context:` block of `scheck.yaml`,
-`./.scheck/context/**`) and `target:` sources are not read in an engagement, and the
-report records what was passed.
+**Host context.** The host collector's context is `assets.<name>.context` and nothing
+else: `role`, `exposure`, `environment` and `expected_services`. Accepted risks live
+only under `intent.accepted_risks`, and a compliance goal is not read. The host
+collector's other sources (`--context`, `./.scheck/context/**`, `target:`, and the
+`context:` block of 0.0.1's `scheck.yaml`) are not read by `scheck run`: prose context
+has no consumer without a model, and a host must not describe itself
+(`host-collector.md §5.4`). The report records what was passed.
+
+**Host settings.** Beside its reach settings and context, a host asset takes `profile`
+(overriding `defaults.profile`, which only host assets read) and the narrowing lists
+`disable_checks` and `deny_paths`, with the semantics of `host-collector.md §8`: a
+check id that is not in the catalog exits 3, and so does a `deny_paths` entry that is
+relative or `/`.
 
 **Validation**, before any target contact:
 
@@ -313,6 +330,9 @@ report records what was passed.
   keywords.
 - Every error names `file:line:key` and, for a credential, the detector that matched;
   it never prints the value.
+- A `redact_extra` pattern that is not valid RE2 exits 3. A pattern shaped like a
+  credential is refused like any other value: the place to keep a secret out of the
+  report is the built-in redactor, not a copy of the secret in the file.
 - A name-based `exclude` (domain, url, repo, organizational unit) that falls under no
   root exits 3. A `network` exclude is always accepted, since it only narrows and an
   address's root is known only once resolved. A `cloud` project exclude is accepted
@@ -348,15 +368,124 @@ is the operator's word, printed in the report header and recorded on each piece 
 evidence like the principal; a resume with a different vantage reads those entry
 points again.
 
+## One command, one file
+
+`scheck run` is the only command that assesses anything (0.0.2 E2). Its input is an
+engagement file or, for one host, a locator:
+
+```
+$ scheck run engagement.yaml
+$ scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo --profile hardened
+$ scheck run --host local
+$ scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml
+```
+
+**`--host`** builds an engagement in memory: one `host:` root, one asset with the reach
+settings given as flags (`--identity`, `--jump`, `--known-hosts`, `--sudo` or
+`--elevate none|sudo`, `--profile`, `--timeout`), `defaults` and `limits` as
+`scheck init` writes them, `engagement.name` derived from the locator with a
+non-default port kept (`host-203-0-113-5`, `host-203-0-113-5-2222`, `host-local`),
+`engagement.timezone` from the machine running scheck, and nothing else: no people,
+intent or context. It goes through the same validation, stages, run directory and
+report as a file, and the run directory keeps it as `engagement.yaml` like any other.
+Its coverage table says what a one-host check is without burying the host: the areas
+it did not ask for fold into one line ("one-host check: identity, secrets, cloud, …
+not requested", reason `not_declared`), and the Hosts row expands into the host
+collector's domains, naming the checks that did not run and why (elevation, profile,
+narrowing), which is what the 0.0.1 text report showed. `--timeout` keeps its 0.0.1
+meaning, the host collector's run timeout (`host-collector.md §4.4`); `limits.timeout`
+bounds the whole engagement. Context,
+accepted risks and narrowing are not flags: a host that needs them is written into a
+file, and `--write-engagement FILE` writes the in-memory engagement as a starting point.
+So every setting a run used exists as a file the operator can read, diff and resume
+from. The reach flags are accepted only with `--host`.
+
+**No configuration file.** scheck reads no configuration file. Each key of 0.0.1's
+`scheck.yaml` (`host-collector.md §8`) has one home:
+
+| 0.0.1 `scheck.yaml` | From 0.0.2 |
+|---|---|
+| `context:` `role`, `exposure`, `environment`, `expected_services` | `assets.<name>.context` |
+| `context:` `accepted_risks` | `intent.accepted_risks` |
+| `context:` `data_classification` | `data.matters_most`, which ties it to an asset and moves severity |
+| `context:` `compliance`, `owner`, other keys | not read: no consumer without a model ("Not asked") |
+| `targets:` | `assets.<name>` (`host`, `identity`, `jump`) |
+| `profile`, `elevate` | `defaults.profile`, `assets.<name>.profile`, `assets.<name>.elevate`; with `--host`, `--profile` and `--sudo` |
+| `disable_checks`, `deny_paths` | `assets.<name>.disable_checks`, `assets.<name>.deny_paths` |
+| `redact_extra` | `redact_extra` |
+| `state_dir` | `--state-dir`; the default of `host-collector.md §6.4` |
+| `provider`, `model`, `base_url`, `effort`, `max_context` | flags on the hidden `scheck eval` |
+
+`scheck run` exits 3 when it finds `./scheck.yaml` or the user configuration file of
+`host-collector.md §8`, naming each key the file sets and its new home, and saying what
+to do: move the keys, then delete or rename the file. A narrowing a v0.0.1 user relied
+on is never dropped silently, whichever release they upgrade to; the check costs two
+file lookups and stays.
+
+**Narrowing travels with the engagement.** What a client says must not be read or
+revealed is part of the rules of engagement, so it lives in the engagement file: a
+host asset's `disable_checks` and `deny_paths`, and the engagement's `redact_extra`.
+They are scope decisions, like `exclude`: each only subtracts a check, adds a denied
+path prefix or adds a redaction, and nothing in the file can add a check, allow a path
+the compiled policy denies, or reveal a redacted value. `redact_extra` applies to every
+output of every collector, through the runner for hosts and through the scope gate for
+API and web evidence. A disabled check's rules are *not assessed*, and coverage names
+each entry that removed something under `excluded_by_operator`, so a narrowed run never
+reads as a clean one. The report says how many operator redaction rules matched and
+never prints a pattern, since a pattern is often the very string it hides.
+
+**The aliases, for 0.0.2 only.** `scheck local` is `scheck run --host local` and
+`scheck ssh user@host` is `scheck run --host user@host`; each prints a deprecation line
+on stderr, and both are removed in 0.0.3. Their 0.0.1 flags map as follows, and any
+other exits 3 naming its replacement:
+
+| 0.0.1 flag | Under `scheck run --host` |
+|---|---|
+| `--user`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator; `--identity`, `--known-hosts` |
+| `--sudo`, `--elevate`, `--profile` | the same |
+| `--timeout` | the same: the host collector's run timeout, not `limits.timeout` |
+| `--format`, `--out`, `-v`, `-vv`, `--state-dir`, `--no-persist` | the same; `--format json` prints the engagement report |
+| `--include-evidence`, `--record-fixtures` | the same, on the host asset's evidence file |
+| `--stop-after context` | `--stop-after intake` |
+| `--stop-after plan` | exits 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
+| `--stop-after facts` | no flag: it is the run |
+| `--context`, `--ignore-context` | exit 3: context is `assets.<name>.context` in a file (`--write-engagement`) |
+| `--audit-log` | exits 3 naming the run directory's `audit.jsonl` |
+| the model flags, `--only`, `--local-only`, `--format sarif` | exit 3, as in 0.0.1 |
+
+`scheck catalog`, `scheck explain` and `scheck sudoers` stay; `scheck config` goes with
+the file it read.
+
+**Exit codes.** The four codes keep their meanings (`host-collector.md §7`), and an
+engagement fixes how they are reached:
+
+- `1` when an open finding is at or above its asset's threshold: a host asset's profile
+  sets it as in 0.0.1 (`baseline`: medium, `hardened`: low); every other asset uses
+  medium. Accepted risks and `info` never count.
+- `2` when the run is incomplete: a declared root had no successful read (coverage,
+  below), or any asset's collection was cut by a transport failure, a run timeout or a
+  limit (reasons `failed` and `limit_reached`). A check that is merely unavailable
+  (elevation, permission, profile, narrowing) makes coverage *partial* and does not
+  change the exit code, as in 0.0.1.
+- `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
+  `0`.
+
+So a one-host run exits as the 0.0.1 command did for the same findings and the same
+failures, and a CI job gating on `scheck ssh` keeps its meaning.
+
+**JSON consumers.** The engagement report's JSON carries each host asset's collector
+envelope (`host-collector.md §6.4`) whole, under that asset, with its own
+`schema_version`; `run.assessment`, `assessments` and `facts` keep their shape one
+level down. The report on stdout is complete without the run directory, so
+`--no-persist` loses nothing, and `--include-evidence` adds captures to the embedded
+envelope. The aliases' deprecation line names the new path of `run.assessment`.
+
 ## Runs, state and configuration
 
-**Configuration still applies.** `scheck.yaml` (`host-collector.md §8`) keeps its role
-inside an engagement: it narrows what the host collector may run or reveal on every
-`host:` asset exactly as it does for `scheck local`, and an explicit `elevate: none`
-there vetoes an asset's `elevate: sudo`. Its `context:` block is not read in an
-engagement ("Host context" above). The engagement file's only policy key is a host's
-`elevate`, which `scheck.yaml` can veto, and the report names the file that vetoed it.
-Nothing in either file widens what the catalog may run or reveal.
+**Nothing else configures a run.** The engagement file, the flags of "One command, one
+file" and the environment's credentials are a run's whole input. A host's `elevate` is
+the file's only key that widens what a host check may read, within the catalog; nothing
+widens what the catalog may run or reveal.
 
 **One directory per run.** A run lives under the state dir
 (`host-collector.md §6.4`; `--state-dir` and `--no-persist` apply), created `0700`
@@ -364,7 +493,8 @@ and locked while a run holds it:
 
 ```
 <state-dir>/engagements/<engagement.name>/<started>/
-  engagement.yaml      the file as read, verbatim, with its path and hash
+  engagement.yaml      the file as read, verbatim, with its path and hash;
+                       for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
   plan.json            stage 4: the checklist per asset (with a model, hypotheses too)
@@ -424,8 +554,8 @@ check them:
 | *outside scheck* | scheck does not cover this area in any mode |
 
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
-`not_on_plan:<feature>`, `collector_not_built`, `no_root` (no root of the kind this
-area reads was declared), `excluded_by_operator`, `limit_reached`, `failed` or
+`not_on_plan:<feature>`, `collector_not_built`, `not_declared` (no root of the kind
+this area reads was declared), `excluded_by_operator`, `limit_reached`, `failed` or
 `sampled`, with a detail line. `sampled` makes a row at most *partial*. Each row also prints the
 assets covered and those excluded by name, the principal the data was read as, the
 collection span, caps and sampling ("history of 40 of 120 repositories; blobs over
@@ -455,7 +585,7 @@ The ranking of findings is labeled as a ranking of what was assessed. A run in w
 declared root had no successful read (no credentials, collector not built, every read
 denied or failed) exits 2, even when findings fired, so a pipeline never reads exit 0
 or 1 as "covered". A root read in part is *partial* in coverage and does not exit 2 by
-itself.
+itself; a collection cut by a failure or a limit does ("Exit codes" above).
 
 The report header states the method ("rules only; the plan is a checklist" in
 0.0.2), and that the report contains personal data and internal topology. It is written

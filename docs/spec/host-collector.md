@@ -10,6 +10,15 @@ unchanged there. The model path (inference layer, agent loop, tools) is
 [model.md](model.md); the bounded-assessment experiment is [bounded.md](bounded.md);
 what is planned next is [../ROADMAP.md](../ROADMAP.md).
 
+**Folding into `scheck run` (0.0.2).** From 0.0.2 the collector is driven by
+`scheck run`, with an engagement file or `--host` (engagement.md, "One command, one
+file"; ROADMAP E1, E2). The catalog, runner, policy, SSH boundary, elevation, posture
+rules, grading and the JSON envelope (§3, §4, §5.3–§5.4, §6.1–§6.5, §7.1) stay this
+collector's contract. What drives them changes: the context sources (§5.1), the text
+report (§6.6), `scheck local` and `scheck ssh` (§7) and the configuration file (§8)
+are superseded, each marked where it is. Until the slice that replaces a section
+lands, that section describes the build.
+
 When the implementation has to deviate from a section, update that section in the same
 commit; the history is git history. Code comments cite sections as
 `docs/spec/host-collector.md §N`, so section numbers do not change.
@@ -410,6 +419,10 @@ feature rather than a flag.
 
 ### 5.1 Sources
 
+> **Superseded in 0.0.2 (ROADMAP E1, E2).** `scheck run` reads a host's context from
+> its asset entry only (engagement.md, "Host context"); `--context`, the implicit
+> sources and `target:` go with `scheck local` and `scheck ssh`.
+
 All sources are given with one repeatable flag, `--context SOURCE`, where `SOURCE` is:
 
 | Form | Meaning |
@@ -800,6 +813,10 @@ judgement. The same applies to listeners, persistence entries and sudoers conten
 
 ### 6.6 Text report — what a person sees
 
+> **Superseded in 0.0.2 (ROADMAP E2).** The engagement report replaces it; the JSON
+> envelope (§6.4) stays, as the host asset's evidence file in the run directory, and
+> `runs/<host.id>/` persistence stops.
+
 `--format text` is the product for anyone who runs `--stop-after facts`, so it has a
 contract, pinned by golden tests per fixture (§9):
 
@@ -869,6 +886,11 @@ contract, pinned by golden tests per fixture (§9):
 ---
 
 ## 7. CLI
+
+> **Superseded in 0.0.2 (ROADMAP E2).** `scheck local` and `scheck ssh` become aliases
+> of `scheck run --host` for 0.0.2 and are removed in 0.0.3; the flag mapping is in
+> engagement.md, "One command, one file". `catalog`, `explain`, `sudoers` and the exit
+> codes stay; `config` is removed with §8.
 
 ```
 scheck local                            # audit this machine: facts + posture rules, no model (§2.1)
@@ -1008,6 +1030,12 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 ---
 
 ## 8. Configuration
+
+> **Superseded in 0.0.2 (ROADMAP E1, E2).** scheck reads no configuration file. Each
+> key below has a home in the engagement file or a flag (engagement.md, "One command,
+> one file"); a file found where this section reads one makes `scheck run` exit 3,
+> naming where each key moved. The narrowing semantics below are what the engagement's
+> `disable_checks`, `deny_paths` and `redact_extra` keep.
 
 Precedence, lowest first: built-in defaults → the OS user config file → the project
 `./scheck.yaml` → flags the operator explicitly set. A flag's registered default never
@@ -1217,4 +1245,5 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§6.5), one fact → one finding, code-graded like everything else. For `local` and `ssh` that is the whole assessment (§2.1). | A fact sheet that never says a recognized fact is wrong is a debug artefact. A conclusion that needs two facts or judgement is not filed until a later record earns phase 2 back. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§7). | One meaning per exit code; CI can gate on the offline run. |
 | Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | A typed record serves the screen, the model and `scheck diff`, and is diffable; a closure serves one consumer and is not. |
+| Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` are aliases for 0.0.2 and go in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |

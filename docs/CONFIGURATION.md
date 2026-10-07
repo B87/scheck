@@ -1,5 +1,11 @@
 # Configuring scheck — a walkthrough
 
+> **v0.0.1 only.** This describes `scheck local`, `scheck ssh` and `scheck.yaml` as
+> released. In 0.0.2 both commands fold into `scheck run`, scheck stops reading
+> configuration files, and every key below moves into the engagement file or a flag
+> (`spec/engagement.md`, "One command, one file"). This page is removed with the
+> aliases (ROADMAP 0.0.2 E2).
+
 scheck reads three kinds of input, and it helps to keep them apart:
 
 | Kind | What it is | Where it lives | Can it widen what scheck does? |

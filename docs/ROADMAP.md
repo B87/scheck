@@ -62,9 +62,11 @@ Hypotheses drawn from the operator's own words, the part of the job that earns t
   [RELEASING.md](RELEASING.md). A gate that could not be run is recorded as such.
 - **One commit per slice**, `make check` green at each. When implementation deviates
   from a spec, the spec changes in the same commit.
-- **The host collector does not regress.** Its golden command traces and reports change
-  only with an explained reason (`spec/host-collector.md §9`). Adding a check is such a
-  reason; a trace that changes for any other reason is a defect.
+- **The host collector does not regress.** Its golden command traces, and its facts and
+  findings for the same inputs, change only with an explained reason
+  (`spec/host-collector.md §9`). Adding a check is such a reason; a trace that changes
+  for any other reason is a defect. Moving the host into `scheck run` (0.0.2 E1, E2)
+  changes which command and which report a person sees, not what reaches the target.
 
 ---
 
@@ -79,6 +81,14 @@ authorization window needed. The point is to prove the engagement works end to e
 including the claim that context and links between assets change the result, on the
 assets where a small company's risk actually sits.
 
+0.0.2 also makes `scheck run` the only way to run an assessment. A one-host check is an
+engagement with one root: `scheck run --host deploy@203.0.113.5` builds that engagement
+in memory, with no file and no interview, and goes through the same validation, run
+directory and report as a full one. `scheck local` and `scheck ssh` are aliases of it
+for this release and are removed in 0.0.3. `scheck.yaml` is no longer read: everything
+it held belongs to an asset, to the engagement or to a flag (`spec/engagement.md`, "One
+command, one file").
+
 ### Decisions
 
 | Question | Decision |
@@ -87,31 +97,91 @@ assets where a small company's risk actually sits.
 | Why not probes? | A probe needs first-party evidence, and in 0.0.2 the only evidence for a discovered site would be the operator's word. Probes arrive in 0.0.3 after the cloud inventory can vouch for an address. |
 | Why GCP and Google Workspace rather than AWS and Microsoft 365? | A market decision, stated as one: the authors' own environment is Google, so the live tests and the lab can exist. AWS has the larger share of small companies and is the next collector on the same shape, before Azure and Microsoft 365. |
 | Third-party tools? | None. DNS, TLS, headers, fingerprinting and both APIs need only the Go standard library. |
-| The host side? | The host collector, unchanged in 0.0.2. `scheck local` and `scheck ssh` keep working as in 0.0.1; the deeper checks a small company needs from it are 0.0.3 G5. |
+| The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1 and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. |
+| One command? | Yes. From E2, `scheck run` is the only assessment command. `scheck local` and `scheck ssh` are aliases of `scheck run --host` in 0.0.2, with a deprecation line on stderr, and are removed in 0.0.3. Two pipelines would mean two reports, two run histories and two places to declare a host, and only one of them would say what it did not assess. |
+| `scheck.yaml`? | Not read by `scheck run` (E1), removed with the aliases (E2). Profile, elevation, host context and the narrowing lists move into the engagement file, per asset where they describe a host; the state directory and the evaluation harness's model settings are flags. A restriction a client asked for is part of the rules of engagement and has to travel with the engagement file: kept in a per-machine file, it silently disappears when a colleague or a CI job runs the same engagement elsewhere. A config file where 0.0.1 read one makes `scheck run` exit 3, naming where each of its keys moved and saying to delete or rename the file, so a v0.0.1 `deny_paths` is never dropped silently, whichever release a user upgrades to; the check stays. |
 | A model? | No. Every stage runs on rules, single-fact and multi-fact. Plan is a checklist per asset type, narrowed and ordered by context, and the report says so. |
-| Reports? | The host report keeps its schema and versioning (`spec/host-collector.md §6.4`). The engagement report is a new document with its own schema, starting at 1.0. The engagement file and report may change freely until 0.0.2 is published. |
+| Reports? | The engagement report is the one report a person or an agent reads, with its own schema starting at 1.0. The engagement file and report may change freely until 0.0.2 is published. The host collector's JSON envelope keeps its schema and versioning (`spec/host-collector.md §6.4`) as the host asset's evidence file in the run directory; the host text report (§6.6) is no longer printed once E2 lands. |
+| Why does the host come first? | Order of building is not order of importance. The host collector is the only collector that already exists, so wiring it in first proves the engagement file, the run directory, the stages and the report on real evidence before any network collector, and the report's goldens show a real asset rather than an empty engagement. E1 adds no host check, and 0.0.2 does not ship until Workspace, GitHub and the domain are read. `scheck init` comes beside the collectors, so each question is written when the rule that reads its answer is. |
 
-### E1 — engagement file and `scheck init`
+### E1 — the engagement file and `scheck run` on a host
 
 **Delivers:** the `engagement.yaml` schema as `spec/engagement.md` shows it: roots,
-exclude, defaults, limits, `people` keyed by handle, assets with canonical ids and the
-host reach settings, the four host context fields of `spec/host-collector.md §5.2`
-allowed in an engagement, the intake answers with their declared consumers, and the
-optional authorization block; validation before any target contact (`spec/engagement.md`,
-"Identity, references and validation"); `scheck init`, an interview that writes the
-file; `scheck run engagement.yaml --stop-after intake`.
+exclude, defaults (including the host `profile`), limits, `redact_extra`, `people` keyed
+by handle, assets with canonical ids, the intake answers and the optional authorization
+block. A host asset carries its reach settings (`identity`, `jump`, `elevate`; the port
+is part of the locator), the four context fields of `spec/host-collector.md §5.2`, its
+`profile` and its narrowing lists (`disable_checks`, `deny_paths`). Validation runs
+before any target contact (`spec/engagement.md`, "Identity, references and validation").
+`scheck run engagement.yaml` and `scheck run --host LOCATOR`, with the flags of
+`spec/engagement.md` ("One command, one file": `--identity`, `--jump`, `--known-hosts`,
+`--sudo` or `--elevate`, `--profile`, `--timeout`, `--write-engagement FILE`); the exit
+codes defined there; the run directory, `0700` and locked, holding the stage outputs
+built so far; `--stop-after` with the engagement's stage names. A `host:` root runs the
+host collector through the runner in Recon, its facts join the asset map
+(`internal/engagement/hostasset`), and its posture rules run in Analyze, which holds
+only single-fact rules until E9; Plan and Check pass through empty until then. `jump` is
+new (ProxyJump), a connection hop on which nothing runs. The host collector receives the
+asset's context fields, profile, elevation and narrowing lists, and the runner's
+redactor gains the engagement's `redact_extra`; nothing else reaches it: `--context`,
+`.scheck/context/`, `target:` sources and `scheck.yaml` are not read, and a config file
+where 0.0.1 read one exits 3, naming each key's new home. Until E2, `findings.json`
+(`--stop-after analyze`) is the last output of `scheck run`, and `scheck local` and
+`scheck ssh` keep their 0.0.1 behaviour.
 
 **Done when:** unknown keys, malformed roots, an `assets` entry outside every root and
-an `exclude` under no root exit 3 naming `file:line:key`; a credential-shaped value is a
-usage error that names the detector and never prints the value; a probe or scan mode
-other than `off`, `scope: full` and `max_cost` exit 3 with "not available in this
-build"; a timestamp without seconds or an offset, and a limit of `0`, are rejected;
-`engagement.name` outside `^[a-z0-9][a-z0-9-]{0,62}$` is rejected; every interview
-question declares its consumers in code by id and owning slice, and a test checks each
-declaration is well formed and that consumers owned by merged slices exist (in E1,
-none are); no code path in this slice contacts a target.
+an `exclude` under no root exit 3 naming `file:line:key`; so do an unknown check id
+under `disable_checks`, a relative or `/` entry under `deny_paths` and an invalid
+`redact_extra` pattern. A credential-shaped value is a usage error that names the
+detector and never prints the value. A probe or scan mode other than `off`, `scope:
+full` and `max_cost` exit 3 with "not available in this build". A timestamp without
+seconds or an offset, a limit of `0`, and an `engagement.name` outside
+`^[a-z0-9][a-z0-9-]{0,62}$` are rejected. For the host path: the golden command traces
+in `internal/baseline` are unchanged; the host asset's facts and posture findings for
+each fixture equal the 0.0.1 golden JSON report's for the same profile, elevation and
+context; a seeded secret on a fixture host is absent from every file in the run
+directory and its marker present, and so is a fixture string matching the engagement's
+`redact_extra`; a run cut by a transport failure exits 2 as in 0.0.1; an integration
+test reaches a container host through
+a jump container with the canary still the first command on the session; the
+integration diff stays the exact allowlist of `spec/host-collector.md §1`.
 
-### E2 — the lab, sealed
+### E2 — the engagement report, and one command
+
+**Delivers:** the coverage table by risk area (`spec/engagement.md`), with the five
+marks defined there and reasons from its closed list, and per row the assets covered
+and excluded, the principal, the collection span, caps and sampling, declared facts
+not verified, and what the engagement's narrowing removed; the *outside scheck* rows;
+ranked findings labeled as a ranking of what was assessed; a header with the trigger,
+the method ("rules only; the plan is a checklist"), the authorization block when
+present, and a notice that the report holds personal data and internal topology; a
+ready-to-paste `accepted_risks` entry under each finding; excluded, out-of-scope,
+refused and not-run items; exit 2 when a declared root went unassessed, findings or
+not; text and JSON with `docs/engagement-report-schema.json`; golden files under the
+same rules as the host report's. Then one command: `scheck local` and `scheck ssh`
+become aliases of `scheck run --host local` and `scheck run --host user@host`, print a
+deprecation line on stderr, and map each 0.0.1 flag to its `run` equivalent or exit 3
+naming the replacement (`spec/engagement.md`, "One command, one file"). The host text
+report and `runs/<host.id>/` persistence stop; `internal/config`, `scheck config`,
+`docs/CONFIGURATION.md` and `scheck.example.yaml` are removed; the README and the
+`scheck` skill move to `scheck run` and the engagement report's JSON, which embeds each
+host asset's collector envelope whole. Built before any network collector so every
+later slice renders into the real report. Because the only real asset at this point is
+a host, the schema is reviewed by the `security-consultant` and the `client` (report
+mode) against at least one non-host finding shape, a person, a token or an OAuth grant,
+before it is frozen.
+
+**Done when:** golden text and JSON reports are committed for a one-host engagement
+from a fixture (the hosts area marked from what ran, every other area *not assessed*
+folded into one line with the reason `not_declared`, the Hosts row expanded into the collector's domains, the *outside scheck* rows present) and for an engagement
+whose only root has no collector (`collector_not_built`, exit 2); the JSON validates
+against the schema as committed; target-derived text is control-character escaped;
+`scheck ssh user@host` and `scheck run --host user@host` produce the same report and
+the same command trace; a one-host run exits as the 0.0.1 command did for the same
+findings and failures; `--format json --no-persist --include-evidence` still prints the
+host's facts with their captures; no code path reads a config file.
+
+### E3 — the lab, sealed
 
 **Delivers:** a GitHub test organization the team owns, a Google Workspace test tenant
 on a domain the team owns, and one Linux host over SSH (nginx in front of a Next.js app,
@@ -133,9 +203,13 @@ false-positive target for the clean variant, fixed now.
 | A third-party OAuth app with full Drive scope | Admin SDK (E6) |
 | DMARC published at `p=none` | DNS (E7) |
 | A CNAME to a hosting service that no longer serves the name | DNS (E7) |
-| `PasswordAuthentication yes` on the host | host collector (E8) |
+| `PasswordAuthentication yes` on the host | host collector (E1) |
 | postgres bound to all interfaces with no host firewall rule in front | multi-fact rule (E9) |
 | Missing `Strict-Transport-Security` header | response headers (E7); low, must rank below every item above |
+
+The host collector's checks predate the lab, and E1 adds none, so wiring the host in
+before the labels are sealed shapes nothing; the recall gate measures its checks like
+every other.
 
 Context cases: a version-revealing `/status` page declared public on purpose must not be
 reported above *info*, while a secret exposed on the same site keeps its severity;
@@ -150,10 +224,10 @@ the 0.0.2 rule correctly abstains (`spec/engagement.md`, "Stages").
 
 **Done when:** the labels are committed encrypted or stored outside the tree, with
 their hash in `docs/eval/`, before the first commit of E5; the seeder is named in the
-acceptance record, with the model when it is an agent. E1, E3 and E4 need no lab and
+acceptance record, with the model when it is an agent. E1, E2 and E4 need no lab and
 may proceed while it is being built.
 
-### E3 — scope stage and the scope gate
+### E4 — scope stage and the scope gate
 
 **Delivers:** expansion of roots by passive discovery (DNS, certificate transparency);
 `exclude`, including repositories, organizational units and projects under a root, with
@@ -162,38 +236,22 @@ evidence per asset, and the operator's confirmations written back to the engagem
 file as `first_party`; the resolved list with `--stop-after scope`, printed without
 waiting when there is no terminal; the scope gate with its audit log, throttle (the
 provider's rate-limit headers for APIs), timeout, re-resolution of names at request
-time, and the authorization windows, which nothing in 0.0.2 needs but every later level
-checks; third-party data sources (certificate transparency, DNS resolvers, provider API
-endpoints) as a declared list of their own; the run directory, `0700` and locked;
-per-request status for resume. Decided in this slice: how repository history is fetched
-for E5 (`spec/scope.md`, "Repositories").
+time, redaction with the engagement's `redact_extra` on every API and web response as
+well as on host output, and the authorization windows, which nothing in 0.0.2 needs but
+every later level checks; third-party data sources (certificate transparency, DNS
+resolvers, provider API endpoints) as a declared list of their own; per-request status
+for resume, for the host asset's checks as for API calls. Decided in this slice: how
+repository history is fetched for E5 (`spec/scope.md`, "Repositories").
 
 **Done when:** gate tests prove a request to an asset outside every root or to an
 excluded asset is refused and audited as refused; an excluded repository returned by a
 list call never reaches evidence and the drop is audited; a name re-pointed into an
 excluded range between Scope and the request is refused; a dangling-record fixture is
 reported and never contacted; an observe request to a discovered site reads only its
-front page and certificate; a run past its timeout stops as incomplete; a resume after a
-denied request retries it and keeps what succeeded.
-
-### E4 — the engagement report
-
-**Delivers:** the coverage table by risk area (`spec/engagement.md`), with the five
-marks defined there and reasons from its closed list, and per row the assets covered
-and excluded, the principal, the collection span, caps and sampling, and declared facts
-not verified; the *outside scheck* rows; ranked findings labeled as a ranking of what
-was assessed; a header with the trigger, the method ("rules only; the plan is a
-checklist"), the authorization block when present, and a notice that the report holds
-personal data and internal topology; a ready-to-paste `accepted_risks` entry under each
-finding; excluded, out-of-scope, refused and not-run items; exit 2 when a declared root
-went unassessed, findings or not; text and JSON with
-`docs/engagement-report-schema.json`; golden files under the same rules as the host
-report's. Built before any collector so every later slice renders into the real report.
-
-**Done when:** golden text and JSON reports are committed for an engagement with no
-collectors (every area *not assessed* with the reason `collector_not_built`, the
-*outside scheck* rows present), the JSON validates against the schema as committed,
-the run exits 2, and target-derived text is control-character escaped.
+front page and certificate; a string matching the engagement's `redact_extra` in a
+fake API response is absent from every output and its marker present; a run past its
+timeout stops as incomplete; a resume after a denied request retries it and keeps what
+succeeded.
 
 ### E5 — GitHub organization and repository secrets
 
@@ -204,7 +262,7 @@ branches, third-party actions pinned to a commit and their use in `pull_request_
 workflows, the names (never the values) of organization and repository secrets, deploy
 keys with write access, pending invitations, and Dependabot and secret-scanning alerts
 where the token can read them. A secret scan of repository history, through the
-transport decided in E3, redacted in every output. A token with more than read access
+transport decided in E4, redacted in every output. A token with more than read access
 is itself reported. People are matched by login only (`spec/engagement.md`, "People").
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
@@ -248,19 +306,21 @@ fingerprint, `robots.txt` and `/.well-known/` entries, from entry points only
 fire, disprove and abstain for every rule; the audit log shows no request outside an
 asset's entry points.
 
-### E8 — the host as an engagement asset
+### E8 — `scheck init`: the interview
 
-**Delivers:** a `host:` root runs the host collector through the runner; its facts and
-posture findings join the asset map. The asset's reach settings (`identity`, `jump`,
-`elevate`; the port is part of the locator) come from the engagement file, and an explicit `elevate: none` in
-`scheck.yaml` vetoes elevation; `jump` is new (ProxyJump), a connection hop on which
-nothing runs. The host collector receives only the asset's four context fields; its
-implicit context sources and `target:` sources are not read.
+**Delivers:** `scheck init`, an interview that writes the engagement file E1 defined,
+asking the questions of `spec/engagement.md` ("Intake") and nothing else; each question
+declares its consumers in code by id and owning slice. A file written by
+`scheck run --host … --write-engagement` is a valid starting point: `scheck init FILE`
+asks only what it does not answer. The `client` agent's interview mode is run on the
+wording before it is fixed, and its fixture mode writes the engagement files the
+interview tests use.
 
-**Done when:** the golden command traces in `internal/baseline` are unchanged and the
-0.0.1 reports for `scheck local` and `scheck ssh` are byte-identical; an integration
-test reaches the lab host through a jump host, and the canary is still the first
-command on the session.
+**Done when:** every question declares its consumers, and a test checks that each
+declaration is well formed and that the consumers owned by merged slices exist; the
+file `init` writes for each company profile in `.agents/clients/` validates; an answer
+that would put a credential in the file is refused by the same detector as validation;
+no code path in `init` contacts a target.
 
 ### E9 — Plan, Analyze and multi-fact rules
 
@@ -289,7 +349,7 @@ asset unchanged; a loop fixture terminates.
 2. **Recall:** the run is recorded against the sealed labels; every miss is recorded as
    a miss before any check is added to fix it.
 3. **False positives:** the clean variant's findings are counted against the target
-   fixed in E2.
+   fixed in E3.
 4. **Context:** both context cases behave as stated, beside a run without context.
 5. **Prioritization:** a named reviewer who wrote none of the checks ranks the lab's
    issues before seeing any scheck output; at least four of the reviewer's top five are
@@ -301,14 +361,20 @@ asset unchanged; a loop fixture terminates.
 7. **Scope:** only the observe level reaches any asset, no request leaves the declared
    entry points, and the audit log shows every request and API call. The lab host's
    integration diff stays the exact allowlist of `spec/host-collector.md §1`.
-8. `make check` is green, and the host collector's reports and command traces are
-   unchanged.
+8. `make check` is green; the host collector's command traces are unchanged, and its
+   facts and findings equal 0.0.1's for the same inputs.
 9. **Consumers:** every consumer declared by an interview question exists, and the
    test that checks it no longer skips anything.
+10. **One command:** `scheck run --host` on the lab host and the `scheck ssh` alias
+    give the same report and command trace, and the host's facts match the host asset's
+    in the full engagement run, and its findings do for the same context; no run reads a
+    config file.
 
-**Sequence:** E1 → E2 → E3 → E4 → {E5, E6, E7, E8} → E9. The lab and the report come
-before any collector so that recall is measured, not confirmed, and so each collector
-has somewhere to render.
+**Sequence:** E1 → E2 → E4 → {E5, E6, E7, E8} → E9, with E3 built alongside and sealed
+before E5 starts. The host path and the report come first because they need no network
+and can be proven on evidence that already exists; the lab comes before any network
+collector so that recall is measured, not confirmed; the interview comes with the
+collectors, whose rules read its answers.
 
 ---
 

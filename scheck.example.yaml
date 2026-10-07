@@ -1,3 +1,8 @@
+# v0.0.1 only. In 0.0.2 scheck reads no configuration file: `scheck run` takes an
+# engagement file or `--host`, and each key below moves into the engagement file or a
+# flag (docs/spec/engagement.md, "One command, one file"). A scheck.yaml makes
+# `scheck run` exit 3, naming where each key moved. Removed in 0.0.2 E2.
+#
 # scheck.example.yaml — every knob, annotated. Copy to `scheck.yaml` and delete
 # what you do not need; an empty file is a valid configuration.
 #
