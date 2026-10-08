@@ -30,6 +30,11 @@ type Input struct {
 	Finished time.Time
 	// Directory is the run directory, "" under --no-persist.
 	Directory string
+	// Resumed says an earlier session of the run left what this one kept;
+	// EditedByHand names the files it used although they changed since
+	// they were written (docs/spec/engagement.md, "Stop and resume").
+	Resumed      bool
+	EditedByHand []string
 
 	Assets []AssetInput
 	// NotUsed are the areas the operator declared do not apply.
@@ -42,8 +47,13 @@ type Input struct {
 	// DataMattersMost are the asset ids data.matters_most names.
 	DataMattersMost []string
 	Acceptances     []AcceptanceInput
-	// Excludes are the exclude entries as written.
-	Excludes []string
+	// Excludes are the exclude entries as written; ExcludeMatches counts,
+	// by entry, the names discovery dropped for it, nil when no discovery
+	// ran.
+	Excludes       []string
+	ExcludeMatches map[string]int
+	// Egress is what left this machine; nil is nothing.
+	Egress *EgressInput
 	// People says whether the engagement names anyone; Candidates are the
 	// handles an acceptance's owner is suggested from.
 	People     bool
@@ -73,8 +83,13 @@ type AssetInput struct {
 	Echo string
 	// Refusal is a refused asset's kind: host_key_unknown,
 	// host_key_changed, jump_host_key_unknown, jump_host_key_changed,
-	// access or canary.
+	// excluded, jump_excluded, access or canary.
 	Refusal string
+	// Contact is how far reaching a host over SSH got: connected,
+	// unreached (a connection was attempted, directly or through its jump
+	// host, and none opened), or "" when none was attempted; JumpContact
+	// the same for its jump host, Via.
+	Contact, JumpContact string
 	// Via is a host's jump host, user@host:port, "" when reached directly.
 	Via string
 	// Trace is the asset's audit log entries, in order: every command a
@@ -82,11 +97,18 @@ type AssetInput struct {
 	Trace []policy.AuditEntry
 	// Host is set for a host asset that was collected, in full or in part.
 	Host *HostInput
+	// Kept says a resume kept the host from the earlier session that
+	// collected it: this session did not contact it.
+	Kept bool
 }
 
 // HostInput is a host asset's collection.
 type HostInput struct {
 	Envelope hostreport.Envelope
+	// Graded is when its accepted risks were graded: the start of the
+	// session that collected it, which a resume may have kept; zero is the
+	// run's start.
+	Graded time.Time
 	// User is who the host was read as.
 	User string
 	// Planned are the check ids the plan held, so checks a cut collection

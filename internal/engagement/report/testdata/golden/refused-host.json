@@ -535,6 +535,27 @@
       "reasons": []
     }
   ],
+  "egress": {
+    "assets": [
+      {
+        "kind": "hosts",
+        "sessions": 2
+      }
+    ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/example/2026-10-07T07:12:03Z",
+    "telemetry": "none",
+    "tenants_read": [],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
   "engagement": {
     "authorization": null,
     "built_from": "file",

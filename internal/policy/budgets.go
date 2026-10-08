@@ -38,13 +38,14 @@ func DefaultBudgets() Budgets {
 	}
 }
 
-// redactSlack is how far past PerCheckOutput the capture reads so that a
+// RedactSlack is how far past an output cap a capture reads so that a
 // secret straddling the cap is inside the redacted window before the cut.
-const redactSlack = 4 << 10
+// The runner and the scope gate both read it.
+const RedactSlack = 4 << 10
 
 // CaptureLimit is the per-stream byte cap handed to a target: the output
 // budget plus slack for redaction (docs/spec/host-collector.md §4.2, decision 4 in the plan).
-func (b Budgets) CaptureLimit() int { return b.PerCheckOutput + redactSlack }
+func (b Budgets) CaptureLimit() int { return b.PerCheckOutput + RedactSlack }
 
 // Validate rejects a zero or negative budget, which would end every run
 // immediately.

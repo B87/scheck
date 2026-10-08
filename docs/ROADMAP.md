@@ -297,40 +297,223 @@ may proceed while it is being built.
 
 ### E4 — scope stage and the scope gate
 
-**Delivers:** expansion of roots by passive discovery (DNS, certificate transparency);
-`exclude`, including repositories, organizational units and projects under a root, with
-excluded items dropped from API responses before anything is stored; first-party
-evidence per asset, and the operator's confirmations written back to the engagement
-file as `first_party`; the resolved list with `--stop-after scope`, printed without
-waiting when there is no terminal; the scope gate with its audit log, throttle (the
-provider's rate-limit headers for APIs), timeout, re-resolution of names at request
-time, redaction with the engagement's `redact_extra` on every API and web response as
-well as on host output, and the authorization windows, which nothing in 0.0.2 needs but
-every later level checks; third-party data sources (certificate transparency, DNS
-resolvers, provider API endpoints) as a declared list of their own; per-request status
-for resume, for the host asset's checks as for API calls. Decided in this slice: how
-repository history is fetched for E5 (`spec/scope.md`, "Repositories").
+**Delivers:** the scope gate, `internal/engagement/gate`, the one place an HTTP request,
+API call or DNS query is sent, with rules defined by the `security-consultant` and
+specified in `spec/scope.md`, "The scope gate":
 
-**Done when:** gate tests prove a request to an asset outside every root or to an
-excluded asset is refused and audited as refused; an excluded repository returned by a
-list call never reaches evidence and the drop is audited; a name re-pointed into an
-excluded range between Scope and the request is refused; a dangling-record fixture is
-reported and never contacted; an observe request to a discovered site reads only its
-front page and certificate; a string matching the engagement's `redact_extra` in a
-fake API response is absent from every output and its marker present; a run past its
-timeout stops as incomplete; a resume after a denied request retries it and keeps what
-succeeded.
+- requests as registered operations, never URLs, with an invariants test;
+- admission in a fixed order: scope, exclusion, level, entry points, first-party
+  evidence and windows, decided from the engagement file and live resolution, never
+  from `scope.json`;
+- names re-resolved at send time, every address checked, special-purpose and metadata
+  addresses refused;
+- no automatic redirects, verified TLS with no bypass, no proxy, an honest User-Agent;
+- `GET` and `HEAD` only, plus one declared token exchange;
+- credentials from the environment, attached by the gate and redacted by value;
+- a response pipeline that redacts the raw bytes before parsing, drops excluded items
+  failing closed, projects to declared fields and caps size;
+- per-provider throttle ceilings with rate-limit headers, per-request timeouts under
+  `limits.timeout`, and bounded retries;
+- an audit line written before each request is sent;
+- authorization windows, which nothing in 0.0.2 needs but every later level checks.
+
+Around it:
+
+- expansion of roots by passive discovery (DNS, certificate transparency), with
+  dangling records recorded and never contacted;
+- `exclude`, including repositories, organizational units and projects under a root;
+- first-party evidence per asset, with the operator's confirmations as `first_party:
+  {confirmed_by, date, target}`, written by hand in 0.0.2, bound to the target they
+  confirmed and valid for a year (the Scope prompt arrives with probes in 0.0.3, after
+  the observe reads, redesigned with the `client`: who runs the server, fixed
+  answers, grouped, "decide later");
+- the resolved list with `--stop-after scope`, printed without waiting when there is
+  no terminal;
+- third-party sources as a declared list, printed in the report as "What left this
+  machine", with "nothing was sent to the makers of scheck" pinned by a test;
+- the gate's own DNS client, for discovery and for every request it sends: rcodes and
+  CNAME chains, the resolver it names is the one it asked;
+- per-request status for resume, each retry admitted again, with a host resumed as a
+  unit;
+- the compiled redaction rules' JSON key/value rule and Google, Stripe, npm and Slack
+  webhook shapes, which change host redaction too; no host golden changed.
+
+Decided in this slice: repository history is read in-process from the operator's
+`git clone --mirror` checkout (`spec/scope.md`, "Repositories"), with no git transport.
+
+Built in four steps, reviewed as E2 was:
+
+1. The gate core and the registry, tested with a fake op.
+2. The response pipeline and the redaction rules.
+3. Scope and passive discovery.
+4. Resume and windows, in two reviewed halves:
+   - 4a, the gate: authorization windows and the resume ledger (a request's identity,
+     earlier successes answered without sending), proving 20 and 21 at the gate;
+   - 4b, `scheck run <directory>`: the lock and a directory refused when it holds a
+     link, a special file, a file another user owns or another hard link reaches, or a
+     file or directory others may write, the directory it sits in included, `run.json` with the
+     recorded file and the hash of every file a stage wrote, the file a resume read and
+     its hash printed on stderr every time, Scope kept while what it read is unchanged, a
+     host kept as a unit from its one collection record and an envelope whose hash
+     matches it, the gate's
+     successes listed in `run.json` handed to the next session's gate, the report's
+     `resumed` and `edited_by_hand` pinned by the `resumed` goldens, and "What left this
+     machine" covering every session, "at least" when one ended before recording what
+     it sent (`spec/engagement.md`, "Stop and resume"). Decided 2026-10-08: a changed
+     accepted risk on a host collects that host again, since nothing regrades a kept
+     envelope, which adds only contact the file already authorizes. The report's changed
+     principal goes to E5, the first collector that reads a principal, and reading again
+     only what a changed `mail` or `intent` URL affects goes to E7.
+
+**Done when** gate tests against `httptest` servers and an injected resolver and dialer
+prove:
+
+1. **Unknown op:** an unregistered op is `refused:unknown_op` with zero dials, audited,
+   and the asset's coverage reason is `unavailable:refused_by_gate`.
+2. **Out of root:** a request for another organization's repository is
+   `refused:out_of_scope`, and the fake server sees nothing.
+3. **Excluded asset:** a per-user op on a user in `/Board` or `/Board/Sub` is refused,
+   while `/Boardroom` is sent.
+4. **List drop:** an excluded repository in a list response is absent from evidence,
+   findings, the report and the audit log. The drop is audited by count, and the row is
+   at most *partial*.
+5. **Excluded-subject set:** items referencing an excluded user are dropped. When the
+   users list failed, the op is `unavailable:exclusion_unknown` and nothing is stored.
+   An item without its exclusion key is dropped and counted as unattributable.
+6. **Rebinding:** a name re-pointed into an excluded range between Scope and the
+   request is `refused:address_excluded` with no dial.
+7. **Every address checked:**
+   - an answer with one public and one excluded address refuses the name;
+   - an answer of 169.254.169.254 or `::ffff:127.0.0.1` is refused even under a
+     `network` root.
+8. **Dangling record:** a CNAME chain ending in NXDOMAIN is reported with zero dials and
+   no search-domain query; NODATA is dangling too, and SERVFAIL is insufficient
+   evidence. A resolver that rewrites NXDOMAIN, and a root with wildcard DNS, are
+   caught by the control queries, with nothing read on the matched names.
+9. **Discovered names:** for a discovered name without first-party evidence, the
+   server sees exactly `GET /` over https and over http plus one TLS handshake; a
+   collector's request for `/robots.txt` on it is `refused:entry_point` and audited.
+10. **Entry points:** a `url` root reads only its entry points, `robots.txt` and
+    `security.txt`.
+11. **Redirects:** a redirect off scope is recorded, not followed. A pagination link to
+    another host is rebuilt or refused.
+12. **TLS and proxies:** an invalid certificate is a finding and the server's HTTP
+    handler is never invoked. No `InsecureSkipVerify` exists outside tests. With
+    `HTTPS_PROXY` pointing at a fake proxy, the proxy sees nothing and the note
+    prints.
+13. **Redaction:** each of these is absent from every output and the run directory, with
+    its marker present:
+    - a `redact_extra` string in a body, header and error body;
+    - `{"access_token":"ya29…"}`;
+    - a token echoed in an error.
+
+    Redacted JSON still parses. Under `"password"`, each quoted `yes`, `no`, `true`,
+    `false`, `none`, `null`, `on`, `off`, `x`, `*`, `-`, `required`, `optional`,
+    `prompt` and `ask` becomes a `json-secret` marker; `true`, `false`, `null`, `0`,
+    `1`, `"0"`, `"1"` and `""` are kept byte for byte; `{"secret_scanning":{"status":
+    "enabled"}}` is kept; the same body as a 2xx and as a 4xx error body reveals the
+    same values; the host goldens are unchanged and `PermitEmptyPasswords no` survives
+    `kv-secret`. A `set-cookie` value and an unlisted header are absent
+    from the run directory. A gzip bomb, a content-type mismatch and JSON over its cap
+    each give their `unavailable` code with nothing stored.
+14. **Credential:** the token never appears in the audit log, URLs or error strings, and
+    a request to a web asset carries no `Authorization`.
+15. **Methods:** the registry invariant rejects a non-`GET` op outside the allowlist,
+    an op missing a declared field, and a list op over an excludable kind with no
+    exclusion key. A full fake run sends only `GET`, `HEAD` and one `POST` to the token
+    endpoint, and neither that body nor its response appears anywhere in the run
+    directory.
+16. **Rate limit:**
+    - a 403 rate limit is `limit_reached`;
+    - a `Retry-After` beyond the deadline stops at once with exit 2;
+    - the remaining floor stops the run before the limit is exhausted.
+17. **Permission traps:** a 404 on a known subject is `insufficient_permission`, and a
+    403 with `X-GitHub-SSO` is `insufficient_permission:sso_authorization`.
+18. **Deadline:** a run past `limits.timeout` cancels the request in flight, marks the
+    rest not sent and exits 2.
+19. **Population:** a list cut by a cap is marked incomplete in its evidence, and a
+    test rule over it, through the rule evaluator, fires, is never disproved, and
+    prints its count as "at least". E4 proves the page's population and the predicate
+    (`AnyRecord` over a partial population); the rule evaluator reads collector
+    evidence from E5, whose first list rule carries this test through it.
+20. **Resume:**
+    - a rate-limited request is sent again and kept;
+    - a refused request is re-admitted and refused again;
+    - successes are not resent;
+    - a changed principal resends everything.
+21. **Window:** a test-only probe op outside every window is `refused:window`, and
+    inside one it is cut at the window's end.
+22. **Audit:** every request has a line written before it was sent, and the line
+    survives a crash mid-request. `--no-persist` with a domain, url, network, SaaS or
+    repository root, or a url asset under a host root, exits 3 with no connection and no resolver query; `--host local`
+    and `--host user@h` with `--no-persist` still run; `gate.New` without an audit log
+    that keeps its lines is an error; a failed audit write is
+    `unavailable:audit_failed` and never dialled.
+23. **Egress:** the report's "What left this machine" lists `crt.sh` with the roots
+    queried, the DNS resolver with its query count, and the model line; a CNAME target
+    outside every root is listed and never dialed; an email identity in a
+    certificate-transparency answer is absent from every output, with its count
+    present. A `--host local` run prints `none` for third-party sources, its one host,
+    and the model line. (A certificate-transparency name outside every root cannot be
+    tested here: `crt.sh` returns only the identities that matched the query, so
+    "other names on your certificates" comes from the handshake in E7.)
+24. **Credentials:** the gate's credential step refuses a request with no credential
+    as `no_credentials` and a rejected one as kind `access`, proved with a test-only op.
+    No root is checked for a credential before a collector would use it: the warning
+    before any contact (exit 2) and the rejected credential (exit 3, the other assets
+    still collected) are proved end to end in E5 and E6, whose collectors use them.
+
+**Carried from E4 step 4a:** 20's "a changed principal resends everything" is proved at
+the gate by the identity (another principal or scope set gives another identity) and by
+a success on record under a principal the gate does not know being sent again; E5,
+whose principal op tells the gate who a credential is, carries it through a real
+principal. A web asset's vantage joins a request's identity when `--vantage` lands in E7
+(`spec/scope.md`, "Resume").
+
+**Deferred from E4's design review** (a modularity pass over the gate, kept here so the
+slices that add callers do them first):
+
+- before E5 and E6: the provider table carries what is now hard-coded per provider (a
+  display name, page keys, rate-limit recognition), so a collector adds one entry, not
+  six edits in two packages; a list declares its item's subject as a template
+  (`repo:github:{key}`), as an op's subject already is, so the gate stops writing the
+  engagement's id syntax; org-unit matching moves behind `Scope`, beside every other
+  exclude match;
+- before E7: `Scope.Site` becomes one `Admits(path, resolution)` decision written once
+  in the engagement, which the gate calls before and after resolving the name and
+  discovery and the report read, in place of today's paths partitioned by the evidence
+  each needs;
+- with E5's first op: a request's `Reason` derived from its decision by one table, and the
+  gate's longest functions (`attempt`, `send`, op validation, discovery's per-root
+  loop, `shape`) split into steps.
+
+**Deferred from E4's slice-closing review** (2026-10-08), each carried by the slice
+named:
+
+- G3: before anything raises the gate's `ceiling` above observe, the per-asset mode
+  check of `spec/scope.md`, "Admission", step 6 ("allowed by the asset's mode") exists.
+  Today only `ceiling` is checked, and the window tests admit a test-only probe op that
+  has no mode at all.
+- E7: `mergeEgress` (`internal/engagement/resume.go`) ORs a site's first-party flag
+  across sessions, so a name sent without first-party evidence in one session and with
+  it in another moves wholly to "websites shown to be yours". No site op exists before
+  E7; E7 keeps each session's counts split by first-party status.
+- E7: `unavailable:blocked`, a firewall that blocks scheck's User-Agent, is the web
+  collector's to decide from the page it is served (`spec/scope.md`, "Connections").
+- E5, E6, E7: a collector marks coverage by `spec/scope.md`'s "Outcomes" table, its
+  row for a request that got no answer (`unavailable:connection_reset`,
+  `unavailable:timeout`, `unavailable:unreachable`: exit 2) included.
 
 ### E5 — GitHub organization and repository secrets
 
 **Delivers:** a GitHub collector with a read-only token from the environment and a
-declared list of read API calls: two-factor requirement, owners and outside
+declared list of read operations through the gate: two-factor requirement, owners and outside
 collaborators, default workflow token permissions, branch protection on default
 branches, third-party actions pinned to a commit and their use in `pull_request_target`
 workflows, the names (never the values) of organization and repository secrets, deploy
 keys with write access, pending invitations, and Dependabot and secret-scanning alerts
-where the token can read them. A secret scan of repository history, through the
-transport decided in E4, redacted in every output. A token with more than read access
+where the token can read them. A secret scan of repository history, read in-process from
+the operator's mirror checkout (`checkout`, decided in E4), redacted in every output. A token with more than read access
 is itself reported. People are matched by login only (`spec/engagement.md`, "People").
 Before E5 starts, the `security-consultant` reviews and freezes the base severity
 anchors (`spec/engagement.md`, "Severity in context"), and every base E5 assigns is
@@ -338,11 +521,26 @@ placed against them.
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
 two-factor requirement is visible only to an owner's token, and whether a fine-grained
-token or an App has more than read access cannot always be read.
+token or an App has more than read access cannot always be read. The token advice in refusals and
+coverage says to get it from an organization owner: a fine-grained token may need the
+organization's approval, and owner-only fields need an owner's token.
 
 **Done when:** tests against a fake GitHub API server cover every rule's three outcomes,
 including a non-owner token on the two-factor rule; a seeded secret never appears in any
-output and its marker does; no non-`GET` request is ever made.
+output and its marker does; no non-`GET` request is ever made; a resume under another
+principal, told apart by the principal op, sends again every request the first one's
+successes would have answered (carried from E4 step 4a) and prints the changed principal
+in the report's header (`spec/engagement.md`, "Stop and resume", carried from E4 step
+4b).
+
+**Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
+table carries what is now hard-coded per provider (a display name, page keys, rate-limit
+recognition), so a collector adds one entry, not six edits in two packages, and a list
+declares its item's subject as a template (`repo:github:{key}`), as an op's subject
+already is. Coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got
+no answer exiting 2. With E5's first op too: a request's `Reason` derived from its
+decision by one table, and the gate's longest functions (`attempt`, `send`, op
+validation, discovery's per-root loop, `shape`) split into steps.
 
 ### E6 — Google Workspace collector
 
@@ -362,6 +560,17 @@ slice against what the read scopes return.
 **Done when:** as E5, against a fake Admin SDK server; an opt-in live test (`make live`)
 reads the lab tenant; broader-than-read scopes are reported as a finding.
 
+**Carried from E4's reviews:** before E6's first op, unless E5 did it first, the provider
+table and a list's item subject as a template, as under E5; and org-unit matching moves
+behind `Scope`, beside every other exclude match. Coverage is marked by
+`spec/scope.md`'s "Outcomes" table, a request that got no answer exiting 2.
+
+**Never declared:** `verificationCodes.list`, which answers with users' backup sign-in
+codes: no finding needs them and no redaction rule could recognize them. The gate's
+registry refuses any op whose path, decoded, reads `verificationCodes`, an API op takes
+no path parameter, and a bound path is checked again before it is sent (a test pins
+it, from E4).
+
 ### E7 — domain, email and web observe
 
 **Delivers:** DNS records and subdomain takeover detection by provider-specific
@@ -370,12 +579,34 @@ with the DMARC policy and alignment read, not just presence; DKIM read per selec
 declared under `mail.senders`, *insufficient evidence* without one; domains declared
 under `mail.no_mail` expected to publish `v=spf1 -all` and DMARC `p=reject`, and DMARC `p=none` graded by
 whether the domain sends; TLS and certificate, response headers and cookies, technology
-fingerprint, `robots.txt` and `/.well-known/` entries, from entry points only
+fingerprint, `/robots.txt` and `/.well-known/security.txt`, from entry points only
 (`spec/scope.md`, "Web applications and sites"). Single-fact rules for each.
+`scheck run --vantage internet|vpn|lan`, recorded in the run and on each piece of web
+evidence and printed in the report header (`spec/engagement.md`, "Reachability and
+vantage"); a web request's identity for resume includes it (`spec/scope.md`, "Resume").
+On a resume, a changed `mail` or `intent` URL reads again only the DNS names and entry
+points it affects, where E4 runs Scope again whole (`spec/engagement.md`, "Stop and
+resume"; carried from E4 step 4b).
 
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)
 fire, disprove and abstain for every rule; the audit log shows no request outside an
-asset's entry points.
+asset's entry points; a resume with a different vantage reads a web asset's entry points
+again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
+and entry points it affects (carried from E4 step 4b).
+
+**Carried from E4's reviews:**
+
+- before E7's first op, `Scope.Site` becomes one `Admits(path, resolution)` decision
+  written once in the engagement, which the gate calls before and after resolving the
+  name and discovery and the report read, in place of today's paths partitioned by the
+  evidence each needs;
+- each session's site requests are kept split by first-party status, so a name sent
+  without first-party evidence in one session and with it in another is not moved
+  wholly to "websites shown to be yours" (today's `mergeEgress` ORs the flag);
+- the web collector decides `unavailable:blocked` from the page it is served
+  (`spec/scope.md`, "Connections");
+- coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got no
+  answer exiting 2.
 
 ### E8 — `scheck init`: the interview
 
@@ -432,8 +663,8 @@ asset unchanged; a loop fixture terminates.
 7. **Scope:** only the observe level reaches any asset, no request leaves the declared
    entry points, and the audit log shows every request and API call. The lab host's
    integration diff stays the exact allowlist of `spec/host-collector.md §1`.
-8. `make check` is green; the host collector's command traces are unchanged, and its
-   facts and findings equal 0.0.1's for the same inputs.
+8. `make check` is green; the host collector's command traces and redacted output are
+   unchanged, and its facts and findings equal 0.0.1's for the same inputs.
 9. **Consumers:** every consumer declared by an interview question exists, and the
    test that checks it no longer skips anything.
 10. **One command:** `scheck run --host` on the lab host and the `scheck ssh` alias
@@ -498,6 +729,11 @@ preview of every planned request; the authorization block and a window required 
 any probe; the interview's framework question returns, since it now
 selects which probes apply; the lab's web tier gains a served `.git` directory and an exposed admin panel,
 seeded under the same rule as 0.0.2.
+
+**Before the gate's `ceiling` rises above observe** (carried from E4's slice-closing
+review): the per-asset mode check of `spec/scope.md`, "Admission", step 6, which 0.0.2
+does not build; until it exists the window tests admit a test-only probe op with no
+mode at all.
 
 **Done when:** no probe runs without an authorization window, first-party evidence and
 the asset's mode allowing it; `confirm` with no terminal reports probes as *not run*;

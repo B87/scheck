@@ -12,7 +12,9 @@ import (
 // (docs/engagement-report-schema.json). Each host asset's envelope is the
 // host collector's JSON whole, and includeEvidence adds the redacted
 // captures to it as `--include-evidence` does for the host report
-// (docs/spec/host-collector.md §6.4); nothing persisted carries them.
+// (docs/spec/host-collector.md §6.4); nothing persisted carries them, so a
+// host a resume kept has none to add: its envelope is rendered without
+// evidence rather than with empty captures that read as observed.
 func WriteJSON(w io.Writer, r *Report, includeEvidence bool) error {
 	assets := make([]any, len(r.Assets))
 	for i, a := range r.Assets {
@@ -21,7 +23,7 @@ func WriteJSON(w io.Writer, r *Report, includeEvidence bool) error {
 			continue
 		}
 		var buf bytes.Buffer
-		if err := hostreport.WriteJSONEvidence(&buf, *a.Envelope, includeEvidence); err != nil {
+		if err := hostreport.WriteJSONEvidence(&buf, *a.Envelope, includeEvidence && !a.Kept); err != nil {
 			return err
 		}
 		assets[i] = struct {

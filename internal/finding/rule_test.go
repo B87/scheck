@@ -315,3 +315,16 @@ func TestTruncationMarkerIsNotEvidence(t *testing.T) {
 		t.Errorf("the excerpt must carry the marker: %q", redacted.Findings[0].Evidence[0].Excerpt)
 	}
 }
+
+// Over a partial population AnyRecord fires on what it saw and prints its
+// count as a lower bound; with nothing seen it abstains, never disproves.
+func TestAnyRecordOverAPartialPopulation(t *testing.T) {
+	recs := check.Records{Items: []check.Record{{check.FieldName: "a"}, {check.FieldName: "b"}}, Partial: true}
+	v := AnyRecord{}.Eval(recs)
+	if v.Status != Matched || !strings.HasSuffix(v.Excerpt, "(at least 2)") {
+		t.Errorf("%+v", v)
+	}
+	if v := (AnyRecord{}).Eval(check.Records{Partial: true}); v.Status != NotAssessed {
+		t.Errorf("an empty partial population disproved the rule: %+v", v)
+	}
+}

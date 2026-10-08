@@ -4,7 +4,7 @@
   "title": "scheck engagement report",
   "description": "spec/engagement.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
   "type": "object",
-  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "assets", "notes"],
+  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "egress", "assets", "notes"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
@@ -57,7 +57,7 @@
             "note": { "type": "string" }
           }
         },
-        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Stage documents the operator edited before a resume." }
+        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a kept host's collection record, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. An edited envelope is never used: the host is collected again." }
       }
     },
     "notice": {
@@ -224,7 +224,7 @@
       "description": "Every exclude entry and whether it matched; probes and scans not run arrive with 0.0.3.",
       "items": {
         "type": "object", "required": ["entry", "matched"], "additionalProperties": false,
-        "properties": { "entry": { "type": "string" }, "matched": { "type": ["boolean", "null"], "description": "null before discovery exists." }, "detail": { "type": "string" } }
+        "properties": { "entry": { "type": "string" }, "matched": { "type": ["boolean", "null"], "description": "Whether discovery dropped anything for it; null when nothing in this version discovers what it covers." }, "detail": { "type": "string" } }
       }
     },
     "redaction": {
@@ -236,6 +236,66 @@
           "type": "object", "required": ["rules", "matches"], "additionalProperties": false,
           "properties": { "rules": { "type": "integer", "minimum": 0 }, "matches": { "type": "integer", "minimum": 0 } }
         }
+      }
+    },
+    "egress": {
+      "type": "object",
+      "description": "What left this machine (docs/spec/engagement.md, \"What left this machine\"): third-party sources, the operator's own systems, names without first-party evidence that were sent requests, and fixed statements. Counts only; a credential is named by its environment variable, never its value.",
+      "required": ["sources", "assets", "unconfirmed", "host_side_effects", "model", "telemetry", "user_agent", "stored", "tenants_read", "ssh_resolved", "ssh_resolved_by_jump"],
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "host", "sent", "requests"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "type": "string", "description": "dns, crt.sh, api.github.com, google." },
+              "operator": { "type": "string", "description": "Who runs a public source." },
+              "host": { "type": "string", "description": "The literal host, or the resolver's address for dns." },
+              "sent": { "type": "array", "items": { "type": "string" }, "description": "What the source was asked about; empty for dns, whose categories the text names." },
+              "requests": { "type": "integer", "minimum": 0 },
+              "credentials": { "type": "array", "items": { "type": "string" }, "description": "Environment variables a credential came from." },
+              "control_lookups": { "type": "integer", "minimum": 0, "description": "dns: lookups of random names under the domain roots, among requests, which test whether the resolver answers names that do not exist." },
+              "control_invalid": { "type": "boolean", "description": "dns: one such lookup was under invalid., among requests." },
+              "scoped_resolvers_ignored": { "type": "boolean", "description": "dns: only a Mac's main resolver was asked, not its per-interface (VPN) resolvers." }
+            }
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "enum": ["websites", "hosts"] },
+              "requests": { "type": "integer", "minimum": 0 },
+              "sessions": { "type": "integer", "minimum": 0 },
+              "unreached": { "type": "integer", "minimum": 0, "description": "Servers a connection was attempted to, directly or through a jump host, that never answered." },
+              "jump_hosts": { "type": "integer", "minimum": 0, "description": "Distinct jump hosts connected to." },
+              "jump_unreached": { "type": "integer", "minimum": 0, "description": "Distinct jump hosts a connection was attempted to that never answered." },
+              "runs": { "type": "integer", "minimum": 0 },
+              "sites": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "unconfirmed": {
+          "type": "object",
+          "required": ["names", "requests"],
+          "additionalProperties": false,
+          "properties": { "names": { "type": "array", "items": { "type": "string" } }, "requests": { "type": "integer", "minimum": 0 } }
+        },
+        "host_side_effects": { "type": "array", "items": { "type": "string" }, "description": "Host checks that may make a host contact its own package repositories, by check id." },
+        "model": { "const": "none" },
+        "telemetry": { "const": "none" },
+        "user_agent": { "type": "string" },
+        "stored": { "type": ["string", "null"], "description": "The run directory; null under --no-persist." },
+        "tenants_read": { "type": "array", "items": { "type": "string" }, "description": "Tenants whose people data the run directory holds." },
+        "ssh_resolved": { "type": "array", "items": { "type": "string" }, "description": "Host and jump host names this machine's system resolver was asked for, to reach them over SSH; not counted." },
+        "ssh_resolved_by_jump": { "type": "array", "items": { "type": "string" }, "description": "Host names a jump host resolved, not this machine." },
+        "unrecorded_sessions": { "type": "array", "items": { "type": "string", "format": "date-time" }, "description": "Starts of a resumed run's earlier sessions that ended before recording all they sent: the block's counts are at least these, and audit.jsonl lists every request." }
       }
     },
     "assets": {
@@ -258,6 +318,7 @@
           "principal": { "oneOf": [{ "$ref": "#/$defs/principal" }, { "type": "null" }] },
           "collected": { "$ref": "#/$defs/span" },
           "evidence": { "type": ["string", "null"], "description": "Path of the asset's evidence file in the run directory; null under --no-persist." },
+          "kept": { "type": "boolean", "description": "For a host on a resume: kept from the earlier session that collected it, not contacted by this one. Its captures were never stored, so --include-evidence adds no evidence to its envelope." },
           "checks": {
             "type": "object", "description": "For a host: its plan, what ran, what gave no usable answer, and what a cut collection never reached.",
             "required": ["planned", "ran", "unknown", "not_run"], "additionalProperties": false,
@@ -349,7 +410,7 @@
         "reason": { "$ref": "#/$defs/reason" },
         "detail": { "type": "string", "description": "Escaped, post-redaction." },
         "echo": { "type": "string", "description": "A canary mismatch's echo, redacted and cut. Attacker-influenced: JSON only, never printed in text." },
-        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
+        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "excluded", "jump_excluded", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
         "effect": {
           "type": "object", "additionalProperties": false,
           "properties": {

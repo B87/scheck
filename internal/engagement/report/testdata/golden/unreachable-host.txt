@@ -97,6 +97,18 @@ EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
 
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session; 1 server not reached (a connection was attempted).
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
 FOR AUTOMATION
 Exit 2: incomplete: deploy could not be reached. Exit 0 is not a clean result either: it means only
 that no rule that could decide found an open problem at or above threshold.

@@ -41,7 +41,7 @@ func hostAsset(t *testing.T, fixture, name string) AssetInput {
 	// One clock: the host's collection starts when the run does.
 	env.Run.Started = started
 	return AssetInput{Name: name, ID: "host:" + name + ":22", Kind: "host", Root: true, Status: "collected",
-		Host: &HostInput{Envelope: env, User: "deploy"}}
+		Contact: "connected", Host: &HostInput{Envelope: env, User: "deploy"}}
 }
 
 // oneHost is a --host engagement on one fixture.
@@ -283,7 +283,7 @@ func refusedHost(t *testing.T) Input {
 	in.FromHost, in.Path = false, "engagement.yaml"
 	in.Rerun = "scheck run engagement.yaml"
 	in.Assets = append(in.Assets, AssetInput{Name: "deploy", ID: "host:203.0.113.5:22", Kind: "host", Root: true,
-		Status: "refused", Reason: "refused", Detail: "host key for 203.0.113.5 changed"})
+		Status: "refused", Reason: "refused", Detail: "host key for 203.0.113.5 changed", Contact: "connected"})
 	return in
 }
 
@@ -545,5 +545,50 @@ func TestASampledReadIsNeverComplete(t *testing.T) {
 	}
 	if got := r.Acceptances[0]; got.Outcome != "rule_not_decided" || !strings.Contains(got.Why, "only part of what is there") {
 		t.Errorf("acceptance %+v", got)
+	}
+}
+
+// A jump host that was reached but could not reach the host counts as a
+// jump host connected to and a server not reached, never as the host's
+// session; each jump host is counted once, whoever logs in to it.
+func TestEgressCountsJumpHostsApart(t *testing.T) {
+	in := oneHost(t, "ubuntu")
+	in.Assets[0].Via, in.Assets[0].JumpContact = "ops@bastion.example.com:22", "connected"
+	in.Assets = append(in.Assets, AssetInput{Name: "db", ID: "host:10.0.0.5:22", Kind: "host", Root: true, Status: "failed",
+		Reason: "failed", Detail: "ssh: jump host could not reach 10.0.0.5:22", Via: "admin@bastion.example.com:22",
+		Contact: "unreached", JumpContact: "connected"})
+	r := Build(in)
+	var hosts EgressAsset
+	for _, a := range r.Egress.Assets {
+		if a.Kind == "hosts" {
+			hosts = a
+		}
+	}
+	if hosts.Sessions != 1 || hosts.Unreached != 1 || hosts.JumpHosts != 1 || hosts.JumpUnreached != 0 {
+		t.Errorf("%+v", hosts)
+	}
+	var txt bytes.Buffer
+	if err := WriteText(&txt, r, Options{Width: 200}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(txt.String(), "servers: 1 SSH session; 1 server not reached (a connection was attempted); 1 jump host connected to.") {
+		t.Errorf("%s", txt.String())
+	}
+}
+
+// --include-evidence adds a host's captures to its envelope, and none to a
+// host a resume kept: its captures were never stored, and empty ones would
+// read as a command that printed nothing.
+func TestIncludeEvidenceSkipsAKeptHost(t *testing.T) {
+	for _, kept := range []bool{false, true} {
+		in := oneHost(t, "ubuntu")
+		in.Assets[0].Kept = kept
+		var buf bytes.Buffer
+		if err := WriteJSON(&buf, Build(in), true); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(buf.String(), `"stdout"`); got == kept {
+			t.Errorf("kept %v: evidence present %v", kept, got)
+		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/b87/scheck/internal/check"
 	_ "github.com/b87/scheck/internal/check/all"
@@ -102,6 +103,22 @@ roots:
   - saas: github:example-org
 `
 
+// A url exclude narrows a url root over the other scheme too, so it is
+// accepted, and it covers the root's path there.
+// So does one written on the root's port under the other scheme
+// (http://x:443/ is read where https://x/ is).
+func TestURLExcludeUnderAURLRootOverHTTP(t *testing.T) {
+	for _, x := range []string{"http://app.example.net/admin/", "http://app.example.net:443/admin/"} {
+		res, err := Parse("e.yaml", []byte(minimal+"  - url: https://app.example.net/\nexclude:\n  - url: "+x+"\n"), testOpts)
+		if err != nil {
+			t.Fatalf("%s: %v", x, err)
+		}
+		if st := res.GateScope(time.Now()).Subject("url:https://app.example.net/", "url:https://app.example.net/admin/x"); st.ExcludedBy != "exclude[0]" {
+			t.Errorf("%s: %+v", x, st)
+		}
+	}
+}
+
 func TestMinimalFile(t *testing.T) {
 	res, err := Parse("e.yaml", []byte(minimal), testOpts)
 	if err != nil {
@@ -140,7 +157,7 @@ func TestValidationErrors(t *testing.T) {
 		{"url with query", minimal + "  - url: https://shop.example.org/?a=1\n", 10, "roots[3].url", "no query", false},
 		{"unknown saas", minimal + "  - saas: gitlab:acme\n", 10, "roots[3].saas", "known: github", false},
 		{"duplicate root", minimal + "  - host: ops@203.0.113.5:22\n", 10, "roots[3]", "again", false},
-		{"local repo", minimal + "  - repo: ./\n", 10, "roots[3].repo", "local checkout", true},
+		{"local repo", minimal + "  - repo: ./\n", 10, "roots[3].repo", "not a repository locator", false},
 		{"exclude under no root", minimal + "exclude:\n  - domain: example.org\n", 11, "exclude[0]", "falls under no root", false},
 		{"url exclude under no root", minimal + "exclude:\n  - url: https://shop.example.org/x/\n", 11, "exclude[0]", "falls under no root", false},
 		{"cloud exclude without org", minimal + "exclude:\n  - cloud: gcp:example-sandbox\n", 11, "exclude[0]", "organization root", false},
@@ -194,6 +211,24 @@ func TestValidationErrors(t *testing.T) {
 		{"merge key", minimal + "defaults:\n  <<: {probe: off}\n", 11, "defaults.<<", "merge keys", false},
 		{"roots written alike", minimal + "  - domain: example.net\n  - host: example.net\n", 11, "roots[4]", "could not tell them apart", false},
 		{"settings for an excluded asset", minimal + "exclude:\n  - domain: legacy.example.com\nassets:\n  old:\n    url: https://legacy.example.com/\n", 14, "assets.old.url", "is excluded by domain:legacy.example.com", false},
+		{"settings under a url exclude, without its slash, over http", minimal + "exclude:\n  - url: https://shop.example.com/checkout/\nassets:\n  co:\n    url: http://shop.example.com/checkout\n    first_party: {confirmed_by: alice, date: 2026-10-07, target: shops.myshopify.com}\n", 14, "assets.co.url", "is excluded by url:https://shop.example.com/checkout/", false},
+		{"a root under a network exclude", minimal + "exclude:\n  - network: 203.0.113.0/24\n", 8, "roots[1]", "is excluded by network:203.0.113.0/24", false},
+		{"a root an exclude names", minimal + "exclude:\n  - host: 203.0.113.5\n", 8, "roots[1]", "exclude always wins", false},
+		{"a root an exclude holds in NAT64 form", minimal + "exclude:\n  - network: \"64:ff9b::cb00:7100/120\"\n", 8, "roots[1]", "exclude always wins", false},
+		{"a root an exclude names in 6to4 form", minimal + "exclude:\n  - host: \"[2002:cb00:7105::1]\"\n", 8, "roots[1]", "exclude always wins", false},
+		{"a NAT64 root under an IPv4 exclude", strings.Replace(minimal, "deploy@203.0.113.5", "deploy@[64:ff9b::cb00:7105]", 1) + "exclude:\n  - network: 203.0.113.0/24\n", 8, "roots[1]", "exclude always wins", false},
+		{"a 6to4 root under an IPv4 host exclude", strings.Replace(minimal, "deploy@203.0.113.5", "deploy@[2002:cb00:7105::1]", 1) + "exclude:\n  - host: 203.0.113.5\n", 8, "roots[1]", "exclude always wins", false},
+		{"a host exclude on another port", minimal + "exclude:\n  - host: 203.0.113.5:2222\n", 8, "roots[1]", "exclude always wins", false},
+		{"a host exclude by name on another port", minimal + "  - host: deploy@bastion.example.net:2222\nexclude:\n  - host: bastion.example.net\n", 10, "roots[3]", "exclude always wins", false},
+		{"a jump excluded by name on another port", minimal + "exclude:\n  - host: bastion.example.com\nassets:\n  deploy:\n    host: 203.0.113.5\n    jump: ops@bastion.example.com:2222\n", 15, "assets.deploy.jump", "a jump host is contacted", false},
+		{"a root in the local-use NAT64 prefix", strings.Replace(minimal, "deploy@203.0.113.5", "deploy@[64:ff9b:1::cb00:7105]", 1), 8, "roots[1].host", "never contacts", false},
+		{"a wide exclude holding all of NAT64", minimal + "exclude:\n  - network: \"64:ff9b::/64\"\n", 8, "roots[1]", "exclude always wins", false},
+		{"a network root an address exclude empties", minimal + "  - network: 198.51.100.7/32\nexclude:\n  - host: 198.51.100.7\n", 10, "roots[3]", "exclude always wins", false},
+		{"a host by name behind a jump host with an address exclude", minimal + "  - host: deploy@db.internal.example.com\nexclude:\n  - network: 192.0.2.0/24\nassets:\n  db:\n    host: db.internal.example.com\n    jump: ops@198.51.100.7\n",
+			16, "assets.db.jump", "write this host as its address", false},
+		{"an excluded jump host", minimal + "exclude:\n  - network: 198.51.100.0/24\nassets:\n  deploy:\n    host: 203.0.113.5\n    jump: ops@198.51.100.7\n", 15, "assets.deploy.jump", "a jump host is contacted", false},
+		{"a url root under its own path without the slash", minimal + "  - url: https://app.example.net/portal/\nexclude:\n  - url: https://app.example.net/portal\n", 10, "roots[3]", "is excluded by url:https://app.example.net/portal", false},
+		{"an excluded intent URL", minimal + "exclude:\n  - url: https://shop.example.com/checkout/\nintent:\n  exposed_on_purpose:\n    - {url: \"https://shop.example.com/checkout\", audience: internet}\n", 14, "intent.exposed_on_purpose[0].url", "never read", false},
 		{"local jump", minimal + "assets:\n  deploy:\n    host: 203.0.113.5\n    jump: local\n", 13, "assets.deploy.jump", "local is the machine running scheck", false},
 		{"numeric last label", minimal + "  - host: 203.0.113.05\n", 10, "roots[3].host", "looks like an address", false},
 	}
@@ -340,8 +375,16 @@ func TestPasswordInALocatorIsNeverQuoted(t *testing.T) {
 }
 
 func TestNotAvailableIsSaidOnce(t *testing.T) {
+	_, err := Parse("e.yaml", []byte(minimal+"limits:\n  max_cost: 5usd\n"), testOpts)
+	if err == nil || strings.Count(err.Error(), "not available in this build") != 1 || !strings.Contains(err.Error(), "0.0.4") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// A local checkout is not a locator; the message says where it goes.
+func TestLocalCheckoutIsNotALocator(t *testing.T) {
 	_, err := Parse("e.yaml", []byte(minimal+"  - repo: ./\n"), testOpts)
-	if err == nil || strings.Count(err.Error(), "not available in this build") != 1 || !strings.Contains(err.Error(), "0.0.2 E4") {
+	if err == nil || strings.Contains(err.Error(), "not available") || !strings.Contains(err.Error(), "checkout setting") {
 		t.Fatalf("got %v", err)
 	}
 }

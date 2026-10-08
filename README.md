@@ -15,7 +15,9 @@ asserts that nothing else on the target changes.
 recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
 of any other kind (a Google Workspace tenant, a GitHub organization, a domain) is
 recorded as *not read by this version* and makes the run exit 2; its collectors arrive
-with the [roadmap](docs/ROADMAP.md). Findings come from compiled-in posture rules,
+with the [roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
+certificate transparency (`crt.sh`) and DNS, contacting no server of yours, and the
+report's "What left this machine" says what was sent where. Findings come from compiled-in posture rules,
 graded through the context the engagement declares. A rule reads one fact, so a short
 list of findings and exit 0 mean no rule fired — not that anything is secure; the
 report's coverage says what was not checked. **No model assesses anything:** a
@@ -40,7 +42,7 @@ about your setup.
 ```mermaid
 flowchart TD
   input["engagement.yaml, or --host"] --> intake["intake<br/>validate; no credential in the file"]
-  intake --> scope["scope<br/>the declared roots, minus exclude"]
+  intake --> scope["scope<br/>the declared roots, minus exclude;<br/>domain names from crt.sh and DNS"]
   scope --> recon["recon<br/>one collector per asset"]
 
   recon -->|host| host["host collector<br/>local, or SSH: strict host key, then sys.canary"]
@@ -66,7 +68,10 @@ flowchart TD
 An SSH canary mismatch stops that host before any other command; the other assets are
 still read and the run exits 3. Every stage writes its document into the run directory
 (`<state-dir>/engagements/<name>/<started>/`, created 0700 and locked);
-`--no-persist` writes nothing and the report goes to stdout only.
+`--no-persist` writes nothing and the report goes to stdout only; it is for host runs
+only, since the audit log is the record of what was sent. `scheck run` on that
+directory resumes a stopped run: what an earlier session read completely is kept, and
+everything else is read again.
 
 ## Installation
 
@@ -114,6 +119,7 @@ bin/scheck run --host local -v                               # plus the host's f
 bin/scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml   # contacts nothing
 bin/scheck run engagement.yaml --stop-after intake           # validate and print it resolved
 bin/scheck run engagement.yaml                               # every stage, through the report
+bin/scheck run ~/.local/state/scheck/engagements/<name>/<started>   # resume that run
 bin/scheck catalog --profile hardened                        # every check, without running any
 ```
 
@@ -156,7 +162,8 @@ instance keyed `{id, asset, subject}` with its severity chain and evidence;
 host's own report is embedded whole at `assets[i].envelope`
 ([docs/report-schema.json](docs/report-schema.json)), with its facts, and
 `assets[i].trace` is every command sent to it, in order, under `--no-persist` too.
-`--include-evidence` adds the redacted captures to stdout only.
+`--include-evidence` adds the redacted captures to stdout only; a host a resume kept
+from an earlier session (`kept: true`) has none to add, since no run directory keeps them.
 
 Use the repository-local [scheck skill](.agents/skills/scheck/SKILL.md) to run scheck
 and interpret its report; it covers exit codes, coverage, partial results and

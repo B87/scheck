@@ -128,11 +128,24 @@ NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
   stripe: this version of scheck does not read it; assess it by other means until it does.
 
 EXCLUDED, NARROWED AND NOT RUN
-  Excluded in the file  repo:github:example-org/old: not matched: no discovery in this version
+  Excluded in the file  repo:github:example-org/old: not matched: nothing in this version discovers
+                        what it covers
   Narrowed in the file  assets.macos.disable_checks[0]: removed fs.suid
   Redacted              built-in rules: 0 values. Your redact_extra rules: 0 matches (patterns not
                         shown).
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
 
 NOTES FOR THE READOUT
   The acceptance of "Software updates are pending" on macos by alice (intent.accepted_risks[0]): it

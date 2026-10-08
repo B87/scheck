@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
@@ -32,10 +33,14 @@ func canaryRefused(t *testing.T) Input {
 // on it, and the refused host was never contacted.
 func jumpRefused(t *testing.T) Input {
 	in := refusedHost(t)
-	in.Assets[0].Via = "ops@198.51.100.7:22"
-	in.Assets[1].Via = "ops@198.51.100.7:22"
-	in.Assets[1].Detail = "ssh: jump host 198.51.100.7:22: host key unknown (jump host)"
+	in.Assets[0].Via = "ops@bastion.example.com:22"
+	in.Assets[1].Via = "ops@bastion.example.com:22"
+	in.Assets[1].Detail = "ssh: jump host bastion.example.com:22: host key unknown (jump host)"
 	in.Assets[1].Refusal = "jump_host_key_unknown"
+	// Both went through the jump host; only the first got past it.
+	in.Assets[0].JumpContact, in.Assets[1].JumpContact, in.Assets[1].Contact = "connected", "connected", ""
+	// The jump host is written as a name, which this machine resolved.
+	in.Egress = &EgressInput{SSHResolved: []string{"bastion.example.com"}}
 	return in
 }
 
@@ -46,8 +51,13 @@ func jumpRefused(t *testing.T) Input {
 func TestGoldenReports(t *testing.T) {
 	s := schema(t)
 	cases := map[string]func(*testing.T) Input{
-		"host-ubuntu":            func(t *testing.T) Input { return oneHost(t, "ubuntu") },
-		"host-macos":             func(t *testing.T) Input { return oneHost(t, "macos") },
+		"host-ubuntu": func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-macos": func(t *testing.T) Input {
+			// A host written as a name: SSH asked the system's resolver.
+			in := oneHost(t, "macos")
+			in.Egress = &EgressInput{SSHResolved: []string{"macos"}}
+			return in
+		},
 		"root-without-collector": withGitHubRoot,
 		"lost-session":           lostSession,
 		"refused-host":           canaryRefused,
@@ -56,10 +66,30 @@ func TestGoldenReports(t *testing.T) {
 		"many-findings":          manyFindings,
 		"context":                withContext,
 		"acceptances":            withAcceptances,
+		"resumed": func(t *testing.T) Input {
+			// A resumed run: its first session asked a DNS resolver and
+			// reached the host, then ended before recording all it sent;
+			// this session kept the host, and a record it kept was edited
+			// by hand.
+			in := oneHost(t, "ubuntu")
+			in.Resumed, in.EditedByHand = true, []string{"evidence/deploy.collection.json"}
+			in.Assets[0].Kept = true
+			in.Directory = "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z"
+			in.Egress = &EgressInput{Unrecorded: []time.Time{in.Started},
+				Sources:  []SourceInput{{Source: "dns", Operator: "your network", Host: "192.0.2.53", Requests: 4}},
+				Contacts: []HostContact{{ID: in.Assets[0].ID, Status: "collected", Contact: "connected"}}}
+			return in
+		},
 	}
 	for name, mk := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := Build(mk(t))
+			in := mk(t)
+			if in.Egress == nil {
+				in.Egress = &EgressInput{}
+			}
+			// What the run passes on from the gate.
+			in.Egress.UserAgent = "scheck/test (security self-assessment)"
+			r := Build(in)
 			validate(t, s, r)
 			for _, v := range []int{0, 1} {
 				var txt bytes.Buffer
@@ -156,7 +186,8 @@ func unreachableHost(t *testing.T) Input {
 	in := oneHost(t, "ubuntu")
 	in.FromHost, in.Path, in.Rerun = false, "engagement.yaml", "scheck run engagement.yaml"
 	in.Assets = append(in.Assets, AssetInput{Name: "deploy", ID: "host:203.0.113.5:22", Kind: "host", Root: true,
-		Status: "failed", Reason: "failed", Detail: "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)", Profile: "baseline"})
+		Status: "failed", Reason: "failed", Detail: "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)", Profile: "baseline",
+		Contact: "unreached"})
 	return in
 }
 

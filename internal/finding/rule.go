@@ -214,7 +214,9 @@ func (p FieldEquals) Eval(parsed any) Verdict {
 }
 
 // AnyRecord fires when a typed shape produced any record at all: the
-// existence of the record is the condition ("updates are pending").
+// existence of the record is the condition ("updates are pending"). Over a
+// partial population it fires on what it saw, is never disproved, and its
+// count is a lower bound (docs/spec/scope.md, "Responses").
 type AnyRecord struct{}
 
 func (p AnyRecord) Accepts(k check.ParserKind) bool { return check.IsTyped(k) }
@@ -227,7 +229,10 @@ func (p AnyRecord) Eval(parsed any) Verdict {
 	}
 	if recs.Len() > 0 {
 		excerpt := recordExcerpt(recs.Items[0])
-		if recs.Len() > 1 {
+		switch {
+		case recs.Partial:
+			excerpt += fmt.Sprintf(" (at least %d)", recs.Len())
+		case recs.Len() > 1:
 			excerpt += fmt.Sprintf(" (+%d more)", recs.Len()-1)
 		}
 		return matched("records-present", excerpt)

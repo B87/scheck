@@ -77,8 +77,12 @@ func ForHost(locator string, h HostFlags, opts Options) (*Resolved, []byte, erro
 		}
 		return nil, nil, err
 	}
+	res.fromHost = true
 	return res, raw, nil
 }
+
+// FromHost says --host built the engagement in memory.
+func (r *Resolved) FromHost() bool { return r.fromHost }
 
 // hostFlagFor names the flag a validation error on the built file came
 // from.

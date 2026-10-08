@@ -33,6 +33,13 @@ var credentialShapes = []struct {
 	{"github-token", githubToken},
 	{"slack-token", slackToken},
 	{"jwt", jwtToken},
+	{"google-access-token", googleAccessToken},
+	{"google-refresh-token", googleRefreshToken},
+	{"google-api-key", googleAPIKey},
+	{"google-client-secret", googleClientSecret},
+	{"stripe-key", stripeKey},
+	{"npm-token", npmToken},
+	{"slack-webhook", slackWebhook},
 	{"bearer", bearerValue},
 	{"url-credentials", urlUserinfo},
 }

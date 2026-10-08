@@ -69,6 +69,10 @@ var (
 	// ErrJumpHost marks a failure on the jump host itself, before the
 	// target was contacted, so a refusal names the hop and not the target.
 	ErrJumpHost = errors.New("jump host")
+	// ErrExcluded marks a host or jump host whose address an exclude in the
+	// engagement file covers: refused before the connection opens
+	// (docs/spec/scope.md, "The scope gate"). It is an ErrAccess.
+	ErrExcluded = errors.New("address excluded")
 	// ErrUnreachable marks a connection that never reached a working
 	// session for any reason other than ErrAccess: a name that does not
 	// resolve, TCP refused or timed out, a handshake reset or cut off.

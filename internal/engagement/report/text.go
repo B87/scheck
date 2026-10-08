@@ -42,6 +42,7 @@ func WriteText(w io.Writer, r *Report, opt Options) error {
 	t.pastes()
 	t.notChecked()
 	t.excluded()
+	t.egress()
 	t.notes()
 	t.factSheets()
 	t.close()
@@ -123,6 +124,21 @@ func (t *text) header() {
 			"incident": "incident", "routine": "routine"}[*e.Trigger]
 	}
 	t.field("", "Trigger", 15, trigger)
+	if t.r.Run.Resumed {
+		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely was kept, and "+
+			"everything else was read again.")
+	}
+	if len(e.EditedByHand) > 0 {
+		names := make([]string, len(e.EditedByHand))
+		for i, n := range e.EditedByHand {
+			names[i] = clean(n)
+		}
+		them := "them"
+		if len(names) == 1 {
+			them = "it"
+		}
+		t.field("", "Edited by hand", 15, strings.Join(names, ", ")+": changed since scheck wrote "+them+", and used as written.")
+	}
 	if e.Trigger != nil && *e.Trigger == "incident" {
 		t.hang("", "", "This is not incident response. scheck does not look for signs of intrusion, and evidence read "+
 			"from a possibly compromised system cannot be trusted. This report lists weaknesses in what scheck could read; "+
@@ -215,6 +231,12 @@ func (t *text) refusal(s Shortfall) string {
 	case "jump_host_key_unknown":
 		out = n + " was not contacted: the host key of its jump host " + t.via(s.Asset) + " is not in your known_hosts " +
 			"file. Confirm the fingerprint with whoever runs the jump host, then add it."
+	case "excluded":
+		out = n + " was not contacted: its name resolves to an address your engagement file excludes. Remove the " +
+			"exclude if the host is in scope, or the host if it is not."
+	case "jump_excluded":
+		out = n + " was not contacted: its jump host " + t.via(s.Asset) + " resolves to an address your engagement " +
+			"file excludes, and scheck never connects to an excluded address."
 	case "canary":
 		out = n + ": scheck stopped before running any check, because the host's login shell changed what it sent " +
 			"back (often a login banner or a profile script that prints text). This does not by itself mean the host " +
@@ -858,6 +880,10 @@ func (t *text) refusedWhy(id string) string {
 			return "the host key of its jump host changed, so it was not contacted"
 		case "jump_host_key_unknown":
 			return "the host key of its jump host is not in your known_hosts file, so it was not contacted"
+		case "excluded":
+			return "its address is excluded by your engagement file, so it was not contacted"
+		case "jump_excluded":
+			return "its jump host's address is excluded by your engagement file, so it was not contacted"
 		case "canary":
 			return "its login shell changed what it sent back, so no check ran"
 		case "access":

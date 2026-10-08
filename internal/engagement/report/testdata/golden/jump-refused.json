@@ -165,12 +165,12 @@
       "root": true,
       "status": "collected",
       "trace": [],
-      "via": "ops@198.51.100.7:22"
+      "via": "ops@bastion.example.com:22"
     },
     {
       "bound_id": null,
       "collector": "host",
-      "detail": "ssh: jump host 198.51.100.7:22: host key unknown (jump host)",
+      "detail": "ssh: jump host bastion.example.com:22: host key unknown (jump host)",
       "id": "host:203.0.113.5:22",
       "kind": "host",
       "name": "deploy",
@@ -178,7 +178,7 @@
       "root": true,
       "status": "refused",
       "trace": [],
-      "via": "ops@198.51.100.7:22"
+      "via": "ops@bastion.example.com:22"
     }
   ],
   "coverage": [
@@ -531,6 +531,30 @@
       "reasons": []
     }
   ],
+  "egress": {
+    "assets": [
+      {
+        "jump_hosts": 1,
+        "kind": "hosts",
+        "sessions": 1
+      }
+    ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
+    "ssh_resolved": [
+      "bastion.example.com"
+    ],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
   "engagement": {
     "authorization": null,
     "built_from": "file",
@@ -562,7 +586,7 @@
       {
         "asset": "host:203.0.113.5:22",
         "code": 3,
-        "why": "deploy was not assessed: ssh: jump host 198.51.100.7:22: host key unknown (jump host)"
+        "why": "deploy was not assessed: ssh: jump host bastion.example.com:22: host key unknown (jump host)"
       },
       {
         "code": 1,
@@ -712,7 +736,7 @@
     {
       "asset": "host:203.0.113.5:22",
       "asset_name": "deploy",
-      "detail": "ssh: jump host 198.51.100.7:22: host key unknown (jump host)",
+      "detail": "ssh: jump host bastion.example.com:22: host key unknown (jump host)",
       "kind": "jump_host_key_unknown",
       "reason": "refused"
     }

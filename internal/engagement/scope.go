@@ -1,0 +1,400 @@
+package engagement
+
+import (
+	"fmt"
+	"net/netip"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/b87/scheck/internal/engagement/gate"
+)
+
+// wellKnown are the two files a first-party site reads beside its entry
+// points: a fixed list, not "any .well-known" (docs/spec/scope.md,
+// "Admission").
+var wellKnown = []string{"/robots.txt", "/.well-known/security.txt"}
+
+// GateScope is the engagement file's scope as the gate reads it, built from
+// the validated file and nothing else: never from scope.json or another
+// stage output, so an edit there cannot widen what is sent
+// (docs/spec/scope.md, "Admission"; docs/spec/engagement.md, "Stop and
+// resume"). at is the run's start, against which a confirmation's year is
+// measured.
+func (r *Resolved) GateScope(at time.Time) gate.Scope {
+	s := &scope{res: r, at: at, assets: map[string]ResolvedAsset{}}
+	for _, a := range r.Assets {
+		s.assets[a.ID] = a
+	}
+	for _, list := range [][]Exposure{r.Intent.ExposedOnPurpose, r.Intent.NotExposed} {
+		for _, e := range list {
+			if u, err := parseURL(e.URL); err == nil { // validated
+				s.intent = append(s.intent, u)
+			}
+		}
+	}
+	return s
+}
+
+type scope struct {
+	res    *Resolved
+	at     time.Time
+	assets map[string]ResolvedAsset // by canonical id
+	intent []Ref                    // the intent URLs, entry points of their site
+}
+
+// parse reads a subject id leniently: a GitHub login or repository, a host
+// name and a URL are canonicalized as the file's locators are, so they are
+// compared case-folded (docs/spec/scope.md, "Admission"). A Workspace
+// per-user subject, `saas:google-workspace:<domain>/users/<key>`, is its
+// tenant's: whether the user is excluded is the gate's excluded-subject
+// set's to say. Anything else fails, and an unreadable subject is outside
+// every root.
+func parseSubject(id string) (Ref, bool) {
+	kind, rest, ok := strings.Cut(id, ":")
+	if !ok {
+		return Ref{}, false
+	}
+	if Kind(kind) == KindSaaS && strings.HasPrefix(rest, ProviderGoogleWorkspace+":") {
+		if tenant, user, found := strings.Cut(rest, "/users/"); found {
+			if user == "" || strings.ContainsAny(user, "/?#") {
+				return Ref{}, false
+			}
+			rest = tenant
+		}
+	}
+	r, err := parseLocator(Kind(kind), rest)
+	return r, err == nil
+}
+
+// under is Under, and also places a URL root's robots.txt and security.txt
+// under it: they sit at the origin's root, outside a root such as
+// https://example.com/app/, and a url root reads them (docs/spec/scope.md,
+// "Admission").
+func under(c, root Ref) bool {
+	if Under(c, root) {
+		return true
+	}
+	return c.Kind == KindURL && root.Kind == KindURL && sameOrigin(c, root) && slices.Contains(wellKnown, c.path)
+}
+
+func sameOrigin(a, b Ref) bool {
+	return a.scheme == b.scheme && a.Address() == b.Address() && a.Port == b.Port
+}
+
+// excludedBy names the first exclude that covers c, as "exclude[i]".
+func (s *scope) excludedBy(c Ref) string {
+	if i := excludeOf(s.res.Exclude, c); i >= 0 {
+		return excludeEntry(i)
+	}
+	return ""
+}
+
+// Subject reads the subject leniently and the asset strictly: the gate keys
+// an asset's throttle, redirects, pages and excluded-subject set by the id
+// as written, so a second spelling of one asset would be a second bucket
+// that the operator's lower throttle never binds. A request's asset that is
+// not a canonical id is outside every root.
+func (s *scope) Subject(asset, id string) gate.Standing {
+	a, ok := ParseID(asset)
+	c, ok2 := parseSubject(id)
+	if !ok || !ok2 {
+		return gate.Standing{}
+	}
+	st := gate.Standing{UnderAsset: under(c, a)}
+	if i := slices.IndexFunc(s.res.Roots, func(root Ref) bool { return under(c, root) }); i >= 0 {
+		st.Root = s.res.Roots[i].ID
+	}
+	st.ExcludedBy = s.excludedBy(c)
+	return st
+}
+
+// Name names the exclude that covers a DNS name (excludesName).
+func (s *scope) Name(n string) string {
+	if i := slices.IndexFunc(s.res.Exclude, func(x Ref) bool { return excludesName(x, n) }); i >= 0 {
+		return excludeEntry(i)
+	}
+	return ""
+}
+
+// Address reports the exclude whose network, or whose host written as an
+// address, holds a in any of its forms (addressExcluded), and whether a
+// network root holds it (docs/spec/scope.md, "Addresses").
+func (s *scope) Address(a netip.Addr) (string, bool) {
+	excludedBy := ""
+	if i := slices.IndexFunc(s.res.Exclude, func(x Ref) bool { return addressExcluded(x, a) }); i >= 0 {
+		excludedBy = excludeEntry(i)
+	}
+	return excludedBy, s.res.networkRoot(a) != ""
+}
+
+// networkRoot is the network root holding a in any of its forms
+// (gate.Forms), "" when none: a root written in IPv4 holds a translated
+// address by the IPv4 address it carries, and a root written inside NAT64
+// or 6to4 holds the IPv6 addresses written in it.
+func (r *Resolved) networkRoot(a netip.Addr) string {
+	f := gate.Forms(a)
+	for _, root := range r.Roots {
+		if root.Kind == KindNetwork && slices.ContainsFunc(f, root.prefix.Contains) {
+			return root.ID
+		}
+	}
+	return ""
+}
+
+// allowAddress refuses an address an exclude covers in any of its forms:
+// what the SSH transport asks about every address a host's or jump host's
+// name resolves to, and the one it dials (docs/spec/scope.md, "The scope
+// gate").
+func (r *Resolved) allowAddress(a netip.Addr) error {
+	if i := slices.IndexFunc(r.Exclude, func(x Ref) bool { return addressExcluded(x, a) }); i >= 0 {
+		return fmt.Errorf("resolves to %s, which %s (%s) covers", a, excludeEntry(i), r.Exclude[i].ID)
+	}
+	return nil
+}
+
+// Site lists the paths an origin may be read at (docs/spec/scope.md,
+// "Admission", "Levels in 0.0.2"):
+//
+//   - a name under a domain root, on the default port, has its front page;
+//   - a first-party site also has its entry points (a url root or a
+//     confirmed url entry, and the intent URLs on it), robots.txt and
+//     security.txt: as Paths when a root is the evidence, as Confirmed
+//     with the confirmation's target when only the operator's word is;
+//   - when the file has a network root, those beyond the front page of a
+//     site without root evidence are also Network paths, which the gate
+//     allows once every address the name resolves to is inside one.
+//
+// An origin not written canonically, or on another port, lists nothing.
+func (s *scope) Site(origin string) gate.SitePaths {
+	o, err := parseURL(origin + "/")
+	if err != nil || o.path != "/" || o.ID != "url:"+origin+"/" {
+		return gate.SitePaths{}
+	}
+	front := false
+	if o.Port == 0 {
+		for _, root := range s.res.Roots {
+			switch root.Kind {
+			case KindDomain:
+				front = front || domainUnder(o.name, root.name)
+			case KindNetwork:
+				front = front || o.addr.IsValid() && root.prefix.Contains(o.addr)
+			case KindHost:
+				front = front || !root.Local() && root.Address() == o.Address()
+			}
+		}
+	}
+	ev, entries := s.res.evidence(o, s.at)
+	if !front && ev == nil {
+		return gate.SitePaths{}
+	}
+	var sp gate.SitePaths
+	if front {
+		sp.Paths = append(sp.Paths, "/")
+	}
+	more := append(slices.Clone(wellKnown), entries...)
+	for _, u := range s.intent {
+		if sameOrigin(u, o) {
+			more = append(more, u.path)
+		}
+	}
+	switch {
+	case ev != nil && ev.Kind != "operator":
+		sp.Paths, sp.FirstParty = append(sp.Paths, more...), true
+	case ev != nil:
+		sp.Confirmed, sp.Target = more, ev.Target
+	}
+	if (ev == nil || ev.Kind == "operator") && slices.ContainsFunc(s.res.Roots, func(r Ref) bool { return r.Kind == KindNetwork }) {
+		// Evidence only a network root holding every address can give,
+		// checked once the gate has resolved the name; with no network
+		// root there is none to give.
+		sp.Network = slices.Clone(more)
+	}
+	for _, l := range []*[]string{&sp.Paths, &sp.Network, &sp.Confirmed} {
+		slices.Sort(*l)
+		*l = slices.Compact(*l)
+	}
+	return sp
+}
+
+// evidence is an origin's first-party evidence from the file, nil when it
+// has none, and the entry points it brings: the paths of the url roots and
+// confirmed url entries on the origin (docs/spec/scope.md, "First-party
+// evidence"). Site and scope.json both read it, so what the Scope stage
+// prints is what the gate admits. A root comes first, then a network root
+// holding an address literal, then the operator's confirmation, which
+// counts only through its year (at is the run's start); a name or address
+// counts only on its scheme's default port.
+func (r *Resolved) evidence(o Ref, at time.Time) (*Evidence, []string) {
+	var ev *Evidence
+	first := func(e *Evidence) {
+		if ev == nil {
+			ev = e
+		}
+	}
+	var entries []string
+	for _, root := range r.Roots {
+		if root.Kind == KindURL && sameOrigin(root, o) {
+			entries = append(entries, root.path)
+			first(&Evidence{Kind: "url_root", Root: root.ID})
+		}
+	}
+	if o.Port == 0 {
+		for _, root := range r.Roots {
+			if root.Kind == KindHost && !root.Local() && root.Address() == o.Address() {
+				first(&Evidence{Kind: "host_root", Root: root.ID})
+			}
+		}
+		for _, root := range r.Roots {
+			if root.Kind == KindNetwork && o.addr.IsValid() && root.prefix.Contains(o.addr) {
+				first(&Evidence{Kind: "network_root", Root: root.ID})
+			}
+		}
+	}
+	for _, a := range r.Assets {
+		if a.FirstParty == nil || !r.current(a.FirstParty, at) {
+			continue
+		}
+		if a.Kind == KindURL && sameOrigin(a.Ref, o) {
+			entries = append(entries, a.path)
+		} else if o.Port != 0 || a.Kind != KindDomain && a.Kind != KindHost || a.Address() != o.Address() {
+			continue
+		}
+		target, _ := canonicalTarget(a.FirstParty.Target) // validated
+		first(&Evidence{Kind: "operator", ConfirmedBy: a.FirstParty.ConfirmedBy, Date: a.FirstParty.Date, Target: target})
+	}
+	return ev, entries
+}
+
+// current reports whether a confirmation is inside its year at t: from its
+// date through its date plus 365 days, until 24:00 in engagement.timezone
+// (docs/spec/scope.md, "First-party evidence"). One dated after t, a typo
+// for a year that has not come, is not evidence: it would outlast its year.
+func (r *Resolved) current(fp *FirstParty, t time.Time) bool {
+	d, err := time.ParseInLocation("2006-01-02", fp.Date, r.zone())
+	if err != nil {
+		return false
+	}
+	return !d.After(t) && t.Before(d.AddDate(0, 0, 366))
+}
+
+// zone is engagement.timezone.
+func (r *Resolved) zone() *time.Location {
+	if r.loc == nil {
+		return time.UTC
+	}
+	return r.loc
+}
+
+// canonicalTarget reads a confirmation's target: a DNS name, lowercased
+// without a trailing dot, or addresses in the form the gate compares
+// (gate.JoinAddrs).
+func canonicalTarget(t string) (string, bool) {
+	var addrs []netip.Addr
+	for part := range strings.SplitSeq(t, ",") {
+		a, err := netip.ParseAddr(strings.TrimSpace(part))
+		if err != nil {
+			addrs = nil
+			break
+		}
+		addrs = append(addrs, a)
+	}
+	if addrs != nil {
+		return gate.JoinAddrs(addrs), true
+	}
+	d := strings.TrimSuffix(strings.ToLower(t), ".")
+	if checkLabels(d, 2) != nil {
+		return "", false
+	}
+	return d, true
+}
+
+// Throttle is the asset's throttle in requests per second. A web asset
+// takes its assets entry's, or the defaults when it has none (a discovered
+// name); a SaaS, repository or cloud asset takes only what its own entry
+// sets, which can only lower the provider's ceiling (docs/spec/scope.md,
+// "Throttle, timeouts and retries").
+func (s *scope) Throttle(asset string) (float64, int) {
+	ref, ok := ParseID(asset)
+	if !ok {
+		return 0, 0
+	}
+	a, declared := s.assets[ref.ID]
+	switch ref.Kind {
+	case KindDomain, KindURL, KindHost, KindNetwork:
+		if !declared {
+			return perSecond(s.res.Defaults.Throttle)
+		}
+		return perSecond(a.Throttle)
+	}
+	if !declared || a.ownThrottle == nil {
+		return 0, 0
+	}
+	rate, _ := perSecond(*a.ownThrottle)
+	return rate, a.ownThrottle.Concurrency
+}
+
+// perSecond reads a validated rate, `5/s` or `120/m`; an unset rate is 0.
+func perSecond(t Throttle) (float64, int) {
+	n, unit, ok := strings.Cut(t.Rate, "/")
+	v, err := strconv.ParseFloat(n, 64)
+	if !ok || err != nil {
+		return 0, 0
+	}
+	if unit == "m" {
+		v /= 60
+	}
+	return v, t.Concurrency
+}
+
+// OrgUnits lists the organizational units the file excludes under a
+// Workspace tenant.
+func (s *scope) OrgUnits(asset string) []gate.OrgUnit {
+	ref, ok := ParseID(asset)
+	if !ok {
+		return nil
+	}
+	var out []gate.OrgUnit
+	for i, x := range s.res.Exclude {
+		if x.OrgUnit != "" && x.ID == ref.ID {
+			out = append(out, gate.OrgUnit{Path: x.OrgUnit, ExcludedBy: excludeEntry(i)})
+		}
+	}
+	return out
+}
+
+// firstParty is a domain, url or host asset's first-party evidence at t,
+// as evidence finds it for the asset's own origin, or for either of a
+// name's or an address's default origins; nil when it has none. A
+// confirmation past its year is reported as expired, which is not
+// evidence.
+func (r *Resolved) firstParty(a ResolvedAsset, at time.Time) *Evidence {
+	var origins []Ref
+	switch a.Kind {
+	case KindURL:
+		origins = []Ref{a.Ref}
+	case KindHost:
+		if a.Local() {
+			return &Evidence{Kind: "host_root", Root: a.Root}
+		}
+		fallthrough
+	case KindDomain:
+		for _, scheme := range []string{"https", "http"} {
+			origins = append(origins, Ref{Kind: KindURL, scheme: scheme, name: a.name, addr: a.addr})
+		}
+	}
+	for _, o := range origins {
+		if ev, _ := r.evidence(o, at); ev != nil {
+			return ev
+		}
+	}
+	if a.FirstParty != nil && !r.current(a.FirstParty, at) {
+		kind := "expired"
+		if d, err := time.ParseInLocation("2006-01-02", a.FirstParty.Date, r.zone()); err == nil && d.After(at) {
+			kind = "future"
+		}
+		return &Evidence{Kind: kind, ConfirmedBy: a.FirstParty.ConfirmedBy, Date: a.FirstParty.Date}
+	}
+	return nil
+}

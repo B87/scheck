@@ -127,9 +127,11 @@ assets:
 
 // fixtureCollect collects every host from a recorded fixture.
 func fixtureCollect(t *testing.T, name string, calls *int) func(context.Context, hostasset.Options) (*hostasset.Collection, error) {
+	// Resolved now, so a test that changes directory still finds it.
+	path, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "fixtures", name))
 	return func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
 		*calls++
-		fx, err := fixture.Load(filepath.Join("..", "..", "testdata", "fixtures", name))
+		fx, err := fixture.Load(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,7 +272,7 @@ func TestJumpReachesTheCollector(t *testing.T) {
 		got = o.Jump
 		return nil, &hostasset.Error{Err: errors.New("ssh: dial: i/o timeout")}
 	}
-	if _, err := Run(context.Background(), res, RunOptions{Collect: collect}); err != nil {
+	if _, err := Run(context.Background(), res, RunOptions{Dir: tempRunDir(t), Collect: collect}); err != nil {
 		t.Fatal(err)
 	}
 	if got == nil || *got != (hostasset.Hop{User: "ops", Host: "198.51.100.7", Port: 2222}) || got.String() != "ops@198.51.100.7:2222" {
@@ -288,12 +290,25 @@ func TestCollectorFailures(t *testing.T) {
 	unreachable := func(context.Context, hostasset.Options) (*hostasset.Collection, error) {
 		return nil, &hostasset.Error{Err: errors.New("ssh: dial 203.0.113.5:22: i/o timeout")}
 	}
-	out, err := Run(context.Background(), res, RunOptions{Collect: unreachable})
+	out, err := Run(context.Background(), res, RunOptions{Raw: []byte(hostAndGitHub), Dir: tempRunDir(t), Collect: unreachable})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(out.Incomplete) != 2 || !strings.HasPrefix(Describe(out.Incomplete[0]), "web: failed: ssh: dial") {
 		t.Fatalf("incomplete = %+v", out.Incomplete)
+	}
+	// What the transport quoted is redacted before it is stored or printed.
+	res, err = Parse("engagement.yaml", []byte(hostAndGitHub+"redact_extra: ['203\\.0\\.113\\.5']\n"), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err = Run(context.Background(), res, RunOptions{Raw: []byte(hostAndGitHub + "redact_extra: ['203\\.0\\.113\\.5']\n"),
+		Dir: tempRunDir(t), Collect: unreachable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := Describe(out.Incomplete[0]); strings.Contains(d, "203.0.113.5") || !strings.Contains(d, "[REDACTED:extra:0:") {
+		t.Errorf("detail %q", d)
 	}
 }
 
@@ -414,7 +429,7 @@ intent:
 		return nil, &hostasset.Error{Err: errors.New("stop")}
 	}
 	started := time.Date(2026, 10, 7, 7, 12, 3, 0, time.UTC)
-	out, err := Run(context.Background(), res, RunOptions{StopAfter: "analyze", Started: started, Collect: capture})
+	out, err := Run(context.Background(), res, RunOptions{Raw: []byte(hostAndGitHub), Dir: tempRunDir(t), StopAfter: "analyze", Started: started, Collect: capture})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +499,7 @@ func TestCanaryEchoStaysOutOfTheText(t *testing.T) {
 // Under --no-persist nothing is written, and the report still carries each
 // host's command trace.
 func TestNoPersistKeepsTheTraceInTheReport(t *testing.T) {
-	res, err := Parse("engagement.yaml", []byte(hostAndGitHub), testOpts)
+	res, _, err := ForHost("deploy@203.0.113.5", HostFlags{}, testOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,5 +544,50 @@ func TestHostPasteValidatesAgainstTheWrittenFile(t *testing.T) {
 	}
 	if id, ok := written.AssetID(tmpl.Asset); !ok || id != res.Assets[0].ID {
 		t.Errorf("asset %q resolves to %q, want %s", tmpl.Asset, id, res.Assets[0].ID)
+	}
+}
+
+// tempRunDir is a run directory the test removes.
+func tempRunDir(t *testing.T) *RunDir {
+	t.Helper()
+	d, err := CreateRunDir(t.TempDir(), "acme", time.Date(2026, 10, 7, 7, 12, 3, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	return d
+}
+
+// A run that would send through the gate without keeping its audit log is
+// refused before any contact, by its roots' kinds whether or not their
+// collector is built; one that stops at intake contacts nothing and runs
+// (docs/spec/scope.md, "Audit"; E4 test 22).
+func TestNoPersistRefusesARunThatSends(t *testing.T) {
+	for _, root := range []string{"domain: example.com", "url: https://www.example.com/", "network: 198.51.100.0/24",
+		"saas: github:other-org", "repo: github:other-org/shop"} {
+		file := strings.Replace(hostAndGitHub, "roots:\n", "roots:\n  - "+root+"\n", 1)
+		res, err := Parse("engagement.yaml", []byte(file), testOpts)
+		if err != nil {
+			t.Fatalf("%s: %v", root, err)
+		}
+		calls := 0
+		_, err = Run(context.Background(), res, RunOptions{Collect: fixtureCollect(t, "ubuntu", &calls)})
+		if err == nil || !strings.Contains(err.Error(), "--no-persist cannot be used when scheck sends network requests") || calls != 0 {
+			t.Errorf("%s: %v, %d hosts reached", root, err, calls)
+		}
+		if _, err := Run(context.Background(), res, RunOptions{StopAfter: "intake"}); err != nil {
+			t.Errorf("%s at intake: %v", root, err)
+		}
+	}
+	// A url asset under a host root is sent for too.
+	file := "schema: 1\nengagement: {name: acme, timezone: Europe/Madrid, trigger: routine}\nroots:\n  - host: deploy@203.0.113.5\n" +
+		"assets:\n  site:\n    url: https://203.0.113.5/\n"
+	res, err := Parse("engagement.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	if _, err := Run(context.Background(), res, RunOptions{Collect: fixtureCollect(t, "ubuntu", &calls)}); err == nil || calls != 0 {
+		t.Errorf("a url asset under a host root: %v, %d hosts reached", err, calls)
 	}
 }
