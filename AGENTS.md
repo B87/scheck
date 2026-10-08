@@ -153,6 +153,31 @@ improvised and wrong answers are the point, so do not tidy them. Run its *report
 on report wording (E2 and later). It never reads code, and it does not judge security;
 the security-consultant does.
 
+For the code itself, use the `code-reviewer` subagent
+([.agents/agents/code-reviewer.md](.agents/agents/code-reviewer.md)): an adversarial
+reviewer that tries to make scheck send what it should refuse, reveal what it should
+redact, touch what it must not, or report what it did not observe, and confirms each
+finding before reporting it. Run it **without being asked**:
+
+- **On any change to the security boundary, whatever its size**, even one line:
+  `internal/runner`, `internal/policy`, `internal/target`, the catalog
+  (`internal/check/...`), `internal/engagement/gate`, `internal/collector/...`,
+  `internal/engagement/hostasset`, the engagement file's validation and locators,
+  credential handling, exit codes, the report contract (goldens, schemas, what never
+  appears), `scripts/depcheck.sh`, and `test/integ` tolerances.
+- **On any large change**: a new package, each build step of a slice, or a few hundred
+  changed non-test lines anywhere.
+- **Before the commit or pull request that closes a slice**, on the whole slice.
+
+When it runs: after `make check` is green and before committing, on a fresh subagent
+each time (never one that wrote the code). Tell it what the change implements, which
+spec sections and roadmap entry govern it, and what is deliberately left for a later
+step. It never edits; the implementing session fixes. Fix every *must-fix* before
+committing and run the reviewer once more on those fixes when they touch the boundary;
+bring *should-fix* and *nits* to the user with a recommendation, and record what is
+deferred in the slice's roadmap entry. Skip it for documentation-only changes (the
+`security-consultant` reviews specs) and for comments, typos and test-only renames.
+
 For agents operating the CLI, use the `scheck` skill at
 [.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers running
 `scheck run` and interpreting the engagement report, not implementation work on this
