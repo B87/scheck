@@ -178,6 +178,19 @@ bring *should-fix* and *nits* to the user with a recommendation, and record what
 deferred in the slice's roadmap entry. Skip it for documentation-only changes (the
 `security-consultant` reviews specs) and for comments, typos and test-only renames.
 
+For the documents, use the `spec-steward` subagent
+([.agents/agents/spec-steward.md](.agents/agents/spec-steward.md)): it keeps `docs/`,
+this file, the README and the `scheck` skill true to the code and to each other, and
+edits nothing else. Use *sync* at each build step of a slice, before `make check` and the
+`code-reviewer`, so the spec change lands in the same commit as the code; *audit* before
+the commit that closes a slice, and after renaming or moving a spec heading (code
+comments cite them); *draft* to turn a `security-consultant` define output or a decision
+of the user's into spec text; *record* for `docs/eval/` and a slice's carried and
+deferred items. It never decides what is checked, refused, redacted or how severe it is:
+it returns those as open decisions, and the implementing session brings them to the
+`security-consultant` or the user. It reports drift in code, goldens and schemas rather
+than fixing it. It reads code, so it is never used for *seed* or *rank*.
+
 For agents operating the CLI, use the `scheck` skill at
 [.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers running
 `scheck run` and interpreting the engagement report, not implementation work on this
