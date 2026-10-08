@@ -49,7 +49,7 @@ func Build(in Input) *Report {
 	}
 	r := &Report{
 		SchemaVersion: SchemaVersion, ScheckVersion: in.Version, RulesVersion: in.Version,
-		Run:        Run{Started: in.Started.UTC(), Resumed: false, Command: in.Rerun},
+		Run:        Run{Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
@@ -80,8 +80,14 @@ func Build(in Input) *Report {
 	b.acceptances()
 	r.Coverage = b.coverage()
 	for _, e := range in.Excludes {
-		r.Excluded = append(r.Excluded, Excluded{Entry: e, Detail: "not matched: no discovery in this version"})
+		x := Excluded{Entry: e, Detail: "not matched: nothing in this version discovers what it covers"}
+		if n, ok := in.ExcludeMatches[e]; ok {
+			matched := n > 0
+			x.Matched, x.Detail = &matched, fmt.Sprintf("dropped %d discovered %s", n, plural(n, "name"))
+		}
+		r.Excluded = append(r.Excluded, x)
 	}
+	r.Egress = b.egress()
 	r.Summary = b.summary()
 	r.Exit = b.exit()
 	return r
@@ -94,7 +100,7 @@ func (b *builder) engagement() Engagement {
 		Source:        Source{SHA256: in.SHA256},
 		Collected:     Span{From: in.Started.UTC(), To: in.Finished.UTC()},
 		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: []string{}},
-		Authorization: in.Authorization, EditedByHand: []string{},
+		Authorization: in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
 	}
 	if in.Operator != "" {
 		op := in.Operator
@@ -151,6 +157,7 @@ func (b *builder) asset(a AssetInput) Asset {
 	}
 	envCopy := env
 	out.Envelope = &envCopy
+	out.Kept = a.Kept
 	c := v.checks()
 	out.Checks = &c
 	return out
@@ -201,7 +208,7 @@ func (b *builder) acceptances() {
 		if kind != "" {
 			b.note(kind, acc.Entry, out.Why)
 		}
-		switch days := b.daysLeft(acc.Expires); {
+		switch days := b.daysLeft(acc.Expires, acc.AssetID); {
 		case acc.Expires == "" && out.Outcome != "not_matched":
 			b.note("acceptance_without_expiry", acc.Entry, "it has no expiry date, so nobody is asked to look at it again")
 		case out.Outcome != "expired" && days >= 0 && days <= 30:
@@ -238,7 +245,7 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 		if applied := b.applying[acc.AssetID+"\x00"+acc.ID]; applied.Entry != acc.Entry {
 			return "not_applied", "a later entry for the same id applies: " + applied.Entry
 		}
-		if b.expired(acc.Expires) {
+		if b.expired(acc.Expires, acc.AssetID) {
 			return "expired", "expired " + acc.Expires + "; the finding is open again"
 		}
 		return "applied", ""
@@ -253,14 +260,29 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 }
 
 // expired reads an acceptance's date in engagement.timezone against the
-// collection time (docs/spec/engagement.md, "Accepted risks").
-func (b *builder) expired(date string) bool {
-	return operator.Risk{Expires: date, Zone: b.zone}.Expired(b.in.Started)
+// collection time of the asset it names (docs/spec/engagement.md,
+// "Accepted risks"), as its grader did.
+func (b *builder) expired(date, asset string) bool {
+	return operator.Risk{Expires: date, Zone: b.zone}.Expired(b.gradedAt(asset))
 }
 
 // daysLeft is how many calendar days remain before date ends, in the
-// engagement's zone, from the collection date; negative once it has passed.
-func (b *builder) daysLeft(date string) int { return calendarDays(b.in.Started, date, b.zone) }
+// engagement's zone, from the asset's collection date; negative once it
+// has passed.
+func (b *builder) daysLeft(date, asset string) int {
+	return calendarDays(b.gradedAt(asset), date, b.zone)
+}
+
+// gradedAt is when the host asset was graded, a resumed run's sessions
+// apart; the run's start for anything else.
+func (b *builder) gradedAt(asset string) time.Time {
+	for _, a := range b.in.Assets {
+		if a.ID == asset && a.Host != nil && !a.Host.Graded.IsZero() {
+			return a.Host.Graded
+		}
+	}
+	return b.in.Started
+}
 
 // calendarDays counts the days from at's date in zone to date, as calendar
 // dates: a daylight-saving change never shortens or lengthens one.

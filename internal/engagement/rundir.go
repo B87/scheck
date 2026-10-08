@@ -23,8 +23,8 @@ type RunDir struct {
 
 // CreateRunDir creates and locks the directory for a run of name started at
 // started. A directory that already exists is refused: locked, it belongs
-// to a run in progress; unlocked, to a finished one, and resuming one
-// arrives in 0.0.2 E4.
+// to a run in progress; unlocked, to an earlier one, which `scheck run
+// <directory>` resumes.
 func CreateRunDir(stateDir, name string, started time.Time) (*RunDir, error) {
 	dir := filepath.Join(stateDir, "engagements", name, started.UTC().Format(time.RFC3339))
 	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
@@ -39,7 +39,7 @@ func CreateRunDir(stateDir, name string, started time.Time) (*RunDir, error) {
 			return nil, err
 		}
 		d.Close()
-		return nil, fmt.Errorf("run directory %s already holds a run: resuming one is not available in this build (0.0.2 E4)", dir)
+		return nil, fmt.Errorf("run directory %s already holds a run: resume it with scheck run %s", dir, dir)
 	case err != nil:
 		return nil, fmt.Errorf("run directory: %w", err)
 	}
@@ -56,7 +56,7 @@ func LockRunDir(dir string) (*RunDir, error) {
 }
 
 func lock(dir string, how int) (*RunDir, error) {
-	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("run directory: %w", err)
 	}
@@ -78,6 +78,46 @@ func (d *RunDir) Close() {
 	_ = syscall.Flock(int(d.lock.Fd()), syscall.LOCK_UN)
 	_ = d.lock.Close()
 	d.lock = nil
+}
+
+// OpenAppend opens name for appending, created 0600, refusing a link: a
+// resumed directory may hold one planted to point outside it, symbolic or
+// hard.
+func (d *RunDir) OpenAppend(name string) (*os.File, error) {
+	f, err := os.OpenFile(d.File(name), os.O_CREATE|os.O_WRONLY|os.O_APPEND|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	st, err := f.Stat()
+	if err == nil {
+		err = owned(name, st)
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+// owned refuses a file or directory of a run directory that is not this
+// user's alone: another owner, write access for others, or a regular file
+// with another hard link, which a write would reach through.
+func owned(name string, info os.FileInfo) error {
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		if int(st.Uid) != os.Geteuid() {
+			return fmt.Errorf("%s belongs to another user", name)
+		}
+		if info.Mode().IsRegular() && st.Nlink != 1 {
+			return fmt.Errorf("%s has another link to it", name)
+		}
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		if info.IsDir() {
+			return fmt.Errorf("%s may be written by others; scheck creates its run directories 0700", name)
+		}
+		return fmt.Errorf("%s may be written by others; scheck writes its run files 0600", name)
+	}
+	return nil
 }
 
 // File is the path of name inside the directory.

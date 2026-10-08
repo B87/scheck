@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -53,6 +54,14 @@ type Options struct {
 	// connection setting, never an asset; nothing runs on it, and every
 	// audit line records it (docs/ROADMAP.md, E1c).
 	Jump *Hop
+	// Allow refuses an address the host's or the hop's name resolves to
+	// that an exclude covers, before the connection opens
+	// (docs/spec/scope.md, "The scope gate").
+	Allow func(netip.Addr) error
+	// Reach, when set, is filled with how far reaching the host got,
+	// whether or not the collection succeeds: what left this machine
+	// (docs/spec/engagement.md, "What left this machine").
+	Reach *Reach
 	// Target, when set, replaces reaching the host, the canary included:
 	// a fixture in tests. No production caller sets it.
 	Target target.Target
@@ -195,6 +204,10 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 	}
 	switch {
 	case o.Target != nil:
+		// A fixture stands for a host reached directly.
+		if o.Reach != nil {
+			*o.Reach = Reach{Dialled: true, Connected: true}
+		}
 		r.Target = record(o.Target)
 	case o.Local:
 		r.Target = record(local.New(budgets.CaptureLimit()))
@@ -268,6 +281,20 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 	}}, nil
 }
 
+// Reach is how far reaching a host over SSH got.
+type Reach struct {
+	// Resolved are the names this machine's resolver was asked for: the
+	// host's, or its jump host's, when written as a name.
+	Resolved []string
+	// Dialled says a connection to the host was attempted, directly or
+	// through its jump host; Connected says one opened. JumpDialled and
+	// JumpConnected are the same for the jump host.
+	Dialled, Connected, JumpDialled, JumpConnected bool
+	// ByJump is the host name its jump host was asked to resolve, "" when
+	// none was.
+	ByJump string
+}
+
 // dial connects over SSH. An address that never answered is a transport
 // failure; anything the operator's own configuration or the host refused
 // is a usage error, as `scheck ssh` treats it.
@@ -283,7 +310,7 @@ func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...an
 		}
 		identity = filepath.Join(home, identity[2:])
 	}
-	so := ssh.Options{Host: o.Host, Port: o.Port, User: o.User, Identity: identity, KnownHosts: o.KnownHosts, MaxOutput: maxOutput}
+	so := ssh.Options{Host: o.Host, Port: o.Port, User: o.User, Identity: identity, KnownHosts: o.KnownHosts, MaxOutput: maxOutput, Allow: o.Allow}
 	if j := o.Jump; j != nil {
 		if j.User == "" {
 			return nil, accessRefused("jump host %s has no SSH user: write it as user@%s", j.Host, j.Host)
@@ -293,7 +320,16 @@ func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...an
 	} else {
 		logf("ssh: connecting to %s@%s:%d", o.User, o.Host, o.Port)
 	}
+	var p ssh.Progress
+	so.Progress = &p
 	st, err := ssh.Dial(ctx, so)
+	if o.Reach != nil {
+		*o.Reach = Reach{Resolved: p.Resolved, Dialled: p.Dialled, Connected: p.Connected, JumpDialled: p.JumpDialled,
+			JumpConnected: p.JumpConnected}
+		if _, err := netip.ParseAddr(o.Host); o.Jump != nil && p.Dialled && err != nil {
+			o.Reach.ByJump = o.Host // a name; an address needs no resolving
+		}
+	}
 	if err != nil {
 		e := &Error{Usage: errors.Is(err, target.ErrAccess), Err: err}
 		hop := ""
@@ -301,6 +337,8 @@ func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...an
 			hop = "jump_"
 		}
 		switch {
+		case errors.Is(err, target.ErrExcluded):
+			e.Kind = hop + "excluded"
 		case errors.Is(err, target.ErrHostKeyChanged):
 			e.Kind = hop + "host_key_changed"
 		case errors.Is(err, target.ErrHostKeyUnknown):
@@ -365,6 +403,21 @@ func DetectPlatform(ctx context.Context, r *runner.Runner, st *ssh.Target) error
 	}
 	st.SetPlatform(p)
 	return nil
+}
+
+// Restore is a collection an earlier session of the run completed, read
+// back from the run directory: a resume keeps a completed host as a unit,
+// never merging two sessions' commands (docs/spec/engagement.md, "Stop and
+// resume"). Nothing is regraded; the envelope is as that session wrote it.
+func Restore(env report.Envelope, planned []string) (*Collection, error) {
+	profile, ok := check.ParseProfile(env.Run.Profile)
+	if !ok {
+		return nil, fmt.Errorf("profile %q is not baseline or hardened", env.Run.Profile)
+	}
+	if env.Run.Status != "complete" {
+		return nil, errors.New("only a complete collection is kept")
+	}
+	return &Collection{sheet: &baseline.FactSheet{}, planned: slices.Clone(planned), profile: profile, env: &env}, nil
 }
 
 // Envelope is the host collector's report for this asset

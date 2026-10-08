@@ -85,6 +85,29 @@ func (a *Audit) Log(e AuditEntry) error {
 	return err
 }
 
+// Record writes one line of another shape: the scope gate's requests share
+// the run's audit log with the host's commands (docs/spec/scope.md, "Audit").
+// The caller passes only redacted values.
+func (a *Audit) Record(v any) error {
+	if a == nil {
+		return nil
+	}
+	line, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, err = a.w.Write(append(line, '\n'))
+	return err
+}
+
+// Keeps reports whether the log writes somewhere: false for a nil log or
+// one on io.Discard, which a sender that must leave a record refuses.
+func (a *Audit) Keeps() bool {
+	return a != nil && a.w != nil && a.w != io.Discard
+}
+
 // Close releases the underlying file, if any.
 func (a *Audit) Close() error {
 	if a == nil || a.c == nil {

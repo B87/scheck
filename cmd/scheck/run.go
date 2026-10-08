@@ -17,6 +17,7 @@ import (
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/engagement"
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/finding"
@@ -50,10 +51,12 @@ var engagementOptions = engagement.Options{
 	KnownFinding: finding.Known,
 }
 
-// collectHost reaches a host asset, and runClock names the run directory;
-// tests replace both.
+// collectHost reaches a host asset, newGate builds the scope gate, and
+// runClock names the run directory; tests replace all three, so no test
+// reaches a host, crt.sh or a resolver.
 var (
 	collectHost = hostasset.Collect
+	newGate     = gate.New
 	runClock    = time.Now
 )
 
@@ -66,7 +69,7 @@ type hostOpts struct {
 func newRunCmd(opts *globalOpts) *cobra.Command {
 	var ho hostOpts
 	cmd := &cobra.Command{
-		Use:   "run ENGAGEMENT.yaml | run --host LOCATOR",
+		Use:   "run ENGAGEMENT.yaml | run RUN_DIRECTORY | run --host LOCATOR",
 		Short: "Run an engagement from its file, or on one host with --host",
 		Long: "Run an engagement (docs/spec/engagement.md) through its stages: intake, scope, recon,\n" +
 			"plan, check, analyze, report. The report says what was checked and what was not, the\n" +
@@ -74,17 +77,19 @@ func newRunCmd(opts *globalOpts) *cobra.Command {
 			"docs/engagement-report-schema.json. --host LOCATOR (user@address[:port], or local) builds a one-host\n" +
 			"engagement in memory from the reach flags. Each run writes its stage outputs to\n" +
 			"<state-dir>/engagements/<name>/<started>/, created 0700 and locked; --stop-after intake\n" +
-			"validates the file and contacts nothing. In this build a host root is collected; a root\n" +
+			"validates the file and contacts nothing. scheck run RUN_DIRECTORY resumes a run: it keeps\n" +
+			"what earlier sessions read completely and reads everything else again. In this build a host root is collected; a root\n" +
 			"of any other kind is recorded as not collected (collector_not_built).\n" +
 			"Exit 0 no open finding at or above an asset's threshold (not a claim of full coverage),\n" +
 			"1 findings, 2 incomplete (a root not read, a transport failure, a timeout), 3 usage,\n" +
 			"validation, policy or canary error.",
 		Example: "  scheck run engagement.yaml\n  scheck run engagement.yaml --stop-after intake --format json\n" +
 			"  scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo --profile hardened\n" +
-			"  scheck run --host local\n  scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml",
+			"  scheck run --host local\n  scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml\n" +
+			"  scheck run ~/.local/state/scheck/engagements/acme/2026-10-08T09:00:00Z",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
-				return usageErr("scheck run takes one engagement file")
+				return usageErr("scheck run takes one engagement file or run directory")
 			}
 			return nil
 		},
@@ -134,9 +139,44 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 	}
-	res, raw, err := loadEngagement(opts, ho, args)
-	if err != nil {
-		return err
+	// A run directory resumes that run (docs/spec/engagement.md, "Stop and
+	// resume"): locked, its engagement file read again from where it was.
+	var prior *engagement.Prior
+	var res *engagement.Resolved
+	var raw []byte
+	if path, ok := runDirArg(args); ok {
+		switch {
+		case ho.host != "" || ho.writeEngagement != "":
+			return usageErr("%s is a run directory, which scheck run resumes: --host and --write-engagement do not apply to it", path)
+		case opts.NoPersist || opts.StateDir != "":
+			return usageErr("a resume writes into the run directory it names: --no-persist and --state-dir do not apply to it")
+		}
+		dir, err := engagement.OpenRun(path)
+		if err != nil {
+			return usageErr("cannot resume: %v", err)
+		}
+		defer dir.Close()
+		if prior, err = engagement.LoadPrior(dir); err != nil {
+			return usageErr("cannot resume %s: %v", dir.Path, err)
+		}
+		// run.json says which file a resume reads, and whoever can write
+		// the directory can change it: say which one, every time, by the
+		// absolute path it was read from (the report and a parse error name
+		// it as typed), even when it does not load.
+		file := report.Sanitize(prior.Manifest.File)
+		if prior.Manifest.Host {
+			file = "the engagement --host built"
+		}
+		if res, raw, err = prior.LoadEngagement(engagementOptions); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "resuming %s with %s\n", report.Sanitize(dir.Path), file)
+			return parseErr(err)
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "resuming %s with %s (sha256 %s)\n", report.Sanitize(dir.Path), file, res.Source.SHA256)
+	} else {
+		var err error
+		if res, raw, err = loadEngagement(opts, ho, args); err != nil {
+			return err
+		}
 	}
 	for _, warn := range res.Warnings {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
@@ -154,14 +194,18 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 	}
 
 	started := runClock()
-	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Version: version.Version,
-		RecordFixtures: opts.RecordFixtures, Collect: collectHost, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
+	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Session: started, Version: version.Version,
+		RecordFixtures: opts.RecordFixtures, Collect: collectHost, NewGate: newGate, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
 	// Refuse what cannot be reached before a run directory exists, so a
 	// refused run leaves nothing behind.
-	if err := engagement.Preflight(res); err != nil {
+	if err := engagement.Preflight(res, !opts.NoPersist); err != nil {
 		return usageErr("%v", err)
 	}
-	if !opts.NoPersist {
+	switch {
+	case prior != nil:
+		ro.Dir, ro.Resume, ro.Started = prior.Dir(), prior, prior.Manifest.Started
+		opts.logf(1, "resuming the run in %s", ro.Dir.Path)
+	case !opts.NoPersist:
 		stateDir, err := state.Dir(opts.StateDir)
 		if err != nil {
 			return usageErr("%v", err)
@@ -244,12 +288,27 @@ func loadEngagement(opts *globalOpts, ho *hostOpts, args []string) (*engagement.
 	}
 	res, err := engagement.Parse(args[0], raw, engagementOptions)
 	if err != nil {
-		if errs, ok := errors.AsType[engagement.Errors](err); ok {
-			return nil, nil, usageErr("the engagement file is not valid (%d %s):\n%v", len(errs), plural(len(errs), "error"), errs)
-		}
-		return nil, nil, usageErr("%v", err)
+		return nil, nil, parseErr(err)
 	}
 	return res, raw, nil
+}
+
+// parseErr is an engagement file that did not load, as exit 3.
+func parseErr(err error) error {
+	if errs, ok := errors.AsType[engagement.Errors](err); ok {
+		return usageErr("the engagement file is not valid (%d %s):\n%v", len(errs), plural(len(errs), "error"), errs)
+	}
+	return usageErr("%v", err)
+}
+
+// runDirArg is the run directory `scheck run DIR` names, when its one
+// argument is a directory.
+func runDirArg(args []string) (string, bool) {
+	if len(args) != 1 {
+		return "", false
+	}
+	st, err := os.Stat(args[0])
+	return args[0], err == nil && st.IsDir()
 }
 
 // writeEngagementFile writes the --host engagement as a starting point. It
@@ -334,10 +393,30 @@ func writeStage(w io.Writer, opts *globalOpts, out *engagement.Outcome, dir *eng
 	switch doc := out.Document.(type) {
 	case *engagement.ScopeDoc:
 		fmt.Fprintf(w, "# %s: scope, %d %s; %s\n# run directory: %s\n", doc.Engagement, len(doc.Assets), plural(len(doc.Assets), "asset"), doc.Discovery, where)
-		fmt.Fprintln(tw, "NAME\tID\tCOLLECTOR")
+		fmt.Fprintln(tw, "NAME\tID\tCOLLECTOR\tFIRST-PARTY EVIDENCE")
 		for _, a := range doc.Assets {
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", a.Name, a.ID, or(a.Collector, "none in this build"))
+			evidence := "-"
+			switch a.Kind {
+			case engagement.KindDomain, engagement.KindURL, engagement.KindHost:
+				evidence = a.FirstParty.String()
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", a.Name, a.ID, or(a.Collector, "none in this build"), evidence)
 		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		for i, x := range doc.Exclude {
+			if i == 0 {
+				fmt.Fprintln(w, "\nExcluded (exclude always wins):")
+			}
+			what := "never contacted; dropped from every list that returns it"
+			if x.OrgUnit != "" {
+				what = "organizational unit " + report.Sanitize(x.OrgUnit) + " and every unit under it: " +
+					"its users are dropped from every list and never read one by one"
+			}
+			fmt.Fprintf(w, "  exclude[%d]  %s  %s\n", i, x.ID, what)
+		}
+		writeScopeDiscovery(w, doc)
 	case *engagement.ReconDoc:
 		fmt.Fprintf(w, "# %s: recon\n# run directory: %s\n", doc.Engagement, where)
 		fmt.Fprintln(tw, "NAME\tID\tSTATUS\tDETAIL")
@@ -371,6 +450,64 @@ func writeStage(w io.Writer, opts *globalOpts, out *engagement.Outcome, dir *eng
 		}
 	}
 	return tw.Flush()
+}
+
+// writeScopeDiscovery prints what the Scope stage found under each domain root
+// (docs/spec/scope.md, "Discovery"). Every name came from crt.sh or DNS,
+// so every one is escaped.
+func writeScopeDiscovery(w io.Writer, doc *engagement.ScopeDoc) {
+	if doc.Resolver != nil {
+		fmt.Fprintf(w, "\nDNS resolver: %s", or(report.Sanitize(doc.Resolver.Address), "none found in /etc/resolv.conf"))
+		if doc.Resolver.Rewrites {
+			fmt.Fprint(w, ". It answers names that do not exist with its own address, so discovered names were not checked; run from a network whose resolver does not do this")
+		}
+		fmt.Fprintln(w)
+	}
+	for _, d := range doc.Domains {
+		fmt.Fprintf(w, "\nUnder %s: %d %s; certificate transparency %s", strings.TrimPrefix(d.Root, "domain:"),
+			len(d.Names), plural(len(d.Names), "name"), d.CT)
+		for _, dr := range d.Dropped {
+			fmt.Fprintf(w, "; %d dropped (%s)", dr.Count, dr.Rule)
+		}
+		if len(d.Wildcard) > 0 {
+			fmt.Fprintf(w, "; wildcard DNS (%s)", report.Sanitize(strings.Join(d.Wildcard, ", ")))
+		}
+		fmt.Fprintln(w)
+		tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "  NAME\tSTATUS\tPOINTS AT\tREAD\tFIRST-PARTY EVIDENCE\tDETAIL")
+		for _, n := range d.Names {
+			read := "no"
+			if n.Read {
+				read = "yes"
+			}
+			ev := "-"
+			if n.Status == engagement.NameResolves {
+				ev = n.FirstParty.String()
+			}
+			name := n.Name
+			if n.ExpiredOnly {
+				name += " (expired certificates only)"
+			}
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\n", report.Sanitize(name), n.Status, or(report.Sanitize(n.Target), "-"), read,
+				report.Sanitize(ev), report.Sanitize(n.Detail))
+		}
+		_ = tw.Flush()
+		if len(d.WildcardCerts) > 0 {
+			fmt.Fprintf(w, "  Wildcard certificates for: %s\n", report.Sanitize(strings.Join(d.WildcardCerts, ", ")))
+		}
+	}
+	if len(doc.PointsAt) > 0 {
+		fmt.Fprintln(w, "\nServices your names point at (outside every root; recorded, never contacted):")
+		for _, p := range doc.PointsAt {
+			fmt.Fprintf(w, "  %s  <- %s\n", report.Sanitize(p.Target), report.Sanitize(strings.Join(p.Names, ", ")))
+		}
+	}
+	if len(doc.Domains) > 0 {
+		fmt.Fprintln(w, "\n"+engagement.CTGaps)
+		fmt.Fprintln(w, "First-party confirmations are written by hand in this version: an assets entry with "+
+			"first_party: {confirmed_by, date, target}, the target as POINTS AT shows it; where it shows a "+
+			"[REDACTED:...] marker, write the name the marker stands for.")
+	}
 }
 
 func statusWord(status, reason string) string {

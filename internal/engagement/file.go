@@ -238,8 +238,14 @@ type Service struct {
 	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
 }
 
-// FirstParty is the operator's confirmation, written by the Scope stage.
+// FirstParty is the operator's confirmation that a name's server is
+// theirs, bound to where the name pointed then and valid for a year
+// (docs/spec/scope.md, "First-party evidence"): written by hand in 0.0.2,
+// by the Scope stage from 0.0.3.
 type FirstParty struct {
 	ConfirmedBy string `yaml:"confirmed_by,omitempty" json:"confirmed_by,omitempty"`
 	Date        string `yaml:"date,omitempty" json:"date,omitempty"`
+	// Target is the first CNAME hop outside every root, else the
+	// addresses, comma-separated.
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
 }

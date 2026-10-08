@@ -323,8 +323,11 @@ This is how the baseline learns `/etc/shadow`'s mode and owner without ever read
 
 Every byte of check output passes the redactor before the model, the report, the audit
 log, or any transcript sees it. Rules: private-key blocks, `AKIA…`-style keys, bearer
-tokens, `password=`/`secret=`/`token=` values, and a config-extensible regex list
-(`redact_extra:`). The key/value rule keeps trivial values (`password=no` is a setting)
+tokens, `password=`/`secret=`/`token=` values, from 0.0.2 E4 a JSON key/value rule
+(`json-secret`) and Google, Stripe, npm and Slack webhook shapes (`scope.md`,
+"Responses"), and a config-extensible regex list (`redact_extra:`). The key/value rule keeps trivial values (`password=no` is a setting;
+the list is host output's only: a JSON value the scope gate reads keeps far fewer, see
+`scope.md`, "Responses")
 and skips the sudoers tags `PASSWD:`/`NOPASSWD:`, whose value is the granted command:
 redacting it would hide exactly what a sudoers reading has to judge.
 
@@ -339,9 +342,14 @@ a size-based rule would remove certificates and plist payloads that are evidence
 **Redact, then truncate.** The runner captures up to `PerCheckOutput` plus a 4 KiB
 slack window, runs the redactor over the captured bytes in a single pass over the
 original input (so a marker is never re-matched by a later rule), then cuts at
-`PerCheckOutput` with `[TRUNCATED:<n bytes>]`. A cut never lands inside a marker. A
+`PerCheckOutput` with `[TRUNCATED:<n bytes>]`. A cut never lands inside a marker, its
+opening `[REDACTED:` included. A
 secret straddling the cap is therefore replaced before the cut instead of leaking a
-prefix. Nothing downstream (report, audit log, persisted run, `-vv`) sees
+prefix. When the target stopped the capture at the slack window's end, the window's
+last 4 KiB may hold the start of a secret whose end was never read, which no rule can
+match: nothing derived from them is kept, even when redaction elsewhere (a private key
+becoming a short marker) brings the output under the cap (0.0.2 E4, shared with the
+scope gate through `policy.Redactor.Finish`). Nothing downstream (report, audit log, persisted run, `-vv`) sees
 pre-redaction bytes; the audit log stores a hash of the redacted output.
 
 ### 4.3 The SSH trust boundary

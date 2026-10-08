@@ -182,7 +182,8 @@ func listeners(sheet *baseline.FactSheet, ctx *operator.Merged) []Item {
 // truncatesProcessName reports whether a capture came from a command that
 // shortens the process name. lsof pads COMMAND to nine characters unless
 // `+c 0` is given, so "ControlCenter" arrives as "ControlCe" (found by the
-// R3 probe: docs/spec/bounded.md, "The defect the probe found").
+// R3 probe: docs/spec/bounded.md, "The defect the probe found before it
+// ran").
 func truncatesProcessName(argv []string) bool {
 	if len(argv) == 0 || pathBase(argv[0]) != "lsof" {
 		return false

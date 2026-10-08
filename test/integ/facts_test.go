@@ -83,7 +83,10 @@ func TestSSHFactsReport(t *testing.T) {
 			if len(dirs) != 1 {
 				t.Fatalf("run directories: %q", dirs)
 			}
-			if ev, _ := filepath.Glob(filepath.Join(dirs[0], "evidence", "*.json")); len(ev) != 1 {
+			// Beside it, the record a resume keeps the host by.
+			ev, _ := filepath.Glob(filepath.Join(dirs[0], "evidence", "*.json"))
+			if len(ev) != 2 || !strings.HasSuffix(ev[0], ".collection.json") || strings.HasSuffix(ev[1], ".collection.json") ||
+				strings.TrimSuffix(ev[0], ".collection.json") != strings.TrimSuffix(ev[1], ".json") {
 				t.Errorf("evidence files: %q", ev)
 			}
 			if old, _ := filepath.Glob(filepath.Join(stateDir, "runs", "*")); len(old) != 0 {

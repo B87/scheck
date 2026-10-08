@@ -8,7 +8,6 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -383,28 +382,7 @@ func (r *Runner) resolve(ctx context.Context, p string) string {
 
 // finish redacts b and then truncates it to capBytes with a marker.
 func (r *Runner) finish(b []byte, targetTruncated bool, capBytes int) (string, bool, int) {
-	red, hits := r.Redactor.Redact(b)
-	truncated := targetTruncated
-	if len(red) > capBytes {
-		cut := capBytes
-		// Never cut inside a redaction marker: the marker is what tells the
-		// model something was there, so it stays whole even past the cap.
-		if i := bytes.LastIndex(red[:cut], []byte("[REDACTED:")); i >= 0 && bytes.IndexByte(red[i:cut], ']') < 0 {
-			if j := bytes.IndexByte(red[i:], ']'); j >= 0 {
-				cut = i + j + 1
-			}
-		}
-		dropped := len(red) - cut
-		red = red[:cut]
-		marker := fmt.Sprintf("\n[TRUNCATED:%d bytes]", dropped)
-		if targetTruncated {
-			marker = fmt.Sprintf("\n[TRUNCATED:%d+ bytes]", dropped)
-		}
-		red = append(red, marker...)
-		truncated = true
-	} else if targetTruncated {
-		red = append(red, "\n[TRUNCATED:unknown bytes]"...)
-	}
+	red, truncated, hits := r.Redactor.Finish(b, targetTruncated, capBytes)
 	return string(red), truncated, len(hits)
 }
 

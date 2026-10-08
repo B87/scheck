@@ -87,7 +87,7 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report; `legacy.go` refuses a 0.0.1 config file), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report, or a run directory, which it resumes; `legacy.go` refuses a 0.0.1 config file), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
@@ -97,7 +97,8 @@ test passes.
 | `internal/report` | the host report envelope and JSON renderer, embedded whole in the engagement report; the fact sheet the engagement report prints per host at `-v` (`text.go`, `text_layout.go`, `domains.go`); golden fact sheets and JSON reports in `testdata/golden`; `docs/report-schema.json` |
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
 | `internal/state` | the state directory, under which run directories live |
-| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2) |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2); the engagement's scope as the gate checks it, passive discovery in Scope, and resume: `run.json` and what a session keeps (E4) |
+| `internal/engagement/gate` | the scope gate (E4): the one place an HTTP request, API call or DNS query is sent; the op registry and its invariants, admission, its own DNS client, the response pipeline, throttle and retries, authorization windows, the audit lines and the resume ledger |
 | `internal/engagement/report` | the engagement report (E2): built from what a run collected, never contacting a target; coverage marked from the rules that decided, findings keyed `{id, asset, subject}`, ranking, acceptances' outcomes, the exit code; `docs/engagement-report-schema.json` |
 | `internal/engagement/hostasset` | the host collector as an asset: reach (local, SSH dial, canary, platform), the baseline through the runner, the posture rules graded through the asset's context; fixture recording (`--record-fixtures`) |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
@@ -119,7 +120,7 @@ about it:
 | Path | Owns | Slice |
 |---|---|---|
 | `internal/engagement` | the engagement file (schema, validation: E1a; `--host` engagements built in memory: E1b), the stages and the run directory (E1b), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file", "Runs, state and configuration") | E1a, E1b, E4, E8, E9 |
-| `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit | E4 |
+| `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit; on resume, an earlier success answered without sending | E4 |
 | `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E2 |
 | `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
 | `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1b |
@@ -132,9 +133,15 @@ in their dependency graph (rules only through 0.0.3), and none but
 (the catalogs import them, so the rule cannot be on the whole graph). `internal/report`
 declares the envelope's model fields itself (`ModelNative`, `ModelLimits`, `ModelUsage`,
 which convert from the `llm` types field for field), so the engagement can carry the host
-envelope without the model path in its graph (cut in E1b). E4 adds the rest: no file under
-`internal/collector` may import `net/http` or `net` directly, only the gate does; and no
-collector imports another collector. A collector that needs something from another's
+envelope without the model path in its graph (cut in E1b). E4 adds the rest: a collector's
+dependency graph, beyond what the gate, `internal/policy` and `internal/finding` bring
+in, holds nothing that can reach the network or run a process (`net` and its
+subpackages other than `net/url`, `net/netip` and `net/mail`, `crypto/tls`, `os/exec`,
+`syscall`, `unsafe`, `plugin`, `golang.org/x/net`, `golang.org/x/sys`,
+`golang.org/x/crypto/ssh`) and no package from outside the
+module and the standard library, so an SDK that wraps `net/http` is caught too; only
+the gate sends requests. No collector imports another collector, and no non-test file
+sets `InsecureSkipVerify`. A collector that needs something from another's
 facts gets it through a multi-fact rule in `internal/engagement`, never by import.
 
 For the practitioner's view of what to build, use the `security-consultant` subagent
@@ -209,6 +216,7 @@ go run ./cmd/scheck run engagement.yaml --stop-after intake   # validate, print 
 go run ./cmd/scheck run --host local --no-persist              # one-host engagement; the engagement report
 go run ./cmd/scheck run --host user@host --identity ~/.ssh/k --format json   # report.json; run directory under the state dir
 go run ./cmd/scheck run --host local --write-engagement e.yaml # write the --host engagement as a file; contacts nothing
+go run ./cmd/scheck run ~/.local/state/scheck/engagements/<name>/<started>   # resume that run in its directory
 go run ./cmd/scheck run --host local -v --no-persist        # the report and the host's fact sheet
 go run ./cmd/scheck catalog --profile hardened
 go run ./cmd/scheck explain sshd.config --format json
@@ -227,7 +235,18 @@ go test ./internal/baseline -update  # rewrite the golden command traces, then r
 `make check` also runs `scripts/depcheck.sh`: `agent`, `policy`, `check`, `finding`,
 `report`, `llm` and `bounded` must have no adapter or SDK in their dependency graph, and
 none of the first six may import `internal/bounded`. It also holds the engagement rules
-above.
+above, and the pin behind the report's "nothing was sent to the makers of scheck": no
+module outside a fixed list is in the build for linux or darwin; each import of an API
+that dials, resolves, sends HTTP, runs a process or makes a raw system call (and of
+`golang.org/x/crypto`, a model adapter or `test/...`) is allowed per package (the gate,
+the SSH transport, the model adapters, the local target); `cmd/scheck` and the host
+asset use `net` only to split and join a host and port, `cmd/scheck` names the OpenAI
+adapter only for its flags, the run directory uses `syscall` only to lock itself, to
+open its files without following a link and to read who owns a file and how many links
+it has, nothing calls `os.StartProcess` or imports
+`C`, `unsafe`, `plugin` or `log/syslog`; and only the hidden `eval` command and `scheck providers` refer to `llm.Build`,
+the only constructor (`llm.Lookup` returns no factory), wherever `internal/llm` is imported, never aliased. Adding a module or such an import is a change to
+the pin, reviewed as one.
 
 `make check` includes the user's `fix` target (`go fix ./...`); keep it in the chain.
 If `go fix` proposes conflicting rewrites and never converges, apply the modernization
@@ -256,7 +275,10 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 Host posture rules read one fact (`docs/spec/host-collector.md §6.5`). Engagement rules
 may combine facts from several checks or assets (`docs/spec/engagement.md`, "Multi-fact
-rules"). Both must declare exactly what they read and abstain when it is unknown.
+rules"). Both must declare exactly what they read and abstain when it is unknown. Over
+a population the gate marks incomplete (a cap, a page limit, an exclusion drop), a rule
+may fire on what it saw but is never disproved, and its counts print as "at least"
+(`docs/spec/scope.md`, "Responses").
 
 1. Add or reuse a `finding.Def` in `internal/finding/catalog.go`: a rule finding has no
    model to write its text, so title, category, base severity, impact and remediation
@@ -380,7 +402,7 @@ claim of any kind.
 
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
 the `anthropic` and `ollama` providers, and
-`--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
-engagement's resume, `scheck init`, the network collectors, probes, scans, full scope and
+`--bounded-source openai|jev`. Tool-call emulation and chunking are not built. `scheck
+init`, the network collectors, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.

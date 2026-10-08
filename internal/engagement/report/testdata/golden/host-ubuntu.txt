@@ -87,6 +87,18 @@ EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
 
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 6 rules that could decide. That is not a
 clean result: 3 rules had no usable evidence, and 9 areas were not checked.

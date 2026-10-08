@@ -129,6 +129,19 @@ EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
 
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    Your DNS resolver, asked through this machine's system resolver for the servers reached over SSH
+      that are written as names: macos; not counted.
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
 FOR AUTOMATION
 Exit 1: 1 open finding at or above its asset's threshold (macos: medium, profile baseline). Exit 0
 would not have meant a clean result either.

@@ -7,8 +7,11 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/b87/scheck/internal/engagement/gate"
 )
 
 // Kind is an asset kind (docs/spec/engagement.md, "Identity, references and
@@ -70,12 +73,6 @@ func (r Ref) Address() string {
 	}
 	return r.name
 }
-
-// notAvailable is a locator this build recognizes but does not accept yet;
-// the validator reports it as "not available in this build".
-type notAvailable struct{ what string }
-
-func (e notAvailable) Error() string { return e.what + ": not available in this build" }
 
 var (
 	dnsLabel   = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -205,6 +202,14 @@ func parseHostName(s string) (string, netip.Addr, error) {
 		if a.Zone() != "" {
 			return "", netip.Addr{}, fmt.Errorf("%q: an address zone is not accepted", s)
 		}
+		// One address, one spelling: the scope gate compares the plain
+		// form and refuses this one too.
+		if a.Is4In6() {
+			return "", netip.Addr{}, fmt.Errorf("%q: write an IPv4-mapped address as its IPv4 address, %s", s, a.Unmap())
+		}
+		if gate.NAT64Local.Contains(a) {
+			return "", netip.Addr{}, fmt.Errorf("%q is in RFC 8215's local-use NAT64 prefix 64:ff9b:1::/48, which scheck never contacts: it cannot tell which IPv4 address it carries", s)
+		}
 		return "", a, nil
 	}
 	name := strings.ToLower(s)
@@ -290,6 +295,14 @@ func parseNetwork(s string) (netip.Prefix, error) {
 	}
 	if p.Addr().Zone() != "" {
 		return netip.Prefix{}, fmt.Errorf("%q: an address zone is not accepted", s)
+	}
+	if p.Addr().Is4In6() {
+		return netip.Prefix{}, fmt.Errorf("%q: write an IPv4-mapped network in its IPv4 form", s)
+	}
+	// A wider network holding it is fine: the gate refuses those
+	// addresses, and what such an exclude carries is decided by gate.Carried.
+	if p.Bits() >= gate.NAT64Local.Bits() && gate.NAT64Local.Contains(p.Addr()) {
+		return netip.Prefix{}, fmt.Errorf("%q is inside RFC 8215's local-use NAT64 prefix 64:ff9b:1::/48, which scheck never contacts: it cannot tell which IPv4 addresses it carries", s)
 	}
 	if m := p.Masked(); m != p {
 		return netip.Prefix{}, fmt.Errorf("%q has host bits set: the network is %s", s, m)
@@ -385,12 +398,13 @@ func parseSaaS(s string) (Ref, error) {
 	return r, nil
 }
 
-// parseRepo parses `github:owner/name`. A local checkout is a passive root
-// whose reading is decided with the scope gate (docs/spec/scope.md,
-// "Repositories"), so it is not accepted before then.
+// parseRepo parses `github:owner/name`. A local checkout is not a locator:
+// it is a repository's `checkout` setting, its mirror, read from 0.0.2 E5
+// (docs/spec/scope.md, "Repositories").
 func parseRepo(s string) (Ref, error) {
 	if strings.HasPrefix(s, ".") || strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") {
-		return Ref{}, notAvailable{"a local checkout as a repo root (accepted once the scope gate decides how history is read, 0.0.2 E4)"}
+		return Ref{}, errors.New("a local checkout is not a repository locator: write the repository as github:owner/name, " +
+			"and its `git clone --mirror` as that asset's checkout setting, read from 0.0.2 E5")
 	}
 	provider, full, ok := strings.Cut(s, ":")
 	if !ok || provider != ProviderGitHub {
@@ -468,6 +482,133 @@ func Under(c, root Ref) bool {
 		return c.Kind == KindRepo && root.provider == ProviderGitHub && c.tenant == root.tenant
 	case KindCloud:
 		return c.Kind == KindCloud && !c.cloudOrg() && root.cloudOrg() && c.provider == root.provider
+	}
+	return false
+}
+
+// Excludes reports whether the exclude x covers c, the one test validation
+// and the scope gate share (docs/spec/scope.md, "What is in scope": exclude
+// always wins). It is Under, and also:
+//
+//   - a url exclude covers its site over both https and http, since every
+//     discovered name is read over both, on the same port (as written, or
+//     the one it is read on: https://x/ covers http://x:443/), and its path
+//     by whole segments whether or not it ends in a slash: /checkout/
+//     covers /checkout;
+//   - an address exclude (a network, or a host written as an address, on
+//     every port) covers a host, url or jump written as an address in any
+//     of its forms, and a network it holds in any of them (addressExcluded).
+//
+// An organizational unit exclude narrows its tenant to users, which the
+// gate drops from responses, so it covers nothing here.
+func Excludes(x, c Ref) bool {
+	switch {
+	case x.OrgUnit != "":
+		return false
+	case x.Kind == KindURL && c.Kind == KindURL:
+		prefix := strings.TrimSuffix(x.path, "/")
+		return x.Address() == c.Address() && (x.Port == c.Port || x.urlPort() == c.urlPort()) &&
+			(prefix == "" || c.path == prefix || strings.HasPrefix(c.path, prefix+"/"))
+	case c.addr.IsValid() && addressExcluded(x, c.addr):
+		return true
+	case x.Kind == KindHost && c.Kind == KindHost && x.Address() == c.Address():
+		// A host exclude covers its name or address on every port, as
+		// the scope gate reads it for web.
+		return true
+	case c.Kind == KindNetwork:
+		if p, ok := excludePrefix(x); ok && networkExcluded(p, c.prefix) {
+			return true
+		}
+	}
+	return Under(c, x)
+}
+
+// urlPort is the port a url is read on, written or its scheme's default.
+func (r Ref) urlPort() int {
+	if r.Port != 0 {
+		return r.Port
+	}
+	return map[string]int{"https": 443, "http": 80}[r.scheme]
+}
+
+// excludesName reports whether the exclude x covers the DNS name n, a
+// name the gate would query or a CNAME chain enters: a domain exclude it
+// falls under, a host exclude written as that name, or a url exclude at
+// the root of that name's site on its default port. Each is the excluded
+// party's server or zone, which a query for the name reaches through its
+// authoritative servers and a request through the chain reaches outright
+// (docs/spec/scope.md, "Discovery"). A domain root's or asset's own
+// standing is Excludes'; this is only the name.
+func excludesName(x Ref, n string) bool {
+	switch {
+	case x.OrgUnit != "":
+		return false
+	case x.Kind == KindDomain:
+		return domainUnder(n, x.name)
+	case x.Kind == KindHost:
+		return x.name == n
+	case x.Kind == KindURL:
+		return x.name == n && x.Port == 0 && strings.TrimSuffix(x.path, "/") == ""
+	}
+	return false
+}
+
+// excludeOf is the index of the first exclude in xs that covers c, or -1.
+func excludeOf(xs []Ref, c Ref) int {
+	return slices.IndexFunc(xs, func(x Ref) bool { return Excludes(x, c) })
+}
+
+// excludeEntry names an exclude as the audit log, scope.json and the gate
+// do: exclude[i].
+func excludeEntry(i int) string { return fmt.Sprintf("exclude[%d]", i) }
+
+// excludePrefix is an address exclude as a network: a network, or a host
+// written as an address.
+func excludePrefix(x Ref) (netip.Prefix, bool) {
+	switch {
+	case x.Kind == KindNetwork:
+		return x.prefix, true
+	case x.Kind == KindHost && x.addr.IsValid():
+		return netip.PrefixFrom(x.addr, x.addr.BitLen()), true
+	}
+	return netip.Prefix{}, false
+}
+
+// addressExcluded reports whether x, a network exclude or a host exclude
+// written as an address, holds a in any of its forms, compared also with
+// the IPv4 network x carries (gate.Carried) (docs/spec/scope.md,
+// "Addresses"). A host exclude written as an address excludes that address
+// on every port, as the scope gate reads it.
+func addressExcluded(x Ref, a netip.Addr) bool {
+	p, ok := excludePrefix(x)
+	if !ok {
+		return false
+	}
+	c, translated := gate.Carried(p)
+	for _, f := range gate.Forms(a) {
+		if p.Contains(f) || translated && c.Contains(f) {
+			return true
+		}
+	}
+	return false
+}
+
+// networkExcluded reports whether the exclude x holds the network n, each
+// compared also in the IPv4 form it carries.
+func networkExcluded(x, n netip.Prefix) bool {
+	outer, inner := []netip.Prefix{x}, []netip.Prefix{n}
+	if c, ok := gate.Carried(x); ok {
+		outer = append(outer, c)
+	}
+	if c, ok := gate.Carried(n); ok {
+		inner = append(inner, c)
+	}
+	for _, o := range outer {
+		for _, i := range inner {
+			if o.Bits() <= i.Bits() && o.Contains(i.Addr()) {
+				return true
+			}
+		}
 	}
 	return false
 }

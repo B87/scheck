@@ -14,8 +14,8 @@ run can resume from a saved output.
 | Stage | What happens | Output |
 |---|---|---|
 | **1. Intake** | Ask what a consultant would ask (below). | Engagement file |
-| **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The operator sees the resolved list before anything beyond passive runs. | Scope |
-| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
+| **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
+| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (mail records, NS, SOA, CAA) is read here, per domain root and declared mail domain. Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
 | **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. With a model (0.0.4), hypotheses as well. | Plan |
 | **5. Check** | Run the follow-up reads that rules named and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
 | **6. Analyze** | Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. | Findings and follow-ups |
@@ -226,7 +226,7 @@ assets:                               # per-asset settings; the key is the name 
         - {port: 5432, proto: tcp, purpose: "postgres", audience: localhost}
   shop:
     url: https://shop.example.com/
-    first_party: {confirmed_by: alice, date: 2026-10-07}   # written by the Scope stage
+    first_party: {confirmed_by: alice, date: 2026-10-07, target: shops.myshopify.com}   # by hand in 0.0.2; the Scope stage asks from 0.0.3
   shop-repo:
     repo: github:example-org/shop
     deploys_to: production
@@ -254,8 +254,9 @@ key, and the locator never carries a password. A single-label name (`web1`) is a
 resolved the way ssh resolves it; a name whose last label is all digits
 (`203.0.113.05`) is refused, since a resolver reads it as an address. A `jump` is a
 host locator other than `local`. A `network` is written with its host bits zero. A
-`url` is a prefix: no query, fragment or credentials. A `repo` is `github:owner/name`; a local checkout (`repo: ./`) is not
-accepted until the gate decides how history is read (0.0.2 E4).
+`url` is a prefix: no query, fragment or credentials. A `repo` is `github:owner/name`; a local
+checkout is not a locator (`repo: ./` exits 3) but a repository's `checkout` setting,
+an absolute path to the operator's `git clone --mirror` ([scope.md](scope.md#repositories)).
 
 **Names.** `engagement.name`, `assets` names and `people` handles all match
 `^[a-z0-9][a-z0-9-]{0,62}$`. A throttle rate is `N/s` or `N/m`.
@@ -263,7 +264,7 @@ accepted until the gate decides how history is read (0.0.2 E4).
 **An asset's settings follow its kind.** `jump`, `identity`, `elevate`, `profile`,
 `disable_checks`, `deny_paths` and `context` are host settings; `first_party` is
 taken by a domain, url or host; `deploys_to` (`production | staging | development`)
-and `ci` (a tool named under `tools`) by a repository. A setting on the wrong kind
+`ci` (a tool named under `tools`) and `checkout` by a repository. A setting on the wrong kind
 exits 3, and so do two `assets` entries for the same id and an entry for an asset an
 `exclude` covers, whose settings could never apply.
 
@@ -318,9 +319,9 @@ creation date.
 finding's instance key (a login, a repository, `port/proto`); without it the acceptance
 covers every instance of that id on that asset, and the report says so. Past `expires`,
 the adjustment stops and the report says so; `expires` is a date in
-`engagement.timezone`, compared with the collection time, never the time the report is
-rendered. The report prints a ready-to-paste entry under each open finding ("The
-report", "Findings").
+`engagement.timezone`, compared with the collection time of the asset it names, never
+the time the report is rendered. The report prints a ready-to-paste entry under each
+open finding ("The report", "Findings").
 
 **Time.** A timestamp is RFC 3339 with seconds and an explicit offset. A date lasts
 until the end of that day (24:00) in `engagement.timezone`, which is required. Both are
@@ -361,7 +362,8 @@ an asset: no session, command or canary runs on it, it is never in scope by bein
 named, and it has no coverage row or findings. The hop's host key is verified strictly
 against the same `known_hosts` file as the host's, with the same identity or agent, and
 there is no bypass. The hop needs its own SSH user, refused by Scope before any contact
-when it is missing; it may not be `local` or the host itself. The address the hop
+when it is missing; it may not be `local` or the host itself, and a hop an `exclude`
+covers exits 3, since scheck authenticates there and exclude always wins. The address the hop
 connects to is the host's locator as written, resolved by the hop, so a name only the
 hop can resolve works. Every audit line of a host reached through a hop carries `via:
 user@address:port`, and so do the report's asset (`assets[].via`) and its coverage line
@@ -388,8 +390,16 @@ it to that list, with none of the target's documented artefacts.
   root exits 3. A `network` exclude is always accepted, since it only narrows and an
   address's root is known only once resolved; so is a `host` exclude written as an
   address, while one written as a name must fall under a root. A `cloud` project
-  exclude is accepted when an organization root exists. Whether any exclude matched
-  something is known only after Scope, which reports it.
+  exclude is accepted when an organization root exists. A `url` exclude falls under a
+  root when it does over either scheme, with or without its trailing slash, as it
+  excludes ([scope.md](scope.md#admission)). Whether any exclude matched something is
+  known only after Scope, which reports it.
+- A root an `exclude` covers exits 3: exclude always wins, so it would never be read.
+  An intent URL an `exclude` covers exits 3 for the same reason. An address is
+  compared in every form, as the scope gate compares it ([scope.md](scope.md#admission),
+  "Address excludes"): `host: 203.0.113.5` covers `host: deploy@[64:ff9b::cb00:7105]`.
+- An IPv4-mapped address or network (`::ffff:198.51.100.7`) exits 3: it is written as
+  its IPv4 form, so every address has one spelling, as the scope gate requires.
 - Two roots written alike (`domain: example.com` and `host: example.com`) exit 3,
   since a reference names a root by its value as written.
 - References name what they must: the keys of `access.admins` and `access.mfa[].where`
@@ -486,13 +496,15 @@ points again.
 ## One command, one file
 
 `scheck run` is the only command that assesses anything (0.0.2 E2). Its input is an
-engagement file or, for one host, a locator:
+engagement file or, for one host, a locator; a run directory resumes that run ("Stop
+and resume"):
 
 ```
 $ scheck run engagement.yaml
 $ scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo --profile hardened
 $ scheck run --host local
 $ scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml
+$ scheck run ~/.local/state/scheck/engagements/acme/2026-10-08T09:00:00Z
 ```
 
 **`--host`** builds an engagement in memory: one `host:` root, one asset with the reach
@@ -615,6 +627,14 @@ ssh` and `scheck local` follow these rules too: a host that never answered now e
 where 0.0.1 exited 3, the one change a CI job gating on `scheck ssh` sees. The canary's
 echo is printed only after redaction, and cut short, in the JSON only.
 
+For an API, a credential that is present but rejected (a 401, an invalid grant) is
+the same positive list: that asset is `refused` with kind `access`, the other assets
+are still collected, and the run exits 3. A declared SaaS root with no credential in
+the environment is `no_credentials` and exits 2, as a declared root with no successful
+read; Scope warns about it before any target is contacted, so the operator can stop
+and set it. A provider's rate limit that the gate cannot wait out is `limit_reached`,
+exit 2 ([scope.md](scope.md#outcomes)).
+
 So a one-host run exits as the 0.0.1 command did for the same findings and the same
 failures, except a host that never answered (2, a transport failure, where 0.0.1 said
 3), and a CI job gating on `scheck ssh` keeps its meaning.
@@ -624,7 +644,7 @@ envelope (`host-collector.md §6.4`) whole, under that asset, with its own
 `schema_version`; `run.assessment`, `assessments` and `facts` keep their shape one
 level down. The report on stdout is complete without the run directory, so
 `--no-persist` loses nothing, and `--include-evidence` adds captures to the embedded
-envelope. The engagement's own findings are authoritative where their severity differs
+envelope of each host this session collected ("Stop and resume"). The engagement's own findings are authoritative where their severity differs
 from the envelope's ("The report", "Findings"). The aliases' deprecation line names the new path of `run.assessment`.
 
 ## Runs, state and configuration
@@ -640,13 +660,17 @@ and locked while a run holds it:
 
 ```
 <state-dir>/engagements/<engagement.name>/<started>/
+  run.json             the run's manifest: its start, the file's path and hash, each
+                       session, the hash of every file a stage wrote ("Stop and resume")
   engagement.yaml      the file as read, its redact_extra masked (below);
                        for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
   plan.json            stage 4: the checklist per asset, and each host's planned and
                        disabled checks (with a model, hypotheses too)
-  evidence/            stages 3 and 5: one file per result, redacted and truncated
+  evidence/            stages 3 and 5: one file per result, redacted and truncated;
+                       per host <asset>.json and <asset>.collection.json, and
+                       requests/, the gate's successes a resume may reuse
   findings.json        stage 6: rule outcomes and follow-ups opened and settled
   report.json          stage 7, with report.txt
   audit.jsonl          every request, command and API call, in order
@@ -665,23 +689,28 @@ engagement never mixes with standalone host runs.
 
 **In 0.0.2 (E1b, E2).** `<started>` is the start time in UTC, RFC 3339 to the second. The
 lock is an `flock` on `.lock` in the directory, released when the run ends or its
-process dies; a second run on a locked directory exits 3, and so does a directory that
-already holds a finished run until resume exists (E4). `--stop-after intake` validates
-and prints the file and creates no directory; without `--stop-after` a run goes through
-Report, which writes `report.json` and `report.txt` ("The report"). Scope writes the declared
-roots as written and refuses, before any target is contacted, a host asset with a
-a host or jump host without an SSH user. Every asset of kind `host`, a root or an `assets` entry,
+process dies; a second run on a locked directory exits 3, and so does a new run whose
+directory already exists, naming `scheck run <directory>` to resume it. `--stop-after
+intake` validates and prints the file and creates no directory; without `--stop-after` a
+run goes through Report, which writes `report.json` and `report.txt` ("The report"). Scope writes the declared
+roots and assets entries, each domain, url and host asset with its first-party evidence
+from the file (a `url` or `host` root, a `network` root holding its address, or
+`operator`'s confirmation, printed as such) and every exclude, and refuses, before any
+target is contacted, a host or jump host without an SSH user. From E4 it also expands
+each `domain` root by passive discovery, through the gate and contacting no server of
+the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
 is collected; an asset of any other kind is `not_collected` with reason
 `collector_not_built`, which makes the run exit 2 when the asset is a root. Plan writes an
-empty checklist and Check opens no follow-up. `evidence/<asset>.json` is the host
-collector's envelope; its `context_sources` names `<file> assets.<name>` with kind
-`config`, and the accepted risks it grades are those in `intent.accepted_risks` that
+empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
+is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
+kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
 (`<file> intent.accepted_risks[i]`), a later entry for the same id winning. The host
 grader accepts a whole id, so a `subject` acceptance is not widened into one: it is
 listed under `acceptances_not_applied` in `findings.json`, printed as a warning and in
 the report as not applied, and becomes applicable when host findings carry instance
-keys. Accepted risks are graded at the run's start time, in `engagement.timezone`.
+keys. Accepted risks are graded at the start of the session that collected the host, in
+`engagement.timezone`.
 Recon writes every asset's commands to `audit.jsonl` and keeps each asset's entries for
 the report's trace, so the trace survives `--no-persist`. A canary mismatch's echo is
 kept apart from its detail (`echo` in `recon.json` and the report's JSON). Scope's refusals (a
@@ -696,28 +725,144 @@ asset as text.
 written. `scheck run <directory>` resumes:
 
 - **Per request, not per stage.** Each stage records the status of every request it
-  made. A resume retries what failed, was rate-limited or was denied, and keeps what
-  succeeded.
+  made. A resume keeps what succeeded and sends again what failed, was rate-limited or
+  was refused, each admitted by the gate from its first check, so a request refused
+  before is refused again under the same file; a resume never replays a decision
+  ([scope.md](scope.md#resume)). A paginated list is read again whole.
+- **A host is resumed as a unit.** A host whose collection completed under the same
+  inputs is kept; any other is collected again on a new session, canary first. A host
+  costs seconds, and an envelope merged from two sessions would break what its command
+  trace means (`host-collector.md §9`).
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
   a better token on resume reads again what the weaker one could not.
-- **A changed engagement file.** The resume reads the file at its recorded path and
-  compares hashes. If roots, exclude, assets or defaults changed, it restarts from
-  Scope. If `mail` or an `intent` URL changed, it reads only the DNS names and entry
-  points that changed. If only people, access, data, secrets or accepted risks changed,
-  it re-runs Analyze and Report without contacting a target.
-- **Hand edits.** A stage output the operator edited is used as written, and the report
-  says which stage was edited. An edit cannot widen scope: the gate checks every
-  request against the engagement file's roots and exclude, not against `scope.json`.
+- **A changed engagement file.** The resume reads the file again at its recorded path,
+  and each stage compares what it reads from it. If anything Scope reads changed, Scope
+  runs again. A host is kept only while nothing its collection reads changed, the
+  accepted risks that name it and `engagement.timezone` included: nothing regrades a kept envelope, so a changed
+  accepted risk on a host collects that host again rather than re-running only Analyze
+  and Report, which adds only contact the file already authorizes. A change to people,
+  access, data, secrets or anything no host or Scope reads contacts no target. Reading
+  again only the DNS names and entry points a changed `mail` or `intent` URL names is
+  not built (0.0.2 E7): Scope runs again whole.
+- **Hand edits.** A file the resume uses is used as written, and the report names each
+  one edited since scheck wrote it; a host's envelope is never used as written (below).
+  An edit cannot widen scope: the gate checks every request against the engagement
+  file's roots and exclude, not against `scope.json`. `run.json` is trusted as written:
+  whoever can write the run directory can change which engagement file it names and the
+  hashes it holds, so the report's list catches an accidental edit, not a deliberate one
+  that rewrites `run.json` too. The safeguard is that every resume prints on stderr which
+  engagement file it read and its sha256.
 - **Principal and time.** The principal per collector is recorded; a different principal
-  on resume is printed in the report. The report prints the collection span, and
-  time-based rules (stale accounts, expiries) are computed against collection time.
+  on resume is printed in the report (E5, the first collector that reads a principal).
+  The report prints the collection span from the run's first start, and time-based
+  rules (stale accounts, expiries) are computed against collection time: scope and
+  first-party confirmations are read at the start of the session that reads them, and a
+  host's accepted risks at the start of the session that collected it.
 
-**Scope confirmations persist.** When the operator confirms in the Scope stage that a
-discovered asset is first-party, scheck writes an `assets` entry with
-`first_party: {confirmed_by, date}` into the engagement file, the only key it writes
-after `scheck init`, and records the new hash. A run with no terminal prints the stanza
-instead and leaves the asset without first-party evidence.
+**In 0.0.2 (E4).** `scheck run <directory>` resolves a path that reaches the directory
+through a link, locks the directory and exits 3 when it is locked; when it holds no
+`run.json` (not a run directory, or an earlier build wrote it); when it holds a link
+anywhere inside it, anything but directories and regular files, a file or directory
+another user owns, a regular file with another hard link, or a file or directory
+writable by group or others, none of which scheck writes (another user who may write
+`run.json` could point the resume at an engagement file of their own); when the directory it sits in
+(`engagements/<name>`) is owned by another user or writable by group or others; and
+with `--host`, `--write-engagement`, `--no-persist` or `--state-dir`. `audit.jsonl` and
+`.lock` are opened without following a link, and `audit.jsonl` is checked again once
+open: this user's, with one link. It reads the engagement file again from `run.json`'s
+`file`, only when that is an absolute path to a regular file (a device or a pipe is
+refused), and parses it under the name the first session gave it (`source.path`),
+which its errors and the report's source path then name, so a run started from a
+relative path keeps its hosts; for a run `run.json` marks `host`, it reads the directory's own
+`engagement.yaml` (which `--host` writes unmasked). It exits 3 when that file is
+missing or not valid, names another engagement ("start a new run"), or, for `--host`,
+changed since scheck wrote it ("start a new run with `scheck run --host`"). Every
+resume prints on stderr `resuming <directory> with <path> (sha256 <hash>)`, the path
+being `run.json`'s absolute `file`, with `the engagement --host built` for the path of
+a `--host` run; a file that does not load is named the same way, without its hash,
+before the error. The report's command to run it again names the file by that absolute
+path too, and a path that starts with `-` as `./<path>`, never as a flag. It then runs Intake through Report, or to
+`--stop-after`, in the same directory, appending to `audit.jsonl`. The run's start stays
+the first session's: the directory's name, the stage documents' headers, the report's
+`run.started` and the start of the collection span.
+
+`run.json` holds the run's start, the source `{path, sha256}`, `file` (the engagement
+file's absolute path, written by the first session and never by a resume, so a relative
+path is resolved against the first session's working directory; empty for `--host`),
+`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, egress, ended}`), `files` (each file a stage wrote,
+relative to the directory, with the sha256 of the bytes written) and `scope_inputs`. It
+is written when a session starts, after each file a stage writes, and after each stage
+with what the session has sent so far as its `egress`; `ended` is set when the session
+ends.
+
+- **Scope** is kept, its `scope.json` used as written and nothing sent, when
+  `scope_inputs` is unchanged (a hash of the build version, the resolved roots,
+  exclude, defaults, assets, `redact_extra`, `mail`, `intent` and `authorization`, and
+  each asset's first-party evidence evaluated at the session's start, so a confirmation
+  that expired or became current since runs Scope again) and the earlier Scope found no
+  gap: every domain root's certificate transparency answer read, and no name
+  `insufficient_evidence` or `not_checked`. Otherwise Scope runs again.
+- **A host** is kept, never contacted, from one record alone:
+  `evidence/<asset>.collection.json`, which Recon writes after the envelope
+  `evidence/<asset>.json` for each host it collected, completely or not, as `{inputs,
+  graded, envelope_sha256, recon, planned, trace}` (`recon` the asset's whole Recon
+  entry, `graded` the start of the session that collected it). The host is kept when the
+  record's inputs match, its `recon` status is `collected` with the same name and id,
+  and the sha256 of `evidence/<asset>.json` as it is on disk equals both the record's
+  `envelope_sha256` and `run.json`'s hash for that file. The record, its trace included,
+  is used as written; the envelope never is: one edited, or written by a session cut
+  before it recorded it, collects the host again, so no kept host mixes two sessions.
+  `recon.json` is not read. The inputs are a hash of the build version and everything the collection
+  reads (reach, user, identity, known_hosts, jump, elevate, profile, `disable_checks`,
+  `deny_paths`, `redact_extra`, timeout, its context with the accepted risks that name
+  it and `engagement.timezone`, in which their expiry is graded, the context's source,
+  and the engagement's `exclude`, which its SSH dial is checked against).
+- A build whose version names no commit (`dev`) or carries uncommitted changes
+  (`-dirty`) keeps neither Scope nor any host.
+- **The gate's successes** are written after each stage to
+  `evidence/requests/<identity>.json` and listed in `run.json`'s `files`; the next
+  session's gate is handed only those `run.json` lists, so a file placed there by hand is
+  ignored ([scope.md](scope.md#resume)). A success this session sends again and keeps
+  replaces the stored one, so a record that could not be reused is rewritten. No op in this build yields a reusable success,
+  so the directory stays empty.
+- **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
+  run was stopped and resumed, that what an earlier session read completely was kept and
+  that everything else was read again. A file the resume used (`scope.json` when kept;
+  `evidence/<asset>.collection.json` for a kept host; a success the gate reused) whose bytes differ from its hash in `run.json` is listed in
+  `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
+  changed since scheck wrote it, and used as written.` ("them" for more than one). An
+  acceptance's outcome and its "expires in N days" are decided at the time the host it
+  names was graded, the start of the session that collected it. A kept host's asset
+  carries `kept: true`; its captures were never stored, so `--include-evidence` adds no
+  `evidence` to its envelope rather than empty captures that would read as a command
+  that printed nothing.
+- **What left this machine** covers this session and every earlier one, merged: sources
+  by name and host, so DNS once per resolver (a session on another network asked
+  another one) and DNS first, with their subjects and credentials unioned and counts
+  summed; sites' requests summed; SSH names unioned. Each session records in `run.json`
+  the hosts it reached (`sessions[].egress.Contacts`), each counted once Recon finished
+  it, with the checks it ran there that may make a host contact its package
+  repositories. The hosts row counts every session's: a kept host's contact and SSH
+  names are the session's that collected it, not this one's, and a host reached in one
+  session and collected again in the next counts in both; `host_side_effects` is the
+  union of every session's, so a check disabled since still shows. A session that ends
+  on an error is `ended`, its contacts recorded. An earlier session not marked `ended`
+  (killed, or the machine stopped) recorded only what it had sent by its last finished
+  stage: its start is listed in `egress.unrecorded_sessions`, and
+  the block opens with `At least what follows: the session started <time> ended before
+  it recorded all it sent. audit.jsonl in the run directory lists every request this
+  run made.` (for more than one, `the sessions started <times> ended before they
+  recorded all they sent`).
+
+**Scope confirmations persist.** A first-party confirmation is an `assets` entry with
+`first_party: {confirmed_by, date, target}` ([scope.md](scope.md#first-party-evidence)).
+In 0.0.2 the operator writes it by hand: Scope asks nothing and prints no stanza to
+paste, and lists each discovered name with what it points at, which is its `target`.
+From 0.0.3, when a confirmation unlocks probes, the Scope stage asks, writes the entry
+into the engagement file (the only key it writes after `scheck init`) and records the
+new hash; `confirmed_by` is `engagement.operator`, which must then be a handle under
+`people`.
 
 ## The report
 
@@ -749,8 +894,9 @@ Templates never use a gendered pronoun: a person is named by handle or address, 
 | 5 | Findings: ranked open findings, then informational, then accepted | always; "0 open findings" is written out |
 | 6 | Not checked, grouped by what would close the gap | when anything was not checked |
 | 7 | Excluded, narrowed and not run | always; probes and scans are one line in 0.0.2 |
-| 8 | Notes for the readout | when any note exists |
-| 9 | Close: the exit code and why, for automation; where the files are | always |
+| 8 | What left this machine | always |
+| 9 | Notes for the readout | when any note exists |
+| 10 | Close: the exit code and why, for automation; where the files are | always |
 
 Coverage is read before any finding: the summary says, in two to five lines of plain
 words, what was checked and what was not, above "Fix these first", and the full table
@@ -760,8 +906,8 @@ first thing read; with trigger `incident`, the incident block stays above it.
 
 **Header.** The engagement name and `engagement.operator`; the collection span in
 `engagement.timezone`, the zone named; the scheck version; the trigger (`not declared
-(one-host check)` for `--host`); a stage document edited by hand and a principal that
-changed on resume ("Stop and resume"). Fixed lines:
+(one-host check)` for `--host`); on a resume, the `Resumed` line, the files edited by
+hand and, from E5, a principal that changed ("Stop and resume"). Fixed lines:
 
 - Method, in 0.0.2: `rules only: a fixed checklist per asset type, no model, no
   hypotheses. Reading only: nothing was probed, scanned, exploited or changed. Not a
@@ -825,7 +971,8 @@ manual checklist is printed for a root without a collector: it would be a second
 unreviewed catalog.
 
 **Excluded, narrowed and not run.** Every `exclude` entry and whether it matched
-anything (before discovery: "not matched: no discovery in this version"); every
+anything: an entry discovery covers prints how many discovered names it dropped, and
+any other "not matched: nothing in this version discovers what it covers"; every
 narrowing entry, as "narrowed in the engagement file", and what it removed; redaction
 counts, built-in rules by rule and `redact_extra` as rules and matches, never a
 pattern; for `deny_paths`, the reads each entry denied, each counted once under the
@@ -834,7 +981,83 @@ into a denied prefix) under `deny_paths` as a whole; probes and scans (in 0.0.2:
 reading was attempted.`, and from 0.0.3 the probes that would have applied, as *not
 run*); acceptances not applied, with why.
 
-**Notes for the readout.** Not findings, and not counted: what each acceptance came to
+**What left this machine.** One fixed block, defined with the gate (0.0.2 E4). A
+client's data protection officer asks this question, and so does the CTO, often to
+answer a customer's questionnaire, so it is written in plain words. Four groups, always
+in this order, and a group with nothing in it prints `none`:
+
+- *Third-party services* ([scope.md](scope.md#third-party-sources)): each source, who
+  runs it when it is a public service, what it was sent, and the request count. The
+  DNS line counts the control queries, and names `systemd-resolved` rather than
+  `127.0.0.53`.
+- *Your own systems*: per kind, the count of requests, SSH sessions or local runs, for
+  assets with first-party evidence, and the servers a connection was attempted to that
+  never answered, which are not sessions, and the jump hosts connected to or not
+  reached, each server once whoever logs in to it. What SSH did is what its transport recorded, the host apart from
+  its jump host (a name resolved, a connection attempted, one opened), never what the
+  file declares: a host refused before any of it adds nothing, and a jump host reached
+  is not a session with the host behind it. When such
+  a check ran, a line saying which
+  host check may make the host download its package list from its own update servers,
+  with the check's id in brackets.
+- *Names under your domains not shown to be yours*: the names, at most ten and then a
+  count, and the requests to them, said as what a browser sends when it opens the
+  page.
+- *AI models*: `Nothing was sent to an AI model provider.`
+
+On a resumed run the groups cover every session of the run, and the block opens with an
+"At least what follows" line when an earlier session ended before it recorded all it
+sent ("Stop and resume").
+
+Then fixed lines: that nothing was sent to the makers of scheck, pinned by
+`scripts/depcheck.sh`: no module outside a fixed list is in the build for any shipped
+platform, and only the gate, the SSH transport, the model adapters (built only by the
+hidden `eval` command) and the local target (which runs catalog entries) import an API
+that reaches the network or a process; the User-Agent the gate set, when a web request was sent; and
+where what
+scheck read is stored and how to delete it, naming the people data read from a tenant
+when one was read. Under `--no-persist`: `What scheck read is stored nowhere; the
+report is on stdout.`
+
+```
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    Your DNS resolver at 192.168.1.1, and whatever it forwards to, as for any web browsing on this network: names under your domains, the names they point to, and the services above; 214 lookups, including 2 random test names under your domains and one under invalid.
+    crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com and example.net; 2 requests. crt.sh sees this machine's internet address and those names, and may keep logs.
+    api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its value appears nowhere); 96 requests.
+  Your own systems:
+    websites shown to be yours: 3 sites, 9 requests.
+    servers: 1 SSH session.
+    One server check may make the server download its package list from its own update servers (pkg.dnf_check_update).
+  Names under your domains not shown to be yours:
+    www.example.com, blog.example.com and 10 more: 36 requests, what a browser sends when it opens the page (the certificate, and the home page over https and http). These servers may be a provider's or someone else's.
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  Every web request identified itself as "scheck/0.0.2 (security self-assessment)".
+  What scheck read, including people's names and email addresses from google-workspace:example.com, is stored only on this machine, in ~/.local/state/scheck/engagements/acme/2026-10-07T09:00:00Z; deleting that directory removes it.
+```
+
+A source names the environment variable a credential came from, never its value. A
+host named by an address puts nothing under third-party services. The names SSH
+resolved with this machine's own lookup, a host's and a jump host's written as names,
+are on a line of their own, since SSH asked the system's resolver for them, not the
+gate; the hosts a jump host resolved are named on another, as resolved by the jump
+host, not by this machine. A request counts once a connection was made. A source's
+line words what it was sent; GitHub's and Google's are worded with their collectors
+(E5, E6). The sentence about macOS resolvers from
+[scope.md](scope.md#third-party-sources) follows the DNS line when it applies. Who
+runs a public source is data held beside its op, so it cannot drift from the code.
+JSON carries the block as `egress: {sources: [{source, operator, host, sent, requests,
+credentials, control_lookups, control_invalid, scoped_resolvers_ignored}], assets:
+[{kind, requests | sessions | unreached | jump_hosts | jump_unreached | runs, sites}], unconfirmed: {names,
+requests}, host_side_effects: [check ids], model: "none", telemetry: "none",
+user_agent, stored, tenants_read, ssh_resolved, ssh_resolved_by_jump,
+unrecorded_sessions}` (the last only on a resume that has one): every fact the text
+states, so a reader of the JSON gets the same answer.
+
+**Notes for the readout.** Not findings, and not counted: `first_party` entries that
+expired or whose target moved, so someone removes them; what each acceptance came to
 when it was not applied ("Acceptances" below), acceptances that expire within 30 days
 or have no `expires`; a listed admin who is not one; a declared person or system
 scheck found no trace of; declarations scheck could not verify; the count of
@@ -850,8 +1073,10 @@ and why, then where `report.txt`, `report.json`, `audit.jsonl` and the evidence 
 | 2 | `Exit 2: incomplete.` and why; with open findings, `Exit 2 takes precedence over exit 1, so a pipeline that gates on exit 1 will not see the N open findings.`; then the exit-0 sentence |
 | 3 | `Exit 3: <asset> was not assessed: <reason in words>.`, then `The other assets were read and are reported above.` only when there are other assets, and the precedence sentence with `Exit 3` when findings are open |
 
-Under `--no-persist` the close says that no run directory or audit log was written and
-that the command trace is in the JSON report.
+`--no-persist` is for host runs only: a run with any other root or asset is refused
+before any contact, since the gate's audit log is the record of what was sent
+([scope.md](scope.md#audit)). Under it the close says that no run directory or audit
+log was written and that the command trace is in the JSON report.
 
 ### Coverage
 
@@ -892,8 +1117,8 @@ most recently pushed"), since a sample nobody can name cannot be compared betwee
 runs.
 
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
-`not_on_plan:<feature>`, `collector_not_built`, `refused` (a host refused us on the
-positive list of "Exit codes"), `not_declared` (no root of the kind this area reads was
+`not_on_plan:<feature>`, `collector_not_built`, `refused` (an asset refused the access
+scheck was given, on the positive list of "Exit codes"), `not_declared` (no root of the kind this area reads was
 declared), `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
 `unavailable:<reason_code>` (a collector's own per-read reason, kept verbatim after the
 colon) or `no_rule` (read, but no rule in this version judges it), with a detail line.
@@ -927,14 +1152,18 @@ the target:
 | `insufficient_permission:<scope>` | the access scheck was given cannot read this; it needs `<scope>`, read-only where the provider offers it |
 | `not_on_plan:<feature>` | your plan with the provider does not include `<feature>`; for a host profile, not in the checks you chose (profile `<p>`) |
 | `collector_not_built` | this version of scheck does not read `<kind>` |
-| `refused` | refused before any check ran; the host's line names the cause by kind ("its host key changed, so it was not contacted") |
+| `refused` | an asset refused the access scheck was given; its line names the cause by kind ("its host key changed, so it was not contacted", "GitHub did not accept the token") |
 | `not_declared` | not part of this engagement; to include it, list it under `roots` in `<file>` |
 | `excluded_by_operator` | left out by the engagement file (`<entry>`) |
-| `limit_reached` | stopped by a time or size limit (`<limit>`) |
+| `limit_reached` | stopped by a time, size or rate limit (`<limit>`) |
 | `failed` | not run: scheck's connection to the host dropped before this check; for a host never reached, "could not connect from this machine" |
 | `sampled` | only part was read: `<n> of <m> <unit>` (`<selection>`); the rest is unknown |
 | `unavailable:command_missing` | the tool that would tell is not installed on the host, so scheck could not tell (this is not a finding) |
-| `unavailable:<other>` | the command that reads it did not give a usable answer (`<code>`) |
+| `unavailable:exclusion_unknown` | scheck could not tell which items your exclusions cover, so it kept none |
+| `unavailable:redirect_out_of_scope` | the site sent scheck somewhere outside your roots, which it did not follow (`<location host>`) |
+| `unavailable:redirect_not_entry_point` | the site redirected to another of its pages, which scheck read only as the redirect (`<path>`) |
+| `unavailable:address_not_public` | the name points at a private or reserved address, which scheck does not contact from outside a declared network |
+| `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
 
 A token is never wrapped across lines; the detail wraps.
@@ -1149,7 +1378,7 @@ the envelope.
 `findings.json` and the report carry each as `{asset, asset_name, reason, detail,
 effect}`: `asset` the canonical id, `reason` from the closed list, `detail` escaped,
 post-redaction text, for a refusal its `kind` (`host_key_unknown`, `host_key_changed`,
-`jump_host_key_unknown`, `jump_host_key_changed`, `access`, `canary`), which picks the sentence below and prints the raw error only at
+`jump_host_key_unknown`, `jump_host_key_changed`, `excluded`, `jump_excluded`, `access`, `canary`), which picks the sentence below and prints the raw error only at
 `-v`, and `effect` what was lost (`{checks_run, checks_unknown,
 checks_not_run, kept}` for a host, `{requests_not_sent}` for an API). They print in run
 status, refused before incomplete, each in the order of `roots`:
@@ -1159,6 +1388,7 @@ status, refused before incomplete, each in the order of `roots`:
 | Unknown host key | `REFUSED: deploy was not contacted: its host key is not in your known_hosts file. Confirm the fingerprint with whoever runs the host, then add it.` | 3 |
 | Unknown key on the jump host | `REFUSED: deploy was not contacted: the host key of its jump host ops@198.51.100.7:22 is not in your known_hosts file. Confirm the fingerprint with whoever runs the jump host, then add it.` | 3 |
 | Changed key on the jump host | `REFUSED: deploy was not contacted: the host key of its jump host ops@198.51.100.7:22 changed. A changed key can mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the jump host before you accept it.` | 3 |
+| Host address excluded | `REFUSED: deploy was not contacted: its name resolves to an address your engagement file excludes. Remove the exclude if the host is in scope, or the host if it is not.` (for a jump host: `its jump host ops@198.51.100.7:22 resolves to an address your engagement file excludes, and scheck never connects to an excluded address.`) | 3 |
 | Changed host key | `REFUSED: deploy was not contacted: the host key for 203.0.113.5 changed. A changed key can mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the host before you accept it.` | 3 |
 | No SSH user, unreadable identity or known_hosts, failed authentication | `REFUSED: deploy: scheck could not use the access it was given (authentication failed for deploy@203.0.113.5 with ~/.ssh/deploy). Nothing was read from it.` | 3 |
 | Canary mismatch | `REFUSED: deploy: scheck stopped before running any check, because the host's login shell changed what it sent back (often a login banner or a profile script that prints text). This does not by itself mean the host is compromised: ask whoever runs it to look at its login scripts. The raw reply is in report.json.` | 3 |
@@ -1167,6 +1397,9 @@ status, refused before incomplete, each in the order of `roots`:
 | `limits.timeout` | `INCOMPLETE: limits.timeout (1h) ended the engagement: <assets> were not read.` | 2 |
 | Unreachable before contact | `INCOMPLETE: deploy: could not connect from this machine (connection timed out). This does not tell you whether it is up for anyone else. Nothing was read.` | 2 |
 | Root with no collector | `INCOMPLETE: example-org (GitHub organization): this version of scheck does not read it. Nothing was read from it.` | 2 |
+| Credential rejected | `REFUSED: example-org (GitHub organization): GitHub did not accept the token in GITHUB_TOKEN (expired, revoked or mistyped). Nothing was read from it.` (or `37 requests were read from it.` when it was rejected mid-run) `Set GITHUB_TOKEN to a current, read-only token.` | 3 |
+| No credential | `INCOMPLETE: example-org (GitHub organization): neither GITHUB_TOKEN nor GH_TOKEN is set, so nothing was read from it. Set one to a read-only token.` | 2 |
+| Provider rate limit | `INCOMPLETE: example-org (GitHub organization): scheck stopped after 140 requests to leave a fifth of this token's GitHub rate limit for its other uses; the limit resets at 15:02 (Europe/Madrid). What was read is kept and assessed.` | 2 |
 
 Counts agree everywhere they appear: "18 of 33" in run status is the checks attempted
 before the loss, and the Hosts block's counts line splits the same 33 into ran,
@@ -1280,7 +1513,10 @@ adding "VPC firewall rule or authorized network open to the internet" is
 `db.internet_reachable`; the bind alone is neither. This lifts the single-fact limit of
 the host collector's posture rules (`host-collector.md §6.5`) for the engagement; each
 rule still declares exactly which facts it reads, and abstains when any of them is
-unknown. Rules that name follow-ups are what let the loop iterate without a model.
+unknown. **An incomplete population proves presence, never absence**
+([scope.md](scope.md#responses)): over a list cut by a cap, a page limit or an
+exclusion drop, a rule may fire on an instance it saw but is never disproved, and a
+count it prints is a lower bound ("at least 4 super admins"). Rules that name follow-ups are what let the loop iterate without a model.
 
 Fixed in both modes:
 

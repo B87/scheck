@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +18,10 @@ import (
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/engagement"
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	"github.com/b87/scheck/internal/target/fixture"
+	"github.com/b87/scheck/internal/version"
 )
 
 // hermetic gives a test its own home, config and state directories and
@@ -29,6 +35,22 @@ func hermetic(t *testing.T) string {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	t.Chdir(dir)
 	return filepath.Join(dir, "state", "scheck")
+}
+
+// Every gate a test of this package builds has a dialer and a resolver that
+// fail at once: no test reaches crt.sh, a website or a DNS server, whether
+// or not it calls hermetic (AGENTS.md, "Testing rules"). What a gate does
+// with an answer is the gate's own tests'.
+func init() {
+	offline := errors.New("no network in tests")
+	newGate = func(cfg gate.Config) (*gate.Gate, error) {
+		cfg.Net = &gate.Net{
+			Dial:       func(context.Context, string, string) (net.Conn, error) { return nil, offline },
+			Nameserver: netip.MustParseAddr("192.0.2.53"),
+			Exchange:   func(context.Context, string, []byte, bool) ([]byte, error) { return nil, offline },
+		}
+		return gate.New(cfg)
+	}
 }
 
 // collectFrom makes every host asset collect from fx, never a real host,
@@ -75,6 +97,18 @@ func runEngagement(t *testing.T, args ...string) (string, string, int) {
 		msg = err.Error()
 	}
 	return out.String(), msg, exitCodeOf(err)
+}
+
+// runEngagementStderr is runEngagement returning what it wrote to stderr.
+func runEngagementStderr(t *testing.T, args ...string) (string, string, int) {
+	t.Helper()
+	root := newRootCmd()
+	var out, stderr bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&stderr)
+	root.SetArgs(append([]string{"run"}, args...))
+	err := root.Execute()
+	return out.String(), stderr.String(), exitCodeOf(err)
 }
 
 const validEngagement = `schema: 1
@@ -132,6 +166,51 @@ func TestRunStopAfterIntakePrintsTheResolvedFile(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Errorf("intake contacted a host %d times", *calls)
+	}
+}
+
+// --stop-after scope prints each web asset's first-party evidence and every
+// exclude, an operator-written unit escaped, and contacts nothing.
+func TestRunStopAfterScopePrintsEvidenceAndExcludes(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots:
+  - domain: example.com
+  - url: https://app.example.net/
+  - host: deploy@203.0.113.5
+  - saas: google-workspace:example.com
+exclude:
+  - url: https://shop.example.com/checkout/
+  - {saas: google-workspace:example.com, org_unit: "/Bo\e[31mard"}
+people:
+  alice: {kind: employee, workspace: alice@example.com}
+assets:
+  blog:
+    domain: blog.example.com
+    first_party: {confirmed_by: alice, date: 2026-10-07, target: blog.example-hosting.net}
+`)
+	prev := runClock
+	runClock = func() time.Time { return time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { runClock = prev })
+	out, msg, code := runEngagement(t, path, "--stop-after", "scope")
+	if code != exitOK {
+		t.Fatalf("exit %d: %s", code, msg)
+	}
+	for _, want := range []string{"FIRST-PARTY EVIDENCE", "url root", "host root", "operator confirmed (alice, 2026-10-07)",
+		"exclude[0]  url:https://shop.example.com/checkout/  never contacted",
+		"exclude[1]  saas:google-workspace:example.com  organizational unit /Bo\\x1b[31mard and every unit under it"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Error("an escape sequence from the file was printed raw")
+	}
+	if *calls != 0 {
+		t.Errorf("%d hosts collected", *calls)
 	}
 }
 
@@ -501,5 +580,169 @@ func TestRunRefusesALegacyConfigFile(t *testing.T) {
 	}
 	if strings.Contains(msg, "acme-secret-codename") || strings.Contains(msg, "/srv/private") {
 		t.Errorf("a value was printed:\n%s", msg)
+	}
+}
+
+// A --host local run sends nothing to a third party and nothing over SSH:
+// the report's "What left this machine" says none, the one local run and
+// the model line (E4 test 23).
+func TestRunLocalEgress(t *testing.T) {
+	hermetic(t)
+	collectFrom(t, recorded(t, "ubuntu"))
+	out, _, _, _ := runCLI(t, "run", "--host", "local", "--no-persist")
+	i := strings.Index(out, "WHAT LEFT THIS MACHINE")
+	if i < 0 {
+		t.Fatalf("no egress block:\n%s", out)
+	}
+	block := out[i:]
+	block = block[:strings.Index(block, "\n\n")]
+	for _, want := range []string{"Third-party services:\n    none", "servers: this machine, read in place.",
+		"Nothing was sent to an AI model provider.", "Nothing was sent to the makers of scheck", "stored nowhere"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("egress lacks %q:\n%s", want, block)
+		}
+	}
+	if strings.Contains(block, "SSH session") || strings.Contains(block, "User-Agent") || strings.Contains(block, "identified itself") {
+		t.Errorf("egress claims a contact that never happened:\n%s", block)
+	}
+}
+
+// --no-persist with a root the gate would send for exits 3 before any
+// contact: no host reached, no gate built, no run directory; a --host run
+// keeps it (docs/spec/scope.md, "Audit"; E4 test 22).
+func TestNoPersistRefusesANetworkRoot(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	gates := 0
+	prev := newGate
+	newGate = func(cfg gate.Config) (*gate.Gate, error) { gates++; return prev(cfg) }
+	t.Cleanup(func() { newGate = prev })
+	for _, root := range []string{"domain: example.com", "url: https://www.example.com/", "network: 198.51.100.0/24",
+		"saas: github:example-org", "repo: github:example-org/shop", "asset"} {
+		path := filepath.Join(t.TempDir(), "engagement.yaml")
+		body := "schema: 1\nengagement: {name: acme, timezone: Europe/Madrid, trigger: routine}\nroots:\n  - " + root +
+			"\n  - host: deploy@203.0.113.5\n"
+		if root == "asset" {
+			// A url asset under a host root is sent for too.
+			body = "schema: 1\nengagement: {name: acme, timezone: Europe/Madrid, trigger: routine}\nroots:\n  - host: deploy@203.0.113.5\n" +
+				"assets:\n  site:\n    url: https://203.0.113.5/\n"
+		}
+		writeFile(t, path, body)
+		_, msg, code := runEngagement(t, path, "--no-persist")
+		if code != exitUsage || !strings.Contains(msg, "--no-persist cannot be used when scheck sends network requests") {
+			t.Errorf("%s: exit %d: %s", root, code, msg)
+		}
+	}
+	if *calls != 0 || gates != 0 {
+		t.Errorf("%d hosts reached, %d gates built", *calls, gates)
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Errorf("a refused run left the state directory: %v", err)
+	}
+	if _, _, msg, code := runCLI(t, "run", "--host", "deploy@203.0.113.5", "--no-persist"); code == exitUsage || *calls != 1 {
+		t.Errorf("--host with --no-persist: exit %d, %d hosts: %s", code, *calls, msg)
+	}
+}
+
+// `scheck run DIR` resumes the run in DIR: a host the first session
+// collected completely is kept, the report says it was resumed, and a flag
+// that would put the resume elsewhere is refused.
+func TestRunResumesARunDirectory(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	prevVersion := version.Version
+	version.Version = "v0.0.2"
+	t.Cleanup(func() { version.Version = prevVersion })
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	writeFile(t, path, validEngagement)
+	if _, msg, code := runEngagement(t, path); code == exitUsage || *calls != 1 {
+		t.Fatalf("first session: exit %d after %d collections: %s", code, *calls, msg)
+	}
+	dir := runDir(t, state, "acme")
+
+	for _, flags := range [][]string{{"--no-persist"}, {"--state-dir", t.TempDir()}, {"--host", "local"},
+		{"--write-engagement", filepath.Join(t.TempDir(), "e.yaml")}} {
+		if _, msg, code := runEngagement(t, append([]string{dir}, flags...)...); code != exitUsage || !strings.Contains(msg, "do not apply") {
+			t.Errorf("%v: exit %d: %s", flags, code, msg)
+		}
+	}
+	out, stderr, code := runEngagementStderr(t, dir, "--format", "json")
+	if code == exitUsage || *calls != 1 {
+		t.Fatalf("resume: exit %d after %d collections: %s", code, *calls, stderr)
+	}
+	// The safeguard against a run.json edited with its hashes: the file
+	// read, by the path it was read from, and its hash, every time.
+	sum := sha256.Sum256([]byte(validEngagement))
+	if want := "with " + path + " (sha256 " + hex.EncodeToString(sum[:]) + ")"; !strings.Contains(stderr, "resuming ") || !strings.Contains(stderr, want) {
+		t.Errorf("stderr does not say %q:\n%s", want, stderr)
+	}
+	var rep struct {
+		Run struct {
+			Resumed   bool    `json:"resumed"`
+			Directory *string `json:"directory"`
+		} `json:"run"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatal(err)
+	}
+	// The run directory as resolved: the path typed may pass through a link.
+	real, _ := filepath.EvalSymlinks(dir)
+	if !rep.Run.Resumed || rep.Run.Directory == nil || *rep.Run.Directory != real {
+		t.Errorf("run %+v", rep.Run)
+	}
+	if dirs, _ := filepath.Glob(filepath.Join(state, "engagements", "acme", "*")); len(dirs) != 1 {
+		t.Errorf("a resume made another run directory: %v", dirs)
+	}
+	// A file that no longer loads is still named by the path it was read
+	// from: a parse error names it as typed.
+	writeFile(t, path, "schema: 1\nnot an engagement\n")
+	if _, stderr, code := runEngagementStderr(t, dir); code != exitUsage || !strings.Contains(stderr, "with "+path+"\n") {
+		t.Errorf("exit %d, stderr:\n%s", code, stderr)
+	}
+}
+
+// An engagement file named --host, typed by a relative path, is a file run:
+// its resume reads that file from its absolute path, says so, and keeps the
+// host it collected.
+func TestRunResumesAFileNamedHost(t *testing.T) {
+	state := hermetic(t)
+	calls := collectFrom(t, recorded(t, "ubuntu"))
+	prevVersion := version.Version
+	version.Version = "v0.0.2"
+	t.Cleanup(func() { version.Version = prevVersion })
+	t.Chdir(t.TempDir())
+	writeFile(t, "--host", validEngagement)
+	command := func(out string) string {
+		t.Helper()
+		var rep struct {
+			Run struct {
+				Command string `json:"command"`
+			} `json:"run"`
+		}
+		if err := json.Unmarshal([]byte(out), &rep); err != nil {
+			t.Fatal(err)
+		}
+		return rep.Run.Command
+	}
+	out, msg, code := runEngagement(t, "--format", "json", "--", "--host")
+	if code == exitUsage || *calls != 1 {
+		t.Fatalf("first session: exit %d after %d collections: %s", code, *calls, msg)
+	}
+	// The command to run it again names the file, never the flag.
+	if got := command(out); got != "scheck run ./--host" {
+		t.Errorf("first session's command %q", got)
+	}
+	dir := runDir(t, state, "acme")
+	t.Chdir(t.TempDir())
+	out, stderr, code := runEngagementStderr(t, dir, "--format", "json")
+	if code == exitUsage || *calls != 1 {
+		t.Fatalf("resume: exit %d after %d collections: %s", code, *calls, stderr)
+	}
+	if !strings.Contains(stderr, string(filepath.Separator)+"--host (sha256 ") || strings.Contains(stderr, "the engagement --host built") {
+		t.Errorf("the resume did not read the file named --host:\n%s", stderr)
+	}
+	// From another directory, by the absolute path it was read from.
+	if got := command(out); !strings.HasPrefix(got, "scheck run /") || !strings.HasSuffix(got, string(filepath.Separator)+"--host") {
+		t.Errorf("the resume's command %q", got)
 	}
 }

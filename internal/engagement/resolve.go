@@ -58,6 +58,11 @@ type ResolvedAsset struct {
 	FirstParty *FirstParty `json:"first_party,omitempty" yaml:"first_party,omitempty"`
 	DeploysTo  string      `json:"deploys_to,omitempty" yaml:"deploys_to,omitempty"`
 	CI         string      `json:"ci,omitempty" yaml:"ci,omitempty"`
+
+	// ownThrottle is the throttle the assets entry itself sets, nil when it
+	// sets none: a SaaS asset takes only that, never the defaults
+	// (docs/spec/scope.md, "Throttle, timeouts and retries").
+	ownThrottle *Throttle
 }
 
 // Resolved is a validated engagement file with every locator canonical and
@@ -95,8 +100,12 @@ type Resolved struct {
 	Warnings []string `json:"-" yaml:"-"`
 
 	redactExtra []string
-	timeout     time.Duration
-	refs        map[string]Ref
+	// fromHost marks an engagement --host built in memory; a file that
+	// happens to be named --host is not one.
+	fromHost bool
+	timeout  time.Duration
+	refs     map[string]Ref
+	loc      *time.Location // engagement.timezone
 }
 
 // RedactExtra returns the operator's redaction patterns, for the runner's
@@ -121,7 +130,7 @@ func (r *Resolved) AssetID(ref string) (string, bool) {
 	}
 	id, ok := ParseID(ref)
 	if !ok || !slices.ContainsFunc(r.Roots, func(root Ref) bool { return Under(id, root) }) ||
-		slices.ContainsFunc(r.Exclude, func(x Ref) bool { return x.OrgUnit == "" && Under(id, x) }) {
+		slices.ContainsFunc(r.Exclude, func(x Ref) bool { return Excludes(x, id) }) {
 		return "", false
 	}
 	return id.ID, true
@@ -170,6 +179,7 @@ func (v *validator) resolve(assets map[string]Ref) *Resolved {
 		Authorization:  f.Authorization,
 		redactExtra:    slices.Clone(f.RedactExtra),
 		refs:           maps.Clone(v.refs),
+		loc:            v.loc,
 	}
 	maps.Copy(res.refs, assets)
 	switch t := f.Limits.Timeout; t {
@@ -254,15 +264,16 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 		r.User = root.User
 	}
 	out := ResolvedAsset{
-		Name:       name,
-		Ref:        r,
-		Root:       root.ID,
-		Probe:      or(a.Probe, d.Probe),
-		Scan:       or(a.Scan, d.Scan),
-		Throttle:   throttleOr(a.Throttle, d.Throttle),
-		FirstParty: a.FirstParty,
-		DeploysTo:  a.DeploysTo,
-		CI:         a.CI,
+		Name:        name,
+		Ref:         r,
+		Root:        root.ID,
+		Probe:       or(a.Probe, d.Probe),
+		Scan:        or(a.Scan, d.Scan),
+		Throttle:    throttleOr(a.Throttle, d.Throttle),
+		FirstParty:  a.FirstParty,
+		DeploysTo:   a.DeploysTo,
+		CI:          a.CI,
+		ownThrottle: a.Throttle,
 	}
 	if r.Kind == KindHost {
 		out.Jump = a.Jump

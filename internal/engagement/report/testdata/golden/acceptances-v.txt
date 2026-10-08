@@ -126,6 +126,18 @@ EXCLUDED, NARROWED AND NOT RUN
                         cannot accept one instance of a host finding, so it was ignored rather than
                         widened to all of them.
 
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
 NOTES FOR THE READOUT
   The acceptance of "Software updates are pending" on macos by alice (intent.accepted_risks[0]): it
     expires on 2026-10-19, in 12 days.

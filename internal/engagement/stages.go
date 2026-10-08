@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/user"
 	"slices"
 	"sort"
@@ -18,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/finding"
@@ -74,6 +74,15 @@ type RunOptions struct {
 	// Collect reaches a host asset; nil is hostasset.Collect. Tests replace
 	// it to collect from a fixture.
 	Collect func(context.Context, hostasset.Options) (*hostasset.Collection, error)
+	// NewGate builds the run's scope gate; nil is gate.New. Tests replace
+	// it to reach fake servers through the gate's own test seams.
+	NewGate func(gate.Config) (*gate.Gate, error)
+	// Resume is what the run directory's earlier sessions left; nil for a
+	// new run. Started is then the run's first start.
+	Resume *Prior
+	// Session is when this session started: the time scope, confirmations
+	// and accepted risks are read at. Zero is Started, or now on a resume.
+	Session time.Time
 }
 
 // Refusal is a run stopped for a reason the operator has to fix before any
@@ -95,14 +104,25 @@ type Header struct {
 	Source     Source    `json:"source"`
 }
 
-// ScopeDoc is scope.json: until 0.0.2 E4, the declared roots as written,
-// without discovery.
+// ScopeDoc is scope.json: the assets the run starts from, the first-party
+// evidence each web asset has, what discovery found under each domain root
+// and what is excluded (docs/spec/scope.md, "What is in scope",
+// "Discovery"). It is for the operator to read, and it says which names
+// Recon reads; the gate decides from the engagement file, never from this
+// document.
 type ScopeDoc struct {
 	Header
 	Discovery string       `json:"discovery"`
 	Roots     []Ref        `json:"roots"`
 	Exclude   []Ref        `json:"exclude"`
 	Assets    []ScopeAsset `json:"assets"`
+	// Resolver is the DNS resolver discovery asked; nil without a domain
+	// root.
+	Resolver *Resolver     `json:"resolver,omitempty"`
+	Domains  []ScopeDomain `json:"domains,omitempty"`
+	// PointsAt lists the services outside every root that names under a
+	// root point at.
+	PointsAt []PointsAt `json:"points_at,omitempty"`
 }
 
 // ScopeAsset is one asset in scope and the collector that will read it.
@@ -113,12 +133,72 @@ type ScopeAsset struct {
 	Root string `json:"root"`
 	// Collector is "host", or empty when no collector reads the kind yet.
 	Collector string `json:"collector,omitempty"`
+	// FirstParty is the evidence that a domain, url or host asset's server
+	// is the operator's, empty when there is none (docs/spec/scope.md,
+	// "First-party evidence"); it is not asked of other kinds.
+	FirstParty *Evidence `json:"first_party,omitempty"`
+}
+
+// Evidence is one kind of first-party evidence: a url, host or network
+// root (the file's own) or the operator's confirmation, printed as such.
+type Evidence struct {
+	// Kind is url_root, host_root, network_root or operator; expired,
+	// future or moved for a confirmation past its year, dated after the
+	// run, or whose name no longer points at its target, none of which is
+	// evidence.
+	Kind string `json:"kind"`
+	// Root is the root that is the evidence, for a root.
+	Root        string `json:"root,omitempty"`
+	ConfirmedBy string `json:"confirmed_by,omitempty"`
+	Date        string `json:"date,omitempty"`
+	Target      string `json:"target,omitempty"`
+}
+
+// counts reports whether the evidence is first-party evidence.
+func (e *Evidence) counts() bool {
+	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved"
+}
+
+// String is the evidence as the Scope stage prints it.
+func (e *Evidence) String() string {
+	switch {
+	case e == nil:
+		return "none"
+	case e.Kind == "operator":
+		return "operator confirmed (" + e.ConfirmedBy + ", " + e.Date + ")"
+	case e.Kind == "expired":
+		return "none: the confirmation of " + e.Date + " expired"
+	case e.Kind == "future":
+		return "none: the confirmation is dated " + e.Date + ", after this run"
+	case e.Kind == "moved":
+		return "none: confirmed for " + e.Target + ", which the name no longer points at"
+	case e.Kind == "network_root":
+		return "inside " + e.Root
+	}
+	return strings.ReplaceAll(e.Kind, "_", " ")
 }
 
 // ReconDoc is recon.json, the asset map.
 type ReconDoc struct {
 	Header
 	Assets []ReconAsset `json:"assets"`
+}
+
+// How far reaching a host got, in recon.json and the report.
+const (
+	ContactConnected = "connected"
+	ContactUnreached = "unreached"
+)
+
+// contact is a ReconAsset's Contact from a transport's progress.
+func contact(dialled, connected bool) string {
+	switch {
+	case connected:
+		return ContactConnected
+	case dialled:
+		return ContactUnreached
+	}
+	return ""
 }
 
 // ReconAsset is what Recon read from one asset.
@@ -136,6 +216,16 @@ type ReconAsset struct {
 	// Refusal names a refused asset's kind: host_key_unknown,
 	// host_key_changed, access or canary.
 	Refusal string `json:"refusal,omitempty"`
+	// Contact is how far reaching a host over SSH got: connected,
+	// unreached (a connection was attempted, directly or through its jump
+	// host, and none opened), or empty when none was attempted;
+	// JumpContact the same for its jump host. ResolvedHere are the names
+	// this machine resolved to reach it, its own or its jump host's;
+	// ResolvedByJump the name its jump host resolved.
+	Contact        string   `json:"contact,omitempty"`
+	JumpContact    string   `json:"jump_contact,omitempty"`
+	ResolvedHere   []string `json:"resolved_here,omitempty"`
+	ResolvedByJump string   `json:"resolved_by_jump,omitempty"`
 	// Host, Facts and Observations are the host collector's
 	// (docs/spec/host-collector.md §6.4), post-redaction.
 	Host         *report.Host                  `json:"host,omitempty"`
@@ -261,6 +351,25 @@ type run struct {
 	zone   *time.Location
 	recon  *ReconDoc
 	out    Outcome
+	// auditFile is the run directory's audit.jsonl, or io.Discard.
+	auditFile io.Writer
+	// gate is the run's scope gate, built when something sends through
+	// it.
+	gate *gate.Gate
+	// scoped is what the Scope stage found.
+	scoped *ScopeDoc
+	// session is when this session started.
+	session time.Time
+	// manifest is run.json, nil under --no-persist.
+	manifest *Manifest
+	// edited are the files an earlier session wrote that the resume used
+	// although they changed since.
+	edited []string
+	// graded is when each host's accepted risks were graded, by name.
+	graded map[string]time.Time
+	// kept names the hosts an earlier session collected, which this one
+	// did not contact.
+	kept map[string]bool
 }
 
 // Run runs the stages of a resolved engagement up to StopAfter, writing
@@ -292,10 +401,33 @@ func Run(ctx context.Context, res *Resolved, o RunOptions) (*Outcome, error) {
 		ctx, cancel = context.WithTimeout(ctx, t)
 		defer cancel()
 	}
-	if err := Preflight(res); err != nil {
+	if err := Preflight(res, o.Dir != nil || last < slices.Index(Stages, "scope")); err != nil {
 		return nil, err
 	}
-	r := &run{res: res, o: o, hosts: map[string]*hostasset.Collection{}, traces: map[string][]policy.AuditEntry{}, zone: time.UTC}
+	r := &run{res: res, o: o, hosts: map[string]*hostasset.Collection{}, traces: map[string][]policy.AuditEntry{}, zone: time.UTC,
+		auditFile: io.Discard, session: o.Session, graded: map[string]time.Time{}, kept: map[string]bool{}}
+	if r.session.IsZero() {
+		r.session = o.Started
+		if o.Resume != nil {
+			r.session = time.Now()
+		}
+	}
+	if o.Dir != nil {
+		if err := r.openManifest(); err != nil {
+			return nil, err
+		}
+		// What this session sent is recorded once it ends, however it
+		// ends, so a later session's report can count it.
+		defer r.closeSession()
+	}
+	if o.Dir != nil && last >= slices.Index(Stages, "scope") {
+		f, err := o.Dir.OpenAppend("audit.jsonl")
+		if err != nil {
+			return nil, fmt.Errorf("run directory: audit log: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		r.auditFile = f
+	}
 	if z, err := time.LoadLocation(res.Engagement.Timezone); err == nil {
 		r.zone = z
 	}
@@ -309,20 +441,32 @@ func Run(ctx context.Context, res *Resolved, o RunOptions) (*Outcome, error) {
 			return nil, err
 		}
 		r.out.Stage, r.out.Document = Stages[i], doc
+		if err := r.keepRequests(); err != nil {
+			return nil, err
+		}
 		o.Log("stage %s done", Stages[i])
 	}
 	return &r.out, nil
 }
 
+// write stores a stage's file and records its hash in run.json, so a resume
+// can tell the file was edited by hand.
 func (r *run) write(name string, doc any) error {
 	if r.o.Dir == nil {
 		return nil
 	}
-	var err error
-	if raw, ok := doc.([]byte); ok {
-		err = r.o.Dir.Write(name, raw)
-	} else {
-		err = r.o.Dir.WriteJSON(name, doc)
+	raw, ok := doc.([]byte)
+	if !ok {
+		b, err := json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			return fmt.Errorf("run directory: %s: %w", name, err)
+		}
+		raw = append(b, '\n')
+	}
+	err := r.o.Dir.Write(name, raw)
+	if err == nil {
+		r.manifest.Files[name] = sha(raw)
+		err = r.saveManifest()
 	}
 	if err != nil {
 		return fmt.Errorf("run directory: %s: %w", name, err)
@@ -331,8 +475,29 @@ func (r *run) write(name string, doc any) error {
 }
 
 // Preflight refuses, before any target is contacted or any run directory
-// created, a host asset this build cannot reach.
-func Preflight(res *Resolved) error {
+// created, a host asset this build cannot reach, and a run that would send
+// through the gate without keeping its audit log (persist is false under
+// --no-persist).
+func Preflight(res *Resolved, persist bool) error {
+	// The gate's audit log is the record of what was sent, and only a run
+	// directory keeps it: a root or asset the gate would send for is
+	// refused by its kind, whether or not its collector is built yet; a url
+	// asset may sit under a host root (docs/spec/scope.md, "Audit").
+	if !persist {
+		kinds := make([]Kind, 0, len(res.Roots)+len(res.Assets))
+		for _, root := range res.Roots {
+			kinds = append(kinds, root.Kind)
+		}
+		for _, a := range res.Assets {
+			kinds = append(kinds, a.Kind)
+		}
+		for _, k := range kinds {
+			if k != KindHost {
+				return refuse("--no-persist cannot be used when scheck sends network requests: the audit log is the " +
+					"record of what was sent. Use --state-dir to keep the run somewhere disposable.")
+			}
+		}
+	}
 	for _, a := range res.Assets {
 		if a.Kind != KindHost {
 			continue
@@ -410,21 +575,120 @@ func maskRedactExtra(raw []byte, res *Resolved) ([]byte, error) {
 	return out, nil
 }
 
-// scope resolves the roots as written (discovery arrives in 0.0.2 E4).
-func (r *run) scope(context.Context) (any, error) {
+// scope lists the declared roots and assets entries with their first-party
+// evidence, and expands each domain root by passive discovery through the
+// gate (docs/spec/scope.md, "Discovery"). It contacts no server of the
+// company's: only crt.sh and the DNS resolver.
+func (r *run) scope(ctx context.Context) (any, error) {
+	// A resume keeps Scope's document while what Scope read from the file
+	// is unchanged and it found no gap to close; the gate still decides
+	// every request from the file (docs/spec/engagement.md, "Stop and
+	// resume").
+	inputs := scopeInputs(r.res, r.o.Version, r.session)
+	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
+		r.o.Log("scope: kept from an earlier session")
+		r.used("scope.json")
+		r.scoped = p.Scope
+		return p.Scope, nil
+	}
+	if r.manifest != nil {
+		r.manifest.ScopeInputs = inputs
+	}
 	doc := &ScopeDoc{Header: r.header("scope"), Roots: r.res.Roots, Exclude: r.res.Exclude,
-		Discovery: "none: the roots as written; discovery arrives in 0.0.2 E4"}
+		Discovery: "none: no domain root"}
 	if doc.Exclude == nil {
 		doc.Exclude = []Ref{}
 	}
 	for _, a := range r.res.Assets {
-		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root}
+		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, FirstParty: r.res.firstParty(a, r.session)}
 		if a.Kind == KindHost {
 			sa.Collector = "host"
 		}
 		doc.Assets = append(doc.Assets, sa)
 	}
+	if slices.ContainsFunc(r.res.Roots, func(x Ref) bool { return x.Kind == KindDomain }) {
+		g, err := r.gateFor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		d := &discovery{res: r.res, g: g, at: r.session, log: r.o.Log}
+		doc.Domains, doc.Resolver, doc.PointsAt = d.run(ctx)
+		doc.Discovery = "certificate transparency (crt.sh) and DNS"
+	}
+	if err := redactEvidence(doc, r.res.RedactExtra()); err != nil {
+		return nil, err
+	}
+	r.scoped = doc
 	return doc, r.write("scope.json", doc)
+}
+
+// redactEvidence redacts each confirmation's target in scope.json as the
+// gate redacts the chain it is compared with: the gate compares the
+// target as written, and only the document is redacted (AGENTS.md rule 5).
+func redactEvidence(doc *ScopeDoc, extra []string) error {
+	red, err := policy.NewRedactor(extra)
+	if err != nil {
+		return err
+	}
+	redact := func(ev *Evidence) {
+		if ev != nil && ev.Target != "" {
+			ev.Target, _ = red.RedactString(ev.Target)
+		}
+	}
+	for i := range doc.Assets {
+		redact(doc.Assets[i].FirstParty)
+	}
+	for i := range doc.Domains {
+		for j := range doc.Domains[i].Names {
+			redact(doc.Domains[i].Names[j].FirstParty)
+		}
+	}
+	return nil
+}
+
+// defaultGate builds a run's gate when RunOptions.NewGate is nil; this
+// package's tests replace it with one that reaches nothing.
+var defaultGate = gate.New
+
+// gateFor builds the run's gate on first use: the engagement file's scope
+// measured at the run's start, its redact_extra, the run's audit log and
+// the deadline limits.timeout put on ctx (docs/spec/scope.md, "The scope
+// gate").
+func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
+	if r.gate != nil {
+		return r.gate, nil
+	}
+	reg, err := gate.NewRegistry(discoveryOps...)
+	if err != nil {
+		return nil, err
+	}
+	cfg := gate.Config{Registry: reg, Scope: r.res.GateScope(r.session), RedactExtra: r.res.RedactExtra(),
+		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1}
+	if p := r.o.Resume; p != nil {
+		cfg.Prior, cfg.Session = p.Requests, len(r.manifest.Sessions)
+	}
+	if d, ok := ctx.Deadline(); ok {
+		cfg.Deadline = d
+	}
+	if a := r.res.Authorization; a != nil {
+		// Validation parsed every window, so neither time is zero.
+		for _, w := range a.Windows {
+			from, _ := time.Parse(time.RFC3339, w.From)
+			to, _ := time.Parse(time.RFC3339, w.To)
+			cfg.Windows = append(cfg.Windows, gate.Window{From: from, To: to})
+		}
+	}
+	newGate := r.o.NewGate
+	if newGate == nil {
+		newGate = defaultGate
+	}
+	if r.gate, err = newGate(cfg); err != nil {
+		return nil, err
+	}
+	for _, n := range r.gate.Notes() {
+		r.o.Log("%s", n)
+	}
+	return r.gate, nil
 }
 
 // reconStage runs every declared read per asset: in this build, the host
@@ -432,19 +696,20 @@ func (r *run) scope(context.Context) (any, error) {
 // recorded as not collected and makes the run incomplete.
 func (r *run) reconStage(ctx context.Context) (any, error) {
 	doc := &ReconDoc{Header: r.header("recon")}
+	// What the session reached is on record as each host ends, so a stage
+	// error after one still counts its contact when the session closes.
+	r.recon = doc
 	// Every asset's commands go to audit.jsonl and are also kept per asset,
 	// so the report carries each asset's trace even under --no-persist
 	// (docs/spec/engagement.md, "Text and JSON").
-	auditFile := io.Discard
-	if r.o.Dir != nil {
-		f, err := os.OpenFile(r.o.Dir.File("audit.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-		if err != nil {
-			return nil, fmt.Errorf("run directory: audit log: %w", err)
-		}
-		defer func() { _ = f.Close() }()
-		auditFile = f
-	}
 	isRoot := func(a ResolvedAsset) bool { return a.Root == a.ID }
+	// A transport error quotes what the target or a resolver said (an
+	// address a name resolved to, a jump host's refusal): redacted before
+	// it is stored or printed (AGENTS.md rule 5).
+	red, err := policy.NewRedactor(r.res.RedactExtra())
+	if err != nil {
+		return nil, err
+	}
 	for _, a := range r.res.Assets {
 		ra := ReconAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root}
 		switch {
@@ -454,37 +719,51 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			if isRoot(a) {
 				r.incomplete(a, ra)
 			}
-		case ctx.Err() != nil:
-			ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
-			ra.Detail = "limits.timeout ended the engagement before this asset was read"
-			r.incomplete(a, ra)
 		default:
-			r.o.Log("recon: %s (%s)", a.Name, a.ID)
 			var trace bytes.Buffer
-			audit := policy.NewAudit(io.MultiWriter(&trace, auditFile))
-			c, err := r.o.Collect(ctx, r.hostOptions(a, audit))
+			audit := policy.NewAudit(io.MultiWriter(&trace, r.auditFile))
+			opts := r.hostOptions(a, audit)
+			inputs := hostInputs(opts, r.res.Exclude, r.o.Version)
+			if kept, ok := r.keptHost(a, inputs); ok {
+				ra = kept
+				break
+			}
+			if ctx.Err() != nil {
+				ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
+				ra.Detail = "limits.timeout ended the engagement before this asset was read"
+				r.incomplete(a, ra)
+				break
+			}
+			r.o.Log("recon: %s (%s)", a.Name, a.ID)
+			var reach hostasset.Reach
+			opts.Reach = &reach
+			c, err := r.o.Collect(ctx, opts)
 			r.traces[a.Name] = readTrace(&trace)
+			ra.ResolvedHere, ra.ResolvedByJump = reach.Resolved, reach.ByJump
+			ra.Contact, ra.JumpContact = contact(reach.Dialled, reach.Connected), contact(reach.JumpDialled, reach.JumpConnected)
 			if err != nil {
 				he, ok := errors.AsType[*hostasset.Error](err)
+				detail, _ := red.RedactString(err.Error())
 				switch {
 				case !ok:
+					doc.Assets = append(doc.Assets, ra)
 					return nil, err
 				case ctx.Err() != nil:
 					// limits.timeout ended the engagement while this host
 					// was reached: whatever the error says, the cause is
 					// the limit, never a refusal.
 					ra.Status, ra.Reason, ra.Detail = StatusNotCollected, ReasonLimitReached,
-						"limits.timeout ended the engagement while it was reached: "+err.Error()
+						"limits.timeout ended the engagement while it was reached: "+detail
 					r.incomplete(a, ra)
 				case he.Usage:
 					// Refused on the positive list: the host is not
 					// reached, the others still are, and the run exits 3
 					// with what it collected written.
-					ra.Status, ra.Reason, ra.Detail, ra.Echo, ra.Refusal = StatusRefused, ReasonRefused, err.Error(), he.Echo, he.Kind
+					ra.Status, ra.Reason, ra.Detail, ra.Echo, ra.Refusal = StatusRefused, ReasonRefused, detail, he.Echo, he.Kind
 					r.out.Refused = append(r.out.Refused, ereport.Shortfall{Asset: a.ID, AssetName: a.Name,
 						Reason: ReasonRefused, Detail: ra.Detail, Echo: ra.Echo, Kind: ra.Refusal})
 				default:
-					ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
+					ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, detail
 					r.incomplete(a, ra)
 				}
 				break
@@ -508,10 +787,14 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 				r.incomplete(a, ra)
 			}
 			ra.Host, ra.Facts, ra.Observations = &env.Host, env.Facts, env.Observations
+			r.graded[a.Name] = r.session
+			if err := r.recordHost(a, c, inputs, ra); err != nil {
+				doc.Assets = append(doc.Assets, ra)
+				return nil, err
+			}
 		}
 		doc.Assets = append(doc.Assets, ra)
 	}
-	r.recon = doc
 	return doc, r.write("recon.json", doc)
 }
 
@@ -561,11 +844,12 @@ func (r *run) hostOptions(a ResolvedAsset, audit *policy.Audit) hostasset.Option
 		Local: a.Local(), Host: a.Address(), Port: a.Port, User: a.User, Identity: a.Identity,
 		KnownHosts: a.KnownHosts, Elevate: a.Elevate, Profile: a.Profile,
 		DisableChecks: a.DisableChecks, DenyPaths: a.DenyPaths, RedactExtra: r.res.RedactExtra(),
-		Audit: audit, Version: r.o.Version, Now: r.o.Started, RecordFixtures: r.o.RecordFixtures,
+		Audit: audit, Version: r.o.Version, Now: r.session, RecordFixtures: r.o.RecordFixtures,
 		ContextSource: r.res.Source.Path + " assets." + a.Name,
 		Log:           func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
 	}
 	o.RunTimeout, _ = time.ParseDuration(a.Timeout) // validated; "" keeps the default
+	o.Allow = r.res.allowAddress
 	if j, ok := jumpOf(a); ok {
 		o.Jump = &j
 	}
@@ -633,9 +917,10 @@ func (r *run) check(context.Context) (any, error) {
 	return &CheckDoc{Header: r.header("check"), FollowUps: []string{}}, nil
 }
 
-// analyze runs each host asset's posture rules over its facts, writes the
-// host collector's envelope under evidence/ (docs/spec/engagement.md,
-// "Runs, state and configuration"), and builds the report from them.
+// analyze reads each host asset's posture rules over its facts, from the
+// host collector's envelope Recon wrote under evidence/
+// (docs/spec/engagement.md, "Runs, state and configuration"), and builds
+// the report from them.
 func (r *run) analyze(context.Context) (any, error) {
 	doc := &FindingsDoc{Header: r.header("analyze")}
 	evidence := map[string]string{}
@@ -646,13 +931,9 @@ func (r *run) analyze(context.Context) (any, error) {
 			aa.Threshold = string(c.Threshold())
 			aa.Assessments, aa.Findings = env.Assessments, env.Findings
 			if r.o.Dir != nil {
+				// Recon wrote it, or an earlier session did for a kept host.
 				aa.Evidence = "evidence/" + fileName(ra.Name) + ".json"
 				evidence[ra.Name] = aa.Evidence
-				path := r.o.Dir.File(aa.Evidence)
-				env.Run.Persisted = &path
-				if err := r.write(aa.Evidence, env); err != nil {
-					return nil, err
-				}
 			}
 		}
 		doc.Assets = append(doc.Assets, aa)
@@ -707,11 +988,21 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	res := r.res
 	in := ereport.Input{
 		Version: r.o.Version, Name: res.Engagement.Name, Operator: res.Engagement.Operator,
-		Trigger: res.Engagement.Trigger, Zone: r.zone, FromHost: res.Source.Path == hostSource,
+		Trigger: res.Engagement.Trigger, Zone: r.zone, FromHost: res.fromHost,
 		Path: res.Source.Path, SHA256: res.Source.SHA256, Started: r.o.Started, Finished: time.Now(),
 		NotUsed: res.NotUsed, People: len(res.People) > 0, RedactExtra: res.RedactPatterns,
 	}
-	in.Rerun = "scheck run " + res.Source.Path
+	// A resume names the file by the absolute path it read: the path the
+	// first session typed is relative to that session's directory. A path
+	// that starts with "-" would read as a flag.
+	file := res.Source.Path
+	if r.o.Resume != nil && r.manifest != nil && r.manifest.File != "" {
+		file = r.manifest.File
+	}
+	if strings.HasPrefix(file, "-") {
+		file = "./" + file
+	}
+	in.Rerun = "scheck run " + file
 	if in.FromHost {
 		// --host writes a trigger only so the file it builds validates; the
 		// operator declared none.
@@ -721,6 +1012,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	if r.o.Dir != nil {
 		in.Directory = r.o.Dir.Path
 	}
+	in.Resumed, in.EditedByHand = r.o.Resume != nil, slices.Clone(r.edited)
 	if a := res.Authorization; a != nil {
 		auth := &ereport.Authorization{By: a.By, Date: a.Date, Source: a.Source, Note: a.Note}
 		for _, w := range a.Windows {
@@ -734,12 +1026,13 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		asset, _ := r.asset(ra.Name)
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
 			Status: ra.Status, Reason: ra.Reason, Detail: ra.Detail, Echo: ra.Echo, Refusal: ra.Refusal,
-			Trace: r.traces[ra.Name]}
+			Contact: ra.Contact, JumpContact: ra.JumpContact, Trace: r.traces[ra.Name], Kept: r.kept[ra.Name]}
 		if j, ok := jumpOf(asset); ok {
 			ai.Via = j.String()
 		}
 		if c, ok := r.hosts[ra.Name]; ok {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
+			ai.Host.Graded = r.graded[ra.Name]
 		}
 		in.Assets = append(in.Assets, ai)
 	}
@@ -785,6 +1078,10 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	for _, x := range res.Exclude {
 		in.Excludes = append(in.Excludes, x.ID)
 	}
+	if r.scoped != nil && len(r.scoped.Domains) > 0 {
+		in.ExcludeMatches = r.excludeMatches()
+	}
+	in.Egress = r.egress()
 	handles := make([]string, 0, len(res.People))
 	for h, p := range res.People {
 		if p.Kind == "employee" && p.Left == "" {
@@ -796,6 +1093,102 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		in.Candidates = append(in.Candidates, ereport.Candidate{Handle: h, Why: "employee"})
 	}
 	return in
+}
+
+// excludeMatches counts, by exclude, the names discovery dropped for it:
+// from certificate transparency, and names it or whose chain it covered.
+func (r *run) excludeMatches() map[string]int {
+	out := map[string]int{}
+	for i, x := range r.res.Exclude {
+		entry := excludeEntry(i)
+		n := 0
+		for _, d := range r.scoped.Domains {
+			for _, dr := range d.Dropped {
+				if dr.Rule == entry {
+					n += dr.Count
+				}
+			}
+			for _, name := range d.Names {
+				if name.ExcludedBy == entry {
+					n++
+				}
+			}
+		}
+		out[x.ID] += n
+	}
+	return out
+}
+
+// egress is what left this machine through the gate and the host
+// collector (docs/spec/engagement.md, "What left this machine"), in this
+// session and every earlier one of the run, an earlier one that did not
+// end named as unrecorded.
+func (r *run) egress() *ereport.EgressInput {
+	e := r.sessionEgress()
+	// The report counts this session's contacts from the assets.
+	e.Contacts = nil
+	if r.manifest != nil {
+		for _, sess := range r.manifest.Sessions[:len(r.manifest.Sessions)-1] {
+			mergeEgress(e, sess.Egress)
+			if !sess.Ended {
+				e.Unrecorded = append(e.Unrecorded, sess.Started)
+			}
+		}
+	}
+	return e
+}
+
+// sessionEgress is what this session sent.
+func (r *run) sessionEgress() *ereport.EgressInput {
+	e := &ereport.EgressInput{UserAgent: gate.UserAgent(r.o.Version)}
+	if r.gate != nil {
+		uses, sites := r.gate.Egress()
+		for _, u := range uses {
+			e.Sources = append(e.Sources, ereport.SourceInput{Source: u.Source, Operator: u.Operator, Host: u.Host,
+				Sent: u.Subjects, Requests: u.Requests, Credentials: u.Credentials, RootControls: u.RootControls,
+				InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
+		}
+		byName := map[string]int{}
+		for _, st := range sites {
+			i, ok := byName[st.Name]
+			if !ok {
+				i = len(e.Sites)
+				byName[st.Name] = i
+				e.Sites = append(e.Sites, ereport.SiteInput{Name: st.Name})
+			}
+			e.Sites[i].Requests += st.Requests
+			e.Sites[i].FirstParty = e.Sites[i].FirstParty || st.FirstParty
+		}
+	}
+	// The names SSH resolved, as the transport recorded them: a host's
+	// own or its jump host's here, a host's behind a jump host there.
+	if r.recon != nil {
+		for _, ra := range r.recon.Assets {
+			if r.kept[ra.Name] {
+				// An earlier session reached it, and recorded so.
+				continue
+			}
+			if ra.Kind == KindHost {
+				hc := ereport.HostContact{ID: ra.ID, Status: ra.Status, Contact: ra.Contact, JumpContact: ra.JumpContact,
+					SideEffects: ereport.SideEffects(ra.Observations)}
+				if a, ok := r.asset(ra.Name); ok {
+					if j, ok := jumpOf(a); ok {
+						hc.Via = j.String()
+					}
+				}
+				e.Contacts = append(e.Contacts, hc)
+			}
+			e.SSHResolved = append(e.SSHResolved, ra.ResolvedHere...)
+			if ra.ResolvedByJump != "" {
+				e.SSHResolvedByJump = append(e.SSHResolvedByJump, ra.ResolvedByJump)
+			}
+		}
+	}
+	for _, l := range []*[]string{&e.SSHResolved, &e.SSHResolvedByJump} {
+		slices.Sort(*l)
+		*l = slices.Compact(*l)
+	}
+	return e
 }
 
 // hostLocator is the --host locator of a one-host engagement, as a rerun

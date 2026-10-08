@@ -34,6 +34,7 @@ type Report struct {
 	Acceptances   []Acceptance `json:"acceptances"`
 	Excluded      []Excluded   `json:"excluded"`
 	Redaction     Redaction    `json:"redaction"`
+	Egress        Egress       `json:"egress"`
 	Assets        []Asset      `json:"assets"`
 	Notes         []Note       `json:"notes"`
 }
@@ -109,8 +110,8 @@ type Shortfall struct {
 	// failed its trust check, so the JSON carries it and the text never
 	// prints it (docs/spec/engagement.md, "Incompleteness and refusals").
 	Echo string `json:"echo,omitempty"`
-	// Kind names a refusal: host_key_unknown, host_key_changed, access or
-	// canary.
+	// Kind names a refusal: host_key_unknown, host_key_changed, their
+	// jump_ forms, excluded, jump_excluded, access or canary.
 	Kind   string  `json:"kind,omitempty"`
 	Effect *Effect `json:"effect,omitempty"`
 }
@@ -479,7 +480,11 @@ type Asset struct {
 	// and what a cut collection never reached.
 	Checks   *Checks              `json:"checks,omitempty"`
 	Envelope *hostreport.Envelope `json:"envelope,omitempty"`
-	Trace    []Trace              `json:"trace"`
+	// Kept says a resume kept the host from the earlier session that
+	// collected it. Its captures were never stored, so --include-evidence
+	// adds none to its envelope rather than empty ones.
+	Kept  bool    `json:"kept,omitempty"`
+	Trace []Trace `json:"trace"`
 }
 
 // Trace is one command or request attempted on an asset.

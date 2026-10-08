@@ -555,6 +555,27 @@
       "reasons": []
     }
   ],
+  "egress": {
+    "assets": [
+      {
+        "kind": "hosts",
+        "sessions": 1
+      }
+    ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
   "engagement": {
     "authorization": null,
     "built_from": "file",
@@ -581,7 +602,7 @@
   },
   "excluded": [
     {
-      "detail": "not matched: no discovery in this version",
+      "detail": "not matched: nothing in this version discovers what it covers",
       "entry": "repo:github:example-org/old",
       "matched": null
     }

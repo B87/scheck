@@ -9,8 +9,8 @@ Handle with care: this report names people, accounts, internal hosts and service
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
 
-REFUSED: deploy was not contacted: the host key of its jump host ops@198.51.100.7:22 is not in your
-  known_hosts file. Confirm the fingerprint with whoever runs the jump host, then add it.
+REFUSED: deploy was not contacted: the host key of its jump host ops@bastion.example.com:22 is not
+  in your known_hosts file. Confirm the fingerprint with whoever runs the jump host, then add it.
 Findings are also open on macos; see Findings below.
 
 SUMMARY
@@ -36,7 +36,7 @@ unknown, not fine.
 COVERAGE
 Hosts                    checked in part: 1 of 2 hosts read
   macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, through
-    ops@198.51.100.7:22, 07:12-07:12
+    ops@bastion.example.com:22, 07:12-07:12
   checks 28: 22 ran, 6 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): 1 open finding (see Findings)
     Disk encryption          checked (FileVault): nothing found by these rules
@@ -138,6 +138,19 @@ NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    Your DNS resolver, asked through this machine's system resolver for the servers reached over SSH
+      that are written as names: bastion.example.com; not counted.
+  Your own systems:
+    servers: 1 SSH session; 1 jump host connected to.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
 
 FOR AUTOMATION
 Exit 3: deploy was not assessed: the host key of its jump host is not in your known_hosts file, so

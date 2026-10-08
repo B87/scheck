@@ -259,12 +259,49 @@ func (v *validator) rootsAndExcludes() {
 			if !slices.ContainsFunc(v.roots, func(root Ref) bool { return Under(r, root) }) {
 				v.fail(key, "%s falls under no root: a cloud project exclude needs its project or an organization root", r.ID)
 			}
+		case r.Kind == KindURL:
+			// A url exclude covers its site over both schemes and its path
+			// with or without the slash (Excludes), so it narrows a root
+			// when any of those forms falls under one.
+			if !slices.ContainsFunc(urlForms(r), func(f Ref) bool { return v.rootOf(f) != nil }) {
+				v.fail(key, "%s falls under no root, so it excludes nothing", r.ID)
+			}
 		default:
-			if v.rootOf(r) == nil {
+			// An exclude covering a root is refused below, by the root.
+			if v.rootOf(r) == nil && !slices.ContainsFunc(v.roots, func(root Ref) bool { return Excludes(r, root) }) {
 				v.fail(key, "%s falls under no root, so it excludes nothing", r.ID)
 			}
 		}
 	}
+	// Exclude always wins over roots (docs/spec/scope.md, "What is in
+	// scope"), so a root an exclude covers would never be read: Recon
+	// would otherwise collect it.
+	for i, root := range v.roots {
+		if j := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, root) }); j >= 0 {
+			v.fail(fmt.Sprintf("roots[%d]", i), "%s is excluded by %s: exclude always wins, so this root would never be read", root.ID, v.excludes[j].ID)
+		}
+	}
+}
+
+// urlForms are the forms of a url exclude Excludes treats alike: either
+// scheme, on its port as written or as read (http://x:443/ is read on
+// https://x/'s port), and its path with and without a trailing slash.
+func urlForms(x Ref) []Ref {
+	var out []Ref
+	for _, scheme := range []string{"https", "http"} {
+		read := x.urlPort()
+		if read == map[string]int{"https": 443, "http": 80}[scheme] {
+			read = 0
+		}
+		for _, port := range slices.Compact([]int{x.Port, read}) {
+			for _, p := range []string{x.path, strings.TrimSuffix(x.path, "/") + "/"} {
+				f := x
+				f.scheme, f.Port, f.path, f.ID = scheme, port, p, ""
+				out = append(out, f)
+			}
+		}
+	}
+	return out
 }
 
 // locator parses one locator entry, failing on the kind key's line.
@@ -276,11 +313,7 @@ func (v *validator) locator(key string, l Locator) (Ref, bool) {
 	}
 	r, err := parseLocator(kind, val)
 	if err != nil {
-		if na, ok := errors.AsType[notAvailable](err); ok {
-			v.unavailable(key+"."+string(kind), "%s", na.what)
-		} else {
-			v.fail(key+"."+string(kind), "%v", err)
-		}
+		v.fail(key+"."+string(kind), "%v", err)
 		return Ref{}, false
 	}
 	r.OrgUnit = l.OrgUnit
@@ -444,7 +477,7 @@ func (v *validator) assetsSection() map[string]Ref {
 		}
 		// exclude wins over an asset's own settings (docs/spec/scope.md),
 		// so settings for an excluded asset would never apply.
-		if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return x.OrgUnit == "" && Under(r, x) }); i >= 0 {
+		if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, r) }); i >= 0 {
 			v.fail(key+"."+string(r.Kind), "%s is excluded by %s: exclude always wins, so these settings would never apply", r.ID, v.excludes[i].ID)
 			continue
 		}
@@ -492,6 +525,11 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	}
 	if fp := a.FirstParty; fp != nil {
 		v.handle(key+".first_party.confirmed_by", fp.ConfirmedBy)
+		if v.required(key+".first_party.target", fp.Target) {
+			if _, ok := canonicalTarget(fp.Target); !ok {
+				v.fail(key+".first_party.target", "%q is neither the name the record points at nor its addresses, such as 198.51.100.7,198.51.100.8", fp.Target)
+			}
+		}
 		if v.required(key+".first_party.date", fp.Date) {
 			v.date(key+".first_party.date", fp.Date)
 		}
@@ -519,6 +557,15 @@ func (v *validator) hostSettings(key string, r Ref, a Asset) {
 			v.fail(key+".jump", "a jump host is reached over SSH; local is the machine running scheck")
 		} else if j.ID == r.ID {
 			v.fail(key+".jump", "names the host itself; a jump host is the machine you connect through to reach it")
+		} else if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, j) }); i >= 0 {
+			// Not an asset, but scheck authenticates there: an excluded
+			// address is never contacted (docs/spec/scope.md).
+			v.fail(key+".jump", "%s is excluded by %s, and a jump host is contacted: exclude always wins", j.ID, v.excludes[i].ID)
+		} else if i := slices.IndexFunc(v.excludes, func(x Ref) bool { _, ok := excludePrefix(x); return ok }); i >= 0 && !r.addr.IsValid() {
+			// The hop resolves the host's name, so scheck never sees the
+			// address it reaches and cannot hold it to the exclude.
+			v.fail(key+".jump", "%s is written as a name and reached through a jump host, which resolves it, so scheck cannot "+
+				"check its address against %s: write this host as its address (%s@<address>)", r.ID, v.excludes[i].ID, or(r.User, "user"))
 		}
 	}
 	if a.Identity != "" && local {
@@ -613,7 +660,7 @@ func (v *validator) acceptedAsset(key, ref string) {
 		v.fail(key, "%q is neither an assets name, a root as written under roots, nor the canonical id of an asset under a root", ref)
 		return
 	}
-	if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return x.OrgUnit == "" && Under(r, x) }); i >= 0 {
+	if i := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, r) }); i >= 0 {
 		v.fail(key, "%s is excluded by %s, so nothing on it is read or accepted", r.ID, v.excludes[i].ID)
 	}
 }
@@ -727,6 +774,8 @@ func (v *validator) intent() {
 					v.fail(key+".url", "%v", err)
 				} else if v.rootOf(r) == nil {
 					v.fail(key+".url", "%s falls under no root: an intent URL is an entry point, never scope of its own", r.ID)
+				} else if j := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, r) }); j >= 0 {
+					v.fail(key+".url", "%s is excluded by %s, so it is never read: exclude always wins", r.ID, v.excludes[j].ID)
 				}
 			}
 			if v.required(key+".audience", e.Audience) {

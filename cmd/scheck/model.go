@@ -53,7 +53,7 @@ func (o *globalOpts) providerConfig(m modelSelection) llm.Config {
 // validateProvider refuses an unknown or deferred adapter, and a missing
 // model where the adapter needs one.
 func validateProvider(m modelSelection) error {
-	info, _, ok := llm.Lookup(m.Provider)
+	info, ok := llm.Lookup(m.Provider)
 	if !ok {
 		return fmt.Errorf("provider %q is unknown; `scheck providers` lists the registered ones", m.Provider)
 	}

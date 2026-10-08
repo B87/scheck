@@ -142,6 +142,19 @@ EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
   Probes and scans      none exist in this version; nothing beyond reading was attempted.
 
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 2 SSH sessions.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored only on this machine, in
+    /state/engagements/example/2026-10-07T07:12:03Z; deleting that directory removes it.
+
 FACTS READ ON MACOS
 
 DOMAIN                   STATUS   CHECK                    READING

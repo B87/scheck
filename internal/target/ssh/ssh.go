@@ -12,10 +12,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	xssh "golang.org/x/crypto/ssh"
@@ -39,6 +42,32 @@ type Options struct {
 	// and the same credentials offered. Nothing runs on the hop; it only
 	// forwards one TCP connection (docs/ROADMAP.md, E1c).
 	Jump *Hop
+	// Allow, when set, is asked about every address the host's or the
+	// hop's name resolves to before any is dialled, and about the address
+	// actually dialled, each as the resolver or the socket gave it: Allow
+	// reads every form an address takes, IPv4-mapped included. An error
+	// refuses the connection as ErrExcluded (docs/spec/scope.md, "The
+	// scope gate"). A host behind a hop is
+	// resolved by the hop, so its address is never seen here.
+	Allow func(netip.Addr) error
+	// Progress, when set, is filled as Dial goes: what left this machine
+	// for the report, whether or not Dial succeeds.
+	Progress *Progress
+}
+
+// Progress is how far reaching a host got (docs/spec/engagement.md, "What
+// left this machine").
+type Progress struct {
+	// Resolved are the names this machine's resolver was asked for: the
+	// host's, or the jump host's, when written as a name.
+	Resolved []string
+	// Dialled says a connection to the host was attempted, directly or
+	// through the jump host's channel; Connected says one opened.
+	Dialled, Connected bool
+	// JumpDialled and JumpConnected are the same for the jump host. The
+	// host is dialled through it only once its session is open, which
+	// asks it to resolve the host's name.
+	JumpDialled, JumpConnected bool
 }
 
 // Hop is a jump host.
@@ -66,6 +95,10 @@ type Target struct {
 func Dial(ctx context.Context, opts Options) (*Target, error) {
 	if opts.MaxOutput <= 0 {
 		return nil, errors.New("ssh: MaxOutput must be > 0")
+	}
+	p := opts.Progress
+	if p == nil {
+		p = &Progress{}
 	}
 	if opts.Port == 0 {
 		opts.Port = 22
@@ -106,7 +139,7 @@ func Dial(ctx context.Context, opts Options) (*Target, error) {
 			port = 22
 		}
 		hopAddr := net.JoinHostPort(j.Host, strconv.Itoa(port))
-		hc, err := dialTCP(ctx, hopAddr, opts.Timeout, "jump host ")
+		hc, err := dialTCP(ctx, j.Host, hopAddr, opts.Timeout, "jump host ", opts.Allow, &p.JumpDialled, &p.JumpConnected, p)
 		if err != nil {
 			return nil, fmt.Errorf("%w (%w)", err, target.ErrJumpHost)
 		}
@@ -118,15 +151,17 @@ func Dial(ctx context.Context, opts Options) (*Target, error) {
 		// The hop answers the channel open, or not, within the same
 		// timeout as a handshake.
 		openCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
+		p.Dialled = true
 		conn, err = hop.DialContext(openCtx, "tcp", addr)
 		cancel()
 		if err != nil {
 			_ = hop.Close()
 			return nil, fmt.Errorf("ssh: jump host %s could not reach %s: %w (%w)", hopAddr, addr, err, target.ErrUnreachable)
 		}
+		p.Connected = true
 	} else {
 		var err error
-		if conn, err = dialTCP(ctx, addr, opts.Timeout, ""); err != nil {
+		if conn, err = dialTCP(ctx, opts.Host, addr, opts.Timeout, "", opts.Allow, &p.Dialled, &p.Connected, p); err != nil {
 			return nil, err
 		}
 	}
@@ -140,12 +175,64 @@ func Dial(ctx context.Context, opts Options) (*Target, error) {
 	return &Target{client: client, hop: hop, opts: opts, platform: target.Unknown}, nil
 }
 
-func dialTCP(ctx context.Context, addr string, timeout time.Duration, role string) (net.Conn, error) {
+// excluded is an address Allow refused.
+type excluded struct{ err error }
+
+func (e excluded) Error() string { return e.err.Error() }
+
+func dialTCP(ctx context.Context, host, addr string, timeout time.Duration, role string, allow func(netip.Addr) error,
+	dialled, connected *bool, p *Progress) (net.Conn, error) {
+	refuse := func(err error) error {
+		return fmt.Errorf("ssh: %s%s: %w (%w, %w)", role, host, err, target.ErrExcluded, target.ErrAccess)
+	}
+	if _, err := netip.ParseAddr(host); err != nil {
+		// Resolved here, by the lookup below or by the dial itself.
+		p.Resolved = append(p.Resolved, host)
+	}
 	d := net.Dialer{Timeout: timeout}
+	var reached atomic.Bool
+	if allow != nil {
+		// Every address the name resolves to, as the scope gate checks
+		// every address, then the one dialled, which may differ.
+		if _, err := netip.ParseAddr(host); err != nil {
+			addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+			if err != nil {
+				return nil, fmt.Errorf("ssh: dial %s%s: %w (%w)", role, addr, err, target.ErrUnreachable)
+			}
+			for _, a := range addrs {
+				if err := allow(a); err != nil {
+					return nil, refuse(err)
+				}
+			}
+		}
+		d.ControlContext = func(_ context.Context, _, address string, _ syscall.RawConn) error {
+			ap, err := netip.ParseAddrPort(address)
+			if err != nil {
+				return excluded{err}
+			}
+			if err := allow(ap.Addr()); err != nil {
+				return excluded{err}
+			}
+			// This address is connected to; one refused before it was
+			// not, and the dialer may still reach this one after it. A
+			// dual-stack dial calls this from two goroutines at once.
+			reached.Store(true)
+			return nil
+		}
+	} else {
+		reached.Store(true)
+	}
 	conn, err := d.DialContext(ctx, "tcp", addr)
+	if reached.Load() {
+		*dialled = true
+	}
 	if err != nil {
+		if ex, ok := errors.AsType[excluded](err); ok {
+			return nil, refuse(ex.err)
+		}
 		return nil, fmt.Errorf("ssh: dial %s%s: %w (%w)", role, addr, err, target.ErrUnreachable)
 	}
+	*connected = true
 	return conn, nil
 }
 

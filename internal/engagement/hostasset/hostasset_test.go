@@ -254,3 +254,22 @@ func TestErrorsAreClassified(t *testing.T) {
 		t.Fatalf("bad profile: %v, want a usage error", err)
 	}
 }
+
+// Reach says how far the transport got, whatever the collection came to:
+// SSH refused before any lookup leaves nothing resolved and nothing
+// dialled, so the report claims no contact; a fixture stands for a host
+// reached (docs/spec/engagement.md, "What left this machine").
+func TestReachIsWhatTheTransportDid(t *testing.T) {
+	var reach Reach
+	_, err := Collect(context.Background(), Options{Host: "srv.example.invalid", Port: 22, User: "deploy",
+		KnownHosts: filepath.Join(t.TempDir(), "absent"), Reach: &reach})
+	if err == nil || len(reach.Resolved) != 0 || reach.Dialled || reach.Connected {
+		t.Errorf("known_hosts unreadable: %v, reach %+v", err, reach)
+	}
+	if _, err := Collect(context.Background(), Options{Target: load(t, "ubuntu"), Profile: "baseline", Reach: &reach}); err != nil {
+		t.Fatal(err)
+	}
+	if !reach.Connected {
+		t.Errorf("fixture reach %+v", reach)
+	}
+}

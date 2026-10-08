@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -148,12 +149,16 @@ func TestJumpHostOnlyForwards(t *testing.T) {
 	identity, kh := world(t, hop, dst)
 	hh, hp := hostPort(t, hop.addr)
 	th, tp := hostPort(t, dst.addr)
+	var p Progress
 	st, err := Dial(context.Background(), Options{Host: th, Port: tp, User: "ops", Identity: identity, KnownHosts: kh,
-		MaxOutput: 1024, Jump: &Hop{Host: hh, Port: hp, User: "ops"}})
+		MaxOutput: 1024, Jump: &Hop{Host: hh, Port: hp, User: "ops"}, Progress: &p})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
+	if p.Resolved != nil || !reflect.DeepEqual(p, Progress{Dialled: true, Connected: true, JumpDialled: true, JumpConnected: true}) {
+		t.Errorf("progress %+v", p)
+	}
 	sess, err := st.client.NewSession()
 	if err != nil {
 		t.Fatalf("a session on the target through the hop: %v", err)
@@ -174,10 +179,15 @@ func TestUnknownJumpHostKeyRefusesBeforeTheTarget(t *testing.T) {
 	identity, kh := world(t, dst) // the hop's key is not known
 	hh, hp := hostPort(t, hop.addr)
 	th, tp := hostPort(t, dst.addr)
+	var p Progress
 	_, err := Dial(context.Background(), Options{Host: th, Port: tp, User: "ops", Identity: identity, KnownHosts: kh,
-		MaxOutput: 1024, Jump: &Hop{Host: hh, Port: hp, User: "ops"}})
+		MaxOutput: 1024, Jump: &Hop{Host: hh, Port: hp, User: "ops"}, Progress: &p})
 	if !errors.Is(err, target.ErrAccess) || !errors.Is(err, target.ErrHostKeyUnknown) || !errors.Is(err, target.ErrJumpHost) {
 		t.Fatalf("err %v, want an access refusal for an unknown host key", err)
+	}
+	// The jump host was reached; the host behind it was not tried.
+	if p.Resolved != nil || !reflect.DeepEqual(p, Progress{JumpDialled: true, JumpConnected: true}) {
+		t.Errorf("progress %+v", p)
 	}
 	time.Sleep(50 * time.Millisecond)
 	if n := dst.accepted.Load(); n != 0 {
@@ -196,9 +206,14 @@ func TestJumpHostThatCannotReachTheTarget(t *testing.T) {
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	_, closedPort := hostPort(t, ln.Addr().String())
 	_ = ln.Close()
+	var p Progress
 	_, err := Dial(context.Background(), Options{Host: "127.0.0.1", Port: closedPort, User: "ops", Identity: identity,
-		KnownHosts: kh, MaxOutput: 1024, Timeout: 2 * time.Second, Jump: &Hop{Host: hh, Port: hp, User: "ops"}})
+		KnownHosts: kh, MaxOutput: 1024, Timeout: 2 * time.Second, Jump: &Hop{Host: hh, Port: hp, User: "ops"}, Progress: &p})
 	if !errors.Is(err, target.ErrUnreachable) || errors.Is(err, target.ErrAccess) {
 		t.Fatalf("err %v, want unreachable", err)
+	}
+	// Tried through the jump host, which never got through.
+	if p.Resolved != nil || !reflect.DeepEqual(p, Progress{Dialled: true, JumpDialled: true, JumpConnected: true}) {
+		t.Errorf("progress %+v", p)
 	}
 }
