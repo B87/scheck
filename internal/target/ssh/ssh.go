@@ -112,9 +112,9 @@ func handshakeErr(err error, addr string, opts Options) error {
 	var keyErr *knownhosts.KeyError
 	switch {
 	case errors.As(err, &keyErr) && len(keyErr.Want) == 0:
-		return fmt.Errorf("ssh: %s is not in %s; verify its key out of band, then: ssh-keyscan -H %s >> %s (%w)", opts.Host, opts.KnownHosts, opts.Host, opts.KnownHosts, target.ErrAccess)
+		return fmt.Errorf("ssh: %s is not in %s; verify its key out of band, then: ssh-keyscan -H %s >> %s (%w, %w)", opts.Host, opts.KnownHosts, opts.Host, opts.KnownHosts, target.ErrAccess, target.ErrHostKeyUnknown)
 	case errors.As(err, &keyErr):
-		return fmt.Errorf("ssh: %s: the host key does not match %s: %w (%w)", addr, opts.KnownHosts, err, target.ErrAccess)
+		return fmt.Errorf("ssh: %s: the host key does not match %s: %w (%w, %w)", addr, opts.KnownHosts, err, target.ErrAccess, target.ErrHostKeyChanged)
 	case strings.Contains(err.Error(), "unable to authenticate"):
 		return fmt.Errorf("ssh: %s: %w (%w)", addr, err, target.ErrAccess)
 	}
@@ -165,7 +165,9 @@ func (t *Target) Verify(ctx context.Context, argv []string, want string) error {
 	t.mu.Unlock()
 	_ = t.Close()
 	if err != nil {
-		return fmt.Errorf("%w: %v", target.ErrCanary, err)
+		// A session lost while the canary ran is a transport failure, not
+		// a shell that altered output: both stay matchable.
+		return fmt.Errorf("%w: %w", target.ErrCanary, err)
 	}
 	// The echo is target output that no redactor has seen, so it is kept
 	// on the target for the caller to redact and is never in the error.

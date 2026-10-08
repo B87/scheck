@@ -7,11 +7,11 @@ repositories, hosts and websites, driven by context only the operator knows. Rea
 
 What exists today, released as v0.0.1, is the **host collector**: a read-only posture
 checker for one macOS or Linux host, local or over SSH. It becomes the collector for
-host assets in the engagement and its guarantees do not change. In 0.0.2, `scheck
-local`, `scheck ssh` and `scheck.yaml` fold into `scheck run` with an engagement file
-or `--host` (`docs/spec/engagement.md`, "One command, one file"); until the slice that
-replaces them lands, they behave as in v0.0.1. This file is the operating manual for a
-coding agent in this repository.
+host assets in the engagement and its guarantees do not change. In 0.0.2 `scheck run`
+is the one command, with an engagement file or `--host`; `scheck local` and `scheck ssh`
+are deprecated aliases of `scheck run --host`, removed in 0.0.3, and no configuration
+file is read (`docs/spec/engagement.md`, "One command, one file"). This file is the
+operating manual for a coding agent in this repository.
 
 ## Documents
 
@@ -24,15 +24,15 @@ coding agent in this repository.
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
 | `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
-| `docs/CONFIGURATION.md`, `docs/RELEASING.md` | Host configuration walkthrough (v0.0.1; removed in 0.0.2 E2); release runbook |
+| `docs/RELEASING.md` | Release runbook |
 
 Code comments cite specs as `docs/spec/<file>.md §N` for anything that exists because
 of a security decision. When implementation has to deviate from a spec, update that
 spec in the same commit; history is git history. Silent drift is a bug.
 
 **No model assesses a host in this build.** The live evaluation failed its frozen
-criteria (`docs/spec/host-collector.md §2.1`, `docs/eval/phase2-results.md`), so
-`scheck local` and `scheck ssh` collect facts and assess them with posture rules. The
+criteria (`docs/spec/host-collector.md §2.1`, `docs/eval/phase2-results.md`), so a
+host asset's facts are assessed with posture rules. The
 model path — `internal/agent`, its three tools, the `llm` adapters — is kept, tested
 offline and reachable only from the hidden `scheck eval`. Do not wire it into a run and
 do not delete it: 0.0.4 plans to reuse it for Plan and Analyze, and only a passing record
@@ -87,19 +87,19 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `local`, `ssh`, `run` (an engagement file or `--host`, through analyze until E2; `legacy.go` refuses a 0.0.1 config file), `catalog`, `explain`, `sudoers`; flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report; `legacy.go` refuses a 0.0.1 config file), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
 | `internal/policy` | path policy, redactor, budgets, JSONL audit log |
 | `internal/runner` | the one exec path (rule 3) |
 | `internal/baseline` | the host plan, run and fact sheet; the golden command traces in `testdata/golden` |
-| `internal/report` | the host report envelope, JSON renderer and text report (`text.go`, `text_layout.go`, `reasons.go`, `domains.go`); golden text and JSON reports in `testdata/golden`; `docs/report-schema.json` |
+| `internal/report` | the host report envelope and JSON renderer, embedded whole in the engagement report; the fact sheet the engagement report prints per host at `-v` (`text.go`, `text_layout.go`, `domains.go`); golden fact sheets and JSON reports in `testdata/golden`; `docs/report-schema.json` |
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
-| `internal/state` | run persistence under the state dir |
-| `internal/config` | yaml chain, validation, narrowing only |
-| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages through analyze and the locked run directory (E1b) |
-| `internal/engagement/hostasset` | the host collector as an asset: reach (local, SSH dial, canary, platform), the baseline through the runner, the posture rules graded through the asset's context; the canary code `scheck ssh` also uses |
+| `internal/state` | the state directory, under which run directories live |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2) |
+| `internal/engagement/report` | the engagement report (E2): built from what a run collected, never contacting a target; coverage marked from the rules that decided, findings keyed `{id, asset, subject}`, ranking, acceptances' outcomes, the exit code; `docs/engagement-report-schema.json` |
+| `internal/engagement/hostasset` | the host collector as an asset: reach (local, SSH dial, canary, platform), the baseline through the runner, the posture rules graded through the asset's context; fixture recording (`--record-fixtures`) |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `internal/operator` | operator context for the host collector: sources, schema, per-kind merge, budget, the `<operator_context>` block |
 | `internal/llm` | the provider contract, token accounting (`CheckFit`), the registry; `mock`, `openai` (the default adapter), `conformance`, `all` |
@@ -154,9 +154,11 @@ on report wording (E2 and later). It never reads code, and it does not judge sec
 the security-consultant does.
 
 For agents operating the CLI, use the `scheck` skill at
-[.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers collecting
-and interpreting host evidence, not implementation work on this repository. Prefer
-JSON, inspect `run.assessment` and coverage, and never treat exit 0 as a security verdict.
+[.agents/skills/scheck/SKILL.md](.agents/skills/scheck/SKILL.md). It covers running
+`scheck run` and interpreting the engagement report, not implementation work on this
+repository. Prefer JSON, read `refused`, `incomplete`, `exit` and `coverage` before the
+findings, and never treat exit 0 as a security verdict. Update it in the same commit as
+any change to the report, the exit codes or the command surface.
 
 ## Commands
 
@@ -165,26 +167,22 @@ make check      # vet + go fix + golangci-lint + go test -race ./...   (must be 
 make build      # bin/scheck
 make integ      # integration tests; needs Docker or Podman running
 make fixtures   # re-record testdata/fixtures/{ubuntu,fedora} from the containers
-go run ./cmd/scheck local --stop-after plan
 go run ./cmd/scheck run engagement.yaml --stop-after intake   # validate, print resolved; contacts nothing
-go run ./cmd/scheck run --host local --no-persist              # one-host engagement through analyze; findings summary
-go run ./cmd/scheck run --host user@host --identity ~/.ssh/k --format json   # findings.json; run directory under the state dir
+go run ./cmd/scheck run --host local --no-persist              # one-host engagement; the engagement report
+go run ./cmd/scheck run --host user@host --identity ~/.ssh/k --format json   # report.json; run directory under the state dir
 go run ./cmd/scheck run --host local --write-engagement e.yaml # write the --host engagement as a file; contacts nothing
-go run ./cmd/scheck local --stop-after facts --format json --audit-log /tmp/audit.jsonl
-go run ./cmd/scheck ssh user@host --stop-after facts
+go run ./cmd/scheck run --host local -v --no-persist        # the report and the host's fact sheet
 go run ./cmd/scheck catalog --profile hardened
 go run ./cmd/scheck explain sshd.config --format json
-go run ./cmd/scheck local --stop-after facts --format json --include-evidence --no-persist
+go run ./cmd/scheck run --host local --format json --include-evidence --no-persist   # with the captures
 go run ./cmd/scheck sudoers --platform macos
-go run ./cmd/scheck config show --format json
-go run ./cmd/scheck local --context hosts/gateway.yaml --stop-after context
 go run ./cmd/scheck explain sshd.password_auth_enabled --exposure internet
-go run ./cmd/scheck local                         # facts + posture rules; no model, no key, free
 go run ./cmd/scheck eval --provider mock          # the harness on the mock; no claim
 go run ./cmd/scheck eval --provider mock --arms rules,bounded --no-pairs   # the bounded arm, scripted
 make live                                        # opt-in live tests; spends money
 make probe                                       # the Jev recall probe; needs TYPESAFE_API_KEY, spends cents
-go test ./internal/report -update    # rewrite the golden text and JSON reports, then read the diff
+go test ./internal/engagement/report -update   # rewrite the golden engagement reports, then read the diff
+go test ./internal/report -update    # rewrite the golden fact sheets and host JSON reports, then read the diff
 go test ./internal/baseline -update  # rewrite the golden command traces, then read the diff
 ```
 
@@ -224,7 +222,9 @@ rules"). Both must declare exactly what they read and abstain when it is unknown
 
 1. Add or reuse a `finding.Def` in `internal/finding/catalog.go`: a rule finding has no
    model to write its text, so title, category, base severity, impact and remediation
-   are all required.
+   are all required. So are `Area`, the engagement report's risk area, and `Exposure`,
+   whether "exposed on purpose" may move it (`docs/spec/engagement.md`, "Severity in
+   context"); place a new base severity against that section's anchors.
 2. Add the `Rule` in `internal/finding/rule.go`. Pick the predicate that matches the
    check's parser and fill in what makes the evidence *recognizable* (`Requires`,
    `Known`, `Recognize`) — without it the predicate cannot abstain, and an answer scheck
@@ -243,7 +243,8 @@ If a rule seems to need a new command, add a catalog check first.
 - Anything that needs a real shell, sshd or sudo goes in `test/integ` behind the
   `integration` build tag and runs in `test/containers`.
 - A seeded secret in any fixture must be asserted absent from report, audit log and
-  persisted run, and its marker asserted present. See `internal/state/redaction_test.go`.
+  persisted run, and its marker asserted present. See `internal/report/redaction_test.go`
+  and `TestRunSeededSecretNeverReachesTheRunDirectory` in `cmd/scheck`.
 - Run `go test` with `set -o pipefail` if you pipe it; a piped `grep` hides failures.
 - `--sudo` cannot be exercised non-interactively on a workstation where sudo prompts.
   Use `sudo -v` first, or install the `scheck sudoers` fragment, or rely on the Ubuntu
@@ -265,13 +266,15 @@ If a rule seems to need a new command, add a catalog check first.
   compatibility shims or migrations for them.
 - Rules require recognized evidence; unknown is not safe or unsafe. Preserve coverage
   in JSON and text, and test partial evidence.
-- The host text report is a contract (`docs/spec/host-collector.md §6.6`) pinned by the
-  golden files. Regenerate with `go test ./internal/report -update` and read the diff as
-  a review item. Two more goldens sit beside it (`docs/spec/host-collector.md §9`): the
-  JSON report, validated against `docs/report-schema.json` as committed, and the command
-  trace in `internal/baseline`, which is the run's audit log — argv, decision and output
-  hash per attempted check, in order. A diff there means what reaches the target
-  changed; explain it or fix it, never regenerate past it.
+- The engagement report is a contract (`docs/spec/engagement.md`, "The report") pinned by
+  its text and JSON goldens in `internal/engagement/report/testdata/golden`, the JSON
+  validated against `docs/engagement-report-schema.json`. Regenerate with `go test
+  ./internal/engagement/report -update` and read the diff as a review item. Beside the
+  host collector (`docs/spec/host-collector.md §9`): the fact sheet the report prints per
+  host at `-v`, the host JSON report validated against `docs/report-schema.json`, and the
+  command trace in `internal/baseline`, which is the run's audit log — argv, decision
+  and output hash per attempted check, in order. A diff there means what reaches the
+  target changed; explain it or fix it, never regenerate past it.
 - In every report: a status word describes execution, never posture; target-derived
   text is control-character escaped before it is printed; and terminal decisions
   (width, tty, `NO_COLOR`) stay in `cmd/scheck`, never in `internal/report`.
@@ -338,9 +341,9 @@ claim of any kind.
 ## Not in the current build
 
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
-`allow_egress: false`, the `anthropic` and `ollama` providers, and
+the `anthropic` and `ollama` providers, and
 `--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
-engagement's report stage (`scheck run` stops after analyze, with `findings.json`), resume,
+engagement's resume,
 `--jump` and `jump:`, `scheck init`, the network collectors, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.

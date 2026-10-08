@@ -42,11 +42,11 @@ func newProvidersCmd(opts *globalOpts) *cobra.Command {
 				return err
 			}
 			defer closeOutput()
-			cfg, err := opts.loadConfig(cmd)
+			sel, err := opts.modelSelection()
 			if err != nil {
 				return err
 			}
-			rows := providerRows(opts.providerConfig(cfg))
+			rows := providerRows(opts.providerConfig(sel))
 			if opts.Format == "json" {
 				enc := json.NewEncoder(w)
 				enc.SetIndent("", "  ")

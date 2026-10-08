@@ -25,7 +25,6 @@ import (
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/bounded"
 	"github.com/b87/scheck/internal/check"
-	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/llm/mock"
@@ -414,7 +413,7 @@ func (o Options) run(ctx context.Context, c Case, arm Arm, repeat int, contextFl
 	}
 	var merged *operator.Merged
 	if len(flags) > 0 {
-		merged, err = operator.Load(operator.Options{Flags: flags, Budget: b.ContextBytes, KnownFinding: config.KnownFinding})
+		merged, err = operator.Load(operator.Options{Flags: flags, Budget: b.ContextBytes, KnownFinding: finding.Known})
 		if err != nil {
 			return run, fmt.Errorf("eval case %s: %w", c.Name, err)
 		}

@@ -498,11 +498,13 @@ func TestRuledOutVerdict(t *testing.T) {
 	if env.Run.Agent == nil || len(env.Run.Agent.RuledOut) != 1 {
 		t.Fatalf("envelope: %+v", env.Run.Agent)
 	}
-	var text bytes.Buffer
-	if err := report.WriteText(&text, env, report.Options{}); err != nil {
+	// The ruled-out id travels in the JSON beside the agent's run, never
+	// as a finding (docs/spec/model.md §8).
+	var js bytes.Buffer
+	if err := report.WriteJSON(&js, env); err != nil {
 		t.Fatal(err)
 	}
-	if s := text.String(); !strings.Contains(s, "ruled out by the model (1, nothing filed)") || !strings.Contains(s, "fw.no_firewall_active: sshd is the only listener") {
-		t.Fatalf("text report:\n%s", s)
+	if s := js.String(); !strings.Contains(s, `"ruled_out"`) || !strings.Contains(s, "sshd is the only listener") {
+		t.Fatalf("JSON report:\n%s", s)
 	}
 }

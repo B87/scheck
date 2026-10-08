@@ -10,9 +10,15 @@ import (
 // because a posture rule must produce a complete finding with no model in the
 // loop.
 type Def struct {
-	ID           string
-	Title        string
-	Category     string // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs | disk | time
+	ID       string
+	Title    string
+	Category string   // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs | disk | time
+	Area     Area     // required: the engagement report's coverage and ranking read it
+	Exposure Exposure // required: whether "exposed on purpose" may move it
+	// Judges is what the rule decides, as a short phrase ("password login"):
+	// the report says what a "checked" area rests on. Required on every
+	// definition a posture rule produces.
+	Judges       string
 	BaseSeverity Severity
 	Impact       string
 	Remediation  Remediation
@@ -22,6 +28,43 @@ type Def struct {
 	// stand on a fact the rule read and found the other way.
 	Premise []string
 }
+
+// Area is a risk area of the engagement report's coverage table, keyed as
+// the engagement file's not_used keys (docs/spec/engagement.md, "The
+// report", "Coverage").
+type Area string
+
+// The ten risk areas, in the coverage table's order.
+const (
+	AreaIdentity Area = "identity"
+	AreaSecrets  Area = "secrets"
+	AreaCloud    Area = "cloud"
+	AreaData     Area = "data"
+	AreaCICD     Area = "cicd"
+	AreaExternal Area = "external"
+	AreaWeb      Area = "web"
+	AreaHosts    Area = "hosts"
+	AreaEmail    Area = "email"
+	AreaLogging  Area = "logging"
+)
+
+// Areas lists the risk areas in the coverage table's order.
+var Areas = []Area{AreaIdentity, AreaSecrets, AreaCloud, AreaData, AreaCICD, AreaExternal, AreaWeb, AreaHosts, AreaEmail, AreaLogging}
+
+// Exposure says whether a finding is an exposure finding, the only kind
+// "exposed on purpose" may lower: one whose whole claim is that a URL or
+// service answers or names its software (docs/spec/engagement.md, "Severity
+// in context"). The zero value is undeclared, which ValidateRules rejects.
+type Exposure uint8
+
+const (
+	exposureUndeclared Exposure = iota
+	// NotExposure is a finding about what is configured, granted or
+	// contained, which no declaration of intent moves.
+	NotExposure
+	// IsExposure is a finding whose whole claim is that something answers.
+	IsExposure
+)
 
 // Finding ids. They are the join key for accepted risks, dedupe and
 // cross-run diffing, so they are constants, never composed strings.
@@ -71,7 +114,7 @@ func IDs() []string {
 var defs = map[string]Def{
 	IDFileVaultOff: {
 		ID: IDFileVaultOff, Title: "FileVault disk encryption is off",
-		Category: "disk", BaseSeverity: SevHigh,
+		Category: "disk", Area: AreaHosts, Exposure: NotExposure, Judges: "FileVault", BaseSeverity: SevHigh,
 		Impact: "The internal disk is not encrypted at rest, so its contents can be read by anyone " +
 			"who gains physical possession of the machine or its disk.",
 		Remediation: Remediation{
@@ -82,7 +125,7 @@ var defs = map[string]Def{
 	},
 	IDSIPDisabled: {
 		ID: IDSIPDisabled, Title: "System Integrity Protection is disabled",
-		Category: "integrity", BaseSeverity: SevHigh,
+		Category: "integrity", Area: AreaHosts, Exposure: NotExposure, Judges: "System Integrity Protection", BaseSeverity: SevHigh,
 		Impact: "Root-level processes can modify system files and load unsigned kernel extensions, " +
 			"so other protections on this machine can be turned off without leaving a trace.",
 		Remediation: Remediation{
@@ -93,7 +136,7 @@ var defs = map[string]Def{
 	},
 	IDGatekeeperDisabled: {
 		ID: IDGatekeeperDisabled, Title: "Gatekeeper assessment is disabled",
-		Category: "integrity", BaseSeverity: SevMedium,
+		Category: "integrity", Area: AreaHosts, Exposure: NotExposure, Judges: "Gatekeeper", BaseSeverity: SevMedium,
 		Impact: "Applications run without any check on their signature or notarisation, so a downloaded " +
 			"binary of unknown origin executes exactly like a trusted one.",
 		Remediation: Remediation{
@@ -104,18 +147,18 @@ var defs = map[string]Def{
 	},
 	IDAppFirewallDisabled: {
 		ID: IDAppFirewallDisabled, Title: "The macOS application firewall is disabled",
-		Category: "network", BaseSeverity: SevMedium,
+		Category: "network", Area: AreaHosts, Exposure: NotExposure, Judges: "the application firewall", BaseSeverity: SevMedium,
 		Impact: "Every listening service on this machine accepts inbound connections without a " +
 			"per-application decision, so a background agent that opens a port is reachable by default.",
 		Remediation: Remediation{
-			Summary:  "Turn the application firewall on.",
+			Summary:  "Turn the application firewall on in System Settings > Network > Firewall, or from the command line.",
 			Commands: []string{"sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"},
 			Caveat:   "This is a per-application filter, not a packet filter; it does not replace a network firewall.",
 		},
 	},
 	IDRemoteLoginEnabled: {
 		ID: IDRemoteLoginEnabled, Title: "Remote Login (SSH) is enabled",
-		Category: "remote-access", BaseSeverity: SevInfo,
+		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "Remote Login", BaseSeverity: SevInfo,
 		Impact: "The machine accepts SSH sessions. Whether that is correct depends on the machine's role, " +
 			"so this is reported for confirmation rather than as a defect.",
 		Remediation: Remediation{
@@ -126,7 +169,7 @@ var defs = map[string]Def{
 	},
 	IDNTPDisabled: {
 		ID: IDNTPDisabled, Title: "Network time synchronisation is off",
-		Category: "time", BaseSeverity: SevLow,
+		Category: "time", Area: AreaHosts, Exposure: NotExposure, Judges: "network time", BaseSeverity: SevLow,
 		Impact: "An unsynchronised clock breaks certificate validity checks and makes this host's log " +
 			"timestamps unusable for correlating an incident with other machines.",
 		Remediation: Remediation{
@@ -136,7 +179,7 @@ var defs = map[string]Def{
 	},
 	IDPasswordAuthEnabled: {
 		ID: IDPasswordAuthEnabled, Title: "sshd accepts password authentication",
-		Category: "remote-access", BaseSeverity: SevMedium,
+		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "password login", BaseSeverity: SevMedium,
 		Impact: "Anyone who can reach this sshd can guess passwords online against every account that has " +
 			"a usable one, at whatever rate the server allows.",
 		Remediation: Remediation{
@@ -152,7 +195,7 @@ var defs = map[string]Def{
 	},
 	IDRootLoginEnabled: {
 		ID: IDRootLoginEnabled, Title: "sshd permits direct root login",
-		Category: "remote-access", BaseSeverity: SevHigh,
+		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "direct root login", BaseSeverity: SevHigh,
 		Impact: "root can authenticate over the network directly, so a single credential is enough for full " +
 			"control and there is no record of which operator escalated.",
 		Remediation: Remediation{
@@ -166,7 +209,7 @@ var defs = map[string]Def{
 	},
 	IDEmptyPassword: {
 		ID: IDEmptyPassword, Title: "A local account has no password set",
-		Category: "accounts", BaseSeverity: SevCritical,
+		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "accounts with no password", BaseSeverity: SevCritical,
 		Impact: "The account authenticates with no credential wherever password authentication is accepted. " +
 			"Whether that includes remote logins depends on this host's PAM and sshd configuration.",
 		Remediation: Remediation{
@@ -182,7 +225,7 @@ var defs = map[string]Def{
 	},
 	IDShadowPermissions: {
 		ID: IDShadowPermissions, Title: "/etc/shadow has an unexpected mode",
-		Category: "accounts", BaseSeverity: SevHigh,
+		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "the mode of /etc/shadow", BaseSeverity: SevHigh,
 		Impact: "The hashed-password file is expected to be readable only by root (mode 0, 600, or 640 with " +
 			"group shadow). A different mode is a deviation worth explaining; it is not by itself evidence " +
 			"that an unauthorized user has read the file.",
@@ -197,7 +240,7 @@ var defs = map[string]Def{
 	},
 	IDSELinuxDisabled: {
 		ID: IDSELinuxDisabled, Title: "SELinux is disabled",
-		Category: "integrity", BaseSeverity: SevMedium,
+		Category: "integrity", Area: AreaHosts, Exposure: NotExposure, Judges: "the SELinux mode", BaseSeverity: SevMedium,
 		Impact: "The mandatory access control layer that confines services is not loaded, so a compromised " +
 			"service is limited only by discretionary file permissions.",
 		Remediation: Remediation{
@@ -212,7 +255,7 @@ var defs = map[string]Def{
 	},
 	IDAuditdInactive: {
 		ID: IDAuditdInactive, Title: "auditd is not running",
-		Category: "logging", BaseSeverity: SevLow,
+		Category: "logging", Area: AreaHosts, Exposure: NotExposure, Judges: "whether auditd runs", BaseSeverity: SevLow,
 		Impact: "Kernel audit events are not being collected, so the host keeps no local record of the " +
 			"syscalls and file accesses an audit policy would have captured.",
 		Remediation: Remediation{
@@ -223,7 +266,7 @@ var defs = map[string]Def{
 	},
 	IDNTPUnsynced: {
 		ID: IDNTPUnsynced, Title: "The system clock is not synchronised",
-		Category: "time", BaseSeverity: SevLow,
+		Category: "time", Area: AreaHosts, Exposure: NotExposure, Judges: "clock synchronisation", BaseSeverity: SevLow,
 		Impact: "An unsynchronised clock breaks certificate validity checks and makes this host's log " +
 			"timestamps unusable for correlating an incident with other machines.",
 		Remediation: Remediation{
@@ -233,7 +276,7 @@ var defs = map[string]Def{
 	},
 	IDUpdatesPending: {
 		ID: IDUpdatesPending, Title: "Software updates are pending",
-		Category: "updates", BaseSeverity: SevLow,
+		Category: "updates", Area: AreaHosts, Exposure: NotExposure, Judges: "pending updates", BaseSeverity: SevLow,
 		Impact: "Published fixes, including security fixes, are available but not installed. How serious " +
 			"that is depends on which packages are behind.",
 		Remediation: Remediation{
@@ -244,7 +287,7 @@ var defs = map[string]Def{
 	},
 	IDWorldWritablePresent: {
 		ID: IDWorldWritablePresent, Title: "World-writable paths without the sticky bit",
-		Category: "fs", BaseSeverity: SevMedium,
+		Category: "fs", Area: AreaHosts, Exposure: NotExposure, Judges: "world-writable paths, depth-capped", BaseSeverity: SevMedium,
 		Impact: "Any local user can replace the contents of these paths. If a privileged process reads, " +
 			"sources or executes one of them, that is a local privilege escalation path.",
 		Remediation: Remediation{
@@ -265,7 +308,7 @@ func init() {
 var judgementDefs = map[string]Def{
 	IDExpectedMissing: {
 		ID: IDExpectedMissing, Title: "A declared service is not listening",
-		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Category: CategoryNetwork, Area: AreaHosts, Exposure: NotExposure, Judges: "declared services listening", BaseSeverity: SevMedium,
 		Impact: "Operator context declares a service on this port, but nothing is listening on it. Either " +
 			"the service is down, the context is stale, or the host is not the one the context describes.",
 		Remediation: Remediation{
@@ -275,7 +318,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDAcceptanceExpired: {
 		ID: IDAcceptanceExpired, Title: "An accepted-risk entry has expired",
-		Category: CategoryGovernance, BaseSeverity: SevLow,
+		Category: CategoryGovernance, Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevLow,
 		Impact: "The acceptance no longer suppresses the finding it names, and the operator's record of " +
 			"why the risk was tolerable is out of date.",
 		Remediation: Remediation{
@@ -285,7 +328,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDUnexpectedListener: {
 		ID: IDUnexpectedListener, Title: "A service is listening that the context does not explain",
-		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Category: CategoryNetwork, Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevMedium,
 		Impact: "A listener with no declared purpose is reachable from wherever this host's network " +
 			"allows, and nobody has said it should be.",
 		Remediation: Remediation{
@@ -295,7 +338,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDNoFirewallActive: {
 		ID: IDNoFirewallActive, Title: "No host firewall is active",
-		Category: CategoryNetwork, BaseSeverity: SevMedium,
+		Category: CategoryNetwork, Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevMedium,
 		Impact: "Every listening service is reachable from any network the host is attached to; there is " +
 			"no host-level filter between a service and the network.",
 		Remediation: Remediation{
@@ -307,7 +350,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDSudoNopasswdBroad: {
 		ID: IDSudoNopasswdBroad, Title: "A broad NOPASSWD sudo rule is in effect",
-		Category: "privesc", BaseSeverity: SevHigh,
+		Category: "privesc", Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevHigh,
 		Impact: "An account, or every member of a group, can become root without re-authenticating, so " +
 			"any compromise of that account is a compromise of the host.",
 		Remediation: Remediation{
@@ -317,7 +360,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDUnexpectedSUID: {
 		ID: IDUnexpectedSUID, Title: "An unexpected SUID binary is present",
-		Category: "fs", BaseSeverity: SevMedium,
+		Category: "fs", Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevMedium,
 		Impact: "The binary runs with its owner's privileges for any local user; a flaw in it, or a " +
 			"writable path to it, is a local privilege escalation.",
 		Remediation: Remediation{
@@ -327,7 +370,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDUnexpectedPersist: {
 		ID: IDUnexpectedPersist, Title: "An unexplained persistence entry is enabled",
-		Category: "persistence", BaseSeverity: SevMedium,
+		Category: "persistence", Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevMedium,
 		Impact: "Something runs at boot or on a schedule that the host's stated role does not account " +
 			"for; persistence is where an intruder or a forgotten tool survives a reboot.",
 		Remediation: Remediation{
@@ -338,7 +381,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDUnexpectedAdmin: {
 		ID: IDUnexpectedAdmin, Title: "An account has administrative rights the context does not explain",
-		Category: "accounts", BaseSeverity: SevMedium,
+		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevMedium,
 		Impact: "The account can escalate to root; if it is a service account, a leftover, or unknown to " +
 			"the operator, that is an unmanaged path to full control.",
 		Remediation: Remediation{
@@ -347,7 +390,7 @@ var judgementDefs = map[string]Def{
 	},
 	IDPasswordAuthExposed: {
 		ID: IDPasswordAuthExposed, Title: "sshd accepts passwords on a listener reachable beyond the host",
-		Category: CategoryRemoteAccess, BaseSeverity: SevHigh, Premise: []string{IDPasswordAuthEnabled},
+		Category: CategoryRemoteAccess, Area: AreaHosts, Exposure: NotExposure, BaseSeverity: SevHigh, Premise: []string{IDPasswordAuthEnabled},
 		Impact: "Password authentication is enabled and sshd listens on a non-loopback address, so online " +
 			"password guessing is possible from wherever the listener is reachable.",
 		Remediation: Remediation{
@@ -357,6 +400,13 @@ var judgementDefs = map[string]Def{
 			Caveat: "Confirm a working key-based login first.",
 		},
 	},
+}
+
+// Known reports whether id is a catalog finding id: what an accepted risk
+// may name besides a custom: one.
+func Known(id string) bool {
+	_, ok := defs[id]
+	return ok
 }
 
 // Lookup returns the definition for a finding id.

@@ -1,0 +1,199 @@
+scheck engagement report: host-ubuntu
+Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        not declared (one-host check)
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: ubuntu (checked only in part: ubuntu, 4 of 13 host areas judged). See Coverage for what was
+not checked.
+
+SUMMARY
+Checked in part  Hosts (ubuntu, 4 of 13 areas judged).
+Not requested    A one-host check reads this host only. Your accounts, code, cloud, domains and
+                 email were not looked at.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 33 checks gave no
+  answer). Below: 0 low, 0 informational, 0 accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings named under
+Coverage; 6 have no rule in this version and 3 had no usable evidence. Nothing but this host was
+looked at. Anything not checked is unknown, not fine.
+
+COVERAGE
+Hosts                    checked in part
+  ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
+  checks 33: 22 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+    Software updates         checked (pending updates): nothing found by these rules
+    Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
+                             devices; not read: disk.crypttab)
+    System integrity         not checked: the tool that would tell is not installed on the host, so
+                             scheck could not tell (this is not a finding) (mac.sestatus: exit 127:
+                             bash: line 1: sestatus: command not found)
+    Firewall                 not judged: this version of scheck has no rule for it (not read:
+                             fw.firewalld, fw.nft, fw.ufw)
+    Network exposure         not judged: this version of scheck has no rule for it (read: 2
+                             listening sockets)
+    SSH server               checked (password login, direct root login): nothing found by these
+                             rules
+    Remote access            not judged: this version of scheck has no rule for it (read: 2 service
+                             states: disabled, not-found)
+    Accounts                 checked (accounts with no password, the mode of /etc/shadow): nothing
+                             found by these rules; also read, not judged: 22 accounts, 4 with a
+                             login shell
+    Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
+                             lines; 33 sudoers.d lines)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
+                             entries; 13 units, all enabled; not read: persist.timers)
+    Filesystem               checked (world-writable paths, depth-capped): nothing found by these
+                             rules; also read, not judged: 9 SUID files
+    Logging and audit        not checked: the command that reads it did not give a usable answer
+                             (exit_error) (log.auditd: exit 1: System has not been booted with
+                             systemd as init system (PID 1). Can't operate.); also read, not judged:
+                             Archived and active journals take up 0B in the file system.
+    Time synchronisation     not checked: the command that reads it did not give a usable answer
+                             (exit_error) (time.timedatectl: exit 1: System has not been booted with
+                             systemd as init system (PID 1). Can't operate.)
+Not requested            A one-host check reads this host only. Your accounts, code, cloud, domains
+                         and email were not looked at.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 0 open, 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  On ubuntu, 5 checks did not give a usable answer: disk.crypttab, fw.ufw, log.auditd,
+    persist.timers, time.timedatectl. `scheck explain <check-id>` prints each command; run it by
+    hand to see why.
+  On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding):
+    fw.firewalld, fw.nft, mac.aa_status, mac.sestatus, pkg.dnf_check_update, pkg.zypper_lp. Nothing
+    to do unless you expected it installed.
+  On ubuntu, this version of scheck has no rule for disk encryption, firewall, network exposure,
+    remote access, privilege escalation, startup and persistence. What was read is in the JSON
+    report (--format json) for a person to look at.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+FACTS READ ON UBUNTU
+
+DOMAIN                   STATUS   CHECK                   READING
+Host identity            ran      host.hostname           21859b827686
+                                                          Hostname
+Host identity            ran      host.machine_id         ef671600129d4fc6813a00cba94421a5
+                                                          Stable machine identifier (hashed into
+                                                          host.id)
+Operating system         ran      os.release              13 settings
+                                                          Distribution identification
+Software updates         ran      pkg.apt_upgradable      0 updates available
+                                                          Packages with pending upgrades (apt)
+Software updates         skipped  pkg.dnf_check_update    exit 127: bash: line 1: dnf: command not
+                                                          found
+                                                          Packages with pending upgrades (dnf; exit
+                                                          100 means updates exist)
+Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
+                                                          not found
+                                                          Pending patches (zypper)
+Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
+                                                          or directory
+                                                          Configured encrypted volumes
+Disk encryption          ran      disk.lsblk              20 block devices
+                                                          Block devices, filesystems and crypt
+                                                          layers
+System integrity         skipped  mac.aa_status           not found: aa-status
+                                                          AppArmor profiles and enforcement
+System integrity         skipped  mac.sestatus            exit 127: bash: line 1: sestatus: command
+                                                          not found
+                                                          SELinux status
+Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
+                                                          command not found
+                                                          firewalld state
+Firewall                 skipped  fw.nft                  not found: nft
+                                                          nftables ruleset
+Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem running iptables:
+                                                          iptables v1.8.10 (nf_tables): Could not
+                                                          fetch rule set generation id: Permission
+                                                          denied (you must be root) [elevated]
+                                                          ufw status and rules
+Network exposure         ran      net.listeners           2 listening sockets
+                                                          Listening TCP/UDP sockets with owning
+                                                          process
+SSH server               ran      sshd.config             91 settings [elevated]
+                                                          Effective sshd configuration
+Remote access            ran      remote.sshd_enabled     2 service states: disabled, not-found
+                                                          Whether the ssh service is enabled at boot
+                                                          (one state per unit name, in order)
+Accounts                 ran      accounts.passwd         22 accounts, 4 with a login shell
+                                                          Local accounts, shells and home
+                                                          directories
+Accounts                 ran      accounts.passwd_status  22 accounts, all locked [elevated]
+                                                          Password status per account (NP = no
+                                                          password, L = locked)
+Accounts                 ran      accounts.shadow_meta    mode 640, owner root:shadow
+                                                          Permissions of /etc/shadow (metadata only,
+                                                          never contents)
+Privilege escalation     ran      privesc.sudoers         41 sudoers lines [elevated]
+                                                          sudoers policy
+Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated]
+                                                          sudoers.d drop-ins (file:line, non-empty
+                                                          lines)
+Startup and persistence  ran      persist.cron            25 cron entries
+                                                          System crontab and cron.d entries
+                                                          (file:line, non-empty lines)
+Startup and persistence  skipped  persist.timers          exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          systemd timers
+Startup and persistence  ran      persist.units           13 units, all enabled
+                                                          Enabled systemd unit files
+Filesystem               ran      fs.suid                 9 SUID files
+                                                          SUID binaries under system and local
+                                                          prefixes (depth-capped)
+Filesystem               ran      fs.world_writable       0 world-writable paths
+                                                          World-writable files and directories
+                                                          without the sticky bit (depth-capped)
+Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          Whether auditd is active
+Logging and audit        ran      log.journal_usage       Archived and active journals take up 0B in
+                                                          the file system.
+                                                          Journal disk usage
+Time synchronisation     skipped  time.timedatectl        exit 1: System has not been booted with
+                                                          systemd as init system (PID 1). Can't
+                                                          operate.
+                                                          Clock, timezone and NTP synchronisation
+                                                          state
+Session and shell        ran      sys.platform            Linux
+                                                          Kernel name (uname -s), used for platform
+                                                          detection
+Session and shell        ran      sys.shell               /bin/bash
+                                                          Login shell of the audit session
+Session and shell        ran      sys.uid                 1001
+                                                          Effective uid of the audit session
+Session and shell        ran      sys.uname               Linux 21859b827686 7.0.12-linuxkit #1 SMP
+                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
+                                                          aarch64 aarch64 aarch64 GNU/Linux
+                                                          Full kernel identification
+
+FOR AUTOMATION
+Exit 0: no open finding at or above threshold among the 6 rules that could decide. That is not a
+clean result: 3 rules had no usable evidence, and 9 areas were not checked.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

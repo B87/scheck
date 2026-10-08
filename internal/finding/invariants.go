@@ -29,6 +29,9 @@ const (
 	RuleDefSeverity    = "finding-def-unknown-severity"
 	RuleDefCategory    = "finding-def-unknown-category"
 	RuleDefPremise     = "finding-def-premise-not-rule-covered"
+	RuleDefArea        = "finding-def-unknown-area"
+	RuleDefExposure    = "finding-def-exposure-undeclared"
+	RuleDefJudges      = "finding-def-judges-missing"
 )
 
 // Categories a Def may carry (docs/spec/host-collector.md §6.1), plus the two the grader
@@ -69,6 +72,18 @@ func ValidateRules() []Violation {
 		if d.Title == "" || d.Impact == "" || d.Category == "" || d.Remediation.Summary == "" {
 			out = append(out, Violation{d.ID, RuleDefIncomplete,
 				"a rule finding has no model to write its text, so title, category, impact and remediation are required"})
+		}
+		if !slices.Contains(Areas, d.Area) {
+			out = append(out, Violation{d.ID, RuleDefArea,
+				fmt.Sprintf("area %q: the engagement report's coverage and ranking need one of the ten risk areas", d.Area)})
+		}
+		if d.Exposure != NotExposure && d.Exposure != IsExposure {
+			out = append(out, Violation{d.ID, RuleDefExposure,
+				"declare whether \"exposed on purpose\" may move it (docs/spec/engagement.md, \"Severity in context\")"})
+		}
+		if d.Judges == "" && len(rulesFor(d.ID)) > 0 {
+			out = append(out, Violation{d.ID, RuleDefJudges,
+				"a posture rule produces it, so the report needs what it judges to say what a \"checked\" area rests on"})
 		}
 		if d.BaseSeverity.Rank() < 0 {
 			out = append(out, Violation{d.ID, RuleDefSeverity, fmt.Sprintf("severity %q", d.BaseSeverity)})

@@ -34,3 +34,10 @@ func incompleteErr(format string, args ...any) error {
 func findingsErr(format string, args ...any) error {
 	return &exitError{Code: exitFindings, Err: fmt.Errorf(format, args...)}
 }
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return noun
+	}
+	return noun + "s"
+}

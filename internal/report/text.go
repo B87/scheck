@@ -10,21 +10,16 @@ import (
 	"github.com/b87/scheck/internal/finding"
 )
 
-// WriteText renders the report a person reads (docs/spec/host-collector.md §6.6): a two-line
-// header, the facts grouped by domain with an explicit execution status, the
-// checks that did not run grouped by reason with a remedy, and a footer that
-// says what this build did not assess.
-func WriteText(w io.Writer, env Envelope, opt Options) error {
+// WriteFactSheet renders a host's fact sheet (docs/spec/host-collector.md
+// §6.6): one row per check with its domain, an execution status that never
+// reads as a verdict, and its one-line reading; -v adds each check's
+// description and -vv its redacted output. The engagement report prints it
+// per host at -v; it is no longer a report of its own (0.0.2 E2).
+func WriteFactSheet(w io.Writer, env Envelope, opt Options) error {
 	t := &textReport{env: env, opt: opt.normalize()}
 	t.st = style{on: t.opt.Color}
 	t.platform = check.Platform(env.Host.Platform)
-	t.header()
-	t.findings()
-	t.coverage()
-	t.modelSummary()
 	t.facts()
-	t.notRun()
-	t.footer()
 	_, err := io.WriteString(w, t.b.String())
 	return err
 }
@@ -41,96 +36,6 @@ type textReport struct {
 func (t *textReport) line(s string) {
 	t.b.WriteString(strings.TrimRight(s, " "))
 	t.b.WriteByte('\n')
-}
-
-// para wraps s to the report width under a fixed indent.
-func (t *textReport) para(indent, s string) {
-	t.hang(indent, indent, s)
-}
-
-// hang wraps s under a first-line prefix, aligning continuations past it.
-// The prefix counts against the first line's width, so nothing overruns.
-func (t *textReport) hang(first, indent, s string) {
-	for _, l := range wrapHanging(first, indent, s, t.opt.Width) {
-		t.line(l)
-	}
-}
-
-// header is the two lines of docs/spec/host-collector.md §6.6: who was audited and how, then
-// what the run did. host.id, kernel, profile, mode and timings move to -v.
-func (t *textReport) header() {
-	h, r := t.env.Host, t.env.Run
-	host := h.Hostname
-	if host == "" {
-		host = "unknown host"
-	}
-	// The OS string already names the platform ("Ubuntu 24.04", "macOS
-	// 26.6"), so the bare platform is printed only when it does not.
-	osName := h.OS
-	if osName == "" {
-		osName = "unidentified " + h.Platform
-	}
-	transport := h.Transport
-	if transport == "" {
-		transport = "unknown transport"
-	}
-	first := fmt.Sprintf("scheck %s — %s — %s — %s, elevation %s",
-		r.Version, host, osName, transport, h.Elevation)
-	// Styling is applied to whole lines only, after wrapping: an escape
-	// sequence must never count against a line's width.
-	for _, l := range wrap(inline(first), t.opt.Width) {
-		t.line(t.st.bold(l))
-	}
-
-	ran, skipped, denied := t.counts()
-	parts := []string{fmt.Sprintf("%d ran", ran)}
-	if skipped > 0 {
-		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
-	}
-	if denied > 0 {
-		parts = append(parts, fmt.Sprintf("%d denied by policy", denied))
-	}
-	result := []string{t.findingsLine()}
-	if n := len(t.env.NotAssessed()); n > 0 {
-		result = append(result, fmt.Sprintf("%d %s not assessed", n, plural(n, "rule")))
-	}
-	result = append(result, fmt.Sprintf("%d checks: %s", len(t.env.Facts), strings.Join(parts, ", ")))
-	t.para("", strings.Join(result, ", "))
-
-	if t.opt.Verbose >= 1 {
-		detail := []string{
-			"host.id " + short(h.ID),
-			"kernel " + orNone(h.Kernel),
-			"profile " + r.Profile,
-			"mode " + r.Mode,
-			"status " + r.Status,
-			fmt.Sprintf("%dms", r.DurationMS),
-		}
-		if h.Transport == "ssh" {
-			detail = append(detail, "remote shell "+orNone(h.RemoteShell), "canary "+h.Canary)
-		}
-		t.para("", inline(strings.Join(detail, " · ")))
-		if r.Persisted != nil {
-			t.para("", "persisted "+inline(*r.Persisted))
-		}
-	}
-	for _, msg := range r.Warnings {
-		t.hang("warning: ", "         ", sanitize(msg))
-	}
-}
-
-func (t *textReport) counts() (ran, skipped, denied int) {
-	for _, f := range t.env.Facts {
-		switch f.Status {
-		case "ok":
-			ran++
-		case "denied":
-			denied++
-		default:
-			skipped++
-		}
-	}
-	return
 }
 
 // row is one check's line in the fact sheet.
@@ -293,123 +198,6 @@ func (t *textReport) output(r row) {
 	}
 }
 
-// notRun explains every check that produced no fact. Skipped checks are
-// grouped by why, each group with the remedy; policy denials are their own
-// section because nothing on the host needs changing for them
-// (docs/spec/host-collector.md §6.6).
-func (t *textReport) notRun() {
-	var skipped, denied []row
-	for _, r := range t.rows() {
-		switch r.fact.Status {
-		case "ok":
-		case "denied":
-			denied = append(denied, r)
-		default:
-			skipped = append(skipped, r)
-		}
-	}
-	t.section("Skipped", "these checks produced no usable fact; some executed but failed", skipped)
-	t.section("Denied by policy", "scheck refused to run these; the target was never asked", denied)
-}
-
-func (t *textReport) section(title, note string, rows []row) {
-	if len(rows) == 0 {
-		return
-	}
-	t.line("")
-	t.line(t.st.bold(fmt.Sprintf("%s (%d)", title, len(rows))))
-	t.para("  ", note)
-	for _, g := range groupByReason(rows) {
-		t.para("  ", fmt.Sprintf("%d %s", len(g.rows), g.title))
-		if g.detailed {
-			idw := 0
-			for _, r := range g.rows {
-				idw = max(idw, min(len([]rune(r.id)), maxCheckWidth))
-			}
-			for _, r := range g.rows {
-				t.hang("    "+pad(clip(r.id, idw), idw)+sp, strings.Repeat(" ", 4+idw+gutter),
-					sanitize(reasonDetail(r.fact.Reason)))
-			}
-		} else {
-			ids := make([]string, 0, len(g.rows))
-			for _, r := range g.rows {
-				ids = append(ids, r.id)
-			}
-			t.para("    ", strings.Join(ids, ", "))
-		}
-		if g.remedy != "" {
-			t.hang("    remedy: ", "            ", g.remedy)
-		}
-	}
-}
-
-// modelSummary prints the model's closing text after the findings. It is
-// model output: escaped like target output, labelled as the model's, never
-// a verdict of scheck's.
-func (t *textReport) modelSummary() {
-	a := t.env.Run.Agent
-	if a == nil || (strings.TrimSpace(a.Text) == "" && len(a.RuledOut) == 0) {
-		return
-	}
-	t.line("")
-	t.line(t.st.bold("Model summary"))
-	t.para("  ", "the model's own closing words; findings above carry the code-assigned severity")
-	for para := range strings.SplitSeq(strings.TrimSpace(a.Text), "\n") {
-		if strings.TrimSpace(para) == "" {
-			continue
-		}
-		t.para("  ", sanitize(para))
-	}
-	if len(a.RuledOut) == 0 {
-		return
-	}
-	// Ruled-out ids are the model's negative claims: shown, never graded,
-	// never a finding (docs/spec/model.md §8).
-	t.line("")
-	t.para("  ", fmt.Sprintf("ruled out by the model (%d, nothing filed):", len(a.RuledOut)))
-	for _, r := range a.RuledOut {
-		t.hang("    - ", "      ", sanitize(r.ID+": "+r.Note))
-	}
-}
-
-// footer never claims an absence of problems: it says what assessed the
-// host and what did not (docs/spec/host-collector.md §6.6).
-func (t *textReport) footer() {
-	t.line("")
-	r := t.env.Run
-	var scope string
-	if r.Agent == nil {
-		scope = "assessment: posture rules only. "
-	} else {
-		provider, model := orNone(deref(r.Provider)), orNone(deref(r.Model))
-		scope = fmt.Sprintf("assessment: posture rules and the %s pass (%s, %s; %d %s, %d model-initiated %s, %d/%d tokens in/out). ",
-			r.Mode, provider, model, r.Agent.Iterations, plural(r.Agent.Iterations, "turn"), r.Agent.Checks, plural(r.Agent.Checks, "check"),
-			r.Usage.Input, r.Usage.Output)
-	}
-	if n := len(t.env.Assessments); n == 0 {
-		scope += "No posture rule applied to this host. "
-	} else {
-		scope += fmt.Sprintf("%d of %d rules had the evidence to decide. ", n-len(t.env.NotAssessed()), n)
-	}
-	tail := "Every other line reports what a command observed, not whether the host is " +
-		"configured safely: a rule reads one fact and says nothing about what no rule covers. "
-	if r.Agent == nil {
-		tail += "The agentic pass did not run."
-	} else if r.Agent.Ended != "model stopped" {
-		tail += "The " + r.Mode + " pass did not finish: " + sanitize(r.Agent.Ended) + "."
-	} else {
-		tail += "Model findings carry code-assigned severity and evidence validated against check output."
-	}
-	t.para("", scope+tail)
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 // severitiesFor lists the severities of the findings whose evidence includes
 // this check, most serious first.
 func (t *textReport) severitiesFor(id string) []finding.Severity {
@@ -425,13 +213,6 @@ func (t *textReport) severitiesFor(id string) []finding.Severity {
 	return out
 }
 
-func plural(n int, noun string) string {
-	if n == 1 {
-		return noun
-	}
-	return noun + "s"
-}
-
 func statusWord(status string) string {
 	switch status {
 	case "ok":
@@ -443,11 +224,4 @@ func statusWord(status string) string {
 	default:
 		return status
 	}
-}
-
-func orNone(s string) string {
-	if s == "" {
-		return "unknown"
-	}
-	return s
 }

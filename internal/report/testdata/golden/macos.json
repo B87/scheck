@@ -128,7 +128,7 @@
       ],
       "impact": "Every listening service on this machine accepts inbound connections without a per-application decision, so a background agent that opens a port is reachable by default.",
       "remediation": {
-        "summary": "Turn the application firewall on.",
+        "summary": "Turn the application firewall on in System Settings \u003e Network \u003e Firewall, or from the command line.",
         "commands": [
           "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"
         ],

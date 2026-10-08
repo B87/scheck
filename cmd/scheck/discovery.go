@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"os"
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
@@ -104,9 +105,9 @@ func (o *globalOpts) commandOutput(fallback io.Writer) (io.Writer, func(), error
 	if o.Out == "" {
 		return fallback, func() {}, nil
 	}
-	w, err := o.output()
+	f, err := os.OpenFile(o.Out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, usageErr("--out: %v", err)
 	}
-	return w, func() { _ = w.Close() }, nil
+	return f, func() { _ = f.Close() }, nil
 }

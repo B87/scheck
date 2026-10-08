@@ -18,6 +18,7 @@ import (
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/hostasset"
+	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/report"
 	"github.com/b87/scheck/internal/state"
@@ -26,19 +27,18 @@ import (
 
 // runFlags are the global flags `scheck run` reads. Every other flag is a
 // usage error rather than a silent no-op.
-var runFlags = []string{"format", "out", "verbose", "stop-after", "state-dir", "no-persist", "host", "write-engagement"}
+var runFlags = []string{"format", "out", "verbose", "stop-after", "state-dir", "no-persist", "host", "write-engagement", "include-evidence"}
 
 // hostReachFlags are accepted only with --host, which writes them into the
 // asset it builds: an engagement file holds its assets' settings
 // (docs/spec/engagement.md, "One command, one file").
-var hostReachFlags = []string{"identity", "known-hosts", "jump", "sudo", "elevate", "profile", "timeout"}
+var hostReachFlags = []string{"identity", "known-hosts", "jump", "sudo", "elevate", "profile", "timeout", "record-fixtures"}
 
 // runFlagHomes names where a 0.0.1 flag's meaning went, for the refusal.
 var runFlagHomes = map[string]string{
-	"context":         "context is assets.<name>.context in an engagement file; --write-engagement FILE writes one to start from",
-	"ignore-context":  "an engagement's context is in its file; remove it there",
-	"audit-log":       "the run directory holds audit.jsonl",
-	"record-fixtures": "fixtures are recorded with scheck local or scheck ssh in this build",
+	"context":        "context is assets.<name>.context in an engagement file; --write-engagement FILE writes one to start from",
+	"ignore-context": "an engagement's context is in its file; remove it there",
+	"audit-log":      "the run directory holds audit.jsonl",
 }
 
 // engagementOptions checks an engagement file against the compiled
@@ -47,7 +47,7 @@ var engagementOptions = engagement.Options{
 	KnownCheck: func(id string) bool {
 		return slices.ContainsFunc(check.All(), func(c check.Check) bool { return c.ID == id })
 	},
-	KnownFinding: func(id string) bool { _, ok := finding.Lookup(id); return ok },
+	KnownFinding: finding.Known,
 }
 
 // collectHost reaches a host asset, and runClock names the run directory;
@@ -61,17 +61,17 @@ type hostOpts struct {
 	host, identity, knownHosts, jump, writeEngagement string
 }
 
-// newRunCmd is `scheck run`: an engagement file or --host, through the
-// stages up to analyze in this build (docs/ROADMAP.md, E1b); the report
-// arrives in E2.
+// newRunCmd is `scheck run`: an engagement file or --host, through every
+// stage to the engagement report (docs/spec/engagement.md, "The report").
 func newRunCmd(opts *globalOpts) *cobra.Command {
 	var ho hostOpts
 	cmd := &cobra.Command{
 		Use:   "run ENGAGEMENT.yaml | run --host LOCATOR",
 		Short: "Run an engagement from its file, or on one host with --host",
 		Long: "Run an engagement (docs/spec/engagement.md) through its stages: intake, scope, recon,\n" +
-			"plan, check, analyze. The report stage arrives in 0.0.2 E2, so findings.json is the last\n" +
-			"output in this build. --host LOCATOR (user@address[:port], or local) builds a one-host\n" +
+			"plan, check, analyze, report. The report says what was checked and what was not, the\n" +
+			"findings to fix first, and why the run exits as it does; --format json prints it as\n" +
+			"docs/engagement-report-schema.json. --host LOCATOR (user@address[:port], or local) builds a one-host\n" +
 			"engagement in memory from the reach flags. Each run writes its stage outputs to\n" +
 			"<state-dir>/engagements/<name>/<started>/, created 0700 and locked; --stop-after intake\n" +
 			"validates the file and contacts nothing. In this build a host root is collected; a root\n" +
@@ -105,13 +105,24 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 	if err := rejectRunFlags(cmd, ho.host != ""); err != nil {
 		return err
 	}
+	return executeEngagement(cmd, opts, ho, args)
+}
+
+// executeEngagement runs an engagement file or a --host one through its
+// stages; `scheck run` and the 0.0.1 aliases both end here, so they give the
+// same report and the same command trace.
+func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args []string) error {
 	switch {
 	case opts.StopAfter == "", slices.Contains(engagement.Stages, opts.StopAfter):
 	default:
 		return usageErr("--stop-after must be one of %s", strings.Join(engagement.Stages, "|"))
 	}
-	if opts.StopAfter == "report" {
-		return usageErr("--stop-after report is not available in this build: the report arrives in 0.0.2 E2; findings.json (--stop-after analyze) is the last output")
+	// --write-engagement writes FILE and contacts nothing: a flag that
+	// shapes a run's output would be accepted and silently ignored.
+	if ho.writeEngagement != "" && (opts.Out != "" || opts.StopAfter != "" || opts.StateDir != "" || opts.NoPersist ||
+		opts.IncludeEvidence || opts.Format == "json") {
+		return usageErr("--write-engagement writes FILE and contacts nothing: --out, --format json, --stop-after, " +
+			"--state-dir, --no-persist and --include-evidence do not apply to it")
 	}
 	// A 0.0.1 configuration file stops any run that contacts a target. The
 	// two paths that contact nothing are how its keys move into a file, so
@@ -127,6 +138,9 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 	if err != nil {
 		return err
 	}
+	for _, warn := range res.Warnings {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
+	}
 	if ho.writeEngagement != "" {
 		return writeEngagementFile(cmd.ErrOrStderr(), ho.writeEngagement, raw)
 	}
@@ -141,7 +155,7 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 
 	started := runClock()
 	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Version: version.Version,
-		Collect: collectHost, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
+		RecordFixtures: opts.RecordFixtures, Collect: collectHost, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
 	// Refuse what cannot be reached before a run directory exists, so a
 	// refused run leaves nothing behind.
 	if err := engagement.Preflight(res); err != nil {
@@ -167,22 +181,30 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 		}
 		return incompleteErr("%v", err)
 	}
-	if err := writeStage(w, opts.Format, out, ro.Dir); err != nil {
+	if err := writeStage(w, opts, out, ro.Dir); err != nil {
 		return err
 	}
 	for _, warn := range out.Warnings {
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", warn)
+		// A warning can quote the operator's file (an acceptance's
+		// subject), which validation does not restrict to safe characters.
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
 	}
 	// Precedence is 3, 2, 1 (docs/spec/engagement.md, "Exit codes"): an
 	// incomplete run's silence is not a clean bill of health. A host that
 	// refused us is exit 3 once everything else was collected and written.
-	if len(out.Refused) > 0 {
-		return usageErr("refused:\n  %s", strings.Join(out.Refused, "\n  "))
+	describe := func(ss []ereport.Shortfall) string {
+		lines := make([]string, len(ss))
+		for i, s := range ss {
+			lines[i] = report.Sanitize(engagement.Describe(s))
+		}
+		return strings.Join(lines, "\n  ")
 	}
-	if len(out.Incomplete) > 0 {
-		return incompleteErr("run incomplete:\n  %s", strings.Join(out.Incomplete, "\n  "))
-	}
-	if out.Open > 0 {
+	switch out.ExitCode() {
+	case 3:
+		return usageErr("refused:\n  %s", describe(out.Refused))
+	case 2:
+		return incompleteErr("run incomplete:\n  %s", describe(out.Incomplete))
+	case 1:
 		return findingsErr("%d open %s at or above an asset's threshold", out.Open, plural(out.Open, "finding"))
 	}
 	return nil
@@ -293,12 +315,18 @@ func writeJSONDoc(w io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
-// writeStage prints the last stage's output: the document as written to the
-// run directory for --format json, a summary for a person otherwise. Until
-// the report (0.0.2 E2) the summary is the only text rendering; target text
-// in it is control-character escaped.
-func writeStage(w io.Writer, format string, out *engagement.Outcome, dir *engagement.RunDir) error {
-	if format == "json" {
+// writeStage prints the last stage's output: the engagement report, or for
+// a run stopped earlier the document as written to the run directory for
+// --format json and a summary for a person otherwise. Target text in the
+// summaries is control-character escaped.
+func writeStage(w io.Writer, opts *globalOpts, out *engagement.Outcome, dir *engagement.RunDir) error {
+	if rep, ok := out.Document.(*ereport.Report); ok {
+		if opts.Format == "json" {
+			return ereport.WriteJSON(w, rep, opts.IncludeEvidence)
+		}
+		return ereport.WriteText(w, rep, opts.textOptions(w))
+	}
+	if opts.Format == "json" {
 		return writeJSONDoc(w, out.Document)
 	}
 	where := "not persisted (--no-persist)"

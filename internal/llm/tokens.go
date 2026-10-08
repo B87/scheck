@@ -68,7 +68,7 @@ func (f Fit) String() string {
 // docs/spec/model.md §4). An unknown limit is a configuration error, never unlimited space.
 func CheckFit(r Request, l Limits) (Fit, error) {
 	if l.MaxContext <= 0 {
-		return Fit{}, Errorf(ErrUnsupported, "context limit unknown: set max_context for this model")
+		return Fit{}, Errorf(ErrUnsupported, "context limit unknown: set --max-context for this model")
 	}
 	f := Fit{Estimated: Estimate(r), Reserved: r.MaxTokens, MaxContext: l.MaxContext}
 	if !f.OK() {

@@ -50,7 +50,7 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			if err != nil {
 				return usageErr("%v", err)
 			}
-			cfg, err := opts.loadConfig(cmd)
+			cfg, err := opts.modelSelection()
 			if err != nil {
 				return err
 			}
@@ -84,8 +84,8 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 			case name == "mock":
 				o.Provider = eval.MockProvider
 			default:
-				if opts.LocalOnly || (cfg.AllowEgress != nil && !*cfg.AllowEgress) {
-					return usageErr("--local-only and allow_egress: false are not available in this build")
+				if opts.LocalOnly {
+					return usageErr("--local-only is not available in this build")
 				}
 				// The harness is the one caller of phase 2 left in this build,
 				// so the provider pre-flight lives here: a missing model, an
@@ -100,7 +100,7 @@ func newEvalCmd(opts *globalOpts) *cobra.Command {
 					return usageErr("provider %s: %v", name, err)
 				}
 				if p.Limits().MaxContext <= 0 {
-					return usageErr("provider %s: the context limit for model %q is unknown; set max_context: or --max-context (docs/spec/model.md §4)", name, cfg.Model)
+					return usageErr("provider %s: the context limit for model %q is unknown; set --max-context (docs/spec/model.md §4)", name, cfg.Model)
 				}
 				o.Live = true
 				o.Provider = func(eval.Case, eval.Arm) (llm.Provider, error) { return llm.Build(name, pcfg) }

@@ -1,0 +1,617 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "accounts.empty_password",
+      "instances": 0,
+      "observations": [
+        "accounts.passwd_status#1"
+      ],
+      "reads": [
+        "check:accounts.passwd_status"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "accounts.shadow_permissions_unexpected",
+      "instances": 0,
+      "observations": [
+        "accounts.shadow_meta#1"
+      ],
+      "reads": [
+        "check:accounts.shadow_meta"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "fs.world_writable_present",
+      "instances": 0,
+      "observations": [
+        "fs.world_writable#1"
+      ],
+      "reads": [
+        "check:fs.world_writable"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "log.auditd_inactive",
+      "instances": 0,
+      "observations": [
+        "log.auditd#1"
+      ],
+      "reads": [
+        "check:log.auditd"
+      ],
+      "reason": "unavailable:exit_error",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "mac.selinux_disabled",
+      "instances": 0,
+      "observations": [
+        "mac.sestatus#1"
+      ],
+      "reads": [
+        "check:mac.sestatus"
+      ],
+      "reason": "unavailable:command_missing",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "sshd.password_auth_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "sshd.root_login_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "time.ntp_unsynced",
+      "instances": 0,
+      "observations": [
+        "time.timedatectl#1"
+      ],
+      "reads": [
+        "check:time.timedatectl"
+      ],
+      "reason": "unavailable:exit_error",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "updates.pending",
+      "instances": 0,
+      "observations": [
+        "pkg.apt_upgradable#1",
+        "pkg.dnf_check_update#1",
+        "pkg.zypper_lp#1"
+      ],
+      "reads": [
+        "check:pkg.apt_upgradable",
+        "check:pkg.dnf_check_update",
+        "check:pkg.zypper_lp"
+      ],
+      "status": "not_matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "checks": {
+        "not_run": 0,
+        "planned": 33,
+        "ran": 22,
+        "unknown": 11
+      },
+      "collected": {
+        "from": "2026-10-07T07:12:03Z",
+        "to": "2026-10-07T07:12:04.234Z"
+      },
+      "collector": "host",
+      "envelope": {
+        "elided": "pinned by internal/report goldens",
+        "schema_version": "1.6"
+      },
+      "id": "host:ubuntu:22",
+      "kind": "host",
+      "name": "ubuntu",
+      "principal": {
+        "elevation": "sudo",
+        "identity": "deploy",
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": []
+    },
+    {
+      "bound_id": null,
+      "collector": "host",
+      "detail": "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)",
+      "id": "host:203.0.113.5:22",
+      "kind": "host",
+      "name": "deploy",
+      "reason": "failed",
+      "root": true,
+      "status": "failed",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "assets_covered": [
+        "host:ubuntu:22"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "hosts",
+        "read": 1
+      },
+      "principals": [
+        {
+          "elevation": "sudo",
+          "identity": "deploy",
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "no_rule"
+        },
+        {
+          "reason": "unavailable:command_missing"
+        },
+        {
+          "reason": "unavailable:exit_error"
+        },
+        {
+          "detail": "deploy",
+          "reason": "failed"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "pending updates"
+          ],
+          "mark": "assessed",
+          "name": "Software updates",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "reasons": [],
+          "rules": [
+            "updates.pending"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Disk encryption",
+          "reasons": [
+            {
+              "detail": "read: 20 block devices; not read: disk.crypttab",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "System integrity",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "mac.sestatus: exit 127: bash: line 1: sestatus: command not found",
+              "reason": "unavailable:command_missing"
+            }
+          ],
+          "rules": [
+            "mac.selinux_disabled"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Firewall",
+          "reasons": [
+            {
+              "detail": "not read: fw.firewalld, fw.nft, fw.ufw",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Network exposure",
+          "reasons": [
+            {
+              "detail": "read: 2 listening sockets",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "password login",
+            "direct root login"
+          ],
+          "mark": "assessed",
+          "name": "SSH server",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 2
+          },
+          "reasons": [],
+          "rules": [
+            "sshd.password_auth_enabled",
+            "sshd.root_login_enabled"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Remote access",
+          "reasons": [
+            {
+              "detail": "read: 2 service states: disabled, not-found",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "accounts with no password",
+            "the mode of /etc/shadow"
+          ],
+          "mark": "assessed",
+          "name": "Accounts",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 2
+          },
+          "read_not_judged": [
+            "22 accounts, 4 with a login shell"
+          ],
+          "reasons": [],
+          "rules": [
+            "accounts.empty_password",
+            "accounts.shadow_permissions_unexpected"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Privilege escalation",
+          "reasons": [
+            {
+              "detail": "read: 41 sudoers lines; 33 sudoers.d lines",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Startup and persistence",
+          "reasons": [
+            {
+              "detail": "read: 25 cron entries; 13 units, all enabled; not read: persist.timers",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "world-writable paths, depth-capped"
+          ],
+          "mark": "assessed",
+          "name": "Filesystem",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "read_not_judged": [
+            "9 SUID files"
+          ],
+          "reasons": [],
+          "rules": [
+            "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Logging and audit",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "read_not_judged": [
+            "Archived and active journals take up 0B in the file system."
+          ],
+          "reasons": [
+            {
+              "detail": "log.auditd: exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+              "reason": "unavailable:exit_error"
+            }
+          ],
+          "rules": [
+            "log.auditd_inactive"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Time synchronisation",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "time.timedatectl: exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+              "reason": "unavailable:exit_error"
+            }
+          ],
+          "rules": [
+            "time.ntp_unsynced"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-07T07:12:03Z",
+      "to": "2026-10-07T07:19:03Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "host-ubuntu",
+    "operator": null,
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "timezone": "UTC",
+    "trigger": null
+  },
+  "excluded": [],
+  "exit": {
+    "code": 2,
+    "reasons": [
+      {
+        "asset": "host:203.0.113.5:22",
+        "code": 2,
+        "why": "deploy: failed: ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)"
+      }
+    ],
+    "thresholds": {
+      "host:203.0.113.5:22": {
+        "basis": "profile:baseline",
+        "severity": "medium"
+      },
+      "host:ubuntu:22": {
+        "basis": "profile:baseline",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [],
+  "incomplete": [
+    {
+      "asset": "host:203.0.113.5:22",
+      "asset_name": "deploy",
+      "detail": "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)",
+      "reason": "failed"
+    }
+  ],
+  "notes": [],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-07T07:12:03Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [],
+    "more": 0,
+    "rules": {
+      "decided": 6,
+      "selected": 9,
+      "without_evidence": 3
+    }
+  }
+}

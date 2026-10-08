@@ -113,6 +113,21 @@ func kindOf(l Locator) (Kind, string, error) {
 	}
 }
 
+// ParseID reads a canonical id back into a Ref ("host:203.0.113.5:22",
+// "repo:github:example-org/shop"): the form a report prints for an asset
+// found under a root, which an accepted risk may name.
+func ParseID(id string) (Ref, bool) {
+	kind, rest, ok := strings.Cut(id, ":")
+	if !ok {
+		return Ref{}, false
+	}
+	r, err := parseLocator(Kind(kind), rest)
+	if err != nil || r.ID != id {
+		return Ref{}, false
+	}
+	return r, true
+}
+
 // parseLocator parses a value of the given kind into its canonical Ref.
 func parseLocator(kind Kind, s string) (Ref, error) {
 	var (

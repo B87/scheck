@@ -159,6 +159,10 @@ type Check struct {
 	// their own records and leave it empty; the invariants test requires it
 	// on every other parsed-into-records check.
 	Unit string
+	// Sampled marks a check that reads a bounded sample by design (depth- or
+	// prefix-capped): an absence in its output is not an absence on the
+	// host, so a rule over it never decides on complete evidence.
+	Sampled bool
 }
 
 // AnyExit is the ExitOK value meaning "any exit code is a valid result".

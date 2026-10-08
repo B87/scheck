@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/b87/scheck/internal/engagement/hostasset"
+	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/target/fixture"
 )
 
@@ -155,13 +157,17 @@ func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Stage != "analyze" || calls != 1 {
+	if out.Stage != "report" || calls != 1 {
 		t.Fatalf("stage %s, %d collections", out.Stage, calls)
 	}
-	if len(out.Incomplete) != 1 || !strings.Contains(out.Incomplete[0], "saas:github:example-org: collector_not_built") || len(out.Refused) != 0 {
-		t.Fatalf("incomplete = %q", out.Incomplete)
+	if len(out.Incomplete) != 1 || Describe(out.Incomplete[0]) != "saas:github:example-org: collector_not_built" || len(out.Refused) != 0 {
+		t.Fatalf("incomplete = %+v", out.Incomplete)
 	}
-	for _, f := range []string{"engagement.yaml", "scope.json", "recon.json", "plan.json", "findings.json", "audit.jsonl", "evidence/web.json"} {
+	if out.ExitCode() != 2 || out.Report == nil || out.Document != out.Report {
+		t.Fatalf("exit %d; the report is the run's last document", out.ExitCode())
+	}
+	for _, f := range []string{"engagement.yaml", "scope.json", "recon.json", "plan.json", "findings.json", "audit.jsonl",
+		"evidence/web.json", "report.json", "report.txt"} {
 		if _, err := os.Stat(dir.File(f)); err != nil {
 			t.Errorf("run directory lacks %s", f)
 		}
@@ -180,6 +186,27 @@ func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
 	}
 	if gh.ID != "saas:github:example-org" || gh.Status != StatusNotCollected || gh.Reason != ReasonCollectorNotBuilt {
 		t.Errorf("github = %+v", gh)
+	}
+	// plan.json names each host's planned and disabled checks, so it
+	// reconciles with audit.jsonl.
+	var plan PlanDoc
+	pb, _ := os.ReadFile(dir.File("plan.json"))
+	if err := json.Unmarshal(pb, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Hosts) != 1 || plan.Hosts[0].Name != "web" || len(plan.Hosts[0].Planned) == 0 {
+		t.Errorf("plan.json hosts = %+v", plan.Hosts)
+	}
+	if len(findings.Incomplete) != 1 || findings.Incomplete[0].Asset != "saas:github:example-org" ||
+		findings.Incomplete[0].Reason != ReasonCollectorNotBuilt {
+		t.Errorf("findings.json incomplete = %+v: {asset, reason, detail}, as the report carries it", findings.Incomplete)
+	}
+	// The report's trace for the host is its audit.jsonl lines, the canary
+	// or first check first.
+	audit, _ := os.ReadFile(dir.File("audit.jsonl"))
+	trace := out.Report.Assets[0].Trace
+	if len(trace) == 0 || len(trace) != strings.Count(string(audit), "\n") {
+		t.Errorf("trace has %d entries, audit.jsonl %d lines", len(trace), strings.Count(string(audit), "\n"))
 	}
 	if out.Open != findings.Open || out.Open != web.Open {
 		t.Errorf("open %d, findings.json %d, web %d", out.Open, findings.Open, web.Open)
@@ -202,13 +229,13 @@ func TestStopAfterEndsTheRunThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.Stage != "scope" || calls != 0 || len(out.Incomplete) != 0 {
-		t.Fatalf("stage %s, %d collections, incomplete %q", out.Stage, calls, out.Incomplete)
+		t.Fatalf("stage %s, %d collections, incomplete %+v", out.Stage, calls, out.Incomplete)
 	}
 	if _, err := os.Stat(dir.File("recon.json")); err == nil {
 		t.Error("recon.json written after --stop-after scope")
 	}
-	if _, err := Run(context.Background(), res, RunOptions{StopAfter: "report"}); err == nil {
-		t.Error("--stop-after report ran")
+	if _, err := Run(context.Background(), res, RunOptions{StopAfter: "facts"}); err == nil {
+		t.Error("--stop-after facts ran")
 	}
 }
 
@@ -244,8 +271,8 @@ func TestCollectorFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Incomplete) != 2 || !strings.Contains(out.Incomplete[0], "web: failed: ssh: dial") {
-		t.Fatalf("incomplete = %q", out.Incomplete)
+	if len(out.Incomplete) != 2 || !strings.HasPrefix(Describe(out.Incomplete[0]), "web: failed: ssh: dial") {
+		t.Fatalf("incomplete = %+v", out.Incomplete)
 	}
 }
 
@@ -284,8 +311,11 @@ func TestARefusedHostDoesNotDiscardTheOthers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Refused) != 1 || !strings.Contains(out.Refused[0], "host:203.0.113.5:22: ssh: 203.0.113.5 is not in") || calls != 1 {
-		t.Fatalf("refused %q after %d collections", out.Refused, calls)
+	if len(out.Refused) != 1 || !strings.HasPrefix(Describe(out.Refused[0]), "host:203.0.113.5:22: ssh: 203.0.113.5 is not in") || calls != 1 {
+		t.Fatalf("refused %+v after %d collections", out.Refused, calls)
+	}
+	if out.ExitCode() != 3 || len(out.Report.Findings) == 0 && len(out.Report.Assessments) == 0 {
+		t.Errorf("exit %d; the other host must still be assessed", out.ExitCode())
 	}
 	var findings FindingsDoc
 	b, _ := os.ReadFile(dir.File("findings.json"))
@@ -362,11 +392,21 @@ intent:
 		got = o
 		return nil, &hostasset.Error{Err: errors.New("stop")}
 	}
-	out, err := Run(context.Background(), res, RunOptions{Collect: capture})
+	started := time.Date(2026, 10, 7, 7, 12, 3, 0, time.UTC)
+	out, err := Run(context.Background(), res, RunOptions{StopAfter: "analyze", Started: started, Collect: capture})
 	if err != nil {
 		t.Fatal(err)
 	}
 	findings := out.Document.(*FindingsDoc)
+	// Acceptances are graded at the collection time, in engagement.timezone.
+	if !got.Now.Equal(started) {
+		t.Errorf("graded at %v, want the run's start", got.Now)
+	}
+	if _, err := time.LoadLocation("Europe/Madrid"); err == nil {
+		if z := got.Context.AcceptedRisks[0].Zone; z == nil || z.String() != "Europe/Madrid" {
+			t.Errorf("acceptance read in %v, want engagement.timezone Europe/Madrid", z)
+		}
+	}
 	if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "intent.accepted_risks[1] (sshd.password_auth_enabled on web, subject x) not applied") ||
 		len(findings.AcceptancesNotApplied) != 1 {
 		t.Errorf("warnings %q, findings.json %q", out.Warnings, findings.AcceptancesNotApplied)
@@ -377,5 +417,96 @@ intent:
 		len(got.RedactExtra) != 1 || c == nil || c.Exposure != "internet" || len(c.ExpectedServices) != 1 ||
 		len(c.AcceptedRisks) != 1 || c.AcceptedRisks[0].Reason != "legacy" || c.AcceptedRisks[0].Source != "engagement.yaml intent.accepted_risks[0]" {
 		t.Fatalf("options = %+v, context %+v", got, c)
+	}
+}
+
+// A canary mismatch's echo is attacker-influenced: recon.json and the
+// report's JSON keep it apart from the detail, and report.txt never prints it.
+func TestCanaryEchoStaysOutOfTheText(t *testing.T) {
+	res, err := Parse("engagement.yaml", []byte(twoHosts), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := CreateRunDir(t.TempDir(), "acme", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	calls := 0
+	fromFixture := fixtureCollect(t, "ubuntu", &calls)
+	echo := `"\x1b]0;owned\x07"`
+	collect := func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
+		if o.Host == "203.0.113.5" {
+			_ = o.Audit.Log(policy.AuditEntry{CheckID: "sys.canary", Decision: "denied:canary"})
+			return nil, &hostasset.Error{Usage: true, Kind: "canary", Err: errors.New("ssh canary mismatch"), Echo: echo}
+		}
+		return fromFixture(ctx, o)
+	}
+	out, err := Run(context.Background(), res, RunOptions{Raw: []byte(twoHosts), Dir: dir, Collect: collect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Report.Refused[0].Echo != echo || strings.Contains(out.Report.Refused[0].Detail, "owned") || out.Report.Refused[0].Kind != "canary" {
+		t.Errorf("refused %+v: the echo belongs in its own field", out.Report.Refused[0])
+	}
+	// The refused host was touched by the canary: its trace says so.
+	if tr := out.Report.Assets[0].Trace; len(tr) != 1 || tr[0].Check != "sys.canary" || tr[0].Decision != "denied:canary" {
+		t.Errorf("refused host's trace %+v", tr)
+	}
+	txt, _ := os.ReadFile(dir.File("report.txt"))
+	js, _ := os.ReadFile(dir.File("report.json"))
+	if strings.Contains(string(txt), "owned") || !strings.Contains(string(js), "owned") {
+		t.Error("the echo must be in report.json only")
+	}
+}
+
+// Under --no-persist nothing is written, and the report still carries each
+// host's command trace.
+func TestNoPersistKeepsTheTraceInTheReport(t *testing.T) {
+	res, err := Parse("engagement.yaml", []byte(hostAndGitHub), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	out, err := Run(context.Background(), res, RunOptions{Collect: fixtureCollect(t, "ubuntu", &calls)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Report.Assets[0].Trace) == 0 || out.Report.Run.Directory != nil {
+		t.Errorf("trace %d entries, directory %v", len(out.Report.Assets[0].Trace), out.Report.Run.Directory)
+	}
+}
+
+// The paste a --host report prints validates once the engagement is
+// written to a file and someone is added under people (docs/ROADMAP.md, E2
+// "Done when").
+func TestHostPasteValidatesAgainstTheWrittenFile(t *testing.T) {
+	res, raw, err := ForHost("deploy@203.0.113.5", HostFlags{}, testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	out, err := Run(context.Background(), res, RunOptions{Raw: raw, Collect: fixtureCollect(t, "macos", &calls)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tmpl *ereport.AcceptTemplate
+	for _, f := range out.Report.Findings {
+		if f.AcceptTemplate != nil {
+			tmpl = f.AcceptTemplate
+			break
+		}
+	}
+	if tmpl == nil || !tmpl.NeedsPeople {
+		t.Fatalf("paste %+v: a --host engagement has no people", tmpl)
+	}
+	file := string(raw) + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+		"    - {id: " + tmpl.ID + ", asset: " + tmpl.Asset + ", reason: patch window, accepted_by: alice, expires: " + tmpl.Expires + "}\n"
+	written, err := Parse("engagement.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatalf("the pasted entry does not validate:\n%s\n%v", file, err)
+	}
+	if id, ok := written.AssetID(tmpl.Asset); !ok || id != res.Assets[0].ID {
+		t.Errorf("asset %q resolves to %q, want %s", tmpl.Asset, id, res.Assets[0].ID)
 	}
 }

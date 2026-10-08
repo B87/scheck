@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"github.com/b87/scheck/internal/finding"
 )
 
 // DefaultWidth is the wrap column when the caller does not know the terminal
@@ -50,23 +48,6 @@ type style struct{ on bool }
 func (s style) bold(t string) string { return s.wrap(t, "\x1b[1m") }
 func (s style) dim(t string) string  { return s.wrap(t, "\x1b[2m") }
 
-// severity is the one colour in the report that carries meaning
-// (docs/spec/host-collector.md §6.6). info is left unstyled: it is information, not alarm.
-func (s style) severity(sev finding.Severity, t string) string {
-	switch sev {
-	case finding.SevCritical:
-		return s.wrap(t, "\x1b[1;31m")
-	case finding.SevHigh:
-		return s.wrap(t, "\x1b[31m")
-	case finding.SevMedium:
-		return s.wrap(t, "\x1b[33m")
-	case finding.SevLow:
-		return s.wrap(t, "\x1b[36m")
-	default:
-		return t
-	}
-}
-
 func (s style) wrap(t, seq string) string {
 	if !s.on || t == "" {
 		return t
@@ -99,11 +80,8 @@ func isControl(r rune) bool {
 }
 
 // Sanitize is sanitize for callers outside the package that print text of
-// uncertain origin (`scheck config show`, `scheck explain`).
+// uncertain origin (`scheck explain`, the engagement report).
 func Sanitize(s string) string { return sanitize(s) }
-
-// inline prevents target-derived fields from forging report structure (docs/spec/host-collector.md §6.6).
-func inline(s string) string { return strings.Join(strings.Fields(sanitize(s)), " ") }
 
 // expandTabs replaces tabs with spaces to the next eight-column stop, so a
 // command's own column alignment survives being re-indented.

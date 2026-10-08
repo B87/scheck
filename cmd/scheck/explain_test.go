@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/b87/scheck/internal/check"
-	_ "github.com/b87/scheck/internal/check/all" // the complete catalog
 	"github.com/b87/scheck/internal/report"
 )
 

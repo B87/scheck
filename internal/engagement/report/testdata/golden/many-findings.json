@@ -1,0 +1,1059 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "accounts.empty_password",
+      "instances": 0,
+      "observations": [
+        "accounts.passwd_status#1"
+      ],
+      "reads": [
+        "check:accounts.passwd_status"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "accounts.shadow_permissions_unexpected",
+      "instances": 0,
+      "observations": [
+        "accounts.shadow_meta#1"
+      ],
+      "reads": [
+        "check:accounts.shadow_meta"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "fs.world_writable_present",
+      "instances": 0,
+      "observations": [
+        "fs.world_writable#1"
+      ],
+      "reads": [
+        "check:fs.world_writable"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "log.auditd_inactive",
+      "instances": 0,
+      "observations": [
+        "log.auditd#1"
+      ],
+      "reads": [
+        "check:log.auditd"
+      ],
+      "reason": "unavailable:exit_error",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "mac.selinux_disabled",
+      "instances": 0,
+      "observations": [
+        "mac.sestatus#1"
+      ],
+      "reads": [
+        "check:mac.sestatus"
+      ],
+      "reason": "unavailable:command_missing",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "sshd.password_auth_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "sshd.root_login_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "time.ntp_unsynced",
+      "instances": 0,
+      "observations": [
+        "time.timedatectl#1"
+      ],
+      "reads": [
+        "check:time.timedatectl"
+      ],
+      "reason": "unavailable:exit_error",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "updates.pending",
+      "instances": 0,
+      "observations": [
+        "pkg.apt_upgradable#1",
+        "pkg.dnf_check_update#1",
+        "pkg.zypper_lp#1"
+      ],
+      "reads": [
+        "check:pkg.apt_upgradable",
+        "check:pkg.dnf_check_update",
+        "check:pkg.zypper_lp"
+      ],
+      "status": "not_matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "checks": {
+        "not_run": 0,
+        "planned": 33,
+        "ran": 22,
+        "unknown": 11
+      },
+      "collected": {
+        "from": "2026-10-07T07:12:03Z",
+        "to": "2026-10-07T07:12:04.234Z"
+      },
+      "collector": "host",
+      "envelope": {
+        "elided": "pinned by internal/report goldens",
+        "schema_version": "1.6"
+      },
+      "id": "host:ubuntu:22",
+      "kind": "host",
+      "name": "ubuntu",
+      "principal": {
+        "elevation": "sudo",
+        "identity": "deploy",
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "assets_covered": [
+        "host:ubuntu:22"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "hosts",
+        "read": 1
+      },
+      "principals": [
+        {
+          "elevation": "sudo",
+          "identity": "deploy",
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "no_rule"
+        },
+        {
+          "reason": "unavailable:command_missing"
+        },
+        {
+          "reason": "unavailable:exit_error"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "pending updates"
+          ],
+          "mark": "assessed",
+          "name": "Software updates",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "reasons": [],
+          "rules": [
+            "updates.pending"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Disk encryption",
+          "reasons": [
+            {
+              "detail": "read: 20 block devices; not read: disk.crypttab",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "System integrity",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "mac.sestatus: exit 127: bash: line 1: sestatus: command not found",
+              "reason": "unavailable:command_missing"
+            }
+          ],
+          "rules": [
+            "mac.selinux_disabled"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Firewall",
+          "reasons": [
+            {
+              "detail": "not read: fw.firewalld, fw.nft, fw.ufw",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Network exposure",
+          "reasons": [
+            {
+              "detail": "read: 2 listening sockets",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "password login",
+            "direct root login"
+          ],
+          "mark": "assessed",
+          "name": "SSH server",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 2
+          },
+          "reasons": [],
+          "rules": [
+            "sshd.password_auth_enabled",
+            "sshd.root_login_enabled"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Remote access",
+          "reasons": [
+            {
+              "detail": "read: 2 service states: disabled, not-found",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "accounts with no password",
+            "the mode of /etc/shadow"
+          ],
+          "mark": "assessed",
+          "name": "Accounts",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 2
+          },
+          "read_not_judged": [
+            "22 accounts, 4 with a login shell"
+          ],
+          "reasons": [],
+          "rules": [
+            "accounts.empty_password",
+            "accounts.shadow_permissions_unexpected"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Privilege escalation",
+          "reasons": [
+            {
+              "detail": "read: 41 sudoers lines; 33 sudoers.d lines",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Startup and persistence",
+          "reasons": [
+            {
+              "detail": "read: 25 cron entries; 13 units, all enabled; not read: persist.timers",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "world-writable paths, depth-capped"
+          ],
+          "mark": "assessed",
+          "name": "Filesystem",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "read_not_judged": [
+            "9 SUID files"
+          ],
+          "reasons": [],
+          "rules": [
+            "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Logging and audit",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "read_not_judged": [
+            "Archived and active journals take up 0B in the file system."
+          ],
+          "reasons": [
+            {
+              "detail": "log.auditd: exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+              "reason": "unavailable:exit_error"
+            }
+          ],
+          "rules": [
+            "log.auditd_inactive"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Time synchronisation",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "time.timedatectl: exit 1: System has not been booted with systemd as init system (PID 1). Can't operate.",
+              "reason": "unavailable:exit_error"
+            }
+          ],
+          "rules": [
+            "time.ntp_unsynced"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "engagement": {
+    "authorization": null,
+    "built_from": "host",
+    "collected": {
+      "from": "2026-10-07T07:12:03Z",
+      "to": "2026-10-07T07:19:03Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "host-ubuntu",
+    "operator": null,
+    "source": {
+      "path": null,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "timezone": "UTC",
+    "trigger": null
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "6 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "host:ubuntu:22": {
+        "basis": "profile:baseline",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-01-05",
+        "id": "accounts.empty_password",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "accounts",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "accounts.passwd_status",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "backup NP 2026-09-11",
+          "kind": "observed",
+          "observation": "accounts.passwd_status#1",
+          "principal": "deploy (sudo -n)"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "accounts.empty_password",
+      "impact": "The account authenticates with no credential wherever password authentication is accepted. Whether that includes remote logins depends on this host's PAM and sshd configuration.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "accounts.empty_password",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Locking an account a service depends on will break that service; find out what the account is for before changing it.",
+        "commands": [
+          "# inspect first:",
+          "sudo passwd -S \u003caccount\u003e",
+          "# then either lock it:",
+          "sudo passwd -l \u003caccount\u003e"
+        ],
+        "summary": "Give the account a password or lock it, depending on what it is for."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:accounts.passwd_status"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "critical",
+      "status": "open",
+      "subject": null,
+      "title": "A local account has no password set",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-01-05",
+        "id": "accounts.shadow_permissions_unexpected",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "accounts",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "accounts.shadow_meta",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "-rw-r--rw-:646:root:shadow",
+          "kind": "observed",
+          "observation": "accounts.shadow_meta#1",
+          "principal": "deploy"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "accounts.shadow_permissions_unexpected",
+      "impact": "The hashed-password file is expected to be readable only by root (mode 0, 600, or 640 with group shadow). A different mode is a deviation worth explaining; it is not by itself evidence that an unauthorized user has read the file.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "accounts.shadow_permissions_unexpected",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Match the distribution's own default rather than copying a mode from another system.",
+        "commands": [
+          "stat -c '%A %a %U:%G' /etc/shadow",
+          "# Debian and Ubuntu: 640 root:shadow — Fedora and RHEL: 000 root:root"
+        ],
+        "summary": "Restore the mode this distribution ships."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:accounts.shadow_meta"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": null,
+      "title": "/etc/shadow has an unexpected mode",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-01-05",
+        "id": "sshd.root_login_enabled",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "remote-access",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "sshd.config",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "permitrootlogin yes",
+          "kind": "observed",
+          "observation": "sshd.config#1",
+          "principal": "deploy (sudo -n)"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "sshd.root_login_enabled",
+      "impact": "root can authenticate over the network directly, so a single credential is enough for full control and there is no record of which operator escalated.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "sshd.root_login_enabled",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Make sure an unprivileged account with sudo rights can log in first. `prohibit-password` still allows key-based root login.",
+        "commands": [
+          "# set PermitRootLogin no in /etc/ssh/sshd_config or a file in /etc/ssh/sshd_config.d/",
+          "sudo sshd -t \u0026\u0026 sudo systemctl reload sshd"
+        ],
+        "summary": "Set PermitRootLogin no and log in as a user who escalates with sudo."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:sshd.config"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": null,
+      "title": "sshd permits direct root login",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-04-05",
+        "id": "fs.world_writable_present",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "fs",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "fs.world_writable",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "/opt/app/uploads",
+          "kind": "observed",
+          "observation": "fs.world_writable#1",
+          "principal": "deploy"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "fs.world_writable_present",
+      "impact": "Any local user can replace the contents of these paths. If a privileged process reads, sources or executes one of them, that is a local privilege escalation path.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "fs.world_writable_present",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Shared directories that are world-writable by design (/tmp, /var/tmp) carry the sticky bit and are already excluded from this check.",
+        "commands": [
+          "# review first:",
+          "ls -ld \u003cpath\u003e",
+          "sudo chmod o-w \u003cpath\u003e"
+        ],
+        "summary": "Review each path and remove world write where it is not deliberate."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:fs.world_writable"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "World-writable paths without the sticky bit",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-04-05",
+        "id": "mac.selinux_disabled",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "integrity",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "mac.sestatus",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "SELinux status: disabled",
+          "kind": "observed",
+          "observation": "mac.sestatus#1",
+          "principal": "deploy"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "mac.selinux_disabled",
+      "impact": "The mandatory access control layer that confines services is not loaded, so a compromised service is limited only by discretionary file permissions.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "mac.selinux_disabled",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Switching straight to enforcing on a host that has run without SELinux can break services. Use permissive first and read the denials.",
+        "commands": [
+          "# review first; a system that has run disabled needs a relabel:",
+          "sudo fixfiles -F onboot",
+          "# set SELINUX=permissive in /etc/selinux/config, reboot, review denials, then set enforcing"
+        ],
+        "summary": "Set SELINUX=enforcing in /etc/selinux/config, relabel, and reboot."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:mac.sestatus"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "SELinux is disabled",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "ubuntu",
+        "by_subject": false,
+        "expires": "2027-04-05",
+        "id": "sshd.password_auth_enabled",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "ubuntu",
+      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "category": "remote-access",
+      "evidence": [
+        {
+          "asset": "host:ubuntu:22",
+          "check": "sshd.config",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "passwordauthentication yes",
+          "kind": "observed",
+          "observation": "sshd.config#1",
+          "principal": "deploy (sudo -n)"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "sshd.password_auth_enabled",
+      "impact": "Anyone who can reach this sshd can guess passwords online against every account that has a usable one, at whatever rate the server allows.",
+      "key": {
+        "asset": "host:ubuntu:22",
+        "id": "sshd.password_auth_enabled",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Confirm at least one working key-based login first, from a second session, or you will lock yourself out.",
+        "commands": [
+          "# review the effective configuration first:",
+          "sudo sshd -T | grep -i passwordauthentication",
+          "# then set PasswordAuthentication no in /etc/ssh/sshd_config or a file in /etc/ssh/sshd_config.d/",
+          "sudo sshd -t \u0026\u0026 sudo systemctl reload sshd"
+        ],
+        "summary": "Set PasswordAuthentication no and rely on key authentication."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:sshd.config"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "sshd accepts password authentication",
+      "why_here": []
+    }
+  ],
+  "incomplete": [],
+  "notes": [],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run --host deploy@ubuntu (with the same flags)",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-07T07:12:03Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "host:ubuntu:22"
+        ],
+        "ids": [
+          "accounts.empty_password"
+        ],
+        "keys": [
+          {
+            "asset": "host:ubuntu:22",
+            "id": "accounts.empty_password",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:hosts"
+        ],
+        "severity": "critical",
+        "title": "A local account has no password set"
+      },
+      {
+        "assets": [
+          "host:ubuntu:22"
+        ],
+        "ids": [
+          "accounts.shadow_permissions_unexpected"
+        ],
+        "keys": [
+          {
+            "asset": "host:ubuntu:22",
+            "id": "accounts.shadow_permissions_unexpected",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:hosts"
+        ],
+        "severity": "high",
+        "title": "/etc/shadow has an unexpected mode"
+      },
+      {
+        "assets": [
+          "host:ubuntu:22"
+        ],
+        "ids": [
+          "sshd.root_login_enabled"
+        ],
+        "keys": [
+          {
+            "asset": "host:ubuntu:22",
+            "id": "sshd.root_login_enabled",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 3,
+        "rank_basis": [
+          "severity:high",
+          "area:hosts"
+        ],
+        "severity": "high",
+        "title": "sshd permits direct root login"
+      },
+      {
+        "assets": [
+          "host:ubuntu:22"
+        ],
+        "ids": [
+          "fs.world_writable_present"
+        ],
+        "keys": [
+          {
+            "asset": "host:ubuntu:22",
+            "id": "fs.world_writable_present",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 4,
+        "rank_basis": [
+          "severity:medium",
+          "area:hosts"
+        ],
+        "severity": "medium",
+        "title": "World-writable paths without the sticky bit"
+      },
+      {
+        "assets": [
+          "host:ubuntu:22"
+        ],
+        "ids": [
+          "mac.selinux_disabled"
+        ],
+        "keys": [
+          {
+            "asset": "host:ubuntu:22",
+            "id": "mac.selinux_disabled",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 5,
+        "rank_basis": [
+          "severity:medium",
+          "area:hosts"
+        ],
+        "severity": "medium",
+        "title": "SELinux is disabled"
+      }
+    ],
+    "more": 1,
+    "rules": {
+      "decided": 6,
+      "selected": 9,
+      "without_evidence": 3
+    }
+  }
+}

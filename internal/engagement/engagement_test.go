@@ -172,6 +172,8 @@ func TestValidationErrors(t *testing.T) {
 		{"admins of a non-tenant", minimal + "people:\n  alice: {kind: employee}\naccess:\n  admins:\n    example.com: [alice]\n", 14, "access.admins.example.com", "not a SaaS tenant", false},
 		{"dangling reference", minimal + "secrets:\n  production:\n    - {store: env-file, asset: web}\n", 12, "secrets.production[0].asset", "neither an assets name nor a root", false},
 		{"unknown accepted risk", minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n    - {id: sshd.nope, asset: deploy@203.0.113.5, reason: r, accepted_by: alice}\n", 14, "intent.accepted_risks[0].id", "neither a catalog finding", false},
+		{"accepted risk on an id outside scope", minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: \"host:198.51.100.7:22\", reason: r, accepted_by: alice}\n", 14, "intent.accepted_risks[0].asset", "canonical id of an asset under a root", false},
+		{"accepted risk on an excluded id", minimal + "exclude:\n  - repo: github:example-org/old\npeople:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: \"repo:github:example-org/old\", reason: r, accepted_by: alice}\n", 16, "intent.accepted_risks[0].asset", "is excluded by repo:github:example-org/old", false},
 		{"intent url outside scope", minimal + "intent:\n  not_exposed:\n    - {url: https://admin.example.org/, audience: vpn}\n", 12, "intent.not_exposed[0].url", "falls under no root", false},
 		{"mail domain outside scope", minimal + "mail:\n  no_mail: [example.org]\n", 11, "mail.no_mail[0]", "no domain root", false},
 		{"sending and no_mail", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid}\n  no_mail: [example.com]\n", 13, "mail.no_mail[0]", "also has a sender", false},
@@ -349,5 +351,48 @@ func TestCredentialInACommentIsReportedOnce(t *testing.T) {
 	errs, ok := errors.AsType[Errors](err)
 	if !ok || len(errs) != 1 || errs[0].Line != 10 {
 		t.Fatalf("want one error on line 10, got %v", err)
+	}
+}
+
+// A report names an asset found under a root by its canonical id, and the
+// paste it prints must validate: an accepted risk may name one
+// (docs/spec/engagement.md, "Identity, references and validation").
+func TestAcceptedRiskByCanonicalID(t *testing.T) {
+	file := minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+		"    - {id: sshd.password_auth_enabled, asset: \"repo:github:example-org/shop\", reason: r, accepted_by: alice}\n" +
+		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice}\n"
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := res.AssetID("repo:github:example-org/shop"); !ok || id != "repo:github:example-org/shop" {
+		t.Errorf("canonical id: %q %v", id, ok)
+	}
+	if id, ok := res.AssetID("deploy@203.0.113.5"); !ok || id != "host:203.0.113.5:22" {
+		t.Errorf("root as written: %q %v", id, ok)
+	}
+	if _, ok := res.AssetID("host:198.51.100.7:22"); ok {
+		t.Error("an id under no root resolved")
+	}
+}
+
+// A name or locator that matches a redact_extra pattern is written into the
+// stage documents as declared, so validation warns, naming neither the
+// pattern nor the value (docs/spec/engagement.md, "Narrowing travels with
+// the engagement").
+func TestRedactExtraMatchingANameWarns(t *testing.T) {
+	file := minimal + "redact_extra: [\"tanger[i]ne\"]\nassets:\n  tangerine-db:\n    host: 203.0.113.5\n"
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "1 assets entry match redact_extra[0]") {
+		t.Fatalf("warnings %q", res.Warnings)
+	}
+	if strings.Contains(res.Warnings[0], "tangerine") || strings.Contains(res.Warnings[0], "tanger[i]ne") {
+		t.Errorf("the warning quotes what it should hide: %q", res.Warnings[0])
+	}
+	if res, _ := Parse("e.yaml", []byte(minimal+"redact_extra: [\"tanger[i]ne\"]\n"), testOpts); len(res.Warnings) != 0 {
+		t.Errorf("a pattern that matches no name warns: %q", res.Warnings)
 	}
 }

@@ -60,6 +60,12 @@ var (
 	// is ErrUnreachable, a transport failure (docs/spec/engagement.md,
 	// "Exit codes").
 	ErrAccess = errors.New("access refused")
+	// ErrHostKeyUnknown and ErrHostKeyChanged say which host-key refusal an
+	// ErrAccess is, so a report can tell an unverified host from a changed
+	// key, which can mean an interception (docs/spec/engagement.md,
+	// "Incompleteness and refusals").
+	ErrHostKeyUnknown = errors.New("host key unknown")
+	ErrHostKeyChanged = errors.New("host key changed")
 	// ErrUnreachable marks a connection that never reached a working
 	// session for any reason other than ErrAccess: a name that does not
 	// resolve, TCP refused or timed out, a handshake reset or cut off.

@@ -54,7 +54,7 @@ func (s Structured) IsZero() bool {
 }
 
 // Service is one expected listener. Source names the context source that
-// declared it, for attribution (docs/spec/host-collector.md §5.4) and for `scheck config show`.
+// declared it, for attribution (docs/spec/host-collector.md §5.4).
 type Service struct {
 	Port     int    `yaml:"port" json:"port"`
 	Proto    string `yaml:"proto,omitempty" json:"proto"`
@@ -72,19 +72,27 @@ type Risk struct {
 	Reason  string `yaml:"reason,omitempty" json:"reason,omitempty"`
 	Expires string `yaml:"expires,omitempty" json:"expires,omitempty"` // YYYY-MM-DD
 	Source  string `yaml:"-" json:"source,omitempty"`
+	// Zone is the time zone the date is read in: an engagement's
+	// engagement.timezone (docs/spec/engagement.md, "Accepted risks"). Nil
+	// is UTC, as a host context file reads it.
+	Zone *time.Location `yaml:"-" json:"-"`
 }
 
-// Expired reports whether the acceptance lapsed before now. An unset date
-// never expires.
+// Expired reports whether the acceptance lapsed before now: a date lasts
+// until the end of that day in Zone. An unset date never expires.
 func (r Risk) Expired(now time.Time) bool {
 	if r.Expires == "" {
 		return false
 	}
-	t, err := time.Parse("2006-01-02", r.Expires)
+	zone := r.Zone
+	if zone == nil {
+		zone = time.UTC
+	}
+	t, err := time.ParseInLocation("2006-01-02", r.Expires, zone)
 	if err != nil {
 		return false // validated at load; unreachable through Load
 	}
-	return now.After(t.Add(24 * time.Hour))
+	return now.After(t.AddDate(0, 0, 1))
 }
 
 // Source records one context input in the report header (docs/spec/host-collector.md §6.4).

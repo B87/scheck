@@ -62,6 +62,38 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 	}
 }
 
+// A definition without a risk area or an exposure declaration is caught by
+// name: the engagement report cannot place or adjust it (docs/spec/engagement.md,
+// "Severity in context").
+func TestValidateRulesCatchesIncompleteDefs(t *testing.T) {
+	saved := defs
+	defer func() { defs = saved }()
+	base := saved[IDPasswordAuthEnabled]
+	cases := []struct {
+		name string
+		edit func(*Def)
+		want string
+	}{
+		{"no area", func(d *Def) { d.Area = "" }, RuleDefArea},
+		{"unknown area", func(d *Def) { d.Area = "network" }, RuleDefArea},
+		{"exposure undeclared", func(d *Def) { d.Exposure = exposureUndeclared }, RuleDefExposure},
+		{"judges missing", func(d *Def) { d.Judges = "" }, RuleDefJudges},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := base
+			tc.edit(&d)
+			defs = map[string]Def{d.ID: d}
+			for _, v := range ValidateRules() {
+				if v.Subject == d.ID && v.Rule == tc.want {
+					return
+				}
+			}
+			t.Fatalf("want %s for %s", tc.want, tc.name)
+		})
+	}
+}
+
 // A rule finding has no model to write its text, so every definition carries
 // its own title, impact and remediation (docs/spec/host-collector.md §6.1).
 func TestEveryDefIsComplete(t *testing.T) {

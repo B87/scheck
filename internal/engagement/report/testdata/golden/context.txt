@@ -1,0 +1,144 @@
+scheck engagement report: host-macos
+For platform-team. Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        incident
+This is not incident response. scheck does not look for signs of intrusion, and evidence read from a
+possibly compromised system cannot be trusted. This report lists weaknesses in what scheck could
+read; it cannot tell you whether you are safe now or how the incident happened. For that you need an
+incident responder; what this report can do is list weaknesses to close.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: macos (checked only in part: macos, 5 of 13 host areas judged). See Coverage for what was not
+checked.
+
+SUMMARY
+Checked in part  Hosts (macos, 5 of 13 areas judged).
+Not checked      Data stores and backups: see Coverage.
+Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
+                 supply chain, external surface, web application, email and domain, logging and
+                 incident readiness. To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      The macOS application firewall is disabled (macos)
+             base medium, raised: you declared macos internet-facing
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 1
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: hosts. On macos, 5 of 13 host areas were judged, each only on the settings named under
+Coverage; 5 have no rule in this version and 3 had no usable evidence. Not checked: data stores and
+backups, identity and access, secrets, cloud configuration, CI/CD and supply chain, external
+surface, web application, email and domain, logging and incident readiness. Anything not checked is
+unknown, not fine.
+
+COVERAGE
+Data stores and backups  not checked
+  Not part of this engagement; to include it, list it under roots in engagement.yaml.
+  Declared, not verified: backups declared in a nightly snapshot (gcp:example-backups), not verified
+    (data.backups[0]).
+Hosts                    checked in part
+  macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, 07:12-07:12
+  checks 28: 22 ran, 6 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
+    Software updates         checked (pending updates): nothing found by these rules
+    Disk encryption          checked (FileVault): nothing found by these rules
+    System integrity         checked (Gatekeeper, System Integrity Protection): nothing found by
+                             these rules
+    Firewall                 checked (the application firewall): 1 open finding (see Findings); also
+                             read, not judged: Firewall has block all state set to disabled.;
+                             Firewall stealth mode is off
+    Network exposure         not judged: this version of scheck has no rule for it (read: 23
+                             listening sockets)
+    SSH server               not checked: the access scheck was given cannot read this; it needs
+                             sudo
+    Remote access            not checked: the access scheck was given cannot read this; it needs
+                             sudo; also read, not judged: 10 service overrides
+    Accounts                 not judged: this version of scheck has no rule for it (read:
+                             GroupMembership: root alice; 134 accounts)
+    Privilege escalation     not judged: this version of scheck has no rule for it (not read:
+                             privesc.sudoers, privesc.sudoers_d)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 3 launchd
+                             plists; 555 launchd jobs, 284 running)
+    Filesystem               checked (world-writable paths, depth-capped): nothing found by these
+                             rules; also read, not judged: 0 SUID files
+    Logging and audit        not judged: this version of scheck has no rule for it (not read:
+                             log.status)
+    Time synchronisation     not checked: the access scheck was given cannot read this; it needs
+                             sudo
+  Narrowed in the engagement file: assets.macos.disable_checks[0]: removed fs.suid.
+Not requested            Not part of this run: identity and access, secrets, cloud configuration,
+                         CI/CD and supply chain, external surface, web application, email and
+                         domain, logging and incident readiness. To include one, list it under roots
+                         in the engagement file.
+Other declared SaaS      stripe: this version of scheck does not read it
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 1 open (1 high), 0 informational, 1 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  The macOS application firewall is disabled (macos) [fw.app_firewall_disabled]
+   Observed      fw.global#1 (07:12, as deploy): Firewall is disabled. (State = 0)
+   Severity      high: base medium, +1 exposure internet (assets.macos.context.exposure)
+   Why here      You declared macos internet-facing (assets.macos.context.exposure).
+   Fix           Turn the application firewall on in System Settings > Network > Firewall, or from
+                 the command line.
+                 Caveat: This is a per-application filter, not a packet filter; it does not replace
+                   a network firewall.
+                 Commands (review before running):
+                   sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+
+Accepted (not counted as open)
+   low     Software updates are pending (macos): accepted by alice, no expiry: "the vendor ships
+     updates monthly" (intent.accepted_risks[0]). Covers every instance of this id on this asset.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
+intent.accepted_risks in engagement.yaml and write the reason.
+
+  # The macOS application firewall is disabled (macos)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: fw.app_firewall_disabled
+      asset: macos
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alice (employee)
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  On macos, 6 checks need root: log.status, privesc.sudoers, privesc.sudoers_d, remote.login,
+    sshd.config, time.ntp. To read them, set elevate: sudo on macos in the engagement file.
+  On macos, this version of scheck has no rule for network exposure, accounts, privilege escalation,
+    startup and persistence, logging and audit. What was read is in the JSON report (--format json)
+    for a person to look at.
+  stripe: this version of scheck does not read it; assess it by other means until it does.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Excluded in the file  repo:github:example-org/old: not matched: no discovery in this version
+  Narrowed in the file  assets.macos.disable_checks[0]: removed fs.suid
+  Redacted              built-in rules: 0 values. Your redact_extra rules: 0 matches (patterns not
+                        shown).
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+NOTES FOR THE READOUT
+  The acceptance of "Software updates are pending" on macos by alice (intent.accepted_risks[0]): it
+    has no expiry date, so nobody is asked to look at it again.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (macos: medium, profile baseline). Exit 0
+would not have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

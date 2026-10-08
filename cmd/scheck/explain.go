@@ -254,3 +254,17 @@ func explainParam(p check.Param) string {
 		return string(p.Kind)
 	}
 }
+
+func argvString(argv []string) string {
+	var out strings.Builder
+	for i, a := range argv {
+		if i > 0 {
+			out.WriteString(" ")
+		}
+		if a == "" {
+			a = `""`
+		}
+		out.WriteString(a)
+	}
+	return out.String()
+}

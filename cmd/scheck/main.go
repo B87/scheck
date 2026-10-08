@@ -1,10 +1,15 @@
-// Command scheck performs a read-only security posture check of one host.
+// Command scheck runs read-only security engagements (docs/spec/engagement.md).
 package main
 
 import (
 	"errors"
 	"fmt"
 	"os"
+
+	// The complete check catalog: without it every plan is empty. The
+	// command's tests rely on this import, not on one of their own, so a
+	// binary that lost it fails them.
+	_ "github.com/b87/scheck/internal/check/all"
 )
 
 func main() {

@@ -1,0 +1,538 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b87/scheck/docs/engagement-report-schema.json",
+  "title": "scheck engagement report",
+  "description": "spec/engagement.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
+  "type": "object",
+  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "assets", "notes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "scheck_version": { "type": "string" },
+    "rules_version": { "type": "string", "description": "Identifies the rule set, so a finding that disappears because a rule changed between versions is never read as fixed." },
+    "run": {
+      "type": "object", "required": ["started", "directory", "resumed"], "additionalProperties": false,
+      "properties": {
+        "started": { "type": "string", "format": "date-time" },
+        "directory": { "type": ["string", "null"], "description": "null under --no-persist." },
+        "resumed": { "type": "boolean" },
+        "command": { "type": "string", "description": "The command that runs this engagement again." }
+      }
+    },
+    "engagement": {
+      "type": "object",
+      "required": ["name", "operator", "timezone", "trigger", "built_from", "source", "collected", "method", "authorization", "edited_by_hand"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "operator": { "type": ["string", "null"], "description": "The engagement's owner, not a signatory." },
+        "timezone": { "type": "string" },
+        "trigger": { "enum": ["questionnaire", "audit", "funding", "incident", "routine", null], "description": "null for an engagement built by --host." },
+        "built_from": { "enum": ["file", "host"] },
+        "source": {
+          "type": "object", "required": ["path", "sha256"], "additionalProperties": false,
+          "properties": {
+            "path": { "type": ["string", "null"], "description": "null for --host." },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Of the file as read; for --host, of the engagement exactly as --write-engagement would write it." }
+          }
+        },
+        "collected": { "$ref": "#/$defs/span" },
+        "method": {
+          "type": "object", "required": ["assessment", "plan", "levels_used"], "additionalProperties": false,
+          "properties": {
+            "assessment": { "enum": ["rules"] },
+            "plan": { "enum": ["checklist"] },
+            "levels_used": { "type": "array", "items": { "enum": ["passive", "observe", "probe", "scan"] } }
+          }
+        },
+        "authorization": {
+          "description": "The operator's declaration, printed as given and never verified (scope.md, Authorization). null when none was recorded.",
+          "type": ["object", "null"], "additionalProperties": false,
+          "required": ["by", "date"],
+          "properties": {
+            "by": { "type": "string" },
+            "date": { "type": "string" },
+            "windows": { "type": "array", "items": { "$ref": "#/$defs/span" } },
+            "source": { "type": "array", "items": { "type": "string" } },
+            "note": { "type": "string" }
+          }
+        },
+        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Stage documents the operator edited before a resume." }
+      }
+    },
+    "notice": {
+      "type": "object", "required": ["personal_data", "internal_topology", "audience"], "additionalProperties": false,
+      "properties": {
+        "personal_data": { "const": true },
+        "internal_topology": { "const": true },
+        "audience": { "const": "operator" }
+      }
+    },
+    "refused": { "type": "array", "items": { "$ref": "#/$defs/shortfall" }, "description": "Assets scheck refused or could not log in to, on the positive list of Exit codes; exit 3." },
+    "incomplete": { "type": "array", "items": { "$ref": "#/$defs/shortfall" }, "description": "Declared roots with no successful read, and collections cut by a failure or a limit; exit 2." },
+    "exit": {
+      "type": "object", "required": ["code", "reasons", "thresholds"], "additionalProperties": false,
+      "properties": {
+        "code": { "enum": [0, 1, 2, 3] },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["code", "why"], "additionalProperties": false,
+            "properties": { "code": { "enum": [1, 2, 3] }, "why": { "type": "string" }, "asset": { "$ref": "#/$defs/asset_id" } }
+          }
+        },
+        "thresholds": {
+          "type": "object",
+          "description": "Per asset id, the lowest open severity that counts toward exit 1, and why.",
+          "additionalProperties": {
+            "type": "object", "required": ["severity", "basis"], "additionalProperties": false,
+            "properties": { "severity": { "$ref": "#/$defs/severity" }, "basis": { "type": "string", "pattern": "^(profile:(baseline|hardened)|default)$" } }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object", "required": ["items", "more", "below", "areas", "rules"], "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array", "maxItems": 5,
+          "description": "Fix these first: a ranking of what was checked, not of all risks. Open, at medium or above, never padded.",
+          "items": {
+            "type": "object", "required": ["rank", "kind", "ids", "person", "title", "severity", "keys", "assets", "rank_basis"], "additionalProperties": false,
+            "properties": {
+              "rank": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "kind": { "enum": ["finding_id", "person"] },
+              "ids": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+              "person": { "type": ["string", "null"], "description": "The people handle a person item groups by (from E9)." },
+              "title": { "type": "string" },
+              "severity": { "$ref": "#/$defs/severity" },
+              "keys": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key" } },
+              "assets": { "type": "array", "items": { "$ref": "#/$defs/asset_id" } },
+              "rank_basis": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "more": { "type": "integer", "minimum": 0, "description": "Items past the fifth that also rank at medium or above." },
+        "below": {
+          "type": "object", "required": ["low", "info", "accepted"], "additionalProperties": false,
+          "properties": { "low": { "type": "integer", "minimum": 0 }, "info": { "type": "integer", "minimum": 0 }, "accepted": { "type": "integer", "minimum": 0 } }
+        },
+        "areas": {
+          "type": "object", "description": "Disjoint counts over the ten risk areas.",
+          "required": ["assessed", "partial", "not_assessed", "not_applicable", "total"], "additionalProperties": false,
+          "properties": {
+            "assessed": { "type": "integer", "minimum": 0 },
+            "partial": { "type": "integer", "minimum": 0 },
+            "not_assessed": { "type": "integer", "minimum": 0 },
+            "not_applicable": { "type": "integer", "minimum": 0 },
+            "total": { "const": 10 }
+          }
+        },
+        "rules": {
+          "type": "object", "required": ["selected", "decided", "without_evidence"], "additionalProperties": false,
+          "properties": { "selected": { "type": "integer", "minimum": 0 }, "decided": { "type": "integer", "minimum": 0 }, "without_evidence": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "description": "Every row, never folded: the ten risk areas, one row per tool without a collector, and the outside-scheck rows. Host domains that carry no rule are not coverage.",
+      "items": {
+        "type": "object",
+        "required": ["area", "mark", "reasons"],
+        "additionalProperties": false,
+        "properties": {
+          "area": { "$ref": "#/$defs/area_row" },
+          "tool": { "type": "string", "description": "For other_saas: the tools entry by name." },
+          "mark": { "$ref": "#/$defs/mark" },
+          "reasons": { "type": "array", "items": { "$ref": "#/$defs/reason_detail" } },
+          "detail": { "type": "string" },
+          "population": { "$ref": "#/$defs/population" },
+          "assets_covered": { "type": "array", "items": { "$ref": "#/$defs/asset_id" } },
+          "assets_excluded": { "type": "array", "items": { "type": "string" } },
+          "principals": { "type": "array", "items": { "$ref": "#/$defs/principal" } },
+          "collected": { "$ref": "#/$defs/span" },
+          "caps": { "type": "array", "items": { "$ref": "#/$defs/cap" } },
+          "narrowing": { "type": "array", "items": { "$ref": "#/$defs/narrowing" } },
+          "declared_not_verified": { "type": "array", "items": { "$ref": "#/$defs/note" } },
+          "unattributed_members": { "type": "integer", "minimum": 0 },
+          "sub_items": {
+            "type": "array",
+            "description": "A rule (or a family sharing a finding id) on an asset; for a host, a host domain that carries a rule. Never a check.",
+            "items": {
+              "type": "object", "required": ["name", "asset", "mark", "reasons"], "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string" },
+                "asset": { "$ref": "#/$defs/asset_id" },
+                "mark": { "enum": ["assessed", "partial", "not_assessed", "not_applicable"] },
+                "reasons": { "type": "array", "items": { "$ref": "#/$defs/reason_detail" } },
+                "population": { "$ref": "#/$defs/population" },
+                "rules": { "type": "array", "items": { "type": "string" } },
+                "judged": { "type": "array", "items": { "type": "string" }, "description": "What the rules that decided judge: an assessed area rests on these and nothing else." },
+                "read_not_judged": { "type": "array", "items": { "type": "string" }, "description": "What was read in the area that no rule judges." }
+              },
+              "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
+            }
+          },
+          "planned_in": { "type": "string", "description": "For collector_not_built: the release that brings the collector. Never printed in text." }
+        },
+        "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "One record per instance, keyed {id, asset, subject}; flat, never grouped. Authoritative over an embedded envelope's findings.",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "assessments": {
+      "type": "array",
+      "description": "One record per selected rule and asset. A later run reads an instance as fixed only when its rule decided on complete evidence with the same declared inputs and the same rules_version.",
+      "items": {
+        "type": "object", "required": ["id", "asset", "status", "instances", "complete", "reads"], "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "asset": { "$ref": "#/$defs/asset_id" },
+          "status": { "enum": ["matched", "not_matched", "not_applicable", "not_assessed"] },
+          "instances": { "type": "integer", "minimum": 0 },
+          "complete": { "type": "boolean", "description": "Decided on unmarked evidence and read the whole population: no cap, sample, excluded unit or page limit." },
+          "reason": { "$ref": "#/$defs/reason" },
+          "reads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids, the vocabulary of finding.rule.reads." },
+          "observations": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "acceptances": {
+      "type": "array",
+      "description": "Every intent.accepted_risks entry and what became of it. Only not_matched may be read as likely fixed.",
+      "items": {
+        "type": "object", "required": ["entry", "id", "asset", "subject", "accepted_by", "expires", "outcome", "findings"], "additionalProperties": false,
+        "properties": {
+          "entry": { "type": "string", "description": "<file> intent.accepted_risks[i]" },
+          "id": { "type": "string" },
+          "asset": { "type": "string", "description": "As written: an assets name, a root as written, or a canonical id." },
+          "subject": { "type": ["string", "null"] },
+          "accepted_by": { "type": "string" },
+          "expires": { "type": ["string", "null"], "format": "date" },
+          "outcome": { "enum": ["applied", "expired", "not_applied", "not_matched", "rule_not_decided", "subject_not_found"] },
+          "why": { "type": "string" },
+          "findings": { "type": "array", "items": { "$ref": "#/$defs/key" } }
+        }
+      }
+    },
+    "excluded": {
+      "type": "array",
+      "description": "Every exclude entry and whether it matched; probes and scans not run arrive with 0.0.3.",
+      "items": {
+        "type": "object", "required": ["entry", "matched"], "additionalProperties": false,
+        "properties": { "entry": { "type": "string" }, "matched": { "type": ["boolean", "null"], "description": "null before discovery exists." }, "detail": { "type": "string" } }
+      }
+    },
+    "redaction": {
+      "type": "object", "required": ["builtin", "operator"], "additionalProperties": false,
+      "description": "Counts only; never a pattern.",
+      "properties": {
+        "builtin": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "operator": {
+          "type": "object", "required": ["rules", "matches"], "additionalProperties": false,
+          "properties": { "rules": { "type": "integer", "minimum": 0 }, "matches": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "id", "bound_id", "kind", "root", "status", "trace"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "id": { "$ref": "#/$defs/asset_id" },
+          "bound_id": { "type": ["string", "null"], "description": "What the asset bound to on contact (host.id, a tenant's customer id); null when it binds to nothing or was not contacted." },
+          "kind": { "enum": ["domain", "url", "host", "network", "saas", "repo", "cloud"] },
+          "root": { "type": "boolean" },
+          "status": { "enum": ["collected", "incomplete", "failed", "refused", "not_collected"] },
+          "reason": { "$ref": "#/$defs/reason" },
+          "detail": { "type": "string" },
+          "collector": { "type": ["string", "null"] },
+          "principal": { "oneOf": [{ "$ref": "#/$defs/principal" }, { "type": "null" }] },
+          "collected": { "$ref": "#/$defs/span" },
+          "evidence": { "type": ["string", "null"], "description": "Path of the asset's evidence file in the run directory; null under --no-persist." },
+          "checks": {
+            "type": "object", "description": "For a host: its plan, what ran, what gave no usable answer, and what a cut collection never reached.",
+            "required": ["planned", "ran", "unknown", "not_run"], "additionalProperties": false,
+            "properties": {
+              "planned": { "type": "integer", "minimum": 0 },
+              "ran": { "type": "integer", "minimum": 0 },
+              "unknown": { "type": "integer", "minimum": 0 },
+              "not_run": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "envelope": {
+            "description": "For a host: the host collector's run envelope whole (report-schema.json), its own schema_version. Its findings are the collector's grading; the engagement's findings are authoritative and their chains start from it.",
+            "type": "object"
+          },
+          "trace": {
+            "type": "array",
+            "description": "The command trace: every check or request attempted on this asset, in order. Present under --no-persist.",
+            "items": {
+              "type": "object", "required": ["at", "decision"], "additionalProperties": false,
+              "properties": {
+                "observation": { "type": "string" },
+                "check": { "type": "string" },
+                "request": { "type": "string" },
+                "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Bound parameters, post-redaction." },
+                "at": { "type": "string", "format": "date-time" },
+                "decision": { "type": "string", "pattern": "^(run|denied:.+|unavailable:.+|not_run:.+)$" },
+                "output_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "oneOf": [{ "required": ["check"] }, { "required": ["request"] }]
+            }
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "description": "For the readout: never findings, never counted.",
+      "items": { "$ref": "#/$defs/note" }
+    }
+  },
+  "$defs": {
+    "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+    "asset_id": { "type": "string", "pattern": "^(domain|url|host|network|saas|repo|cloud):.+$" },
+    "area": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"] },
+    "area_row": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging", "other_saas", "endpoints", "application_logic", "processes", "lookalike_domains"] },
+    "mark": { "enum": ["assessed", "partial", "not_assessed", "not_applicable", "outside_scheck"] },
+    "reason": {
+      "type": "string",
+      "pattern": "^(no_credentials|insufficient_permission:.+|not_on_plan:.+|collector_not_built|refused|not_declared|excluded_by_operator|limit_reached|failed|sampled|unavailable:[a-z_]+|no_rule)$"
+    },
+    "reason_detail": {
+      "type": "object", "required": ["reason"], "additionalProperties": false,
+      "properties": { "reason": { "$ref": "#/$defs/reason" }, "detail": { "type": "string" } }
+    },
+    "reasons_when_not_assessed": {
+      "if": { "properties": { "mark": { "enum": ["partial", "not_assessed"] } }, "required": ["mark"] },
+      "then": { "properties": { "reasons": { "minItems": 1 } } }
+    },
+    "read_ref": { "type": "string", "pattern": "^(check|request|declared):.+$" },
+    "span": {
+      "type": "object", "required": ["from", "to"], "additionalProperties": false,
+      "properties": { "from": { "type": "string", "format": "date-time" }, "to": { "type": "string", "format": "date-time" } }
+    },
+    "population": {
+      "type": "object", "required": ["kind", "in_scope", "read"], "additionalProperties": false,
+      "description": "What a mark counts: the in-scope assets, repositories, users or entry points of the kind it reads, and how many were read.",
+      "properties": { "kind": { "type": "string" }, "in_scope": { "type": "integer", "minimum": 0 }, "read": { "type": "integer", "minimum": 0 } }
+    },
+    "cap": {
+      "type": "object", "required": ["what", "of", "cap", "selection"], "additionalProperties": false,
+      "properties": { "what": { "type": "string" }, "of": { "type": "integer", "minimum": 0 }, "cap": { "type": "integer", "minimum": 0 }, "selection": { "type": "string" } }
+    },
+    "principal": {
+      "type": "object", "required": ["identity", "scopes_source"], "additionalProperties": false,
+      "description": "Who the data was read as. env names the environment variable a credential came from, never its value.",
+      "properties": {
+        "identity": { "type": "string" },
+        "elevation": { "enum": ["none", "sudo", "root"] },
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "scopes_source": { "enum": ["provider", "declared", "unknown"], "description": "unknown prints as \"permissions not readable\", never \"read-only\"." },
+        "env": { "type": "string" }
+      }
+    },
+    "shortfall": {
+      "type": "object", "required": ["asset", "asset_name", "reason", "detail"], "additionalProperties": false,
+      "properties": {
+        "asset": { "$ref": "#/$defs/asset_id" },
+        "asset_name": { "type": "string" },
+        "reason": { "$ref": "#/$defs/reason" },
+        "detail": { "type": "string", "description": "Escaped, post-redaction." },
+        "echo": { "type": "string", "description": "A canary mismatch's echo, redacted and cut. Attacker-influenced: JSON only, never printed in text." },
+        "kind": { "enum": ["host_key_unknown", "host_key_changed", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
+        "effect": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "checks_run": { "type": "integer", "minimum": 0 },
+            "checks_unknown": { "type": "integer", "minimum": 0 },
+            "checks_not_run": { "type": "integer", "minimum": 0 },
+            "requests_not_sent": { "type": "integer", "minimum": 0 },
+            "kept": { "type": "boolean", "description": "Whether what was read before the cut is kept and assessed." }
+          }
+        },
+        "planned_in": { "type": "string" }
+      }
+    },
+    "narrowing": {
+      "type": "object", "required": ["entry", "removed"], "additionalProperties": false,
+      "properties": {
+        "entry": { "type": "string", "description": "<file> assets.<name>.disable_checks[i] and the like." },
+        "removed": { "type": "array", "items": { "type": "string" }, "description": "Checks, rules or paths it removed; empty when it removed nothing." },
+        "denied_reads": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "note": {
+      "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name"] },
+        "source": { "type": "string" },
+        "detail": { "type": "string" }
+      }
+    },
+    "key": {
+      "type": "object", "required": ["id", "asset", "subject"], "additionalProperties": false,
+      "properties": { "id": { "type": "string" }, "asset": { "$ref": "#/$defs/asset_id" }, "subject": { "type": ["string", "null"] } }
+    },
+    "subject": {
+      "type": "object", "required": ["kind", "key", "label"], "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name", "url", "declaration"] },
+        "key": { "type": "string", "description": "What accepted_risks[].subject takes; a redact_extra marker when the name is redacted." },
+        "label": { "type": "string", "description": "Built only from fields rules read." },
+        "provider_id": { "type": "string" },
+        "person": { "type": "string", "description": "The people handle, when attributed." }
+      }
+    },
+    "source_ref": {
+      "oneOf": [
+        { "type": "object", "required": ["file", "key"], "additionalProperties": false,
+          "properties": { "file": { "type": "string" }, "key": { "type": "string" } } },
+        { "type": "object", "required": ["observation", "excerpt"], "additionalProperties": false,
+          "properties": { "observation": { "type": "string" }, "excerpt": { "type": "string" } } }
+      ]
+    },
+    "evidence": {
+      "type": "object", "required": ["kind", "excerpt"], "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["observed", "declared"] },
+        "asset": { "$ref": "#/$defs/asset_id" },
+        "check": { "type": "string" },
+        "request": { "type": "string" },
+        "observation": { "type": "string" },
+        "source": { "type": "string", "description": "For declared evidence: engagement.yaml <key path>." },
+        "collected_at": { "type": "string", "format": "date-time" },
+        "principal": { "type": "string" },
+        "excerpt": { "type": "string" }
+      },
+      "if": { "properties": { "kind": { "const": "observed" } } },
+      "then": {
+        "required": ["asset", "observation", "collected_at", "principal"],
+        "oneOf": [{ "required": ["check"] }, { "required": ["request"] }]
+      },
+      "else": { "required": ["source"] }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["key", "asset_name", "bound_id", "subject", "id", "title", "area", "category", "exposure_finding", "severity_base", "severity", "adjustments", "status", "rule", "evidence", "impact", "why_here", "not_checked", "remediation"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "asset_name": { "type": "string" },
+        "bound_id": { "type": ["string", "null"] },
+        "subject": { "oneOf": [{ "$ref": "#/$defs/subject" }, { "type": "null" }] },
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "area": { "$ref": "#/$defs/area" },
+        "category": { "type": "string" },
+        "exposure_finding": { "type": "boolean" },
+        "severity_base": { "$ref": "#/$defs/severity" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "adjustments": {
+          "type": "array",
+          "description": "The collector's chain first (by: collector), then the engagement's closed table (spec/engagement.md, Severity in context).",
+          "items": {
+            "type": "object", "required": ["rule", "by", "delta", "source"], "additionalProperties": false,
+            "properties": {
+              "rule": { "type": "string", "pattern": "^(exposed_on_purpose|data_matters_most|deploys_to:production|contradiction|attribute:[a-z_]+|exposure:(internet|airgapped)|environment:dev|expected_service:.+|unexpected_service:.+)$" },
+              "by": { "enum": ["collector", "engagement"] },
+              "delta": { "type": "string", "pattern": "^([+-][1-4]|to_info)$" },
+              "source": { "$ref": "#/$defs/source_ref" }
+            }
+          }
+        },
+        "status": { "enum": ["open", "accepted"] },
+        "acceptance": {
+          "type": "object", "required": ["entry", "reason", "accepted_by", "expires", "expired", "covers_every_instance"], "additionalProperties": false,
+          "properties": {
+            "entry": { "type": "string" },
+            "reason": { "type": "string" },
+            "accepted_by": { "type": "string" },
+            "expires": { "type": ["string", "null"], "format": "date" },
+            "expired": { "type": "boolean" },
+            "covers_every_instance": { "type": "boolean" }
+          }
+        },
+        "rule": {
+          "type": "object", "required": ["kind", "reads"], "additionalProperties": false,
+          "properties": { "kind": { "enum": ["single_fact", "multi_fact"] }, "reads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/read_ref" } } }
+        },
+        "evidence": {
+          "type": "array", "minItems": 1,
+          "description": "At least one observed item: a declaration supports a finding and never makes one alone.",
+          "items": { "$ref": "#/$defs/evidence" },
+          "contains": { "properties": { "kind": { "const": "observed" } }, "required": ["kind"] }
+        },
+        "derived": {
+          "type": "array",
+          "description": "Computed against collection time; each states what a field shows, never who acted.",
+          "items": {
+            "type": "object", "required": ["name", "value"], "additionalProperties": false,
+            "properties": { "name": { "type": "string" }, "value": { "type": ["string", "number", "boolean"] } }
+          }
+        },
+        "affected": {
+          "type": "object", "required": ["count", "listed", "cap"], "additionalProperties": false,
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "listed": { "type": "array", "items": { "type": "string" } },
+            "cap": { "type": "integer", "minimum": 1 },
+            "of_note": {
+              "type": "array",
+              "items": {
+                "type": "object", "required": ["key", "why"], "additionalProperties": false,
+                "properties": { "key": { "type": "string" }, "why": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "impact": { "type": "string" },
+        "why_here": { "type": "array", "items": { "type": "string" }, "description": "Templated from attributed context only." },
+        "not_checked": { "type": "array", "items": { "type": "string" } },
+        "remediation": {
+          "type": "object", "required": ["summary"], "additionalProperties": false,
+          "properties": {
+            "summary": { "type": "string" },
+            "steps": { "type": "array", "items": { "type": "string" }, "description": "In a responder's order: contain, remove access, review, clean up." },
+            "commands": { "type": "array", "items": { "type": "string" } },
+            "caveat": { "type": "string" },
+            "where": { "type": "string", "description": "A console path, for a finding with no command." }
+          }
+        },
+        "accept_template": {
+          "description": "The ready-to-paste intent.accepted_risks entry, for an open finding. reason and accepted_by are left empty for the owner to write; validation rejects them empty.",
+          "type": "object", "required": ["id", "asset", "by_subject", "reason", "accepted_by", "accepted_by_candidates", "expires", "needs_people"], "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string" },
+            "asset": { "type": "string", "description": "The assets name, else the canonical id." },
+            "subject": { "type": "string" },
+            "by_subject": { "type": "boolean", "description": "false when the subject's name is redacted and it has no provider id: the finding cannot be accepted by subject." },
+            "subject_note": { "type": "string" },
+            "reason": { "const": "" },
+            "accepted_by": { "const": "" },
+            "accepted_by_candidates": {
+              "type": "array",
+              "items": {
+                "type": "object", "required": ["handle", "why"], "additionalProperties": false,
+                "properties": { "handle": { "type": "string" }, "why": { "type": "string" } }
+              }
+            },
+            "expires": { "type": "string", "format": "date" },
+            "needs_people": { "type": "boolean", "description": "The engagement has no people: write it to a file and add one first." }
+          }
+        }
+      },
+      "if": { "properties": { "status": { "const": "accepted" } } },
+      "then": { "required": ["acceptance"], "not": { "required": ["accept_template"] } },
+      "else": { "required": ["accept_template"], "not": { "required": ["acceptance"] } }
+    }
+  }
+}

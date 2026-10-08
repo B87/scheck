@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/b87/scheck/internal/config"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
@@ -120,13 +119,10 @@ func (o *globalOpts) explainContext(cmd *cobra.Command, ef explainFlags) (*opera
 	var base operator.Structured
 	origins := map[string]string{}
 	if len(o.Context) > 0 && !o.IgnoreCtx {
-		cfg, err := o.loadConfig(cmd)
-		if err != nil {
-			return nil, nil, err
-		}
-		m, err := operator.Load(operator.Options{ConfigContext: cfg.Context, ConfigSource: cfg.ContextSource,
-			ImplicitDir: operator.DefaultImplicitDir, Flags: o.Context, Budget: policy.DefaultBudgets().ContextBytes,
-			KnownFinding: config.KnownFinding})
+		// --context names the files to read; no configuration file adds
+		// to them (docs/spec/engagement.md, "No configuration file").
+		m, err := operator.Load(operator.Options{Flags: o.Context, Budget: policy.DefaultBudgets().ContextBytes,
+			KnownFinding: finding.Known})
 		if err != nil {
 			return nil, nil, usageErr("%v", err)
 		}

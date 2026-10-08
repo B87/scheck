@@ -11,8 +11,7 @@ import (
 
 // No model assesses a host in this build (docs/spec/host-collector.md §2.1): every flag
 // that selects one is a usage error on local and ssh, with nothing
-// executed and no report written. The same settings in a configuration
-// file are simply unused, since a run never builds a provider.
+// executed and no report written.
 func TestModelFlagsAreRejectedByLocalAndSSH(t *testing.T) {
 	dir := t.TempDir()
 	cases := [][]string{
@@ -38,14 +37,6 @@ func TestModelFlagsAreRejectedByLocalAndSSH(t *testing.T) {
 			t.Errorf("%v: exit %d, output %q", args, code, out)
 		}
 	}
-	// A configured provider, model and refusal of egress cannot fail a run
-	// that never contacts a provider.
-	writeFile(t, filepath.Join(dir, "scheck.yaml"), "provider: anthropic\nmodel: gpt-5\nallow_egress: false\n")
-	for _, args := range [][]string{{"local", "--stop-after", "plan"}, {"local", "--stop-after", "context"}} {
-		if out, code := runIn(t, dir, args...); code != exitOK {
-			t.Errorf("%v with model settings configured: exit %d %q", args, code, out)
-		}
-	}
 }
 
 // The evaluation harness is the one caller of phase 2 left, so it owns the
@@ -66,6 +57,12 @@ func TestEvalProviderPreflightExitsThree(t *testing.T) {
 		{"eval", "--suite", suite},                           // default luna, no credential
 		{"eval", "--suite", suite, "--model", "gpt-5"},       // no credential
 		{"eval", "--suite", "nowhere", "--provider", "mock"}, // no suite
+		// A recorded evaluation never runs at settings other than its flags.
+		{"eval", "--suite", suite, "--provider", "mock", "--arms", "rules", "--no-pairs", "--profile", "bogus"},
+		{"eval", "--suite", suite, "--provider", "mock", "--arms", "rules", "--no-pairs", "--effort", "bogus"},
+		{"eval", "--suite", suite, "--provider", "mock", "--arms", "rules", "--no-pairs", "--max-context", "-5"},
+		{"providers", "--effort", "bogus"},
+		{"providers", "--max-context", "-5"},
 	}
 	for _, args := range cases {
 		out, code := runIn(t, dir, args...)
@@ -77,10 +74,6 @@ func TestEvalProviderPreflightExitsThree(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-test")
 	if out, code := runIn(t, dir, "eval", "--suite", suite, "--model", "mystery-7b"); code != exitUsage || out != "" {
 		t.Errorf("unknown window: exit %d %q", code, out)
-	}
-	writeFile(t, filepath.Join(dir, "scheck.yaml"), "allow_egress: false\nmodel: gpt-5\n")
-	if out, code := runIn(t, dir, "eval", "--suite", suite); code != exitUsage || out != "" {
-		t.Errorf("allow_egress false: exit %d %q", code, out)
 	}
 }
 

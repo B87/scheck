@@ -45,7 +45,7 @@ func TestNewValidatesConfiguration(t *testing.T) {
 	if _, err := New(llm.Config{Model: "gpt-4o", Env: noKey}); err == nil || !strings.Contains(err.Error(), keyVar) {
 		t.Errorf("no key on the default endpoint: %v", err)
 	}
-	if _, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", Env: noKey}); err == nil || !strings.Contains(err.Error(), "max_context") {
+	if _, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", Env: noKey}); err == nil || !strings.Contains(err.Error(), "--max-context") {
 		t.Errorf("unknown window: %v", err)
 	}
 	p, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", MaxContext: 8192, Env: noKey})

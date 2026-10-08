@@ -15,6 +15,9 @@ func exitOK(c check.Check, codes ...int) check.Check { c.ExitOK = codes; return 
 // "9 SUID files" rather than "9 lines" (docs/spec/host-collector.md §3).
 func unit(c check.Check, noun string) check.Check { c.Unit = noun; return c }
 
+// sampled marks a depth- or prefix-capped read (check.Check.Sampled).
+func sampled(c check.Check) check.Check { c.Sampled = true; return c }
+
 func init() {
 	check.Register(
 		// OS / host
@@ -63,10 +66,10 @@ func init() {
 		exitOK(unit(base("persist.cron", "System crontab and cron.d entries (file:line, non-empty lines)", check.DomainPersistence, check.ParseLines, "grep", "-rH", ".", "/etc/crontab", "/etc/cron.d"), "cron entries"), 0, 1, 2),
 
 		// SUID / world-writable
-		unit(exitOK(base("fs.suid", "SUID binaries under system and local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "/usr/bin", "/usr/sbin", "/bin", "/sbin", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files"),
-		unit(exitOK(base("fs.world_writable", "World-writable files and directories without the sticky bit (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths"),
+		sampled(unit(exitOK(base("fs.suid", "SUID binaries under system and local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "/usr/bin", "/usr/sbin", "/bin", "/sbin", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files")),
+		sampled(unit(exitOK(base("fs.world_writable", "World-writable files and directories without the sticky bit (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths")),
 
 		// Logging / audit
 		exitOK(base("log.auditd", "Whether auditd is active", check.DomainLogging, check.ParseRaw, "systemctl", "is-active", "auditd"), check.AnyExit...),
