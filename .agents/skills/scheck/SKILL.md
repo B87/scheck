@@ -59,8 +59,11 @@ Context and narrowing live in the engagement file, never in flags: a host's `con
 `redact_extra`, and `intent.accepted_risks`. `scheck run --host … --write-engagement
 FILE` writes the one-host engagement as a starting point and contacts nothing.
 `--context`, `--ignore-context` and `--audit-log` exit 3 on `run` and on the aliases.
-The reach flags (`--identity`, `--known-hosts`, `--sudo`, `--elevate`, `--profile`,
-`--timeout`) are accepted only with `--host`; in a file they are the host asset's keys.
+The reach flags (`--identity`, `--known-hosts`, `--jump`, `--sudo`, `--elevate`,
+`--profile`, `--timeout`) are accepted only with `--host`; in a file they are the host
+asset's keys. `--jump user@bastion[:port]` reaches the host through one SSH hop whose key
+must also be in known_hosts; nothing runs on the hop, and the report and every audit
+line name it as `via`. An unknown key on the hop exits 3 before the host is contacted.
 
 ## Run and discover
 

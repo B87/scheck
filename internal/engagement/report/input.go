@@ -72,8 +72,11 @@ type AssetInput struct {
 	// Echo is a canary mismatch's echo, redacted and cut; JSON only.
 	Echo string
 	// Refusal is a refused asset's kind: host_key_unknown,
-	// host_key_changed, access or canary.
+	// host_key_changed, jump_host_key_unknown, jump_host_key_changed,
+	// access or canary.
 	Refusal string
+	// Via is a host's jump host, user@host:port, "" when reached directly.
+	Via string
 	// Trace is the asset's audit log entries, in order: every command a
 	// collection attempt sent, refused and failed ones included.
 	Trace []policy.AuditEntry

@@ -461,15 +461,17 @@ type OperatorRedaction struct {
 
 // Asset is one asset in scope and what became of it.
 type Asset struct {
-	Name      string     `json:"name"`
-	ID        string     `json:"id"`
-	BoundID   *string    `json:"bound_id"`
-	Kind      string     `json:"kind"`
-	Root      bool       `json:"root"`
-	Status    string     `json:"status"`
-	Reason    string     `json:"reason,omitempty"`
-	Detail    string     `json:"detail,omitempty"`
-	Collector *string    `json:"collector,omitempty"`
+	Name      string  `json:"name"`
+	ID        string  `json:"id"`
+	BoundID   *string `json:"bound_id"`
+	Kind      string  `json:"kind"`
+	Root      bool    `json:"root"`
+	Status    string  `json:"status"`
+	Reason    string  `json:"reason,omitempty"`
+	Detail    string  `json:"detail,omitempty"`
+	Collector *string `json:"collector,omitempty"`
+	// Via is the jump host a host was reached through; nothing ran on it.
+	Via       string     `json:"via,omitempty"`
 	Principal *Principal `json:"principal,omitempty"`
 	Collected *Span      `json:"collected,omitempty"`
 	Evidence  *string    `json:"evidence,omitempty"`

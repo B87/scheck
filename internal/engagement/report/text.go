@@ -208,6 +208,13 @@ func (t *text) refusal(s Shortfall) string {
 	case "host_key_unknown":
 		out = n + " was not contacted: its host key is not in your known_hosts file. Confirm the fingerprint with " +
 			"whoever runs the host, then add it."
+	case "jump_host_key_changed":
+		out = n + " was not contacted: the host key of its jump host " + t.via(s.Asset) + " changed. A changed key can " +
+			"mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the jump host " +
+			"before you accept it."
+	case "jump_host_key_unknown":
+		out = n + " was not contacted: the host key of its jump host " + t.via(s.Asset) + " is not in your known_hosts " +
+			"file. Confirm the fingerprint with whoever runs the jump host, then add it."
 	case "canary":
 		out = n + ": scheck stopped before running any check, because the host's login shell changed what it sent " +
 			"back (often a login banner or a profile script that prints text). This does not by itself mean the host " +
@@ -719,6 +726,9 @@ func (t *text) hosts(row Row) {
 				why = t.refusedWhy(a.ID)
 			case statusFailed:
 				why = "could not connect from this machine"
+				if a.Via != "" {
+					why += " through " + clean(a.Via)
+				}
 			}
 			t.hang("  "+clean(a.Name)+"  ", "    ", clean(a.ID)+": not checked: "+why+".")
 			continue
@@ -732,6 +742,9 @@ func (t *text) hosts(row Row) {
 			as += ", as root"
 		default:
 			as += ", no elevation"
+		}
+		if a.Via != "" {
+			as += ", through " + clean(a.Via)
 		}
 		span := ""
 		if a.Collected != nil {
@@ -819,6 +832,16 @@ func (t *text) openIn(a Asset, si SubItem) int {
 	return n
 }
 
+// via is the jump host an asset was reached through, "" if none.
+func (t *text) via(id string) string {
+	for _, a := range t.r.Assets {
+		if a.ID == id {
+			return clean(a.Via)
+		}
+	}
+	return ""
+}
+
 // refusedWhy is a refused host's cause, in words, for its Hosts line and
 // the close.
 func (t *text) refusedWhy(id string) string {
@@ -831,6 +854,10 @@ func (t *text) refusedWhy(id string) string {
 			return "its host key changed, so it was not contacted"
 		case "host_key_unknown":
 			return "its host key is not in your known_hosts file, so it was not contacted"
+		case "jump_host_key_changed":
+			return "the host key of its jump host changed, so it was not contacted"
+		case "jump_host_key_unknown":
+			return "the host key of its jump host is not in your known_hosts file, so it was not contacted"
 		case "canary":
 			return "its login shell changed what it sent back, so no check ran"
 		case "access":

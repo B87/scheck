@@ -19,6 +19,7 @@ import (
 type HostFlags struct {
 	Identity   string
 	KnownHosts string
+	Jump       string // user@host[:port] of an SSH hop, or ""
 	Timeout    string // the host collector's run timeout, e.g. 10m
 	Elevate    string // "", none or sudo
 	Profile    string // "", baseline or hardened
@@ -48,7 +49,7 @@ func ForHost(locator string, h HostFlags, opts Options) (*Resolved, []byte, erro
 		Defaults: Defaults{Probe: "off", Scan: "off",
 			Throttle: &Throttle{Rate: DefaultRate, Concurrency: DefaultConcurrency}, Profile: DefaultProfile},
 		Limits: Limits{Timeout: DefaultTimeout.String()},
-		Assets: map[string]Asset{name: {Locator: Locator{Host: locator}, Identity: h.Identity,
+		Assets: map[string]Asset{name: {Locator: Locator{Host: locator}, Identity: h.Identity, Jump: h.Jump,
 			KnownHosts: h.KnownHosts, Timeout: h.Timeout, Elevate: h.Elevate, Profile: h.Profile}},
 	}
 	var buf bytes.Buffer
@@ -85,6 +86,8 @@ func hostFlagFor(key string) string {
 	switch {
 	case strings.HasSuffix(key, ".identity"):
 		return "--identity"
+	case strings.HasSuffix(key, ".jump"):
+		return "--jump"
 	case strings.HasSuffix(key, ".known_hosts"):
 		return "--known-hosts"
 	case strings.HasSuffix(key, ".timeout"):

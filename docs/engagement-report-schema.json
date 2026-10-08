@@ -254,6 +254,7 @@
           "reason": { "$ref": "#/$defs/reason" },
           "detail": { "type": "string" },
           "collector": { "type": ["string", "null"] },
+          "via": { "type": "string", "description": "For a host reached through a jump host: the hop as user@host:port. A connection setting, not an asset: nothing ran on it, and its audit lines carry the same via." },
           "principal": { "oneOf": [{ "$ref": "#/$defs/principal" }, { "type": "null" }] },
           "collected": { "$ref": "#/$defs/span" },
           "evidence": { "type": ["string", "null"], "description": "Path of the asset's evidence file in the run directory; null under --no-persist." },
@@ -348,7 +349,7 @@
         "reason": { "$ref": "#/$defs/reason" },
         "detail": { "type": "string", "description": "Escaped, post-redaction." },
         "echo": { "type": "string", "description": "A canary mismatch's echo, redacted and cut. Attacker-influenced: JSON only, never printed in text." },
-        "kind": { "enum": ["host_key_unknown", "host_key_changed", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
+        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
         "effect": {
           "type": "object", "additionalProperties": false,
           "properties": {

@@ -121,7 +121,7 @@ func (b *builder) engagement() Engagement {
 
 func (b *builder) asset(a AssetInput) Asset {
 	out := Asset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, Status: a.Status, Reason: a.Reason,
-		Detail: a.Detail, Trace: []Trace{}}
+		Detail: a.Detail, Via: a.Via, Trace: []Trace{}}
 	if a.Kind == "host" {
 		host := "host"
 		out.Collector = &host

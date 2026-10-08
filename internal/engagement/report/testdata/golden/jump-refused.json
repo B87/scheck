@@ -1,0 +1,775 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "host:macos:22",
+      "complete": true,
+      "id": "disk.filevault_off",
+      "instances": 0,
+      "observations": [
+        "disk.fdesetup#1"
+      ],
+      "reads": [
+        "check:disk.fdesetup"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "fs.world_writable_present",
+      "instances": 0,
+      "observations": [
+        "fs.world_writable#1"
+      ],
+      "reads": [
+        "check:fs.world_writable"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": true,
+      "id": "fw.app_firewall_disabled",
+      "instances": 1,
+      "observations": [
+        "fw.global#1"
+      ],
+      "reads": [
+        "check:fw.global"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": true,
+      "id": "integrity.gatekeeper_disabled",
+      "instances": 0,
+      "observations": [
+        "integrity.spctl#1"
+      ],
+      "reads": [
+        "check:integrity.spctl"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": true,
+      "id": "integrity.sip_disabled",
+      "instances": 0,
+      "observations": [
+        "integrity.csrutil#1"
+      ],
+      "reads": [
+        "check:integrity.csrutil"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "remote.login_enabled",
+      "instances": 0,
+      "observations": [
+        "remote.login#1"
+      ],
+      "reads": [
+        "check:remote.login"
+      ],
+      "reason": "insufficient_permission:sudo",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "sshd.password_auth_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "reason": "insufficient_permission:sudo",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "sshd.root_login_enabled",
+      "instances": 0,
+      "observations": [
+        "sshd.config#1"
+      ],
+      "reads": [
+        "check:sshd.config"
+      ],
+      "reason": "insufficient_permission:sudo",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "time.ntp_disabled",
+      "instances": 0,
+      "observations": [
+        "time.ntp#1"
+      ],
+      "reads": [
+        "check:time.ntp"
+      ],
+      "reason": "insufficient_permission:sudo",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": true,
+      "id": "updates.pending",
+      "instances": 1,
+      "observations": [
+        "pkg.softwareupdate#1"
+      ],
+      "reads": [
+        "check:pkg.softwareupdate"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+      "checks": {
+        "not_run": 0,
+        "planned": 28,
+        "ran": 22,
+        "unknown": 6
+      },
+      "collected": {
+        "from": "2026-10-07T07:12:03Z",
+        "to": "2026-10-07T07:12:04.234Z"
+      },
+      "collector": "host",
+      "envelope": {
+        "elided": "pinned by internal/report goldens",
+        "schema_version": "1.6"
+      },
+      "id": "host:macos:22",
+      "kind": "host",
+      "name": "macos",
+      "principal": {
+        "elevation": "none",
+        "identity": "deploy",
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [],
+      "via": "ops@198.51.100.7:22"
+    },
+    {
+      "bound_id": null,
+      "collector": "host",
+      "detail": "ssh: jump host 198.51.100.7:22: host key unknown (jump host)",
+      "id": "host:203.0.113.5:22",
+      "kind": "host",
+      "name": "deploy",
+      "reason": "refused",
+      "root": true,
+      "status": "refused",
+      "trace": [],
+      "via": "ops@198.51.100.7:22"
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "assets_covered": [
+        "host:macos:22"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "hosts",
+        "read": 1
+      },
+      "principals": [
+        {
+          "elevation": "none",
+          "identity": "deploy",
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "no_rule"
+        },
+        {
+          "reason": "insufficient_permission:sudo"
+        },
+        {
+          "detail": "deploy",
+          "reason": "refused"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "host:macos:22",
+          "judged": [
+            "pending updates"
+          ],
+          "mark": "assessed",
+          "name": "Software updates",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "reasons": [],
+          "rules": [
+            "updates.pending"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "judged": [
+            "FileVault"
+          ],
+          "mark": "assessed",
+          "name": "Disk encryption",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "reasons": [],
+          "rules": [
+            "disk.filevault_off"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "judged": [
+            "Gatekeeper",
+            "System Integrity Protection"
+          ],
+          "mark": "assessed",
+          "name": "System integrity",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 2
+          },
+          "reasons": [],
+          "rules": [
+            "integrity.gatekeeper_disabled",
+            "integrity.sip_disabled"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "judged": [
+            "the application firewall"
+          ],
+          "mark": "assessed",
+          "name": "Firewall",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "read_not_judged": [
+            "Firewall has block all state set to disabled.",
+            "Firewall stealth mode is off"
+          ],
+          "reasons": [],
+          "rules": [
+            "fw.app_firewall_disabled"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Network exposure",
+          "reasons": [
+            {
+              "detail": "read: 23 listening sockets",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "SSH server",
+          "population": {
+            "in_scope": 2,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "sshd.config: requires elevated read",
+              "reason": "insufficient_permission:sudo"
+            }
+          ],
+          "rules": [
+            "sshd.password_auth_enabled",
+            "sshd.root_login_enabled"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Remote access",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "read_not_judged": [
+            "10 service overrides"
+          ],
+          "reasons": [
+            {
+              "detail": "remote.login: requires elevated read",
+              "reason": "insufficient_permission:sudo"
+            }
+          ],
+          "rules": [
+            "remote.login_enabled"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Accounts",
+          "reasons": [
+            {
+              "detail": "read: GroupMembership: root alice; 134 accounts",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Privilege escalation",
+          "reasons": [
+            {
+              "detail": "not read: privesc.sudoers, privesc.sudoers_d",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Startup and persistence",
+          "reasons": [
+            {
+              "detail": "read: 3 launchd plists; 555 launchd jobs, 284 running",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "judged": [
+            "world-writable paths, depth-capped"
+          ],
+          "mark": "assessed",
+          "name": "Filesystem",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "read_not_judged": [
+            "0 SUID files"
+          ],
+          "reasons": [],
+          "rules": [
+            "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Logging and audit",
+          "reasons": [
+            {
+              "detail": "not read: log.status",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Time synchronisation",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "time.ntp: requires elevated read",
+              "reason": "insufficient_permission:sudo"
+            }
+          ],
+          "rules": [
+            "time.ntp_disabled"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-07T07:12:03Z",
+      "to": "2026-10-07T07:19:03Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "host-macos",
+    "operator": null,
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "timezone": "UTC",
+    "trigger": null
+  },
+  "excluded": [],
+  "exit": {
+    "code": 3,
+    "reasons": [
+      {
+        "asset": "host:203.0.113.5:22",
+        "code": 3,
+        "why": "deploy was not assessed: ssh: jump host 198.51.100.7:22: host key unknown (jump host)"
+      },
+      {
+        "code": 1,
+        "why": "1 open finding at or above its asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "host:203.0.113.5:22": {
+        "basis": "profile:baseline",
+        "severity": "medium"
+      },
+      "host:macos:22": {
+        "basis": "profile:baseline",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "macos",
+        "by_subject": false,
+        "expires": "2027-04-05",
+        "id": "fw.app_firewall_disabled",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "macos",
+      "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+      "category": "network",
+      "evidence": [
+        {
+          "asset": "host:macos:22",
+          "check": "fw.global",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Firewall is disabled. (State = 0)",
+          "kind": "observed",
+          "observation": "fw.global#1",
+          "principal": "deploy"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "fw.app_firewall_disabled",
+      "impact": "Every listening service on this machine accepts inbound connections without a per-application decision, so a background agent that opens a port is reachable by default.",
+      "key": {
+        "asset": "host:macos:22",
+        "id": "fw.app_firewall_disabled",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "This is a per-application filter, not a packet filter; it does not replace a network firewall.",
+        "commands": [
+          "sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"
+        ],
+        "summary": "Turn the application firewall on in System Settings \u003e Network \u003e Firewall, or from the command line."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:fw.global"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "The macOS application firewall is disabled",
+      "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "macos",
+        "by_subject": false,
+        "expires": "2027-04-05",
+        "id": "updates.pending",
+        "needs_people": true,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "hosts",
+      "asset_name": "macos",
+      "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+      "category": "updates",
+      "evidence": [
+        {
+          "asset": "host:macos:22",
+          "check": "pkg.softwareupdate",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "name=Safari27.0TahoeAuto-27.0 version=27.0 (+2 more)",
+          "kind": "observed",
+          "observation": "pkg.softwareupdate#1",
+          "principal": "deploy"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "updates.pending",
+      "impact": "Published fixes, including security fixes, are available but not installed. How serious that is depends on which packages are behind.",
+      "key": {
+        "asset": "host:macos:22",
+        "id": "updates.pending",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "caveat": "Some updates need a restart to take effect; schedule accordingly.",
+        "commands": [
+          "# review the list first, then apply with apt / dnf / zypper / softwareupdate"
+        ],
+        "summary": "Review the pending updates and apply them with the host's package manager."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "check:pkg.softwareupdate"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": null,
+      "title": "Software updates are pending",
+      "why_here": []
+    }
+  ],
+  "incomplete": [],
+  "notes": [],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [
+    {
+      "asset": "host:203.0.113.5:22",
+      "asset_name": "deploy",
+      "detail": "ssh: jump host 198.51.100.7:22: host key unknown (jump host)",
+      "kind": "jump_host_key_unknown",
+      "reason": "refused"
+    }
+  ],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-07T07:12:03Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 1
+    },
+    "items": [
+      {
+        "assets": [
+          "host:macos:22"
+        ],
+        "ids": [
+          "fw.app_firewall_disabled"
+        ],
+        "keys": [
+          {
+            "asset": "host:macos:22",
+            "id": "fw.app_firewall_disabled",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:medium",
+          "area:hosts"
+        ],
+        "severity": "medium",
+        "title": "The macOS application firewall is disabled"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 6,
+      "selected": 10,
+      "without_evidence": 4
+    }
+  }
+}

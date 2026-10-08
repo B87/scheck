@@ -353,6 +353,23 @@ needed any of them can be repeated from its file. Beside its reach settings and 
 check id that is not in the catalog exits 3, and so does a `deny_paths` entry that is
 relative or `/`.
 
+**Jump hosts (0.0.2 E1c).** `jump: user@address[:port]` on a host asset, or `--jump`
+with `--host`, reaches the host through one SSH hop, as `ssh -J` does: scheck
+authenticates to the hop, opens one `direct-tcpip` channel to the host's address and
+port, and runs the host's SSH handshake inside it. The hop is a connection setting, not
+an asset: no session, command or canary runs on it, it is never in scope by being
+named, and it has no coverage row or findings. The hop's host key is verified strictly
+against the same `known_hosts` file as the host's, with the same identity or agent, and
+there is no bypass. The hop needs its own SSH user, refused by Scope before any contact
+when it is missing; it may not be `local` or the host itself. The address the hop
+connects to is the host's locator as written, resolved by the hop, so a name only the
+hop can resolve works. Every audit line of a host reached through a hop carries `via:
+user@address:port`, and so do the report's asset (`assets[].via`) and its coverage line
+("through ops@198.51.100.7:22"). One hop only; a chain of hops is not offered. What a
+hop leaves behind is what sshd writes for any authenticated connection (an ssh login's own
+noise, `host-collector.md §1`: the PAM session's motd cache); the integration test holds
+it to that list, with none of the target's documented artefacts.
+
 **Validation**, before any target contact:
 
 - Unknown keys exit 3.
@@ -578,16 +595,18 @@ engagement fixes how they are reached:
 - `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
   `0`.
 
-For a host, exit 3 is a positive list. A host asset with no SSH user is refused by
-Scope before any target is contacted, so nothing is read and no run directory is
-created. An unknown or changed host key, an unreadable identity or known_hosts file,
-failed authentication and a canary mismatch are found on contact: that host is recorded
+For a host, exit 3 is a positive list. A host asset or its jump host with no SSH user is
+refused by Scope before any target is contacted, so nothing is read and no run directory
+is created. An unknown or changed host key, an unreadable identity or known_hosts file,
+failed authentication and a canary mismatch are found on contact, and so are an unknown
+or changed key on a jump host and failed authentication to it, before the host itself
+is contacted: that host is recorded
 as `refused`, the other assets are still collected and every stage is written before
 the run exits 3, so nothing already read from a client's host is discarded. A canary
 that never answers is not a mismatch: nothing was shown to be altered, so it is a
 transport failure. Every other failure to reach a host (a name that
 does not resolve, TCP refused or timed out, a handshake reset, cut off or past its
-deadline) is a transport failure: the asset is `failed` and the run exits 2. A session
+deadline, a jump host that cannot reach the host) is a transport failure: the asset is `failed` and the run exits 2. A session
 lost after it worked stops that host's plan where it was lost, keeps what was read, and
 is `incomplete` with reason `failed`: never a complete run of unavailable checks. A
 session lost while the canary itself ran is a transport failure too, not a canary
@@ -651,7 +670,7 @@ already holds a finished run until resume exists (E4). `--stop-after intake` val
 and prints the file and creates no directory; without `--stop-after` a run goes through
 Report, which writes `report.json` and `report.txt` ("The report"). Scope writes the declared
 roots as written and refuses, before any target is contacted, a host asset with a
-`jump` or without an SSH user. Every asset of kind `host`, a root or an `assets` entry,
+a host or jump host without an SSH user. Every asset of kind `host`, a root or an `assets` entry,
 is collected; an asset of any other kind is `not_collected` with reason
 `collector_not_built`, which makes the run exit 2 when the asset is a root. Plan writes an
 empty checklist and Check opens no follow-up. `evidence/<asset>.json` is the host
@@ -666,7 +685,7 @@ keys. Accepted risks are graded at the run's start time, in `engagement.timezone
 Recon writes every asset's commands to `audit.jsonl` and keeps each asset's entries for
 the report's trace, so the trace survives `--no-persist`. A canary mismatch's echo is
 kept apart from its detail (`echo` in `recon.json` and the report's JSON). Scope's refusals (a
-`jump`, a host without an SSH user) happen before the run directory is created, so a
+host or jump host without an SSH user) happen before the run directory is created, so a
 refused run leaves nothing behind. Stdout is the report, as text or with `--format json`
 as `report.json` (`--include-evidence` adds the hosts' captures to stdout only); a run
 stopped earlier prints that stage's document with `--format json` (`--stop-after check`
@@ -1130,7 +1149,7 @@ the envelope.
 `findings.json` and the report carry each as `{asset, asset_name, reason, detail,
 effect}`: `asset` the canonical id, `reason` from the closed list, `detail` escaped,
 post-redaction text, for a refusal its `kind` (`host_key_unknown`, `host_key_changed`,
-`access`, `canary`), which picks the sentence below and prints the raw error only at
+`jump_host_key_unknown`, `jump_host_key_changed`, `access`, `canary`), which picks the sentence below and prints the raw error only at
 `-v`, and `effect` what was lost (`{checks_run, checks_unknown,
 checks_not_run, kept}` for a host, `{requests_not_sent}` for an API). They print in run
 status, refused before incomplete, each in the order of `roots`:
@@ -1138,6 +1157,8 @@ status, refused before incomplete, each in the order of `roots`:
 | Case | Text | Exit |
 |---|---|---|
 | Unknown host key | `REFUSED: deploy was not contacted: its host key is not in your known_hosts file. Confirm the fingerprint with whoever runs the host, then add it.` | 3 |
+| Unknown key on the jump host | `REFUSED: deploy was not contacted: the host key of its jump host ops@198.51.100.7:22 is not in your known_hosts file. Confirm the fingerprint with whoever runs the jump host, then add it.` | 3 |
+| Changed key on the jump host | `REFUSED: deploy was not contacted: the host key of its jump host ops@198.51.100.7:22 changed. A changed key can mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the jump host before you accept it.` | 3 |
 | Changed host key | `REFUSED: deploy was not contacted: the host key for 203.0.113.5 changed. A changed key can mean a reinstalled server or an interception; confirm the fingerprint with whoever runs the host before you accept it.` | 3 |
 | No SSH user, unreadable identity or known_hosts, failed authentication | `REFUSED: deploy: scheck could not use the access it was given (authentication failed for deploy@203.0.113.5 with ~/.ssh/deploy). Nothing was read from it.` | 3 |
 | Canary mismatch | `REFUSED: deploy: scheck stopped before running any check, because the host's login shell changed what it sent back (often a login banner or a profile script that prints text). This does not by itself mean the host is compromised: ask whoever runs it to look at its login scripts. The raw reply is in report.json.` | 3 |

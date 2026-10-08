@@ -109,6 +109,7 @@ With the Go toolchain required by [go.mod](go.mod):
 make build
 bin/scheck run --host local                                  # this machine; the engagement report
 bin/scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo
+bin/scheck run --host deploy@10.0.4.12 --jump ops@bastion.example.com   # through one SSH hop; nothing runs on it
 bin/scheck run --host local -v                               # plus the host's fact sheet
 bin/scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml   # contacts nothing
 bin/scheck run engagement.yaml --stop-after intake           # validate and print it resolved

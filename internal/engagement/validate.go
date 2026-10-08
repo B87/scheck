@@ -518,7 +518,7 @@ func (v *validator) hostSettings(key string, r Ref, a Asset) {
 		} else if j.Local() {
 			v.fail(key+".jump", "a jump host is reached over SSH; local is the machine running scheck")
 		} else if j.ID == r.ID {
-			v.fail(key+".jump", "is the host itself")
+			v.fail(key+".jump", "names the host itself; a jump host is the machine you connect through to reach it")
 		}
 	}
 	if a.Identity != "" && local {
