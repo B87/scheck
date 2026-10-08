@@ -343,7 +343,6 @@ claim of any kind.
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
 the `anthropic` and `ollama` providers, and
 `--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
-engagement's resume,
-`--jump` and `jump:`, `scheck init`, the network collectors, probes, scans, full scope and
+engagement's resume, `scheck init`, the network collectors, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.

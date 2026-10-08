@@ -57,14 +57,86 @@ func Start(t testing.TB, name string) *Container {
 	}
 	dir := t.TempDir()
 	identity, pub := genKey(t, dir)
-	image := "scheck-test-" + name
-	run(t, rt, "build", "-q", "-t", image, "--build-arg", "PUBKEY="+pub, filepath.Join(root(t), "test", "containers", name))
+	image := build(t, rt, name, pub)
 	id := strings.TrimSpace(run(t, rt, "run", "-d", "--rm", "-p", "127.0.0.1::22", image))
 	t.Cleanup(func() { _ = exec.Command(rt, "rm", "-f", id).Run() })
 	port := mappedPort(t, rt, id)
 	c := &Container{ID: id, Host: "127.0.0.1", Port: port, Identity: identity, KnownHosts: filepath.Join(dir, "known_hosts")}
 	waitSSH(t, c)
 	return c
+}
+
+// TargetAlias is the name a target started by StartBehindJump has on its
+// private network: only the jump host resolves it.
+const TargetAlias = "scheck-target"
+
+// StartBehindJump runs the image twice on a private network: a jump host
+// whose sshd is published on 127.0.0.1, and a target with no published
+// port, reachable only from the jump host as TargetAlias port 22. Both
+// authorise the same key. Each KnownHosts holds its own host key only, so
+// a test chooses which keys the client knows.
+func StartBehindJump(t testing.TB, name string) (jump, dst *Container) {
+	t.Helper()
+	rt := Runtime()
+	if rt == "" {
+		t.Skip("no container runtime available")
+	}
+	dir := t.TempDir()
+	identity, pub := genKey(t, dir)
+	image := build(t, rt, name, pub)
+	network := "scheck-jump-" + filepath.Base(dir)
+	run(t, rt, "network", "create", network)
+	t.Cleanup(func() { _ = exec.Command(rt, "network", "rm", network).Run() })
+
+	hopID := strings.TrimSpace(run(t, rt, "run", "-d", "--rm", "--network", network, "-p", "127.0.0.1::22", image))
+	t.Cleanup(func() { _ = exec.Command(rt, "rm", "-f", hopID).Run() })
+	jump = &Container{ID: hopID, Host: "127.0.0.1", Port: mappedPort(t, rt, hopID), Identity: identity,
+		KnownHosts: filepath.Join(dir, "known_hosts.jump")}
+	waitSSH(t, jump)
+
+	dstID := strings.TrimSpace(run(t, rt, "run", "-d", "--rm", "--network", network, "--network-alias", TargetAlias, image))
+	t.Cleanup(func() { _ = exec.Command(rt, "rm", "-f", dstID).Run() })
+	dst = &Container{ID: dstID, Host: TargetAlias, Port: 22, Identity: identity, KnownHosts: filepath.Join(dir, "known_hosts.target")}
+	// The target is not reachable from here: wait for its sshd from
+	// inside, and take its host key from the file sshd serves.
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		out, err := exec.Command(rt, "exec", dstID, "ss", "-Hltn", "sport = :22").Output()
+		if err == nil && len(bytes.TrimSpace(out)) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("sshd in %s did not come up", dstID)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	key := strings.Fields(run(t, rt, "exec", dstID, "cat", "/etc/ssh/ssh_host_ed25519_key.pub"))
+	if len(key) < 2 {
+		t.Fatalf("no ed25519 host key in %s", dstID)
+	}
+	if err := os.WriteFile(dst.KnownHosts, []byte(TargetAlias+" "+key[0]+" "+key[1]+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return jump, dst
+}
+
+// build builds test/containers/<name> authorising pub and returns the image.
+func build(t testing.TB, rt, name, pub string) string {
+	t.Helper()
+	image := "scheck-test-" + name
+	run(t, rt, "build", "-q", "-t", image, "--build-arg", "PUBKEY="+pub, filepath.Join(root(t), "test", "containers", name))
+	return image
+}
+
+// Logs is the container's output so far: sshd -e logs every login there.
+func (c *Container) Logs(t testing.TB) string {
+	t.Helper()
+	cmd := exec.Command(Runtime(), "logs", c.ID)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("logs %s: %v\n%s", c.ID, err, out)
+	}
+	return string(out)
 }
 
 // Exec runs a command inside the container (for setup, e.g. installing a

@@ -337,11 +337,11 @@ func Preflight(res *Resolved) error {
 		if a.Kind != KindHost {
 			continue
 		}
-		if a.Jump != "" {
-			return refuse("assets %s: jump: not available in this build (0.0.2 E1c)", a.Name)
-		}
 		if !a.Local() && a.User == "" {
 			return refuse("assets %s: %s has no SSH user: write it into the locator as user@%s", a.Name, a.ID, a.Address())
+		}
+		if j, ok := jumpOf(a); ok && j.User == "" {
+			return refuse("assets %s: jump %s has no SSH user: write it as user@%s", a.Name, j.Host, j.Host)
 		}
 	}
 	return nil
@@ -515,6 +515,18 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	return doc, r.write("recon.json", doc)
 }
 
+// jumpOf is a host asset's jump host, parsed (validated at load).
+func jumpOf(a ResolvedAsset) (hostasset.Hop, bool) {
+	if a.Jump == "" {
+		return hostasset.Hop{}, false
+	}
+	j, err := parseLocator(KindHost, a.Jump)
+	if err != nil {
+		return hostasset.Hop{}, false
+	}
+	return hostasset.Hop{User: j.User, Host: j.Address(), Port: j.Port}, true
+}
+
 // hostTimeout names a host's run timeout and where it was set.
 func hostTimeout(a ResolvedAsset) string {
 	if a.Timeout != "" {
@@ -554,6 +566,9 @@ func (r *run) hostOptions(a ResolvedAsset, audit *policy.Audit) hostasset.Option
 		Log:           func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
 	}
 	o.RunTimeout, _ = time.ParseDuration(a.Timeout) // validated; "" keeps the default
+	if j, ok := jumpOf(a); ok {
+		o.Jump = &j
+	}
 	o.Context = r.hostContext(a)
 	return o
 }
@@ -720,6 +735,9 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
 			Status: ra.Status, Reason: ra.Reason, Detail: ra.Detail, Echo: ra.Echo, Refusal: ra.Refusal,
 			Trace: r.traces[ra.Name]}
+		if j, ok := jumpOf(asset); ok {
+			ai.Via = j.String()
+		}
 		if c, ok := r.hosts[ra.Name]; ok {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
 		}

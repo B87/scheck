@@ -13,9 +13,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +49,10 @@ type Options struct {
 	User       string
 	Identity   string
 	KnownHosts string
+	// Jump, when set, is the SSH hop the connection goes through: a
+	// connection setting, never an asset; nothing runs on it, and every
+	// audit line records it (docs/ROADMAP.md, E1c).
+	Jump *Hop
 	// Target, when set, replaces reaching the host, the canary included:
 	// a fixture in tests. No production caller sets it.
 	Target target.Target
@@ -75,6 +81,22 @@ type Options struct {
 	// collection time (docs/spec/engagement.md, "Accepted risks"); zero is
 	// when the envelope is built.
 	Now time.Time
+}
+
+// Hop is a jump host: who to log in as, where.
+type Hop struct {
+	User string
+	Host string
+	Port int
+}
+
+// String is the hop as an audit line and the report name it.
+func (h Hop) String() string {
+	port := h.Port
+	if port == 0 {
+		port = 22
+	}
+	return h.User + "@" + net.JoinHostPort(h.Host, strconv.Itoa(port))
 }
 
 // Error is a host that was not collected. Usage marks a refusal on a
@@ -177,6 +199,11 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 	case o.Local:
 		r.Target = record(local.New(budgets.CaptureLimit()))
 	default:
+		if o.Jump != nil {
+			// Every audit line names the hop; the hop itself never
+			// appears as a target.
+			o.Audit.SetVia(o.Jump.String())
+		}
 		st, err := dial(ctx, o, budgets.CaptureLimit(), logf)
 		if err != nil {
 			return nil, err
@@ -256,16 +283,28 @@ func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...an
 		}
 		identity = filepath.Join(home, identity[2:])
 	}
-	logf("ssh: connecting to %s@%s:%d", o.User, o.Host, o.Port)
-	st, err := ssh.Dial(ctx, ssh.Options{Host: o.Host, Port: o.Port, User: o.User, Identity: identity,
-		KnownHosts: o.KnownHosts, MaxOutput: maxOutput})
+	so := ssh.Options{Host: o.Host, Port: o.Port, User: o.User, Identity: identity, KnownHosts: o.KnownHosts, MaxOutput: maxOutput}
+	if j := o.Jump; j != nil {
+		if j.User == "" {
+			return nil, accessRefused("jump host %s has no SSH user: write it as user@%s", j.Host, j.Host)
+		}
+		so.Jump = &ssh.Hop{Host: j.Host, Port: j.Port, User: j.User}
+		logf("ssh: connecting to %s@%s:%d through %s", o.User, o.Host, o.Port, j)
+	} else {
+		logf("ssh: connecting to %s@%s:%d", o.User, o.Host, o.Port)
+	}
+	st, err := ssh.Dial(ctx, so)
 	if err != nil {
 		e := &Error{Usage: errors.Is(err, target.ErrAccess), Err: err}
+		hop := ""
+		if errors.Is(err, target.ErrJumpHost) {
+			hop = "jump_"
+		}
 		switch {
 		case errors.Is(err, target.ErrHostKeyChanged):
-			e.Kind = "host_key_changed"
+			e.Kind = hop + "host_key_changed"
 		case errors.Is(err, target.ErrHostKeyUnknown):
-			e.Kind = "host_key_unknown"
+			e.Kind = hop + "host_key_unknown"
 		case e.Usage:
 			e.Kind = "access"
 		}

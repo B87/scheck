@@ -370,6 +370,11 @@ honoured by a quoting function plus verification:
   (from the `sys.shell` check, `printenv SHELL`, so no `$` expansion is needed) and the
   canary result. Host keys are verified strictly against `~/.ssh/known_hosts`; an
   unknown host exits 3 with an `ssh-keyscan` hint. There is no bypass flag.
+- **Jump hosts (0.0.2 E1c).** A host may be reached through one SSH hop
+  (`engagement.md`, "Jump hosts"). The hop's key is verified the same way, before any
+  connection to the host is made through it; the hop only forwards one TCP connection,
+  so no command, session or canary runs on it, and the canary is still the first
+  command on the host's own session. Quoting and the catalog are unchanged.
   Authentication is an `--identity` file or the `SSH_AUTH_SOCK` agent; password
   authentication is not offered.
 
@@ -406,7 +411,8 @@ parameters, resolved argv, decision (`run | denied:<rule> | unavailable:<reason>
 exit code, duration, and output hash. A denied call returns an error `tool_result` to
 the model naming the rule — never a silent drop. Phase 1 writes the same lines; the
 canary appears as `run` or `denied:canary`, and a metadata-only substitution records
-the `fs.stat` argv that actually ran.
+the `fs.stat` argv that actually ran. A host reached through a jump host has `via:
+user@address:port` on every line (0.0.2 E1c); the hop never appears as a target.
 
 ---
 

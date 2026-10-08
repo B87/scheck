@@ -242,8 +242,8 @@ func TestStopAfterEndsTheRunThere(t *testing.T) {
 // What this build cannot reach is refused before any target is contacted.
 func TestScopeRefusesBeforeContact(t *testing.T) {
 	for name, file := range map[string]string{
-		"jump":    strings.Replace(hostAndGitHub, "elevate: sudo", "jump: ops@198.51.100.7", 1),
-		"no user": strings.Replace(hostAndGitHub, "deploy@203.0.113.5", "203.0.113.5", 1),
+		"jump without a user": strings.Replace(hostAndGitHub, "elevate: sudo", "jump: 198.51.100.7", 1),
+		"no user":             strings.Replace(hostAndGitHub, "deploy@203.0.113.5", "203.0.113.5", 1),
 	} {
 		res, err := Parse("engagement.yaml", []byte(file), testOpts)
 		if err != nil {
@@ -254,6 +254,27 @@ func TestScopeRefusesBeforeContact(t *testing.T) {
 		if _, ok := errors.AsType[*Refusal](err); !ok || calls != 0 {
 			t.Errorf("%s: err %v after %d collections, want a refusal before any", name, err, calls)
 		}
+	}
+}
+
+// A jump host is a connection setting the collector dials through; the
+// asset is still the target (docs/spec/engagement.md, "Jump hosts").
+func TestJumpReachesTheCollector(t *testing.T) {
+	file := strings.Replace(hostAndGitHub, "elevate: sudo", "jump: ops@198.51.100.7:2222", 1)
+	res, err := Parse("engagement.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got *hostasset.Hop
+	collect := func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
+		got = o.Jump
+		return nil, &hostasset.Error{Err: errors.New("ssh: dial: i/o timeout")}
+	}
+	if _, err := Run(context.Background(), res, RunOptions{Collect: collect}); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || *got != (hostasset.Hop{User: "ops", Host: "198.51.100.7", Port: 2222}) || got.String() != "ops@198.51.100.7:2222" {
+		t.Fatalf("hop %+v", got)
 	}
 }
 

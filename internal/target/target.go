@@ -66,6 +66,9 @@ var (
 	// "Incompleteness and refusals").
 	ErrHostKeyUnknown = errors.New("host key unknown")
 	ErrHostKeyChanged = errors.New("host key changed")
+	// ErrJumpHost marks a failure on the jump host itself, before the
+	// target was contacted, so a refusal names the hop and not the target.
+	ErrJumpHost = errors.New("jump host")
 	// ErrUnreachable marks a connection that never reached a working
 	// session for any reason other than ErrAccess: a name that does not
 	// resolve, TCP refused or timed out, a handshake reset or cut off.

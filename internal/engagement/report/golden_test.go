@@ -27,6 +27,18 @@ func canaryRefused(t *testing.T) Input {
 	return in
 }
 
+// jumpRefused is a host behind a jump host whose key is unknown, beside a
+// host that was read through a jump host: the hop is named, nothing ran
+// on it, and the refused host was never contacted.
+func jumpRefused(t *testing.T) Input {
+	in := refusedHost(t)
+	in.Assets[0].Via = "ops@198.51.100.7:22"
+	in.Assets[1].Via = "ops@198.51.100.7:22"
+	in.Assets[1].Detail = "ssh: jump host 198.51.100.7:22: host key unknown (jump host)"
+	in.Assets[1].Refusal = "jump_host_key_unknown"
+	return in
+}
+
 // The engagement report is a contract like the host report
 // (docs/spec/host-collector.md §9): text and JSON are pinned per case.
 // Regenerate with `go test ./internal/engagement/report -update` and read
@@ -39,6 +51,7 @@ func TestGoldenReports(t *testing.T) {
 		"root-without-collector": withGitHubRoot,
 		"lost-session":           lostSession,
 		"refused-host":           canaryRefused,
+		"jump-refused":           jumpRefused,
 		"unreachable-host":       unreachableHost,
 		"many-findings":          manyFindings,
 		"context":                withContext,

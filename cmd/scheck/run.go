@@ -96,7 +96,7 @@ func newRunCmd(opts *globalOpts) *cobra.Command {
 	f.StringVar(&ho.host, "host", "", "run on one host: user@address[:port] or local")
 	f.StringVar(&ho.identity, "identity", "", "with --host: private key file (otherwise ssh-agent)")
 	f.StringVar(&ho.knownHosts, "known-hosts", "", "with --host: known_hosts file (default ~/.ssh/known_hosts)")
-	f.StringVar(&ho.jump, "jump", "", "with --host: jump host (not available in this build)")
+	f.StringVar(&ho.jump, "jump", "", "with --host: an SSH jump host, user@address[:port]; nothing runs on it")
 	f.StringVar(&ho.writeEngagement, "write-engagement", "", "with --host: write the engagement to FILE and contact nothing")
 	return cmd
 }
@@ -220,9 +220,6 @@ func loadEngagement(opts *globalOpts, ho *hostOpts, args []string) (*engagement.
 	case ho.host == "" && ho.writeEngagement != "":
 		return nil, nil, usageErr("--write-engagement writes the engagement --host builds; it needs --host")
 	case ho.host != "":
-		if ho.jump != "" {
-			return nil, nil, usageErr("--jump is not available in this build (0.0.2 E1c)")
-		}
 		elevate := opts.Elevate
 		if opts.Sudo {
 			if elevate != "" && elevate != "sudo" {
@@ -235,7 +232,7 @@ func loadEngagement(opts *globalOpts, ho *hostOpts, args []string) (*engagement.
 			timeout = opts.Timeout.String()
 		}
 		res, raw, err := engagement.ForHost(ho.host, engagement.HostFlags{Identity: ho.identity, KnownHosts: ho.knownHosts,
-			Timeout: timeout, Elevate: elevate, Profile: opts.Profile}, engagementOptions)
+			Jump: ho.jump, Timeout: timeout, Elevate: elevate, Profile: opts.Profile}, engagementOptions)
 		if err != nil {
 			return nil, nil, usageErr("%v", err)
 		}

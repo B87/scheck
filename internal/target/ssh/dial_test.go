@@ -30,7 +30,7 @@ func TestHandshakeErrorsAreClassified(t *testing.T) {
 		{"deadline", errors.New("read tcp: i/o timeout"), target.ErrUnreachable},
 	}
 	for _, tc := range cases {
-		got := handshakeErr(tc.err, "203.0.113.5:22", o)
+		got := handshakeErr(tc.err, "203.0.113.5:22", o, "")
 		if !errors.Is(got, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
 		}

@@ -115,7 +115,7 @@ is part of the locator), the four context fields of `spec/host-collector.md §5.
 before any target contact (`spec/engagement.md`, "Identity, references and
 validation"), including the credential detector; `scheck run engagement.yaml
 --stop-after intake` validates the file and prints it resolved. `jump` is accepted and
-validated here and refused at run time with "not available in this build" until E1c.
+validated here; E1c makes it reachable.
 
 **Done when:** unknown keys, malformed roots, an `assets` entry outside every root and
 an `exclude` under no root exit 3 naming `file:line:key`; so do an unknown check id
