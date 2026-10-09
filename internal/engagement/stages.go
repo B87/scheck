@@ -158,7 +158,7 @@ type Evidence struct {
 
 // counts reports whether the evidence is first-party evidence.
 func (e *Evidence) counts() bool {
-	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved"
+	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved" && e.Kind != "suspended"
 }
 
 // String is the evidence as the Scope stage prints it.
@@ -172,6 +172,8 @@ func (e *Evidence) String() string {
 		return "none: the confirmation of " + e.Date + " expired"
 	case e.Kind == "future":
 		return "none: the confirmation is dated " + e.Date + ", after this run"
+	case e.Kind == "suspended":
+		return "none: the provider returned an unconfigured-service fingerprint"
 	case e.Kind == "moved":
 		return "none: confirmed for " + e.Target + ", which the name no longer points at"
 	case e.Kind == "network_root":
@@ -362,7 +364,8 @@ type run struct {
 	auditFile io.Writer
 	// gate is the run's scope gate, built when something sends through
 	// it.
-	gate *gate.Gate
+	gate     *gate.Gate
+	webScope *scope
 	// scoped is what the Scope stage found; reconResolver what this
 	// session's control lookup found of the resolver Recon reads through.
 	scoped        *ScopeDoc
@@ -671,7 +674,8 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := gate.Config{Registry: reg, Scope: r.res.GateScope(r.session), RedactExtra: r.res.RedactExtra(),
+	r.webScope = r.res.GateScope(r.session).(*scope)
+	cfg := gate.Config{Registry: reg, Scope: r.webScope, RedactExtra: r.res.RedactExtra(),
 		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1}
 	if p := r.o.Resume; p != nil {
 		cfg.Prior, cfg.Session = p.Requests, len(r.manifest.Sessions)
@@ -722,6 +726,7 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 	ev := web.Collect(ctx, g, r.webDomain(a))
 	ra.Web = &ev
 	ra.Judged = web.Judge(r.webInput(a, ev))
+	r.suspendConfirmations(ra.Judged)
 	ra.Status = StatusCollected
 	if ctx.Err() != nil || ev.Cut() {
 		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
@@ -748,6 +753,10 @@ func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
 		if sd.Root != a.ID {
 			continue
 		}
+		if sd.Control != nil {
+			n := webName(*sd.Control)
+			in.Wildcard = &n
+		}
 		if sd.CT != "ok" {
 			in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:ct_source", Detail: "certificate transparency did not answer"})
 		}
@@ -763,8 +772,7 @@ func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
 			if r.innerRoot(a, sn.Name) {
 				continue
 			}
-			in.Names = append(in.Names, web.Name{Name: sn.Name, Status: sn.Status, Detail: sn.Detail, Outcome: sn.Outcome,
-				Chain: sn.Chain, Addresses: sn.Addresses, FinalInRoot: sn.FinalInRoot, Request: sn.RequestID})
+			in.Names = append(in.Names, webName(sn))
 		}
 	}
 	return in
@@ -839,8 +847,12 @@ func (r *run) webDomain(a ResolvedAsset) web.Domain {
 			if sd.Root != a.ID {
 				continue
 			}
+			if sd.Control != nil && resolverDoubt(r.scoped.Resolver) == "" && resolverDoubt(r.reconResolver) == "" &&
+				web.NeedsWildcardPage(webName(*sd.Control)) {
+				d.Names = append(d.Names, sd.Control.Name)
+			}
 			for _, sn := range sd.Names {
-				if sn.Read {
+				if sn.Read && !r.innerRoot(a, sn.Name) {
 					d.Names = append(d.Names, sn.Name)
 				}
 			}
@@ -967,6 +979,11 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 				doc.Assets[i].Status, doc.Assets[i].Reason = root.Status, root.Reason
 				doc.Assets[i].Detail = "read with " + root.Name
 			}
+		}
+	}
+	if r.scoped != nil {
+		if err := r.write("scope.json", r.scoped); err != nil {
+			return nil, err
 		}
 	}
 	return doc, r.write("recon.json", doc)
@@ -1213,9 +1230,10 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
+			ai.Unfingerprinted = web.Unfingerprinted(r.webInput(asset, *ra.Web))
 			for _, j := range ra.Judged {
 				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
-					Reads: j.Reads, Excerpt: j.Excerpt,
+					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked,
 					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
 			}
 		}
@@ -1456,4 +1474,50 @@ func fileName(name string) string {
 		}
 		return '_'
 	}, name)
+}
+
+func webName(sn ScopeName) web.Name {
+	return web.Name{Name: sn.Name, Status: sn.Status, Detail: sn.Detail, Outcome: sn.Outcome,
+		Chain: sn.Chain, Addresses: sn.Addresses, FinalInRoot: sn.FinalInRoot, Request: sn.RequestID}
+}
+
+// Positive fingerprints narrow the live scope and mark the persisted
+// confirmation as suspended (docs/spec/web-collector.md, "Never claim a name").
+func (r *run) suspendConfirmations(judged []web.Judgment) {
+	for _, j := range judged {
+		if j.Verdict != web.Fired || (j.ID != finding.IDDNSTakeoverCandidate && j.ID != finding.IDDNSUnclaimedAtProvider) {
+			continue
+		}
+		names := append([]string{j.Subject.Key}, j.Members...)
+		for _, name := range names {
+			if strings.HasPrefix(name, "*.") {
+				continue
+			}
+			if r.webScope != nil {
+				r.webScope.suspended.Store(name, true)
+			}
+			if r.scoped == nil {
+				continue
+			}
+			suspend := func(e *Evidence) {
+				if e != nil && e.Kind == "operator" {
+					e.Kind = "suspended"
+				}
+			}
+			for i := range r.scoped.Assets {
+				a := &r.scoped.Assets[i]
+				if ref, ok := parseSubject(a.ID); ok && ref.name == name {
+					suspend(a.FirstParty)
+				}
+			}
+			for i := range r.scoped.Domains {
+				for k := range r.scoped.Domains[i].Names {
+					n := &r.scoped.Domains[i].Names[k]
+					if n.Name == name {
+						suspend(n.FirstParty)
+					}
+				}
+			}
+		}
+	}
 }

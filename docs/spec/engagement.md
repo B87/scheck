@@ -869,8 +869,8 @@ target is contacted, a host or jump host without an SSH user. From E4 it also ex
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
 is collected. A `domain` root is read through the web collector (E7 step 2a,
-[web-collector.md](web-collector.md#reads)), judged by its DNS rules in Recon (step
-2b-i, [web-collector.md](web-collector.md#dns-and-takeover)) and recorded as
+[web-collector.md](web-collector.md#reads)), judged by its DNS and takeover rules in Recon (step
+2b, [web-collector.md](web-collector.md#dns-and-takeover)) and recorded as
 `collected`, or with `limit_reached` when `limits.timeout` ends the engagement before it
 is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
@@ -1414,21 +1414,25 @@ no rule consumes in this version (`expected_services` before E9). With more than
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
-**The external and email rows, in this build** (E7 step 2b-i). A domain root the web
-collector read feeds both. In the external row each such root has three sub-items:
-*dangling records* (`dns.dangling_external` and `dns.dangling_internal`) and *private
-addresses* (`dns.private_address`), each marked from its rules' verdicts on that root
-and the names under it (*assessed* when none abstained, *partial* when some decided,
-*not assessed* when none did) with each abstention's reason and subject, or
-`not_applicable` when its rules had nothing to judge on complete evidence (no CNAME, no
-MX, no NS target), since everything unread abstains
-([web-collector.md](web-collector.md#dns-and-takeover)); and *subdomain takeover, TLS
-and certificates*, *not assessed* with `no_rule`. A row whose sub-items are each
-*assessed* or `not_applicable` is *assessed*; the external row is therefore *partial* at
-best. The email row is *not assessed* with `no_rule` ("SPF, DMARC and DKIM records"). A
-declared `domain` asset read with its root counts as read in both rows; its names are
-judged under its root's sub-items, and it has none of its own. A root that was not read
-gives its own reason in both rows.
+**The external and email rows, in this build** (E7 step 2b). A domain root the web
+collector read feeds both. In the external row each such root has *dangling records*
+(`dns.dangling_external` and `dns.dangling_internal`), *subdomain takeover*
+(`dns.takeover_candidate` and `dns.unclaimed_at_provider`) and *private addresses*
+(`dns.private_address`), each marked from its rules' verdicts on that root and the
+names under it (*assessed* when none abstained, *partial* when some decided, *not
+assessed* when none did) with each abstention's reason and subject, or
+`not_applicable` when its rules had nothing to judge on complete evidence. A wildcard
+finding that shares its subject with a discovery gap retains the gap's reason and
+leaves coverage partial ([web-collector.md](web-collector.md#dns-and-takeover)).
+*Services your names point at* lists names without a verified takeover fingerprint,
+with the count not checked and `no_rule`; an unknown-provider wildcard is listed once
+as `*.<root>`, even with no certificate-log members, and grouped names are omitted. *TLS and certificates* is *not assessed*
+with `no_rule`. A row whose sub-items are each *assessed* or `not_applicable` is
+*assessed*; the external row is therefore *partial* at best. The email row is *not
+assessed* with `no_rule` ("SPF, DMARC and DKIM records"). A declared `domain` asset
+read with its root counts as read in both rows; its names are judged under its root's
+sub-items, and it has none of its own. A root that was not read gives its own reason
+in both rows.
 
 **The fold line.** Rows whose reason is `not_declared` fold into one line, labeled `Not
 requested`, only when no declaration in the file points at the area. An area the file

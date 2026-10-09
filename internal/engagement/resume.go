@@ -273,7 +273,7 @@ func scopeInputs(res *Resolved, version string, at time.Time) string {
 // certificate transparency answer read, every name checked.
 func (d *ScopeDoc) complete() bool {
 	for _, dom := range d.Domains {
-		if dom.CT != "ok" {
+		if dom.CT != "ok" || dom.Control != nil && (dom.Control.Status == NameInsufficient || dom.Control.Status == NameNotChecked) {
 			return false
 		}
 		for _, n := range dom.Names {

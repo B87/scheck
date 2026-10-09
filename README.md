@@ -19,9 +19,14 @@ read by this version* and makes the run exit 2; its collectors arrive with the
 certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
 reads the root's DNS and mail records and, for each name Scope chose, the certificate
 and the front page over https and http. Its DNS rules judge what was read: a record
-pointing at a name that does not exist, and a public name publishing a private address.
-Subdomain takeover, email, TLS and header rules are not built yet, and the report's
-coverage says so. The report's "What left this machine" says what was sent where.
+pointing at a name that does not exist, a public name publishing a private address,
+and provider fingerprints for possible subdomain takeover or an unconfigured service
+with an ownership-verification policy. Wildcards are filed once, with matching
+undeclared names grouped; declared names keep their own reads and judgments.
+A takeover candidate is not proof that someone can claim the name; provider caveats
+and services with no fingerprint are listed. Email, TLS and header rules are not built
+yet, and the report's coverage says so. The report's "What left this machine" says
+what was sent where.
 Findings come from compiled-in rules: a host's posture rules, graded through the
 context the engagement declares, and a domain's DNS rules. A rule reads one fact, so a short
 list of findings and exit 0 mean no rule fired — not that anything is secure; the
@@ -51,7 +56,7 @@ flowchart TD
   scope --> recon["recon<br/>one collector per asset"]
 
   recon -->|host| host["host collector<br/>local, or SSH: strict host key, then sys.canary"]
-  recon -->|domain root| web["web collector, through the scope gate<br/>DNS rules: dangling records, private addresses"]
+  recon -->|domain root| web["web collector, through the scope gate<br/>DNS rules: dangling records, private addresses, takeover"]
   recon -->|any other kind| none["not read by this version<br/>collector_not_built"]
 
   catalog["catalog<br/>compiled checks, literal argv"] --> host

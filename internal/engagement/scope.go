@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
@@ -39,10 +40,11 @@ func (r *Resolved) GateScope(at time.Time) gate.Scope {
 }
 
 type scope struct {
-	res    *Resolved
-	at     time.Time
-	assets map[string]ResolvedAsset // by canonical id
-	intent []Ref                    // the intent URLs, entry points of their site
+	suspended sync.Map // names whose provider fingerprint invalidated operator confirmation
+	res       *Resolved
+	at        time.Time
+	assets    map[string]ResolvedAsset // by canonical id
+	intent    []Ref                    // the intent URLs, entry points of their site
 }
 
 // parse reads a subject id leniently: a GitHub login or repository, a host
@@ -258,6 +260,9 @@ func (s *scope) site(origin string) sitePaths {
 		}
 	}
 	ev, entries := s.res.evidence(o, s.at)
+	if ev != nil && ev.Kind == "operator" && s.confirmationSuspended(o.name) {
+		ev, entries = nil, nil
+	}
 	if !front && ev == nil {
 		return sitePaths{}
 	}
@@ -495,4 +500,9 @@ func (r *Resolved) firstParty(a ResolvedAsset, at time.Time) *Evidence {
 		return &Evidence{Kind: kind, ConfirmedBy: a.FirstParty.ConfirmedBy, Date: a.FirstParty.Date}
 	}
 	return nil
+}
+
+func (s *scope) confirmationSuspended(name string) bool {
+	_, found := s.suspended.Load(name)
+	return found
 }

@@ -718,7 +718,7 @@ func (g *Gate) Resolve(ctx context.Context, r Resolve) Resolved {
 	refuse := func(rule, detail string) Resolved {
 		e.Event, e.Decision, e.Detail = "refused", "refused:"+rule, detail
 		_ = g.record(e)
-		out := Resolved{RequestID: e.RequestID, Decision: e.Decision, Detail: detail}
+		out := Resolved{RequestID: e.RequestID, Decision: e.Decision, Detail: detail, Lookup: Lookup{Name: g.redact(r.Name)}}
 		if rule == "excluded" {
 			out.ExcludedBy = detail
 		}
@@ -747,7 +747,7 @@ func (g *Gate) Resolve(ctx context.Context, r Resolve) Resolved {
 		// Nothing to ask: not sent, so neither counted nor a control.
 		e.Event, e.Decision, e.Detail = "refused", "unavailable:no_resolver", "no nameserver in /etc/resolv.conf"
 		_ = g.record(e)
-		return Resolved{RequestID: e.RequestID, Decision: e.Decision, Detail: e.Detail}
+		return Resolved{RequestID: e.RequestID, Decision: e.Decision, Detail: e.Detail, Lookup: Lookup{Name: g.redact(name)}}
 	}
 	if r.Control {
 		g.countControl(invalid)
@@ -762,6 +762,12 @@ func (g *Gate) Resolve(ctx context.Context, r Resolve) Resolved {
 // PointsAt, an exclude in the chain) was made on them as answered, before
 // this; an address redact_extra matches already ended the lookup.
 func (g *Gate) redactLookup(l Lookup) Lookup {
+	// The concrete wildcard control leaves the gate through this field.
+	// A marked identity is insufficient, never a later HTTP target
+	// (docs/spec/web-collector.md, "Wildcards"; AGENTS.md rule 5).
+	if name := g.redact(l.Name); name != l.Name {
+		l.Name, l.Outcome = name, OutcomeError
+	}
 	if l.Chain != nil {
 		chain := make([]string, len(l.Chain))
 		for i, hop := range l.Chain {

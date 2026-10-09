@@ -96,6 +96,10 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		ext + " example.com/NS/ns1.dns.example":           Abstained,
 		in + " example.com/NS/ns.example.com":             Abstained,
 	}
+	for _, name := range []string{"flaky.example.com", "lost.example.com", "far.example.com", "late.example.com"} {
+		want[finding.IDDNSTakeoverCandidate+" "+name] = Abstained
+		want[finding.IDDNSUnclaimedAtProvider+" "+name] = Abstained
+	}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("%s: %q, want %q", k, got[k], v)
@@ -127,6 +131,12 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 			seen[id] = map[string]bool{}
 		}
 		seen[id][v] = true
+	}
+	for _, j := range takeoverOutcomes(t) {
+		if seen[j.ID] == nil {
+			seen[j.ID] = map[string]bool{}
+		}
+		seen[j.ID][j.Verdict] = true
 	}
 	for _, id := range finding.WebIDs() {
 		if len(seen[id]) != 3 {

@@ -581,3 +581,49 @@ func TestWebInputNestedRootsAndResolver(t *testing.T) {
 		t.Errorf("this session's resolver rewrites: doubt %q", in.Doubt)
 	}
 }
+
+// A matched provider fingerprint invalidates only the operator confirmation;
+// subsequent admission still requires independent root evidence or the front
+// page allowance (docs/spec/web-collector.md, "Never claim a name").
+func TestFingerprintSuspendsConfirmation(t *testing.T) {
+	s := scopeOf(t, scopeFile).(*scope)
+	l := gate.Lookup{Outcome: gate.OutcomeAddresses, Chain: []string{"blog.example-hosting.net"}, Addrs: []netip.Addr{netip.MustParseAddr("203.0.113.70")}}
+	if a := s.Admits("https://blog.example.com", "/robots.txt", nil); a.Refused != "" || !a.Resolve || !slices.Contains(s.site("https://blog.example.com").confirmed, "/robots.txt") {
+		t.Fatal(a)
+	}
+	fp := &Evidence{Kind: "operator", Target: "blog.example-hosting.net"}
+	r := run{webScope: s, scoped: &ScopeDoc{Assets: []ScopeAsset{{ID: "domain:blog.example.com", FirstParty: fp}}, Domains: []ScopeDomain{{Root: "domain:example.com", Names: []ScopeName{{Name: "blog.example.com", FirstParty: &Evidence{Kind: "operator"}}}}}}}
+	r.suspendConfirmations([]web.Judgment{{ID: "dns.takeover_candidate", Verdict: web.Fired, Subject: web.Subject{Key: "*.example.com"}, Members: []string{"blog.example.com"}}})
+	if a := s.Admits("https://blog.example.com", "/robots.txt", &l); a.Refused != "address_moved" {
+		t.Fatal(a)
+	}
+	if a := s.Admits("https://blog.example.com", "/", &l); a.Refused != "" || a.FirstParty {
+		t.Fatal(a)
+	}
+	if s.confirmationSuspended("other.example.com") {
+		t.Fatal("unobserved sibling confirmation suspended")
+	}
+	if fp.Kind != "suspended" || fp.counts() || r.scoped.Domains[0].Names[0].FirstParty.Kind != "suspended" {
+		t.Fatal(r.scoped)
+	}
+	if a := s.Admits("https://app.example.net", "/portal/", &l); a.Refused != "" || !a.FirstParty {
+		t.Fatal(a)
+	}
+}
+
+func TestWildcardNeedsRecognizedEqualChains(t *testing.T) {
+	l := gate.Lookup{Outcome: gate.OutcomeAddresses, Chain: []string{"[REDACTED:extra:0:12 bytes]"}, Addrs: []netip.Addr{netip.MustParseAddr("198.51.100.77")}}
+	c := &ScopeName{Status: NameResolves, Outcome: "addresses", Chain: l.Chain, Addresses: []string{"198.51.100.77"}}
+	if matchesWildcard(l, c) {
+		t.Fatal("equal redaction markers treated as equal DNS targets")
+	}
+	l.Chain = []string{"one.provider.example"}
+	c.Chain = []string{"two.provider.example"}
+	if matchesWildcard(l, c) {
+		t.Fatal("equal addresses treated as equal CNAME chains")
+	}
+	c.Chain = l.Chain
+	if !matchesWildcard(l, c) {
+		t.Fatal("recognized equal answer rejected")
+	}
+}

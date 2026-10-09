@@ -53,8 +53,18 @@ assessed, and a `domain` root in part. A `domain` root is read (DNS and mail rec
 and the certificate and front page of each name Scope chose, which contacts the
 company's web servers) and judged by DNS rules only: a record pointing at a name that
 does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
-publishing a private address (`dns.private_address`). Subdomain takeover, TLS,
-certificates and email are not judged yet: the `external` row is `partial` at best and
+publishing a private address (`dns.private_address`), a provider fingerprint that may
+be claimable (`dns.takeover_candidate`, high), or an unconfigured service at a provider
+with an ownership-verification policy (`dns.unclaimed_at_provider`, low); the binding's
+ownership was not checked. A candidate is not proof of
+claimability: retain its `not_checked` caveats, including GitHub verification and Azure
+App Service's `asuid` record when applicable. A wildcard is filed once on `*.<root>`
+with matching undeclared names grouped as DNS matches whose pages were not read;
+declared names keep their own reads and judgments. A discovery gap still leaves
+coverage partial. Services
+without a verified fingerprint are listed as not checked for takeover. Both new
+findings require a DNS-name subject in an acceptance. TLS, certificates and email are
+not judged yet: the `external` row is `partial` at best and
 the `email` row `not_assessed` with `no_rule`. A declared root of any other kind (a
 SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
 exits 2. Tell the user what was not assessed, never that it is fine.

@@ -492,6 +492,14 @@ func (b *builder) exit() Exit {
 		}
 		e.Thresholds[a.ID] = t
 	}
+	// Discovered names have their own finding assets without a declared
+	// AssetInput. Their default threshold is still medium (engagement.md,
+	// "Exit codes"); a missing map entry must not discard their findings.
+	for _, f := range b.r.Findings {
+		if _, ok := e.Thresholds[f.Key.Asset]; !ok {
+			e.Thresholds[f.Key.Asset] = Threshold{Severity: string(finding.SevMedium), Basis: "default"}
+		}
+	}
 	for _, s := range b.r.Refused {
 		e.Reasons = append(e.Reasons, ExitReason{Code: 3, Why: s.AssetName + " was not assessed: " + s.Detail, Asset: s.Asset})
 	}

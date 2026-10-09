@@ -157,3 +157,29 @@ func (h *Harness) CrtSh(body string) func() []string {
 		return out
 	}
 }
+
+// FingerprintSite serves a provider error from an in-scope name (or a
+// wildcard certificate's concrete control host), counting every request.
+func (h *Harness) FingerprintSite(name, ip string, status int, body string, configured ...string) func() []string {
+	cert := h.w.leaf([]string{name}, time.Now().Add(time.Hour), false)
+	reply := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if slices.Contains(configured, r.Host) {
+			_, _ = w.Write([]byte("A configured site"))
+			return
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}
+	a := h.w.serve(name, ip, 443, &cert, reply)
+	b := h.w.serve(name, ip, 80, nil, reply)
+	return func() []string {
+		var out []string
+		for _, s := range []*server{a, b} {
+			for _, r := range s.requests() {
+				out = append(out, r.Host+r.URL.Path)
+			}
+		}
+		return out
+	}
+}

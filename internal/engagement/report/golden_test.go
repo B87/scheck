@@ -63,6 +63,7 @@ func TestGoldenReports(t *testing.T) {
 		},
 		"root-without-collector": withGitHubRoot,
 		"domain-root":            withDomainRoot,
+		"takeover-root":          withTakeoverRoot,
 		"lost-session":           lostSession,
 		"refused-host":           canaryRefused,
 		"jump-refused":           jumpRefused,

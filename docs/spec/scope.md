@@ -128,9 +128,12 @@ sorted and joined with commas. A name whose current chain or addresses no longer
 `target` has lost the confirmation: the gate refuses what needed it as
 `refused:address_moved`, and the report says it was re-asked because its target
 changed. That catches a record repointed; it does not catch a change of owner behind
-the same provider name (a released app name claimed by someone else), which only the
-expiry bounds, and from 0.0.2 E7 a provider's "no such app" page, which suspends the
-confirmation. A name with no CNAME whose addresses rotate (an apex alias to a load
+the same provider name (a released app name claimed by someone else). Expiry bounds
+how long the confirmation can last. From 0.0.2 E7 step 2b-ii a positive provider
+fingerprint suspends operator confirmation in the live gate and persisted
+`scope.json`. Suspension applies to the exact subject name or the names listed as
+members of a wildcard finding, never every descendant or a nested root. Explicit
+roots keep their root evidence. A name with no CNAME whose addresses rotate (an apex alias to a load
 balancer or CDN) loses its confirmation whenever they change; the report counts those
 so the churn is visible. A confirmation is valid from `date` through `date` plus 365
 days, until 24:00 in `engagement.timezone`; one dated after the run (a typo for a year
@@ -172,9 +175,17 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    that do not exist with its own address, so discovered names were not checked. Run
    from a network whose resolver does not do this." If a root's control label gets an
    address, the root has wildcard DNS, and a discovered name whose answer equals the
-   control answer is recorded as "matches the wildcard" and is not read on its own,
+   control answer in outcome, whole CNAME chain and addresses is recorded as
+   "matches the wildcard" and is not read on its own,
    listed under not checked; a declared name (an `assets` entry or a `url` root) is
-   read even then. The control names are random. A resolver that answers `.invalid`
+   read even then. Answers must be recognized: shared IPs alone, different chains
+   and equal redaction or truncation markers never establish a match. A nonempty
+   dangling chain matching the control's chain, outcome and addresses is grouped
+   the same way. `domains[].control` keeps the
+   concrete control name, chain, addresses, outcome and request id; Recon judges that
+   answer once on `*.<root>` (E7 step 2b-ii,
+   [web-collector.md](web-collector.md#takeover-fingerprints), "Wildcards"). The
+   control names are random. A resolver that answers `.invalid`
    itself, as RFC 6761 lets it, and rewrites everything else passes the first control;
    the per-root control is the safety net, and under rewriting a dangling verdict can
    only be missed, never invented. `scope.json`'s `resolver` records what the
@@ -237,7 +248,12 @@ asks `crt.sh` once per domain root and the system's resolver for each name
 
 Scope records which names Recon reads; the gate does not decide that. The gate enforces
 scope, exclusion, entry points and addresses from the file and live resolution, and a
-collector reads only the names `scope.json` marks for it.
+collector reads only the names `scope.json` marks for it, plus the concrete wildcard
+control when its resolving chain matches an enabled body-fingerprint provider and
+both resolvers are known not to invent answers. That control receives one https/http
+front-page pair through the normal gate; matching undeclared discovered names and
+the literal `*.<root>` receive none. Declared names retain their own reads and
+judgments even with matching DNS, since their HTTP Host bindings may differ.
 
 **Outside every root.** Recorded, never resolved on their own or contacted, in two
 lists:
@@ -817,7 +833,10 @@ is the right one for takeover. A host's SSH transport resolves its name with the
 system's own lookup, outside this client, as it does a jump host's; the report names
 both when written as names, and names the hosts a jump host resolved instead. A name in
 an answer that `redact_extra` matches is redacted where a lookup leaves the gate, in
-`scope.json`, the report and the audit log alike. The gate decides on the names as
+`scope.json`, the report and the audit log alike. The lookup's own name is redacted
+too, including on a refusal; changing it makes a sent lookup's outcome `error`.
+Discovery keeps only that redacted name. A marked wildcard control is insufficient
+evidence and never becomes an HTTP host or front-page read. The gate decides on the names as
 answered (an exclude in the chain, the service a name points at, whether a dangling
 target is under a root, whether a confirmation's target still holds) and redacts them
 only where the lookup leaves it, so what discovery records is the gate's verdict; the

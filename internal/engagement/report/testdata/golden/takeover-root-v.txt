@@ -21,9 +21,10 @@ Not requested    Not part of this run: identity and access, secrets, cloud confi
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  1  medium    A DNS record points at a name that does not exist (old.example.com)
-  2  medium    The macOS application firewall is disabled (macos)
-Nothing else open ranks at medium or above among what was checked. Below: 1 low, 0 informational, 1
+  1  high      A DNS name may be claimable at its provider (example.com)
+  2  medium    A DNS record points at a name that does not exist (old.example.com)
+  3  medium    The macOS application firewall is disabled (macos)
+Nothing else open ranks at medium or above among what was checked. Below: 2 low, 0 informational, 1
 accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
@@ -36,8 +37,11 @@ checked is unknown, not fine.
 COVERAGE
 External surface         checked in part
   1 of 1 asset read.
-  The command that reads it did not give a usable answer (dns_servfail); this version of scheck has
-  no rule for it (TLS and certificates).
+  The command that reads it did not give a usable answer (ct_source); the command that reads it did
+  not give a usable answer (dns_servfail); this version of scheck has no rule for it (1 not checked
+  for takeover: no fingerprint for this provider; TLS and certificates).
+  Services your names point at: domain:example.com
+    old.example.com → gone.saas.example; not checked for takeover: no fingerprint for this provider.
 Hosts                    checked in part
   macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, 07:12-07:12
   checks 28: 22 ran, 6 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
@@ -83,12 +87,31 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
-FINDINGS: 3 open (2 medium, 1 low), 0 informational, 1 accepted
+FINDINGS: 5 open (1 high, 2 medium, 2 low), 0 informational, 1 accepted
 Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
 problems than anything here.
 To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
 
-1  medium  A DNS record points at a name that does not exist (old.example.com)
+1  high  A DNS name may be claimable at its provider (example.com) [dns.takeover_candidate]
+   Subject       *.example.com (dns_name *.example.com)
+   Observed      g000001 (07:12, as anonymous): random.example.com → unused.github.io: addresses;
+                 provider: GitHub Pages; http status 404, marker "There isn't a GitHub Pages site
+                 here."; another account may be able to claim it; names with matching DNS answers
+                 (their pages were not read): a.example.com, b.example.com
+   Observed      g000016 (07:12, as anonymous): random.example.com → unused.github.io: addresses;
+                 provider: GitHub Pages; http status 404, marker "There isn't a GitHub Pages site
+                 here."; another account may be able to claim it; names with matching DNS answers
+                 (their pages were not read): a.example.com, b.example.com
+   Severity      high
+   Why here      This is the standard rating: it is about how the records are set up, which nothing
+                 you declared changes.
+   Not checked   Whether someone has already claimed this name was not checked; Whether your
+                 organization verified this domain at GitHub was not checked; verification can
+                 prevent another account from claiming it.
+   Fix           Delete the DNS record today, or restore the service in your provider account; then
+                 check whether anyone already served content there.
+
+2  medium  A DNS record points at a name that does not exist (old.example.com)
    [dns.dangling_external]
    Subject       old.example.com (dns_name old.example.com)
    Observed      g000004 (07:12, as anonymous): old.example.com → gone.saas.example: nxdomain
@@ -97,7 +120,7 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  you declared changes.
    Fix           Delete the record, or point it at the service's current name.
 
-2  medium  The macOS application firewall is disabled (macos) [fw.app_firewall_disabled]
+3  medium  The macOS application firewall is disabled (macos) [fw.app_firewall_disabled]
    Observed      fw.global#1 (07:12, as deploy): Firewall is disabled. (State = 0)
    Severity      medium
    Why here      scheck was not told how this machine is used (for example, whether it faces the
@@ -109,7 +132,25 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  Commands (review before running):
                    sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
 
-3  low  Software updates are pending (macos) [updates.pending]
+4  low  A DNS name points at an unconfigured service that checks domain ownership
+   (preview.example.com) [dns.unclaimed_at_provider]
+   Subject       preview.example.com (dns_name preview.example.com)
+   Observed      g000017 (07:12, as anonymous): preview.example.com → cname.vercel-dns.com:
+                 addresses; provider: Vercel; http status 404, marker DEPLOYMENT_NOT_FOUND; the
+                 provider's policy requires ownership verification when moving a domain from another
+                 account; this binding's ownership was not checked
+   Observed      g000018 (07:12, as anonymous): preview.example.com → cname.vercel-dns.com:
+                 addresses; provider: Vercel; http status 404, marker DEPLOYMENT_NOT_FOUND; the
+                 provider's policy requires ownership verification when moving a domain from another
+                 account; this binding's ownership was not checked
+   Severity      low
+   Why here      This is the standard rating: it is about how the records are set up, which nothing
+                 you declared changes.
+   Not checked   Whether someone has already claimed this name was not checked
+   Fix           Remove the stale DNS record, or finish configuring the domain in your provider
+                 account.
+
+5  low  Software updates are pending (macos) [updates.pending]
    Observed      pkg.softwareupdate#1 (07:12, as deploy): name=Safari27.0TahoeAuto-27.0 version=27.0
                  (+2 more)
    Severity      low
@@ -129,6 +170,16 @@ Only for a risk you decide not to fix, and decided by whoever owns it: write the
 file (--write-engagement FILE), add yourself under people, paste the entry under
 intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
 
+  # A DNS name may be claimable at its provider (example.com)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: dns.takeover_candidate
+      asset: example.com
+      subject: "*.example.com"     # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
   # A DNS record points at a name that does not exist (old.example.com)
     - id: dns.dangling_external
       asset: domain:old.example.com
@@ -141,6 +192,15 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
   # The macOS application firewall is disabled (macos)
     - id: fw.app_firewall_disabled
       asset: macos
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # A DNS name points at an unconfigured service that checks domain ownership (preview.example.com)
+    - id: dns.unclaimed_at_provider
+      asset: domain:preview.example.com
+      subject: preview.example.com # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
       expires: 2027-04-05          # after this date the finding counts again
@@ -167,14 +227,21 @@ EXCLUDED, NARROWED AND NOT RUN
 
 WHAT LEFT THIS MACHINE
   Third-party services:
-    none
+    Your DNS resolver at 192.0.2.53, and whatever it forwards to, as for any web browsing on this
+      network: names under your domains, the names they point to, and the services above; 20
+      lookups, including 1 random test name under your domains and one under invalid.
+    crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com;
+      1 request. crt.sh sees this machine's internet address and those names, and may keep logs.
   Your own systems:
     servers: 1 SSH session.
   Names under your domains not shown to be yours:
-    none
+    random.example.com, preview.example.com: 4 requests, what a browser sends when it opens the page
+      (the certificate, and the home page over https and http). These servers may be a provider's or
+      someone else's.
   AI models:
     Nothing was sent to an AI model provider.
   Nothing was sent to the makers of scheck: no telemetry, no update check.
+  Every web request identified itself as "scheck/test (security self-assessment)".
   What scheck read is stored nowhere; the report is on stdout.
 
 FACTS READ ON MACOS
@@ -253,7 +320,7 @@ Session and shell        ran      sys.uname                Darwin mac-fixture.lo
                                                            Full kernel identification
 
 FOR AUTOMATION
-Exit 1: 2 open findings at or above their asset's threshold (macos: medium, profile baseline; every
+Exit 1: 3 open findings at or above their asset's threshold (macos: medium, profile baseline; every
 other asset: medium). Exit 0 would not have meant a clean result either.
 --no-persist: no run directory or audit log was written; the command trace is in the JSON report
 (--format json).

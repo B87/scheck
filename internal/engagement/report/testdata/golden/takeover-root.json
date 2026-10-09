@@ -176,12 +176,35 @@
       "status": "not_matched"
     },
     {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "dns.takeover_candidate",
+      "instances": 1,
+      "reads": [
+        "request:g000001",
+        "request:g000016"
+      ],
+      "reason": "unavailable:ct_source",
+      "status": "matched"
+    },
+    {
       "asset": "domain:old.example.com",
       "complete": true,
       "id": "dns.dangling_external",
       "instances": 1,
       "reads": [
         "request:g000004"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:preview.example.com",
+      "complete": true,
+      "id": "dns.unclaimed_at_provider",
+      "instances": 1,
+      "reads": [
+        "request:g000017",
+        "request:g000018"
       ],
       "status": "matched"
     }
@@ -286,10 +309,13 @@
       },
       "reasons": [
         {
+          "reason": "unavailable:ct_source"
+        },
+        {
           "reason": "unavailable:dns_servfail"
         },
         {
-          "detail": "TLS and certificates",
+          "detail": "1 not checked for takeover: no fingerprint for this provider; TLS and certificates",
           "reason": "no_rule"
         }
       ],
@@ -309,9 +335,17 @@
         },
         {
           "asset": "domain:example.com",
-          "mark": "not_applicable",
+          "judged": [
+            "names pointing at providers with verified fingerprints"
+          ],
+          "mark": "partial",
           "name": "subdomain takeover",
-          "reasons": [],
+          "reasons": [
+            {
+              "detail": "*.example.com",
+              "reason": "unavailable:ct_source"
+            }
+          ],
           "rules": [
             "dns.takeover_candidate",
             "dns.unclaimed_at_provider"
@@ -332,6 +366,20 @@
           ],
           "rules": [
             "dns.private_address"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "Services your names point at",
+          "read_not_judged": [
+            "old.example.com → gone.saas.example"
+          ],
+          "reasons": [
+            {
+              "detail": "1 not checked for takeover: no fingerprint for this provider",
+              "reason": "no_rule"
+            }
           ]
         },
         {
@@ -675,15 +723,37 @@
     ],
     "host_side_effects": [],
     "model": "none",
-    "sources": [],
+    "sources": [
+      {
+        "control_invalid": true,
+        "control_lookups": 1,
+        "host": "192.0.2.53",
+        "operator": "your network",
+        "requests": 20,
+        "sent": [],
+        "source": "dns"
+      },
+      {
+        "host": "crt.sh",
+        "operator": "Sectigo",
+        "requests": 1,
+        "sent": [
+          "example.com"
+        ],
+        "source": "crt.sh"
+      }
+    ],
     "ssh_resolved": [],
     "ssh_resolved_by_jump": [],
     "stored": null,
     "telemetry": "none",
     "tenants_read": [],
     "unconfirmed": {
-      "names": [],
-      "requests": 0
+      "names": [
+        "random.example.com",
+        "preview.example.com"
+      ],
+      "requests": 4
     },
     "user_agent": "scheck/test (security self-assessment)"
   },
@@ -718,7 +788,7 @@
     "reasons": [
       {
         "code": 1,
-        "why": "2 open findings at or above their asset's threshold"
+        "why": "3 open findings at or above their asset's threshold"
       }
     ],
     "thresholds": {
@@ -730,6 +800,10 @@
         "basis": "default",
         "severity": "medium"
       },
+      "domain:preview.example.com": {
+        "basis": "default",
+        "severity": "medium"
+      },
       "host:macos:22": {
         "basis": "profile:baseline",
         "severity": "medium"
@@ -737,6 +811,78 @@
     }
   },
   "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-01-05",
+        "id": "dns.takeover_candidate",
+        "needs_people": true,
+        "reason": "",
+        "subject": "*.example.com"
+      },
+      "adjustments": [],
+      "area": "external",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "dns",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "random.example.com → unused.github.io: addresses; provider: GitHub Pages; http status 404, marker \"There isn't a GitHub Pages site here.\"; another account may be able to claim it; names with matching DNS answers (their pages were not read): a.example.com, b.example.com",
+          "kind": "observed",
+          "observation": "g000001",
+          "principal": "anonymous",
+          "request": "g000001"
+        },
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "random.example.com → unused.github.io: addresses; provider: GitHub Pages; http status 404, marker \"There isn't a GitHub Pages site here.\"; another account may be able to claim it; names with matching DNS answers (their pages were not read): a.example.com, b.example.com",
+          "kind": "observed",
+          "observation": "g000016",
+          "principal": "anonymous",
+          "request": "g000016"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "dns.takeover_candidate",
+      "impact": "The provider says nothing is set up at the name your DNS points at. Another account may be able to claim it and serve content under your name. This is a candidate, not proof that the name can be claimed.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "dns.takeover_candidate",
+        "subject": "*.example.com"
+      },
+      "not_checked": [
+        "Whether someone has already claimed this name was not checked",
+        "Whether your organization verified this domain at GitHub was not checked; verification can prevent another account from claiming it."
+      ],
+      "remediation": {
+        "summary": "Delete the DNS record today, or restore the service in your provider account; then check whether anyone already served content there."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:g000001",
+          "request:g000016"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "*.example.com",
+        "kind": "dns_name",
+        "label": "*.example.com"
+      },
+      "title": "A DNS name may be claimable at its provider",
+      "why_here": [
+        "This is the standard rating: it is about how the records are set up, which nothing you declared changes."
+      ]
+    },
     {
       "accept_template": {
         "accepted_by": "",
@@ -851,6 +997,77 @@
       "subject": null,
       "title": "The macOS application firewall is disabled",
       "why_here": []
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "domain:preview.example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "dns.unclaimed_at_provider",
+        "needs_people": true,
+        "reason": "",
+        "subject": "preview.example.com"
+      },
+      "adjustments": [],
+      "area": "external",
+      "asset_name": "preview.example.com",
+      "bound_id": null,
+      "category": "dns",
+      "evidence": [
+        {
+          "asset": "domain:preview.example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "preview.example.com → cname.vercel-dns.com: addresses; provider: Vercel; http status 404, marker DEPLOYMENT_NOT_FOUND; the provider's policy requires ownership verification when moving a domain from another account; this binding's ownership was not checked",
+          "kind": "observed",
+          "observation": "g000017",
+          "principal": "anonymous",
+          "request": "g000017"
+        },
+        {
+          "asset": "domain:preview.example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "preview.example.com → cname.vercel-dns.com: addresses; provider: Vercel; http status 404, marker DEPLOYMENT_NOT_FOUND; the provider's policy requires ownership verification when moving a domain from another account; this binding's ownership was not checked",
+          "kind": "observed",
+          "observation": "g000018",
+          "principal": "anonymous",
+          "request": "g000018"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "dns.unclaimed_at_provider",
+      "impact": "The provider says nothing is set up there. Its policy requires ownership verification when moving a domain from another account. This binding's ownership was not checked; the record leads to an unconfigured service.",
+      "key": {
+        "asset": "domain:preview.example.com",
+        "id": "dns.unclaimed_at_provider",
+        "subject": "preview.example.com"
+      },
+      "not_checked": [
+        "Whether someone has already claimed this name was not checked"
+      ],
+      "remediation": {
+        "summary": "Remove the stale DNS record, or finish configuring the domain in your provider account."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:g000017",
+          "request:g000018"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "preview.example.com",
+        "kind": "dns_name",
+        "label": "preview.example.com"
+      },
+      "title": "A DNS name points at an unconfigured service that checks domain ownership",
+      "why_here": [
+        "This is the standard rating: it is about how the records are set up, which nothing you declared changes."
+      ]
     },
     {
       "accept_template": {
@@ -1000,9 +1217,33 @@
     "below": {
       "accepted": 1,
       "info": 0,
-      "low": 1
+      "low": 2
     },
     "items": [
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "dns.takeover_candidate"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "dns.takeover_candidate",
+            "subject": "*.example.com"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:high",
+          "area:external"
+        ],
+        "severity": "high",
+        "title": "A DNS name may be claimable at its provider"
+      },
       {
         "assets": [
           "domain:old.example.com"
@@ -1019,7 +1260,7 @@
         ],
         "kind": "finding_id",
         "person": null,
-        "rank": 1,
+        "rank": 2,
         "rank_basis": [
           "severity:medium",
           "area:external"
@@ -1043,7 +1284,7 @@
         ],
         "kind": "finding_id",
         "person": null,
-        "rank": 2,
+        "rank": 3,
         "rank_basis": [
           "severity:medium",
           "area:hosts"
@@ -1054,8 +1295,8 @@
     ],
     "more": 0,
     "rules": {
-      "decided": 9,
-      "selected": 13,
+      "decided": 11,
+      "selected": 15,
       "without_evidence": 4
     }
   }

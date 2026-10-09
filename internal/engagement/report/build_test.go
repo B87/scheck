@@ -731,3 +731,64 @@ func TestReasonNamesTheSecondCheck(t *testing.T) {
 		}
 	}
 }
+
+func withTakeoverRoot(t *testing.T) Input {
+	in := withDomainRoot(t)
+	in.Egress = &EgressInput{Sources: []SourceInput{{Source: "dns", Operator: "your network", Host: "192.0.2.53", Requests: 20, RootControls: 1, InvalidControl: true}, {Source: "crt.sh", Operator: "Sectigo", Host: "crt.sh", Sent: []string{"domain:example.com"}, Requests: 1}}, Sites: []SiteInput{{Name: "random.example.com", Requests: 2}, {Name: "preview.example.com", Requests: 2}}}
+	a := &in.Assets[len(in.Assets)-1]
+	a.Unfingerprinted = []string{"old.example.com → gone.saas.example"}
+	a.Judged = append(a.Judged,
+		Judgment{ID: finding.IDDNSTakeoverCandidate, Subject: Subject{Kind: "dns_name", Key: "*.example.com", Label: "*.example.com"}, Verdict: "fired", Reason: "unavailable:ct_source", Reads: []string{"g000001", "g000016"},
+			Excerpt:    "random.example.com → unused.github.io: addresses; provider: GitHub Pages; http status 404, marker \"There isn't a GitHub Pages site here.\"; another account may be able to claim it; names with matching DNS answers (their pages were not read): a.example.com, b.example.com",
+			NotChecked: []string{"Whether someone has already claimed this name was not checked", "Whether your organization verified this domain at GitHub was not checked; verification can prevent another account from claiming it."}},
+		Judgment{ID: finding.IDDNSUnclaimedAtProvider, Asset: "domain:preview.example.com", Subject: Subject{Kind: "dns_name", Key: "preview.example.com", Label: "preview.example.com"}, Verdict: "fired", Reads: []string{"g000017", "g000018"}, Excerpt: "preview.example.com → cname.vercel-dns.com: addresses; provider: Vercel; http status 404, marker DEPLOYMENT_NOT_FOUND; the provider's policy requires ownership verification when moving a domain from another account; this binding's ownership was not checked", NotChecked: []string{"Whether someone has already claimed this name was not checked"}},
+	)
+	return in
+}
+
+func TestTakeoverReport(t *testing.T) {
+	in := withTakeoverRoot(t)
+	r := Build(in)
+	var found int
+	for _, f := range r.Findings {
+		if f.ID != finding.IDDNSTakeoverCandidate && f.ID != finding.IDDNSUnclaimedAtProvider {
+			continue
+		}
+		found++
+		if f.Subject.Kind != "dns_name" || len(f.NotChecked) == 0 || f.AcceptTemplate == nil || !f.AcceptTemplate.BySubject || f.AcceptTemplate.Subject != f.Subject.Key {
+			t.Fatal(f)
+		}
+		if f.ID == finding.IDDNSTakeoverCandidate && f.Severity != "high" || f.ID == finding.IDDNSUnclaimedAtProvider && f.Severity != "low" {
+			t.Fatal(f)
+		}
+	}
+	if found != 2 {
+		t.Fatal(found)
+	}
+	for _, a := range r.Assessments {
+		if a.ID == finding.IDDNSTakeoverCandidate && (a.Complete || a.Reason != "unavailable:ct_source") {
+			t.Fatal(a)
+		}
+	}
+	for _, s := range row(t, r, "external").SubItems {
+		if s.Name == "subdomain takeover" && s.Mark != "partial" {
+			t.Fatal(s)
+		}
+	}
+	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "e.yaml intent.accepted_risks[1]", AssetID: "domain:example.com", ID: finding.IDDNSTakeoverCandidate, Subject: "*.example.com", Reason: "repair scheduled", AcceptedBy: "alice"})
+	r = Build(in)
+	if a := r.Acceptances[len(r.Acceptances)-1]; a.Outcome != "applied" || len(a.Findings) != 1 || *a.Findings[0].Subject != "*.example.com" {
+		t.Fatal(a)
+	}
+}
+
+func TestDiscoveredNameSetsExitThreshold(t *testing.T) {
+	in := withTakeoverRoot(t)
+	in.Assets = in.Assets[len(in.Assets)-1:]
+	in.Assets[0].Judged = []Judgment{{ID: finding.IDDNSTakeoverCandidate, Asset: "domain:old.example.com", Subject: Subject{Kind: "dns_name", Key: "old.example.com"}, Verdict: "fired", Reads: []string{"dns1"}}}
+	in.Acceptances = nil
+	r := Build(in)
+	if r.Exit.Code != 1 || r.Exit.Thresholds["domain:old.example.com"].Severity != "medium" || len(r.Exit.Reasons) != 1 || !strings.Contains(r.Exit.Reasons[0].Why, "1 open finding") {
+		t.Fatal(r.Exit)
+	}
+}

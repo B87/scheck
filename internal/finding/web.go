@@ -5,15 +5,25 @@ package finding
 // which judges its own evidence; these definitions give each finding its
 // title, area, base severity, impact and fix.
 const (
-	IDDNSDanglingExternal = "dns.dangling_external"
-	IDDNSDanglingInternal = "dns.dangling_internal"
-	IDDNSPrivateAddress   = "dns.private_address"
+	IDDNSTakeoverCandidate   = "dns.takeover_candidate"
+	IDDNSUnclaimedAtProvider = "dns.unclaimed_at_provider"
+	IDDNSDanglingExternal    = "dns.dangling_external"
+	IDDNSDanglingInternal    = "dns.dangling_internal"
+	IDDNSPrivateAddress      = "dns.private_address"
 )
 
 // CategoryDNS is the category of the DNS findings.
 const CategoryDNS = "dns"
 
 var webDefs = []Def{
+	{ID: IDDNSTakeoverCandidate, Title: "A DNS name may be claimable at its provider",
+		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "names pointing at a provider with a verified takeover fingerprint",
+		BaseSeverity: SevHigh, Impact: "The provider says nothing is set up at the name your DNS points at. Another account may be able to claim it and serve content under your name. This is a candidate, not proof that the name can be claimed.",
+		Remediation: Remediation{Summary: "Delete the DNS record today, or restore the service in your provider account; then check whether anyone already served content there."}},
+	{ID: IDDNSUnclaimedAtProvider, Title: "A DNS name points at an unconfigured service that checks domain ownership",
+		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "names pointing at an unconfigured provider service that checks ownership",
+		BaseSeverity: SevLow, Impact: "The provider says nothing is set up there. Its policy requires ownership verification when moving a domain from another account. This binding's ownership was not checked; the record leads to an unconfigured service.",
+		Remediation: Remediation{Summary: "Remove the stale DNS record, or finish configuring the domain in your provider account."}},
 	{
 		ID: IDDNSDanglingExternal, Title: "A DNS record points at a name that does not exist",
 		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "records pointing at names that do not exist",

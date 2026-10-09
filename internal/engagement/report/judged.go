@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -18,9 +19,10 @@ type Judgment struct {
 	Subject Subject
 	Verdict string
 	// Reason is why it abstained, as a coverage reason.
-	Reason  string
-	Reads   []string
-	Excerpt string
+	Reason     string
+	Reads      []string
+	NotChecked []string
+	Excerpt    string
 }
 
 // The verdicts of a judgment.
@@ -56,7 +58,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			ExposureFinding: def.Exposure == finding.IsExposure,
 			SeverityBase:    string(def.BaseSeverity), Adjustments: []Adjustment{}, Status: finding.StatusOpen,
 			Rule:   Rule{Kind: "single_fact", Reads: requestRefs(j.Reads)},
-			Impact: def.Impact, NotChecked: []string{},
+			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
 		if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
@@ -217,6 +219,12 @@ func judgedAssessments(a AssetInput) []Assessment {
 		for _, r := range requestRefs(j.Reads) {
 			ea.Reads = appendUnique(ea.Reads, r)
 		}
+		if j.Reason != "" {
+			ea.Complete = false
+			if ea.Reason == "" {
+				ea.Reason = j.Reason
+			}
+		}
 		switch j.Verdict {
 		case verdictFired:
 			ea.Status = finding.Matched
@@ -333,6 +341,7 @@ var judgedFamilies = map[finding.Area][]struct {
 	finding.AreaExternal: {
 		{"dangling records", "records pointing at names that do not exist",
 			[]string{finding.IDDNSDanglingExternal, finding.IDDNSDanglingInternal}},
+		{"subdomain takeover", "names pointing at providers with verified fingerprints", []string{finding.IDDNSTakeoverCandidate, finding.IDDNSUnclaimedAtProvider}},
 		{"private addresses", "public names publishing private addresses", []string{finding.IDDNSPrivateAddress}},
 	},
 }
@@ -340,7 +349,7 @@ var judgedFamilies = map[finding.Area][]struct {
 // notJudged lists, per area, what the domain collector reads or would read
 // that no rule judges in this build.
 var notJudged = map[finding.Area][]string{
-	finding.AreaExternal: {"subdomain takeover", "TLS and certificates"},
+	finding.AreaExternal: {"TLS and certificates"},
 	finding.AreaEmail:    {"SPF, DMARC and DKIM records"},
 }
 
@@ -382,10 +391,11 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				if !slices.Contains(fam.ids, j.ID) {
 					continue
 				}
-				if j.Verdict == verdictAbstained {
+				if j.Verdict == verdictAbstained || j.Reason != "" {
 					undecided++
 					si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: j.Reason, Detail: j.Subject.Label})
-				} else {
+				}
+				if j.Verdict != verdictAbstained {
 					decided++
 				}
 			}
@@ -405,6 +415,12 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: r.Reason})
 			}
 			row.SubItems = append(row.SubItems, si)
+		}
+		if area == finding.AreaExternal && len(a.Unfingerprinted) > 0 {
+			detail := fmt.Sprintf("%d not checked for takeover: no fingerprint for this provider", len(a.Unfingerprinted))
+			row.SubItems = append(row.SubItems, SubItem{Name: "Services your names point at", Asset: a.ID, Mark: "not_assessed",
+				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: detail}}, ReadNotJudged: a.Unfingerprinted})
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 		}
 		if nj := notJudged[area]; len(nj) > 0 {
 			row.SubItems = append(row.SubItems, SubItem{Name: strings.Join(nj, ", "), Asset: a.ID, Mark: "not_assessed",

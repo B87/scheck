@@ -44,7 +44,9 @@ type Judgment struct {
 	// stage's lookups among them.
 	Reads []string `json:"reads"`
 	// Excerpt is what was observed, as read and redacted.
-	Excerpt string `json:"excerpt,omitempty"`
+	Excerpt    string   `json:"excerpt,omitempty"`
+	NotChecked []string `json:"not_checked,omitempty"`
+	Members    []string `json:"members,omitempty"`
 }
 
 // Name is a name the Scope stage looked up, as the rules read it, with its
@@ -81,6 +83,7 @@ type Gap struct {
 type Input struct {
 	Asset, Root string
 	Names       []Name
+	Wildcard    *Name
 	Gaps        []Gap
 	// Doubt is why no verdict over the resolver's answers stands, as a
 	// coverage reason: it answers names that do not exist, or whether it
@@ -98,11 +101,12 @@ func Judge(in Input) []Judgment {
 	j := judging{in: in, byKey: map[string]int{}}
 	for _, g := range in.Gaps {
 		// Names Scope could not list may hold what a rule looks for.
-		for _, id := range []string{finding.IDDNSDanglingExternal, finding.IDDNSPrivateAddress} {
+		for _, id := range []string{finding.IDDNSDanglingExternal, finding.IDDNSPrivateAddress, finding.IDDNSTakeoverCandidate, finding.IDDNSUnclaimedAtProvider} {
 			j.add(Judgment{ID: id, Asset: in.Asset, Verdict: Abstained, Reason: g.Reason,
 				Subject: Subject{Kind: SubjectDNSName, Key: "*." + in.Root, Label: "names under " + in.Root + " not listed: " + g.Detail}})
 		}
 	}
+	j.wildcard()
 	for _, n := range in.Names {
 		j.name(n)
 	}
@@ -140,11 +144,16 @@ func (j *judging) add(x Judgment) {
 			reads = append(reads, r)
 		}
 	}
+	reason := j.out[i].Reason
+	if reason == "" {
+		reason = x.Reason
+	}
 	rank := map[string]int{Disproved: 0, Abstained: 1, Fired: 2}
 	if rank[x.Verdict] > rank[j.out[i].Verdict] {
 		j.out[i] = x
 	}
 	j.out[i].Reads = reads
+	j.out[i].Reason = reason
 }
 
 // assetOf is the asset a name's subject belongs to: the name's own id
@@ -196,17 +205,30 @@ func (j *judging) name(n Name) {
 	case StatusExcluded, StatusWildcard:
 		return
 	case StatusNotChecked, StatusInsufficient:
+		if provider(n) == nil {
+			abstain(finding.IDDNSTakeoverCandidate)
+			abstain(finding.IDDNSUnclaimedAtProvider)
+		} else {
+			j.takeover(n, base)
+		}
 		abstain(danglingID(n.FinalInRoot))
 		abstain(finding.IDDNSPrivateAddress)
 		return
 	}
-	if len(n.Chain) > 0 {
+	taken := j.takeover(n, base)
+	if len(n.Chain) > 0 && !taken {
 		x := base
 		x.ID = danglingID(n.FinalInRoot)
 		x.Excerpt = n.Name + " → " + strings.Join(n.Chain, " → ") + ": " + n.Outcome
 		switch n.Status {
 		case StatusDangling:
 			x.Verdict = Fired
+			if !n.FinalInRoot && provider(n) == nil {
+				x.NotChecked = []string{"Whether another account could claim this target was not assessed: no verified fingerprint for this provider"}
+			}
+			if p := provider(n); p != nil && !p.Ownership && n.Outcome == string(gate.OutcomeNoData) {
+				x.Excerpt += "; the provider still knows this name but serves no address for it"
+			}
 		case StatusResolves:
 			x.Verdict = Disproved
 		}
@@ -318,4 +340,35 @@ func outcomeReason(o string) string {
 		return "unavailable:dns_error"
 	}
 	return "unavailable:dns_" + o
+}
+
+// wildcard judges the concrete control answer once, filing its verdicts on
+// *.root. Matching CT names remain grouped evidence, never separate findings
+// or HTTP reads (docs/spec/web-collector.md, "Wildcards").
+func (j *judging) wildcard() {
+	if j.in.Wildcard == nil {
+		return
+	}
+	n := *j.in.Wildcard
+	if n.Status == StatusExcluded || n.Status == StatusGone || n.Status == StatusNoAddress {
+		return
+	}
+	sub := judging{in: j.in, byKey: map[string]int{}}
+	sub.name(n)
+	var members []string
+	for _, m := range j.in.Names {
+		if m.Status == StatusWildcard {
+			members = append(members, m.Name)
+		}
+	}
+	slices.Sort(members)
+	for _, x := range sub.out {
+		x.Asset = j.in.Asset
+		x.Subject = Subject{Kind: SubjectDNSName, Key: "*." + j.in.Root, Label: "*." + j.in.Root}
+		x.Members = members
+		if len(members) > 0 {
+			x.Excerpt += "; names with matching DNS answers (their pages were not read): " + strings.Join(members, ", ")
+		}
+		j.add(x)
+	}
 }

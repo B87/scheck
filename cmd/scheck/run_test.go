@@ -746,3 +746,23 @@ func TestRunResumesAFileNamedHost(t *testing.T) {
 		t.Errorf("the resume's command %q", got)
 	}
 }
+
+// DNS findings are per name, including the merge's original three ids.
+// Their acceptances must name a subject; a quoted wildcard is one subject.
+func TestDNSAcceptancesRequireSubject(t *testing.T) {
+	for _, id := range []string{"dns.dangling_external", "dns.dangling_internal", "dns.private_address", "dns.takeover_candidate", "dns.unclaimed_at_provider"} {
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{domain: example.com}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "DNS name") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '*.example.com'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}

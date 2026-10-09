@@ -805,11 +805,33 @@ Built in steps, reviewed as E4 was:
        when Scope's resolver and the one this session's Recon checked with its own
        control lookup are known not to invent answers (`spec/scope.md`, "Discovery");
        and the model path's store refuses an id that is not a host finding's;
-     - 2b-ii: the takeover table, `dns.takeover_candidate` and
-       `dns.unclaimed_at_provider`, and the chains they decide carved out of
-       `dns.dangling_external`; with the takeover rules' wildcards, a name matching its
-       root's wildcard answer, which 2b-i judges by neither name rule, filed once on
-       `*.<root>` (`spec/web-collector.md`, "Wildcards").
+     - 2b-ii, done: takeover table `2026-10-09.1`, pinned to
+       `can-i-take-over-xyz` commit `5bd4e12837911c8475486f1da922c9b9c706e632`
+       (`2025-02-08`), reviewed `2026-10-09`; enabled fingerprints for GitHub Pages,
+       S3, Elastic Beanstalk, Azure and Vercel, with the remaining planned providers
+       explicitly unverified (`spec/web-collector.md`, "Takeover fingerprints").
+       `dns.takeover_candidate` and `dns.unclaimed_at_provider` both declare subject
+       kind `dns_name`, as the three existing DNS definitions do: an acceptance must
+       name the subject. A positive fingerprint replaces duplicate
+       `dns.dangling_external`; unknown providers and NODATA remain ordinary dangling
+       records. Scope keeps its concrete wildcard control; Recon judges it once on
+       `*.<root>` with matching undeclared names grouped, and reads its front-page
+       pair only for a resolving body-fingerprint provider through the normal gate.
+       Wildcard matching requires recognized equal chains, outcomes and addresses,
+       never shared IPs alone or equal markers. The gate redacts the lookup's name,
+       refusals included; a marked control is insufficient and never becomes an HTTP
+       target. An insufficient or unchecked control leaves Scope incomplete for
+       resume to retry; a successful control is kept with complete Scope. A positive
+       fingerprint suspends operator confirmations for its exact subject or listed
+       wildcard members in live and persisted scope; declared names keep their own
+       reads and judgments. Provider caveats reach the report, whose coverage lists
+       services with no fingerprint, including a wildcard with no certificate-log
+       members once on `*.<root>`. Gaps in discovery stay partial even when the wildcard fires.
+       Findings on discovered names get the default medium exit threshold even when
+       the name has no asset input. Reviewed with the merged `dns_name` definitions
+       from 2b-i; the code review's fixes passed fresh review, including the final
+       resume fix, and `make check` is green. No review findings deferred from this
+       step.
 3. The email rules.
 4. The web, TLS and header rules, and their data.
 5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,

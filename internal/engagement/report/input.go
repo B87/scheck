@@ -67,10 +67,11 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
-	Name string
-	ID   string
-	Kind string
-	Root bool
+	Unfingerprinted []string
+	Name            string
+	ID              string
+	Kind            string
+	Root            bool
 	// Status and Reason are Recon's (collected, incomplete, failed,
 	// refused, not_collected) and the coverage reason when not collected.
 	Status string

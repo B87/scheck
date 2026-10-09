@@ -82,7 +82,7 @@ SPF budgets. It keeps only the fields in the table above: no TXT record but `v=s
 ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
 has a value but never its address, each DKIM key's tags. What it read is in
 `recon.json`, under the asset's `web`. Recon then judges it ("Rules", built in step
-2b-i) and the root is `collected`. It is `limit_reached`
+2b) and the root is `collected`. It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
@@ -120,19 +120,24 @@ contradiction of a declared restriction, which is never an exposure finding
 | Rule | Fires | Disproved | Abstains | Base | Area | Exposure |
 |---|---|---|---|---|---|---|
 | `dns.takeover_candidate`: "*name* points at *provider*, which says nothing is set up there; anyone with an account there may be able to claim it" | the chain ends in NXDOMAIN at a suffix whose table entry's evidence is NXDOMAIN; or it ends at a fingerprinted suffix and an https or http response matches that entry's status and body marker (and its server marker, where the entry has one) | the chain ends at a fingerprinted provider and a response is 2xx or 3xx with no marker, worded "the provider serves a site for this name; whose site it is was not checked" | SERVFAIL, REFUSED, a timeout or a loop; a resolver that rewrites NXDOMAIN or is not known not to ("Nothing unread counts as nothing found"); both responses unavailable (timeout, blocked, 5xx, 429); an answer equal to the root's wildcard answer (filed once on `*.root`, "Takeover fingerprints"); a provider that verifies ownership (`dns.unclaimed_at_provider` instead) | high | external | no |
-| `dns.unclaimed_at_provider`: "*name* points at *provider*, which says nothing is set up there; *provider* checks ownership before another account can use it" | the marker matched for a provider that verifies ownership | as `dns.takeover_candidate` | as `dns.takeover_candidate` | low | external | no |
+| `dns.unclaimed_at_provider`: "*name* points at *provider*, which says nothing is set up there; its policy requires ownership verification when moving a domain from another account; this binding's ownership was not checked" | the marker matched for a provider that verifies ownership | as `dns.takeover_candidate` | as `dns.takeover_candidate` | low | external | no |
 | `dns.dangling_external`: "*name* (or the MX or NS of *d*) points at *target*, which does not exist" | every dangling chain outside every root that `dns.takeover_candidate` did not decide: NODATA at any suffix, NXDOMAIN at a suffix whose entry's evidence is the body, NXDOMAIN at a suffix with no entry; an MX or NS target outside every root that is NXDOMAIN or NODATA; an SPF `include:` target outside every root that is NXDOMAIN. NODATA at a claimable suffix is worded "the provider still knows this name but serves no address for it" | the target resolves | a lookup failure; a resolver that rewrites NXDOMAIN or is not known not to | medium | external | no |
 | `dns.dangling_internal`: "a record points at *target* under your own domain, which does not exist" | the dangling target is inside a root | it resolves | as `dns.dangling_external` | info | external | no |
 | `dns.private_address`: "*name* publishes a private address" | every address is RFC 1918, unique local, CGNAT or loopback | any public address | a lookup failure; a resolver that rewrites NXDOMAIN or is not known not to | info | external | no |
 
-A name whose provider has no entry in the takeover table is not applicable to the
-takeover rules. It is listed under "Services your names point at"
-([scope.md](scope.md#discovery)) with "*N* not checked for takeover: no fingerprint for
-this provider".
+A complete lookup whose provider has no entry in the takeover table is not applicable
+to the takeover rules. When the lookup is unknown and no provider can be recognized,
+both takeover rules abstain. An unmatched external target is listed under "Services
+your names point at" ([scope.md](scope.md#discovery)) with "*N* not checked for
+takeover: no fingerprint for this provider". An unknown-provider wildcard control is
+listed once as `*.<root>`, even when certificate logs supplied no matching names; its
+grouped members are not listed separately. A dangling finding for such a name also says under `not_checked` that
+whether another account could claim its target was not assessed.
 
-**Built in E7 step 2b-i:** `dns.dangling_external`, `dns.dangling_internal` and
-`dns.private_address`. `Judge` in `internal/collector/web` applies them to each domain
-root in Recon, right after `Collect`, over Scope's lookups and what `Collect` read; the
+**Built in E7 step 2b:** `dns.dangling_external`, `dns.dangling_internal` and
+`dns.private_address` (2b-i), and `dns.takeover_candidate` and
+`dns.unclaimed_at_provider` (2b-ii). `Judge` in `internal/collector/web` applies them
+to each domain root in Recon, right after `Collect`, over Scope's lookups and what `Collect` read; the
 session's first `Collect` follows its own control lookup under `invalid.`
 ([scope.md](scope.md#discovery)), counted as a control. Each
 verdict is `fired`, `disproved` or `abstained` on one subject ("Subjects"), with the
@@ -140,10 +145,10 @@ coverage reason of an abstention and the gate request ids it read, and is kept i
 `recon.json` under the asset's `judged`. One subject gets one verdict per rule: fired
 stands over abstained, abstained over disproved, and the verdict keeps the reads of every
 verdict merged into it. A name Scope looked up is judged only under the most specific
-domain root holding it, as a mail domain is read, so nested roots never judge it twice. The takeover table and its two rules
-are step 2b-ii. Until then `dns.dangling_external` fires on every dangling chain outside
-every root, takeover candidates included, and NODATA at a claimable suffix has no
-wording of its own. As built:
+domain root holding it, as a mail domain is read, so nested roots never judge it twice.
+A positive provider fingerprint replaces the name's `dns.dangling_external` verdict;
+an abstention leaves an observed dangling chain to that rule. A target under a root
+never enters the takeover table. As built:
 
 - **Through a CNAME** (subject `dns_name`): a name with no CNAME is not judged. Scope's
   status `dangling` fires, as `dns.dangling_internal` when the chain ends under a root;
@@ -152,28 +157,35 @@ wording of its own. As built:
   and so does NODATA for an MX or NS target; a target that resolves disproves. An
   include target that exists with no SPF record is `email.spf_invalid`'s and disproves
   these rules. A `redirect=` target is not judged by them: one that does not exist is
-  SPF's own error (step 3). An excluded target is judged by no rule.
+  SPF's own error (step 3). An excluded target is judged by no rule. These records
+  never become takeover findings, even when their target matches a table suffix.
 - **`dns.private_address`** (subject `dns_name`): every name Scope resolved to at least
   one address, its addresses as `scope.json` keeps them; it fires when every address is
   private and is disproved by any public one. An address `redact_extra` matches leaves the lookup
   *insufficient evidence* ([scope.md](scope.md#third-party-sources)), so the name
   abstains as `unavailable:dns_error`.
-- **A name matching the root's wildcard answer** is judged by neither name rule: the
-  wildcard is one instance, filed once on `*.<root>` with the takeover rules' wildcards
-  in step 2b-ii ("Wildcards").
+- **An undeclared discovered name matching the root's wildcard answer** is judged by
+  no name rule on its own:
+  the control answer is judged once on `*.<root>`, with matching names grouped under
+  it ("Wildcards"). Declared names keep their own reads and judgments.
 
 **Nothing unread counts as nothing found.** Each of these abstains, never disproves:
 
 | What was not read | Abstains on | Reason |
 |---|---|---|
-| a resolver that rewrites NXDOMAIN: Scope's (`scope.json` `resolver.rewrites_nxdomain`) or the one this session's Recon reads through | every subject of the three rules, names and records alike, in place of any other verdict and reason | `unavailable:resolver_rewrites` |
+| a resolver that rewrites NXDOMAIN: Scope's (`scope.json` `resolver.rewrites_nxdomain`) or the one this session's Recon reads through | every applicable subject of the DNS and takeover rules, names and records alike, in place of any other verdict and reason | `unavailable:resolver_rewrites` |
 | a resolver not known not to rewrite: Scope's control lookup under `invalid.` (`resolver.control_outcome`) or this session's in Recon was neither NXDOMAIN nor NODATA nor answered, because it failed or was not sent, or `scope.json` records no resolver ([scope.md](scope.md#discovery)) | as above | `unavailable:resolver_unchecked` |
-| a name Scope did not check (`not_checked`) | the name, for both name rules | `sampled` past the cap; for a refusal (a deadline), the gate's reason |
-| a name whose lookup said nothing, with or without a chain (`insufficient_evidence`) | the name, for both name rules | `unavailable:dns_<outcome>`; `limit_reached` for a deadline or a cancel |
-| names Scope could not list: certificate transparency did not answer, the gate dropped names from its answer for any rule but an exclude and `not_a_name` (`redacted`, `unattributable`; [scope.md](scope.md#third-party-sources)), or Scope's list is missing | `*.<root>`, for `dns.dangling_external` and `dns.private_address` | `unavailable:ct_source`, `unavailable:<rule>`, `unavailable:not_listed` |
+| a name Scope did not check (`not_checked`) | the name, for the dangling and private-address rules and the applicable takeover rule, or both takeover rules when its provider is unknown | `sampled` past the cap; for a refusal (a deadline), the gate's reason |
+| a name whose lookup said nothing, with or without a chain (`insufficient_evidence`) | the name, for the dangling and private-address rules and the applicable takeover rule, or both takeover rules when its provider is unknown | `unavailable:dns_<outcome>`; `limit_reached` for a deadline or a cancel |
+| names Scope could not list: certificate transparency did not answer, the gate dropped names from its answer for any rule but an exclude and `not_a_name` (`redacted`, `unattributable`; [scope.md](scope.md#third-party-sources)), or Scope's list is missing | `*.<root>`, for `dns.dangling_external`, `dns.private_address` and both takeover rules | `unavailable:ct_source`, `unavailable:<rule>`, `unavailable:not_listed` |
 | a records read that said nothing (MX, NS, the domain's TXT) | `<owner>/<TYPE>`, for `dns.dangling_external` | the read's reason |
 | an SPF tree not read to its end | `<domain>/TXT`, for `dns.dangling_external` | `unavailable:spf_incomplete` |
 | a target read that said nothing | its `dns_record` | the read's reason |
+
+A wildcard finding does not settle a gap in the names listed: the merged verdict keeps
+the gap's reason, its assessment incomplete and its coverage partial. A matching body
+marker may fire in a truncated capture, but a marked or truncated capture never proves
+its absence. A generic 4xx page settles neither configured nor unclaimed.
 
 A read the gate refused or could not make takes its reason from the gate's own table
 ([scope.md](scope.md#outcomes)); a deadline or a cancel in a lookup is `limit_reached`.
@@ -319,36 +331,62 @@ finding to the domain root the mail domain falls under. Acceptances and assessme
 by that asset, and an undeclared name's findings print the name as their asset and its
 canonical id as the paste's `asset` ([engagement.md](engagement.md#findings), "The
 paste"). An acceptance covers its own asset's instances only, never those of a name
-under it ([engagement.md](engagement.md#findings), "Acceptances").
+under it ([engagement.md](engagement.md#findings), "Acceptances"). The DNS finding
+definitions, including both takeover findings, declare `Subject: "dns_name"`, so an
+acceptance must name its subject; record findings still use their `dns_record` key.
 
 ## Takeover fingerprints
 
-The takeover table is versioned data in the tree, refreshed each release. Each entry
-holds the provider, its suffixes, the kind of evidence, its tier, the marker, and its
-source: a URL and the `can-i-take-over-xyz` commit and date it was taken from. A change
-to the table invalidates recall comparisons across it.
+The takeover table in `internal/collector/web/takeover.go` is versioned data,
+refreshed each release. Version `2026-10-09.1`, reviewed on `2026-10-09`, uses
+[`can-i-take-over-xyz`'s `fingerprints.json`](https://github.com/EdOverflow/can-i-take-over-xyz/blob/5bd4e12837911c8475486f1da922c9b9c706e632/fingerprints.json)
+at commit `5bd4e12837911c8475486f1da922c9b9c706e632` (`2025-02-08`), with the
+provider sources below. Each enabled entry holds the provider, anchored DNS suffix
+pattern, evidence kind, status and markers where applicable, ownership tier, source
+and caveat. A change invalidates recall comparisons across versions.
 
-| Provider | Suffixes | Evidence | Tier |
+| Enabled provider | Suffixes | Evidence | Tier and source |
 |---|---|---|---|
-| GitHub Pages | `*.github.io` | 404 and "There isn't a GitHub Pages site here.", read from http (https does not match) | claimable; `not_checked`: "unless your organization verified this domain at GitHub" |
-| AWS S3 | `*.s3-website[-.]<region>.amazonaws.com`, `*.s3[.-]<region>.amazonaws.com`, `*.s3.amazonaws.com` | 404 and `NoSuchBucket` (with `Server: AmazonS3`) | claimable |
-| Elastic Beanstalk | `*.<region>.elasticbeanstalk.com` | NXDOMAIN | claimable |
-| Azure | `azurewebsites.net`, `cloudapp.net`, `cloudapp.azure.com`, `trafficmanager.net`, `blob.core.windows.net`, `azure-api.net` | NXDOMAIN | claimable; `not_checked` names App Service's `asuid` TXT record |
-| Heroku (legacy) | `*.herokuapp.com`; `herokudns.com` is not on the list | "No such app" | claimable |
-| Bitbucket | `*.bitbucket.io` | "Repository not found" | claimable |
-| Pantheon, Surge, WordPress.com, Ghost | per source | the body | claimable per source; second tier, added only once their marker is verified |
-| Netlify, Vercel, Shopify, Fastly, Webflow, Zendesk, CloudFront | per source | the provider's "not configured" page | verifies ownership: `dns.unclaimed_at_provider`, low |
+| GitHub Pages | `*.github.io` | 404 and "There isn't a GitHub Pages site here.", read from http (https does not match) | claimable; `not_checked`: whether the organization [verified the domain](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/verifying-your-custom-domain-for-github-pages), which can prevent another account claiming it |
+| AWS S3 | `*.s3-website[-.]<region>.amazonaws.com`, `*.s3[.-]<region>.amazonaws.com`, `*.s3.amazonaws.com` | 404 and `NoSuchBucket`, with `Server: AmazonS3` | claimable; [virtual hosting and custom domains](https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html) |
+| Elastic Beanstalk | `*.<region>.elasticbeanstalk.com` | NXDOMAIN | claimable; [custom domains](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/customdomains.html) |
+| Azure | names below `azurewebsites.net`, `cloudapp.net`, `cloudapp.azure.com`, `trafficmanager.net`, `blob.core.windows.net`, `azure-api.net` | NXDOMAIN | claimable; [subdomain takeover](https://learn.microsoft.com/en-us/azure/security/fundamentals/subdomain-takeover); only for `azurewebsites.net`, `not_checked` names App Service's `asuid` TXT ownership record, which can prevent another account binding the domain |
+| Vercel | exactly `cname.vercel-dns.com` or `cname.vercel-dns-0.com` | 404 and `DEPLOYMENT_NOT_FOUND` | verifies ownership: `dns.unclaimed_at_provider`, low; [the error and its status](https://vercel.com/docs/errors/deployment_not_found), [ownership policy](https://vercel.com/docs/domains/working-with-domains/claim-domain-ownership) |
+
+**No verified fingerprint in this version:** Heroku (legacy `herokuapp.com`) and
+Bitbucket have no status in the pinned source; their body marker alone is not enough.
+Pantheon, Surge, WordPress.com, Ghost, Netlify, Shopify, Fastly, Webflow, Zendesk and
+CloudFront have no enabled status, marker and ownership combination. Names pointing
+at these providers are listed as not checked for takeover, as are other unmatched
+providers; an unknown provider's dangling chain still fires `dns.dangling_external`.
+They are not presumed safe or claimable. `herokudns.com` is not on the claimable list.
 
 **Two kinds of evidence, never one alone:** NXDOMAIN at a claimable suffix; or the
 suffix **and** the status **and** the body marker.
 
 **Wildcards.**
 
-- A name whose answer equals its root's control answer is not read
-  ([scope.md](scope.md#discovery)).
+- An undeclared discovered name whose answer equals its root's control answer is not
+  read on its own ([scope.md](scope.md#discovery)). A declared name keeps its own HTTP
+  reads and judgments: the same DNS answer does not establish the same Host binding.
+  Answers match only when recognized and equal in outcome, whole CNAME chain and
+  addresses. Shared addresses alone, different chains, and equal redaction or
+  truncation markers never establish a match. Scope keeps the gate's redacted control
+  name, chain, addresses, outcome and request id as `domains[].control` in
+  `scope.json`. A marked control name is insufficient evidence, never an HTTP host
+  or a reason to read a page. A control marked `insufficient_evidence` or
+  `not_checked` leaves Scope incomplete and is retried on resume; a successful
+  control is kept when Scope is complete.
+  A dangling wildcard needs a nonempty chain; an
+  ordinary random NXDOMAIN with no chain is not a wildcard finding.
 - When the control label's own chain dangles or is fingerprinted, that is **one**
   instance, on `*.root`, and the certificate-transparency names with the same chain are
-  grouped under it.
+  grouped under it. When a resolving control points at an enabled body-fingerprint
+  provider and both resolvers are known not to invent answers, Recon sends the control
+  name's one https/http front-page pair through the normal gate. It never sends a
+  literal `*.<root>` or reads matching undeclared certificate-log names separately.
+  The evidence says those names matched DNS, and their pages were not read. A dangling
+  control needs no page; neither does an unknown provider.
 - On a provider's own wildcard (`github.io`, `herokuapp.com`, S3), only the body is
   evidence.
 - Under a resolver that rewrites NXDOMAIN, every NXDOMAIN verdict is insufficient
@@ -356,9 +394,13 @@ suffix **and** the status **and** the body marker.
 
 **Never claim a name.** No provider account, no call to a provider's API, no request
 beyond the two reads of a name without first-party evidence, and no read repeated. A
-matched fingerprint suspends a `first_party` confirmation
-([scope.md](scope.md#first-party-evidence)). The report says that scheck cannot tell
-whether someone has already claimed a name.
+matched fingerprint suspends operator `first_party` confirmations for that name in
+the live scope and persisted `scope.json`; a wildcard match suspends confirmations
+only for its listed member names, never every descendant or a nested root. Explicit
+roots remain authorized by their root evidence
+([scope.md](scope.md#first-party-evidence)). The finding's `not_checked` says whether
+someone already claimed the name was not checked, with the provider's caveat where
+applicable.
 
 ## What the report never says
 
@@ -417,6 +459,7 @@ Each is printed with its reason, under the coverage row it belongs to
 | Rule | Fix |
 |---|---|
 | `dns.takeover_candidate` | Delete the record at *DNS host* today, or claim the name again in your *provider* account; then check whether anyone already served content there. |
+| `dns.unclaimed_at_provider` | Remove the stale DNS record, or finish configuring the domain in the provider account. |
 | `dns.dangling_external` | Delete the record, or point it at the service's current name. |
 | `email.dmarc_not_enforced` | If there is no record, publish `v=DMARC1; p=none; rua=mailto:<a mailbox you read>`; read two to four weeks of reports; confirm that each sender under `mail.senders` passes; then move to `quarantine`, then `reject`. Do not jump straight to `reject`. |
 | `email.spf_permits_anyone` | Replace `+all` or `all` with `~all`, or `-all` once DMARC enforces. |

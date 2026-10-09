@@ -62,7 +62,8 @@ type ScopeDomain struct {
 	Dropped []gate.Drop `json:"dropped,omitempty"`
 	// Wildcard is the control label's answer, when the root has wildcard
 	// DNS.
-	Wildcard []string `json:"wildcard,omitempty"`
+	Wildcard []string   `json:"wildcard,omitempty"`
+	Control  *ScopeName `json:"control,omitempty"`
 	// WildcardCerts are the names a wildcard certificate covers (*.x).
 	WildcardCerts []string    `json:"wildcard_certificates,omitempty"`
 	Names         []ScopeName `json:"names"`
@@ -191,13 +192,25 @@ func (d *discovery) run(ctx context.Context) ([]ScopeDomain, *Resolver, []Points
 func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, points map[string][]string) ScopeDomain {
 	sd := ScopeDomain{Root: root.ID, Names: []ScopeName{}}
 	d.log("scope: discovering names under %s", root.name)
-	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: root.ID, Name: randomLabel() + "." + root.name, Stage: "scope", Control: true})
+	controlName := randomLabel() + "." + root.name
+	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: root.ID, Name: controlName, Stage: "scope", Control: true})
 	if ctl.Decision == gate.DecisionSent {
 		resolver.Controls++
 	}
 	if ctl.Lookup.Outcome == gate.OutcomeAddresses {
 		sd.Wildcard = addrStrings(ctl.Lookup.Addrs)
 	}
+	sn := ScopeName{Name: ctl.Lookup.Name, RequestID: ctl.RequestID, Outcome: string(ctl.Lookup.Outcome),
+		Chain: ctl.Lookup.Chain, Addresses: addrStrings(ctl.Lookup.Addrs), FinalInRoot: ctl.Lookup.FinalInRoot}
+	switch ctl.Decision {
+	case gate.DecisionSent:
+		d.classify(&sn, ctl.Lookup, true, nil, resolver.Rewrites, map[string][]string{})
+	case "refused:excluded":
+		sn.Status = NameExcluded
+	default:
+		sn.Status, sn.Detail = NameNotChecked, ctl.Decision
+	}
+	sd.Control = &sn
 	cands := candidates{}
 	cands.add(root.name, "root", time.Time{}, true)
 	for _, a := range d.res.Assets {
@@ -306,7 +319,7 @@ func (d *discovery) fromCT(ctx context.Context, root Ref, sd *ScopeDomain, cands
 // status and whether it is read.
 func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list []*candidate, resolver *Resolver, points map[string][]string) {
 	rewrites := resolver.Rewrites
-	wildcard := sd.Wildcard
+	wildcard := sd.Control
 	// The caps count names the gate looked up: one an exclude covers is
 	// refused before any query, and counts toward neither.
 	resolved, unverified := 0, 0
@@ -364,7 +377,7 @@ func (d *discovery) evidence(name string, l gate.Lookup) *Evidence {
 
 // classify settles a resolved name's status (docs/spec/scope.md,
 // "Discovery", step 4).
-func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildcard []string, rewrites bool, points map[string][]string) {
+func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildcard *ScopeName, rewrites bool, points map[string][]string) {
 	// A chain that enters an excluded name stops there: the resolver
 	// already followed it, and the gate went no further.
 	if l.Outcome == gate.OutcomeExcluded {
@@ -379,6 +392,8 @@ func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildca
 	switch {
 	case l.Insufficient():
 		sn.Status, sn.Detail = NameInsufficient, string(l.Outcome)
+	case !declared && matchesWildcard(l, wildcard):
+		sn.Status = NameMatchesWildcard
 	case (l.Outcome == gate.OutcomeNXDomain || l.Outcome == gate.OutcomeNoData) && len(l.Chain) > 0:
 		sn.Status = NameDangling
 		if rewrites {
@@ -395,8 +410,6 @@ func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildca
 		sn.Status = NameGone
 	case l.Outcome == gate.OutcomeNoData:
 		sn.Status = NameNoAddress
-	case !declared && wildcard != nil && slices.Equal(addrStrings(l.Addrs), wildcard):
-		sn.Status = NameMatchesWildcard
 	default:
 		sn.Status = NameResolves
 	}
@@ -421,4 +434,22 @@ func randomLabel() string {
 		b[i] = alphabet[int(b[i])%len(alphabet)]
 	}
 	return string(b)
+}
+
+// matchesWildcard compares recognized DNS answers, not shared CDN addresses
+// alone. Equal redaction markers do not establish equal targets
+// (docs/spec/web-collector.md, "Wildcards").
+func matchesWildcard(l gate.Lookup, control *ScopeName) bool {
+	if control == nil || (control.Status != NameResolves && control.Status != NameDangling) ||
+		(len(l.Chain) == 0 && len(l.Addrs) == 0) {
+		return false
+	}
+	for _, chain := range [][]string{l.Chain, control.Chain} {
+		for _, hop := range chain {
+			if strings.Contains(hop, "[REDACTED:") || strings.Contains(hop, "[TRUNCATED:") {
+				return false
+			}
+		}
+	}
+	return string(l.Outcome) == control.Outcome && slices.Equal(l.Chain, control.Chain) && slices.Equal(addrStrings(l.Addrs), control.Addresses)
 }

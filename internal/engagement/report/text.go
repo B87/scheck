@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -737,6 +738,14 @@ func (t *text) row(row Row) {
 			t.hang("  ", "  ", s+".")
 		}
 	}
+	for _, item := range row.SubItems {
+		if item.Name == "Services your names point at" {
+			t.hang("  Services your names point at: ", "    ", clean(item.Asset))
+			for _, name := range item.ReadNotJudged {
+				t.hang("    ", "    ", clean(name)+"; not checked for takeover: no fingerprint for this provider.")
+			}
+		}
+	}
 	for _, n := range row.DeclaredNotVerified {
 		t.hang("  Declared, not verified: ", "    ", clean(n.Detail)+" ("+clean(entryKey(n.Source))+").")
 	}
@@ -1144,7 +1153,13 @@ func (t *text) paste(p *AcceptTemplate) {
 	kv("asset", clean(p.Asset), "")
 	switch {
 	case p.Subject != "":
-		kv("subject", clean(p.Subject), "required: this entry accepts this one only")
+		subject := clean(p.Subject)
+		// A wildcard starts YAML's alias syntax: quote it so the pasted
+		// acceptance names the DNS subject (web-collector.md, "Wildcards").
+		if strings.HasPrefix(subject, "*") {
+			subject = strconv.Quote(subject)
+		}
+		kv("subject", subject, "required: this entry accepts this one only")
 	case p.SubjectNote != "":
 		t.line(in + "    # " + clean(p.SubjectNote))
 	}
