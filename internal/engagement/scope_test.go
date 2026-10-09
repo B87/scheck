@@ -193,46 +193,62 @@ func TestScopeSite(t *testing.T) {
 	well := []string{"/.well-known/security.txt", "/robots.txt"}
 	for _, tc := range []struct {
 		origin string
-		want   gate.SitePaths
+		want   siteList
 	}{
 		// Discovered, no evidence: the front page, over https and http.
-		{"https://shop.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well}},
-		{"http://shop.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well}},
+		{"https://shop.example.com", siteList{Paths: []string{"/"}, Network: well}},
+		{"http://shop.example.com", siteList{Paths: []string{"/"}, Network: well}},
 		// No other port, and nothing outside every root.
-		{"https://shop.example.com:8443", gate.SitePaths{}},
-		{"https://example.org", gate.SitePaths{}},
+		{"https://shop.example.com:8443", siteList{}},
+		{"https://example.org", siteList{}},
 		// Confirmed by the operator: while it points at its target, or
 		// through a network root.
-		{"https://blog.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well, Confirmed: well, Target: "blog.example-hosting.net"}},
+		{"https://blog.example.com", siteList{Paths: []string{"/"}, Network: well, Confirmed: well, Target: "blog.example-hosting.net"}},
 		// The intent URL on a discovered name is an entry point only with
 		// first-party evidence.
-		{"https://www.example.com", gate.SitePaths{Paths: []string{"/"}, Network: []string{"/.well-known/security.txt", "/api/", "/robots.txt"}}},
+		{"https://www.example.com", siteList{Paths: []string{"/"}, Network: []string{"/.well-known/security.txt", "/api/", "/robots.txt"}}},
 		// A url root: its own path, the intent URL on it, the two files;
 		// not its front page.
-		{"https://app.example.net", gate.SitePaths{Paths: []string{"/.well-known/security.txt", "/portal/", "/portal/status", "/robots.txt"}}},
-		{"http://app.example.net", gate.SitePaths{}},
+		{"https://app.example.net", siteList{Paths: []string{"/.well-known/security.txt", "/portal/", "/portal/status", "/robots.txt"}}},
+		{"http://app.example.net", siteList{}},
 		// A host root and an address in a network root are first-party.
-		{"https://203.0.113.5", gate.SitePaths{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
-		{"https://198.51.100.7", gate.SitePaths{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
+		{"https://203.0.113.5", siteList{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
+		{"https://198.51.100.7", siteList{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
 		// An origin not written canonically lists nothing.
-		{"https://Shop.example.com", gate.SitePaths{}},
-		{"https://shop.example.com:443", gate.SitePaths{}},
-		{"https://shop.example.com/x", gate.SitePaths{}},
+		{"https://Shop.example.com", siteList{}},
+		{"https://shop.example.com:443", siteList{}},
+		{"https://shop.example.com/x", siteList{}},
 	} {
-		if got := s.Site(tc.origin); !sameSite(got, tc.want) {
+		if got := siteOf(s, tc.origin); !sameSite(got, tc.want) {
 			t.Errorf("Site(%s) = %+v; want %+v", tc.origin, got, tc.want)
 		}
 	}
 }
 
-func sameSite(a, b gate.SitePaths) bool {
+// siteList is site's lists as these tests write them, with the
+// confirmation's target the confirmed paths wait on.
+type siteList struct {
+	Paths, Network, Confirmed []string
+	Target                    string
+}
+
+func siteOf(s gate.Scope, origin string) siteList {
+	sp := s.(*scope).site(origin)
+	out := siteList{Paths: sp.paths, Network: sp.network, Confirmed: sp.confirmed}
+	if sp.ev != nil {
+		out.Target = sp.ev.Target
+	}
+	return out
+}
+
+func sameSite(a, b siteList) bool {
 	return slices.Equal(a.Paths, b.Paths) && slices.Equal(a.Network, b.Network) && slices.Equal(a.Confirmed, b.Confirmed) && a.Target == b.Target
 }
 
 // With no network root, nothing beyond a discovered name's front page
 // waits on one.
 func TestScopeSiteWithoutNetworkRoots(t *testing.T) {
-	if got := scopeOf(t, minimal).Site("https://www.example.com"); !sameSite(got, gate.SitePaths{Paths: []string{"/"}}) {
+	if got := siteOf(scopeOf(t, minimal), "https://www.example.com"); !sameSite(got, siteList{Paths: []string{"/"}}) {
 		t.Errorf("Site = %+v", got)
 	}
 }
@@ -251,7 +267,7 @@ func TestConfirmationYear(t *testing.T) {
 		time.Date(2027, 10, 7, 23, 59, 0, 0, madrid): "198.51.100.8,198.51.100.9",
 		time.Date(2027, 10, 8, 0, 0, 0, 0, madrid):   "",
 	} {
-		if got := res.GateScope(at).Site("https://www.example.com"); got.Target != want {
+		if got := siteOf(res.GateScope(at), "https://www.example.com"); got.Target != want {
 			t.Errorf("at %s: %+v", at, got)
 		}
 	}
@@ -262,7 +278,7 @@ func TestConfirmationYear(t *testing.T) {
 	future := strings.Replace(file, "date: 2026-10-07", "date: 2062-10-07", 1)
 	if res, err := Parse("e.yaml", []byte(future), testOpts); err != nil {
 		t.Fatal(err)
-	} else if got := res.GateScope(runStart).Site("https://www.example.com"); got.Target != "" || len(got.Confirmed) != 0 {
+	} else if got := siteOf(res.GateScope(runStart), "https://www.example.com"); got.Target != "" || len(got.Confirmed) != 0 {
 		t.Errorf("a future confirmation: %+v", got)
 	} else if ev := res.firstParty(res.Assets[len(res.Assets)-1], runStart); ev.String() != "none: the confirmation is dated 2062-10-07, after this run" {
 		t.Errorf("future: %s", ev)
@@ -387,7 +403,7 @@ assets:
 				if o.Port != 0 {
 					host += ":" + strconv.Itoa(o.Port)
 				}
-				site := s.Site(o.scheme + "://" + host)
+				site := siteOf(s, o.scheme+"://"+host)
 				paths, netPaths := slices.Concat(site.Paths, site.Confirmed), site.Network
 				if reads := slices.Contains(paths, "/robots.txt"); reads != (ev != nil) {
 					t.Errorf("%s %s at %s://%s: evidence %v, the gate reads %v", name, a.Name, o.scheme, host, ev, paths)

@@ -78,11 +78,11 @@ type Cert struct {
 // send writes the send line, then dials the checked addresses in order and
 // sends the request; a send line that cannot be written stops it.
 func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (Result, *retry) {
-	red := g.redactFor(a)
-	e.Event, e.Decision, e.Port = "send", "sent", int(a.b.port)
+	e.Event, e.Decision, e.Port = "send", DecisionSent, int(a.b.port)
 	if err := g.record(e); err != nil {
-		return Result{RequestID: e.RequestID, Decision: "unavailable:audit_failed", Reason: "unavailable:audit_failed",
-			Detail: "the audit log could not be written, so nothing was sent"}, nil
+		res := Result{RequestID: e.RequestID}
+		res.end("unavailable:audit_failed", "the audit log could not be written, so nothing was sent")
+		return res, nil
 	}
 	total := totalTimeout
 	if a.prov.timeout > 0 {
@@ -97,145 +97,189 @@ func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (Result
 		ctx, wcancel = context.WithDeadline(ctx, a.windowEnd)
 		defer wcancel()
 	}
-	start := g.now()
-
-	var (
-		destIP   string
-		dialMu   sync.Mutex
-		releases []func()
-		// closed is set when the request ends: the transport dials on a
-		// context of its own, so a dial may still be looping, and a slot it
-		// takes after this point is released at once rather than leaked.
-		closed bool
-	)
-	defer func() {
-		dialMu.Lock()
-		defer dialMu.Unlock()
-		closed = true
-		for _, rel := range releases {
-			rel()
-		}
-	}()
-	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
-		var errs []error
-		for _, ip := range a.addrs {
-			// The per-address throttle is taken for the address dialled:
-			// CDNs share addresses across assets.
-			if a.prov.web {
-				rel, err := g.limits.get("addr:"+ip.String(), addrRate, 2).acquire(ctx, g.now, g.sleep)
-				if err != nil {
-					return nil, err
-				}
-				dialMu.Lock()
-				if closed || ctx.Err() != nil {
-					dialMu.Unlock()
-					rel()
-					return nil, errors.Join(append(errs, context.Canceled)...)
-				}
-				releases = append(releases, rel)
-				dialMu.Unlock()
-			}
-			dctx, dcancel := context.WithTimeout(ctx, dialTimeout)
-			c, err := g.dial(dctx, "tcp", netip.AddrPortFrom(ip, a.b.port).String())
-			dcancel()
-			if err == nil {
-				dialMu.Lock()
-				destIP = ip.String()
-				dialMu.Unlock()
-				return c, nil
-			}
-			errs = append(errs, err)
-		}
-		return nil, errors.Join(errs...)
-	}
-	tlsConf := &tls.Config{ServerName: a.b.name, MinVersion: tls.VersionTLS12, RootCAs: g.roots}
-
-	res := Result{RequestID: e.RequestID, Decision: "sent"}
+	d := &dialer{g: g, a: a}
+	defer d.close()
 	e.Event = "result"
-	finish := func(resp *Response, rt *retry) (Result, *retry) {
-		e.DurationMS = g.now().Sub(start).Milliseconds()
-		dialMu.Lock()
-		e.DestIP = destIP
-		dialMu.Unlock()
-		// It left this machine once a connection was made.
-		if e.DestIP != "" {
-			g.countSend(a, r.Asset)
-		}
-		if resp != nil {
-			resp.DestIP = e.DestIP
-			res.Response = resp
-			e.Status, e.Stored, e.Truncated = resp.Status, len(resp.Body), resp.Truncated
-			e.Redactions = len(resp.Redactions)
-			if resp.TLS != nil {
-				e.TLS = resp.TLS.Version
-				if !resp.TLS.Verified {
-					e.TLS = "invalid"
-				}
-			}
-			if resp.Body != nil {
-				e.OutputHash = hash(resp.Body)
-			} else {
-				e.OutputHash = resp.hash
-			}
-			if p := resp.Population; p != nil {
-				e.Dropped = p.Dropped
-			}
-		}
-		res.Detail, _ = red.RedactString(res.Detail)
-		e.Decision, e.Detail = res.Decision, res.Detail
-		_ = g.record(e)
-		return res, rt
-	}
-	// outcome names a transport error; beforeResponse says nothing came
-	// back yet, the only case a reset is retried in.
-	outcome := func(err error, beforeResponse bool, resp *Response) (Result, *retry) {
-		var verr *tls.CertificateVerificationError
-		var nerr net.Error
-		switch {
-		case errors.As(err, &verr):
-			res.Decision, res.Reason = "unavailable:tls_invalid", "unavailable:tls_invalid"
-			res.Detail = verr.Err.Error()
-			return finish(&Response{TLS: tlsInfo(red, nil, verr)}, nil)
-		case g.pastDeadline(g.now()):
-			res.Decision, res.Reason, res.Detail = "unavailable:deadline", "limit_reached", "limits.timeout ended the request in flight"
-		case !a.windowEnd.IsZero() && !g.now().Before(a.windowEnd):
-			res.Decision, res.Reason, res.Detail = "unavailable:window_ended", "limit_reached", "the authorization window ended with the request in flight"
-		case errors.Is(err, context.Canceled):
-			res.Decision, res.Reason, res.Detail = "unavailable:canceled", "limit_reached", "the run was cancelled with the request in flight"
-		case errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
-			res.Decision, res.Reason, res.Detail = "unavailable:connection_reset", "unavailable:connection_reset", err.Error()
-			if beforeResponse {
-				return finish(resp, &retry{provider: a.b.op.Provider, code: "connection_reset", detail: err.Error()})
-			}
-		case errors.Is(err, context.DeadlineExceeded) || errors.As(err, &nerr) && nerr.Timeout():
-			res.Decision, res.Reason, res.Detail = "unavailable:timeout", "unavailable:timeout", err.Error()
-		default:
-			res.Decision, res.Reason, res.Detail = "unavailable:unreachable", "unavailable:unreachable", err.Error()
-		}
-		return finish(resp, nil)
-	}
-
+	s := &sending{g: g, e: e, a: a, r: r, red: g.redactFor(a), d: d, start: g.now(),
+		res: Result{RequestID: e.RequestID, Decision: DecisionSent}}
 	if a.b.op.Method == TLS {
-		raw, err := dial(ctx, "tcp", "")
-		if err != nil {
-			return outcome(err, true, nil)
-		}
-		defer func() { _ = raw.Close() }()
-		hctx, hcancel := context.WithTimeout(ctx, tlsTimeout)
-		defer hcancel()
-		conn := tls.Client(raw, tlsConf)
-		if err := conn.HandshakeContext(hctx); err != nil {
-			return outcome(err, true, nil)
-		}
-		st := conn.ConnectionState()
-		return finish(&Response{TLS: tlsInfo(red, &st, nil)}, nil)
+		return s.handshake(ctx)
 	}
+	return s.roundTrip(ctx)
+}
 
+// dialer dials a request's checked addresses in order. The transport dials
+// on a context of its own, so a dial may still be looping when the request
+// ends: a throttle slot it takes after close is released at once rather
+// than leaked.
+type dialer struct {
+	g        *Gate
+	a        admitted
+	mu       sync.Mutex
+	destIP   string
+	releases []func()
+	closed   bool
+}
+
+func (d *dialer) dial(ctx context.Context, _, _ string) (net.Conn, error) {
+	var errs []error
+	for _, ip := range d.a.addrs {
+		// The per-address throttle is taken for the address dialled: CDNs
+		// share addresses across assets.
+		if d.a.prov.web {
+			rel, err := d.g.limits.get("addr:"+ip.String(), addrRate, 2).acquire(ctx, d.g.now, d.g.sleep)
+			if err != nil {
+				return nil, err
+			}
+			d.mu.Lock()
+			if d.closed || ctx.Err() != nil {
+				d.mu.Unlock()
+				rel()
+				return nil, errors.Join(append(errs, context.Canceled)...)
+			}
+			d.releases = append(d.releases, rel)
+			d.mu.Unlock()
+		}
+		dctx, dcancel := context.WithTimeout(ctx, dialTimeout)
+		c, err := d.g.dial(dctx, "tcp", netip.AddrPortFrom(ip, d.a.b.port).String())
+		dcancel()
+		if err == nil {
+			d.mu.Lock()
+			d.destIP = ip.String()
+			d.mu.Unlock()
+			return c, nil
+		}
+		errs = append(errs, err)
+	}
+	return nil, errors.Join(errs...)
+}
+
+// dialled is the address a connection was made to, "" when none was.
+func (d *dialer) dialled() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.destIP
+}
+
+func (d *dialer) close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.closed = true
+	for _, rel := range d.releases {
+		rel()
+	}
+}
+
+// sending is one request in flight: its result line and what it read.
+type sending struct {
+	g     *Gate
+	e     Entry
+	a     admitted
+	r     Request
+	red   *policy.Redactor
+	d     *dialer
+	start time.Time
+	res   Result
+}
+
+func (s *sending) tlsConfig() *tls.Config {
+	return &tls.Config{ServerName: s.a.b.name, MinVersion: tls.VersionTLS12, RootCAs: s.g.roots}
+}
+
+// finish writes the result line and returns the result.
+func (s *sending) finish(resp *Response, rt *retry) (Result, *retry) {
+	e := &s.e
+	e.DurationMS = s.g.now().Sub(s.start).Milliseconds()
+	e.DestIP = s.d.dialled()
+	// It left this machine once a connection was made.
+	if e.DestIP != "" {
+		s.g.countSend(s.a, s.r.Asset)
+	}
+	if resp != nil {
+		resp.DestIP = e.DestIP
+		s.res.Response = resp
+		e.Status, e.Stored, e.Truncated = resp.Status, len(resp.Body), resp.Truncated
+		e.Redactions = len(resp.Redactions)
+		if resp.TLS != nil {
+			e.TLS = resp.TLS.Version
+			if !resp.TLS.Verified {
+				e.TLS = "invalid"
+			}
+		}
+		if resp.Body != nil {
+			e.OutputHash = hash(resp.Body)
+		} else {
+			e.OutputHash = resp.hash
+		}
+		if p := resp.Population; p != nil {
+			e.Dropped = p.Dropped
+		}
+	}
+	s.res.Detail, _ = s.red.RedactString(s.res.Detail)
+	e.Decision, e.Detail = s.res.Decision, s.res.Detail
+	_ = s.g.record(*e)
+	return s.res, rt
+}
+
+// failed ends a request on a transport error (docs/spec/scope.md,
+// "Outcomes"); beforeResponse says nothing came back yet, the only case a
+// reset is retried in.
+func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result, *retry) {
+	var verr *tls.CertificateVerificationError
+	var nerr net.Error
+	var rt *retry
+	switch {
+	case errors.As(err, &verr):
+		s.res.end("unavailable:tls_invalid", verr.Err.Error())
+		return s.finish(&Response{TLS: tlsInfo(s.red, nil, verr)}, nil)
+	case s.g.pastDeadline(s.g.now()):
+		s.res.end("unavailable:deadline", "limits.timeout ended the request in flight")
+	case !s.a.windowEnd.IsZero() && !s.g.now().Before(s.a.windowEnd):
+		s.res.end("unavailable:window_ended", "the authorization window ended with the request in flight")
+	case errors.Is(err, context.Canceled):
+		s.res.end("unavailable:canceled", "the run was cancelled with the request in flight")
+	case errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
+		s.res.end("unavailable:connection_reset", err.Error())
+		if beforeResponse {
+			// Kept for when the retries run out: redacted now, since the
+			// error's text names the URL.
+			detail, _ := s.red.RedactString(err.Error())
+			rt = &retry{provider: s.a.b.op.Provider, code: "connection_reset", detail: detail}
+		}
+	case errors.Is(err, context.DeadlineExceeded) || errors.As(err, &nerr) && nerr.Timeout():
+		s.res.end("unavailable:timeout", err.Error())
+	default:
+		s.res.end("unavailable:unreachable", err.Error())
+	}
+	return s.finish(resp, rt)
+}
+
+// handshake is a TLS op: the handshake and nothing after it.
+func (s *sending) handshake(ctx context.Context) (Result, *retry) {
+	raw, err := s.d.dial(ctx, "tcp", "")
+	if err != nil {
+		return s.failed(err, true, nil)
+	}
+	defer func() { _ = raw.Close() }()
+	hctx, hcancel := context.WithTimeout(ctx, tlsTimeout)
+	defer hcancel()
+	conn := tls.Client(raw, s.tlsConfig())
+	if err := conn.HandshakeContext(hctx); err != nil {
+		return s.failed(err, true, nil)
+	}
+	st := conn.ConnectionState()
+	return s.finish(&Response{TLS: tlsInfo(s.red, &st, nil)}, nil)
+}
+
+// roundTrip sends an HTTP request on one fresh connection and reads its
+// answer through the pipeline.
+func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
+	g, a := s.g, s.a
 	tr := &http.Transport{
 		// No proxy: a proxy resolves names itself and sees every URL.
 		Proxy:                 nil,
-		DialContext:           dial,
-		TLSClientConfig:       tlsConf,
+		DialContext:           s.d.dial,
+		TLSClientConfig:       s.tlsConfig(),
 		TLSHandshakeTimeout:   tlsTimeout,
 		ResponseHeaderTimeout: headersTimeout,
 		// One connection per request: a pooled connection would go to an
@@ -253,7 +297,7 @@ func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (Result
 	}
 	req, err := http.NewRequestWithContext(ctx, string(a.b.op.Method), a.b.url.String(), nil)
 	if err != nil {
-		return outcome(err, true, nil)
+		return s.failed(err, true, nil)
 	}
 	req.Header.Set("User-Agent", g.ua)
 	req.Header.Set("Accept", strings.Join(a.b.op.Accept, ", "))
@@ -264,39 +308,45 @@ func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (Result
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return outcome(err, true, nil)
+		return s.failed(err, true, nil)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	out := &Response{Status: resp.StatusCode}
 	if resp.TLS != nil {
-		out.TLS = tlsInfo(red, resp.TLS, nil)
+		out.TLS = tlsInfo(s.red, resp.TLS, nil)
 	}
-	out.Header, e.Headers, out.Redactions = keepHeaders(resp.Header, red)
+	out.Header, s.e.Headers, out.Redactions = keepHeaders(resp.Header, s.red)
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		g.noteRedirect(e.RequestID, r.Asset, a, req.URL, resp.Header.Get("Location"))
+		g.noteRedirect(s.e.RequestID, s.r.Asset, a, req.URL, resp.Header.Get("Location"))
 	}
-	body, rt := g.pipeline(&res, out, a, r, resp, &e)
+	body, rt := g.pipeline(&s.res, out, a, s.r, resp, &s.e)
 	if body.kept {
-		g.mu.Lock()
-		if body.next != nil {
-			g.pages[e.RequestID] = body.next
-		}
-		if body.done != nil {
-			g.users[r.Asset] = body.done
-		}
-		// The page before is read; its cursor is spent. A page that was
-		// not kept leaves it, so the collector may ask again.
-		delete(g.pages, r.NextOf)
-		g.mu.Unlock()
+		g.keepPage(s.e.RequestID, s.r, body)
 	}
 	if body.err != nil {
 		// A body cut short is never a complete read: the status and the
 		// headers stay, the partial body is not kept, and it is not
 		// retried, since a response came back.
-		return outcome(body.err, false, out)
+		return s.failed(body.err, false, out)
 	}
-	return finish(out, rt)
+	return s.finish(out, rt)
+}
+
+// keepPage stores what a kept list page leaves for the next: its page
+// state and a users list's finished set. The page before is read; its
+// cursor is spent. A page that was not kept leaves it, so the collector
+// may ask again.
+func (g *Gate) keepPage(id string, r Request, body piped) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if body.next != nil {
+		g.pages[id] = body.next
+	}
+	if body.done != nil {
+		g.users[r.Asset] = body.done
+	}
+	delete(g.pages, r.NextOf)
 }
 
 // piped is what the pipeline left for send: a transport error mid-body,
@@ -388,8 +438,7 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	}
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
-		res.Decision, res.Reason = "unavailable:"+code, "unavailable:"+code
-		res.Detail = codeDetail(code, limit)
+		res.end("unavailable:"+code, codeDetail(code, limit))
 	}
 	return p, rt
 }
@@ -455,7 +504,7 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 		return nil
 	}
 	if s == 502 || s == 503 || s == 504 {
-		res.Decision, res.Reason = "unavailable:server_error", "unavailable:server_error"
+		res.end("unavailable:server_error", res.Detail)
 		return &retry{provider: p, after: retryAfter, code: "server_error", detail: fmt.Sprintf("%s answered %d", sourceName(p), s)}
 	}
 	if p == "github" && (s == 403 || s == 429) && h.Get("X-RateLimit-Remaining") == "0" && !hasRetryAfter {
@@ -482,7 +531,7 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 	case s == 403, s == 404 && r.Exists:
 		res.Reason = "insufficient_permission"
 	case s >= 500:
-		res.Decision, res.Reason = "unavailable:server_error", "unavailable:server_error"
+		res.end("unavailable:server_error", res.Detail)
 	}
 	if a.prov.floor && s < 400 {
 		g.checkFloor(p, h)

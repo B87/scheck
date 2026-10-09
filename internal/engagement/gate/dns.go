@@ -609,7 +609,7 @@ func (g *Gate) Resolve(ctx context.Context, r Resolve) Resolved {
 	}
 	invalid := strings.HasSuffix(name, ".invalid")
 	if !invalid {
-		rule, detail := g.admitSubject(r.Asset, "domain:"+name)
+		rule, detail := g.placeSubject(r.Asset, "domain:"+name)
 		if rule == "" {
 			if x := g.scope.Name(name); x != "" {
 				rule, detail = "excluded", x

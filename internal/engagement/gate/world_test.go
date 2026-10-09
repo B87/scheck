@@ -347,11 +347,42 @@ func (s *fakeScope) Address(a netip.Addr) (string, bool) {
 	return excludedBy, in
 }
 
-func (s *fakeScope) Site(origin string) SitePaths {
-	if site, ok := s.sites[origin]; ok {
-		return site
+// SitePaths are the paths a fake origin may be read at, by the evidence
+// each needs, as the engagement's Scope lists them before it decides.
+type SitePaths struct {
+	Paths      []string
+	FirstParty bool
+	Network    []string
+	Confirmed  []string
+	Target     string
+}
+
+// Admits decides as the engagement's Scope does: Paths need nothing more,
+// Network every address in a network root, Confirmed the name pointing at
+// Target; either of the last two suffices.
+func (s *fakeScope) Admits(origin, path string, l *Lookup) Admission {
+	site, ok := s.sites[origin]
+	if !ok {
+		site = SitePaths{Paths: []string{"/"}}
 	}
-	return SitePaths{Paths: []string{"/"}}
+	network, confirmed := slices.Contains(site.Network, path), slices.Contains(site.Confirmed, path)
+	switch {
+	case slices.Contains(site.Paths, path):
+		return Admission{FirstParty: site.FirstParty}
+	case !network && !confirmed:
+		return Admission{Refused: "entry_point"}
+	case l == nil:
+		return Admission{Resolve: true}
+	}
+	all := len(l.Addrs) > 0
+	for _, a := range l.Addrs {
+		_, in := s.Address(a)
+		all = all && in
+	}
+	if network && all || confirmed && l.PointsAt(site.Target) {
+		return Admission{FirstParty: true}
+	}
+	return Admission{Refused: "address_moved"}
 }
 
 // throttle is an asset's own rate and concurrency.

@@ -154,23 +154,67 @@ func (r *Resolved) allowAddress(a netip.Addr) error {
 	return nil
 }
 
-// Site lists the paths an origin may be read at (docs/spec/scope.md,
+// sitePaths are the paths an origin may be read at, by the evidence each
+// needs (docs/spec/scope.md, "Admission", "First-party evidence"). A path
+// in both network and confirmed may be read when either holds.
+type sitePaths struct {
+	// paths need nothing more than the file.
+	paths []string
+	// firstParty says the file's own evidence (a root) admits paths, not
+	// only a domain root's front page: what the report counts as a site
+	// shown to be the operator's.
+	firstParty bool
+	// network need every address the name resolves to inside a network
+	// root; confirmed need the name to point at the confirmation's target.
+	network, confirmed []string
+	// ev is the file's evidence for the origin, which confirmed rests on.
+	ev *Evidence
+}
+
+// Admits decides whether path may be read at origin (docs/spec/scope.md,
+// "Admission", steps 7 and 8): the one decision the gate makes before it
+// resolves the name, with l nil, and again after, with the lookup as
+// answered. It is the only check on a web op's port: an origin it admits
+// no path at is refused, so a discovered name's other ports are never read.
+func (s *scope) Admits(origin, path string, l *gate.Lookup) gate.Admission {
+	sp := s.site(origin)
+	switch {
+	case slices.Contains(sp.paths, path):
+		return gate.Admission{FirstParty: sp.firstParty}
+	case !slices.Contains(sp.network, path) && !slices.Contains(sp.confirmed, path):
+		return gate.Admission{Refused: "entry_point"}
+	case l == nil:
+		return gate.Admission{Resolve: true}
+	}
+	// A confirmation admits only the paths it lists; a network root
+	// holding every address admits the rest, and a confirmation that moved.
+	ev := sp.ev
+	if !slices.Contains(sp.confirmed, path) {
+		ev = nil
+	}
+	if !s.res.resolvedEvidence(ev, *l).counts() {
+		return gate.Admission{Refused: "address_moved"}
+	}
+	return gate.Admission{FirstParty: true}
+}
+
+// site lists the paths an origin may be read at (docs/spec/scope.md,
 // "Admission", "Levels in 0.0.2"):
 //
 //   - a name under a domain root, on the default port, has its front page;
 //   - a first-party site also has its entry points (a url root or a
 //     confirmed url entry, and the intent URLs on it), robots.txt and
-//     security.txt: as Paths when a root is the evidence, as Confirmed
-//     with the confirmation's target when only the operator's word is;
+//     security.txt: as paths when a root is the evidence, as confirmed
+//     when only the operator's word is;
 //   - when the file has a network root, those beyond the front page of a
-//     site without root evidence are also Network paths, which the gate
+//     site without root evidence are also network paths, which the gate
 //     allows once every address the name resolves to is inside one.
 //
 // An origin not written canonically, or on another port, lists nothing.
-func (s *scope) Site(origin string) gate.SitePaths {
+func (s *scope) site(origin string) sitePaths {
 	o, err := parseURL(origin + "/")
 	if err != nil || o.path != "/" || o.ID != "url:"+origin+"/" {
-		return gate.SitePaths{}
+		return sitePaths{}
 	}
 	front := false
 	if o.Port == 0 {
@@ -187,11 +231,11 @@ func (s *scope) Site(origin string) gate.SitePaths {
 	}
 	ev, entries := s.res.evidence(o, s.at)
 	if !front && ev == nil {
-		return gate.SitePaths{}
+		return sitePaths{}
 	}
-	var sp gate.SitePaths
+	sp := sitePaths{ev: ev}
 	if front {
-		sp.Paths = append(sp.Paths, "/")
+		sp.paths = append(sp.paths, "/")
 	}
 	more := append(slices.Clone(wellKnown), entries...)
 	for _, u := range s.intent {
@@ -201,27 +245,53 @@ func (s *scope) Site(origin string) gate.SitePaths {
 	}
 	switch {
 	case ev != nil && ev.Kind != "operator":
-		sp.Paths, sp.FirstParty = append(sp.Paths, more...), true
+		sp.paths, sp.firstParty = append(sp.paths, more...), true
 	case ev != nil:
-		sp.Confirmed, sp.Target = more, ev.Target
+		sp.confirmed = more
 	}
 	if (ev == nil || ev.Kind == "operator") && slices.ContainsFunc(s.res.Roots, func(r Ref) bool { return r.Kind == KindNetwork }) {
 		// Evidence only a network root holding every address can give,
 		// checked once the gate has resolved the name; with no network
 		// root there is none to give.
-		sp.Network = slices.Clone(more)
+		sp.network = slices.Clone(more)
 	}
-	for _, l := range []*[]string{&sp.Paths, &sp.Network, &sp.Confirmed} {
+	for _, l := range []*[]string{&sp.paths, &sp.network, &sp.confirmed} {
 		slices.Sort(*l)
 		*l = slices.Compact(*l)
 	}
 	return sp
 }
 
+// resolvedEvidence is first-party evidence once the name is resolved
+// (docs/spec/scope.md, "First-party evidence"), the decision the gate's
+// Admits and discovery's listing share: a confirmation holds only while the
+// name points at its target, and is "moved" otherwise; without evidence
+// that holds, a name every address of which a network root holds has that
+// root's.
+func (r *Resolved) resolvedEvidence(ev *Evidence, l gate.Lookup) *Evidence {
+	if ev != nil && ev.Kind == "operator" && !l.PointsAt(ev.Target) {
+		ev = &Evidence{Kind: "moved", ConfirmedBy: ev.ConfirmedBy, Date: ev.Date, Target: ev.Target}
+	}
+	if ev.counts() || len(l.Addrs) == 0 {
+		return ev
+	}
+	held := ""
+	for _, a := range l.Addrs {
+		root := r.networkRoot(a)
+		if root == "" {
+			return ev
+		}
+		if held == "" {
+			held = root
+		}
+	}
+	return &Evidence{Kind: "network_root", Root: held}
+}
+
 // evidence is an origin's first-party evidence from the file, nil when it
 // has none, and the entry points it brings: the paths of the url roots and
 // confirmed url entries on the origin (docs/spec/scope.md, "First-party
-// evidence"). Site and scope.json both read it, so what the Scope stage
+// evidence"). Admits and scope.json both read it, so what the Scope stage
 // prints is what the gate admits. A root comes first, then a network root
 // holding an address literal, then the operator's confirmation, which
 // counts only through its year (at is the run's start); a name or address

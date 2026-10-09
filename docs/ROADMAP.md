@@ -507,13 +507,17 @@ slices that add callers do them first):
   (`repo:github:{key}`), as an op's subject already is, so the gate stops writing the
   engagement's id syntax; org-unit matching moves behind `Scope`, beside every other
   exclude match;
-- before E7: `Scope.Site` becomes one `Admits(path, resolution)` decision written once
-  in the engagement, which the gate calls before and after resolving the name and
-  discovery and the report read, in place of today's paths partitioned by the evidence
-  each needs;
-- with E7's first op, E7 being the first network collector: a request's `Reason`
-  derived from its decision by one table, and the gate's longest functions (`attempt`,
-  `send`, op validation, discovery's per-root loop, `shape`) split into steps.
+- before E7, done in E7 step 1a: `Scope.Site`, paths partitioned by the evidence each
+  needs, became one `Scope.Admits(origin, path, lookup)` decision written once in the
+  engagement. The gate asks it at steps 7 and 8 and, when the answer needs the lookup,
+  again at step 12 (`spec/scope.md`, "Admission"); discovery's listing decides
+  first-party evidence after resolution with the same function, and the report counts
+  a site as first-party from the gate's answer;
+- with E7's first op, E7 being the first network collector, done in E7 step 1a ahead
+  of it: a request's `Reason` comes from its decision by one table, and only a sent
+  request's from its status; the gate's longest functions (`attempt`, `send`, op
+  validation, discovery's per-root loop, `shape`) are split into steps, `attempt`'s in
+  the order of `spec/scope.md`, "Admission".
 
 **Deferred from E4's slice-closing review** (2026-10-08), each carried by the slice
 named:
@@ -633,6 +637,26 @@ network collector: the `security-consultant` froze the base severity anchors on
 2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
 placed against them.
 
+Built in steps, reviewed as E4 was:
+
+0. The definition: `spec/web-collector.md`, the frozen severity anchors, `PreloadedTLDs`;
+   the lab's domain part sealed (`eval/lab-0.0.2-domain.md`).
+1. The gate, in two halves:
+   - 1a, the refactors carried from E4's reviews (below): a request's `Reason` from its
+     decision by one table, the longest functions split into steps, and
+     `Scope.Admits`;
+   - 1b, what E7's reads need of the gate: TXT, MX and NS in its DNS client, the
+     underscore labels and DKIM selectors in its name types, a CNAME query when an
+     address query finds neither an address nor a CNAME (a DNS host may hide an in-zone
+     CNAME whose target does not exist), recorded fixtures of that and of a DNS host's
+     compact denial of existence, and the typed certificate verification class.
+2. `internal/collector/web`: its declared ops for DNS records, the names the company's
+   records point at, and takeover by fingerprint.
+3. The email rules.
+4. The web, TLS and header rules, and their data.
+5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
+   and the report's wording read by the `client`.
+
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)
 fire, disprove and abstain for every rule; the audit log shows no request outside an
 asset's entry points and its one redirect hop, and no `robots.txt` path
@@ -642,14 +666,14 @@ and entry points it affects (carried from E4 step 4b).
 
 **Carried from E4's reviews:**
 
-- with E7's first op: a request's `Reason` derived from its decision
-  by one table, and the gate's longest functions (`attempt`, `send`, op validation,
-  discovery's per-root loop, `shape`) split into steps. The provider table and a list's
-  item subject as a template stay with E5 and E6;
-- before E7's first op, `Scope.Site` becomes one `Admits(path, resolution)` decision
-  written once in the engagement, which the gate calls before and after resolving the
-  name and discovery and the report read, in place of today's paths partitioned by the
-  evidence each needs;
+- done in E7 step 1a: a request's `Reason` derived from its decision by one table, and
+  the gate's longest functions (`attempt`, `send`, op validation, discovery's per-root
+  loop, `shape`) split into steps. The provider table and a list's item subject as a
+  template stay with E5 and E6;
+- done in E7 step 1a: `Scope.Site` replaced by one `Scope.Admits(origin, path, lookup)`
+  decision written once in the engagement, which the gate calls before and after
+  resolving the name, and whose evidence check after resolution discovery's listing
+  shares (E4's "Deferred from E4's design review");
 - each session's site requests are kept split by first-party status, so a name sent
   without first-party evidence in one session and with it in another is not moved
   wholly to "websites shown to be yours" (today's `mergeEgress` ORs the flag);

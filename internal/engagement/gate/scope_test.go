@@ -36,7 +36,12 @@ const testToken = "test-token-0123456789abcdef"
 
 func harness(t *testing.T) (*gate.Harness, *gate.Gate) {
 	t.Helper()
-	res, err := engagement.Parse("e.yaml", []byte(engagementFile), engagement.Options{
+	return harnessOf(t, engagementFile)
+}
+
+func harnessOf(t *testing.T, file string) (*gate.Harness, *gate.Gate) {
+	t.Helper()
+	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
 		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
@@ -180,6 +185,42 @@ func TestEngagementScopeEntryPoints(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, []string{"https GET /.well-known/security.txt", "https GET /portal/", "https GET /robots.txt"}) {
 		t.Errorf("the url root's server saw %v", got)
+	}
+}
+
+// Scope.Admits decides again on the lookup, with the engagement's Scope: a
+// confirmed name reads robots.txt while it points at its target and is
+// refused as address_moved once it points elsewhere; a name every address
+// of which a network root holds reads it without a confirmation.
+func TestEngagementScopeAdmitsOnTheLookup(t *testing.T) {
+	confirmed := engagementFile + "assets:\n  blog:\n    domain: blog.example.com\n    first_party: {confirmed_by: alice, date: " +
+		time.Now().AddDate(0, 0, -1).Format("2006-01-02") + ", target: blog.example-hosting.net}\npeople:\n  alice: {kind: employee}\n"
+	for _, tc := range []struct {
+		name, file, host, ip string
+		dns                  map[string]string
+		want                 string
+	}{
+		{"a confirmation that holds", confirmed, "blog.example.com", "198.51.100.60",
+			map[string]string{"blog.example.com": "cname:blog.example-hosting.net", "blog.example-hosting.net": "addrs:198.51.100.60"}, "sent"},
+		{"a confirmation that moved", confirmed, "blog.example.com", "198.51.100.60",
+			map[string]string{"blog.example.com": "cname:blog.other-hosting.net", "blog.other-hosting.net": "addrs:198.51.100.60"}, "refused:address_moved"},
+		{"a network root holding every address", engagementFile, "cdn.example.com", "10.20.0.7", nil, "sent"},
+		{"no evidence", engagementFile, "cdn.example.com", "198.51.100.61", nil, "refused:address_moved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, g := harnessOf(t, tc.file)
+			seen := h.Site(tc.host, tc.ip)
+			if tc.dns != nil {
+				h.DNS(tc.dns)
+			}
+			res := g.Send(context.Background(), web("https", tc.host, "/robots.txt"))
+			if res.Decision != tc.want {
+				t.Fatalf("%+v", res)
+			}
+			if got := seen(); (tc.want == "sent") != slices.Equal(got, []string{"https GET /robots.txt"}) {
+				t.Errorf("the server saw %v", got)
+			}
+		})
 	}
 }
 

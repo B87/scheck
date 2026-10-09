@@ -537,3 +537,22 @@ func TestNoResolver(t *testing.T) {
 		t.Errorf("%+v", res)
 	}
 }
+
+// A result's coverage reason comes from its decision by one table
+// (docs/spec/scope.md, "Outcomes"); a sent request's comes from its
+// status, so its decision gives none.
+func TestReasonOfDecision(t *testing.T) {
+	for decision, want := range map[string]string{
+		DecisionSent: "", DecisionReused: "",
+		"refused:excluded": "excluded_by_operator", "refused:address_excluded": "excluded_by_operator",
+		"refused:address_moved": "unavailable:address_moved", "refused:no_credentials": "no_credentials",
+		"refused:window": "limit_reached", "refused:rate_limit": "limit_reached",
+		"refused:out_of_scope": "unavailable:refused_by_gate", "refused:bind": "unavailable:refused_by_gate",
+		"unavailable:deadline": "limit_reached", "unavailable:canceled": "limit_reached", "unavailable:window_ended": "limit_reached",
+		"unavailable:timeout": "unavailable:timeout", "unavailable:redirect_out_of_scope": "unavailable:redirect_out_of_scope",
+	} {
+		if got := reasonOf(decision); got != want {
+			t.Errorf("reasonOf(%q) = %q; want %q", decision, got, want)
+		}
+	}
+}

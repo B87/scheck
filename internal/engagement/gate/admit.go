@@ -63,7 +63,9 @@ func (g *Gate) exhausted(res Result, r *retry) Result {
 		res.Reason, res.Detail = "limit_reached", detail
 		return res
 	}
-	res.Decision, res.Reason, res.Detail = "unavailable:"+r.code, "unavailable:"+r.code, r.detail
+	// The detail is a transport error's text, which names the URL: redacted
+	// as the result line's was.
+	res.end("unavailable:"+r.code, g.redact(r.detail))
 	return res
 }
 
@@ -94,7 +96,8 @@ func (g *Gate) cutRetry(r Request, first string, n int, res Result, rt *retry, w
 	e := Entry{Event: "refused", RequestID: g.nextID(), Stage: r.Stage, Asset: r.Asset, Op: r.Op, Attempt: n, RetryOf: first,
 		Decision: "refused:" + rule, Detail: detail}
 	_ = g.record(e)
-	out := Result{RequestID: e.RequestID, Decision: e.Decision, Reason: "limit_reached", Detail: detail, Response: res.Response}
+	out := Result{RequestID: e.RequestID, Response: res.Response}
+	out.end(e.Decision, detail)
 	if asked {
 		out.Until = g.now().Add(wait)
 	}
@@ -122,78 +125,178 @@ func sourceName(p string) string {
 	return p
 }
 
-// refusalReason maps a refusal rule to its coverage reason
-// (docs/spec/scope.md, "Outcomes"). A rule a collector should never trip is
-// a defect, reported as refused_by_gate.
-func refusalReason(rule string) string {
-	switch rule {
-	case "excluded", "address_excluded":
-		return "excluded_by_operator"
-	case "address_not_public", "address_moved":
-		return "unavailable:" + rule
-	case "no_credentials":
-		return "no_credentials"
-	case "deadline", "rate_limit", "canceled", "window":
-		// A window bounds probes as limits.timeout bounds the run.
-		return "limit_reached"
-	}
-	return "unavailable:refused_by_gate"
+// reasons is the table a decision's coverage reason comes from
+// (docs/spec/scope.md, "Outcomes"), for every decision but sent, whose
+// reason its status decides (classify). A decision it does not list is its
+// own reason when unavailable, and a refusal a collector should never trip
+// is a defect, reported as refused_by_gate.
+var reasons = map[string]string{
+	"refused:excluded":           "excluded_by_operator",
+	"refused:address_excluded":   "excluded_by_operator",
+	"refused:address_not_public": "unavailable:address_not_public",
+	"refused:address_moved":      "unavailable:address_moved",
+	"refused:no_credentials":     "no_credentials",
+	// A window bounds probes as limits.timeout bounds the run.
+	"refused:deadline":         "limit_reached",
+	"refused:rate_limit":       "limit_reached",
+	"refused:canceled":         "limit_reached",
+	"refused:window":           "limit_reached",
+	"unavailable:deadline":     "limit_reached",
+	"unavailable:window_ended": "limit_reached",
+	"unavailable:canceled":     "limit_reached",
 }
+
+// reasonOf is a decision's coverage reason, "" for one that read something.
+func reasonOf(decision string) string {
+	if r, ok := reasons[decision]; ok {
+		return r
+	}
+	switch {
+	case strings.HasPrefix(decision, "unavailable:"):
+		return decision
+	case strings.HasPrefix(decision, "refused:"):
+		return "unavailable:refused_by_gate"
+	}
+	return ""
+}
+
+// end sets a result's decision, its reason from the table, and its detail.
+func (r *Result) end(decision, detail string) {
+	r.Decision, r.Reason, r.Detail = decision, reasonOf(decision), detail
+}
+
+// pending is a request on its way through admission: what each step
+// found, for the steps after it.
+type pending struct {
+	r    Request
+	e    Entry
+	op   *compiled
+	prov provider
+	b    *bound
+	// prev is the list page the request follows; hopDepth the redirect
+	// hops behind it.
+	prev     *page
+	hopDepth int
+	// site is a web request's admission at steps 7 and 8, settled again
+	// at step 12 when it waits on the lookup.
+	site      Admission
+	windowEnd time.Time
+	cred      *Credential
+	addrs     []netip.Addr
+	// key is the request's identity for resume.
+	key string
+	// cleanup runs when the attempt ends, in reverse.
+	cleanup []func()
+}
+
+// halt ends a request before it is sent: decision is refused:<rule> or
+// unavailable:<code>, as the audit line has it.
+type halt struct {
+	decision, detail string
+	// until is when a stopped provider's rate limit resets.
+	until time.Time
+}
+
+func refused(rule, detail string) *halt { return &halt{decision: "refused:" + rule, detail: detail} }
 
 // attempt admits one attempt in the order of docs/spec/scope.md,
 // "Admission", and sends it. The first failed check ends it with an audit
-// line.
+// line. On a resume, a request with a success on record is answered from
+// it after step 12 and is not sent.
 func (g *Gate) attempt(ctx context.Context, r Request, id, retryOf string, n int) (Result, *retry) {
-	e := Entry{RequestID: id, Stage: r.Stage, Asset: r.Asset, Op: r.Op, Attempt: n, RetryOf: retryOf, RedirectOf: r.RedirectOf, NextOf: r.NextOf}
-	hopDepth := 0
-	refuse := func(rule, detail string) (Result, *retry) {
-		decision, reason := "refused:"+rule, refusalReason(rule)
-		// A genuine hop off scope is where an SSO login or a hosted
-		// storefront leads: a coverage gap, not a collector's defect. An
-		// excluded hop stays excluded.
-		switch {
-		case r.RedirectOf != "" && rule == "out_of_scope":
-			decision, reason = "unavailable:redirect_out_of_scope", "unavailable:redirect_out_of_scope"
-		case r.RedirectOf != "" && rule == "entry_point":
+	p := &pending{r: r, e: Entry{RequestID: id, Stage: r.Stage, Asset: r.Asset, Op: r.Op, Attempt: n, RetryOf: retryOf,
+		RedirectOf: r.RedirectOf, NextOf: r.NextOf}}
+	defer func() {
+		for _, f := range slices.Backward(p.cleanup) {
+			f()
+		}
+	}()
+	for _, step := range []func(context.Context, *pending) *halt{
+		g.registered,       // 1
+		g.bindParams,       // 2
+		g.followHop,        // a redirect hop goes where its 3xx pointed
+		g.admitSubject,     // 3–5
+		g.admitUsers,       // the excluded-subject set is known
+		g.admitLevel,       // 6
+		g.admitPath,        // 7–8
+		g.admitWindow,      // 9
+		g.attachCredential, // 10
+		g.admitTime,        // 11
+		g.admitAddresses,   // 12
+	} {
+		if h := step(ctx, p); h != nil {
+			return g.halted(p, h), nil
+		}
+	}
+	if res, ok := g.answerFromPrior(p); ok {
+		return res, nil
+	}
+	if h := g.waitThrottle(ctx, p); h != nil { // 13
+		return g.halted(p, h), nil
+	}
+	// 14. The audit line is written, then the request is sent.
+	res, rt := g.send(ctx, p.e, admitted{b: p.b, prov: p.prov, cred: p.cred, addrs: p.addrs, depth: p.hopDepth, prev: p.prev,
+		firstParty: p.site.FirstParty, windowEnd: p.windowEnd}, r)
+	if reusable(res) && p.key != "" {
+		res.Identity = p.key
+		g.mu.Lock()
+		g.kept[p.key] = res.Response.clone()
+		g.mu.Unlock()
+	}
+	return res, rt
+}
+
+// halted writes a halted request's audit line and its result. A genuine
+// hop off scope is where an SSO login or a hosted storefront leads: a
+// coverage gap, not a collector's defect; an excluded hop stays excluded.
+func (g *Gate) halted(p *pending, h *halt) Result {
+	decision := h.decision
+	if p.r.RedirectOf != "" {
+		switch decision {
+		case "refused:out_of_scope":
+			decision = "unavailable:redirect_out_of_scope"
+		case "refused:entry_point":
 			// The commonest redirect there is (/ → /en/): the 3xx is the
 			// evidence, and the page it leads to is not an entry point.
-			decision, reason = "unavailable:redirect_not_entry_point", "unavailable:redirect_not_entry_point"
+			decision = "unavailable:redirect_not_entry_point"
 		}
-		detail, _ = g.redactor.RedactString(detail)
-		e.Event, e.Decision, e.Detail = "refused", decision, detail
-		_ = g.record(e)
-		return Result{RequestID: id, Decision: decision, Reason: reason, Detail: detail}, nil
 	}
-	// unavailable ends a request that is not sent for want of something
-	// the run did not get, not for a rule it broke.
-	unavailable := func(code, reason, detail string) (Result, *retry) {
-		e.Event, e.Decision, e.Detail = "refused", "unavailable:"+code, detail
-		_ = g.record(e)
-		return Result{RequestID: id, Decision: e.Decision, Reason: reason, Detail: detail}, nil
-	}
+	p.e.Event = "refused"
+	res := Result{RequestID: p.e.RequestID, Until: h.until}
+	res.end(decision, g.redact(h.detail))
+	p.e.Decision, p.e.Detail = res.Decision, res.Detail
+	_ = g.record(p.e)
+	return res
+}
 
-	// 1. The op is registered.
-	op, ok := g.reg.ops[r.Op]
+// registered is step 1: the op is registered.
+func (g *Gate) registered(_ context.Context, p *pending) *halt {
+	op, ok := g.reg.ops[p.r.Op]
 	if !ok {
-		return refuse("unknown_op", "the op is not registered")
+		return refused("unknown_op", "the op is not registered")
 	}
-	e.Level, e.Method = op.Level.String(), string(op.Method)
-	prov := providers[op.Provider]
-	if !prov.web {
-		e.Source = prov.source
+	p.op, p.prov = op, providers[op.Provider]
+	p.e.Level, p.e.Method = op.Level.String(), string(op.Method)
+	if !p.prov.web {
+		p.e.Source = p.prov.source
 	}
-	// 2. Its parameters bind to their types. A list's cursor is never a
-	// collector's: the gate fills it from the page before, and the request
-	// repeats that page's parameters.
-	params, prev := r.Params, (*page)(nil)
+	return nil
+}
+
+// bindParams is step 2: the parameters bind to their types. A list's
+// cursor is never a collector's: the gate fills it from the page before,
+// and the request repeats that page's parameters.
+func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
+	op, r := p.op, p.r
+	params := r.Params
 	if l := op.List; l != nil && l.Next != nil {
 		if _, set := r.Params[l.Next.Param]; set {
-			return refuse("bind", fmt.Sprintf("parameter %q is filled by the gate from the page before", l.Next.Param))
+			return refused("bind", fmt.Sprintf("parameter %q is filled by the gate from the page before", l.Next.Param))
 		}
 	}
 	if r.NextOf != "" {
 		g.mu.Lock()
-		prev = g.pages[r.NextOf]
+		prev := g.pages[r.NextOf]
 		mine := prev != nil && prev.asset == r.Asset && prev.op == r.Op
 		busy := mine && prev.reading
 		if mine && !busy {
@@ -201,17 +304,18 @@ func (g *Gate) attempt(ctx context.Context, r Request, id, retryOf string, n int
 		}
 		g.mu.Unlock()
 		if !mine {
-			return refuse("bind", "next_of names no page this gate returned for the op and asset")
+			return refused("bind", "next_of names no page this gate returned for the op and asset")
 		}
 		if busy {
-			return refuse("bind", "the page after it is already being read")
+			return refused("bind", "the page after it is already being read")
 		}
 		// Released when this attempt ends; a kept page has deleted it.
-		defer func() {
+		p.prev = prev
+		p.cleanup = append(p.cleanup, func() {
 			g.mu.Lock()
 			prev.reading = false
 			g.mu.Unlock()
-		}()
+		})
 		params = maps.Clone(r.Params)
 		if params == nil {
 			params = map[string]string{}
@@ -220,192 +324,235 @@ func (g *Gate) attempt(ctx context.Context, r Request, id, retryOf string, n int
 	}
 	b, err := op.bind(params)
 	if err != nil {
-		return refuse("bind", err.Error())
+		return refused("bind", err.Error())
 	}
-	e.Params, e.URL = b.params, auditURL(b)
-	if prev != nil {
-		e.Page = prev.n + 1
+	p.b = b
+	p.e.Params, p.e.URL = b.params, auditURL(b)
+	if p.prev != nil {
+		p.e.Page = p.prev.n + 1
 		rest := maps.Clone(b.params)
 		delete(rest, op.List.Next.Param)
-		if !maps.Equal(rest, prev.params) {
-			return refuse("bind", "a next page repeats the parameters of the page before")
+		if !maps.Equal(rest, p.prev.params) {
+			return refused("bind", "a next page repeats the parameters of the page before")
 		}
 	}
 	if op.Class == CredentialExchange {
 		// Sent only by a credential source, which arrives with the
 		// Workspace collector (0.0.2 E6).
-		return refuse("method", "a credential exchange is not a collector's request")
+		return refused("method", "a credential exchange is not a collector's request")
 	}
-	// A hop follows a 3xx the gate itself received for the same asset, to
-	// exactly where it pointed; a collector cannot invent one.
-	if r.RedirectOf != "" {
-		g.mu.Lock()
-		from, ok := g.redirects[r.RedirectOf]
-		g.mu.Unlock()
-		switch {
-		case !ok || from.asset != r.Asset:
-			return refuse("redirect", "redirect_of names no redirect this gate received for the asset")
-		case from.target != canonicalURL(b.url):
-			return refuse("redirect", "the hop is not where the redirect pointed")
-		case from.depth+1 > maxRedirects:
-			return refuse("redirect_depth", fmt.Sprintf("more than %d redirects", maxRedirects))
-		}
-		hopDepth = from.depth + 1
-	}
-	// 3–5. The destination is classed by its provider; the subject falls
-	// under a root and no exclude. A principal op reads the credential,
-	// so its asset is what must be in scope.
-	subject := b.subject
-	if subject == "" {
-		subject = r.Asset
-	}
-	if rule, detail := g.admitSubject(r.Asset, subject); rule != "" {
-		return refuse(rule, detail)
-	}
-	// A request that names or lists users waits for the excluded-subject
-	// set: unknown, nothing it returned could be filtered, so it is not
-	// sent (docs/spec/scope.md, "Exclusion in responses").
-	if op.users {
-		if !g.usersKnown(r.Asset) {
-			return unavailable(codeExclusionUnkn, "unavailable:"+codeExclusionUnkn, codeDetail(codeExclusionUnkn, 0))
-		}
-		set := g.excludedUsers(r.Asset)
-		for name, p := range op.types {
-			if p.Type != UserKey {
-				continue
-			}
-			switch rule := set.rule(b.params[name]); rule {
-			case "":
-			case "unattributable":
-				return refuse("excluded", "the users list did not place this user in a unit, so it may be excluded")
-			default:
-				return refuse("excluded", rule)
-			}
-		}
-	}
-	// 6. Only passive and observe are admitted in 0.0.2, whatever the
-	// registry declares (docs/spec/scope.md, "Admission").
-	if op.Level > ceiling {
-		return refuse("level", op.Level.String()+" is not admitted in this build")
-	}
-	// 7–8. A web request reads an entry point; a path beyond the front
-	// page needs first-party evidence, from the file or, at step 12, from
-	// a network root holding every address.
-	var need evidenceNeed
-	firstParty := false
-	if prov.web {
-		site := g.scope.Site(b.url.Scheme + "://" + b.url.Host)
-		p := b.url.EscapedPath()
-		switch {
-		case slices.Contains(site.Paths, p):
-			firstParty = site.FirstParty
-		case slices.Contains(site.Network, p) || slices.Contains(site.Confirmed, p):
-			// Held once step 12 has checked it.
-			firstParty = true
-			need.network = slices.Contains(site.Network, p)
-			if slices.Contains(site.Confirmed, p) {
-				need.target = site.Target
-			}
-		default:
-			return refuse("entry_point", p+" is not an entry point of "+b.url.Host)
-		}
-	}
-	// 9. Probe and above are inside an authorization window, checked on
-	// every request (docs/spec/scope.md, "Authorization windows").
-	var windowEnd time.Time
-	if op.Level >= Probe {
-		i := g.window(g.now())
-		if i < 0 {
-			return refuse("window", "the time is outside every authorization window")
-		}
-		e.Window, windowEnd = &i, g.windows[i].To
-	}
-	// 10. A credential is present when the op binds one.
-	var cred *Credential
-	if op.Auth != NoAuth {
-		var hint string
-		if cred, hint = g.credential(op.Auth); cred == nil {
-			return refuse("no_credentials", hint)
-		}
-		e.Principal = cred.Principal
-	}
-	// 11. Time is left under limits.timeout, and the provider was not
-	// stopped for its rate limit.
-	if g.pastDeadline(g.now()) {
-		return refuse("deadline", "limits.timeout passed")
-	}
-	g.mu.Lock()
-	s, stopped := g.stopped[op.Provider]
-	g.mu.Unlock()
-	if stopped {
-		res, _ := refuse("rate_limit", s.detail)
-		res.Until = s.until
-		return res, nil
-	}
-	// 12. The name is resolved now, and every address passes.
-	addrs, rule, detail := g.addresses(ctx, e, b, need)
-	if rule != "" {
-		if rule == "unavailable" {
-			reason := "unavailable:" + detail
-			if detail == string(OutcomeDeadline) || detail == string(OutcomeCanceled) {
-				reason = "limit_reached"
-			}
-			return unavailable(detail, reason, "")
-		}
-		return refuse(rule, detail)
-	}
-	// A resume answers a request from the earlier run's success with the
-	// same identity, once every check above, live resolution included, has
-	// admitted it again: a request refused before is refused again, and
-	// nothing is sent to the target (docs/spec/scope.md, "Resume").
-	key := g.identity(op, r, b.params, cred)
-	// A record is checked as a send is before it is kept: a resume's
-	// records come from stage files the operator may have edited.
-	if prior, ok := g.prior[key]; ok && key != "" && prior != nil && reusable(Result{Response: prior}) {
-		e.Event, e.Decision, e.Status, e.OutputHash = DecisionReused, DecisionReused, prior.Status, prior.hash
-		if prior.Body != nil {
-			e.OutputHash = hash(prior.Body)
-		}
-		if err := g.record(e); err != nil {
-			return Result{RequestID: id, Decision: "unavailable:audit_failed", Reason: "unavailable:audit_failed",
-				Detail: "the audit log could not be written"}, nil
-		}
-		g.mu.Lock()
-		g.reused[key] = true
-		g.mu.Unlock()
-		return Result{RequestID: id, Decision: DecisionReused, Response: prior.clone(), Identity: key}, nil
-	}
-	// 13. The throttle admits it; the address's own throttle is taken at
-	// the dial, for the address actually dialled.
-	release, err := g.throttle(ctx, r.Asset, op, prov)
-	if err != nil {
-		if g.pastDeadline(g.now()) {
-			return refuse("deadline", "limits.timeout passed while waiting for the throttle")
-		}
-		return refuse("canceled", "the run was cancelled while waiting for the throttle")
-	}
-	defer release()
-	// The wait for the throttle, and the lookup before it, may have
-	// outlasted the window.
-	if !windowEnd.IsZero() && !g.now().Before(windowEnd) {
-		return refuse("window", "the authorization window ended before the request was sent")
-	}
-	// 14. The audit line is written, then the request is sent.
-	res, rt := g.send(ctx, e, admitted{b: b, prov: prov, cred: cred, addrs: addrs, depth: hopDepth, prev: prev,
-		firstParty: firstParty, windowEnd: windowEnd}, r)
-	if reusable(res) && key != "" {
-		res.Identity = key
-		g.mu.Lock()
-		g.kept[key] = res.Response.clone()
-		g.mu.Unlock()
-	}
-	return res, rt
+	return nil
 }
 
-// admitSubject is steps 4–5 for a request's or a lookup's subject: it
-// falls under a root and under the request's asset, and no exclude covers
-// it. It returns the refusal rule and its detail, or "".
-func (g *Gate) admitSubject(asset, subject string) (string, string) {
+// followHop admits a redirect hop: it follows a 3xx the gate itself
+// received for the same asset, to exactly where it pointed; a collector
+// cannot invent one.
+func (g *Gate) followHop(_ context.Context, p *pending) *halt {
+	if p.r.RedirectOf == "" {
+		return nil
+	}
+	g.mu.Lock()
+	from, ok := g.redirects[p.r.RedirectOf]
+	g.mu.Unlock()
+	switch {
+	case !ok || from.asset != p.r.Asset:
+		return refused("redirect", "redirect_of names no redirect this gate received for the asset")
+	case from.target != canonicalURL(p.b.url):
+		return refused("redirect", "the hop is not where the redirect pointed")
+	case from.depth+1 > maxRedirects:
+		return refused("redirect_depth", fmt.Sprintf("more than %d redirects", maxRedirects))
+	}
+	p.hopDepth = from.depth + 1
+	return nil
+}
+
+// admitSubject is steps 3–5: the destination is classed by its provider;
+// the subject falls under a root and no exclude. A principal op reads the
+// credential, so its asset is what must be in scope.
+func (g *Gate) admitSubject(_ context.Context, p *pending) *halt {
+	subject := p.b.subject
+	if subject == "" {
+		subject = p.r.Asset
+	}
+	if rule, detail := g.placeSubject(p.r.Asset, subject); rule != "" {
+		return refused(rule, detail)
+	}
+	return nil
+}
+
+// admitUsers holds a request that names or lists users until the
+// excluded-subject set is known: unknown, nothing it returned could be
+// filtered, so it is not sent (docs/spec/scope.md, "Exclusion in
+// responses"). A user the set excludes is refused.
+func (g *Gate) admitUsers(_ context.Context, p *pending) *halt {
+	if !p.op.users {
+		return nil
+	}
+	if !g.usersKnown(p.r.Asset) {
+		return &halt{decision: "unavailable:" + codeExclusionUnkn, detail: codeDetail(codeExclusionUnkn, 0)}
+	}
+	set := g.excludedUsers(p.r.Asset)
+	for name, prm := range p.op.types {
+		if prm.Type != UserKey {
+			continue
+		}
+		switch rule := set.rule(p.b.params[name]); rule {
+		case "":
+		case "unattributable":
+			return refused("excluded", "the users list did not place this user in a unit, so it may be excluded")
+		default:
+			return refused("excluded", rule)
+		}
+	}
+	return nil
+}
+
+// admitLevel is step 6: only passive and observe are admitted in 0.0.2,
+// whatever the registry declares (docs/spec/scope.md, "Admission").
+func (g *Gate) admitLevel(_ context.Context, p *pending) *halt {
+	if p.op.Level > ceiling {
+		return refused("level", p.op.Level.String()+" is not admitted in this build")
+	}
+	return nil
+}
+
+// admitPath is steps 7 and 8: a web request reads an entry point, and a
+// path beyond the front page has the first-party evidence it needs, from
+// the file or, at step 12, from the lookup (Scope.Admits).
+func (g *Gate) admitPath(_ context.Context, p *pending) *halt {
+	if !p.prov.web {
+		return nil
+	}
+	path := p.b.url.EscapedPath()
+	p.site = g.scope.Admits(origin(p.b), path, nil)
+	if p.site.Refused != "" {
+		return refused(p.site.Refused, path+" is not an entry point of "+p.b.url.Host)
+	}
+	return nil
+}
+
+// origin is a web request's scheme://host[:port], as Scope.Admits takes it.
+func origin(b *bound) string { return b.url.Scheme + "://" + b.url.Host }
+
+// admitWindow is step 9: probe and above are inside an authorization
+// window, checked on every request (docs/spec/scope.md, "Authorization
+// windows").
+func (g *Gate) admitWindow(_ context.Context, p *pending) *halt {
+	if p.op.Level < Probe {
+		return nil
+	}
+	i := g.window(g.now())
+	if i < 0 {
+		return refused("window", "the time is outside every authorization window")
+	}
+	p.e.Window, p.windowEnd = &i, g.windows[i].To
+	return nil
+}
+
+// attachCredential is step 10: a credential is present when the op binds
+// one.
+func (g *Gate) attachCredential(_ context.Context, p *pending) *halt {
+	if p.op.Auth == NoAuth {
+		return nil
+	}
+	cred, hint := g.credential(p.op.Auth)
+	if cred == nil {
+		return refused("no_credentials", hint)
+	}
+	p.cred, p.e.Principal = cred, cred.Principal
+	return nil
+}
+
+// admitTime is step 11: time is left under limits.timeout, and the
+// provider was not stopped for its rate limit.
+func (g *Gate) admitTime(_ context.Context, p *pending) *halt {
+	if g.pastDeadline(g.now()) {
+		return refused("deadline", "limits.timeout passed")
+	}
+	g.mu.Lock()
+	s, stopped := g.stopped[p.op.Provider]
+	g.mu.Unlock()
+	if stopped {
+		h := refused("rate_limit", s.detail)
+		h.until = s.until
+		return h
+	}
+	return nil
+}
+
+// admitAddresses is step 12: the name is resolved now, and every address
+// passes; a path that waits on the lookup for its evidence is settled.
+func (g *Gate) admitAddresses(ctx context.Context, p *pending) *halt {
+	l, h := g.addresses(ctx, p.e, p.b)
+	if h != nil {
+		return h
+	}
+	p.addrs = sortAddrs(l.Addrs)
+	if p.site.Resolve {
+		path := p.b.url.EscapedPath()
+		p.site = g.scope.Admits(origin(p.b), path, &l)
+		switch {
+		case p.site.Refused == "address_moved", p.site.Resolve && p.site.Refused == "":
+			// An answer that still waits on the lookup holds no evidence.
+			return refused("address_moved", p.b.name+" no longer points where its first-party evidence says")
+		case p.site.Refused != "":
+			return refused(p.site.Refused, path+" is not an entry point of "+p.b.url.Host)
+		}
+	}
+	return nil
+}
+
+// answerFromPrior answers a request from the earlier run's success with the
+// same identity, once every check above, live resolution included, has
+// admitted it again: a request refused before is refused again, and
+// nothing is sent to the target (docs/spec/scope.md, "Resume").
+func (g *Gate) answerFromPrior(p *pending) (Result, bool) {
+	p.key = g.identity(p.op, p.r, p.b.params, p.cred)
+	// A record is checked as a send is before it is kept: a resume's
+	// records come from stage files the operator may have edited.
+	prior, ok := g.prior[p.key]
+	if !ok || p.key == "" || prior == nil || !reusable(Result{Response: prior}) {
+		return Result{}, false
+	}
+	e := p.e
+	e.Event, e.Decision, e.Status, e.OutputHash = DecisionReused, DecisionReused, prior.Status, prior.hash
+	if prior.Body != nil {
+		e.OutputHash = hash(prior.Body)
+	}
+	if err := g.record(e); err != nil {
+		res := Result{RequestID: e.RequestID}
+		res.end("unavailable:audit_failed", "the audit log could not be written")
+		return res, true
+	}
+	g.mu.Lock()
+	g.reused[p.key] = true
+	g.mu.Unlock()
+	return Result{RequestID: e.RequestID, Decision: DecisionReused, Response: prior.clone(), Identity: p.key}, true
+}
+
+// waitThrottle is step 13: the throttle admits the request; the address's
+// own throttle is taken at the dial, for the address actually dialled.
+func (g *Gate) waitThrottle(ctx context.Context, p *pending) *halt {
+	release, err := g.throttle(ctx, p.r.Asset, p.op, p.prov)
+	if err != nil {
+		if g.pastDeadline(g.now()) {
+			return refused("deadline", "limits.timeout passed while waiting for the throttle")
+		}
+		return refused("canceled", "the run was cancelled while waiting for the throttle")
+	}
+	p.cleanup = append(p.cleanup, release)
+	// The wait for the throttle, and the lookup before it, may have
+	// outlasted the window.
+	if !p.windowEnd.IsZero() && !g.now().Before(p.windowEnd) {
+		return refused("window", "the authorization window ended before the request was sent")
+	}
+	return nil
+}
+
+// placeSubject places a request's or a lookup's subject: it falls under a
+// root and under the request's asset, and no exclude covers it. It returns
+// the refusal rule and its detail, or "".
+func (g *Gate) placeSubject(asset, subject string) (string, string) {
 	st := g.scope.Subject(asset, subject)
 	switch {
 	case !st.UnderAsset || st.Root == "":
@@ -418,14 +565,14 @@ func (g *Gate) admitSubject(asset, subject string) (string, string) {
 
 // addresses resolves the request's name, unless it is an address literal,
 // and checks every address in the answer, not only the one it will dial
-// (docs/spec/scope.md, "Addresses"). It returns the addresses in the order
-// they will be dialled, or the refusal rule and its detail; rule
-// "unavailable" means the name did not resolve, with the code as detail.
-func (g *Gate) addresses(ctx context.Context, e Entry, b *bound, need evidenceNeed) ([]netip.Addr, string, string) {
+// (docs/spec/scope.md, "Addresses"). It returns the lookup as answered, or
+// what halted the request: a refusal, or unavailable when the name did not
+// resolve.
+func (g *Gate) addresses(ctx context.Context, e Entry, b *bound) (Lookup, *halt) {
 	var l Lookup
 	if a, err := netip.ParseAddr(b.name); err == nil {
 		if g.redactsAddr([]netip.Addr{a}) {
-			return nil, "unavailable", "dns_error"
+			return l, &halt{decision: "unavailable:dns_error"}
 		}
 		l = Lookup{Name: b.name, Addrs: []netip.Addr{a}, Outcome: OutcomeAddresses}
 		l.target = l.Target()
@@ -433,41 +580,24 @@ func (g *Gate) addresses(ctx context.Context, e Entry, b *bound, need evidenceNe
 		var code string
 		l, code = g.resolve(ctx, e, b.name)
 		if l.Outcome == OutcomeExcluded {
-			return nil, "excluded", b.name + " points into " + l.ExcludedBy
+			return l, refused("excluded", b.name+" points into "+l.ExcludedBy)
 		}
 		if code != "" {
-			return nil, "unavailable", code
+			return l, &halt{decision: "unavailable:" + code}
 		}
 	}
-	addrs := sortAddrs(l.Addrs)
-	allInNetwork := true
-	for _, a := range addrs {
+	for _, a := range sortAddrs(l.Addrs) {
 		excludedBy, inNetwork := g.scope.Address(a)
-		allInNetwork = allInNetwork && inNetwork
 		switch class := classify(a); {
 		case class == never:
-			return nil, "address_not_public", b.name + " resolves to " + a.String() + ", which scheck never contacts"
+			return l, refused("address_not_public", b.name+" resolves to "+a.String()+", which scheck never contacts")
 		case excludedBy != "":
-			return nil, "address_excluded", b.name + " resolves into " + excludedBy
+			return l, refused("address_excluded", b.name+" resolves into "+excludedBy)
 		case class == notPublic && !inNetwork:
-			return nil, "address_not_public", b.name + " resolves to " + a.String() + ", outside every network root"
+			return l, refused("address_not_public", b.name+" resolves to "+a.String()+", outside every network root")
 		}
 	}
-	if need.network || need.target != "" {
-		held := need.network && allInNetwork || l.PointsAt(need.target)
-		if !held {
-			return nil, "address_moved", b.name + " no longer points where its first-party evidence says"
-		}
-	}
-	return addrs, "", ""
-}
-
-// evidenceNeed is what a path beyond an origin's front page needs once its
-// name is resolved: every address in a network root, or the name pointing
-// at its confirmation's target; either suffices when both are set.
-type evidenceNeed struct {
-	network bool
-	target  string
+	return l, nil
 }
 
 // resolve looks a request's name up with the gate's DNS client
