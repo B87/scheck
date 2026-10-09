@@ -86,6 +86,8 @@ type Gap struct {
 // looked up and what it could not list, whether the resolver answers names
 // that do not exist, and what Recon read.
 type Input struct {
+	Vantage      string
+	Restricted   []Restriction
 	Now          time.Time
 	URLAssets    []URLAsset
 	Asset, Root  string
@@ -128,6 +130,7 @@ func Judge(in Input) []Judgment {
 		j.records(in.Root, "NS", in.Evidence.NS, in.Evidence.NSTargets, true)
 	}
 	j.sites()
+	j.restricted()
 	return j.out
 }
 
@@ -355,7 +358,7 @@ func nonEmpty(id string) []string {
 // readReason is the coverage reason of a read that said nothing: the
 // gate's own for a refusal (docs/spec/scope.md, "Outcomes").
 func readReason(r RecordRead) string {
-	if r.Decision != gate.DecisionSent {
+	if r.Decision != gate.DecisionSent && r.Decision != gate.DecisionReused {
 		if reason := gate.ReasonOf(r.Decision); reason != "" {
 			return reason
 		}

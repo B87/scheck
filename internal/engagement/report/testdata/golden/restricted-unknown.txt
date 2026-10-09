@@ -1,0 +1,88 @@
+scheck engagement report: restricted-pages
+Read 2026-10-07 07:12 to 08:12 (UTC). scheck test.
+Trigger        not declared
+Vantage        not given: restricted pages were not checked for outside reachability (--vantage
+               internet). internet means outside every permitted source, including office allowlists
+               and VPN.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: admin. See Coverage for what was not checked.
+
+SUMMARY
+Not checked      Secrets, External surface, Web application: see Coverage.
+Not requested    Not part of this run: identity and access, cloud configuration, data stores and
+                 backups, CI/CD and supply chain, hosts, email and domain, logging and incident
+                 readiness. To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  Nothing open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+  accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Not
+checked: secrets, external surface, web application, identity and access, cloud configuration, data
+stores and backups, CI/CD and supply chain, hosts, email and domain, logging and incident readiness.
+Anything not checked is unknown, not fine.
+
+COVERAGE
+Secrets                  not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision; this version of scheck has no rule for it
+  (loaded scripts and pages beyond entry points).
+External surface         not checked
+  1 of 1 asset read.
+  Restricted pages were not checked for outside reachability: no --vantage given; some web-response
+  checks could not reach a decision; this version of scheck has no rule for it (TLS versions and
+  ciphers other than those negotiated, and revocation).
+Web application          not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision.
+Not requested            Not part of this run: identity and access, cloud configuration, data stores
+                         and backups, CI/CD and supply chain, hosts, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 0 open, 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  url:https://admin.example.com/: Pages you said are restricted were not checked for reachability:
+    the run's vantage was not given (--vantage internet). internet means outside every permitted
+    source, including office allowlists and VPN.
+
+FOR AUTOMATION
+Exit 0: no open finding at or above threshold among the 0 rules that could decide. That is not a
+clean result: 1 rule had no usable evidence, and 10 areas were not checked.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

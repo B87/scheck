@@ -112,7 +112,11 @@ type Net struct {
 // Config builds a gate.
 type Config struct {
 	Registry *Registry
-	Scope    Scope
+	Vantage  string
+	// Inputs fingerprint declarations by canonical mail domain and exact URL.
+	DNSInputs map[string]string
+	WebInputs map[string]string
+	Scope     Scope
 	// RedactExtra is the engagement's redact_extra, applied to every
 	// response as to host output.
 	RedactExtra []string
@@ -153,10 +157,12 @@ type Gate struct {
 	kept   map[string]*Response
 	reused map[string]bool
 	// rules fingerprints the redaction rules for a request's identity.
-	rules  string
-	ua     string
-	getenv func(string) string
-	notes  []string
+	vantage              string
+	dnsInputs, webInputs map[string]string
+	rules                string
+	ua                   string
+	getenv               func(string) string
+	notes                []string
 
 	dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// nameserver and exchange are the gate's DNS client (dns.go).
@@ -174,12 +180,14 @@ type Gate struct {
 	dns    *limiter
 	egress egress
 
-	mu        sync.Mutex
-	seq       int
-	stopped   map[string]stop     // provider → why it stopped
-	redirects map[string]redirect // request id → the 3xx it received
-	pages     map[string]*page    // request id → the page after it
-	users     map[string]*userSet // asset → its excluded-subject set, once known
+	mu           sync.Mutex
+	entries      []Entry
+	observations map[string]Observation
+	seq          int
+	stopped      map[string]stop     // provider → why it stopped
+	redirects    map[string]redirect // request id → the 3xx it received
+	pages        map[string]*page    // request id → the page after it
+	users        map[string]*userSet // asset → its excluded-subject set, once known
 	// pointed is what each records read's answer pointed at, by its
 	// request id; spfLookups counts the include: and redirect= reads of
 	// each SPF evaluation (dns.go).
@@ -215,9 +223,10 @@ func New(cfg Config) (*Gate, error) {
 	}
 	g := &Gate{
 		reg: cfg.Registry, scope: cfg.Scope, audit: cfg.Audit, redactor: red,
+		vantage: cfg.Vantage, dnsInputs: cfg.DNSInputs, webInputs: cfg.WebInputs,
 		deadline: cfg.Deadline, getenv: cfg.Getenv,
 		windows: cfg.Windows, prior: cfg.Prior, rules: rulesFingerprint(cfg.Version, cfg.RedactExtra),
-		session: cfg.Session, kept: map[string]*Response{}, reused: map[string]bool{},
+		session: cfg.Session, kept: map[string]*Response{}, observations: map[string]Observation{}, reused: map[string]bool{},
 		ua:         UserAgent(cfg.Version),
 		dial:       (&net.Dialer{}).DialContext,
 		nameserver: systemNameserver(), exchange: exchange,

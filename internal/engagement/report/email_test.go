@@ -11,7 +11,7 @@ import (
 func withEmailRoot(t *testing.T) Input {
 	t.Helper()
 	domain := Subject{Kind: "mail_domain", Key: "example.com", Label: "example.com (declared sending: google-workspace)"}
-	return Input{Version: "test", Name: "mail-review", Path: "engagement.yaml", SHA256: strings.Repeat("a", 64), Rerun: "scheck run engagement.yaml", Started: started, Zone: time.UTC,
+	return Input{LevelsUsed: []string{"passive", "observe"}, Version: "test", Name: "mail-review", Path: "engagement.yaml", SHA256: strings.Repeat("a", 64), Rerun: "scheck run engagement.yaml", Started: started, Zone: time.UTC,
 		Egress: &EgressInput{Sources: []SourceInput{{Source: "dns", Host: "192.0.2.53:53", Requests: 12, RootControls: 1, InvalidControl: true}}},
 		People: true, Candidates: []Candidate{{Handle: "alice", Why: "listed employee"}},
 		Assets: []AssetInput{{ID: "domain:example.com", Name: "example.com", Kind: "domain", Root: true, Status: "collected", Collector: "web",

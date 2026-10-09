@@ -654,9 +654,13 @@ Whether something is reachable depends on where the request came from. `scheck r
 `not_exposed` rule fires only when the run's vantage is `internet` and the declared
 audience is not `internet`; every other combination, and an unknown vantage, abstains.
 `/admin` declared VPN-only and reached from the VPN is not a contradiction; from the
-`internet` vantage, no answer is the evidence that disproves it, never an incomplete
-run ([web-collector.md](web-collector.md#headers-and-cookies),
-`web.restricted_reachable`). The vantage is the operator's word, printed in the report
+`internet` vantage, a connection refusal or timeout disproves the contradiction
+with an outage caveat, rather than making that restricted read incomplete ([web-collector.md](web-collector.md#headers-and-cookies),
+`web.restricted_reachable`). The vantage is the operator's word, declared separately
+on each invocation; omission
+means unknown, including on resume. `internet` means outside every permitted source,
+including office allowlists and VPN. scheck does not detect or verify it, and asks no
+external service for an egress address. It is printed in the report
 header and recorded on each piece of evidence like the principal, DNS evidence
 included; a resume with a different vantage reads those names and entry points again.
 A run whose file lists `intent.not_exposed` and that has no `--vantage` warns at its
@@ -919,9 +923,12 @@ written. `scheck run <directory>` resumes:
   accepted risks that name it and `engagement.timezone` included: nothing regrades a kept envelope, so a changed
   accepted risk on a host collects that host again rather than re-running only Analyze
   and Report, which adds only contact the file already authorizes. A change to people,
-  access, data, secrets or anything no host or Scope reads contacts no target. Reading
-  again only the DNS names and entry points a changed `mail` or `intent` URL names is
-  not built (0.0.2 E7): Scope runs again whole.
+  access, data, secrets or anything no host or Scope reads contacts no target. E7 step 5 keeps Scope when only `mail` or `intent` changes: discovery reads
+  neither. Mail declarations are hashed by canonical domain; changed senders, selectors
+  or no-mail declarations refresh that domain's records and dependent follow-ups.
+  Changed intent role or audience refreshes its exact URL entry; reasons and web
+  accepted risks only regrade retained evidence. Unaffected successful reads are kept.
+  Changed vantage reruns Scope and web/DNS reads; hosts are unaffected.
 - **Hand edits.** A file the resume uses is used as written, and the report names each
   one edited since scheck wrote it; a host's envelope is never used as written (below).
   An edit cannot widen scope: the gate checks every request against the engagement
@@ -967,7 +974,7 @@ the first session's: the directory's name, the stage documents' headers, the rep
 `run.json` holds the run's start, the source `{path, sha256}`, `file` (the engagement
 file's absolute path, written by the first session and never by a resume, so a relative
 path is resolved against the first session's working directory; empty for `--host`),
-`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, egress, ended}`), `files` (each file a stage wrote,
+`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, vantage, egress, ended}`), `files` (each file a stage wrote,
 relative to the directory, with the sha256 of the bytes written) and `scope_inputs`. It
 is written when a session starts, after each file a stage writes, and after each stage
 with what the session has sent so far as its `egress`; `ended` is set when the session
@@ -975,8 +982,8 @@ ends.
 
 - **Scope** is kept, its `scope.json` used as written and nothing sent, when
   `scope_inputs` is unchanged (a hash of the build version, the resolved roots,
-  exclude, defaults, assets, `redact_extra`, `mail`, `intent` and `authorization`, and
-  each asset's first-party evidence evaluated at the session's start, so a confirmation
+  exclude, defaults, assets, `redact_extra`, `authorization` and the invocation's
+  vantage, and each asset's first-party evidence evaluated at the session's start, so a confirmation
   that expired or became current since runs Scope again) and the earlier Scope found no
   gap: every domain root's certificate transparency answer read, and no name
   `insufficient_evidence` or `not_checked`. Otherwise Scope runs again.
@@ -1006,7 +1013,8 @@ ends.
   successes kept there.
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
-  that everything else was read again. A file the resume used (`scope.json` when kept;
+  that everything else was read again. It states that kept evidence was not read again
+  and retains its original observation date. A file the resume used (`scope.json` when kept;
   `evidence/<asset>.collection.json` for a kept host; a success the gate reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An
@@ -1018,7 +1026,9 @@ ends.
 - **What left this machine** covers this session and every earlier one, merged: sources
   by name and host, so DNS once per resolver (a session on another network asked
   another one) and DNS first, with their subjects and credentials unioned and counts
-  summed; sites' requests summed; SSH names unioned. Each session records in `run.json`
+  summed; sites' requests summed by host and first-party admission status, within
+  each session and across resumes; SSH names unioned. Later first-party evidence
+  never reclassifies earlier requests. Each session records in `run.json`
   the hosts it reached (`sessions[].egress.Contacts`), each counted once Recon finished
   it, with the checks it ran there that may make a host contact its package
   repositories. The hosts row counts every session's: a kept host's contact and SSH
@@ -1200,7 +1210,7 @@ report is on stdout.`
 ```
 WHAT LEFT THIS MACHINE
   Third-party services:
-    Your DNS resolver at 192.168.1.1, and whatever it forwards to, as for any web browsing on this network: names under your domains, the names they point to, and the services above; 214 lookups, including 2 random test names under your domains and one under invalid.
+    Your DNS resolver at 192.168.1.1, and whatever it forwards to, as for any web browsing on this network: names under your domains, the names they point to (including third-party mail and DNS providers), and the services above; 214 lookups, including 2 random test names under your domains and 2 queries for random names under invalid.
     crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com and example.net; 2 requests. crt.sh sees this machine's internet address and those names, and may keep logs.
     api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its value appears nowhere); 96 requests.
   Your own systems:
@@ -1227,7 +1237,7 @@ line words what it was sent; GitHub's and Google's are worded with their collect
 [scope.md](scope.md#third-party-sources) follows the DNS line when it applies. Who
 runs a public source is data held beside its op, so it cannot drift from the code.
 JSON carries the block as `egress: {sources: [{source, operator, host, sent, requests,
-credentials, control_lookups, control_invalid, scoped_resolvers_ignored}], assets:
+credentials, control_lookups, control_invalid, invalid_queries, scoped_resolvers_ignored}], assets:
 [{kind, requests | sessions | unreached | jump_hosts | jump_unreached | runs, sites}], unconfirmed: {names,
 requests}, host_side_effects: [check ids], model: "none", telemetry: "none",
 user_agent, stored, tenants_read, ssh_resolved, ssh_resolved_by_jump,
@@ -1360,7 +1370,7 @@ says so in the report, in these words (0.0.2 E7; [web-collector.md](web-collecto
 | `email.dkim_*` | `mail.senders[].dkim_selectors` | "DKIM for *service* on *d* was not checked: no selector was given, and DNS cannot list them. Find it as `s=` in the DKIM-Signature header of a message *service* sent." |
 | `email.spf_undeclared_sender` | `mail.senders` for that domain | "SPF was not compared with your senders: none were listed for *d*." |
 | `web.version_disclosed` | `intent.exposed_on_purpose[].url`, exactly | its `why_here`: "No page was declared public on purpose; this is the standard rating." |
-| `web.restricted_reachable` | `intent.not_exposed[]` and `--vantage` | with no vantage: "Pages you said are restricted were not checked for reachability: the run's vantage was not given (`--vantage internet`)."; with `vpn` or `lan`: "…this run came from inside your network."; with no `not_exposed` entry, no line |
+| `web.restricted_reachable` | `intent.not_exposed[]` and `--vantage` | with no vantage: "Pages you said are restricted were not checked for reachability: the run's vantage was not given (`--vantage internet`)."; with `vpn` or `lan`: "…you declared this run came from inside your network."; with no `not_exposed` entry, no line |
 | headers, cookies, `security.txt`, plain HTTP | `url` roots and entries, `first_party` | "*N* names under *root* were read but not judged for headers: none is declared as your site. Add a `url` entry for the ones you run." |
 | ranking | `data.matters_most[].asset` | no line |
 
@@ -1535,7 +1545,7 @@ one id graded differently.
 | `severity`, `severity_base`, `adjustments[]` | each adjustment `{rule, by, delta, source}`: `rule` from the closed table of "Severity in context" or the collector's own, `by` `collector` or `engagement`, `source` either `{file, key}` for a declaration or `{observation, excerpt}` for a fact; no non-base severity without its chain |
 | `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance}` |
 | `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]`. `single_fact` is one fact per subject, which includes a host rule that joins a second check of the same host per account (`host-collector.md §6.5`, both checks in `reads`); `multi_fact` combines facts across checks or assets ("Multi-fact rules") |
-| `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
+| `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, vantage, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
 | `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
 | `impact` | from the definition |
@@ -1550,7 +1560,8 @@ combined by reference (`people.carol.left`, `workspace.users#1`), then derived v
 in words ("last sign-in 2026-09-28, 13 days after the declared leaving date; scheck
 cannot tell who signed in"), `Severity` with its chain, `Why here`, `Not checked`,
 `Fix`, and the paste. A contradiction prints both sides on two lines, the declaration
-and the observation.
+and the observation. `Observed` includes the date when the collection span crosses
+a day, so retained evidence is not presented as newly collected.
 
 **Subjects.** Host findings carry no subject in E2: no rules-only host finding names a
 listener, and the host grader accepts a whole id. A listener's subject, `{kind:
@@ -1635,8 +1646,11 @@ own, holds one that no unexpired entry of its own accepts, the outcome is `rule_
 "an instance is open under it, on *name*, which is its own asset: accept it there
 (asset: domain:*name*)", never `not_matched` or `subject_not_found`. A `domain:` name
 under a root the collector read was read with it, declared or not, so an entry that
-names a subject on a name now gone is `subject_not_found`, "nothing with that subject
-points anywhere on this run: if the record was removed, remove the entry", never "the
+names a subject on a name now gone is `subject_not_found` only when the applicable
+population on the owning asset and collector is complete; an unrelated asset's
+incomplete collection does not change that population. Incomplete or unknown evidence
+there gives `rule_not_decided`. For a complete population the message is "nothing
+with that subject points anywhere on this run: if the record was removed, remove the entry", never "the
 asset was not read on this run". When that subject was read on a name under the entry's
 asset, it is `subject_not_found` with "that subject was read on *name*, which is its own
 asset (asset: domain:*name*)".

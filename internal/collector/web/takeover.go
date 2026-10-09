@@ -115,7 +115,7 @@ func (j *judging) providerPages(n Name, p *fingerprint, x *Judgment) {
 			if p.HTTPOnly && i == 0 {
 				continue
 			}
-			if page.Decision != gate.DecisionSent || page.Status == 429 || page.Status >= 500 {
+			if (page.Decision != gate.DecisionSent && page.Decision != gate.DecisionReused) || page.Status == 429 || page.Status >= 500 {
 				if x.Verdict == Abstained && page.Reason != "" {
 					x.Reason = page.Reason
 				}

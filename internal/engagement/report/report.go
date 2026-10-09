@@ -41,6 +41,7 @@ type Report struct {
 
 // Run identifies the run the report is about.
 type Run struct {
+	Vantage   string    `json:"vantage,omitempty"`
 	Started   time.Time `json:"started"`
 	Directory *string   `json:"directory"`
 	Resumed   bool      `json:"resumed"`
@@ -354,6 +355,7 @@ type Rule struct {
 
 // Evidence is observed (a fact) or declared (the engagement file).
 type Evidence struct {
+	Vantage     string     `json:"vantage,omitempty"`
 	Kind        string     `json:"kind"` // observed | declared
 	Asset       string     `json:"asset,omitempty"`
 	Check       string     `json:"check,omitempty"`

@@ -110,7 +110,13 @@ func (t *text) name(id string) string {
 	return clean(id)
 }
 
-func (t *text) clock(ts time.Time) string { return ts.In(t.zone).Format("15:04") }
+func (t *text) clock(ts time.Time) string {
+	format := "15:04"
+	if t.r.Engagement.Collected.From.In(t.zone).Format("2006-01-02") != t.r.Engagement.Collected.To.In(t.zone).Format("2006-01-02") {
+		format = "2006-01-02 15:04"
+	}
+	return ts.In(t.zone).Format(format)
+}
 
 // --- header ----------------------------------------------------------------
 
@@ -132,9 +138,15 @@ func (t *text) header() {
 			"incident": "incident", "routine": "routine"}[*e.Trigger]
 	}
 	t.field("", "Trigger", 15, trigger)
+	if t.r.Run.Vantage == "" && slices.ContainsFunc(t.r.Assessments, func(a Assessment) bool { return a.ID == finding.IDWebRestrictedReachable }) {
+		t.field("", "Vantage", 15, "not given: restricted pages were not checked for outside reachability (--vantage internet). internet means outside every permitted source, including office allowlists and VPN.")
+	}
+	if t.r.Run.Vantage != "" {
+		t.field("", "Vantage", 15, clean(t.r.Run.Vantage)+" (your declaration; not verified). internet means outside every permitted source, including office allowlists and VPN.")
+	}
 	if t.r.Run.Resumed {
 		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely was kept, and "+
-			"everything else was read again.")
+			"everything else was read again. Kept evidence was not read again and retains its original observation date.")
 	}
 	if len(e.EditedByHand) > 0 {
 		names := make([]string, len(e.EditedByHand))
@@ -656,6 +668,9 @@ func (t *text) reasonText(rd ReasonDetail) string {
 	case "unavailable":
 		if detail, ok := map[string]string{
 			"not_read":                 "the required read was not collected",
+			"vantage_unknown":          "restricted pages were not checked for outside reachability: no --vantage given",
+			"vantage_inside":           "restricted pages were not checked for outside reachability: you declared this run came from inside your network",
+			"audience_internet":        "the declared audience is internet, so no restriction contradiction was judged",
 			"login_flow":               "the login flow was not read, so session cookies were not fully checked",
 			"web_evidence":             "some web-response checks could not reach a decision",
 			"tls_interception":         "your network inspects TLS, so certificates were not judged",
@@ -1350,7 +1365,7 @@ func (t *text) notes() {
 				who = t.acceptanceName(a)
 			}
 		}
-		lines = append(lines, who+": "+clean(n.Detail)+".")
+		lines = append(lines, who+": "+strings.TrimSuffix(clean(n.Detail), ".")+".")
 	}
 	if len(lines) == 0 {
 		return

@@ -200,3 +200,16 @@ func (h *Harness) ResponseSite(name, ip string, handler http.HandlerFunc) func()
 		return out
 	}
 }
+
+// ExpiredSite serves a declared test endpoint whose certificate is expired.
+func (h *Harness) ExpiredSite(name, ip string) {
+	cert := h.w.leaf([]string{name}, time.Now().Add(-time.Minute), false)
+	h.w.serve(name, ip, 443, &cert, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+}
+
+// FailNS makes only the NS read fail while the name's other answers remain intact.
+func (h *Harness) FailNS(name string) {
+	r := h.w.zone.names[name]
+	r.failType = typeNS
+	h.w.zone.names[name] = r
+}

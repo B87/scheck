@@ -37,7 +37,10 @@ URL assets contained by a URL root are exact entry points using its authority an
 count as read with that root. URL-only TLS and response judgments use captured
 evidence without requiring a domain-discovery resolver control. Coverage
 preserves unknown evidence and the unread login flow; browser HTTPS-only exceptions
-use a pinned whole-TLD list. The report's "What left this machine" says what was sent where.
+use a pinned whole-TLD list. `--vantage internet|vpn|lan` declares this invocation's
+network position; `internet` means outside every permitted source, including office
+allowlists and VPN. Restricted URL findings require that declaration and observed
+reachability; they do not establish an authentication bypass. The report's "What left this machine" says what was sent where.
 Findings come from compiled-in rules: a host's posture rules, graded through the
 context the engagement declares, and the web collector's DNS, email, TLS and response
 rules. They judge the collected evidence, so a short list of findings and exit 0 mean no rule fired — not that anything is secure; the
@@ -94,7 +97,10 @@ still read and the run exits 3. Every stage writes its document into the run dir
 `--no-persist` writes nothing and the report goes to stdout only; it is for host runs
 only, since the audit log is the record of what was sent. `scheck run` on that
 directory resumes a stopped run: what an earlier session read completely is kept, and
-everything else is read again.
+everything else is read again. Changed mail declarations refresh their DNS records
+and dependent follow-ups; changed intent role or audience refreshes the exact URL.
+Unchanged successes retain their observation time. Give `--vantage` on each invocation,
+including resume; changing it refreshes web and DNS evidence, without recollecting hosts.
 
 ## Installation
 

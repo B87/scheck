@@ -65,6 +65,12 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
+		if j.ID == finding.IDWebRestrictedReachable {
+			f.Rule.Kind = "multi_fact"
+			f.Rule.Reads = append(f.Rule.Reads, "declared:"+j.Context, "declared:--vantage")
+			audience, _ := j.Details["audience"].(string)
+			f.Evidence = append(f.Evidence, Evidence{Kind: "declared", Source: b.in.Path + " " + j.Context, Excerpt: key + " is reachable only from " + audience}, Evidence{Kind: "declared", Source: "--vantage", Excerpt: b.in.Vantage + " (your declaration; not verified)"})
+		}
 		if j.Context != "" {
 			f.WhyHere = []string{j.Context}
 		} else if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
@@ -77,6 +83,11 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			f.WhyHere = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
 		}
 		for _, attr := range j.Attributes {
+			if attr == "contradiction" && j.ID == finding.IDWebRestrictedReachable {
+				sev = raise(sev)
+				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "contradiction", By: "engagement", Delta: "+1", Source: SourceRef{File: b.in.Path, Key: j.Context}})
+				f.WhyHere = []string{"You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested."}
+			}
 			if attr == "password_form" && j.ID == finding.IDWebPlaintextHTTP {
 				sev = raise(sev)
 				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:password_form", By: "collector", Delta: "+1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
@@ -114,8 +125,16 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		}
 		f.Severity = string(sev)
 		for _, r := range j.Reads {
+			observed := at
+			vantage := b.in.Vantage
+			if meta, ok := b.in.Observations[r]; ok {
+				if !meta.CollectedAt.IsZero() {
+					observed = meta.CollectedAt
+				}
+				vantage = meta.Vantage
+			}
 			f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Request: r, Observation: r,
-				CollectedAt: &at, Principal: readBy, Excerpt: j.Excerpt})
+				CollectedAt: &observed, Vantage: vantage, Principal: readBy, Excerpt: j.Excerpt})
 		}
 		if acc, ok := b.effective(owner.ID, j.ID, key); ok && !b.expired(acc.Expires, owner.ID) {
 			f.Status = finding.StatusAccepted
@@ -373,6 +392,31 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 	case fired > 0:
 		return "applied", ""
 	case acc.Subject != "" && disproved+abstained == 0:
+		complete, seen := true, false
+		for _, j := range judged {
+			if j.ID == acc.ID {
+				seen = true
+				if j.Verdict == verdictAbstained || j.Reason != "" {
+					complete = false
+				}
+			}
+		}
+		for _, a := range b.in.Assets {
+			owns := a.ID == acc.AssetID
+			for _, j := range a.Judged {
+				if j.ID == acc.ID && j.Asset == acc.AssetID {
+					owns = true
+				}
+			}
+			if owns {
+				if a.Status != statusCollected || a.PopulationIncomplete {
+					complete = false
+				}
+			}
+		}
+		if !seen || !complete {
+			return "rule_not_decided", "the applicable subject population was not completely assessed; scheck cannot tell whether this subject disappeared"
+		}
 		if under := b.heldUnder(acc.AssetID, acc.ID, acc.Subject); under != "" {
 			return "subject_not_found", "that subject was read on " + under + ", which is its own asset (asset: domain:" + under + ")"
 		}
@@ -405,6 +449,7 @@ var judgedFamilies = map[finding.Area][]struct {
 		{"security contact", "the current security.txt contact file", []string{finding.IDWebSecurityTXT}},
 	},
 	finding.AreaExternal: {
+		{"restricted URL reachability", "restricted endpoints answering from a declared outside vantage", []string{finding.IDWebRestrictedReachable}},
 		{"dangling records", "records pointing at names that do not exist",
 			[]string{finding.IDDNSDanglingExternal, finding.IDDNSDanglingInternal}},
 		{"subdomain takeover", "names pointing at providers with verified fingerprints", []string{finding.IDDNSTakeoverCandidate, finding.IDDNSUnclaimedAtProvider}},

@@ -13,9 +13,10 @@ import (
 
 // record is one name in a fake zone: a CNAME, or addresses, or an rcode.
 type record struct {
-	cname string
-	addrs []string
-	rcode int
+	cname    string
+	addrs    []string
+	rcode    int
+	failType dnsType // only this record type returns SERVFAIL
 	// stop makes the resolver answer this CNAME without chasing it.
 	stop bool
 	// big makes the UDP answer truncated, so the gate asks over TCP.
@@ -114,6 +115,10 @@ func (z zone) exchange(_ context.Context, _ string, q []byte, tcp bool) ([]byte,
 		}
 		if rec.big && !tcp {
 			truncated = true
+		}
+		if rec.failType == qt {
+			rcode = rcodeServFail
+			break
 		}
 		if rec.rcode != 0 {
 			rcode = rec.rcode

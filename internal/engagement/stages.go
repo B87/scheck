@@ -67,6 +67,7 @@ type RunOptions struct {
 	Dir *RunDir
 	// StopAfter ends the run after that stage; "" runs through LastStage.
 	StopAfter string
+	Vantage   string
 	Started   time.Time
 	Version   string
 	Log       func(format string, args ...any)
@@ -185,7 +186,8 @@ func (e *Evidence) String() string {
 // ReconDoc is recon.json, the asset map.
 type ReconDoc struct {
 	Header
-	Assets []ReconAsset `json:"assets"`
+	Assets   []ReconAsset `json:"assets"`
+	Resolver *Resolver    `json:"resolver,omitempty"`
 }
 
 // How far reaching a host got, in recon.json and the report.
@@ -399,6 +401,9 @@ func Run(ctx context.Context, res *Resolved, o RunOptions) (*Outcome, error) {
 	if last < 0 || last > slices.Index(Stages, LastStage) {
 		return nil, refuse("--stop-after must be one of %s", strings.Join(Stages, "|"))
 	}
+	if !ValidVantage(o.Vantage) {
+		return nil, refuse("--vantage must be internet|vpn|lan")
+	}
 	if o.Log == nil {
 		o.Log = func(string, ...any) {}
 	}
@@ -596,7 +601,7 @@ func (r *run) scope(ctx context.Context) (any, error) {
 	// is unchanged and it found no gap to close; the gate still decides
 	// every request from the file (docs/spec/engagement.md, "Stop and
 	// resume").
-	inputs := scopeInputs(r.res, r.o.Version, r.session)
+	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
 	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
 		r.o.Log("scope: kept from an earlier session")
 		r.used("scope.json")
@@ -676,7 +681,8 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	}
 	r.webScope = r.res.GateScope(r.session).(*scope)
 	cfg := gate.Config{Registry: reg, Scope: r.webScope, RedactExtra: r.res.RedactExtra(),
-		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1}
+		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1, Vantage: r.o.Vantage,
+		DNSInputs: mailInputs(r.res), WebInputs: intentInputs(r.res)}
 	if p := r.o.Resume; p != nil {
 		cfg.Prior, cfg.Session = p.Requests, len(r.manifest.Sessions)
 	}
@@ -743,7 +749,18 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 // the names Scope looked up, what it could not list, whether the resolver
 // invents answers, and what Recon read.
 func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
-	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev, Now: r.session}
+	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev, Now: r.session, Vantage: r.o.Vantage}
+	for _, plan := range r.webPlans(a) {
+		for _, entry := range plan.Entries {
+			raw := entry.Scheme + "://" + entry.Host + entry.Path
+			for i, e := range r.res.Intent.NotExposed {
+				ref, _ := parseURL(e.URL)
+				if raw == strings.TrimPrefix(ref.ID, "url:") {
+					in.Restricted = append(in.Restricted, web.Restriction{URL: raw, Audience: e.Audience, Source: fmt.Sprintf("intent.not_exposed[%d]", i)})
+				}
+			}
+		}
+	}
 	if a.Kind == KindURL {
 		in.Root = ""
 	}
@@ -841,6 +858,9 @@ func (r *run) checkResolver(ctx context.Context, g *gate.Gate, a ResolvedAsset) 
 		Control: string(ctl.Lookup.Outcome)}
 	if ctl.Decision != gate.DecisionSent {
 		r.reconResolver.Control = ctl.Decision
+	}
+	if r.recon != nil {
+		r.recon.Resolver = r.reconResolver
 	}
 }
 
@@ -1247,7 +1267,38 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	if strings.HasPrefix(file, "-") {
 		file = "./" + file
 	}
+	in.Observations = map[string]ereport.Observation{}
+	if r.scoped != nil {
+		for _, d := range r.scoped.Domains {
+			names := slices.Clone(d.Names)
+			if d.Control != nil {
+				names = append(names, *d.Control)
+			}
+			for _, n := range names {
+				in.Observations[n.RequestID] = ereport.Observation{CollectedAt: n.CollectedAt, Vantage: n.Vantage}
+			}
+		}
+	}
+	if r.gate != nil {
+		for id, meta := range r.gate.Observations() {
+			in.Observations[id] = ereport.Observation{CollectedAt: meta.CollectedAt, Vantage: meta.Vantage}
+		}
+	}
+	if r.gate != nil {
+		for _, e := range r.gate.Entries() {
+			if e.Event == "dns" && !slices.Contains(in.LevelsUsed, "passive") {
+				in.LevelsUsed = append(in.LevelsUsed, "passive")
+			}
+			if e.Event == "send" && e.Level != "" && !slices.Contains(in.LevelsUsed, e.Level) {
+				in.LevelsUsed = append(in.LevelsUsed, e.Level)
+			}
+		}
+	}
+	in.Vantage = r.o.Vantage
 	in.Rerun = "scheck run " + file
+	if r.o.Vantage != "" {
+		in.Rerun += " --vantage " + r.o.Vantage
+	}
 	if in.FromHost {
 		// --host writes a trigger only so the file it builds validates; the
 		// operator declared none.
@@ -1288,8 +1339,25 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
-			in.RulesVersion = r.o.Version + ":web:" + web.BrowserDataVersion + ":preload:" + web.PreloadVersion + ":takeover:" + web.TakeoverVersion + ":senders:" + web.SenderTableVersion
+			ai.WebShortfalls = r.webShortfalls(asset, *ra.Web)
+			if r.gate != nil {
+				for _, e := range r.gate.Entries() {
+					if e.Asset == ra.ID {
+						ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: e.RequestID, Params: e.Params, At: e.Time, Decision: e.Decision, OutputSHA256: e.OutputHash})
+					}
+				}
+			}
+			in.RulesVersion = r.o.Version + ":web:" + web.BrowserDataVersion + ":preload:" + web.PreloadVersion + ":takeover:" + web.TakeoverVersion + ":senders:" + web.SenderTableVersion + ":login-redirect:" + web.LoginRedirectVersion
 			wi := r.webInput(asset, *ra.Web)
+			ai.PopulationIncomplete = len(wi.Gaps) > 0 || ra.Web.Cut() || slices.ContainsFunc(wi.Names, func(n web.Name) bool { return n.Status == web.StatusNotChecked || n.Status == web.StatusInsufficient })
+			if len(wi.Restricted) > 0 {
+				for _, warn := range VantageWarnings(res, r.o.Vantage) {
+					ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: ra.ID, Detail: warn})
+				}
+			}
+			if r.reconResolver != nil && ra.Kind == KindDomain {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: ra.ID, Detail: fmt.Sprintf("Recon resolver control: %s at %s. A reserved-name control is a heuristic; it does not prove the resolver never rewrites other missing names.", r.reconResolver.Control, r.reconResolver.Address)})
+			}
 			ai.Redactions = web.RedactionHits(*ra.Web)
 			ai.Unfingerprinted = web.Unfingerprinted(wi)
 			for _, n := range web.SiteNotes(wi) {
@@ -1352,6 +1420,21 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		in.ExcludeMatches = r.excludeMatches()
 	}
 	in.Egress = r.egress()
+	// Levels describe the whole retained run, like egress, not only this session.
+	for _, source := range in.Egress.Sources {
+		if source.Requests > 0 && !slices.Contains(in.LevelsUsed, "passive") {
+			in.LevelsUsed = append(in.LevelsUsed, "passive")
+		}
+	}
+	for _, site := range in.Egress.Sites {
+		if site.Requests > 0 && !slices.Contains(in.LevelsUsed, "observe") {
+			in.LevelsUsed = append(in.LevelsUsed, "observe")
+		}
+	}
+	slices.SortFunc(in.LevelsUsed, func(a, b string) int {
+		levels := []string{"passive", "observe", "probe", "scan"}
+		return cmp.Compare(slices.Index(levels, a), slices.Index(levels, b))
+	})
 	handles := make([]string, 0, len(res.People))
 	for h, p := range res.People {
 		if p.Kind == "employee" && p.Left == "" {
@@ -1416,19 +1499,9 @@ func (r *run) sessionEgress() *ereport.EgressInput {
 		for _, u := range uses {
 			e.Sources = append(e.Sources, ereport.SourceInput{Source: u.Source, Operator: u.Operator, Host: u.Host,
 				Sent: u.Subjects, Requests: u.Requests, Credentials: u.Credentials, RootControls: u.RootControls,
-				InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
+				InvalidQueries: u.InvalidQueries, InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
 		}
-		byName := map[string]int{}
-		for _, st := range sites {
-			i, ok := byName[st.Name]
-			if !ok {
-				i = len(e.Sites)
-				byName[st.Name] = i
-				e.Sites = append(e.Sites, ereport.SiteInput{Name: st.Name})
-			}
-			e.Sites[i].Requests += st.Requests
-			e.Sites[i].FirstParty = e.Sites[i].FirstParty || st.FirstParty
-		}
+		e.Sites = sessionSites(sites)
 	}
 	// The names SSH resolved, as the transport recorded them: a host's
 	// own or its jump host's here, a host's behind a jump host there.
@@ -1587,4 +1660,25 @@ func (r *run) suspendConfirmations(judged []web.Judgment) {
 			}
 		}
 	}
+}
+
+// sessionSites totals hosts across assets without reclassifying requests whose
+// admission did not use first-party evidence (docs/spec/scope.md, "Resume").
+func sessionSites(sites []gate.Site) []ereport.SiteInput {
+	var out []ereport.SiteInput
+	byName := map[[2]string]int{}
+	for _, st := range sites {
+		key := [2]string{st.Name, strconv.FormatBool(st.FirstParty)}
+		i, ok := byName[key]
+		if !ok {
+			i = len(out)
+			byName[key] = i
+			out = append(out, ereport.SiteInput{Name: st.Name, FirstParty: st.FirstParty})
+		}
+		out[i].Requests += st.Requests
+	}
+	slices.SortFunc(out, func(a, b ereport.SiteInput) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(strconv.FormatBool(a.FirstParty), strconv.FormatBool(b.FirstParty)))
+	})
+	return out
 }

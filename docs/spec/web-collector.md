@@ -351,8 +351,8 @@ subsumes certificate judgments on the concrete wildcard-control hostname.
 ### Headers and cookies
 
 Declared or first-party sites, except where a row says every read name. Built in
-E7 step 4: the three TLS and eight web rules below; `web.restricted_reachable` stays
-with step 5. Each requires its subject kind in an acceptance.
+E7 step 4: the three TLS and eight web rules below. E7 step 5 adds
+`web.restricted_reachable`. Each requires its subject kind in an acceptance.
 
 HSTS parses the complete syntax of the first header field: duplicate directives,
 invalid tokens or values, and valued `includeSubDomains` or `preload` are invalid.
@@ -397,7 +397,27 @@ A trusted 404 is absence evidence both when sent and when reused on resume.
 | `web.version_disclosed`: "*url* reveals software versions (*what*)". Every read name; the subject is the URL | a version number in `server` or `x-powered-by`, in `<meta name="generator">`, or in a JSON body's top-level version, build or commit | none, or a product without a version (`nginx`, `cloudflare`, `AmazonS3`, `Vercel`) | blocked; 5xx; a body cut before `</head>` with no version in the headers | low | web | yes: to info |
 | `web.secret_in_response`: "A secret is published in the page at *url*". Every read name | a redaction hit from `private-key`, `github-token`, `slack-token`, `google-access-token`, `google-refresh-token`, `google-client-secret`, `stripe-key`, `npm-token` or `slack-webhook` | HTML read whole with no hit, for that HTML only | a truncated body fires on what it saw and is never disproved. Never fires on `google-api-key`, `jwt`, `bearer`, `kv-secret` or `json-secret`, an AWS key id alone, or `extra:*` | critical; a Slack webhook high | secrets | no |
 | `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` in the past; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
-| `web.restricted_reachable`: "*url*, which you said is reachable only from *audience*, answered from the internet" | the vantage is `internet`, the declared audience is not, and the response is a 2xx, a 401, or a 3xx to a login page on the same site or an identity provider | refused or timed out from the `internet` vantage, worded "did not answer from here; scheck cannot tell a firewall from a server that is down" | the vantage is not `internet` or not given; 403 or 404; blocked; 5xx; an invalid certificate | medium, +1 `contradiction`: high | external | no; validation also refuses one URL under both `intent` lists |
+| `web.restricted_reachable`: "*url*, which you said is reachable only from *audience*, answered from the internet" | the vantage is `internet`, the declared audience is not, and the response is a 2xx, a 401, or a 3xx to a login page on the same site or an identity provider | refused or timed out from the `internet` vantage, worded "did not answer from here; scheck cannot tell a firewall from a server that is down" | the vantage is not `internet` or not given; 403, 404 or 429; blocked; 5xx; an invalid or intercepted certificate; policy refusal; unrecognized redirect | medium, +1 `contradiction`: high | external | no; validation also refuses one URL under both `intent` lists |
+
+**Restricted reachability (E7 step 5).** The subject is the exact canonical URL in
+`intent.not_exposed`, using only its original response, never a redirect destination's
+response. Canonical escaped paths are retained through ordinary entry reads,
+redirect-hop admission and judgment, including reserved characters encoded in a
+path segment. `internet` declares that this invocation comes from outside every
+permitted source, including office allowlists and VPN. A successful response establishes outside
+reachability, not a bypass of authentication. The medium base gains the declaration's
+`contradiction` raise to high; exposed-on-purpose never lowers it. The report identifies
+this as a multi-fact rule and prints the exact URL/audience declaration and declared
+`--vantage` alongside the observation.
+
+A same-origin redirect keeps the original scheme, host and port and is recognized
+only when a path segment is `login`, `signin`, `sign-in` or `log-in`.
+`LoginRedirectVersion` (`2026-10-09.1`) pins a minimal identity provider list:
+HTTPS on the default port at `accounts.google.com/o/oauth2/auth` or
+`/o/oauth2/v2/auth`, and `login.microsoftonline.com/<tenant>/oauth2/authorize` or
+`/<tenant>/oauth2/v2.0/authorize`. These destinations are inspected, never contacted
+by this rule. A connection refusal or timeout disproves the contradiction from this
+vantage with the outage caveat; a gate refusal or other transport failure does not.
 
 **Preloaded TLDs.** `PreloadedTLDs` is versioned data in the tree, taken from
 Chromium's `net/http/transport_security_state_static.json`, pinned to a commit and

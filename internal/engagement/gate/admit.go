@@ -515,7 +515,7 @@ func (g *Gate) answerFromPrior(p *pending) (Result, bool) {
 	// A record is checked as a send is before it is kept: a resume's
 	// records come from stage files the operator may have edited.
 	prior, ok := g.prior[p.key]
-	if !ok || p.key == "" || prior == nil || !reusable(Result{Response: prior}) {
+	if !ok || p.key == "" || prior == nil || (p.op.Provider == "web" && prior.Vantage != g.vantage) || !reusable(Result{Response: prior}) {
 		return Result{}, false
 	}
 	e := p.e
@@ -530,6 +530,7 @@ func (g *Gate) answerFromPrior(p *pending) (Result, bool) {
 	}
 	g.mu.Lock()
 	g.reused[p.key] = true
+	g.observations[e.RequestID] = Observation{CollectedAt: prior.CollectedAt, Vantage: prior.Vantage}
 	g.mu.Unlock()
 	return Result{RequestID: e.RequestID, Decision: DecisionReused, Response: prior.clone(), Identity: p.key}, true
 }

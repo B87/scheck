@@ -213,6 +213,7 @@ func withGitHubRoot(t *testing.T) Input {
 // subject.
 func withDomainRoot(t *testing.T) Input {
 	in := oneHost(t, "macos")
+	in.LevelsUsed = []string{"passive", "observe"}
 	in.FromHost, in.Path = false, "engagement.yaml"
 	in.Rerun = "scheck run engagement.yaml"
 	name := func(n string) Subject { return Subject{Kind: "dns_name", Key: n, Label: n} }
@@ -309,7 +310,7 @@ func TestDomainRootFindings(t *testing.T) {
 	in.Assets[len(in.Assets)-1].Judged = in.Assets[len(in.Assets)-1].Judged[1:]
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
 		Asset: "domain:old.example.com", AssetID: "domain:old.example.com", Subject: "old.example.com", Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"}}
-	if r = Build(in); r.Acceptances[0].Outcome != "subject_not_found" || !strings.Contains(r.Acceptances[0].Why, "remove the entry") {
+	if r = Build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "population") {
 		t.Errorf("a fixed name's entry %+v", r.Acceptances[0])
 	}
 	// A declared domain read with its root is read in coverage.

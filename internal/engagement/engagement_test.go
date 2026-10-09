@@ -531,3 +531,17 @@ func TestSubjectOnAWholeAssetFinding(t *testing.T) {
 		t.Fatalf("want one error on the organization-wide acceptance, the host one left to Recon; got %v", err)
 	}
 }
+
+func TestIntentURLCannotBeBothPublicAndRestricted(t *testing.T) {
+	file := `schema: 1
+engagement: {name: contradictory, timezone: UTC, trigger: routine}
+roots: [{url: 'https://example.com/'}]
+intent:
+ exposed_on_purpose: [{url: 'https://EXAMPLE.com:443/admin', audience: internet}]
+ not_exposed: [{url: 'https://example.com/admin', audience: vpn}]
+`
+	_, err := Parse("e.yaml", []byte(file), testOpts)
+	if err == nil || !strings.Contains(err.Error(), "same URL is also declared exposed_on_purpose") {
+		t.Fatal(err)
+	}
+}

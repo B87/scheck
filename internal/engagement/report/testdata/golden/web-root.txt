@@ -239,7 +239,7 @@ NOTES FOR THE READOUT
   example.com: SPF term read, not compared with declared senders: ip4:192.0.2.0/24.
   news.example.com: DKIM for sendgrid was not checked: no selector given. Find s= in the
     DKIM-Signature header of a recent message from this service.
-  domain:example.com: Entry points only: no authenticated login flow or loaded scripts were read..
+  domain:example.com: Entry points only: no authenticated login flow or loaded scripts were read.
 
 FOR AUTOMATION
 Exit 1: 3 open findings at or above their asset's threshold (every asset: medium). Exit 0 would not

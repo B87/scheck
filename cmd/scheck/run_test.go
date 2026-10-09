@@ -825,3 +825,18 @@ intent:
 		}
 	}
 }
+
+func TestRunVantageValidatedBeforeContact(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "macos"))
+	for _, v := range []string{"internet", "vpn", "lan"} {
+		_, stderr, code := runEngagement(t, "--host", "local", "--vantage", v, "--stop-after", "intake", "--no-persist")
+		if code != 0 {
+			t.Fatal(v, stderr, code)
+		}
+	}
+	_, stderr, code := runEngagement(t, "--host", "local", "--vantage", "office")
+	if code != 3 || !strings.Contains(stderr, "--vantage must be internet|vpn|lan") || *calls != 0 {
+		t.Fatal(stderr, code, *calls)
+	}
+}

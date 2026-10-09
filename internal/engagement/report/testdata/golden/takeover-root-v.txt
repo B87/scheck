@@ -237,8 +237,9 @@ EXCLUDED, NARROWED AND NOT RUN
 WHAT LEFT THIS MACHINE
   Third-party services:
     Your DNS resolver at 192.0.2.53, and whatever it forwards to, as for any web browsing on this
-      network: names under your domains, the names they point to, and the services above; 20
-      lookups, including 1 random test name under your domains and one under invalid.
+      network: names under your domains, the names they point to (including third-party mail and DNS
+      providers), and the services above; 20 lookups, including 1 random test name under your
+      domains and one under invalid.
     crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com;
       1 request. crt.sh sees this machine's internet address and those names, and may keep logs.
   Your own systems:

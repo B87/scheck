@@ -136,8 +136,9 @@ EXCLUDED, NARROWED AND NOT RUN
 WHAT LEFT THIS MACHINE
   Third-party services:
     Your DNS resolver at 192.0.2.53:53, and whatever it forwards to, as for any web browsing on this
-      network: names under your domains, the names they point to, and the services above; 12
-      lookups, including 1 random test name under your domains and one under invalid.
+      network: names under your domains, the names they point to (including third-party mail and DNS
+      providers), and the services above; 12 lookups, including 1 random test name under your
+      domains and one under invalid.
   Your own systems:
     none
   Names under your domains not shown to be yours:

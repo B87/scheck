@@ -21,7 +21,7 @@ type SitePlan struct {
 }
 
 func entryURL(e Entry) string {
-	return (&url.URL{Scheme: e.Scheme, Host: e.Host, Path: e.Path}).String()
+	return e.Scheme + "://" + e.Host + e.Path
 }
 
 // Enrich reads a site's declared entries and two well-known files, after
@@ -92,7 +92,7 @@ func Enrich(ctx context.Context, g Gate, d Domain, ev Evidence) Evidence {
 			if err != nil || loc == "" || to.User != nil || !strings.EqualFold(to.Host, base.Host) || (to.Scheme != "https" && to.Scheme != "http") {
 				continue
 			}
-			hop := Entry{to.Scheme, to.Host, to.Path}
+			hop := Entry{to.Scheme, to.Host, to.EscapedPath()}
 			if hop.Path == "" {
 				hop.Path = "/"
 			}
@@ -107,7 +107,10 @@ func Enrich(ctx context.Context, g Gate, d Domain, ev Evidence) Evidence {
 	}
 	return ev
 }
-func entryOf(raw string) Entry { u, _ := url.Parse(raw); return Entry{u.Scheme, u.Host, u.Path} }
+func entryOf(raw string) Entry {
+	u, _ := url.Parse(raw)
+	return Entry{u.Scheme, u.Host, u.EscapedPath()}
+}
 func (c collector) entry(ctx context.Context, e Entry, from string) Page {
 	p := page(c.g.Send(ctx, gate.Request{Op: OpEntry, Asset: c.d.Asset, Stage: c.d.Stage, RedirectOf: from,
 		Params: map[string]string{"scheme": e.Scheme, "host": e.Host, "path": e.Path}}))

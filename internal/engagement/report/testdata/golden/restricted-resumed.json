@@ -1,0 +1,609 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "url:https://admin.example.com/",
+      "complete": true,
+      "id": "web.restricted_reachable",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "audience": "vpn",
+            "vantage": "internet"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "https://admin.example.com/",
+            "kind": "url",
+            "label": "https://admin.example.com/"
+          }
+        },
+        {
+          "detail": {
+            "audience": "vpn",
+            "vantage": "internet"
+          },
+          "outcome": "disproved",
+          "subject": {
+            "key": "https://admin.example.com/private",
+            "kind": "url",
+            "label": "https://admin.example.com/private"
+          }
+        }
+      ],
+      "reads": [
+        "request:admin1",
+        "request:private1"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "web",
+      "id": "url:https://admin.example.com/",
+      "kind": "url",
+      "name": "admin",
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "url:https://admin.example.com/"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "loaded scripts and pages beyond entry points",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "response secrets",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.secret_in_response"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "loaded scripts and pages beyond entry points",
+          "read_not_judged": [
+            "loaded scripts and pages beyond entry points"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "assets_covered": [
+        "url:https://admin.example.com/"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "TLS versions and ciphers other than those negotiated, and revocation",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "url:https://admin.example.com/",
+          "judged": [
+            "restricted endpoints answering from a declared outside vantage"
+          ],
+          "mark": "assessed",
+          "name": "restricted URL reachability",
+          "reasons": [],
+          "rules": [
+            "web.restricted_reachable"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_applicable",
+          "name": "dangling records",
+          "reasons": [],
+          "rules": [
+            "dns.dangling_external",
+            "dns.dangling_internal"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_applicable",
+          "name": "subdomain takeover",
+          "reasons": [],
+          "rules": [
+            "dns.takeover_candidate",
+            "dns.unclaimed_at_provider"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_applicable",
+          "name": "private addresses",
+          "reasons": [],
+          "rules": [
+            "dns.private_address"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "TLS and certificates",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "tls.certificate_invalid",
+            "tls.certificate_expiring",
+            "tls.legacy_only"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "TLS versions and ciphers other than those negotiated, and revocation",
+          "read_not_judged": [
+            "TLS versions and ciphers other than those negotiated, and revocation"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "assets_covered": [
+        "url:https://admin.example.com/"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "HTTPS and plain HTTP",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.hsts_missing",
+            "web.plaintext_http",
+            "web.plaintext_http_clients"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "entry response headers",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_headers"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "session cookies",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.session_cookie_flags"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "software versions",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.version_disclosed"
+          ]
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "mark": "not_assessed",
+          "name": "security contact",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_txt"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-07T07:12:03Z",
+      "to": "2026-10-08T08:12:03Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "passive",
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "restricted-pages",
+    "operator": null,
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": null
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "1 open finding at or above its asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "url:https://admin.example.com/": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "admin",
+        "by_subject": true,
+        "expires": "2027-01-05",
+        "id": "web.restricted_reachable",
+        "needs_people": true,
+        "reason": "",
+        "subject": "https://admin.example.com/"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "contradiction",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "intent.not_exposed[0]"
+          }
+        }
+      ],
+      "area": "external",
+      "asset_name": "admin",
+      "bound_id": null,
+      "category": "web",
+      "derived": [
+        {
+          "name": "audience",
+          "value": "vpn"
+        },
+        {
+          "name": "vantage",
+          "value": "internet"
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "https://admin.example.com/ is reachable only from vpn",
+          "kind": "declared",
+          "source": "engagement.yaml intent.not_exposed[0]"
+        },
+        {
+          "excerpt": "internet (your declaration; not verified)",
+          "kind": "declared",
+          "source": "--vantage"
+        },
+        {
+          "asset": "url:https://admin.example.com/",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "https://admin.example.com/ answered HTTP 401 from the declared internet vantage, outside every permitted source, including office allowlists and VPN; declared audience: vpn. Authentication was not tested",
+          "kind": "observed",
+          "observation": "admin1",
+          "principal": "anonymous",
+          "request": "admin1",
+          "vantage": "internet"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.restricted_reachable",
+      "impact": "The endpoint answered from a source declared outside every permitted network. A login page or 401 still means it is reachable; authenticated access and login bypass were not tested.",
+      "key": {
+        "asset": "url:https://admin.example.com/",
+        "id": "web.restricted_reachable",
+        "subject": "https://admin.example.com/"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Restrict access at the reverse proxy, gateway or firewall to the intended network. Repeat this check from outside every permitted source, including office allowlists and VPN."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:admin1",
+          "declared:intent.not_exposed[0]",
+          "declared:--vantage"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "https://admin.example.com/",
+        "kind": "url",
+        "label": "https://admin.example.com/"
+      },
+      "title": "A URL declared restricted answered from the internet",
+      "why_here": [
+        "You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "did not answer from here; scheck cannot tell a firewall from a server that is down",
+      "kind": "web_context",
+      "source": "https://admin.example.com/private"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml --vantage internet",
+    "directory": null,
+    "resumed": true,
+    "started": "2026-10-07T07:12:03Z",
+    "vantage": "internet"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "url:https://admin.example.com/"
+        ],
+        "ids": [
+          "web.restricted_reachable"
+        ],
+        "keys": [
+          {
+            "asset": "url:https://admin.example.com/",
+            "id": "web.restricted_reachable",
+            "subject": "https://admin.example.com/"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:high",
+          "area:external"
+        ],
+        "severity": "high",
+        "title": "A URL declared restricted answered from the internet"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 1,
+      "selected": 1,
+      "without_evidence": 0
+    }
+  }
+}

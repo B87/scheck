@@ -90,7 +90,18 @@ HTTP one level, except the browser rule is disproved under a preloaded TLD.
 and the limits: no loaded scripts or authenticated login flow, no robots paths
 requested, and only whole-TLD browser preloads checked. Correct cookie flags on an
 entry do not establish a safe login flow. Missing evidence remains explicit in web,
-secrets and external coverage. Vantage and restricted reachability remain step 5.
+secrets and external coverage. E7 step 5 adds `--vantage internet|vpn|lan` on each
+invocation, including resume; omission means unknown. `internet` declares outside
+every permitted source, including office allowlists and VPN, and is not detected or
+verified. A restricted exact URL answering 2xx, 401 or a recognized login redirect
+from that vantage produces `web.restricted_reachable`, high after the contradiction
+raise. This establishes reachability, not authentication bypass. Refusal or timeout
+disproves with an outage caveat; blocked, denied, unknown or invalid TLS evidence
+abstains. No identity-provider redirect is contacted by the rule.
+On resume, changed mail declarations refresh the affected records and follow-ups;
+changed intent role or audience refreshes its exact entry. Reasons and web
+acceptances only regrade retained observations. Changed vantage refreshes web/DNS
+evidence and Scope, without recollecting hosts. Reused evidence keeps its actual time.
 A declared root of any other kind (a
 SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
 exits 2. Tell the user what was not assessed, never that it is fine.
@@ -255,7 +266,9 @@ in this order:
    with that subject points anywhere" means the record is gone: confirm, then remove the
    entry.
 8. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
-   count, of which `control_lookups` and `control_invalid` are the random test names,
+   count, of which `control_lookups` counts root controls and `invalid_queries` counts
+   actual queries for reserved-name controls; `control_invalid` says whether any
+   such query was sent,
    crt.sh with the domains asked about, a provider with the environment variable its
    credential came from, never the value), `assets` (SSH sessions, `unreached` servers
    a connection was attempted to, `jump_hosts` and `jump_unreached` counted apart,

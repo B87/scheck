@@ -915,6 +915,17 @@ func (v *validator) references() {
 
 func (v *validator) intent() {
 	in := v.f.Intent
+	public := map[string]bool{}
+	for _, e := range in.ExposedOnPurpose {
+		if ref, err := parseURL(e.URL); err == nil {
+			public[ref.ID] = true
+		}
+	}
+	for i, e := range in.NotExposed {
+		if ref, err := parseURL(e.URL); err == nil && public[ref.ID] {
+			v.fail(fmt.Sprintf("intent.not_exposed[%d].url", i), "the same URL is also declared exposed_on_purpose")
+		}
+	}
 	for _, list := range []struct {
 		key     string
 		entries []Exposure

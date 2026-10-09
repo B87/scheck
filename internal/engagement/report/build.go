@@ -49,7 +49,7 @@ func Build(in Input) *Report {
 	}
 	r := &Report{
 		SchemaVersion: SchemaVersion, ScheckVersion: in.Version, RulesVersion: in.Version,
-		Run:        Run{Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
+		Run:        Run{Vantage: in.Vantage, Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
@@ -73,6 +73,7 @@ func Build(in Input) *Report {
 	for _, a := range in.Assets {
 		r.Assets = append(r.Assets, b.asset(a))
 		b.shortfall(a)
+		r.Incomplete = append(r.Incomplete, a.WebShortfalls...)
 		if v := b.hosts[a.ID]; v != nil {
 			r.Findings = append(r.Findings, b.hostFindings(v)...)
 			r.Assessments = append(r.Assessments, v.assessments()...)
@@ -117,7 +118,7 @@ func (b *builder) engagement() Engagement {
 		Name: in.Name, Timezone: b.zone.String(), BuiltFrom: "file",
 		Source:        Source{SHA256: in.SHA256},
 		Collected:     Span{From: in.Started.UTC(), To: in.Finished.UTC()},
-		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: []string{}},
+		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...)},
 		Authorization: in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
 	}
 	if in.Operator != "" {
@@ -136,11 +137,8 @@ func (b *builder) engagement() Engagement {
 	}
 	for _, a := range in.Assets {
 		switch {
-		case a.Collector != "":
-			// DNS reads are passive; a site's front page is observe.
-			e.Method.LevelsUsed = []string{"passive", "observe"}
-		case a.Host != nil && len(e.Method.LevelsUsed) == 0:
-			e.Method.LevelsUsed = []string{"observe"}
+		case a.Host != nil && !slices.Contains(e.Method.LevelsUsed, "observe"):
+			e.Method.LevelsUsed = append(e.Method.LevelsUsed, "observe")
 		}
 	}
 	return e
@@ -163,6 +161,7 @@ func (b *builder) asset(a AssetInput) Asset {
 		out.Trace = append(out.Trace, Trace{Observation: e.Observation, Check: e.CheckID, Params: e.Params,
 			At: e.Time.UTC(), Decision: e.Decision, OutputSHA256: e.OutputHash})
 	}
+	out.Trace = append(out.Trace, a.NetworkTrace...)
 	v := b.hosts[a.ID]
 	if v == nil {
 		return out

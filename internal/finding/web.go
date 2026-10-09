@@ -8,6 +8,7 @@ const (
 	IDTLSCertificateInvalid    = "tls.certificate_invalid"
 	IDTLSCertificateExpiring   = "tls.certificate_expiring"
 	IDTLSLegacyOnly            = "tls.legacy_only"
+	IDWebRestrictedReachable   = "web.restricted_reachable"
 	IDWebHSTSMissing           = "web.hsts_missing"
 	IDWebPlaintextHTTP         = "web.plaintext_http"
 	IDWebPlaintextHTTPClients  = "web.plaintext_http_clients"
@@ -40,6 +41,7 @@ const CategoryDNS = "dns"
 const CategoryEmail = "email"
 
 var webDefs = []Def{
+	{ID: IDWebRestrictedReachable, Title: "A URL declared restricted answered from the internet", Category: "web", Area: AreaExternal, Exposure: NotExposure, Subject: "url", Judges: "declared restricted URL reachability", BaseSeverity: SevMedium, Impact: "The endpoint answered from a source declared outside every permitted network. A login page or 401 still means it is reachable; authenticated access and login bypass were not tested.", Remediation: Remediation{Summary: "Restrict access at the reverse proxy, gateway or firewall to the intended network. Repeat this check from outside every permitted source, including office allowlists and VPN."}},
 	{ID: IDTLSCertificateInvalid, Title: "The certificate failed verification", Category: "tls", Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "The certificate failed verification", BaseSeverity: SevLow, Impact: "The served certificate is expired, for another name, untrusted, or may lack an intermediate. Browser recovery and other clients can differ.", Remediation: Remediation{Summary: "Renew or reissue the certificate for this name; for a missing intermediate, serve the full chain."}},
 	{ID: IDTLSCertificateExpiring, Title: "The certificate expires within 14 days", Category: "tls", Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "The certificate expires within 14 days", BaseSeverity: SevInfo, Impact: "Expiry is approaching. Short-lived certificates can renew normally within this window; renewal success was not checked.", Remediation: Remediation{Summary: "Confirm automatic renewal is working and monitor the replacement certificate."}},
 	{ID: IDTLSLegacyOnly, Title: "The site did not negotiate TLS 1.2 or later", Category: "tls", Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "The site did not negotiate TLS 1.2 or later", BaseSeverity: SevLow, Impact: "The offered TLS 1.2-or-later handshake was rejected for its protocol version. This does not establish which older versions the server accepts.", Remediation: Remediation{Summary: "Configure the endpoint to support TLS 1.2 or later, then check current-client compatibility."}},

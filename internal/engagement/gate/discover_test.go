@@ -260,12 +260,12 @@ func TestDiscoveryEgress(t *testing.T) {
 	for _, want := range []string{
 		"crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com; 1 request.",
 		"Your DNS resolver at 192.0.2.53, and whatever it forwards to",
-		"including 1 random test name under your domains and one under invalid.",
+		"including 1 random test name under your domains and 4 queries for random names under invalid.",
 		"Nothing was sent to an AI model provider.",
 		"domain:legacy.example.com: dropped 1 discovered name",
 	} {
 		if !strings.Contains(text.String(), want) {
-			t.Errorf("the report lacks %q", want)
+			t.Errorf("the report lacks %q: %s", want, text.String())
 		}
 	}
 	srcs := map[string]ereport.EgressSource{}

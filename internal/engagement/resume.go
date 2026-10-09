@@ -56,6 +56,7 @@ type Manifest struct {
 type Session struct {
 	Started time.Time `json:"started"`
 	Version string    `json:"version"`
+	Vantage string    `json:"vantage"`
 	// Egress is what the session sent, recorded after each stage and when
 	// it ended; Ended says it lived to record the last of it.
 	Egress *ereport.EgressInput `json:"egress,omitempty"`
@@ -247,7 +248,7 @@ func (p *Prior) edited(name string) bool {
 // the build, and each asset's first-party evidence at the session's time,
 // so a confirmation that expired since runs Scope again. An unknown build
 // has none, so its Scope is always run again.
-func scopeInputs(res *Resolved, version string, at time.Time) string {
+func scopeInputs(res *Resolved, version string, at time.Time, vantage ...string) string {
 	if !gate.KnownBuild(version) {
 		return ""
 	}
@@ -257,16 +258,15 @@ func scopeInputs(res *Resolved, version string, at time.Time) string {
 	}
 	return fingerprint(struct {
 		Version       string
+		Vantage       []string
 		Roots         []Ref
 		Exclude       []Ref
 		Defaults      EffectiveDefaults
 		Assets        []ResolvedAsset
 		RedactExtra   []string
-		Mail          Mail
-		Intent        Intent
 		Authorization *Authorization
 		FirstParty    []any
-	}{version, res.Roots, res.Exclude, res.Defaults, res.Assets, res.RedactExtra(), res.Mail, res.Intent, res.Authorization, evidence})
+	}{version, vantage, res.Roots, res.Exclude, res.Defaults, res.Assets, res.RedactExtra(), res.Authorization, evidence})
 }
 
 // complete says Scope found no gap a resume should try to close: every
@@ -327,6 +327,7 @@ func mergeEgress(into, from *ereport.EgressInput) {
 		t.Credentials = union(t.Credentials, s.Credentials)
 		t.Requests += s.Requests
 		t.RootControls += s.RootControls
+		t.InvalidQueries += s.InvalidQueries
 		t.InvalidControl = t.InvalidControl || s.InvalidControl
 		t.ScopedResolversIgnored = t.ScopedResolversIgnored || s.ScopedResolversIgnored
 	}
@@ -336,7 +337,7 @@ func mergeEgress(into, from *ereport.EgressInput) {
 	})
 	into.Contacts = append(into.Contacts, from.Contacts...)
 	for _, s := range from.Sites {
-		i := slices.IndexFunc(into.Sites, func(x ereport.SiteInput) bool { return x.Name == s.Name })
+		i := slices.IndexFunc(into.Sites, func(x ereport.SiteInput) bool { return x.Name == s.Name && x.FirstParty == s.FirstParty })
 		if i < 0 {
 			into.Sites = append(into.Sites, s)
 			continue
@@ -384,7 +385,7 @@ func (r *run) openManifest() error {
 		}
 		r.manifest.File = abs
 	}
-	r.manifest.Sessions = append(r.manifest.Sessions, Session{Started: r.session.UTC(), Version: r.o.Version})
+	r.manifest.Sessions = append(r.manifest.Sessions, Session{Started: r.session.UTC(), Version: r.o.Version, Vantage: r.o.Vantage})
 	return r.saveManifest()
 }
 

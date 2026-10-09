@@ -1,0 +1,123 @@
+scheck engagement report: restricted-pages
+Read 2026-10-07 07:12 to 08:12 (UTC). scheck test.
+Trigger        not declared
+Vantage        internet (your declaration; not verified). internet means outside every permitted
+               source, including office allowlists and VPN.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: admin (checked only in part: external surface). See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  External surface.
+Not checked      Secrets, Web application: see Coverage.
+Not requested    Not part of this run: identity and access, cloud configuration, data stores and
+                 backups, CI/CD and supply chain, hosts, email and domain, logging and incident
+                 readiness. To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      A URL declared restricted answered from the internet (admin)
+             base medium, raised: you declared this URL restricted, but it answered from a source
+             you declared outside every permitted network. Authentication was not tested
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: external surface. Not checked: secrets, web application, identity and access, cloud
+configuration, data stores and backups, CI/CD and supply chain, hosts, email and domain, logging and
+incident readiness. Anything not checked is unknown, not fine.
+
+COVERAGE
+Secrets                  not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision (no judgments from web responses were
+  recorded); this version of scheck has no rule for it (loaded scripts and pages beyond entry
+  points).
+External surface         checked in part
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision; this version of scheck has no rule for it
+  (TLS versions and ciphers other than those negotiated, and revocation).
+Web application          not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision (no judgments from web responses were
+  recorded).
+Not requested            Not part of this run: identity and access, cloud configuration, data stores
+                         and backups, CI/CD and supply chain, hosts, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 1 open (1 high), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  A URL declared restricted answered from the internet (admin) [web.restricted_reachable]
+   Subject       https://admin.example.com/ (url https://admin.example.com/)
+   You declared  engagement.yaml intent.not_exposed[0]: https://admin.example.com/ is reachable only
+                 from vpn
+   You declared  --vantage: internet (your declaration; not verified)
+   Observed      admin1 (07:12, as anonymous): https://admin.example.com/ answered HTTP 401 from the
+                 declared internet vantage, outside every permitted source, including office
+                 allowlists and VPN; declared audience: vpn. Authentication was not tested
+   Concluded from request:admin1, declared:intent.not_exposed[0], declared:--vantage
+   Severity      high: base medium, +1 contradiction (intent.not_exposed[0])
+   Why here      You declared this URL restricted, but it answered from a source you declared
+                 outside every permitted network. Authentication was not tested.
+   Fix           Restrict access at the reverse proxy, gateway or firewall to the intended network.
+                 Repeat this check from outside every permitted source, including office allowlists
+                 and VPN.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # A URL declared restricted answered from the internet (admin)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: web.restricted_reachable
+      asset: admin
+      subject: https://admin.example.com/ # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  https://admin.example.com/private: did not answer from here; scheck cannot tell a firewall from a
+    server that is down.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

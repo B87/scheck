@@ -161,3 +161,65 @@ exclude: [{url: 'https://admin.example.com/app/login/private'}]
 		}
 	}
 }
+
+func TestDeclaredWebFailureExitSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		expired, private bool
+		want             int
+	}{{name: "transport", want: 2}, {name: "invalid certificate", expired: true, want: 0}, {name: "private address", private: true, want: 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := gate.NewHarness(t, nil)
+			if tc.expired {
+				h.ExpiredSite("admin.example.page", "198.51.100.60")
+			} else if tc.private {
+				h.Answer("admin.example.page", "10.0.0.4")
+			} else {
+				h.Answer("admin.example.page", "198.51.100.60")
+			}
+			file := `schema: 1
+engagement: {name: failure-semantics, timezone: UTC, trigger: routine}
+roots: [{url: 'https://admin.example.page/'}]
+`
+			out := runWebFile(t, h, file)
+			if out.ExitCode() != tc.want {
+				t.Fatal(out.ExitCode(), out.Report.Incomplete, out.Report.Findings)
+			}
+			if tc.expired {
+				found := false
+				for _, f := range out.Report.Findings {
+					found = found || f.ID == finding.IDTLSCertificateInvalid
+				}
+				if !found {
+					t.Fatal("expired certificate finding missing")
+				}
+			}
+		})
+	}
+}
+
+func TestDeclaredDomainNSFailureIsIncomplete(t *testing.T) {
+	h := gate.NewHarness(t, nil)
+	h.CrtSh(`[]`)
+	h.DNS(map[string]string{})
+	h.ResponseSite("example.com", "198.51.100.40", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("hello")) })
+	h.TXT("example.com", "v=spf1 -all")
+	h.TXT("_dmarc.example.com", "v=DMARC1; p=reject")
+	h.FailNS("example.com")
+	out := runWebFile(t, h, `schema: 1
+engagement: {name: ns-failure, timezone: UTC, trigger: routine}
+roots: [{domain: example.com}]
+`)
+	if out.Report.Exit.Code != 2 {
+		t.Fatal(out.Report.Exit)
+	}
+	found := false
+	for _, s := range out.Report.Incomplete {
+		if s.Asset == "domain:example.com" && strings.Contains(s.Detail, "dns_servfail") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal(out.Report.Incomplete)
+	}
+}

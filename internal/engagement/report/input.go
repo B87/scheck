@@ -12,6 +12,9 @@ import (
 // report's own terms, so this package never imports the engagement or a
 // collector, and never contacts a target.
 type Input struct {
+	Vantage      string
+	Observations map[string]Observation
+	LevelsUsed   []string
 	RulesVersion string
 	Exposures    []ExposureInput
 	Version      string
@@ -69,14 +72,17 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
-	Redactions      []policy.Hit
-	WebNotes        []Note
-	MailNotes       []Note
-	Unfingerprinted []string
-	Name            string
-	ID              string
-	Kind            string
-	Root            bool
+	PopulationIncomplete bool
+	NetworkTrace         []Trace
+	WebShortfalls        []Shortfall
+	Redactions           []policy.Hit
+	WebNotes             []Note
+	MailNotes            []Note
+	Unfingerprinted      []string
+	Name                 string
+	ID                   string
+	Kind                 string
+	Root                 bool
 	// Status and Reason are Recon's (collected, incomplete, failed,
 	// refused, not_collected) and the coverage reason when not collected.
 	Status string
@@ -171,3 +177,9 @@ type AcceptanceInput struct {
 
 // ExposureInput is an exact declared public URL and its reason.
 type ExposureInput struct{ URL, Reason, Source string }
+
+// Observation is the original collection metadata, including reused evidence.
+type Observation struct {
+	CollectedAt time.Time
+	Vantage     string
+}

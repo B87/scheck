@@ -495,7 +495,7 @@ prove:
 the gate by the identity (another principal or scope set gives another identity) and by
 a success on record under a principal the gate does not know being sent again; E5,
 whose principal op tells the gate who a credential is, carries it through a real
-principal. A web asset's vantage joins a request's identity when `--vantage` lands in E7
+principal. A web asset's vantage joins a request's identity in E7 step 5
 (`spec/scope.md`, "Resume").
 
 **Deferred from E4's design review** (a modularity pass over the gate, kept here so the
@@ -526,10 +526,9 @@ named:
   check of `spec/scope.md`, "Admission", step 6 ("allowed by the asset's mode") exists.
   Today only `ceiling` is checked, and the window tests admit a test-only probe op that
   has no mode at all.
-- E7: `mergeEgress` (`internal/engagement/resume.go`) ORs a site's first-party flag
-  across sessions, so a name sent without first-party evidence in one session and with
-  it in another moves wholly to "websites shown to be yours". No site op exists before
-  E7; E7 keeps each session's counts split by first-party status.
+- done in E7 step 5: each session's site request counts remain split by
+  first-party status across sessions, so later evidence never moves earlier
+  unconfirmed requests into "websites shown to be yours".
 - E7: `unavailable:blocked`, a firewall that blocks scheck's User-Agent, is the web
   collector's to decide from the page it is served (`spec/scope.md`, "Connections").
 - E5, E6, E7: a collector marks coverage by `spec/scope.md`'s "Outcomes" table, its
@@ -594,7 +593,7 @@ repositories as `secret_location` keyed `actions:<name>` or a new kind (E5).
 collector that declares the kind lands (E5, E6); empty password raised to critical by
 the E9 multi-fact rule `sshd.empty_password_login` (`permitemptypasswords yes` with
 password or keyboard-interactive login, and the shell; high for a refusing shell when
-TCP forwarding is allowed, since nologin does not stop `ssh -N`); handed to E7 step 5:
+TCP forwarding is allowed, since nologin does not stop `ssh -N`); done in E7 step 5:
 `--vantage internet` from an office the admin panel allowlists gives a false
 contradiction, so the flag help, the warning and the finding define "internet" as
 outside every address the page allows (not the office, not the VPN).
@@ -750,7 +749,8 @@ and DNS evidence and printed in the report header, with a warning at the start w
 `intent.not_exposed` is listed and no vantage is given (`spec/engagement.md`,
 "Reachability and vantage"); a web request's identity for resume includes it
 (`spec/scope.md`, "Resume"). On a resume, a changed `mail` or `intent` URL reads again
-only the DNS names and entry points it affects, where E4 runs Scope again whole
+only the DNS names and entry points it affects; Scope discovery is kept when its
+inputs are unchanged
 (`spec/engagement.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
 network collector: the `security-consultant` froze the base severity anchors on
 2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
@@ -892,8 +892,28 @@ Built in steps, reviewed as E4 was:
    and per-capture abstentions remain enforced. `make check` is green; consultant
    review and a fresh code review found no remaining issues. Five offline regression
    tests cover the real-run failure modes. No follow-up review findings deferred.
-5. **Next:** `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
-   and the report's wording read by the `client`.
+5. **Done:** `--vantage internet|vpn|lan` is
+   declared on each invocation and recorded in sessions, HTTP/DNS evidence, audit
+   and the report. `internet` means outside every permitted source, including office
+   allowlists and VPN; no egress detection is sent. `web.restricted_reachable` judges
+   exact restricted URL entries, with an authentication caveat and outage caveat.
+   Changed mail declarations refresh records and dependent follow-ups by domain;
+   changed intent role or audience refreshes its exact URL; reasons and web
+   acceptances only regrade. Changed vantage refreshes Scope and web/DNS evidence,
+   leaving hosts unchanged. Reused evidence keeps its observation time. The
+   adversarial review fixes preserve canonical escaped entry and redirect-hop
+   paths, reuse successful MX and NS address dependencies,
+   recalculate reused DNS chain membership against current roots, mark failed declared
+   root NS reads incomplete, and scope missing accepted-subject completeness to its
+   owning asset and collector. Follow-up review corrections keep first-party egress
+   counts separate within sessions as well as across resumes, sort those rows
+   deterministically, and require the original scheme for a same-origin login redirect.
+   `make check` and `make build` are green. Consultant and final client report reviews
+   are complete; the whole E7 integration review and a fresh review of the final
+   boundary fixes found no remaining issues. Offline regressions cover these fixes,
+   selective resume and all three restricted-rule outcomes. No review findings are
+   deferred from this step. These are software checks, not external live-security
+   acceptance or a recorded 0.0.2 release-gate pass.
 
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)
 fire, disprove and abstain for every rule; the audit log shows no request outside an
@@ -912,9 +932,8 @@ and entry points it affects (carried from E4 step 4b).
   decision written once in the engagement, which the gate calls before and after
   resolving the name, and whose evidence check after resolution discovery's listing
   shares (E4's "Deferred from E4's design review");
-- each session's site requests are kept split by first-party status, so a name sent
-  without first-party evidence in one session and with it in another is not moved
-  wholly to "websites shown to be yours" (today's `mergeEgress` ORs the flag);
+- done in step 5: site requests remain split by first-party status across
+  sessions; later confirmation never changes earlier unconfirmed request counts;
 - the web collector decides `unavailable:blocked` from the page it is served: status
   and a block-page marker (`spec/scope.md`, "Connections");
 - coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got no
@@ -923,30 +942,27 @@ and entry points it affects (carried from E4 step 4b).
 **Carried from E7 step 2b-i's review** (code review, 2026-10-09), each fixed before E7
 closes:
 
-- an observed item's `collected_at` is the run's start, not when its request was read
-  (`spec/engagement.md`, "Findings");
-- a domain asset's command trace is empty: the report lists no request that touched it
-  (`spec/engagement.md`, "Text and JSON"), as before 2b-i;
-- `method.levels_used` claims `observe` for every read domain root, including one whose
-  names had no front page requested (`spec/engagement.md`, "Runs, state and
-  configuration").
+- done in step 5: observed items use actual request collection times and
+  preserve them when reused (`spec/engagement.md`, "Findings");
+- done in step 5: network assets have a trace of redacted gate entries,
+  including DNS queries (`spec/engagement.md`, "Text and JSON");
+- done in step 5: `method.levels_used` comes from actual DNS queries and
+  request sends over the retained run, plus host collection; DNS-only reads never
+  invent `observe`
+  (`spec/engagement.md`, "Runs, state and configuration").
 
-**Carried from E7 step 2b-i** (2026-10-09), for the `security-consultant` before E7
-closes: a resolver that answers `invalid.` itself, as RFC 6761 lets it, and rewrites
-everything else passes the control lookup, so a dangling target can be missed and shown
-as disproved (`spec/scope.md`, "Discovery"; `spec/web-collector.md`, "DNS and
-takeover"). Also before E7 closes:
+**Carried from E7 step 2b-i** (2026-10-09), done in step 5:
 
-- an acceptance with no subject on a `domain:` name now gone comes out
-  `rule_not_decided`; whether it should read as `subject_not_found` ("remove the
-  entry") is the caller's or the `security-consultant`'s;
-- "What left this machine" says "one under invalid." though Scope and Recon may each
-  send one (`gate/egress.go` keeps a bool; the schema's `control_invalid` says "one");
-  count them, and settle the wording with the `client`;
-- Recon's own resolver check is not in `recon.json`: a reader sees
-  `unavailable:resolver_*` without the outcome that caused it;
-- `spec/scope.md` "Discovery" calls the `invalid.` control "the only lookup outside
-  every root", which chain-following and the follow-ups no longer make true.
+- Resolver controls remain a heuristic: a resolver that handles `invalid.` specially
+  can rewrite other missing names. The report explains this limitation; it makes no
+  guarantee that every dangling target is found.
+- Missing accepted subjects are removable only over a complete applicable population;
+  incomplete evidence remains `rule_not_decided`, never evidence of a fix.
+- Egress records actual reserved-name query counts in `invalid_queries`, alongside
+  the boolean `control_invalid`; wording names Scope and Recon's real total.
+- Recon's resolver control outcome is in `recon.json` and report context notes.
+- Discovery wording includes passive resolution of third-party CNAME, MX, NS and SPF
+  names outside roots; no such lookup authorizes HTTP contact.
 
 **Carried to 0.0.3 from E7's definition** (2026-10-09): an SOA lookup of a dangling
 target's registrable domain, which would tell whether anyone can register it
@@ -1044,8 +1060,9 @@ asset unchanged; a loop fixture terminates.
 - *Already built, carried here:* a resume keeps Scope and host envelopes of any age,
   so a run resumed weeks later reports old discovery as current. Keep nothing older
   than a fixed maximum, compiled in with no setting to widen it (the consultant
-  recommends 7 days; owner's decision pending), and print the date on `Observed`
-  whenever a run's collection crosses a day.
+  recommends 7 days; owner's decision pending). The date on `Observed`
+  whenever a run's collection crosses a day is implemented in E7 step 5; the maximum
+  age decision and enforcement remain E9's.
 - *Owner's decision pending:* may a context raise reach critical? Today "a person who
   left still active" with `attribute:admin` and "2-step verification not enforced" with
   `contradiction` both reach critical, while critical is defined as usable by anyone on

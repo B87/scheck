@@ -16,6 +16,7 @@
         "started": { "type": "string", "format": "date-time" },
         "directory": { "type": ["string", "null"], "description": "null under --no-persist." },
         "resumed": { "type": "boolean" },
+        "vantage": { "enum": ["internet", "vpn", "lan"] },
         "command": { "type": "string", "description": "The command that runs this engagement again." }
       }
     },
@@ -259,7 +260,8 @@
               "requests": { "type": "integer", "minimum": 0 },
               "credentials": { "type": "array", "items": { "type": "string" }, "description": "Environment variables a credential came from." },
               "control_lookups": { "type": "integer", "minimum": 0, "description": "dns: lookups of random names under the domain roots, among requests, which test whether the resolver answers names that do not exist." },
-              "control_invalid": { "type": "boolean", "description": "dns: one such lookup was under invalid., among requests." },
+              "invalid_queries": { "type": "integer", "minimum": 0 },
+              "control_invalid": { "type": "boolean", "description": "dns: whether any reserved-name control query was sent under invalid.; invalid_queries counts actual queries." },
               "scoped_resolvers_ignored": { "type": "boolean", "description": "dns: only a Mac's main resolver was asked, not its per-interface (VPN) resolvers." }
             }
           }
@@ -345,7 +347,7 @@
                 "request": { "type": "string" },
                 "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Bound parameters, post-redaction." },
                 "at": { "type": "string", "format": "date-time" },
-                "decision": { "type": "string", "pattern": "^(run|denied:.+|unavailable:.+|not_run:.+)$" },
+                "decision": { "type": "string", "pattern": "^(run|sent|reused|refused:.+|denied:.+|unavailable:.+|not_run:.+)$" },
                 "output_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
               },
               "oneOf": [{ "required": ["check"] }, { "required": ["request"] }]
@@ -474,6 +476,7 @@
         "source": { "type": "string", "description": "For declared evidence: engagement.yaml <key path>." },
         "collected_at": { "type": "string", "format": "date-time" },
         "principal": { "type": "string" },
+        "vantage": { "enum": ["internet", "vpn", "lan"] },
         "excerpt": { "type": "string" }
       },
       "if": { "properties": { "kind": { "const": "observed" } } },

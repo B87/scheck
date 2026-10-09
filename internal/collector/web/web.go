@@ -129,6 +129,8 @@ type SelectorRead struct {
 
 // RecordRead is one DNS read as the gate answered it.
 type RecordRead struct {
+	Vantage     string        `json:"vantage"`
+	CollectedAt time.Time     `json:"collected_at"`
 	SPFMarked   bool          `json:"spf_marked,omitempty"`
 	RequestID   string        `json:"request_id"`
 	Decision    string        `json:"decision"`
@@ -146,7 +148,7 @@ type RecordRead struct {
 // Insufficient reports a read that says nothing about its name: not sent,
 // or a failure (docs/spec/scope.md, "The resolver").
 func (r RecordRead) Insufficient() bool {
-	return r.Decision != gate.DecisionSent || (r.Outcome != string(gate.OutcomeRecords) &&
+	return (r.Decision != gate.DecisionSent && r.Decision != gate.DecisionReused) || (r.Outcome != string(gate.OutcomeRecords) &&
 		r.Outcome != string(gate.OutcomeNXDomain) && r.Outcome != string(gate.OutcomeNoData) &&
 		r.Outcome != string(gate.OutcomeAddresses))
 }
@@ -174,6 +176,7 @@ type Site struct {
 
 // Page is one web request's result.
 type Page struct {
+	Vantage       string              `json:"vantage"`
 	CollectedAt   time.Time           `json:"collected_at"`
 	RobotsCount   *int                `json:"robots_disallow_count,omitempty"`
 	BlockedVendor string              `json:"blocked_vendor,omitempty"`
@@ -543,7 +546,7 @@ func (e Evidence) reads() []RecordRead {
 }
 
 func recordRead(r gate.RecordSet) RecordRead {
-	return RecordRead{RequestID: r.RequestID, Decision: r.Decision, Detail: r.Detail, Outcome: string(r.Outcome), Chain: r.Chain,
+	return RecordRead{Vantage: r.Vantage, CollectedAt: r.CollectedAt, RequestID: r.RequestID, Decision: r.Decision, Detail: r.Detail, Outcome: string(r.Outcome), Chain: r.Chain,
 		TXT: r.TXT, MX: r.MX, NS: r.NS, Targets: r.Targets, Addrs: r.Addrs, FinalInRoot: r.FinalInRoot}
 }
 
@@ -554,6 +557,7 @@ func page(r gate.Result) Page {
 		p.Body = string(resp.Body)
 		p.Redactions, p.FirstParty = resp.Redactions, resp.FirstParty
 		p.CollectedAt = resp.CollectedAt
+		p.Vantage = resp.Vantage
 	}
 	return p
 }

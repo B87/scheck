@@ -168,7 +168,9 @@ asks `crt.sh` once per domain root and the system's resolver for each name
 
 1. **Control queries.** Before anything else, Scope asks for a random 20-character
    label under each domain root, and one under `invalid.` (RFC 6761: it names no one's
-   asset, and is the only lookup outside every root scheck sends). If `invalid.` gets
+   asset). CNAME chains and mail/DNS follow-ups may also resolve names outside every
+   root; those are passive reads, never authority to contact their servers. If `invalid.`
+   gets
    an address, the resolver answers names that do not exist with its own address:
    every dangling verdict is then *insufficient evidence*, no discovered name without
    first-party evidence is read, and the report says "Your DNS resolver answers names
@@ -187,8 +189,9 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    [web-collector.md](web-collector.md#takeover-fingerprints), "Wildcards"). The
    control names are random. A resolver that answers `.invalid`
    itself, as RFC 6761 lets it, and rewrites everything else passes the first control;
-   the per-root control is the safety net, and under rewriting a dangling verdict can
-   only be missed, never invented. `scope.json`'s `resolver` records what the
+   the per-root control is a further heuristic. These controls do not prove the
+   resolver never rewrites other missing names; a dangling verdict can be missed.
+   `scope.json`'s `resolver` records what the
    `invalid.` lookup came to (`control_outcome`: its outcome, or the gate's decision
    when it was not sent) beside `rewrites_nxdomain`. Whether the resolver rewrites is
    known only when that lookup said NXDOMAIN or NODATA, or got an address. Otherwise no
@@ -199,7 +202,9 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    ([web-collector.md](web-collector.md#dns-and-takeover)). Each session that runs
    Recon on a domain root sends a control lookup of its own under `invalid.`, once,
    before its first read through the resolver, since a resumed session may be on
-   another network; its DNS and email verdicts stand only when both Scope's resolver
+   another network. Its outcome and resolver are recorded in `recon.json` and noted
+   in the report with that heuristic caveat; its DNS and email verdicts stand only when
+   both Scope's resolver
    and that session's are known not to invent answers. TLS and response verdicts
    use their own gate-admitted capture evidence; resolver-control doubt does not
    replace those verdicts. URL-only runs need no discovery control for these rules.
@@ -843,8 +848,8 @@ holding a dot byte, which joined with dots would read as another name, makes the
 answer unreadable: the lookup's outcome is `error`. With
 no nameserver there, a lookup is `unavailable:no_resolver`: not sent, not counted. On
 macOS, `/etc/resolv.conf` names only the primary resolver: per-interface (VPN)
-resolvers are not used, the report says so, and, once a run declares its vantage, a
-run with `vantage: vpn` on macOS warns at its start. Discovery from the public view is also the attacker's view, which
+resolvers are not used, the report says so, and a run with `--vantage vpn` on macOS
+warns at its start. Discovery from the public view is also the attacker's view, which
 is the right one for takeover. A host's SSH transport resolves its name with the
 system's own lookup, outside this client, as it does a jump host's; the report names
 both when written as names, and names the hosts a jump host resolved instead. A name in
@@ -1175,7 +1180,7 @@ scheck crashed mid-request.
 
 Fields:
 
-- `time`, `request_id`, `stage`, `asset`, `op`;
+- `time`, `request_id`, `stage`, `asset`, `op`, and the invocation's declared `vantage`;
 - `params`, bound and redacted;
 - `method`, and `url` as scheme, host and path, with query values redacted except
   declared typed parameters;
@@ -1220,7 +1225,7 @@ stops the request or lookup before it is sent.
 | An address that lost the first-party evidence Scope recorded (`refused:address_moved`) | `unavailable:address_moved` | no change; the next Scope run shows the asset without it |
 | An address not public, a redirect out of scope or off the entry points, an invalid certificate, a handshake the server ended with a TLS alert, a TLS alert after the handshake completed and before any response (`unavailable:tls_invalid`, `unavailable:tls_handshake`, `unavailable:tls_refused`) | `unavailable:<code>` | no change, like `path_denied` |
 | A provider rate limit, `limits.timeout`, or a request outside every authorization window or cut by its end (`refused:window`, `unavailable:window_ended`), or a run cancelled with the request in flight (`unavailable:canceled`) | `limit_reached` | 2 |
-| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for a `not_exposed` URL read from the `internet` vantage, no answer is the evidence that disproves the contradiction (`engagement.md`, "Reachability and vantage") |
+| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for an exact `not_exposed` URL read from the `internet` vantage, only connection refusal or timeout disproves the contradiction with the outage caveat (`engagement.md`, "Reachability and vantage") |
 | A page served by a firewall that blocks scheck (`unavailable:blocked`, "Connections") | `unavailable:blocked` | no change; every rule over it abstains |
 | `refused:unknown_op`, `out_of_scope` or `method` on a collector's request | `unavailable:refused_by_gate` | no change. It is a defect, and a collector's tests fail on any |
 
@@ -1240,9 +1245,12 @@ fingerprint and the redaction rules (the scheck version, whose compiled rules it
 carries, and `redact_extra`). A changed build, op or `redact_extra` reuses nothing, so a
 stored body is never one today's rules would redact differently. A build whose version
 names no commit (`dev`) or carries uncommitted changes (`-dirty`) cannot be told from
-another one, and reuses nothing at all. A web asset's vantage joins it when `--vantage` lands in 0.0.2 E7, and the vantage is
+another one, and reuses nothing at all. A web asset's vantage joins it in E7 step 5,
+and the vantage is
 recorded on DNS evidence too, so a resume from another vantage reads the names again
-(`engagement.md`, "Reachability and vantage"); this build has no `--vantage`. The fingerprint is a hash
+(`engagement.md`, "Reachability and vantage"). Exact URL intent role and audience
+also join web identities; mail declarations join records identities by canonical
+domain and are inherited by dependent follow-ups. The fingerprint is a hash
 of the principal's identity and sorted scopes, never of the token. A resume reuses only
 a success with the same identity. Everything else is retried, and every retry is
 admitted again from step 1, re-resolution and window included: a resume never replays
@@ -1265,9 +1273,14 @@ Some successes are never reused, and are sent again:
   (E5);
 - a redirect, since the hop after it needs the gate's own record of the 3xx;
 - a web page answered with 429 or a 5xx, kept as evidence but not a page that was read;
-- a records read and a follow-up ("Third-party sources"), which keep no record to
-  answer from until 0.0.2 E7 step 5, whose resume after a changed `mail` or `intent`
-  URL reads again only the names it affects.
+- a records read or follow-up with insufficient, excluded, redacted or truncated
+  evidence. Complete successes are reused in E7 step 5: their current chains and
+  pointed names are rechecked against exclusions, and whether the chain ends under
+  a root is recalculated against the current roots. Follow-up authority is rebuilt
+  from the admitted record, successful MX and NS address reads can be reused, and
+  SPF budgets still apply. The stored TXT projection retains only declared mail
+  fields, with DMARC reporting-address presence, never
+  the reporting address itself. A DNS reuse never authorizes an HTTP dial.
 
 A record is checked the same way when it is looked up, since a resume's records come
 from stage files the operator may have edited: a redirect, a 429 or a 5xx on record is

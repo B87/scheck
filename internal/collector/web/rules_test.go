@@ -132,7 +132,7 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		}
 		seen[id][v] = true
 	}
-	for _, j := range append(append(takeoverOutcomes(t), emailOutcomes(t)...), httpOutcomes(t)...) {
+	for _, j := range append(append(takeoverOutcomes(t), emailOutcomes(t)...), append(httpOutcomes(t), restrictedOutcomes(t)...)...) {
 		if seen[j.ID] == nil {
 			seen[j.ID] = map[string]bool{}
 		}

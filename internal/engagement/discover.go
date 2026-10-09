@@ -71,7 +71,9 @@ type ScopeDomain struct {
 
 // ScopeName is one name under a domain root and what resolving it found.
 type ScopeName struct {
-	Name string `json:"name"`
+	Vantage     string    `json:"vantage"`
+	CollectedAt time.Time `json:"collected_at"`
+	Name        string    `json:"name"`
 	// From says where it came from: root, declared or certificate
 	// transparency.
 	From []string `json:"from"`
@@ -200,7 +202,7 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 	if ctl.Lookup.Outcome == gate.OutcomeAddresses {
 		sd.Wildcard = addrStrings(ctl.Lookup.Addrs)
 	}
-	sn := ScopeName{Name: ctl.Lookup.Name, RequestID: ctl.RequestID, Outcome: string(ctl.Lookup.Outcome),
+	sn := ScopeName{Vantage: ctl.Vantage, CollectedAt: ctl.CollectedAt, Name: ctl.Lookup.Name, RequestID: ctl.RequestID, Outcome: string(ctl.Lookup.Outcome),
 		Chain: ctl.Lookup.Chain, Addresses: addrStrings(ctl.Lookup.Addrs), FinalInRoot: ctl.Lookup.FinalInRoot}
 	switch ctl.Decision {
 	case gate.DecisionSent:
@@ -344,6 +346,7 @@ func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list 
 		resolved++
 		l := r.Lookup
 		sn.Chain, sn.Addresses = l.Chain, addrStrings(l.Addrs)
+		sn.CollectedAt, sn.Vantage = r.CollectedAt, r.Vantage
 		sn.Outcome, sn.FinalInRoot, sn.RequestID = string(l.Outcome), l.FinalInRoot, r.RequestID
 		d.classify(&sn, l, c.declared, wildcard, rewrites, points)
 		if sn.Status == NameResolves {

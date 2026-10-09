@@ -38,7 +38,9 @@ const (
 // Response is what the gate hands back: the status, the kept headers and
 // the body, all redacted, the body cut at the op's cap.
 type Response struct {
-	Status int
+	Status  int
+	Vantage string
+	Records *RecordSet `json:",omitempty"`
 	// FirstParty records the live scope admission, after address checks.
 	FirstParty  bool
 	CollectedAt time.Time
@@ -266,6 +268,7 @@ func (s *sending) finish(resp *Response, rt *retry) (Result, *retry) {
 		resp.DestIP = e.DestIP
 		resp.FirstParty = s.a.firstParty
 		resp.CollectedAt = s.g.now()
+		resp.Vantage = s.g.vantage
 		s.res.Response = resp
 		e.Status, e.Stored, e.Truncated = resp.Status, len(resp.Body), resp.Truncated
 		e.Redactions = len(resp.Redactions)

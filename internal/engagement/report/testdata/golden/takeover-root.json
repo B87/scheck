@@ -368,6 +368,15 @@
       "sub_items": [
         {
           "asset": "domain:example.com",
+          "mark": "not_applicable",
+          "name": "restricted URL reachability",
+          "reasons": [],
+          "rules": [
+            "web.restricted_reachable"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
           "judged": [
             "records pointing at names that do not exist"
           ],

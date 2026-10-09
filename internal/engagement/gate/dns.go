@@ -443,7 +443,7 @@ func (g *Gate) query(ctx context.Context, e Entry, name string, t dnsType) (dnsM
 	if err := g.record(d); err != nil {
 		return dnsMsg{}, OutcomeAuditFailed
 	}
-	g.countDNS()
+	g.countDNS(name)
 	var idb [2]byte
 	_, _ = rand.Read(idb[:])
 	id := binary.BigEndian.Uint16(idb[:])
@@ -695,7 +695,9 @@ const DecisionSent = "sent"
 
 // Resolved is a lookup's admission and what it found.
 type Resolved struct {
-	RequestID string
+	Vantage     string
+	CollectedAt time.Time
+	RequestID   string
 	// Decision is sent or refused:<rule>, as the audit line has it.
 	Decision string
 	Detail   string
@@ -753,7 +755,7 @@ func (g *Gate) Resolve(ctx context.Context, r Resolve) Resolved {
 		g.countControl(invalid)
 	}
 	l := g.redactLookup(g.lookup(ctx, e, name))
-	return Resolved{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Lookup: l}
+	return Resolved{Vantage: g.vantage, CollectedAt: g.now(), RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Lookup: l}
 }
 
 // redactLookup is a lookup as it leaves the gate: redact_extra may name an
@@ -799,7 +801,9 @@ type MX struct {
 // the chain and MX and NS targets, are redacted as a lookup's are, and each
 // TXT record is redacted as rules read it (joinTXT).
 type RecordSet struct {
-	RequestID string
+	Vantage     string
+	CollectedAt time.Time
+	RequestID   string
 	// Decision is sent or refused:<rule>, unavailable:no_resolver when
 	// there is no nameserver to ask.
 	Decision   string
@@ -836,6 +840,7 @@ type Target struct {
 // follow may look up, each once.
 type pointed struct {
 	asset string
+	input string
 	// eval is the SPF evaluation the answer belongs to: the request id of
 	// the TXT read that began it.
 	eval     string
@@ -852,7 +857,7 @@ const maxSPFLookups = 10
 // Insufficient reports a read that says nothing about the name's records.
 func (r RecordSet) Insufficient() bool {
 	switch r.Outcome {
-	case OutcomeRecords, OutcomeNXDomain, OutcomeNoData:
+	case OutcomeRecords, OutcomeAddresses, OutcomeNXDomain, OutcomeNoData:
 		return false
 	}
 	return true
@@ -905,7 +910,7 @@ func (g *Gate) ReadRecords(ctx context.Context, r Records) RecordSet {
 	if t == typeTXT && !strings.HasPrefix(name, "_") && !strings.Contains(name, "._domainkey.") {
 		eval = r.Asset + " " + name
 	}
-	return g.readRecords(ctx, e, name, t, eval)
+	return g.readRecords(ctx, e, name, t, eval, g.dnsInput(name))
 }
 
 // readRecords reads name's records of type t and keeps what the answer
@@ -914,9 +919,15 @@ func (g *Gate) ReadRecords(ctx context.Context, r Records) RecordSet {
 // DKIM selector). A TXT answer points at the include: and redirect=
 // targets of its one v=spf1 record; with more than one, SPF is broken and
 // nothing is followed.
-func (g *Gate) readRecords(ctx context.Context, e Entry, name string, t dnsType, eval string) RecordSet {
+func (g *Gate) readRecords(ctx context.Context, e Entry, name string, t dnsType, eval, input string) RecordSet {
+	key := g.dnsIdentity(e, name, t.String(), input)
+	if out, ok := g.priorDNS(e, key); ok {
+		g.installPoints(e, &out, eval, input)
+		g.keepDNS(key, out)
+		return out
+	}
 	l, records := g.chase(ctx, e, name, OutcomeRecords, t)
-	out := RecordSet{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
+	out := RecordSet{Vantage: g.vantage, CollectedAt: g.now(), RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
 		FinalInRoot: g.scope.Subject(e.Asset, "domain:"+l.Final()).Root != ""}
 	spf := 0
 	for _, rr := range records {
@@ -924,7 +935,7 @@ func (g *Gate) readRecords(ctx context.Context, e Entry, name string, t dnsType,
 			spf++
 		}
 	}
-	p := &pointed{asset: e.Asset, eval: eval, followed: map[int]bool{}}
+	p := &pointed{asset: e.Asset, eval: eval, input: input, followed: map[int]bool{}}
 	point := func(name, via string) {
 		p.names, p.via = append(p.names, name), append(p.via, via)
 		out.Targets = append(out.Targets, Target{Name: g.redact(name), Via: via})
@@ -959,10 +970,19 @@ func (g *Gate) readRecords(ctx context.Context, e Entry, name string, t dnsType,
 		}
 	}
 	out.Chain = g.redactLookup(l).Chain
+	g.observe(e.RequestID, out.CollectedAt, out.Vantage)
 	if len(p.names) > 0 {
 		g.mu.Lock()
 		g.pointed[e.RequestID] = p
 		g.mu.Unlock()
+	}
+	// Reuse only fully unmarked captures: projection must not erase a
+	// marker that would have made the original evidence uncertain.
+	canKeep := g.dnsReusable(out)
+	if canKeep {
+		stored := out
+		stored.TXT = projectTXT(name, out.TXT)
+		g.keepDNS(key, stored)
 	}
 	return out
 }
@@ -1066,9 +1086,16 @@ func (g *Gate) FollowTarget(ctx context.Context, f Follow) RecordSet {
 		return refuse("unavailable:no_resolver", "no nameserver in /etc/resolv.conf")
 	}
 	if via == "include" || via == "redirect" {
-		return g.readRecords(ctx, e, name, typeTXT, p.eval)
+		return g.readRecords(ctx, e, name, typeTXT, p.eval, p.input)
+	}
+	key := g.dnsIdentity(e, name, via, p.input)
+	if out, ok := g.priorDNS(e, key); ok {
+		g.keepDNS(key, out)
+		return out
 	}
 	l := g.redactLookup(g.lookup(ctx, e, name))
-	return RecordSet{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
+	out := RecordSet{Vantage: g.vantage, CollectedAt: g.now(), RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
 		Chain: l.Chain, Addrs: l.Addrs, FinalInRoot: l.FinalInRoot}
+	g.keepDNS(key, out)
+	return out
 }

@@ -14,6 +14,11 @@ type SiteNote struct{ Source, Detail string }
 func SiteNotes(in Input) []SiteNote {
 	notes := []SiteNote{{Source: in.Asset, Detail: "One TLS negotiation per connection was observed; other versions, ciphers and revocation were not tested. Entry points only: no authenticated login flow or loaded scripts were read"},
 		{Source: in.Asset, Detail: "Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked"}}
+	for _, j := range Judge(in) {
+		if j.ID == "web.restricted_reachable" && j.Verdict == Disproved {
+			notes = append(notes, SiteNote{j.Subject.Key, j.Excerpt})
+		}
+	}
 	unjudged := 0
 	for _, s := range in.Evidence.Sites {
 		eligible := s.Declared
