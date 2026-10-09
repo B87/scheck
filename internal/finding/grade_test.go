@@ -40,7 +40,7 @@ func TestSeverityTable(t *testing.T) {
 		{"internet escalates remote-access", IDPasswordAuthEnabled, &operator.Structured{Exposure: "internet"}, nil, SevHigh, []string{"exposure:internet from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"internet escalates network", IDAppFirewallDisabled, &operator.Structured{Exposure: "internet"}, nil, SevHigh, []string{"exposure:internet from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"internet leaves disk alone", IDFileVaultOff, &operator.Structured{Exposure: "internet"}, nil, SevHigh, nil, StatusOpen},
-		{"critical stays critical", IDEmptyPassword, &operator.Structured{Exposure: "internet"}, nil, SevCritical, nil, StatusOpen},
+		{"internet leaves accounts alone", IDEmptyPassword, &operator.Structured{Exposure: "internet"}, nil, SevHigh, nil, StatusOpen},
 		{"dev de-escalates everything", IDFileVaultOff, &operator.Structured{Environment: "dev"}, nil, SevMedium, []string{"environment:dev from scheck.yaml#context.environment"}, StatusOpen},
 		{"airgapped de-escalates remote-access two", IDRootLoginEnabled, &operator.Structured{Exposure: "airgapped"}, nil, SevLow, []string{"exposure:airgapped from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"airgapped leaves network alone", IDAppFirewallDisabled, &operator.Structured{Exposure: "airgapped"}, nil, SevMedium, nil, StatusOpen},
@@ -183,5 +183,16 @@ func TestRuleAndModelFindingGradeAlike(t *testing.T) {
 	gm, _ := g.Grade(model)
 	if gr.Severity != gm.Severity || len(gr.Adjustments) != len(gm.Adjustments) || gr.Adjustments[0] != gm.Adjustments[0] {
 		t.Errorf("rule %+v vs model %+v", gr, gm)
+	}
+}
+
+// No host finding has a critical base since E5a, so the cap is tested on a
+// remote-access finding given one: internet exposure cannot raise it further.
+func TestCriticalStaysCritical(t *testing.T) {
+	g := Grader{Context: &operator.Structured{Exposure: "internet"}, Origins: map[string]string{"exposure": "hosts/gw.yaml"}, Now: now}
+	f := base(IDRootLoginEnabled)
+	f.SeverityBase, f.Severity = SevCritical, SevCritical
+	if got, steps := g.Grade(f); got.Severity != SevCritical {
+		t.Fatalf("severity %s, want critical; steps %+v", got.Severity, steps)
 	}
 }

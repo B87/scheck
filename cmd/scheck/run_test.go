@@ -186,7 +186,7 @@ exclude:
   - url: https://shop.example.com/checkout/
   - {saas: google-workspace:example.com, org_unit: "/Bo\e[31mard"}
 people:
-  alice: {kind: employee, workspace: alice@example.com}
+  alice: {kind: employee, workspace: [alice@example.com]}
 assets:
   blog:
     domain: blog.example.com

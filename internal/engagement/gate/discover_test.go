@@ -48,7 +48,7 @@ var discoveryStart = time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
 func discover(t *testing.T, h *gate.Harness, file string) (*engagement.ScopeDoc, string) {
 	t.Helper()
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestDiscoveryEgress(t *testing.T) {
 	h.CrtSh(crtBody)
 	h.DNS(map[string]string{"example.com": "addrs:198.51.100.1", "www.example.com": "addrs:198.51.100.2"})
 	res, err := engagement.Parse("e.yaml", []byte(discoveryFile), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestDiscoveryMovedConfirmation(t *testing.T) {
     domain: cdn.example.com
     first_party: {confirmed_by: alice, date: 2026-10-01, target: old-edge.cdnprovider.example}
 people:
-  alice: {kind: employee, workspace: alice@example.com}
+  alice: {kind: employee, workspace: [alice@example.com]}
 `
 	doc, _ := discover(t, h, file)
 	cdn := byName(doc)["cdn.example.com"]
@@ -353,7 +353,7 @@ exclude:
 	}
 
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestDiscoveryRedactsAnswerNames(t *testing.T) {
 	h.CrtSh(crtBody)
 	h.DNS(zone)
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestDiscoveryVerdictsOnRedactedNames(t *testing.T) {
     domain: cdn.example.com
     first_party: {confirmed_by: alice, date: 2026-10-01, target: ` + word + `-edge.cdnprovider.example}
 people:
-  alice: {kind: employee, workspace: alice@example.com}
+  alice: {kind: employee, workspace: [alice@example.com]}
 redact_extra: [` + word + `]
 `
 	doc, dir := discover(t, h, file)
@@ -573,7 +573,7 @@ func TestRunPassesWindows(t *testing.T) {
     - {from: 2026-10-08T09:00:00Z, to: 2026-10-08T10:00:00Z}
 `
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +610,7 @@ func scopeRun(t *testing.T, h *gate.Harness, path, dir string) *engagement.Scope
 // scopeRunAt is scopeRun with a resumed session starting at session.
 func scopeRunAt(t *testing.T, h *gate.Harness, path, dir string, session time.Time) *engagement.ScopeDoc {
 	t.Helper()
-	opts := engagement.Options{KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }}
+	opts := engagement.Options{KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }}
 	ro := engagement.RunOptions{StopAfter: "scope", Started: discoveryStart, Version: "v0.0.2", NewGate: h.NewGate}
 	var res *engagement.Resolved
 	if _, err := os.Stat(filepath.Join(dir, "run.json")); err == nil {
@@ -732,7 +732,7 @@ func TestReconReadsADomainRoot(t *testing.T) {
 	file := discoveryFile + "mail:\n  senders:\n    - {domain: example.com, service: google-workspace, dkim_selectors: [Google]}\n" +
 		"redact_extra: [" + word + "]\n"
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}

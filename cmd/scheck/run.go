@@ -48,7 +48,12 @@ var engagementOptions = engagement.Options{
 	KnownCheck: func(id string) bool {
 		return slices.ContainsFunc(check.All(), func(c check.Check) bool { return c.ID == id })
 	},
-	KnownFinding: finding.Known,
+	KnownFinding:   finding.Known,
+	FindingSubject: func(id string) string { return string(finding.SubjectOf(id)) },
+	HostFinding: func(id string) bool {
+		d, ok := finding.Lookup(id)
+		return ok && d.Area == finding.AreaHosts
+	},
 }
 
 // collectHost reaches a host asset, newGate builds the scope gate, and

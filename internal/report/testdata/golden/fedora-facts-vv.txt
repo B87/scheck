@@ -283,7 +283,7 @@ Remote access            ran      remote.sshd_enabled     2 service states: not-
                                                           (one state per unit name, in order)
   | not-found
   | enabled
-Accounts                 ran      accounts.passwd         22 accounts, 5 with a login shell
+Accounts                 ran      accounts.passwd         22 accounts, 2 with a login shell
                                                           Local accounts, shells and home
                                                           directories
   | root:x:0:0:Super User:/root:/bin/bash

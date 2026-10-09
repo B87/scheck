@@ -1,6 +1,10 @@
 package finding
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -44,6 +48,16 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 			RuleNoPredicate},
 		{"bad regexp", Rule{Finding: IDFileVaultOff, Check: "disk.fdesetup", Platform: check.MacOS,
 			When: RawMatch{Regexp: "("}}, RuleBadRegexp},
+		{"second check without a join predicate", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd",
+			Platform: check.Linux, When: FieldEquals{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate without a second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check is the first", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check not in the catalog", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "nope.invented",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate cannot read the second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.shadow_meta",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -78,6 +92,7 @@ func TestValidateRulesCatchesIncompleteDefs(t *testing.T) {
 		{"unknown area", func(d *Def) { d.Area = "network" }, RuleDefArea},
 		{"exposure undeclared", func(d *Def) { d.Exposure = exposureUndeclared }, RuleDefExposure},
 		{"judges missing", func(d *Def) { d.Judges = "" }, RuleDefJudges},
+		{"unknown subject kind", func(d *Def) { d.Subject = "listener" }, RuleDefSubject},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,5 +139,38 @@ func TestEveryDefIsComplete(t *testing.T) {
 		if !reachable[d.ID] {
 			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)
 		}
+	}
+}
+
+// The subject kinds a definition may declare are the engagement report
+// schema's enum, so a finding can never carry a kind the report rejects.
+func TestSubjectKindsMatchTheReportSchema(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "engagement-report-schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Defs struct {
+			Subject struct {
+				Properties struct {
+					Kind struct {
+						Enum []string `json:"enum"`
+					} `json:"kind"`
+				} `json:"properties"`
+			} `json:"subject"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := doc.Defs.Subject.Properties.Kind.Enum
+	got := make([]string, len(SubjectKinds))
+	for i, k := range SubjectKinds {
+		got[i] = string(k)
+	}
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("SubjectKinds %v, schema enum %v", got, want)
 	}
 }

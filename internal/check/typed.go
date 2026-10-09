@@ -209,7 +209,14 @@ func parseAccounts(lines []string) ([]Record, int) {
 		if strings.HasPrefix(l, "#") {
 			continue
 		}
-		if f := strings.Split(l, ":"); len(f) >= 7 {
+		// A passwd line has exactly seven fields. A marker contains colons,
+		// so a line holding one would shift every field after it: such a
+		// line is unparsed, never read as an account with the wrong shell.
+		if strings.Contains(l, "[REDACTED") || strings.Contains(l, "[TRUNCATED") {
+			bad++
+			continue
+		}
+		if f := strings.Split(l, ":"); len(f) == 7 {
 			out = append(out, Record{FieldName: f[0], FieldUID: f[2], FieldHome: f[5], FieldShell: f[6]})
 			continue
 		}

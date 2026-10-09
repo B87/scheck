@@ -131,7 +131,7 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
   # A DNS record points at a name that does not exist (old.example.com)
     - id: dns.dangling_external
       asset: domain:old.example.com
-      subject: old.example.com     # omit to accept every instance on this asset
+      subject: old.example.com     # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
       expires: 2027-04-05          # after this date the finding counts again

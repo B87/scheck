@@ -81,13 +81,19 @@ type Limits struct {
 	MaxCost string `yaml:"max_cost,omitempty" json:"max_cost,omitempty"`
 }
 
-// Person is one entry of `people`, keyed by handle.
+// Person is one entry of `people`, keyed by handle: a person, or a shared,
+// service or break-glass account (docs/spec/engagement.md, "People"). A
+// person may hold several addresses and logins; every rule matches over all
+// of them.
 type Person struct {
-	Kind      string `yaml:"kind,omitempty" json:"kind,omitempty"`
-	Org       string `yaml:"org,omitempty" json:"org,omitempty"`
-	Workspace string `yaml:"workspace,omitempty" json:"workspace,omitempty"`
-	GitHub    string `yaml:"github,omitempty" json:"github,omitempty"`
-	Left      string `yaml:"left,omitempty" json:"left,omitempty"`
+	Kind      string   `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Org       string   `yaml:"org,omitempty" json:"org,omitempty"`
+	Workspace []string `yaml:"workspace,omitempty" json:"workspace,omitempty"`
+	GitHub    []string `yaml:"github,omitempty" json:"github,omitempty"`
+	// UsedBy names who signs in to a shared account, so a departure among
+	// them says to rotate its password.
+	UsedBy []string `yaml:"used_by,omitempty" json:"used_by,omitempty"`
+	Left   string   `yaml:"left,omitempty" json:"left,omitempty"`
 }
 
 // Access is who is expected to hold admin roles, and where MFA is enforced.
@@ -96,10 +102,12 @@ type Access struct {
 	MFA    []MFA               `yaml:"mfa,omitempty" json:"mfa,omitempty"`
 }
 
-// MFA is one declared enforcement.
+// MFA is one declared enforcement: who the operator believes must use a
+// second factor in that tenant, one of MFAEnforcements. `unknown` is an
+// answer, not a gap: the contradiction rule abstains on it.
 type MFA struct {
 	Where    string `yaml:"where,omitempty" json:"where,omitempty"`
-	Enforced *bool  `yaml:"enforced,omitempty" json:"enforced,omitempty"`
+	Enforced string `yaml:"enforced,omitempty" json:"enforced,omitempty"`
 }
 
 // Tool is one declared SaaS tool or provider.

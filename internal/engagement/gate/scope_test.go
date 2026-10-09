@@ -42,7 +42,8 @@ func harness(t *testing.T) (*gate.Harness, *gate.Gate) {
 func harnessOf(t *testing.T, file string) (*gate.Harness, *gate.Gate) {
 	t.Helper()
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
-		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false },
+		FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
 	if err != nil {
 		t.Fatal(err)
 	}

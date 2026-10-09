@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "host": {
     "id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
     "hostname": "mac-fixture.local",

@@ -101,6 +101,11 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		{IDWorldWritablePresent, "fs.world_writable", check.Linux,
 			"/opt/shared", "", "[TRUNCATED:900 bytes]"},
 	}
+	// withRaw is the output of a rule's With check, the same for all three
+	// fixtures, so each still turns on the first check alone.
+	withRaw := map[string]string{
+		IDEmptyPassword: "root:x:0:0:root:/root:/bin/bash\nalice:x:1000:1000::/home/alice:/bin/bash",
+	}
 	seen := map[string]bool{}
 	for _, tc := range cases {
 		seen[tc.finding+" "+tc.check] = true
@@ -114,7 +119,13 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 			{"abstains", tc.abstains, NotAssessed},
 		} {
 			t.Run(tc.finding+"/"+tc.check+"/"+step.name, func(t *testing.T) {
-				res := Evaluate(Input{Sheet: sheet(t, tc.platform, map[string]string{tc.check: step.raw})})
+				raw := map[string]string{tc.check: step.raw}
+				for _, r := range RulesFor(tc.check) {
+					if r.Finding == tc.finding && r.With != "" {
+						raw[r.With] = withRaw[tc.finding]
+					}
+				}
+				res := Evaluate(Input{Sheet: sheet(t, tc.platform, raw)})
 				a, ok := assessmentFor(res, tc.finding, tc.check)
 				if !ok {
 					t.Fatalf("no assessment for %s via %s", tc.finding, tc.check)

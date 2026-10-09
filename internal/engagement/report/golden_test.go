@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/baseline"
+	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
+	"github.com/b87/scheck/internal/runner"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden engagement reports")
@@ -194,11 +197,25 @@ func unreachableHost(t *testing.T) Input {
 
 // manyFindings has six open finding ids at medium or above, each with the
 // evidence its own rule reads: five rank, and the summary says one more does.
+// The empty password is the rule's own output over edited captures, since an
+// injected `backup NP` once showed a finding its fixture's shell disproves.
 func manyFindings(t *testing.T) Input {
 	in := oneHost(t, "ubuntu")
 	env := &in.Assets[0].Host.Envelope
+	f, a := ruleFinding(t, finding.IDEmptyPassword, map[string]string{
+		"accounts.passwd_status": "root L 2026-09-11 0 99999 7 -1\nops NP 2026-09-11 0 99999 7 -1",
+		"accounts.passwd":        "root:x:0:0:root:/root:/bin/bash\nops:x:1001:1001::/home/ops:/bin/bash",
+	})
+	env.Findings = append(env.Findings, f)
+	// Its assessment comes from the same run, so the report does not say the
+	// rule was disproved beside the finding it raised. The fact sheet still
+	// summarizes the fixture's captures, in which every account is locked.
+	for i := range env.Assessments {
+		if env.Assessments[i].Finding == finding.IDEmptyPassword {
+			env.Assessments[i] = a
+		}
+	}
 	for _, f := range []struct{ id, check, excerpt string }{
-		{finding.IDEmptyPassword, "accounts.passwd_status", "backup NP 2026-09-11"},
 		{finding.IDShadowPermissions, "accounts.shadow_meta", "-rw-r--rw-:646:root:shadow"},
 		{finding.IDRootLoginEnabled, "sshd.config", "permitrootlogin yes"},
 		{finding.IDPasswordAuthEnabled, "sshd.config", "passwordauthentication yes"},
@@ -246,4 +263,37 @@ func withContext(t *testing.T) Input {
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDUpdatesPending,
 		Asset: "macos", AssetID: "host:macos:22", Reason: "the vendor ships updates monthly", AcceptedBy: "alice"}}
 	return in
+}
+
+// ruleFinding runs the posture rules over the given captures and returns the
+// finding id they raise and its assessment, so a golden shows what a rule
+// really produces.
+func ruleFinding(t *testing.T, id string, raw map[string]string) (finding.Finding, finding.Assessment) {
+	t.Helper()
+	sheet := &baseline.FactSheet{Platform: check.Linux, Results: map[string]runner.Result{}}
+	for cid, out := range raw {
+		c, ok := check.Lookup(cid, check.Linux)
+		if !ok {
+			t.Fatalf("%s is not a Linux catalog id", cid)
+		}
+		parsed, err := check.Parse(c, []byte(out))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sheet.Results[cid] = runner.Result{CheckID: cid, Status: runner.StatusOK, Attempted: true, Raw: out,
+			Parsed: parsed, Observation: cid + "#1"}
+	}
+	res := finding.Evaluate(finding.Input{Sheet: sheet})
+	for _, f := range res.Findings {
+		if f.ID != id {
+			continue
+		}
+		for _, a := range res.Assessments {
+			if a.Finding == id {
+				return f, a
+			}
+		}
+	}
+	t.Fatalf("the rules raised no %s over %v", id, raw)
+	return finding.Finding{}, finding.Assessment{}
 }

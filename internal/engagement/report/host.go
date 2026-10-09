@@ -74,6 +74,11 @@ func (v *hostView) excused(a finding.Assessment) bool {
 // reason maps a rule that could not decide to the coverage reason list
 // (docs/spec/engagement.md, "Coverage", the host mapping table).
 func (v *hostView) reason(a finding.Assessment) ReasonDetail {
+	// A reason prefixed "with-" is the rule's second check's: coverage names
+	// that check, not the one that ran.
+	if r, ok := strings.CutPrefix(a.Reason, finding.ReasonWith); ok && a.With != "" {
+		a.Check, a.Observation, a.Reason = a.With, a.WithObservation, r
+	}
 	code, rc, _ := strings.Cut(a.Reason, ":")
 	fact := v.env.Facts[a.Check]
 	detail := a.Check
@@ -120,8 +125,13 @@ func (v *hostView) assessments() []Assessment {
 		notApplicable := 0
 		for _, as := range group {
 			ea.Reads = appendUnique(ea.Reads, "check:"+as.Check)
-			if as.Observation != "" {
-				ea.Observations = appendUnique(ea.Observations, as.Observation)
+			if as.With != "" {
+				ea.Reads = appendUnique(ea.Reads, "check:"+as.With)
+			}
+			for _, obs := range []string{as.Observation, as.WithObservation} {
+				if obs != "" {
+					ea.Observations = appendUnique(ea.Observations, obs)
+				}
 			}
 			if answered(as) && !v.whole(as) {
 				// It answered, but from part of what is there: an absence
@@ -157,13 +167,26 @@ func (v *hostView) assessments() []Assessment {
 // check, not a truncated capture, not a command whose non-zero exit was
 // tolerated (a find that could not enter some directories still answers).
 func (v *hostView) whole(as finding.Assessment) bool {
-	if c, ok := check.Lookup(as.Check, v.platform); ok && c.Sampled {
+	if !v.wholeCheck(as.Check, as.Observation) {
 		return false
 	}
-	if f, ok := v.env.Facts[as.Check]; ok && f.Truncated {
+	// A rule that joins a second check read it too (host-collector.md §6.5),
+	// when that check gave a fact: a disproof that never needed it (no
+	// account without a password) is not made partial by its failure.
+	if as.WithObservation == "" || v.env.Facts[as.With].Status != "ok" {
+		return true
+	}
+	return v.wholeCheck(as.With, as.WithObservation)
+}
+
+func (v *hostView) wholeCheck(id, observation string) bool {
+	if c, ok := check.Lookup(id, v.platform); ok && c.Sampled {
 		return false
 	}
-	if code, ok := v.exit[as.Observation]; ok && code != 0 {
+	if f, ok := v.env.Facts[id]; ok && f.Truncated {
+		return false
+	}
+	if code, ok := v.exit[observation]; ok && code != 0 {
 		return false
 	}
 	return true
@@ -228,6 +251,9 @@ func (v *hostView) domains() []SubItem {
 		judged := map[string]bool{}
 		for _, as := range dm.rules {
 			judged[as.Check] = true
+			if as.With != "" {
+				judged[as.With] = true
+			}
 		}
 		var notJudged []string
 		for _, id := range sortedKeys(dm.read) {
@@ -329,6 +355,9 @@ func (b *builder) hostFindings(v *hostView) []Finding {
 		}
 		for _, as := range v.byID[f.ID] {
 			ef.Rule.Reads = appendUnique(ef.Rule.Reads, "check:"+as.Check)
+			if as.With != "" {
+				ef.Rule.Reads = appendUnique(ef.Rule.Reads, "check:"+as.With)
+			}
 		}
 		for _, e := range f.Evidence {
 			if e.Check != "context" {

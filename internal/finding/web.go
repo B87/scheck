@@ -16,7 +16,7 @@ const CategoryDNS = "dns"
 var webDefs = []Def{
 	{
 		ID: IDDNSDanglingExternal, Title: "A DNS record points at a name that does not exist",
-		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Judges: "records pointing at names that do not exist",
+		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "records pointing at names that do not exist",
 		BaseSeverity: SevMedium,
 		Impact: "The record sends visitors, or mail, to a name outside your domains that nobody serves. If someone " +
 			"registers that name or claims it at its provider, they receive what was meant for you.",
@@ -24,7 +24,7 @@ var webDefs = []Def{
 	},
 	{
 		ID: IDDNSDanglingInternal, Title: "A DNS record points at a name under your own domain that does not exist",
-		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Judges: "records pointing at names that do not exist",
+		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "records pointing at names that do not exist",
 		BaseSeverity: SevInfo,
 		Impact: "The record leads nowhere. Only you can create the name it points at, so nobody else can take it, " +
 			"but it is a leftover that can confuse the next change.",
@@ -32,7 +32,7 @@ var webDefs = []Def{
 	},
 	{
 		ID: IDDNSPrivateAddress, Title: "A public name publishes a private address",
-		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Judges: "public names publishing private addresses",
+		Category: CategoryDNS, Area: AreaExternal, Exposure: NotExposure, Subject: "dns_name", Judges: "public names publishing private addresses",
 		BaseSeverity: SevInfo,
 		Impact:       "Anyone can read the record, so it tells an outsider part of how your internal network is addressed.",
 		Remediation:  Remediation{Summary: "Serve internal names from internal DNS only, or remove the record if it is no longer used."},

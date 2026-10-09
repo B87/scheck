@@ -235,7 +235,7 @@ counts are then "at least", and `audit.jsonl` in the run directory lists every r
 `engagement.edited_by_hand` names files changed since scheck wrote them that this report
 used as written; say so before anything that rests on them.
 
-A host's `envelope` follows `docs/report-schema.json` (schema `1.6`): `host`, `run`,
+A host's `envelope` follows `docs/report-schema.json` (schema `1.7`): `host`, `run`,
 `facts`, `observations`, `assessments`, `findings`. Its findings are the host
 collector's grading; the engagement's `findings` are authoritative where they differ.
 `run.assessment` is now at `assets[i].envelope.run.assessment`.

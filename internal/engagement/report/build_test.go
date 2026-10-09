@@ -706,3 +706,28 @@ func TestIncludeEvidenceSkipsAKeptHost(t *testing.T) {
 		}
 	}
 }
+
+// When a rule could not decide because its second check was disabled, the
+// coverage reason and detail name that check, not the one that ran
+// (docs/spec/host-collector.md §6.5).
+func TestReasonNamesTheSecondCheck(t *testing.T) {
+	in := oneHost(t, "ubuntu")
+	env := &in.Assets[0].Host.Envelope
+	for i, a := range env.Assessments {
+		if a.Finding == finding.IDEmptyPassword {
+			env.Assessments[i].Status, env.Assessments[i].Reason = finding.NotAssessed, finding.ReasonWith+"check-disabled-by-config"
+		}
+	}
+	v := newHostView(in.Assets[0])
+	for _, a := range v.byID[finding.IDEmptyPassword] {
+		got := v.reason(a)
+		if got.Reason != "excluded_by_operator" || got.Detail != "accounts.passwd: disable_checks" {
+			t.Fatalf("reason %+v, want excluded_by_operator on accounts.passwd", got)
+		}
+	}
+	for _, ea := range v.assessments() {
+		if ea.ID == finding.IDEmptyPassword && !slices.Contains(ea.Reads, "check:accounts.passwd") {
+			t.Fatalf("reads %v lack the second check", ea.Reads)
+		}
+	}
+}

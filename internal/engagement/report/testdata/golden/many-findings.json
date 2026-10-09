@@ -5,14 +5,16 @@
       "asset": "host:ubuntu:22",
       "complete": true,
       "id": "accounts.empty_password",
-      "instances": 0,
+      "instances": 1,
       "observations": [
-        "accounts.passwd_status#1"
+        "accounts.passwd_status#1",
+        "accounts.passwd#1"
       ],
       "reads": [
-        "check:accounts.passwd_status"
+        "check:accounts.passwd_status",
+        "check:accounts.passwd"
       ],
-      "status": "not_matched"
+      "status": "matched"
     },
     {
       "asset": "host:ubuntu:22",
@@ -142,7 +144,7 @@
       "collector": "host",
       "envelope": {
         "elided": "pinned by internal/report goldens",
-        "schema_version": "1.6"
+        "schema_version": "1.7"
       },
       "id": "host:ubuntu:22",
       "kind": "host",
@@ -353,7 +355,7 @@
         {
           "asset": "host:ubuntu:22",
           "judged": [
-            "accounts with no password",
+            "accounts with no password and a login shell",
             "the mode of /etc/shadow"
           ],
           "mark": "assessed",
@@ -363,9 +365,6 @@
             "kind": "rules",
             "read": 2
           },
-          "read_not_judged": [
-            "22 accounts, 4 with a login shell"
-          ],
           "reasons": [],
           "rules": [
             "accounts.empty_password",
@@ -583,15 +582,24 @@
           "asset": "host:ubuntu:22",
           "check": "accounts.passwd_status",
           "collected_at": "2026-10-07T07:12:03Z",
-          "excerpt": "backup NP 2026-09-11",
+          "excerpt": "name=ops status=NP",
           "kind": "observed",
           "observation": "accounts.passwd_status#1",
           "principal": "deploy (sudo -n)"
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "check": "accounts.passwd",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "name=ops uid=1001 shell=/bin/bash",
+          "kind": "observed",
+          "observation": "accounts.passwd#1",
+          "principal": "deploy"
         }
       ],
       "exposure_finding": false,
       "id": "accounts.empty_password",
-      "impact": "The account authenticates with no credential wherever password authentication is accepted. Whether that includes remote logins depends on this host's PAM and sshd configuration.",
+      "impact": "The account has an empty password field and a shell that lets someone log in. Most Linux distributions accept an empty password for local logins by default (su, the console, a provider's serial console), so anyone or anything already running on this host can become this account without a credential, and become root if the account is root. scheck did not check whether sshd or another network service accepts empty passwords; if one does, the account can be logged into remotely.",
       "key": {
         "asset": "host:ubuntu:22",
         "id": "accounts.empty_password",
@@ -599,26 +607,34 @@
       },
       "not_checked": [],
       "remediation": {
-        "caveat": "Locking an account a service depends on will break that service; find out what the account is for before changing it.",
+        "caveat": "Find out what the account is for before you change it. Locking stops password logins only; with UsePAM no in sshd it also blocks SSH key logins for that account.",
         "commands": [
-          "# inspect first:",
+          "# who is it, and does anyone use it?",
           "sudo passwd -S \u003caccount\u003e",
-          "# then either lock it:",
-          "sudo passwd -l \u003caccount\u003e"
+          "last \u003caccount\u003e | head",
+          "# nobody logs in with a password: lock it",
+          "sudo passwd -l \u003caccount\u003e",
+          "# a service account that should never log in: also",
+          "sudo usermod -s /usr/sbin/nologin \u003caccount\u003e",
+          "# a person who needs it: set one",
+          "sudo passwd \u003caccount\u003e",
+          "# confirm sshd refuses empty passwords (expect \"permitemptypasswords no\")",
+          "sudo sshd -T | grep -i permitemptypasswords"
         ],
-        "summary": "Give the account a password or lock it, depending on what it is for."
+        "summary": "Lock the account, or set a password if a person really logs in with one."
       },
       "rule": {
         "kind": "single_fact",
         "reads": [
-          "check:accounts.passwd_status"
+          "check:accounts.passwd_status",
+          "check:accounts.passwd"
         ]
       },
-      "severity": "critical",
-      "severity_base": "critical",
+      "severity": "high",
+      "severity_base": "high",
       "status": "open",
       "subject": null,
-      "title": "A local account has no password set",
+      "title": "A local account with a login shell has no password",
       "why_here": []
     },
     {
@@ -967,11 +983,11 @@
         "person": null,
         "rank": 1,
         "rank_basis": [
-          "severity:critical",
+          "severity:high",
           "area:hosts"
         ],
-        "severity": "critical",
-        "title": "A local account has no password set"
+        "severity": "high",
+        "title": "A local account with a login shell has no password"
       },
       {
         "assets": [

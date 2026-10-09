@@ -76,11 +76,11 @@ exists, and the release gate proves they all do. A consumer is never stubbed to 
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
 | Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: an MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; neither makes it judged as a domain that sends no mail; and the report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
 | Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
-| People | Who are the admins, contractors and agencies, and the service and break-glass accounts, with their Workspace address and GitHub login? Everyone else can be filled in from the stanza `--stop-after recon` prints. | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply |
+| People | Who are the admins and contractors, and the shared, service and break-glass accounts, with every Workspace address and GitHub login each uses? Everyone else is named from the stanza `--stop-after recon` prints, one account at a time ("People" below). | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply; a contractor holding an admin role is a finding whether listed or not; a shared account names who uses it, so a leaver among them says to rotate it |
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
-| Access | Who is expected to be an admin or owner in each tenant? | An admin or owner not listed is a finding; a listed person who is not one is a note for the readout, not a finding; an admin or owner who cannot be tied to a named person is a finding |
+| Access | Who is expected to be a super admin (Workspace) or an owner (GitHub) in each tenant? | A super admin or owner not listed is a finding; a listed person who is not one is a note for the readout, not a finding; one who cannot be tied to a named person is a finding. Too many of them is a finding whatever is listed ("Admins") |
 | Access | Which repositories deploy to production, and from which CI? | `deploys_to: production` raises branch protection, workflow token, deploy key and `pull_request_target` findings on those repositories; from 0.0.3 G4 links them to the cloud project |
-| Access | Is MFA enforced, and where? | Compared with the enforcement the tenants report; a declared enforcement the API disproves is a contradiction finding |
+| Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
 | Secrets | Where do production secrets live? | The Secrets coverage row cites each declared store and whether scheck read it |
 | Data | What data matters most, and on which asset? | Severity adjustment on that asset ("Severity in context" below), attributed |
 | Data | Where are the backups, in which account? | The data stores and backups coverage row prints the location as *declared, not verified* and stays *not assessed* until the cloud collector can compare it with inventory (0.0.3) |
@@ -146,19 +146,20 @@ redact_extra:                         # client strings to hide, RE2; added to th
   - "project-tangerine"               # the report counts matches and never prints a pattern
 
 people:                               # handles; every other key names people by handle
-  alice:      {kind: employee, workspace: alice@example.com, github: alice-ex}
-  bob:        {kind: contractor, org: "Acme Dev", github: bob-acme}
-  carol:      {kind: employee, workspace: carol@example.com, github: carol-codes, left: 2026-09-15}
-  deploy-bot: {kind: service, github: example-deploy-bot}
-  breakglass: {kind: break_glass, workspace: breakglass@example.com}
+  alice:      {kind: employee, workspace: [alice@example.com], github: [alice-ex]}
+  bob:        {kind: contractor, org: "Acme Dev", github: [bob-acme]}
+  carol:      {kind: employee, workspace: [carol@example.com], github: [carol-codes, carol-work], left: 2026-09-15}
+  ops-admin:  {kind: shared, workspace: [ops@example.com], used_by: [alice, carol]}
+  deploy-bot: {kind: service, github: [example-deploy-bot]}
+  breakglass: {kind: break_glass, workspace: [breakglass@example.com]}
 
 access:
-  admins:                             # per tenant root: who is expected to be an admin or owner
+  admins:                             # per tenant: the super admins (Workspace) and owners (GitHub) you expect
     google-workspace:example.com: [alice, breakglass]
     github:example-org: [alice]
-  mfa:
-    - {where: google-workspace:example.com, enforced: true}
-    - {where: github:example-org, enforced: true}
+  mfa:                                # who must use 2-step verification: everyone | admins | some | none | unknown
+    - {where: google-workspace:example.com, enforced: everyone}
+    - {where: github:example-org, enforced: everyone}
 
 tools:                                # a tool without a collector is a coverage row naming it
   - {category: identity, name: google-workspace}
@@ -192,8 +193,8 @@ intent:
     - {url: https://shop.example.com/admin, audience: vpn}
   accepted_risks:                     # pasted from a report, at the readout
     - id: sshd.password_auth_enabled
-      asset: deploy                   # subject: the instance key (a login, a repository, port/proto);
-                                      # omitted, every instance of the id on the asset is accepted
+      asset: deploy                   # subject: the instance key (a login, a DNS name, port/proto), required
+                                      # when the finding declares one; a host finding has none in 0.0.2
       reason: "break-glass path; MFA at the bastion"
       accepted_by: alice
       expires: 2026-12-31
@@ -283,29 +284,67 @@ or validation exits 3. Scope has one source, `roots`, narrowed by `exclude`. A s
 entry points are its `url` root or entry and every `intent.*.url` on it; there is no
 other list of URLs. Intent URLs are entry points but never first-party evidence.
 
-**People.** `people` is a map from a handle to a person's identifiers and kind
-(`employee`, `contractor`, `agency`, `service`, `break_glass`); `org` names a
-contractor's or agency's company. Every other key that names a person uses the handle,
-except `authorization.by`, which is free text because the person authorizing may not be
-in `people`. Rules match:
+**People.** `people` is a map from a handle to an account holder's kind and identifiers.
+Every other key that names a person uses the handle, except `authorization.by`, which is
+free text because the person authorizing may not be in `people`. Built in E5a: the
+schema and its validation; the rules below arrive with E5 (GitHub) and E6 (Workspace).
 
-- in Workspace, by `primaryEmail` only. An address that resolves as an alias of another
-  user is reported separately ("mail to carol@ reaches bob"), never as the person being
-  active;
+| Kind | Who | Exempt from | Counted for the admin threshold |
+|---|---|---|---|
+| `employee` | a person on the payroll | nothing | yes |
+| `contractor` | a person working for another company, named in `org` | nothing; holding super admin or owner is a finding (`identity.external_admin`, medium) whether or not `access.admins` lists them | yes |
+| `shared` | one account several people sign in to (`ops@`); `used_by` names them, `org` the company behind it if any | nothing | yes, as one |
+| `service` | an account automation signs in as | the stale and never-signed-in rules only | no |
+| `break_glass` | an emergency admin account nobody uses day to day | the stale and never-signed-in rules only | no, for at most two per tenant; any beyond two count as admins, with a readout note |
+
+`workspace` and `github` are lists: a person may hold a work and a personal login in
+the organization, or addresses in more than one tenant, and every rule matches over all
+of them. `left` is the date after which no access is expected; on a `service` account
+it means retired, and a retired account still active is a finding like a person's. No
+kind is exempt from the 2-step verification, admin or OAuth rules: a break-glass super
+admin without 2-step verification is reported like any admin (hardware keys are the
+answer to "it must survive a lost phone"), and the operator may accept it by subject.
+A shared account holding an admin role is a finding (`identity.shared_admin`, medium):
+nobody's actions on it can be told apart. When a handle in its `used_by` has a `left`
+date that has passed, the readout says to rotate its password and second factor,
+naming who left; rotation is not observable, so that is a note, not a finding.
+
+Rules match:
+
+- in Workspace, by `primaryEmail`. A declared address that matches no primary address
+  but is an alias of exactly one user is that user's, with `matched_by: alias`, printed
+  in coverage ("alice → alice.smith@example.com, by alias") and a readout note to write
+  the primary address; without it, a typo-level declaration would file a false
+  "admin tied to no person". For a person whose `left` date has passed, the same match
+  on an *active* user makes the Workspace side of the left-person rule *insufficient
+  evidence*, never disproved, with a note ("carol@ now delivers to archive-carol@, an
+  active account: if that is carol's account renamed, she still has access; if it is
+  someone else's, mail and password resets meant for carol reach them"). An alias of a
+  suspended user is correct offboarding. A declared address that is a group's is a
+  note to list its members instead;
 - in GitHub, by login only. GitHub returns a member's email only on Enterprise Cloud to
-  an owner's token, so there is no email path. A person with no `github` login gives
-  *insufficient evidence* on the GitHub side, never "not found, so fine";
+  an owner's token, so there is no email path, and a Workspace account is never merged
+  with a GitHub login by guess. A person with no `github` login gives *insufficient
+  evidence* on the GitHub side, never "not found, so fine";
 - in GitHub, over members, outside collaborators and pending invitations, not members
   alone.
 
+Each matched account's provider id is recorded beside its key, in the run's
+`recon.json` (`{tenant, key, provider_id, handle, matched_by}`) and in each finding's
+`subject.provider_id`, so a rename between two runs is followed by id when runs are
+compared (0.0.3 G6). It is never written into the engagement file. An account renamed
+with its old address removed cannot be found by address, which the left-person rule
+lists under what it did not check.
+
 An admin or owner nobody can tie to a person is a finding; unattributed plain members
-are a count in coverage. Nothing is filed because something was not declared: the admin
-rule runs for a tenant only when `access.admins` names it, and the unattributed-admin
-rule only when `people` holds at least one identifier for that tenant. Otherwise both
-are *insufficient evidence*. `--stop-after recon` prints the unattributed owners, admins and
-members as a `people` stanza to fill in. `service` and `break_glass` accounts are
-exempt from the stale and never-logged-in rules and counted apart from human admins;
-the report lists them.
+are a count in coverage. Nothing is filed because something was not declared: the
+unexpected-admin rule runs for a tenant only when `access.admins` names it, and the
+unattributed-admin rule only when `people` holds at least one identifier for that
+tenant. Otherwise both are *insufficient evidence*. The report lists the service and
+break-glass accounts. A declared break-glass account that is not a super admin, or
+that signed in within the last 90 days, gets a readout note ("a break-glass account
+that cannot administer the tenant cannot recover it"; "confirm the sign-in was an
+exercise").
 
 Three traps the people rules must not fall into, each tested in the rule's fixtures: a
 `left` date that has not yet passed in `engagement.timezone` (a person serving notice)
@@ -314,10 +353,109 @@ offboarding, never "still active"; and an account created recently that has neve
 signed in is a new hire, not a stale account, so the never-signed-in rule reads the
 creation date.
 
+**Admins.** `access.admins` lists, per tenant, the **super admins** (Workspace users
+with `isAdmin`) and **owners** (GitHub organization members with role `admin`) the
+operator expects. Those are what it is compared with and what the threshold counts.
+Holders of delegated roles that can reset passwords, change users' sign-in or recovery
+details, change security settings, move users between organizational units, manage
+domains, control app access or administer groups (Workspace's User Management, Help
+Desk and Groups roles and custom roles with those privileges), and GitHub organization
+roles granting admin over every repository or settings, or repository admin on a
+`deploys_to: production` repository, are listed by name in the readout, not compared
+with `access.admins`. They count as admins for the unattributed-admin rule and for
+`attribute:admin` on a person who left, since an unknown person who can reset passwords
+is as dangerous as an unknown super admin. The exact privilege and role names are
+frozen at the start of E5 and E6 against what the APIs return. When a person's `left`
+date has passed, their admin role is reported by the left-person rule with
+`attribute:admin`, and the unexpected-admin rule does not file it again.
+
+Too many admins is a finding whatever `access.admins` lists
+(`workspace.too_many_super_admins`, `github.too_many_owners`, medium, no subject: the
+admins are its `affected` list). The count is the admins less `service` accounts and
+less up to two `break_glass` accounts; shared and unattributed accounts count. It fires
+when the count is above 3, or when it is at least 3 and above a third of the tenant's
+active humans (Workspace: active users not declared `service` or `break_glass`;
+GitHub: members, not outside collaborators, not declared `service`). Pending invitations
+with the owner role are shown beside the count, not in it. Two is never too many: it is the
+providers' own advice, so a tenant is never told to go below it. It is disproved on
+complete admin and user populations; on a partial one it may fire on the first clause,
+as "at least N", and never computes the ratio.
+
+**2-step verification.** `access.mfa[].enforced` says who the operator believes must
+use a second factor in that tenant. It is the operator's belief, so `unknown` is an
+answer, and true or false is refused as ambiguous.
+
+| Value | Claims | Raises as `contradiction` |
+|---|---|---|
+| `everyone` | every active account must, service and break-glass included | every instance of the not-enforced finding; on GitHub, the organization's requirement switched off even when every member has 2FA, since the claim was enforcement |
+| `admins` | every super admin or owner must | not-enforced on an organizational unit holding an unenforced super admin, and every admin without 2-step verification; GitHub cannot require it of owners only, so there it raises only an owner without 2FA, with a readout note |
+| `some` | part of the tenant must | everything, when nothing is enforced; a note when everything is |
+| `none` | nothing is enforced | nothing; a note when the tenant does better |
+| `unknown` | the operator does not know | nothing; a readout note says what scheck read ("N of M accounts not required") |
+
+Observed better than declared is never a finding. A Workspace user with enforcement on,
+not enrolled and created within the enrolment period is a new hire, a note and not a
+contradiction; a super admin in that state is still an admin without 2-step
+verification. GitHub's organization requirement is read only by an owner's token and
+is three-valued: absent or null is *insufficient evidence*, never "not required".
+
+**The recon stanza.** `--stop-after recon` prints the accounts no handle names, for the
+operator to paste under `people` (in JSON, `people_candidates[]` with the same fields):
+
+```yaml
+# Accounts no handle under people names, read 2026-10-09 14:02 (Europe/Madrid).
+# Set kind for each and paste under people: in /home/alice/acme/engagement.yaml.
+# One entry per account: the same person may appear once per provider; merge them by
+# hand. An admin or owner nobody can name is a finding.
+# kind: employee | contractor | shared | service | break_glass    (add left: YYYY-MM-DD if they left)
+people:
+  # google-workspace:example.com  super admin  last sign-in 2026-10-01  created 2024-03-12
+  dave:
+    kind: ""
+    workspace: [dave@example.com]
+  # google-workspace:example.com  member  last sign-in never  created 2026-10-02 (7 days ago)
+  erin:
+    kind: ""
+    workspace: [erin@example.com]
+  # github:example-org  owner  GitHub reports no sign-ins
+  dkim-dave:
+    kind: ""
+    github: [dkim-dave]
+  # github:example-org  pending invitation, role member, sent 2026-09-30 (no account to declare yet)
+# Not listed: 7 suspended accounts that hold no admin role or group-granted access.
+```
+
+Entries run in roots order; within a tenant, admins and owners first, then delegated
+role holders, members, outside collaborators and invitations, then by key. A handle is
+the local part or login made to fit the handle pattern, `-2` added on a collision. A
+Workspace last sign-in of 1970 prints as `never`. On a partial population the header
+says "At least these accounts". `kind: ""` is printed on purpose and validation rejects
+it until someone who knows writes the kind: pasting the stanza wholesale as `employee`
+would attribute every former employee nobody listed and defeat the unattributed-admin
+rule, which is why bulk confirmation is refused for first-party evidence too
+([scope.md](scope.md)). A key hidden by `redact_extra` is printed as a comment asking
+for the address, never as a value that could validate. The stanza never writes the
+engagement file, never prefills a kind or suggests `left` from staleness, never merges a
+Workspace account with a GitHub login, sends no request of its own, prints no field a
+rule or label does not read, omits attributed and excluded accounts, never counts as a
+finding or changes the exit code, and prints nothing from a credential. Run again after
+a paste, it lists only what is still unnamed.
+
 **Accepted risks** follow `host-collector.md §5.2` for `id` (a catalog finding id or
 `custom:`) and add `asset`, `subject`, `accepted_by` and `expires`. `subject` is the
-finding's instance key (a login, a repository, `port/proto`); without it the acceptance
-covers every instance of that id on that asset, and the report says so. Past `expires`,
+finding's instance key (a login, an OAuth app's client id, a DNS name). When the
+finding's definition declares a subject kind, `subject` is required: an acceptance of
+the whole id would also accept every instance the asset gains later, next month's
+Drive-scoped OAuth app among them, so validation exits 3 naming the kind ("reported per
+OAuth app, … name the OAuth app, and add one entry per OAuth app to accept"). A
+definition without a subject kind is accepted by id. Either it is about the asset as a
+whole (too many owners of an organization), or its instances are not keyed yet: every
+host finding in 0.0.2, `accounts.empty_password` among them, whose acceptance covers
+every account on the host, including accounts added later. A host acceptance that names
+a subject is listed as not applied (the Recon paragraph under "Runs, state and
+configuration"); a `subject` on any other id without a subject kind exits 3 ("… is about
+the organization as a whole; remove subject"), since nothing could ever match it.
+`custom:` ids are never subject-checked. Past `expires`,
 the adjustment stops and the report says so; `expires` is a date in
 `engagement.timezone`, compared with the collection time of the asset it names, never
 the time the report is rendered. The report prints a ready-to-paste entry under each
@@ -404,15 +542,34 @@ it to that list, with none of the target's documented artefacts.
   since a reference names a root by its value as written.
 - References name what they must: the keys of `access.admins` and `access.mfa[].where`
   a SaaS tenant; `accepted_by`, `confirmed_by` and the lists under `access.admins` a
-  handle under `people`. Two handles with the same Workspace address or GitHub login
-  exit 3, since no rule could tell them apart. `org` is taken by a contractor or an
-  agency.
+  handle under `people`. An address or login held by two handles, or listed twice
+  under one, exits 3, since no rule could tell them apart; one account several people
+  sign in to is one handle of kind `shared` with `used_by`. `workspace`, `github` and
+  `used_by` are lists, never a single value, and never empty. `org` is taken by a
+  contractor or a shared account; `used_by` is required on a shared account, refused on
+  any other, and names people, never a shared or service account or itself. An
+  admin listed for a tenant must have an identifier for it (a Workspace address for a
+  Workspace tenant, a login for a GitHub organization), or the comparison could never
+  find them. `kind: ""`, which the recon stanza prints, exits 3 asking for the kind.
+  A marker scheck printed in place of a hidden value is never accepted as a value.
+- `access.mfa[].enforced` is one of `everyone`, `admins`, `some`, `none` or `unknown`;
+  `true` and `false` exit 3 as ambiguous; a tenant appears at most once.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
   under a root, and one URL listed under both `intent.exposed_on_purpose` and
   `intent.not_exposed` exits 3.
 - An accepted risk needs `id`, `asset`, `reason` and `accepted_by`; an empty `reason`
-  counts as missing.
+  counts as missing. It needs `subject` when the finding's definition declares a
+  subject kind, and may not have one on a non-host id whose definition declares none
+  ("Accepted risks" above).
+- The operator-facing wording of the people and MFA errors is fixed here, since the
+  recon stanza sends operators straight to them: `kind: ""` says "is empty. Say whose
+  account this is: employee, contractor, shared, service or break_glass. If you cannot
+  tell, find out: an admin nobody can name is reported as a finding"; `enforced: true`
+  says "true is ambiguous. Write everyone if every account must use 2-step
+  verification, admins if only administrators must, some, none, or unknown"; a login
+  under two handles says "One login belongs to one handle; if several people sign in to
+  it, declare it once with kind: shared and used_by".
 - The file is one YAML document, written out: a second document, anchors, aliases,
   merge keys, explicit tags (`!!binary`) and a key repeated in a mapping exit 3, so
   nothing in the file is dropped or decoded from text the credential check did not
@@ -480,9 +637,9 @@ against them:
 
 | Base | Means | Anchors |
 |---|---|---|
-| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant. | a usable empty password; a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
-| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`); an admin or owner tied to no person; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); Owner on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
-| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); an admin or owner not declared but tied to a person; a human with Owner or Editor not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`) |
+| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant. | a usable empty password: an account with an empty password that sshd accepts empty passwords for (a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
+| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`) |
 | low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone |
 | info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
 
@@ -1165,7 +1322,7 @@ does not. A host's `reason_code`s (`host-collector.md §6.4`) map as follows:
 | `unknown_check`, `invalid_params` | `unavailable:<reason_code>`; a defect, never expected in a report |
 | the check ran, but its rule could not read what it returned (`unrecognized-value`, `partial-output`, …, `host-collector.md §6.5`) | `unavailable:<reason>`, hyphens as underscores |
 | a fact read that no rule judges | `no_rule` |
-| the session lost after it worked | `failed`; the checks after the loss are `not_run`, never `unavailable` |
+| the session lost after it worked | `failed`; the checks after the loss are counted under the host's `not_run` (a count of checks, not a coverage reason), never as `unavailable` |
 
 **Reason wording.** The text prints each reason as a fixed phrase, with the detail.
 Each phrase says what is unknown and what would change it; none reads as a verdict on
@@ -1337,7 +1494,7 @@ one id graded differently.
 | `exposure_finding` | required on every finding definition: whether "exposed on purpose" may move it ("Severity in context") |
 | `severity`, `severity_base`, `adjustments[]` | each adjustment `{rule, by, delta, source}`: `rule` from the closed table of "Severity in context" or the collector's own, `by` `collector` or `engagement`, `source` either `{file, key}` for a declaration or `{observation, excerpt}` for a fact; no non-base severity without its chain |
 | `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance}` |
-| `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]` |
+| `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]`. `single_fact` is one fact per subject, which includes a host rule that joins a second check of the same host per account (`host-collector.md §6.5`, both checks in `reads`); `multi_fact` combines facts across checks or assets ("Multi-fact rules") |
 | `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
 | `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
@@ -1385,8 +1542,9 @@ and read as a to-do. Each entry:
 
 - `id`; `asset` as the `assets` name, or else the canonical id, which validation
   accepts for an asset under a declared root ("Identity, references and validation");
-  `subject` when the finding has one, with a comment that omitting it accepts every
-  instance on the asset.
+  `subject` when the finding has one, which validation then requires; a finding
+  without a subject kind is accepted by id, with a comment that the entry covers that
+  finding on the whole asset.
 - `reason: ""`, which validation rejects until it is written.
 - `accepted_by: ""`, with the candidate handles in a comment (`# a handle under
   people: alice (admin of google-workspace)`): a risk is accepted by its owner, and a
