@@ -299,7 +299,7 @@ evidence, what was excluded and why) before anything beyond passive runs. Showin
 not approving: the list is printed and written to `scope.json`, and only a first-party
 confirmation or a `confirm`-mode probe or scan waits for the operator. A run with no
 terminal goes on with the observe level and records every pending confirmation as
-not given ([engagement.md](engagement.md#runs-state-and-configuration), "Scope
+not given ([runs.md](runs.md#runs-state-and-configuration), "Scope
 confirmations persist").
 
 A name is resolved again when a request is sent, and the request goes to the address
@@ -920,8 +920,7 @@ records collected under another root; they send no additional lookup. Each follo
 result, like a records read's, says
 whether the name its chain ends at is under a root.
 
-The report prints what left the machine as one fixed block (`engagement.md`, "The
-report").
+The report prints what left the machine as one fixed block (`report.md`, "The report").
 
 ### Methods and credentials
 
@@ -1217,6 +1216,51 @@ stops the request or lookup before it is sent.
 
 ### Outcomes
 
+**Exit codes.** The four codes keep their meanings (`host-collector.md §7`), and an
+engagement fixes how they are reached:
+
+- `1` when an open finding is at or above its asset's threshold: a host asset's profile
+  sets it as in 0.0.1 (`baseline`: medium, `hardened`: low); every other asset uses
+  medium. Accepted risks and `info` never count.
+- `2` when the run is incomplete: a declared root had no successful read ([report.md](report.md#coverage)), or any asset's collection was cut by a transport failure, a run timeout or a
+  limit (reasons `failed` and `limit_reached`). A check that is merely unavailable
+  (elevation, permission, profile, narrowing) makes coverage *partial* and does not
+  change the exit code, as in 0.0.1.
+- `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
+  `0`.
+
+For a host, exit 3 is a positive list. A host asset or its jump host with no SSH user is
+refused by Scope before any target is contacted, so nothing is read and no run directory
+is created. An unknown or changed host key, an unreadable identity or known_hosts file,
+failed authentication and a canary mismatch are found on contact, and so are an unknown
+or changed key on a jump host and failed authentication to it, before the host itself
+is contacted: that host is recorded
+as `refused`, the other assets are still collected and every stage is written before
+the run exits 3, so nothing already read from a client's host is discarded. A canary
+that never answers is not a mismatch: nothing was shown to be altered, so it is a
+transport failure. Every other failure to reach a host (a name that
+does not resolve, TCP refused or timed out, a handshake reset, cut off or past its
+deadline, a jump host that cannot reach the host) is a transport failure: the asset is `failed` and the run exits 2. A session
+lost after it worked stops that host's plan where it was lost, keeps what was read, and
+is `incomplete` with reason `failed`: never a complete run of unavailable checks. A
+session lost while the canary itself ran is a transport failure too, not a canary
+mismatch: nothing was shown to be altered. As aliases of `scheck run --host`, `scheck
+ssh` and `scheck local` follow these rules too: a host that never answered now exits 2
+where 0.0.1 exited 3, the one change a CI job gating on `scheck ssh` sees. The canary's
+echo is printed only after redaction, and cut short, in the JSON only.
+
+For an API, a credential that is present but rejected (a 401, an invalid grant) is
+the same positive list: that asset is `refused` with kind `access`, the other assets
+are still collected, and the run exits 3. A declared SaaS root with no credential in
+the environment is `no_credentials` and exits 2, as a declared root with no successful
+read; Scope warns about it before any target is contacted, so the operator can stop
+and set it. A provider's rate limit that the gate cannot wait out is `limit_reached`,
+exit 2.
+
+So a one-host run exits as the 0.0.1 command did for the same findings and the same
+failures, except a host that never answered (2, a transport failure, where 0.0.1 said
+3), and a CI job gating on `scheck ssh` keeps its meaning.
+
 | Outcome | Coverage reason | Exit |
 |---|---|---|
 | A credential present but rejected (401, invalid grant) | `refused`, kind `access` | 3, and the other assets are still collected, as for a failed SSH login |
@@ -1225,7 +1269,7 @@ stops the request or lookup before it is sent.
 | An address that lost the first-party evidence Scope recorded (`refused:address_moved`) | `unavailable:address_moved` | no change; the next Scope run shows the asset without it |
 | An address not public, a redirect out of scope or off the entry points, an invalid certificate, a handshake the server ended with a TLS alert, a TLS alert after the handshake completed and before any response (`unavailable:tls_invalid`, `unavailable:tls_handshake`, `unavailable:tls_refused`) | `unavailable:<code>` | no change, like `path_denied` |
 | A provider rate limit, `limits.timeout`, or a request outside every authorization window or cut by its end (`refused:window`, `unavailable:window_ended`), or a run cancelled with the request in flight (`unavailable:canceled`) | `limit_reached` | 2 |
-| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for an exact `not_exposed` URL read from the `internet` vantage, only connection refusal or timeout disproves the contradiction with the outage caveat (`engagement.md`, "Reachability and vantage") |
+| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for an exact `not_exposed` URL read from the `internet` vantage, only connection refusal or timeout disproves the contradiction with the outage caveat (`web-collector.md`, "Reachability and vantage") |
 | A page served by a firewall that blocks scheck (`unavailable:blocked`, "Connections") | `unavailable:blocked` | no change; every rule over it abstains |
 | `refused:unknown_op`, `out_of_scope` or `method` on a collector's request | `unavailable:refused_by_gate` | no change. It is a defect, and a collector's tests fail on any |
 
@@ -1248,7 +1292,7 @@ names no commit (`dev`) or carries uncommitted changes (`-dirty`) cannot be told
 another one, and reuses nothing at all. A web asset's vantage joins it in E7 step 5,
 and the vantage is
 recorded on DNS evidence too, so a resume from another vantage reads the names again
-(`engagement.md`, "Reachability and vantage"). Exact URL intent role and audience
+(`web-collector.md`, "Reachability and vantage"). Exact URL intent role and audience
 also join web identities; mail declarations join records identities by canonical
 domain and are inherited by dependent follow-ups. The fingerprint is a hash
 of the principal's identity and sorted scopes, never of the token. A resume reuses only
@@ -1291,10 +1335,9 @@ The successes a resume may reuse are written after each stage to
 `scheck run <directory>` hands the next session's gate only those `run.json` lists, so a
 file placed there by hand is never a success on record. The gate reports which records
 it reused, and the report names each one that changed since scheck wrote it
-(`engagement.md`, "Stop and resume"). A resumed session's request ids carry its number,
+(`runs.md`, "Stop and resume"). A resumed session's request ids carry its number,
 `g<session>-<seq>` (`g2-000001`) after the first session's `g000001`, so ids stay
-unique in the run's one `audit.jsonl`. A host is resumed as a unit (`engagement.md`,
-"Stop and resume").
+unique in the run's one `audit.jsonl`. A host is resumed as a unit (`runs.md`, "Stop and resume").
 
 ### Authorization windows
 

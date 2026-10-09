@@ -37,7 +37,7 @@ type Input struct {
 	Directory string
 	// Resumed says an earlier session of the run left what this one kept;
 	// EditedByHand names the files it used although they changed since
-	// they were written (docs/spec/engagement.md, "Stop and resume").
+	// they were written (docs/spec/runs.md, "Stop and resume").
 	Resumed      bool
 	EditedByHand []string
 

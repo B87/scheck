@@ -24,7 +24,7 @@ import (
 )
 
 // manifestFile is the run's own record of itself: what a resume reads
-// first (docs/spec/engagement.md, "Stop and resume").
+// first (docs/spec/runs.md, "Stop and resume").
 const manifestFile = "run.json"
 
 // requestsDir holds the gate's successes a resume may reuse, one file per

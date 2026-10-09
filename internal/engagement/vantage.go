@@ -7,7 +7,7 @@ import (
 )
 
 // ValidVantage validates the operator declaration, never detecting its value
-// (docs/spec/engagement.md, "Reachability and vantage").
+// (docs/spec/web-collector.md, "Reachability and vantage").
 func ValidVantage(v string) bool { return v == "" || v == "internet" || v == "vpn" || v == "lan" }
 
 func VantageWarnings(res *Resolved, v string) []string {

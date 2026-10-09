@@ -173,7 +173,7 @@ diff on the target stays the exact allowlist of `spec/host-collector.md §1`.
 
 ### E2 — the engagement report, and one command
 
-**Delivers:** the coverage table by risk area (`spec/engagement.md`), with the five
+**Delivers:** the coverage table by risk area (`spec/report.md`), with the five
 marks defined there and reasons from its closed list, and per row the assets covered
 and excluded, the principal, the collection span, caps and sampling, declared facts
 not verified, and what the engagement's narrowing removed; the *outside scheck* rows;
@@ -195,7 +195,7 @@ later slice renders into the real report. Because the only real asset at this po
 a host, the schema is reviewed by the `security-consultant` and the `client` (report
 mode) against at least one non-host finding shape, a person, a token or an OAuth grant,
 before it is frozen. The content and wording were defined with the `security-consultant`
-and read by the `client` on 2026-10-07 (`spec/engagement.md`, "The report", "Severity in
+and read by the `client` on 2026-10-07 (`spec/report.md`, "The report"; `spec/engagement.md`, "Severity in
 context"): one finding record per instance keyed `{id, asset, subject}`, with `area` and
 `exposure_finding` required on every finding definition and observed evidence on every
 finding; host coverage marked from the rules that decided, never from the checks that
@@ -211,8 +211,7 @@ whose only root has no collector (`collector_not_built`, exit 2); the JSON valid
 against the schema as committed; target-derived text is control-character escaped;
 `scheck ssh user@host` and `scheck run --host user@host` produce the same report and
 the same command trace; a one-host run exits as the 0.0.1 command did for the same
-findings and failures, except a host that never answered (2, not 3, `spec/engagement.md`,
-"Exit codes"); `--format json --no-persist --include-evidence` still prints the
+findings and failures, except a host that never answered (2, not 3, `spec/scope.md`, "Outcomes"); `--format json --no-persist --include-evidence` still prints the
 host's facts with their captures; no code path reads a config file. Goldens also pin a
 lost session (exit 2, the checks after the loss *not run*), a refused host (exit 3), a
 Linux host whose Firewall and Network exposure rows are `no_rule`, and the apt, dnf and
@@ -386,7 +385,7 @@ Built in four steps, reviewed as E2 was:
      successes listed in `run.json` handed to the next session's gate, the report's
      `resumed` and `edited_by_hand` pinned by the `resumed` goldens, and "What left this
      machine" covering every session, "at least" when one ended before recording what
-     it sent (`spec/engagement.md`, "Stop and resume"). Decided 2026-10-08: a changed
+     it sent (`spec/runs.md`, "Stop and resume"). Decided 2026-10-08: a changed
      accepted risk on a host collects that host again, since nothing regrades a kept
      envelope, which adds only contact the file already authorizes. The report's changed
      principal goes to E5, the first collector that reads a principal, and reading again
@@ -547,7 +546,7 @@ adopted the recommended answers.
 **Delivers:**
 
 - A finding definition declares a subject kind (`finding.Def.Subject`, from the closed
-  list in `spec/engagement.md`, "Findings"), checked by the invariants test; an accepted
+  list in `spec/report.md`, "Findings"), checked by the invariants test; an accepted
   risk for such an id must name its subject, or validation exits 3 (`spec/engagement.md`,
   "Accepted risks"). No host finding declares one in 0.0.2: host acceptance by subject
   arrives with the listener slice.
@@ -633,8 +632,42 @@ including a non-owner token on the two-factor rule; a seeded secret never appear
 output and its marker does; no non-`GET` request is ever made; a resume under another
 principal, told apart by the principal op, sends again every request the first one's
 successes would have answered (carried from E4 step 4a) and prints the changed principal
-in the report's header (`spec/engagement.md`, "Stop and resume", carried from E4 step
+in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
+
+**Build steps** (planned, security-consultant DEFINE, 2026-10-09; rules and
+permissions in `spec/github-collector.md` are proposals until reviewed and frozen):
+
+0. **Contract preparation.** Split the engagement spec and audit citations; draft the
+   operation/permission and rule-outcome tables. Resolve the assessment-token
+   reporting choice and review proposed bases before their definitions are fixed.
+   Confirm E3's rest-lab seal before the first E5 commit; never open its
+   labels in the implementation session. This step is documentation only.
+1. **Gate foundation.** Move provider display, pagination and rate-limit metadata
+   into the provider table and list-item subject templates into operations, as E4's
+   review requires. Preserve every existing admission and response guarantee.
+2. **Principal and organization inventory.** GET-only PAT/App-user principal,
+   verified own membership, organization metadata, members/owners, outside
+   collaborators, invitations and repository inventory; projected evidence,
+   permission/population gaps, changed-principal resume and header tests. Unsupported
+   installation principals stay unknown and authenticated successes are not reused.
+   No later rule id or optional check is introduced in this step.
+3. **Identity and repository access.** Existing E5a people/admin/MFA rules; repository
+   public intent, default member permission, production outside-admin and write
+   deploy-key rules. Freeze privilege maps, bases and subject keys before building.
+4. **CI controls.** Organization/repository workflow defaults, default-branch
+   protection and active rules, supported workflow parsing, immutable action
+   references and dangerous PR-target combinations. Freeze supported syntax and
+   runner evidence; carried App/runner breadth remains an explicit decision.
+5. **Secret metadata and provider alerts.** Secret names/visibility and projected
+   Dependabot/secret-scanning alerts, with per-location findings and honest gaps.
+6. **Confined history reader.** In-process mirror remote/head checks, bounded object
+   and history reads, detector markers and redaction assertions; freeze supported
+   formats and caps before implementation.
+7. **Closing review.** Consultant REVIEW, client REPORT, spec sync/audit,
+   `make check` and a fresh whole-slice adversarial code review. Every built rule has
+   firing, disproved and abstained fixtures. Missing live lab measurements remain
+   *not run*, never passed.
 
 **Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
 table carries what is now hard-coded per provider (a display name, page keys, rate-limit
@@ -645,18 +678,14 @@ no answer exiting 2.
 
 **Carried from the engagement-spec review** (security-consultant, 2026-10-09):
 
-- *Before E5's spec text, once E7 has merged:* split `spec/engagement.md`, which has
-  grown past what one reviewer holds, without dropping a decision. The report (order,
-  wording, coverage, ranking, findings, JSON) moves to `spec/report.md`; the run
-  directory, `run.json`, locking and resume to `spec/runs.md`; the `scheck.yaml` and
-  alias tables to `spec/host-collector.md §8`, since they go in 0.0.3; the domain
-  acceptance paragraph to `spec/web-collector.md`, "Subjects". Slice-progress prose
-  ("In 0.0.2 (E4) …") becomes a one-line "built in" marker per section, the history
-  staying here. Each decision gets one owner the others link to: exit codes in
-  `spec/scope.md` "Outcomes", reachability in `spec/web-collector.md`, and the rule
-  "an `assets` entry never adds scope", stated in both `spec/scope.md` and
-  `spec/engagement.md`, kept in one. Code comments
-  cite headings, so the `spec-steward` audits every citation in the same commit.
+- *Engagement-spec split completed before E5's spec text:* report order, wording,
+  coverage, ranking, findings and JSON are owned by `spec/report.md`; run directories,
+  `run.json`, locking and resume by `spec/runs.md`; the `scheck.yaml` and alias tables
+  by `spec/host-collector.md §8`; domain acceptance ownership by
+  `spec/web-collector.md`, "Subjects". Exit outcomes are owned by `spec/scope.md`,
+  "Outcomes", reachability by `spec/web-collector.md`, and whether asset entries add
+  scope by `spec/scope.md`, "What is in scope". Citation updates and the
+  `spec-steward` audit accompany the split.
 - "Which repositories are public on purpose": `public: true` on a repository asset,
   and an undeclared public repository is the finding (`intent` holds URLs only).
 - Anchors for self-hosted runners on public repositories (high), GitHub App
@@ -746,12 +775,11 @@ TLS-interception list, the session cookie names, the SPF include-to-service tabl
 the block-page markers. Validation refuses one URL under both `intent` lists.
 `scheck run --vantage internet|vpn|lan`, recorded in the run and on each piece of web
 and DNS evidence and printed in the report header, with a warning at the start when
-`intent.not_exposed` is listed and no vantage is given (`spec/engagement.md`,
-"Reachability and vantage"); a web request's identity for resume includes it
+`intent.not_exposed` is listed and no vantage is given (`spec/web-collector.md`, "Reachability and vantage"); a web request's identity for resume includes it
 (`spec/scope.md`, "Resume"). On a resume, a changed `mail` or `intent` URL reads again
 only the DNS names and entry points it affects; Scope discovery is kept when its
 inputs are unchanged
-(`spec/engagement.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
+(`spec/runs.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
 network collector: the `security-consultant` froze the base severity anchors on
 2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
 placed against them.
@@ -797,7 +825,7 @@ Built in steps, reviewed as E4 was:
        `scope.json`, the report's input, findings and acceptance by subject, coverage
        rows for the external and email areas, and E7's subject kinds in
        `docs/engagement-report-schema.json` (`spec/web-collector.md`, "DNS and
-       takeover"; `spec/engagement.md`, "Coverage", "Findings"). A read domain root is
+       takeover"; `spec/report.md`, "Coverage", "Findings"). A read domain root is
        `collected`: its coverage replaces `collector_not_built`, and its findings set
        the exit code. A finding belongs to the most specific asset holding its subject,
        a name found under the root its own; a declared domain asset under a read root is
@@ -943,13 +971,13 @@ and entry points it affects (carried from E4 step 4b).
 closes:
 
 - done in step 5: observed items use actual request collection times and
-  preserve them when reused (`spec/engagement.md`, "Findings");
+  preserve them when reused (`spec/report.md`, "Findings");
 - done in step 5: network assets have a trace of redacted gate entries,
-  including DNS queries (`spec/engagement.md`, "Text and JSON");
+  including DNS queries (`spec/report.md`, "Text and JSON");
 - done in step 5: `method.levels_used` comes from actual DNS queries and
   request sends over the retained run, plus host collection; DNS-only reads never
   invent `observe`
-  (`spec/engagement.md`, "Runs, state and configuration").
+  (`spec/runs.md`, "Runs, state and configuration").
 
 **Carried from E7 step 2b-i** (2026-10-09), done in step 5:
 
@@ -1083,7 +1111,7 @@ asset unchanged; a loop fixture terminates.
    issues before seeing any scheck output; at least four of the reviewer's top five are
    in scheck's top five. Without such a reviewer the gate is recorded as *not run*.
 6. **Coverage:** every risk area's mark matches what ran by the definitions in
-   `spec/engagement.md`, for the lab and for an engagement with a collector missing or
+   `spec/report.md`, for the lab and for an engagement with a collector missing or
    credentials withheld; the reason is printed, and the run with a declared root
    unassessed exits 2.
 7. **Scope:** only the observe level reaches any asset, no request leaves the declared

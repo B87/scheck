@@ -33,11 +33,11 @@ import (
 var Stages = []string{"intake", "scope", "recon", "plan", "check", "analyze", "report"}
 
 // LastStage is the last stage: Report writes report.json and report.txt
-// (docs/spec/engagement.md, "The report").
+// (docs/spec/report.md, "The report").
 const LastStage = "report"
 
 // Reasons an asset was not collected, as coverage names them
-// (docs/spec/engagement.md, "The report", "Coverage").
+// (docs/spec/report.md, "The report", "Coverage").
 const (
 	ReasonCollectorNotBuilt = "collector_not_built"
 	ReasonFailed            = "failed"
@@ -45,7 +45,7 @@ const (
 )
 
 // ReasonRefused is a host that refused us for a reason on the positive
-// list of docs/spec/engagement.md, "Exit codes" (host key, authentication,
+// list of docs/spec/scope.md, "Exit codes" (host key, authentication,
 // identity, canary): the run goes on and exits 3.
 const ReasonRefused = "refused"
 
@@ -321,7 +321,7 @@ type Outcome struct {
 }
 
 // ExitCode is the run's exit code, in the precedence 3, 2, 1, 0
-// (docs/spec/engagement.md, "Exit codes").
+// (docs/spec/scope.md, "Exit codes").
 func (o *Outcome) ExitCode() int {
 	switch {
 	case o.Report != nil:
@@ -388,7 +388,7 @@ type run struct {
 
 // Run runs the stages of a resolved engagement up to StopAfter, writing
 // each stage's output into the run directory as it goes
-// (docs/spec/engagement.md, "Stages", "Runs, state and configuration").
+// (docs/spec/engagement.md, "Stages"; docs/spec/runs.md, "Runs, state and configuration").
 // It returns a *Refusal for exit 3 before any target is contacted; a host
 // that refuses us later is recorded in Outcome.Refused and the run goes on.
 // Any other error leaves the run incomplete.
@@ -599,7 +599,7 @@ func maskRedactExtra(raw []byte, res *Resolved) ([]byte, error) {
 func (r *run) scope(ctx context.Context) (any, error) {
 	// A resume keeps Scope's document while what Scope read from the file
 	// is unchanged and it found no gap to close; the gate still decides
-	// every request from the file (docs/spec/engagement.md, "Stop and
+	// every request from the file (docs/spec/runs.md, "Stop and
 	// resume").
 	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
 	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
@@ -930,7 +930,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	r.recon = doc
 	// Every asset's commands go to audit.jsonl and are also kept per asset,
 	// so the report carries each asset's trace even under --no-persist
-	// (docs/spec/engagement.md, "Text and JSON").
+	// (docs/spec/report.md, "Text and JSON").
 	isRoot := func(a ResolvedAsset) bool { return a.Root == a.ID }
 	// A transport error quotes what the target or a resolver said (an
 	// address a name resolved to, a jump host's refusal): redacted before
@@ -1007,7 +1007,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			if !c.Complete() {
 				// Say which limit cut it: a lost session, the engagement's
 				// limits.timeout, or the host collector's own run timeout
-				// (docs/spec/engagement.md, "Incompleteness and refusals").
+				// (docs/spec/report.md, "Incompleteness and refusals").
 				ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
 				switch {
 				case c.Lost() != "":
@@ -1184,7 +1184,7 @@ func (r *run) check(context.Context) (any, error) {
 
 // analyze reads each host asset's posture rules over its facts, from the
 // host collector's envelope Recon wrote under evidence/
-// (docs/spec/engagement.md, "Runs, state and configuration"), and builds
+// (docs/spec/runs.md, "Runs, state and configuration"), and builds
 // the report from them.
 func (r *run) analyze(context.Context) (any, error) {
 	doc := &FindingsDoc{Header: r.header("analyze")}
@@ -1228,7 +1228,7 @@ func (r *run) analyze(context.Context) (any, error) {
 }
 
 // reportStage writes the engagement report, JSON and text; the text is
-// always at default verbosity (docs/spec/engagement.md, "What never
+// always at default verbosity (docs/spec/report.md, "What never
 // appears").
 func (r *run) reportStage(context.Context) (any, error) {
 	if r.o.Dir == nil {
@@ -1381,7 +1381,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		in.OtherTools = append(in.OtherTools, t.Name)
 		// A tool in an area's category with no root of its own
 		// half-declares that area: its row is kept, never folded
-		// (docs/spec/engagement.md, "The fold line").
+		// (docs/spec/report.md, "The fold line").
 		if area, ok := toolAreas[t.Category]; ok {
 			in.Declarations = append(in.Declarations, ereport.Declaration{Area: area,
 				Source: fmt.Sprintf("%s tools[%d]", res.Source.Path, i),
@@ -1473,7 +1473,7 @@ func (r *run) excludeMatches() map[string]int {
 }
 
 // egress is what left this machine through the gate and the host
-// collector (docs/spec/engagement.md, "What left this machine"), in this
+// collector (docs/spec/report.md, "What left this machine"), in this
 // session and every earlier one of the run, an earlier one that did not
 // end named as unrecorded.
 func (r *run) egress() *ereport.EgressInput {

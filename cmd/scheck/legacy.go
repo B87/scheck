@@ -16,7 +16,7 @@ import (
 )
 
 // legacyHomes is where each key of 0.0.1's scheck.yaml lives from 0.0.2
-// (docs/spec/engagement.md, "No configuration file").
+// (docs/spec/host-collector.md, "No configuration file").
 var legacyHomes = map[string]string{
 	"context":        "role, exposure, environment and expected_services: assets.<name>.context; accepted_risks: intent.accepted_risks; data_classification: data.matters_most; compliance, owner and other keys are not read",
 	"targets":        "assets.<name> (host, identity, jump)",
@@ -62,7 +62,7 @@ func legacyConfig() error {
 		fmt.Fprintf(&b, "%s:", path)
 		var doc yaml.Node
 		if yaml.Unmarshal(raw, &doc) != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-			b.WriteString("\n  (not readable as YAML; its keys go where docs/spec/engagement.md, \"No configuration file\", says)")
+			b.WriteString("\n  (not readable as YAML; its keys go where docs/spec/host-collector.md, \"No configuration file\", says)")
 		} else {
 			m := doc.Content[0]
 			for i := 0; i+1 < len(m.Content); i += 2 {
@@ -91,5 +91,5 @@ func legacyConfig() error {
 	}
 	return usageErr("scheck reads no configuration file from 0.0.2, and found one where 0.0.1 read it:\n%s\n"+
 		"Move these keys into the engagement file (or use the flags named), then delete or rename the file "+
-		"(docs/spec/engagement.md, \"No configuration file\").", strings.Join(found, "\n"))
+		"(docs/spec/host-collector.md, \"No configuration file\").", strings.Join(found, "\n"))
 }

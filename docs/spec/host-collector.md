@@ -723,7 +723,7 @@ together when a change is implemented.
 
 **Persistence.** *From 0.0.2 (E2) nothing is written under `runs/<host.id>/`: the
 envelope is the host asset's evidence file in the engagement's run directory
-(engagement.md, "Runs, state and configuration"). As built in 0.0.1:* every run wrote this envelope to
+(runs.md, "Runs, state and configuration"). As built in 0.0.1:* every run wrote this envelope to
 `<state-dir>/runs/<host.id>/<started>.json` (default state dir
 `~/.local/state/scheck`, or `$XDG_STATE_HOME/scheck`; `--state-dir` overrides,
 `--no-persist` disables). Persisted files pass the same redactor as the report. The
@@ -934,7 +934,7 @@ contract, pinned by golden tests per fixture (§9):
 
 > **Superseded in 0.0.2 (ROADMAP E2).** `scheck local` and `scheck ssh` are aliases of
 > `scheck run --host` for 0.0.2, print a deprecation line, and are removed in 0.0.3; the
-> flag mapping is in engagement.md, "One command, one file" (`--context`,
+> flag mapping is in §8, "0.0.2 migration and aliases" (`--context`,
 > `--ignore-context`, `--audit-log` and `--stop-after plan` exit 3 naming their
 > replacement). `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
 > `config` was removed with §8. The block below records 0.0.1.
@@ -1085,11 +1085,64 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 
 > **Removed in 0.0.2 (ROADMAP E1b, E2).** scheck reads no configuration file:
 > `internal/config`, `scheck config` and `docs/CONFIGURATION.md` are gone. Each key below
-> has a home in the engagement file or a flag (engagement.md, "One command, one file");
+> has a home in the engagement file or a flag ("0.0.2 migration and aliases" below);
 > a file found where this section reads one makes `scheck run` and its aliases exit 3,
 > naming where each key moved. The model keys are flags on `scheck providers` and the
 > hidden `scheck eval`. The narrowing semantics below are what the engagement's
 > `disable_checks`, `deny_paths` and `redact_extra` keep; the rest records 0.0.1.
+
+### 0.0.2 migration and aliases
+
+**No configuration file.** scheck reads no configuration file. Each key of 0.0.1's
+`scheck.yaml` (`host-collector.md §8`) has one home:
+
+| 0.0.1 `scheck.yaml` | From 0.0.2 |
+|---|---|
+| `context:` `role`, `exposure`, `environment`, `expected_services` | `assets.<name>.context` |
+| `context:` `accepted_risks` | `intent.accepted_risks` |
+| `context:` `data_classification` | `data.matters_most`, which ties it to an asset and moves severity |
+| `context:` `compliance`, `owner`, other keys | not read: no consumer without a model (engagement.md, "Not asked") |
+| `targets:` | `assets.<name>` (`host`, `identity`, `jump`) |
+| `profile`, `elevate` | `defaults.profile`, `assets.<name>.profile`, `assets.<name>.elevate`; with `--host`, `--profile` and `--sudo` |
+| `disable_checks`, `deny_paths` | `assets.<name>.disable_checks`, `assets.<name>.deny_paths` |
+| `redact_extra` | `redact_extra` |
+| `state_dir` | `--state-dir`; the default of `host-collector.md §6.4` |
+| `provider`, `model`, `base_url`, `effort`, `max_context` | flags on the hidden `scheck eval` |
+
+`scheck run` exits 3 when it finds `./scheck.yaml` or the user configuration file of
+`host-collector.md §8`, naming each key the file sets and its new home, and saying what
+to do: move the keys, then delete or rename the file. The two paths that contact
+nothing, `--write-engagement` and `--stop-after intake`, print the same list as a
+warning and go on, since they are how those keys move into a file. A narrowing a v0.0.1 user relied
+on is never dropped silently, whichever release they upgrade to; the check costs two
+file lookups and stays.
+
+**The aliases, for 0.0.2 only.** `scheck local` is `scheck run --host local` and
+`scheck ssh user@host` is `scheck run --host user@host`; each prints a deprecation line
+on stderr, and both are removed in 0.0.3. Their 0.0.1 flags map as follows, and any
+other exits 3 naming its replacement:
+
+| 0.0.1 flag | Under `scheck run --host` |
+|---|---|
+| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (`--port` wins over a port in the argument, as in 0.0.1); `--identity`, `--known-hosts`. `scheck ssh local` exits 3: `local` is this machine, `scheck run --host local` |
+| `--sudo`, `--elevate`, `--profile` | the same, except that `--sudo` with `--elevate none` exits 3, where 0.0.1 let `--elevate` win |
+| `--timeout` | the same: the host collector's run timeout, not `limits.timeout` |
+| `--format`, `--out`, `-v`, `-vv`, `--state-dir`, `--no-persist` | the same; `--format json` prints the engagement report |
+| `--include-evidence` | the same: with `--format json`, the hosts' redacted captures inside each embedded envelope, on stdout only |
+| `--record-fixtures` (hidden) | the same: every exec of the host written to a fixture directory, post-redaction |
+| `--stop-after context` | `--stop-after intake` |
+| `--stop-after plan` | exits 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
+| `--stop-after facts` | no flag: it is the run |
+| `--context`, `--ignore-context` | exit 3: context is `assets.<name>.context` in a file (`--write-engagement`) |
+| `--audit-log` | exits 3 naming the run directory's `audit.jsonl` |
+| the model flags, `--only`, `--local-only`, `--format sarif` | exit 3, as in 0.0.1 |
+
+`scheck catalog`, `scheck explain` and `scheck sudoers` stay; `scheck config` goes with
+the file it read. A 0.0.1 `./.scheck/context/` directory, which `local` and `ssh` read
+implicitly, is refused like the configuration file, so its accepted risks never vanish
+without a word.
+
+### 0.0.1 configuration
 
 Precedence, lowest first: built-in defaults → the OS user config file → the project
 `./scheck.yaml` → flags the operator explicitly set. A flag's registered default never

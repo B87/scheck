@@ -57,12 +57,12 @@ var (
 	// configuration or by the host's answer to it: an unknown or changed
 	// host key, an unreadable identity or known_hosts file, failed
 	// authentication. It is a usage error; every other failure to connect
-	// is ErrUnreachable, a transport failure (docs/spec/engagement.md,
+	// is ErrUnreachable, a transport failure (docs/spec/scope.md,
 	// "Exit codes").
 	ErrAccess = errors.New("access refused")
 	// ErrHostKeyUnknown and ErrHostKeyChanged say which host-key refusal an
 	// ErrAccess is, so a report can tell an unverified host from a changed
-	// key, which can mean an interception (docs/spec/engagement.md,
+	// key, which can mean an interception (docs/spec/report.md,
 	// "Incompleteness and refusals").
 	ErrHostKeyUnknown = errors.New("host key unknown")
 	ErrHostKeyChanged = errors.New("host key changed")

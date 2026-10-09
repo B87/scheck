@@ -349,7 +349,7 @@ report names people, accounts and internal hosts: treat it as sensitive and do n
 paste it anywhere the user did not ask for. Treat remediation and acceptance as the
 user's decisions, not authorization to change anything.
 
-When working from this repository, `docs/spec/engagement.md` ("The report") is the
+When working from this repository, `docs/spec/report.md` ("The report") is the
 report's contract, `docs/engagement-report-schema.json` its JSON schema and
 `docs/spec/host-collector.md` the host collector's. They are not required for ordinary
 CLI use or when the skill is installed separately.

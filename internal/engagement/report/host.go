@@ -14,7 +14,7 @@ import (
 
 // plumbing are the host domains that carry no rule by design: they say who
 // the host is and how the session runs. They are not coverage
-// (docs/spec/engagement.md, "Coverage").
+// (docs/spec/report.md, "Coverage").
 var plumbing = []check.Domain{check.DomainHost, check.DomainOS, check.DomainSys, check.DomainText}
 
 // hostView reads one collected host asset.
@@ -63,7 +63,7 @@ func answered(a finding.Assessment) bool {
 // excused reports whether a rule that could not decide is an alternative
 // to a sibling that did: rules sharing a finding id on one host are a
 // family, and a package manager that is not installed does not lower the
-// mark when another one answered (docs/spec/engagement.md, "Coverage").
+// mark when another one answered (docs/spec/report.md, "Coverage").
 func (v *hostView) excused(a finding.Assessment) bool {
 	if decided(a) || a.Reason != "check-unavailable:command_missing" {
 		return false
@@ -72,7 +72,7 @@ func (v *hostView) excused(a finding.Assessment) bool {
 }
 
 // reason maps a rule that could not decide to the coverage reason list
-// (docs/spec/engagement.md, "Coverage", the host mapping table).
+// (docs/spec/report.md, "Coverage", the host mapping table).
 func (v *hostView) reason(a finding.Assessment) ReasonDetail {
 	// A reason prefixed "with-" is the rule's second check's: coverage names
 	// that check, not the one that ran.

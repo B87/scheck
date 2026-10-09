@@ -70,7 +70,7 @@ type hostOpts struct {
 }
 
 // newRunCmd is `scheck run`: an engagement file or --host, through every
-// stage to the engagement report (docs/spec/engagement.md, "The report").
+// stage to the engagement report (docs/spec/report.md, "The report").
 func newRunCmd(opts *globalOpts) *cobra.Command {
 	var ho hostOpts
 	cmd := &cobra.Command{
@@ -149,7 +149,7 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 	}
-	// A run directory resumes that run (docs/spec/engagement.md, "Stop and
+	// A run directory resumes that run (docs/spec/runs.md, "Stop and
 	// resume"): locked, its engagement file read again from where it was.
 	var prior *engagement.Prior
 	var res *engagement.Resolved
@@ -246,7 +246,7 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 		// subject), which validation does not restrict to safe characters.
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
 	}
-	// Precedence is 3, 2, 1 (docs/spec/engagement.md, "Exit codes"): an
+	// Precedence is 3, 2, 1 (docs/spec/scope.md, "Exit codes"): an
 	// incomplete run's silence is not a clean bill of health. A host that
 	// refused us is exit 3 once everything else was collected and written.
 	describe := func(ss []ereport.Shortfall) string {

@@ -9,7 +9,7 @@ import (
 )
 
 // Judgment is a network collector rule's verdict on one subject
-// (docs/spec/engagement.md, "Findings"): fired, disproved or abstained,
+// (docs/spec/report.md, "Findings"): fired, disproved or abstained,
 // with the gate requests it read.
 type Judgment struct {
 	Attributes []string
@@ -356,7 +356,7 @@ func (b *builder) judgedFor(asset string) ([]Judgment, bool) {
 
 // judgedOutcome settles an acceptance on an asset a network collector
 // judged: by subject when it names one, else over every instance of its id
-// (docs/spec/engagement.md, "Acceptances").
+// (docs/spec/report.md, "Acceptances").
 func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []Judgment) (string, string) {
 	if strings.HasPrefix(acc.ID, "custom:") {
 		return "rule_not_decided", "no rule decides a custom finding"
@@ -463,7 +463,7 @@ var judgedFamilies = map[finding.Area][]struct {
 var notJudged = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
 
 // judgedRow is an area a network collector reads: one sub-item per rule
-// family per asset, marked from the judgments (docs/spec/engagement.md,
+// family per asset, marked from the judgments (docs/spec/report.md,
 // "Coverage"), and what was read that no rule judges yet.
 func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 	row := Row{Area: string(area), Reasons: []ReasonDetail{}}
@@ -569,7 +569,7 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 
 // Shared origins can be read under several roots. Their report identity
 // remains {id,asset,subject}, not which collector supplied the evidence
-// (docs/spec/engagement.md, "Findings").
+// (docs/spec/report.md, "Findings").
 func uniqueFindings(in []Finding) []Finding {
 	out := make([]Finding, 0, len(in))
 	index := map[string]int{}

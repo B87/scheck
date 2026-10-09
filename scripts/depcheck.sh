@@ -89,7 +89,7 @@ if [ -d ./internal/collector ]; then
   rm -f "$allowed"
 fi
 # Nothing is sent to the makers of scheck: no telemetry, no update check
-# (docs/spec/engagement.md, "What left this machine"). The pin is on
+# (docs/spec/report.md, "What left this machine"). The pin is on
 # imports, read for every platform scheck ships for, since a file built
 # only on one would otherwise escape the run on another; and on the calls
 # made through the few packages allowed one of these imports for a narrow

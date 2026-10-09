@@ -164,7 +164,7 @@ func compareGolden(t *testing.T, name, got string) {
 
 // The text report never prints a reason or mark token, never prints the
 // canary echo, and escapes every control character a target sent
-// (docs/spec/engagement.md, "Words, not tokens", "What never appears").
+// (docs/spec/report.md, "Words, not tokens", "What never appears").
 func TestTextIsWordsAndSafe(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
 		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {

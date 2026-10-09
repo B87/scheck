@@ -18,7 +18,7 @@ import (
 // cmd/scheck).
 type Options = hostreport.Options
 
-// WriteText renders the report a person reads (docs/spec/engagement.md,
+// WriteText renders the report a person reads (docs/spec/report.md,
 // "The report"): plain words for marks and reasons, never their tokens,
 // and every string that came from a target or the operator escaped.
 func WriteText(w io.Writer, r *Report, opt Options) error {
@@ -231,7 +231,7 @@ func (t *text) status() {
 	t.blank()
 }
 
-// refusal words a refused asset by its kind (docs/spec/engagement.md,
+// refusal words a refused asset by its kind (docs/spec/report.md,
 // "Incompleteness and refusals"); the raw error follows at -v. A canary
 // echo is never printed.
 func (t *text) refusal(s Shortfall) string {
@@ -630,7 +630,7 @@ var markWord = map[string]string{
 	"not_applicable": "not applicable", "outside_scheck": "outside scheck",
 }
 
-// reasonText is a reason's fixed phrase (docs/spec/engagement.md,
+// reasonText is a reason's fixed phrase (docs/spec/report.md,
 // "Reason wording"): what is unknown and what would change it, never a
 // verdict on the target.
 func (t *text) reasonText(rd ReasonDetail) string {
@@ -878,7 +878,7 @@ func (t *text) hosts(row Row) {
 }
 
 // subItemText is one host area's line: what a "checked" rests on and what
-// it found, never a bare mark that reads as a pass (docs/spec/engagement.md,
+// it found, never a bare mark that reads as a pass (docs/spec/report.md,
 // "The Hosts row").
 func (t *text) subItemText(a Asset, si SubItem) string {
 	if len(si.Reasons) == 1 && si.Reasons[0].Reason == "no_rule" && si.Mark == "not_assessed" {
@@ -1145,7 +1145,7 @@ func (t *text) findingBlock(n int, f Finding) {
 }
 
 // pastes prints, once, the entry that accepts each open finding instead of
-// fixing it, headed so nobody reads it as the default (docs/spec/engagement.md,
+// fixing it, headed so nobody reads it as the default (docs/spec/report.md,
 // "The paste").
 func (t *text) pastes() {
 	var ps []*AcceptTemplate
@@ -1390,7 +1390,7 @@ func (t *text) acceptanceName(a Acceptance) string {
 
 // factSheets prints each collected host's facts at -v, one row per check
 // with an execution status, and at -vv the redacted captures too
-// (docs/spec/engagement.md, "Text and JSON"). The default report leaves
+// (docs/spec/report.md, "Text and JSON"). The default report leaves
 // them to the JSON: a reader does not act on them.
 func (t *text) factSheets() {
 	if t.opt.Verbose < 1 {

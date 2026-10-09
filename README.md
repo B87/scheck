@@ -203,9 +203,9 @@ elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted capt
 - [Vision](docs/VISION.md): what scheck is becoming and the principles behind it.
 - [Roadmap](docs/ROADMAP.md): 0.0.2, 0.0.3 and 0.0.4.
 - [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the
-  stages and the report) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
+  stages), [report](docs/spec/report.md), [runs and state](docs/spec/runs.md) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
   (what a host asset reads and its guarantees), [domain, email and web
-  collector](docs/spec/web-collector.md) (0.0.2 E7, being built), [model path](docs/spec/model.md) and
+  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 design), [model path](docs/spec/model.md) and
   [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Engagement report schema](docs/engagement-report-schema.json) and the

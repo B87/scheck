@@ -189,7 +189,7 @@ func (b *builder) asset(a AssetInput) Asset {
 
 // shortfall records a refused asset (exit 3) and an incomplete one (exit
 // 2): a declared root with no successful read, or a collection cut short
-// (docs/spec/engagement.md, "Exit codes").
+// (docs/spec/scope.md, "Exit codes").
 func (b *builder) shortfall(a AssetInput) {
 	s := Shortfall{Asset: a.ID, AssetName: a.Name, Reason: a.Reason, Detail: a.Detail, Echo: a.Echo, Kind: a.Refusal}
 	switch a.Status {
@@ -213,7 +213,7 @@ func (b *builder) shortfall(a AssetInput) {
 }
 
 // acceptances settles every intent.accepted_risks entry and writes the
-// readout's notes about them (docs/spec/engagement.md, "Acceptances").
+// readout's notes about them (docs/spec/report.md, "Acceptances").
 func (b *builder) acceptances() {
 	for _, acc := range b.in.Acceptances {
 		out := Acceptance{Entry: acc.Entry, ID: acc.ID, Asset: acc.Asset, AcceptedBy: acc.AcceptedBy, Findings: []Key{}}
@@ -342,7 +342,7 @@ func (b *builder) findingAcceptance(asset, id, reason string) *FindingAccept {
 
 // template is the ready-to-paste acceptance for an open finding: reason and
 // accepted_by left for the risk's owner, expires a quarter out for critical
-// and high and half a year otherwise (docs/spec/engagement.md, "The paste").
+// and high and half a year otherwise (docs/spec/report.md, "The paste").
 func (b *builder) template(a AssetInput, id string, sev finding.Severity) *AcceptTemplate {
 	days := 180
 	if sev.AtLeast(finding.SevHigh) {
@@ -365,7 +365,7 @@ func (b *builder) template(a AssetInput, id string, sev finding.Severity) *Accep
 // rankFindings puts findings[] in the order the report ranks them: open
 // findings by severity after context, risk area, an asset named in
 // data.matters_most, then asset and id; then informational ones; then the
-// accepted (docs/spec/engagement.md, "Ranking"). A consumer reading the
+// accepted (docs/spec/report.md, "Ranking"). A consumer reading the
 // JSON in order reads the most serious first.
 func (b *builder) rankFindings() {
 	group := func(f Finding) int {
@@ -390,7 +390,7 @@ func (b *builder) rankFindings() {
 }
 
 // summary ranks the open findings at medium or above into at most five
-// items, one per finding id (docs/spec/engagement.md, "Ranking").
+// items, one per finding id (docs/spec/report.md, "Ranking").
 func (b *builder) summary() Summary {
 	s := Summary{Items: []Item{}, Areas: AreaCounts{Total: len(finding.Areas)}}
 	type group struct {
@@ -491,7 +491,7 @@ func boolFirst(x, y bool) int {
 
 // exit is the exit code: 3 when a host refused us, 2 when the run is
 // incomplete, 1 when an open finding is at or above its asset's threshold,
-// in that precedence (docs/spec/engagement.md, "Exit codes").
+// in that precedence (docs/spec/scope.md, "Exit codes").
 func (b *builder) exit() Exit {
 	e := Exit{Reasons: []ExitReason{}, Thresholds: map[string]Threshold{}}
 	for _, a := range b.in.Assets {
@@ -506,8 +506,8 @@ func (b *builder) exit() Exit {
 		e.Thresholds[a.ID] = t
 	}
 	// Discovered names have their own finding assets without a declared
-	// AssetInput. Their default threshold is still medium (engagement.md,
-	// "Exit codes"); a missing map entry must not discard their findings.
+	// AssetInput. Their default threshold is still medium (docs/spec/scope.md,
+	// "Outcomes"); a missing map entry must not discard their findings.
 	for _, f := range b.r.Findings {
 		if _, ok := e.Thresholds[f.Key.Asset]; !ok {
 			e.Thresholds[f.Key.Asset] = Threshold{Severity: string(finding.SevMedium), Basis: "default"}

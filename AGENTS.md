@@ -21,6 +21,8 @@ operating manual for a coding agent in this repository.
 | `docs/ROADMAP.md` | 0.0.2 (first engagement: Workspace, GitHub, domain, host; reading only), 0.0.3 (GCP, probes, host depth, comparing runs), 0.0.4 (model, scans, `auto`): slices and release gates |
 | `docs/spec/host-collector.md` | Contract of the built host collector. Wins on any conflict about host collection. |
 | `docs/spec/engagement.md`, `docs/spec/scope.md` | Designs for the engagement and its scope rules; each section becomes contract when its release lands |
+| `docs/spec/report.md`, `docs/spec/runs.md` | The engagement report contract, run directories, state and resume |
+| `docs/spec/github-collector.md` | Proposed E5 GitHub read operations, rule outcomes and reporting limits; design until built |
 | `docs/spec/web-collector.md` | Design of the domain, email and web collector (E7): its reads, rules, takeover table and what the report never claims; contract when E7 lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
@@ -121,7 +123,7 @@ about it:
 
 | Path | Owns | Slice |
 |---|---|---|
-| `internal/engagement` | the engagement file (schema, validation: E1a; `--host` engagements built in memory: E1b), the stages and the run directory (E1b), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file", "Runs, state and configuration") | E1a, E1b, E4, E8, E9 |
+| `internal/engagement` | the engagement file (schema, validation: E1a; `--host` engagements built in memory: E1b), the stages and the run directory (E1b), resume (E4), the interview's questions and their consumers (E8) (`docs/spec/engagement.md`, "One command, one file"; `docs/spec/runs.md`, "Runs, state and configuration") | E1a, E1b, E4, E8, E9 |
 | `internal/engagement/gate` | the scope gate: the one place an HTTP request or API call is sent; scope, exclusion, first-party evidence, level and mode, window, throttle, timeout, redaction, audit; on resume, an earlier success answered without sending | E4 |
 | `internal/engagement/report` | the coverage table, the engagement report (text and JSON), `docs/engagement-report-schema.json`, goldens | E2 |
 | `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
@@ -338,7 +340,7 @@ If a rule seems to need a new command, add a catalog check first.
   compatibility shims or migrations for them.
 - Rules require recognized evidence; unknown is not safe or unsafe. Preserve coverage
   in JSON and text, and test partial evidence.
-- The engagement report is a contract (`docs/spec/engagement.md`, "The report") pinned by
+- The engagement report is a contract (`docs/spec/report.md`, "The report") pinned by
   its text and JSON goldens in `internal/engagement/report/testdata/golden`, the JSON
   validated against `docs/engagement-report-schema.json`. Regenerate with `go test
   ./internal/engagement/report -update` and read the diff as a review item. Beside the

@@ -12,7 +12,7 @@ import (
 
 // Exit 3 is a positive list: a host key scheck cannot verify and failed
 // authentication. Every other handshake failure is a transport failure
-// (docs/spec/engagement.md, "Exit codes").
+// (docs/spec/scope.md, "Exit codes").
 func TestHandshakeErrorsAreClassified(t *testing.T) {
 	o := Options{Host: "203.0.113.5", KnownHosts: "/kh"}
 	cases := []struct {

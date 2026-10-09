@@ -14,7 +14,7 @@ import (
 var hostSideEffects = []string{"pkg.dnf_check_update"}
 
 // EgressInput is what left this machine, as the run counted it
-// (docs/spec/engagement.md, "What left this machine").
+// (docs/spec/report.md, "What left this machine").
 type EgressInput struct {
 	// Sources are the third-party sources the gate sent to, DNS first.
 	Sources []SourceInput
@@ -254,7 +254,7 @@ func (b *builder) egress() Egress {
 	return e
 }
 
-// egress prints "What left this machine" (docs/spec/engagement.md), in
+// egress prints "What left this machine" (docs/spec/report.md), in
 // plain words: a data protection officer reads it to answer a customer.
 func (t *text) egress() {
 	e := t.r.Egress

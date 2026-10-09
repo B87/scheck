@@ -1,4 +1,4 @@
-// Package report builds the engagement report (docs/spec/engagement.md,
+// Package report builds the engagement report (docs/spec/report.md,
 // "The report"): coverage by risk area, the ranked findings, what was not
 // checked and why, and the exit code, from what a run collected. It reads
 // collected evidence and never contacts a target. Its JSON shape is
@@ -99,7 +99,7 @@ type Notice struct {
 	Audience         string `json:"audience"`
 }
 
-// Shortfall is one refused or incomplete asset (docs/spec/engagement.md,
+// Shortfall is one refused or incomplete asset (docs/spec/report.md,
 // "Incompleteness and refusals").
 type Shortfall struct {
 	Asset     string `json:"asset"`
@@ -109,7 +109,7 @@ type Shortfall struct {
 	// Echo is what a remote shell returned in place of the canary,
 	// redacted and cut. It is attacker-influenced text from a host that
 	// failed its trust check, so the JSON carries it and the text never
-	// prints it (docs/spec/engagement.md, "Incompleteness and refusals").
+	// prints it (docs/spec/report.md, "Incompleteness and refusals").
 	Echo string `json:"echo,omitempty"`
 	// Kind names a refusal: host_key_unknown, host_key_changed, their
 	// jump_ forms, excluded, jump_excluded, access or canary.
@@ -292,7 +292,7 @@ type Subject struct {
 	Person     string `json:"person,omitempty"`
 }
 
-// Finding is one finding instance (docs/spec/engagement.md, "Findings").
+// Finding is one finding instance (docs/spec/report.md, "Findings").
 type Finding struct {
 	Key             Key             `json:"key"`
 	AssetName       string          `json:"asset_name"`

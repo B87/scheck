@@ -120,7 +120,7 @@ func (o *globalOpts) explainContext(cmd *cobra.Command, ef explainFlags) (*opera
 	origins := map[string]string{}
 	if len(o.Context) > 0 && !o.IgnoreCtx {
 		// --context names the files to read; no configuration file adds
-		// to them (docs/spec/engagement.md, "No configuration file").
+		// to them (docs/spec/host-collector.md, "No configuration file").
 		m, err := operator.Load(operator.Options{Flags: o.Context, Budget: policy.DefaultBudgets().ContextBytes,
 			KnownFinding: finding.Known})
 		if err != nil {

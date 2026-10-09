@@ -135,7 +135,7 @@ func TestReportsValidateAgainstTheSchema(t *testing.T) {
 // checks that ran: on Linux no rule judges the firewall or the listeners,
 // so those rows say "not judged", and the package managers that are
 // not installed do not lower Software updates when apt answered
-// (docs/spec/engagement.md, "Coverage").
+// (docs/spec/report.md, "Coverage").
 func TestHostCoverageComesFromRules(t *testing.T) {
 	r := Build(oneHost(t, "ubuntu"))
 	hosts := row(t, r, "hosts")
@@ -323,7 +323,7 @@ func TestDomainRootFindings(t *testing.T) {
 }
 
 // A declared root with no collector leaves the run incomplete, whatever
-// the findings, and its areas say so (docs/spec/engagement.md, "Exit codes").
+// the findings, and its areas say so (docs/spec/scope.md, "Exit codes").
 func TestARootWithoutCollectorExitsTwo(t *testing.T) {
 	r := Build(withGitHubRoot(t))
 	if r.Exit.Code != 2 {
@@ -471,7 +471,7 @@ func withAcceptances(t *testing.T) Input {
 }
 
 // Each acceptance ends as one outcome, and only a rule that decided on
-// complete evidence may say "likely fixed" (docs/spec/engagement.md,
+// complete evidence may say "likely fixed" (docs/spec/report.md,
 // "Acceptances").
 func TestAcceptanceOutcomes(t *testing.T) {
 	r := Build(withAcceptances(t))

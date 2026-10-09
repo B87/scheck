@@ -13,7 +13,7 @@ import (
 // collector exists: Workspace and GitHub tenants for identity, a GitHub
 // organization and repositories for secrets and CI/CD, cloud projects for
 // cloud and data, domains and URLs for the external surface, web and email
-// (docs/spec/engagement.md, "Coverage").
+// (docs/spec/report.md, "Coverage").
 func feeds(area finding.Area, a AssetInput) bool {
 	github := strings.HasPrefix(a.ID, "saas:github:")
 	switch area {
@@ -40,7 +40,7 @@ func feeds(area finding.Area, a AssetInput) bool {
 }
 
 // outside are the rows scheck covers in no mode; they print on every run
-// and never fold (docs/spec/engagement.md, "Coverage").
+// and never fold (docs/spec/report.md, "Coverage").
 var outside = []Row{
 	{Area: "endpoints", Mark: "outside_scheck", Reasons: []ReasonDetail{},
 		Detail: "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of " +
@@ -115,7 +115,7 @@ func (b *builder) areaRow(area finding.Area) Row {
 
 // hostsRow aggregates every host asset: one block of domains per host,
 // marked from the rules that decided, never from the checks that ran
-// (docs/spec/engagement.md, "Coverage", "The Hosts row").
+// (docs/spec/report.md, "Coverage", "The Hosts row").
 func (b *builder) hostsRow() Row {
 	row := Row{Area: string(finding.AreaHosts), Reasons: []ReasonDetail{}}
 	var hosts, read int

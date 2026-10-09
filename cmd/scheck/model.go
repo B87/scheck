@@ -14,7 +14,7 @@ const defaultProvider = "openai-compatible"
 
 // modelSelection is the provider choice of `scheck providers` and the
 // evaluation harness, from their flags alone: scheck reads no configuration
-// file (docs/spec/engagement.md, "No configuration file"), and no host
+// file (docs/spec/host-collector.md, "No configuration file"), and no host
 // assessment builds a provider in this build (docs/spec/host-collector.md §2.1).
 type modelSelection struct {
 	Provider, Model, BaseURL, Effort, Profile string

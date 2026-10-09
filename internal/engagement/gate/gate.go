@@ -27,7 +27,7 @@ import (
 // Scope is the engagement file's scope as the gate reads it. The
 // engagement implements it from the validated file and nothing else: never
 // from scope.json or another stage output, so an edit there cannot widen
-// what is sent (docs/spec/engagement.md, "Stop and resume").
+// what is sent (docs/spec/runs.md, "Stop and resume").
 type Scope interface {
 	// Subject places a canonical id against the asset a request is for:
 	// whether it is that asset or falls under it, the root it falls under
@@ -312,7 +312,7 @@ type Result struct {
 	// Decision is sent, refused:<rule> or unavailable:<code>, as the audit
 	// line has it.
 	Decision string
-	// Reason is the coverage reason (docs/spec/engagement.md, "Coverage"),
+	// Reason is the coverage reason (docs/spec/report.md, "Coverage"),
 	// empty when the read succeeded.
 	Reason string
 	// Kind is a refusal's kind, "access" for a credential the provider did

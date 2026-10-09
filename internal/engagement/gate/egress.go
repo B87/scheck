@@ -10,7 +10,7 @@ import (
 )
 
 // Use is what one third-party source was sent, for the report's "What
-// left this machine" (docs/spec/engagement.md, "The report"): the subjects
+// left this machine" (docs/spec/report.md, "The report"): the subjects
 // of the requests the gate sent to it, which are what it learned, and how
 // many. Only requests whose send line was written are counted.
 type Use struct {
