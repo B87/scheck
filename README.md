@@ -24,12 +24,16 @@ and provider fingerprints for possible subdomain takeover or an unconfigured ser
 with an ownership-verification policy. Wildcards are filed once, with matching
 undeclared names grouped; declared names keep their own reads and judgments.
 A takeover candidate is not proof that someone can claim the name; provider caveats
-and services with no fingerprint are listed. Email, TLS and header rules are not built
-yet, and the report's coverage says so. The report's "What left this machine" says
-what was sent where.
+and services with no fingerprint are listed. Email rules judge published DMARC and SPF
+policies, compare recognized SPF services with declared senders, and check declared
+DKIM keys. The report shows mail context and missing evidence; DNS does not establish
+actual delivery, alignment or whether a selector signs current mail. DMARC uses legacy
+organizational-domain fallback and sampling; current receiver tree walking is not
+assessed. TLS and header rules are not built yet, and coverage says so. The report's
+"What left this machine" says what was sent where.
 Findings come from compiled-in rules: a host's posture rules, graded through the
-context the engagement declares, and a domain's DNS rules. A rule reads one fact, so a short
-list of findings and exit 0 mean no rule fired — not that anything is secure; the
+context the engagement declares, and a domain's DNS and email rules. They judge the
+collected evidence, so a short list of findings and exit 0 mean no rule fired — not that anything is secure; the
 report's coverage says what was not checked. **No model assesses anything:** a
 model-assessed pass exists in the codebase, was measured against criteria frozen
 before it was built, did not earn its cost, and is not part of this build

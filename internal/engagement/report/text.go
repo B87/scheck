@@ -654,6 +654,24 @@ func (t *text) reasonText(rd ReasonDetail) string {
 	case "sampled":
 		return "only part was read; the rest is unknown"
 	case "unavailable":
+		if detail, ok := map[string]string{
+			"not_read":           "the required DNS read was not collected",
+			"dkim_selector":      "DKIM was not checked: no selector given",
+			"mail_senders":       "SPF was not compared with declared senders: none were listed",
+			"mail_use":           "mail use could not be established from the declaration or DNS evidence",
+			"mail_evidence":      "email evidence was not judged",
+			"dmarc_parent":       "inherited DMARC is unknown: the organizational-domain policy was not read",
+			"dmarc_descendants":  "descendant policies were not assessed for a non-organizational domain",
+			"dmarc_existence":    "inherited np policy is uncertain: whether the domain exists was not established",
+			"dmarc_policy":       "a DMARC policy value was not recognized",
+			"spf_incomplete":     "the relevant SPF include tree was not read completely",
+			"spf_path":           "earlier SPF denials leave later authorization uncertain",
+			"spf_macro":          "SPF uses macros that require a message sender to evaluate",
+			"dkim_key":           "the DKIM key could not be parsed or was absent or revoked",
+			"dkim_multiple_keys": "multiple DKIM keys leave the selector ambiguous",
+		}[arg]; ok {
+			return detail
+		}
 		if arg == "command_missing" {
 			return "the tool that would tell is not installed on the host, so scheck could not tell (this is not a finding)"
 		}
@@ -668,7 +686,7 @@ func (t *text) reasonsText(rs []ReasonDetail) string {
 	var out []string
 	for _, rd := range rs {
 		s := t.reasonText(rd)
-		if rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule") {
+		if rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule" || rd.Reason == "unavailable:dkim_selector" || rd.Reason == "unavailable:mail_senders") {
 			s += " (" + clean(rd.Detail) + ")"
 		}
 		out = append(out, s)

@@ -38,18 +38,25 @@ within the gate's length and charset checks (`_spf.google.com`). A DKIM selector
 RFC 6376's sub-domain syntax, in either case, at most 63 characters a label, with no
 underscore; the name built from it is lowercase.
 
+**SPF record selection** requires case-insensitive `v=spf1` at byte zero, followed by
+ASCII space or the end of the record (RFC 7208 §4.5). Leading whitespace or a different
+version delimiter does not identify an SPF record.
+
 **SPF's budget** is 10 DNS-querying terms per evaluation, counted across the whole tree
 (`include`, `a`, `mx`, `ptr`, `exists`, `redirect`; RFC 7208 §4.6.4). Only `include`
 and `redirect` targets are queried, as TXT; `a`, `mx`, `ptr` and `exists` are counted
-and never resolved. An eleventh term fires `email.spf_invalid` and stops the evaluation.
+and never resolved. Step 3 validates the whole record, including syntax after `all`,
+but follows and counts only mechanisms before the first `all`; a record with `all`
+ignores `redirect`. Invalid syntax yields no follow-ups. An eleventh term fires
+`email.spf_invalid` and stops further collection.
 The collector reads the tree only when the domain has exactly one `v=spf1` record, depth
 first in the order its terms are written, and reads nothing more once the count passes
 10; the gate sends at most 10 `include:` and `redirect=` reads per evaluation, one
 evaluation per domain, whatever the collector counts
 ([scope.md](scope.md#third-party-sources), "Follow-ups"). The tree is complete
 (`spf_complete`) when nothing in it is unknown: the domain's TXT was read, and either
-it holds no single `v=spf1` record to walk or every `include:` and `redirect=` within
-the budget was read. A failed read of the domain or of an include, a term whose target
+it holds no single `v=spf1` record to walk or every reachable `include:` and
+`redirect=` within the budget was read. A failed read of the domain or of an include, a term whose target
 the gate gave none for (a macro), or a count past 10 leaves it incomplete, and so does a
 record at the domain or an include that redaction marked before anything showed it is
 not SPF (the text before the marker could still begin `v=spf1`), since how many SPF
@@ -65,11 +72,18 @@ other values are kept as written, and a rule reads `p`, `sp` and `np` case-insen
 as RFC 7489's grammar does. DKIM's tag names are case-sensitive (RFC 6376 §3.2), and a
 part of a key that is not a tag breaks its format. Whitespace is allowed around `=`. A
 record in which a tag repeats, or a key whose format is broken, is invalid: it is kept as
-`malformed`, without its tags. `rua` counts only when it has a value. A record a
-redaction marked that may have been a DMARC record (the text before the marker could
-still begin `v=DMARC1`) or, at a selector, any marked record that is not seen as a key,
-is counted apart (`dmarc_marked`, a selector's `marked`), so a rule over that domain or
-selector abstains on it rather than reading it as absent.
+`malformed`, without its tags. Plain unmarked DMARC remainder fragments that are not
+tags are ignored under RFC 7489 §6.3; they produce no standalone-fragment finding.
+`rua` counts only when it has a value. Any marker in a recognized DMARC record or DKIM
+key is counted before tags are reduced, including markers inside a tag name or a
+fragment. Both redaction and truncation markers count, including before version
+recognition. For a marked record that could have begun `v=DMARC1`, recognition of the
+remaining prefix allows the same leading whitespace and whitespace around `=` as the
+tag parser, including tabs and CRLF. SPF's potential version prefix remains strict at
+byte zero, without whitespace trimming. Any marked record at a selector that is not
+recognized as a key is counted too. These counts (`dmarc_marked`, a selector's
+`marked`) make a rule over the domain or selector abstain rather than treating marked
+evidence as absence or valid evidence.
 
 **Built in E7 step 2a:** Recon reads each domain root with `Collect`: for the root and
 each mail domain under it, in that order, TXT at the domain and at `_dmarc.<d>`, MX and
@@ -81,8 +95,8 @@ specific domain root that holds it, so nested roots never read it twice or give 
 SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
 ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
 has a value but never its address, each DKIM key's tags. What it read is in
-`recon.json`, under the asset's `web`. Recon then judges it ("Rules", built in step
-2b) and the root is `collected`. It is `limit_reached`
+`recon.json`, under the asset's `web`. After all roots have been read, Recon judges it ("Rules", DNS in step 2b and
+email in step 3) and the root is `collected`. It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
@@ -203,33 +217,94 @@ an observation is the gate request it read.
 
 ### Email
 
-Declared mail domains, and domain roots judged from the mail use they show when nothing
-was declared ([engagement.md](engagement.md#intake-the-engagement-file), "Mail").
+**Built in E7 step 3:** eleven rules over the mail DNS already collected. No email
+rule sends a request. An uncollected read or unknown read decision is
+`unavailable:not_read`, including a declared DKIM selector with no read at all.
+Absent collected evidence is never interpreted as a missing record or a no-mail
+domain. They judge declared mail domains and domain roots from the mail
+use they show when nothing was declared
+([engagement.md](engagement.md#intake-the-engagement-file), "Mail"). A non-null MX
+or recognized SPF authorization is evidence of mail use, not proof of current sending.
+A domain is inferred to send no mail only when its MX and complete SPF evidence are
+recognized, show no authorization and contain no SPF error. A deny-only include does
+not establish sending; missing or failed evidence leaves mail use unknown.
+
+This is a DNS configuration review, not a test of delivered mail. DMARC uses the legacy
+organizational-domain fallback and `pct`, and recognizes `t=y`; current RFC 9989
+receiver DNS tree walking is not assessed. The embedded ICANN and private public-suffix
+snapshot is commit `3929462652695bad04f0a27afb600974014a3c8b` (`2026-10-07`) of
+[the Public Suffix List](https://github.com/publicsuffix/list/blob/3929462652695bad04f0a27afb600974014a3c8b/public_suffix_list.dat).
+It adds no network dependency. An unknown suffix gives no organizational-domain
+conclusion. An absent subdomain policy can inherit only from organizational-domain
+records already collected, including a different declared root. Judgment happens after
+all roots' reads, so collection order cannot change inheritance. If those records were
+not read, the rule abstains; it sends no parent lookup. `sp` overrides the inherited
+`p`; `np` applies only to a child whose TXT and MX both prove NXDOMAIN. Recognized
+records or NODATA establish existence. When existence is unknown and `np` would change
+the inherited policy, the rule abstains.
 
 | Rule | Fires | Disproved | Abstains | Base | Area |
 |---|---|---|---|---|---|
-| `email.dmarc_not_enforced`: "Mail pretending to come from *d* is not rejected or quarantined (DMARC *state*)" | no `v=DMARC1` record; more than one; `p=none`; `p` missing or invalid; `pct=0`; `t=y` | exactly one record, `p=quarantine` or `p=reject`, with `pct` absent or from 1 to 100 and no `t=y` | a lookup failure; a truncated answer not retried over TCP; *d* not registrable, its organizational domain not a root, and `_dmarc.<d>` absent (read with the public-suffix snapshot) | medium | email |
-| `email.dmarc_partial`: "DMARC on *d* applies its policy to only *pct*% of mail that fails authentication" | `pct` from 1 to 99 with an enforcing `p` and no `t=y`; not applicable when `email.dmarc_not_enforced` fires, since nothing is enforced to apply partly | an enforcing `p` with `pct` 100 or absent | as `email.dmarc_not_enforced` | low | email |
-| `email.dmarc_subdomains_open`: "Subdomains of *d* can be spoofed" | `p` enforces and `sp=none` (or `np=none`) | `sp` absent or enforcing | as `email.dmarc_not_enforced` | low | email |
-| `email.no_mail_spoofable`: "*d* sends no mail but does not tell receivers to reject mail claiming to come from it" | SPF absent or not exactly `v=spf1 -all`, or DMARC not `p=reject` at 100% | `v=spf1 -all` and `p=reject` | a lookup failure | low | email |
-| `email.spf_permits_anyone`: "SPF lets any server send as *d*" | `+all`, a bare `all`, an `ip4` of /8 or wider, an `ip6` of /16 or wider | `-all`, `~all` or `?all` with no such range | a `redirect=` to a name not read | high | email |
-| `email.spf_missing`: "*d* publishes no SPF record, so receivers cannot check which servers may send as it" | a sending or mail-use domain with no `v=spf1` record | one record | a lookup failure | low | email |
-| `email.spf_invalid`: "SPF for *d* is broken, so receivers ignore it" | more than one `v=spf1` record; a syntax error; an eleventh DNS-querying term ("Reads", SPF's budget); an `include:` target with no SPF record (a permerror, RFC 7208 §5.2); more than two void lookups | one valid record within the budget | when includes were not read, the count fires on what it saw, is never disproved and prints "at least" | low | email |
-| `email.spf_undeclared_sender`: "SPF authorizes *service*, which you did not list as sending for *d*" | an include on the include-to-service table, for a service not declared; runs only when `mail.senders` lists at least one sender for *d* | every mapped include is declared | unmapped includes, `ip4` and `ip6` are listed, not judged | low | email |
-| `email.dkim_missing`: "No DKIM key for *service* at *sel*._domainkey.*d*" | NXDOMAIN or NODATA; not a DKIM record; an empty `p=` | a valid key | a lookup failure; no selector declared, which coverage words as "no selector given", never "missing" | low | email |
-| `email.dkim_key_breakable`: "The DKIM key at *sel*._domainkey.*d* is short enough to break, which would let anyone sign mail as *d*" | an RSA modulus under 1024 bits | 1024 bits or more, or ed25519 | unparseable | high | email |
-| `email.dkim_key_1024`: "The DKIM key at *sel*._domainkey.*d* is 1024-bit; 2048-bit is the current recommendation" | an RSA modulus of 1024 bits | over 1024 bits, or ed25519 | unparseable | info | email |
+| `email.dmarc_not_enforced`: "DMARC does not request its full enforcement policy" | no DMARC record after bounded fallback; multiple or malformed records; `p` missing, invalid or `none`; legacy `pct=0`; `t=y` | one usable policy, `p=quarantine` or `p=reject`, legacy `pct` absent or 1–100, no `t=y` | lookup failure or marked evidence; unknown mail use or inherited policy; unrecognized `pct` or `t` | medium | email |
+| `email.dmarc_partial`: "DMARC publishes a partial percentage for legacy receivers" | legacy `pct` 1–99 with an enforcing policy and no `t=y` | enforcing policy with legacy `pct` 100 or absent | as `email.dmarc_not_enforced`; not applicable when that rule fires | low | email |
+| `email.dmarc_subdomains_open`: "DMARC leaves subdomains without a requested enforcement policy" | organizational domain has an enforcing policy and `sp=none` or `np=none` | enforcing policy, `sp` and `np` absent or enforcing | as `email.dmarc_not_enforced`; invalid `sp` or `np`; domain is not the organizational domain (descendant policy is unknown) | low | email |
+| `email.no_mail_spoofable`: "A domain with no mail use lacks a full no-mail policy" | declared or inferred no-mail domain: SPF absent or not exactly `v=spf1 -all`, or DMARC not a full `p=reject` policy | exact SPF denial and full DMARC rejection (`pct` 100 or absent, no `t=y`) | neither side proves a defect and one is unknown; unknown mail use | low | email |
+| `email.spf_permits_anyone`: "SPF authorizes any sender or a very broad address range" | reachable positive `all`, `ip4` /8 or wider, or `ip6` /16 or wider, including an allowing include or redirect path | recognized complete valid tree has no such authorization | unknown or invalid evidence before a possible grant, unread target, macro or incomplete tree | high | email |
+| `email.spf_missing`: "A mail domain publishes no SPF record" | sending or mail-use domain has no SPF record | SPF is present; validity is judged separately | failed or marked evidence; unknown mail use | low | email |
+| `email.spf_invalid`: "SPF contains an error or can exceed its lookup limit" | multiple records; syntax error; static tree exceeds ten DNS-querying terms or two void lookups; include or redirect has no single SPF record | recognized complete valid tree within the limits | missing or unknown evidence without an observed error; observed errors may fire on an incomplete tree, whose counts say "at least" | low | email |
+| `email.spf_undeclared_sender`: "SPF includes a service absent from the declared senders" | recognized positive include can grant a pass and maps to a service not declared for that domain; at least one sender is declared | mapped service is declared, or complete valid evidence has no includes or unmapped terms to compare | no senders declared; incomplete or invalid tree; unmapped include or literal IP range (listed, not judged) | low | email |
+| `email.dkim_missing`: "A declared DKIM selector has no usable published key" | NXDOMAIN or NODATA; no DKIM key record; revoked empty `p=` | one recognized public key | lookup failure, marked evidence, multiple keys or unparseable key; no declared selector is "no selector given", never "missing" | low | email |
+| `email.dkim_key_breakable`: "A DKIM RSA key is shorter than 1024 bits" | recognized RSA modulus under 1024 bits | RSA at least 1024 bits or recognized Ed25519 key | as `email.dkim_missing`, including missing or revoked key | high | email |
+| `email.dkim_key_1024`: "A DKIM RSA key is 1024-bit" | recognized RSA modulus exactly 1024 bits | recognized RSA of another size or Ed25519 key | as `email.dkim_key_breakable` | info | email |
 
-- The three DMARC outcomes are exclusive per domain: `pct=0`, `t=y`, or `p` missing,
-  invalid or `none` fire `email.dmarc_not_enforced`; `pct` from 1 to 99 with an
-  enforcing `p` fires `email.dmarc_partial` and disproves `email.dmarc_not_enforced`;
-  `pct` absent or 100 with an enforcing `p` disproves both. `t=y` is recognized wherever
-  `pct` is read.
-- `~all` is never a finding when DMARC enforces.
-- Alignment (`adkim`, `aspf`) is printed as read, with "whether your senders' mail
-  actually aligns is not visible in DNS", and is never a finding.
-- A domain declared under `mail.no_mail` whose SPF authorizes a sender, or that has DKIM
-  or MX records, is a note for the readout, not a finding.
+Legacy `pct` must contain one to three ASCII digits and be from 0 to 100
+(RFC 7489 §6.4); other values leave the policy unrecognized.
+`email.dmarc_not_enforced` and `email.dmarc_partial` cannot both fire. The partial
+and subdomain-policy rules are not applicable when the domain has no enforcing policy. A test-mode
+`p=reject` or legacy `pct=0; p=reject` can still request quarantine; the report never
+calls either "no quarantine or rejection". No-mail domains use
+`email.no_mail_spoofable` instead of the three sending-domain DMARC rules. A confirmed
+defect on one side of a no-mail policy may fire while the other is unknown, retaining
+the gap so coverage stays partial.
+
+SPF is a static review of reachable configuration, not an evaluation for a particular
+sender. Record syntax is checked even after `all`, but valid mechanisms after it are
+ignored; known modifier syntax is validated even when the modifier is ignored.
+Qualifiers are honored; a negative include of an all-passing child ends the path.
+Otherwise an earlier nonpositive mechanism leaves later grants uncertain
+(`unavailable:spf_path`), since this review cannot establish whether the earlier
+mechanism matches a sender. An unknown or erroneous child likewise prevents
+conclusions about authorization later on that path. Lookup-limit findings say the tree *can* exceed a limit, never that every
+message does. `a`, `mx`, `ptr` and `exists` count without address evaluation; macros
+remain unknown. `~all` alone is never a finding. A mapped provider's internal include
+tree is not treated as another business service to declare.
+
+The exact include-to-service table (`SenderTableVersion` `2026-10-09.1`, reviewed
+`2026-10-09`) is:
+
+| Service | Exact includes | Accepted declaration aliases | Source |
+|---|---|---|---|
+| `google-workspace` | `_spf.google.com` | `google workspace`, `g suite`, `gsuite` | [Google](https://support.google.com/a/answer/33786) |
+| `microsoft-365` | `spf.protection.outlook.com`, `spf.protection.office365.us`, `spf.protection.partner.outlook.cn` | `microsoft 365`, `office 365`, `office365` | [Microsoft](https://learn.microsoft.com/en-us/defender-office-365/email-authentication-spf-configure) |
+| `sendgrid` | `sendgrid.net` | `twilio sendgrid` | [Twilio](https://www.twilio.com/docs/sendgrid/ui/sending-email/verify-sender-with-spf) |
+| `amazon-ses` | `amazonses.com` | `amazon ses`, `aws ses` | [Amazon](https://docs.aws.amazon.com/ses/latest/dg/mail-from.html) |
+
+Service names compare without case and surrounding whitespace; there is no fuzzy
+match. Unmapped includes and literal `ip4`/`ip6` grants are listed as not compared.
+DKIM strength requires a decoded RSA public key (PKIX or PKCS#1 DER) with positive
+modulus and an odd exponent at least three, or exactly 32 decoded bytes for Ed25519.
+A published key does not show that the selector signs current mail.
+
+The report's `mail_context` notes show declarations or inferred mail use, alignment
+(`adkim`, `aspf`, including default relaxed values), and whether an aggregate-report
+destination is present, never its address. They state that actual message alignment,
+delivery and current selector use were not assessed. The DMARC note says coverage is
+limited to the DNS records read, including legacy `pct` percentages: receivers may
+discover or apply policies differently, and actual mail handling was not tested.
+Missing senders and selectors stay coverage gaps, with the domain and service named
+even in default text coverage. A declared no-mail domain with recognized
+SPF authorization, a non-null MX or a published DKIM key gets a context note, not a
+separate finding.
 
 ### TLS and certificate
 
@@ -319,7 +394,7 @@ no trailing dot, default ports dropped, no query or fragment and no spaces; a ke
 | `dns_record` | `<owner>/<TYPE>/<target>`, `TYPE` one of `MX`, `NS` and `TXT` (an SPF include target), the owner the name whose record points at the target: the domain, or for a nested include the include whose record names it. Labelled "MX of example.com → mx.oldhost.net", "NS of example.com → ns1.dns-host.example", "SPF include of example.com → _spf.gone.example". A records read that said nothing is `<owner>/<TYPE>` | `dns.dangling_*` through an MX, an NS or an SPF include whose target is gone |
 | `mail_domain` | the mail domain; its label adds "declared sending (…)", "declared no mail" or "not declared" | `email.dmarc_*`, `email.spf_missing`, `email.spf_invalid`, `email.spf_permits_anyone`, `email.no_mail_spoofable` |
 | `dkim_selector` | `<sel>._domainkey.<domain>`, labelled "selector google (google-workspace) on example.com" | `email.dkim_*` |
-| `spf_mechanism` | `<domain>/include:<target>`, one per include | `email.spf_undeclared_sender` |
+| `spf_mechanism` | `<domain>/include:<target>`, the target lowercase with no trailing dot; dotted and undotted spellings deduplicate to one subject and acceptance key | `email.spf_undeclared_sender` |
 
 A finding's asset is the most specific asset that holds its subject. A `dns_name`'s is
 the name's own id (`domain:<name>`), declared or not, and the root for the root itself
@@ -334,6 +409,11 @@ paste"). An acceptance covers its own asset's instances only, never those of a n
 under it ([engagement.md](engagement.md#findings), "Acceptances"). The DNS finding
 definitions, including both takeover findings, declare `Subject: "dns_name"`, so an
 acceptance must name its subject; record findings still use their `dns_record` key.
+All email definitions likewise require their tabled subject kind in an acceptance.
+Email findings remain on the most specific domain root holding the mail domain, even
+when that mail domain is also a declared asset. A missing selector has a coverage-only
+key `<domain>/no-selector`; sender-comparison gaps use `<domain>/SPF` or
+`<domain>/unmapped`, never an invented include finding.
 
 ## Takeover fingerprints
 
@@ -462,7 +542,7 @@ Each is printed with its reason, under the coverage row it belongs to
 | `dns.unclaimed_at_provider` | Remove the stale DNS record, or finish configuring the domain in the provider account. |
 | `dns.dangling_external` | Delete the record, or point it at the service's current name. |
 | `email.dmarc_not_enforced` | If there is no record, publish `v=DMARC1; p=none; rua=mailto:<a mailbox you read>`; read two to four weeks of reports; confirm that each sender under `mail.senders` passes; then move to `quarantine`, then `reject`. Do not jump straight to `reject`. |
-| `email.spf_permits_anyone` | Replace `+all` or `all` with `~all`, or `-all` once DMARC enforces. |
+| `email.spf_permits_anyone` | Remove `+all` or bare `all`; replace broad IP ranges with the exact sender ranges documented by the mail services. |
 | `email.no_mail_spoofable` | Publish `v=spf1 -all`, `v=DMARC1; p=reject;` and a null MX (`MX 0 .`). |
 | `email.dkim_missing` | For Google: Admin console > Apps > Google Workspace > Gmail > Authenticate email > Generate, publish, then Start authentication. Otherwise read `s=` in the DKIM-Signature of a message the service sent. |
 | `email.dkim_key_breakable` | Publish a 2048-bit key under a new selector, switch to it, then remove the old one. |

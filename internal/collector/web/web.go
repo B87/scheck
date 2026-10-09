@@ -74,8 +74,8 @@ type MailEvidence struct {
 	// DMARC is the _dmarc read, its records in DMARCRecords.
 	DMARC        RecordRead `json:"dmarc"`
 	DMARCRecords []DMARC    `json:"dmarc_records,omitempty"`
-	// DMARCMarked counts records at _dmarc a redaction marked that were
-	// not recognised: one may have been a DMARC record.
+	// DMARCMarked counts potentially relevant records a marker made
+	// uncertain, including recognized records with a hidden policy tag.
 	DMARCMarked int          `json:"dmarc_marked,omitempty"`
 	MX          RecordRead   `json:"mx"`
 	MXTargets   []TargetRead `json:"mx_targets,omitempty"`
@@ -113,13 +113,14 @@ type SelectorRead struct {
 	Read     RecordRead `json:"read"`
 	Keys     []DKIMKey  `json:"keys,omitempty"`
 	// Other counts the records there that are not DKIM keys; Marked those
-	// a redaction marked, which may have been one.
+	// a redaction marked, including recognized keys with hidden tags.
 	Other  int `json:"other,omitempty"`
 	Marked int `json:"marked,omitempty"`
 }
 
 // RecordRead is one DNS read as the gate answered it.
 type RecordRead struct {
+	SPFMarked   bool          `json:"spf_marked,omitempty"`
 	RequestID   string        `json:"request_id"`
 	Decision    string        `json:"decision"`
 	Detail      string        `json:"detail,omitempty"`
@@ -216,6 +217,7 @@ func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 	ev := MailEvidence{Domain: m.Name}
 	ev.TXT = c.read(ctx, m.Name, "TXT")
 	ev.SPF, ev.SPFComplete = c.spf(ctx, m.Name, ev.TXT)
+	ev.TXT.SPFMarked = markedOther(ev.TXT.TXT)
 	ev.TXT.TXT = spfOnly(ev.TXT.TXT)
 	ev.DMARC = c.read(ctx, "_dmarc."+m.Name, "TXT")
 	for _, r := range ev.DMARC.TXT {
@@ -224,6 +226,12 @@ func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 			if couldBe(r, "v=dmarc1") {
 				ev.DMARCMarked++
 			}
+			continue
+		}
+		// Preserve uncertainty before tag reduction can discard a marker
+		// in a tag name or fragment (docs/spec/web-collector.md, "Reads").
+		if marked(r) {
+			ev.DMARCMarked++
 			continue
 		}
 		d := DMARC{Malformed: !ok}
@@ -245,7 +253,7 @@ func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 			_, hasV := tags["v"]
 			switch {
 			// Any record may hold p=, so any marked one may have been a key.
-			case (!hasKey || hasV && (keys[0] != "v" || tags["v"] != "DKIM1")) && strings.Contains(rec, "[REDACTED:"):
+			case (!hasKey || hasV && (keys[0] != "v" || tags["v"] != "DKIM1")) && marked(rec):
 				r.Marked++
 				continue
 			case !hasKey || hasV && (keys[0] != "v" || tags["v"] != "DKIM1"):
@@ -254,6 +262,10 @@ func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 			}
 			// A part that is not a tag breaks the key's format: a verifier
 			// ignores it (RFC 6376 §6.1.2).
+			if marked(rec) {
+				r.Marked++
+				continue
+			}
 			k := DKIMKey{Malformed: !ok || slices.Contains(keys, "")}
 			if ok {
 				k.Tags = keep(tags, "v", "k", "p", "t")
@@ -297,15 +309,25 @@ func tagList(record string, fold bool) ([]string, map[string]string, bool) {
 	return keys, tags, ok
 }
 
-// couldBe reports a record a redaction marked before anything showed it is
-// not of the kind whose records begin with version: the text before its
-// first marker, spaces aside, could still be the start of version.
+// couldBe reports a marked record whose remaining prefix could begin the
+// required version. DMARC permits the whitespace tagList trims around its
+// first tag; SPF requires its version at byte zero (RFC 7208 §4.5).
 func couldBe(record, version string) bool {
-	before, _, ok := strings.Cut(record, "[REDACTED:")
-	if !ok {
+	i := strings.Index(record, "[REDACTED:")
+	if cut := strings.Index(record, "[TRUNCATED:"); cut >= 0 && (i < 0 || cut < i) {
+		i = cut
+	}
+	if i < 0 {
 		return false
 	}
-	return strings.HasPrefix(version, strings.ToLower(strings.ReplaceAll(before, " ", "")))
+	before := record[:i]
+	if version == "v=dmarc1" {
+		before = strings.TrimSpace(before)
+		if k, v, ok := strings.Cut(before, "="); ok {
+			before = strings.TrimSpace(k) + "=" + strings.TrimSpace(v)
+		}
+	}
+	return strings.HasPrefix(version, strings.ToLower(before))
 }
 
 // keep is tags with only the names given.
@@ -353,14 +375,19 @@ func (c collector) spf(ctx context.Context, domain string, txt RecordRead) ([]Ta
 	complete := followable(records[0], txt.Targets)
 	var walk func(owner string, from RecordRead) bool
 	walk = func(owner string, from RecordRead) bool {
-		for i, t := range from.Targets {
-			if t.Via != "include" && t.Via != "redirect" {
-				continue
-			}
+		recs := spfOnly(from.TXT)
+		if len(recs) != 1 {
+			return true
+		}
+		indexes, known := spfTargets(recs[0], from.Targets)
+		complete = complete && known
+		for _, i := range indexes {
 			if count > MaxLookups {
 				return false
 			}
 			r := c.follow(ctx, owner, from, i)
+			r.SPFMarked = markedOther(r.TXT)
+			r.TXT = spfOnly(r.TXT)
 			tree = append(tree, r)
 			if r.Insufficient() {
 				return false
@@ -369,7 +396,7 @@ func (c collector) spf(ctx context.Context, domain string, txt RecordRead) ([]Ta
 				count += Lookups(recs[0])
 				complete = complete && followable(recs[0], r.Targets)
 			}
-			complete = complete && !markedOther(r.TXT)
+			complete = complete && !r.SPFMarked
 			r.TXT = spfOnly(r.TXT)
 			tree[len(tree)-1] = r
 			if !walk(r.Name, r.RecordRead) {
@@ -391,27 +418,32 @@ func markedOther(records []string) bool {
 // followable reports whether the gate gave a target for each include and
 // redirect term of an SPF record: a macro or a malformed target is none.
 func followable(record string, targets []gate.Target) bool {
-	terms := 0
-	for _, term := range strings.Fields(record)[1:] {
-		t := strings.ToLower(term)
-		if strings.HasPrefix(t, "redirect=") {
-			terms++
+	_, ok := spfTargets(record, targets)
+	return ok
+}
+
+func spfTargets(record string, targets []gate.Target) ([]int, bool) {
+	p := parseSPF(record)
+	if p.invalid {
+		return nil, false
+	}
+	var indexes []int
+	complete := !p.unknown
+	for _, term := range p.terms {
+		if term.name != "include" && term.name != "redirect" {
 			continue
 		}
-		if strings.ContainsAny(t[:1], "+-~?") {
-			t = t[1:]
+		found := false
+		for i, t := range targets {
+			if !slices.Contains(indexes, i) && t.Via == term.name && strings.EqualFold(strings.TrimSuffix(t.Name, "."), strings.TrimSuffix(term.arg, ".")) {
+				indexes = append(indexes, i)
+				found = true
+				break
+			}
 		}
-		if strings.HasPrefix(t, "include:") {
-			terms++
-		}
+		complete = complete && found
 	}
-	n := 0
-	for _, t := range targets {
-		if t.Via == "include" || t.Via == "redirect" {
-			n++
-		}
-	}
-	return n == terms
+	return indexes, complete
 }
 
 // MaxLookups is SPF's limit of DNS-querying terms per evaluation (RFC 7208
@@ -419,31 +451,20 @@ func followable(record string, targets []gate.Target) bool {
 const MaxLookups = 10
 
 func isSPF(record string) bool {
-	f := strings.Fields(record)
-	return len(f) > 0 && strings.EqualFold(f[0], "v=spf1")
+	// RFC 7208 §4.5: the version begins the record and is followed by
+	// ASCII space or the end. Fields would accept a different DNS record.
+	const version = "v=spf1"
+	return len(record) >= len(version) && strings.EqualFold(record[:len(version)], version) &&
+		(len(record) == len(version) || record[len(version)] == ' ')
 }
 
 // Lookups counts an SPF record's DNS-querying terms: include, a, mx, ptr,
 // exists and redirect (RFC 7208 §4.6.4).
 func Lookups(record string) int {
-	terms := strings.Fields(record)
-	if len(terms) == 0 {
-		return 0
-	}
 	n := 0
-	for _, term := range terms[1:] {
-		t := strings.ToLower(term)
-		if strings.HasPrefix(t, "redirect=") {
-			n++
-			continue
-		}
-		if t != "" && strings.ContainsAny(t[:1], "+-~?") {
-			t = t[1:]
-		}
-		name, _, _ := strings.Cut(t, ":")
-		name, _, _ = strings.Cut(name, "/")
-		switch name {
-		case "include", "a", "mx", "ptr", "exists":
+	for _, term := range parseSPF(record).terms {
+		switch term.name {
+		case "include", "a", "mx", "ptr", "exists", "redirect":
 			n++
 		}
 	}

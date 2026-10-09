@@ -611,23 +611,72 @@
       },
       "reasons": [
         {
-          "detail": "SPF, DMARC and DKIM records",
-          "reason": "no_rule"
+          "detail": "no email judgments were recorded",
+          "reason": "unavailable:mail_evidence"
         }
       ],
       "sub_items": [
         {
           "asset": "domain:example.com",
           "mark": "not_assessed",
-          "name": "SPF, DMARC and DKIM records",
-          "read_not_judged": [
-            "SPF, DMARC and DKIM records"
-          ],
+          "name": "DMARC policy",
           "reasons": [
             {
-              "detail": "not judged in this version",
-              "reason": "no_rule"
+              "detail": "no email judgments were recorded",
+              "reason": "unavailable:mail_evidence"
             }
+          ],
+          "rules": [
+            "email.dmarc_not_enforced",
+            "email.dmarc_partial",
+            "email.dmarc_subdomains_open",
+            "email.no_mail_spoofable"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "SPF policy",
+          "reasons": [
+            {
+              "detail": "no email judgments were recorded",
+              "reason": "unavailable:mail_evidence"
+            }
+          ],
+          "rules": [
+            "email.spf_missing",
+            "email.spf_invalid",
+            "email.spf_permits_anyone"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "SPF senders",
+          "reasons": [
+            {
+              "detail": "no email judgments were recorded",
+              "reason": "unavailable:mail_evidence"
+            }
+          ],
+          "rules": [
+            "email.spf_undeclared_sender"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "DKIM selectors",
+          "reasons": [
+            {
+              "detail": "no email judgments were recorded",
+              "reason": "unavailable:mail_evidence"
+            }
+          ],
+          "rules": [
+            "email.dkim_missing",
+            "email.dkim_key_breakable",
+            "email.dkim_key_1024"
           ]
         }
       ]

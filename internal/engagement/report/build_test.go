@@ -262,7 +262,7 @@ func TestDomainRootFindings(t *testing.T) {
 	if ext.Mark != "partial" || !slices.Contains(reasons(ext.Reasons), "no_rule") || !slices.Contains(reasons(ext.Reasons), "unavailable:dns_servfail") {
 		t.Errorf("external %s %v", ext.Mark, ext.Reasons)
 	}
-	if email := row(t, r, "email"); email.Mark != "not_assessed" || !slices.Equal(reasons(email.Reasons), []string{"no_rule"}) {
+	if email := row(t, r, "email"); email.Mark != "not_assessed" || !slices.Equal(reasons(email.Reasons), []string{"unavailable:mail_evidence"}) {
 		t.Errorf("email %s %v", email.Mark, email.Reasons)
 	}
 	if len(r.Incomplete) != 0 {

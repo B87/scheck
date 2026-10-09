@@ -891,7 +891,12 @@ domain's TXT again does not renew it; the gate sends at most 10 `include:` and
 `redirect=` reads per evaluation, whatever the collector counts, and refuses the next
 (`refused:spf_budget`). The collector counts SPF's budget itself, over every
 DNS-querying term ([web-collector.md](web-collector.md#reads)), and the gate's cap
-holds whether it does or not. Each follow-up's result, like a records read's, says
+holds whether it does or not. In E7 step 3 the collector narrows these reads to
+syntactically valid SPF records and terms before the first `all`, ignoring `redirect`
+when `all` is present; the gate's admitted surface and independent cap do not change.
+Email rules consume only collected evidence, including organizational-domain DMARC
+records collected under another root; they send no additional lookup. Each follow-up's
+result, like a records read's, says
 whether the name its chain ends at is under a root.
 
 The report prints what left the machine as one fixed block (`engagement.md`, "The

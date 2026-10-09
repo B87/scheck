@@ -69,7 +69,7 @@ Hosts                    checked in part
                              sudo (time.ntp: requires elevated read)
 Email and domain         not checked
   1 of 1 asset read.
-  This version of scheck has no rule for it (SPF, DMARC and DKIM records).
+  Email evidence was not judged (no email judgments were recorded).
 Not requested            Not part of this run: identity and access, secrets, cloud configuration,
                          data stores and backups, CI/CD and supply chain, web application, logging
                          and incident readiness. To include one, list it under roots in the

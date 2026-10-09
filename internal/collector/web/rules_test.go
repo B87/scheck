@@ -106,7 +106,7 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		}
 	}
 	for k := range got {
-		if _, ok := want[k]; !ok {
+		if _, ok := want[k]; !ok && !strings.HasPrefix(k, "email.") {
 			t.Errorf("unexpected judgment %s: %s", k, got[k])
 		}
 	}
@@ -132,7 +132,7 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		}
 		seen[id][v] = true
 	}
-	for _, j := range takeoverOutcomes(t) {
+	for _, j := range append(takeoverOutcomes(t), emailOutcomes(t)...) {
 		if seen[j.ID] == nil {
 			seen[j.ID] = map[string]bool{}
 		}

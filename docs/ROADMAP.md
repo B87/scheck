@@ -832,8 +832,32 @@ Built in steps, reviewed as E4 was:
        from 2b-i; the code review's fixes passed fresh review, including the final
        resume fix, and `make check` is green. No review findings deferred from this
        step.
-3. The email rules.
-4. The web, TLS and header rules, and their data.
+3. **Done:** the eleven email rules over
+   collected DNS: DMARC enforcement, legacy sampling and subdomain policy; no-mail
+   policy; SPF presence, syntax, static tree limits, broad authorization and declared
+   sender comparison; declared DKIM selectors and RSA key sizes. Each definition
+   requires its mail-domain, SPF-mechanism or DKIM-selector subject. Findings stay on
+   the owning domain root. Missing declarations, unread or marked records, unknown
+   mail use and incomplete trees remain coverage gaps; `mail_context` notes describe
+   what DNS shows and cannot show. DMARC uses the embedded public-suffix snapshot and
+   already-collected organizational policies across roots, after every root is read;
+   current receiver DNS tree walking and actual messages are not assessed. The
+   versioned sender table maps four services by exact includes and explicit aliases.
+   SPF syntax is checked past `all`, but unreachable mechanisms and an ignored
+   redirect are not followed; the gate's request surface and cap are unchanged.
+   See `spec/web-collector.md`, "Email", for the reviewed predicates and limitations.
+   The code review's fixes are implemented: DMARC and DKIM markers survive tag
+   reduction as uncertainty; SPF record selection requires the version at byte zero
+   and its ASCII-space or end delimiter; include subjects drop trailing dots and
+   deduplicate for findings and acceptances. Uncollected or unknown read decisions
+   retain `unavailable:not_read`, so absent mail evidence or a declared selector with
+   no read cannot become an absence finding. A further fresh review's fix preserves
+   uncertainty in a marked DMARC version with the tag parser's whitespace handling;
+   SPF version recognition remains strict, and both redaction and truncation markers
+   count before version recognition and tag reduction. `make check` is green;
+   consultant and client reviews are complete, and the final fresh code review found
+   no remaining issues. No review findings deferred from this step.
+4. **Next:** the web, TLS and header rules, and their data.
 5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
    and the report's wording read by the `client`.
 

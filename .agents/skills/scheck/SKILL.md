@@ -51,8 +51,8 @@ the installed CLI's behaviour differs from this skill: v0.0.1 has only `local` a
 recon, plan, check, analyze, report) and prints the **engagement report**. Hosts are
 assessed, and a `domain` root in part. A `domain` root is read (DNS and mail records,
 and the certificate and front page of each name Scope chose, which contacts the
-company's web servers) and judged by DNS rules only: a record pointing at a name that
-does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
+company's web servers) and judged by DNS and email rules. The DNS rules find a record
+pointing at a name that does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
 publishing a private address (`dns.private_address`), a provider fingerprint that may
 be claimable (`dns.takeover_candidate`, high), or an unconfigured service at a provider
 with an ownership-verification policy (`dns.unclaimed_at_provider`, low); the binding's
@@ -63,16 +63,28 @@ with matching undeclared names grouped as DNS matches whose pages were not read;
 declared names keep their own reads and judgments. A discovery gap still leaves
 coverage partial. Services
 without a verified fingerprint are listed as not checked for takeover. Both new
-findings require a DNS-name subject in an acceptance. TLS, certificates and email are
-not judged yet: the `external` row is `partial` at best and
-the `email` row `not_assessed` with `no_rule`. A declared root of any other kind (a
+findings require a DNS-name subject in an acceptance. Email rules judge DMARC policy,
+SPF presence, validity, broad grants and declared sender comparison, and declared DKIM
+keys. Their findings belong to the domain root and require a `mail_domain`,
+`spf_mechanism` or `dkim_selector` subject. The email row has DMARC policy, SPF policy,
+SPF senders and DKIM selectors sub-items, marked from the rules that decided. No
+selector is a coverage gap, never a missing-key finding. No senders listed leaves SPF
+comparison unassessed; unmapped includes and literal IP ranges are listed, not judged.
+`mail_context` notes explain declared or inferred mail use, alignment tags, missing
+context and DNS-only limits. DMARC uses legacy organizational-domain fallback and
+`pct`; current receiver tree walking and actual delivery are not assessed. Test-mode
+`p=reject` or legacy `pct=0; p=reject` can still request quarantine. SPF lookup counts
+are a static tree review, not a result for every message. A published DKIM key does
+not show current use. TLS and certificates are not judged yet, so `external` is
+`partial` at best. A declared root of any other kind (a
 SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
 exits 2. Tell the user what was not assessed, never that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
-A domain's findings come from the web collector's DNS rules, one per record or name
-(its `subject`), with evidence read through the scope gate as `anonymous`.
+A domain's findings come from the web collector's DNS and email rules, one per
+record, name, mail domain, include or selector (its `subject`), with evidence read
+through the scope gate as `anonymous`.
 **No model assesses anything.** A model-assessed pass exists in the codebase, did not
 earn its cost against criteria frozen before it was built, and is not in the CLI: a run
 needs no API key and sends nothing it read off the machine. The model flags
@@ -207,7 +219,8 @@ in this order:
    `intent.accepted_risks` for a risk the user decides not to fix; `reason` and
    `accepted_by` are left empty on purpose for the risk's owner to write. A finding
    with a `subject` puts it in the template; an entry without one accepts every
-   instance of that id on the asset, and only on that asset: a name under a domain root
+   instance of that id on the asset when the definition allows it, and only on that
+   asset. DNS and email findings require a subject. For DNS, a name under a domain root
    is its own asset, and the template names it by its id (`domain:<name>`) when it is
    not declared.
 6. **`assessments`**: every selected rule per asset, `matched`, `not_matched`,

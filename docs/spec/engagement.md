@@ -74,7 +74,7 @@ exists, and the release gate proves they all do. A consumer is never stubbed to 
 |---|---|---|
 | Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted", worded in "The report" |
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
-| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: an MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; neither makes it judged as a domain that sends no mail; and the report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
+| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: a non-null MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; recognized complete MX and SPF evidence showing neither makes it judged as a domain that sends no mail; missing or invalid evidence leaves mail use unknown. The report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
 | Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
 | People | Who are the admins and contractors, and the shared, service and break-glass accounts, with every Workspace address and GitHub login each uses? Everyone else is named from the stanza `--stop-after recon` prints, one account at a time ("People" below). | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply; a contractor holding an admin role is a finding whether listed or not; a shared account names who uses it, so a leaver among them says to rotate it |
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
@@ -1414,7 +1414,7 @@ no rule consumes in this version (`expected_services` before E9). With more than
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
-**The external and email rows, in this build** (E7 step 2b). A domain root the web
+**The external and email rows, in this build** (E7 steps 2b and 3). A domain root the web
 collector read feeds both. In the external row each such root has *dangling records*
 (`dns.dangling_external` and `dns.dangling_internal`), *subdomain takeover*
 (`dns.takeover_candidate` and `dns.unclaimed_at_provider`) and *private addresses*
@@ -1428,8 +1428,17 @@ leaves coverage partial ([web-collector.md](web-collector.md#dns-and-takeover)).
 with the count not checked and `no_rule`; an unknown-provider wildcard is listed once
 as `*.<root>`, even with no certificate-log members, and grouped names are omitted. *TLS and certificates* is *not assessed*
 with `no_rule`. A row whose sub-items are each *assessed* or `not_applicable` is
-*assessed*; the external row is therefore *partial* at best. The email row is *not
-assessed* with `no_rule` ("SPF, DMARC and DKIM records"). A declared `domain` asset
+*assessed*; the external row is therefore *partial* at best. The email row has four
+families per root: *DMARC policy* (including no-mail policy), *SPF policy*, *SPF
+senders* and *DKIM selectors*. The same verdict-based marks apply. No mail evidence
+is `unavailable:mail_evidence`; missing senders, selectors, inherited policy, marked
+records and incomplete trees remain explicit reasons, never a pass. Default text
+coverage retains the affected domain or service when no DKIM selector was given. `mail_context`
+notes print under "Mail context" in text and in `notes` in JSON: declared or inferred
+mail use, observed alignment tags and report-destination presence, unclassified SPF
+terms, missing declarations and the limits of a DNS-only review. Current receiver
+DMARC tree walking and actual message authentication or delivery are not assessed
+([web-collector.md](web-collector.md#email)). A declared `domain` asset
 read with its root counts as read in both rows; its names are judged under its root's
 sub-items, and it has none of its own. A root that was not read gives its own reason
 in both rows.

@@ -20,6 +20,7 @@ import (
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/target/fixture"
 	"github.com/b87/scheck/internal/version"
 )
@@ -762,6 +763,34 @@ intent:
 			t.Fatalf("%s: %v", id, err)
 		}
 		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '*.example.com'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}
+
+func TestEmailAcceptancesRequireTheirSubject(t *testing.T) {
+	for _, id := range finding.WebIDs() {
+		if !strings.HasPrefix(id, "email.") {
+			continue
+		}
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{domain: example.com}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		subject := "example.com"
+		switch finding.SubjectOf(id) {
+		case "dkim_selector":
+			subject = "google._domainkey.example.com"
+		case "spf_mechanism":
+			subject = "example.com/include:sendgrid.net"
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '"+subject+"'}\n"), engagementOptions); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
 	}

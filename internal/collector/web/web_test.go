@@ -234,7 +234,7 @@ func TestCollectUnknowns(t *testing.T) {
 func TestLookups(t *testing.T) {
 	for record, want := range map[string]int{
 		"v=spf1 -all": 0, "v=spf1 a mx ptr exists:%{i}.x.example include:a.example redirect=b.example": 6,
-		"v=spf1 +a/24 -mx:mail.example ~include:c.example ip4:192.0.2.1 ?all": 3, "": 0, "v=spf1 all a:x.example": 1,
+		"v=spf1 +a/24 -mx:mail.example ~include:c.example ip4:192.0.2.1 ?all": 3, "": 0, "v=spf1 all a:x.example": 0,
 	} {
 		if got := Lookups(record); got != want {
 			t.Errorf("Lookups(%q) = %d; want %d", record, got, want)

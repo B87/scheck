@@ -67,6 +67,7 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
+	MailNotes       []Note
 	Unfingerprinted []string
 	Name            string
 	ID              string

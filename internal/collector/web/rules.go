@@ -32,7 +32,8 @@ type Subject struct {
 
 // Judgment is one rule's verdict on one subject, and what it read.
 type Judgment struct {
-	ID string `json:"id"`
+	ID      string `json:"id"`
+	Context string `json:"context,omitempty"`
 	// Asset is the most specific asset holding the subject: the name's own
 	// id under the root (docs/spec/web-collector.md, "Subjects").
 	Asset   string  `json:"asset"`
@@ -81,10 +82,12 @@ type Gap struct {
 // looked up and what it could not list, whether the resolver answers names
 // that do not exist, and what Recon read.
 type Input struct {
-	Asset, Root string
-	Names       []Name
-	Wildcard    *Name
-	Gaps        []Gap
+	Asset, Root  string
+	MailPolicies []MailEvidence
+	MailContext  []MailContext
+	Names        []Name
+	Wildcard     *Name
+	Gaps         []Gap
 	// Doubt is why no verdict over the resolver's answers stands, as a
 	// coverage reason: it answers names that do not exist, or whether it
 	// does is unknown (docs/spec/web-collector.md, "Takeover
@@ -111,6 +114,7 @@ func Judge(in Input) []Judgment {
 		j.name(n)
 	}
 	for _, m := range in.Evidence.Mail {
+		j.email(m)
 		j.records(m.Domain, "MX", m.MX, m.MXTargets, true)
 		j.records(m.Domain, "TXT", m.TXT, m.SPF, m.SPFComplete)
 	}
@@ -127,6 +131,13 @@ type judging struct {
 // add files a judgment, merging one on the same id and subject: a fired
 // verdict stands over an abstention, an abstention over a disproof.
 func (j *judging) add(x Judgment) {
+	reads := make([]string, 0, len(x.Reads))
+	for _, id := range x.Reads {
+		if id != "" && !slices.Contains(reads, id) {
+			reads = append(reads, id)
+		}
+	}
+	x.Reads = reads
 	if j.in.Doubt != "" {
 		x.Verdict, x.Reason = Abstained, j.in.Doubt
 	}
@@ -138,7 +149,7 @@ func (j *judging) add(x Judgment) {
 		return
 	}
 	// Every read stays; the stronger verdict stands.
-	reads := j.out[i].Reads
+	reads = j.out[i].Reads
 	for _, r := range x.Reads {
 		if !slices.Contains(reads, r) {
 			reads = append(reads, r)
@@ -326,7 +337,10 @@ func nonEmpty(id string) []string {
 // gate's own for a refusal (docs/spec/scope.md, "Outcomes").
 func readReason(r RecordRead) string {
 	if r.Decision != gate.DecisionSent {
-		return gate.ReasonOf(r.Decision)
+		if reason := gate.ReasonOf(r.Decision); reason != "" {
+			return reason
+		}
+		return "unavailable:not_read"
 	}
 	return outcomeReason(r.Outcome)
 }

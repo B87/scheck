@@ -741,6 +741,32 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 // invents answers, and what Recon read.
 func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
 	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev}
+	for _, m := range ev.Mail {
+		context := web.MailContext{Domain: m.Domain}
+		for _, sender := range r.res.Mail.Senders {
+			if strings.TrimSuffix(strings.ToLower(sender.Domain), ".") != m.Domain {
+				continue
+			}
+			selectors := []string{}
+			for _, sel := range sender.DKIMSelectors {
+				selectors = append(selectors, strings.ToLower(sel))
+			}
+			context.Senders = append(context.Senders, web.MailSender{Service: sender.Service, Selectors: selectors})
+		}
+		for _, domain := range r.res.Mail.NoMail {
+			if strings.TrimSuffix(strings.ToLower(domain), ".") == m.Domain {
+				context.NoMail = true
+			}
+		}
+		in.MailContext = append(in.MailContext, context)
+	}
+	if r.recon != nil {
+		for _, ra := range r.recon.Assets {
+			if ra.Web != nil && ra.ID != a.ID {
+				in.MailPolicies = append(in.MailPolicies, ra.Web.Mail...)
+			}
+		}
+	}
 	if r.scoped == nil {
 		in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:not_listed", Detail: "Scope did not run"})
 		return in
@@ -967,6 +993,20 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			}
 		}
 		doc.Assets = append(doc.Assets, ra)
+	}
+	// Judge again after all roots are read so inherited mail policy can use
+	// already-collected organizational evidence regardless of root order.
+	// No new request is made (docs/spec/web-collector.md, "Email").
+	for i, ra := range doc.Assets {
+		if ra.Web == nil {
+			continue
+		}
+		for _, a := range r.res.Assets {
+			if a.ID == ra.ID {
+				doc.Assets[i].Judged = web.Judge(r.webInput(a, *ra.Web))
+				break
+			}
+		}
 	}
 	// A declared domain under a root the web collector read was read with
 	// it: its names were among the root's.
@@ -1230,10 +1270,14 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
-			ai.Unfingerprinted = web.Unfingerprinted(r.webInput(asset, *ra.Web))
+			wi := r.webInput(asset, *ra.Web)
+			ai.Unfingerprinted = web.Unfingerprinted(wi)
+			for _, n := range web.MailNotes(wi) {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
+			}
 			for _, j := range ra.Judged {
 				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
-					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked,
+					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context,
 					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
 			}
 		}

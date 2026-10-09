@@ -12,7 +12,8 @@ import (
 // (docs/spec/engagement.md, "Findings"): fired, disproved or abstained,
 // with the gate requests it read.
 type Judgment struct {
-	ID string
+	ID      string
+	Context string
 	// Asset is the most specific asset holding the subject, "" for the
 	// asset the collector read.
 	Asset   string
@@ -61,7 +62,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
-		if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
+		if j.Context != "" {
+			f.WhyHere = []string{j.Context}
+		} else if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
 			sev = raise(sev)
 			f.Adjustments = append(f.Adjustments, Adjustment{Rule: "data_matters_most", By: "engagement", Delta: "+1",
 				Source: SourceRef{File: b.in.Path, Key: "data.matters_most"}})
@@ -338,6 +341,12 @@ var judgedFamilies = map[finding.Area][]struct {
 	name, judges string
 	ids          []string
 }{
+	finding.AreaEmail: {
+		{"DMARC policy", "published DMARC enforcement and subdomain policy", []string{finding.IDEmailDMARCNotEnforced, finding.IDEmailDMARCPartial, finding.IDEmailDMARCSubdomainsOpen, finding.IDEmailNoMailSpoofable}},
+		{"SPF policy", "SPF presence, syntax, static lookup limits and broad authorization", []string{finding.IDEmailSPFMissing, finding.IDEmailSPFInvalid, finding.IDEmailSPFPermitsAnyone}},
+		{"SPF senders", "recognized positive SPF includes compared with declared senders", []string{finding.IDEmailSPFUndeclaredSender}},
+		{"DKIM selectors", "declared DKIM keys and their strength", []string{finding.IDEmailDKIMMissing, finding.IDEmailDKIMKeyBreakable, finding.IDEmailDKIMKey1024}},
+	},
 	finding.AreaExternal: {
 		{"dangling records", "records pointing at names that do not exist",
 			[]string{finding.IDDNSDanglingExternal, finding.IDDNSDanglingInternal}},
@@ -350,7 +359,6 @@ var judgedFamilies = map[finding.Area][]struct {
 // that no rule judges in this build.
 var notJudged = map[finding.Area][]string{
 	finding.AreaExternal: {"TLS and certificates"},
-	finding.AreaEmail:    {"SPF, DMARC and DKIM records"},
 }
 
 // judgedRow is an area a network collector reads: one sub-item per rule
@@ -403,6 +411,10 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			case decided == 0 && undecided == 0:
 				// Everything was read and nothing of this kind exists.
 				si.Mark = "not_applicable"
+				if area == finding.AreaEmail && !slices.ContainsFunc(a.Judged, func(j Judgment) bool { return strings.HasPrefix(j.ID, "email.") }) {
+					si.Mark = "not_assessed"
+					si.Reasons = append(si.Reasons, ReasonDetail{Reason: "unavailable:mail_evidence", Detail: "no email judgments were recorded"})
+				}
 			case undecided == 0:
 				si.Mark, si.Judged = "assessed", []string{fam.judges}
 			case decided > 0:
@@ -412,7 +424,11 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			}
 			some = some || si.Mark == "assessed" || si.Mark == "partial"
 			for _, r := range si.Reasons {
-				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: r.Reason})
+				detail := ReasonDetail{Reason: r.Reason}
+				if area == finding.AreaEmail {
+					detail = r
+				}
+				row.Reasons = appendReason(row.Reasons, detail)
 			}
 			row.SubItems = append(row.SubItems, si)
 		}

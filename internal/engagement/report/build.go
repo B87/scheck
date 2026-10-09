@@ -76,6 +76,7 @@ func Build(in Input) *Report {
 			r.Redaction.Operator.Matches += v.redactions(r.Redaction.Builtin)
 		}
 		if a.Collector != "" {
+			r.Notes = append(r.Notes, a.MailNotes...)
 			r.Findings = append(r.Findings, b.judgedFindings(a)...)
 			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 		}
