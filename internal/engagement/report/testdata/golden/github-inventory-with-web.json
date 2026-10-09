@@ -113,6 +113,7 @@
     {
       "area": "secrets",
       "assets_covered": [
+        "saas:github:example-org",
         "url:https://example.com/"
       ],
       "mark": "partial",

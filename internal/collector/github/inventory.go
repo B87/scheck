@@ -98,6 +98,7 @@ type Population[T any] struct {
 
 // Evidence is typed inventory only. It does not assert any security rule outcome.
 type Evidence struct {
+	Judgments                    []Judgment             `json:"judgments,omitempty"`
 	Principal                    PrincipalRead          `json:"principal"`
 	OrganizationRead             Read                   `json:"organization_read"`
 	Organization                 *OrganizationObject    `json:"organization,omitempty"`
@@ -110,6 +111,9 @@ type Evidence struct {
 	OutsideCollaborators         Population[Account]    `json:"outside_collaborators"`
 	Invitations                  Population[Invitation] `json:"invitations"`
 	Repositories                 Population[Repository] `json:"repositories"`
+	MembersWithoutMFA            Population[Account]    `json:"members_without_mfa"`
+	OwnersWithoutMFA             Population[Account]    `json:"owners_without_mfa"`
+	RepositoriesAccess           []RepositoryAccess     `json:"repositories_access,omitempty"`
 	RepositoryVisibilityComplete bool                   `json:"repository_visibility_complete"`
 }
 
@@ -297,16 +301,31 @@ func itemID[T any](item T) int64 {
 		return v.ID
 	case Repository:
 		return v.ID
+	case Collaborator:
+		return v.ID
+	case DeployKey:
+		return v.ID
 	}
 	return 0
 }
 
 // Reads returns execution metadata for every request, in collection order.
 func (e Evidence) Reads() []Read {
-	out := []Read{e.Principal.Read, e.OrganizationRead, e.MembershipRead}
+	out := []Read{}
+	for _, read := range []Read{e.Principal.Read, e.OrganizationRead, e.MembershipRead} {
+		if read.Op != "" {
+			out = append(out, read)
+		}
+	}
 	out = append(out, e.Members.Reads...)
 	out = append(out, e.Owners.Reads...)
 	out = append(out, e.OutsideCollaborators.Reads...)
 	out = append(out, e.Invitations.Reads...)
-	return append(out, e.Repositories.Reads...)
+	out = append(out, e.Repositories.Reads...)
+	out = append(out, e.MembersWithoutMFA.Reads...)
+	out = append(out, e.OwnersWithoutMFA.Reads...)
+	for _, access := range e.RepositoriesAccess {
+		out = append(out, access.Reads()...)
+	}
+	return out
 }

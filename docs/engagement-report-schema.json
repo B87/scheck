@@ -200,7 +200,7 @@
           "reason": { "$ref": "#/$defs/reason" },
           "reads": { "type": "array", "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids; empty when no read was collected or a static preload decision needed no request." },
           "observations": { "type": "array", "items": { "type": "string" } },
-          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"$ref": "#/$defs/subject"}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
+          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"oneOf": [{"$ref": "#/$defs/subject"}, {"type": "null"}]}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
         }
       }
     },

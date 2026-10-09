@@ -232,7 +232,14 @@ assets:                               # per-asset settings; the key is the name 
     repo: github:example-org/shop
     deploys_to: production
     ci: github-actions
+    public: false                    # true declares deliberate public visibility
 ```
+
+A repository asset's optional `public` boolean records intentional public visibility.
+Only `public: true` declares it public on purpose; omission and `false` do not. The
+field does not grant scope or excuse secrets. E5's public-repository rule compares
+this declaration with recognized API visibility; URL `intent` cannot declare a
+repository's public visibility.
 
 ### Identity, references and validation
 
@@ -287,7 +294,8 @@ other list of URLs. Intent URLs are entry points but never first-party evidence.
 **People.** `people` is a map from a handle to an account holder's kind and identifiers.
 Every other key that names a person uses the handle, except `authorization.by`, which is
 free text because the person authorizing may not be in `people`. Built in E5a: the
-schema and its validation; the rules below arrive with E5 (GitHub) and E6 (Workspace).
+schema and its validation. GitHub identity rules are built in E5 step 3; Workspace
+rules arrive with E6.
 
 | Kind | Who | Exempt from | Counted for the admin threshold |
 |---|---|---|---|
@@ -296,6 +304,11 @@ schema and its validation; the rules below arrive with E5 (GitHub) and E6 (Works
 | `shared` | one account several people sign in to (`ops@`); `used_by` names them, `org` the company behind it if any | nothing | yes, as one |
 | `service` | an account automation signs in as | the stale and never-signed-in rules only | no |
 | `break_glass` | an emergency admin account nobody uses day to day | the stale and never-signed-in rules only | no, for at most two per tenant; any beyond two count as admins, with a readout note |
+
+GitHub identifiers also accept provider Bot logins ending in `[bot]`; this does
+not infer that the operator should classify the account as `service`. GitHub
+user-only disabled-MFA filters do not establish Bot or App enrollment; the
+per-member MFA rule abstains for those identities.
 
 `workspace` and `github` are lists: a person may hold a work and a personal login in
 the organization, or addresses in more than one tenant, and every rule matches over all
@@ -424,6 +437,9 @@ people:
   # github:example-org  pending invitation, role member, sent 2026-09-30 (no account to declare yet)
 # Not listed: 7 suspended accounts that hold no admin role or group-granted access.
 ```
+
+A GitHub candidate seen only in a pending invitation carries `invitation_id`, not
+an account `provider_id`; invitation identity is never presented as account identity.
 
 Entries run in roots order; within a tenant, admins and owners first, then delegated
 role holders, members, outside collaborators and invitations, then by key. A handle is

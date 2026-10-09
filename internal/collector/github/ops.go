@@ -5,14 +5,19 @@ package github
 import "github.com/b87/scheck/internal/engagement/gate"
 
 const (
-	OpPrincipal    = "github.principal"
-	OpOrganization = "github.organization"
-	OpMembership   = "github.membership"
-	OpMembers      = "github.members"
-	OpOwners       = "github.owners"
-	OpOutside      = "github.outside_collaborators"
-	OpInvitations  = "github.invitations"
-	OpRepositories = "github.repositories"
+	OpPrincipal         = "github.principal"
+	OpOrganization      = "github.organization"
+	OpMembership        = "github.membership"
+	OpMembers           = "github.members"
+	OpOwners            = "github.owners"
+	OpOutside           = "github.outside_collaborators"
+	OpInvitations       = "github.invitations"
+	OpRepositories      = "github.repositories"
+	OpMembersWithoutMFA = "github.members_without_mfa"
+	OpOwnersWithoutMFA  = "github.owners_without_mfa"
+	OpRepository        = "github.repository"
+	OpCollaborators     = "github.collaborators"
+	OpDeployKeys        = "github.deploy_keys"
 )
 
 // Ops is the compiled, GET-only inventory surface. Pagination accepts only a
@@ -44,5 +49,21 @@ func inventoryOps() []gate.Op {
 	invitations := list(OpInvitations, "/orgs/{org}/invitations", "", []string{"id", "login", "role", "invitation_source"}, gate.KindOther, "")
 	repos := list(OpRepositories, "/orgs/{org}/repos", "&type=all", []string{"id", "name", "full_name", "owner.id", "owner.login", "owner.type", "visibility", "private", "archived", "default_branch"}, gate.KindRepo, "full_name")
 	repos.List.Subject = "repo:github:{key}"
-	return []gate.Op{principal, org, membership, members, owners, outside, invitations, repos}
+	membersMFA := list(OpMembersWithoutMFA, "/orgs/{org}/members", "&role=all&filter=2fa_disabled", accounts, gate.KindOther, "")
+	ownersMFA := list(OpOwnersWithoutMFA, "/orgs/{org}/members", "&role=admin&filter=2fa_disabled", accounts, gate.KindOther, "")
+	repository := object(OpRepository, "/repos/{owner}/{repo}", repos.Keep)
+	repository.Subject = "repo:github:{owner}/{repo}"
+	repository.Params = []gate.Param{{Name: "owner", Type: gate.Login}, {Name: "repo", Type: gate.RepoName}}
+	repoList := func(id, suffix string, fields []string) gate.Op {
+		o := repository
+		o.ID, o.URL, o.Keep = id, repository.URL+suffix+"?per_page=100&page={page}", fields
+		o.Params = append([]gate.Param{}, repository.Params...)
+		o.Params = append(o.Params, gate.Param{Name: "page", Type: gate.Count, Optional: true})
+		o.List = &gate.List{Items: "$", Kind: gate.KindOther, Next: &gate.Pages{Param: "page"}, MaxPages: 100}
+		return o
+	}
+	collaborators := repoList(OpCollaborators, "/collaborators", []string{"id", "login", "type", "role_name", "permissions.admin", "permissions.pull", "permissions.push", "permissions.maintain", "permissions.triage"})
+	collaborators.URL += "&affiliation=all"
+	keys := repoList(OpDeployKeys, "/keys", []string{"id", "read_only"})
+	return []gate.Op{principal, org, membership, members, owners, outside, invitations, repos, membersMFA, ownersMFA, repository, collaborators, keys}
 }

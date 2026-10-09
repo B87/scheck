@@ -108,8 +108,21 @@ GET reads. Credentials come from `GITHUB_TOKEN`, then `GH_TOKEN`; never print or
 request their values in an engagement file. Read the asset notes, request traces and
 coverage gaps before interpreting counts. “Observed” or “at least” is the token's
 view, not the organization's complete access or private-repository population.
-GitHub security controls are `not_assessed` with `no_rule`: inventory creates no
-security findings. Missing reads and permission gaps remain explicit. The principal
+GitHub identity and repository-access rules produce subject-specific findings and
+fired, disproved or abstained assessments. Owner authority is required for trusted
+MFA evidence; unknown authority or missing/partial populations are not passes.
+GitHub account 2FA is independent of identity-provider MFA; SAML enforcement alone
+does not settle the GitHub 2FA rules.
+Read partial coverage and permission gaps before conclusions. Public-repository
+and deploy-key rules assess part of CI/CD; workflow controls, provider alerts and
+history remain `no_rule`. `public: true` on a repository asset declares
+deliberate public visibility; it never excuses a secret leak. Acceptances for an
+account, invitation, repository or deploy key must name its subject. Collaborator
+pagination covers only the credential's visible view; missing access never proves
+offboarding. `--stop-after recon` prints unattributed accounts with `kind: ""`
+and invitation comments. Let the operator classify each account; never fill kinds
+by guessing or merge people across providers. Missing reads
+and permission gaps remain explicit. The principal
 is read fresh before authenticated reuse; changed known identity is reported in
 `engagement.principal_changes` and the header. Unknown or installation principals
 reuse no authenticated successes. The normal header names the account and its
@@ -123,6 +136,8 @@ that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
+GitHub findings come from identity, MFA, access and repository visibility rules,
+with exact account, invitation, repository or deploy-key subjects where applicable.
 The web collector's findings come from DNS, email, TLS and response rules, one per
 record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
 through the scope gate as `anonymous`.

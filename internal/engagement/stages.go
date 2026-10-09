@@ -187,8 +187,14 @@ func (e *Evidence) String() string {
 // ReconDoc is recon.json, the asset map.
 type ReconDoc struct {
 	Header
-	Assets   []ReconAsset `json:"assets"`
-	Resolver *Resolver    `json:"resolver,omitempty"`
+	Attribution              []Attribution             `json:"attribution,omitempty"`
+	PeopleCandidates         []PeopleCandidate         `json:"people_candidates,omitempty"`
+	PeopleInvitationComments []PeopleInvitationComment `json:"people_invitation_comments,omitempty"`
+	PeopleCandidatesPartial  bool                      `json:"people_candidates_partial,omitempty"`
+	PeopleSource             string                    `json:"people_source,omitempty"`
+	PeopleTenantOrder        []string                  `json:"people_tenant_order,omitempty"`
+	Assets                   []ReconAsset              `json:"assets"`
+	Resolver                 *Resolver                 `json:"resolver,omitempty"`
 }
 
 // How far reaching a host got, in recon.json and the report.
@@ -622,7 +628,7 @@ func (r *run) scope(ctx context.Context) (any, error) {
 		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, FirstParty: r.res.firstParty(a, r.session)}
 		if a.Kind == KindHost {
 			sa.Collector = "host"
-		} else if a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") {
+		} else if (a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:")) || (a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:")) {
 			sa.Collector = "github"
 		}
 		doc.Assets = append(doc.Assets, sa)
@@ -952,6 +958,11 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			ra = r.collectURL(ctx, a, ra)
 		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") && isRoot(a):
 			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.Root, "saas:github:"):
+			ra.Status = StatusCollected
+			ra.Detail = "read with " + a.Root
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -1066,6 +1077,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			return nil, err
 		}
 	}
+	r.reconcileGitHubRepositories(doc)
+	r.populateGitHubPeople(doc)
 	return doc, r.write("recon.json", doc)
 }
 
@@ -1344,6 +1357,19 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
 			ai.ReadWith = ra.Root
 		}
+		if ra.Kind == KindRepo && strings.HasPrefix(ra.Root, "saas:github:") && ra.GitHub == nil {
+			ai.Collector = "github"
+			ai.ReadWith = ra.Root
+			for _, root := range r.recon.Assets {
+				if root.GitHub != nil {
+					for _, access := range root.GitHub.RepositoriesAccess {
+						if access.Asset == ra.ID {
+							ai.InventoryRead = githubReadOK(access.RepositoryRead)
+						}
+					}
+				}
+			}
+		}
 		if ra.GitHub != nil {
 			r.githubReportInput(ra, &ai)
 		}
@@ -1455,6 +1481,16 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	for _, h := range handles {
 		in.Candidates = append(in.Candidates, ereport.Candidate{Handle: h, Why: "employee"})
 	}
+	for _, asset := range r.recon.Assets {
+		if asset.GitHub != nil {
+			if in.RulesVersion == "" {
+				in.RulesVersion = r.o.Version
+			}
+			in.RulesVersion += ":github-access:2026-10-10"
+			break
+		}
+	}
+	partitionGitHubJudgments(in.Assets)
 	return in
 }
 

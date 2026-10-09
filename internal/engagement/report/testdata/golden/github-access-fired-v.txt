@@ -1,0 +1,287 @@
+scheck engagement report: GitHub identity and repository-access review
+For Alex. Read 2026-10-09 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+GitHub account saas:github:example-org: alice (user ID 41). Inventory visibility depends on this
+               credential.
+GitHub account repo:github:example-org/production: alice (user ID 41). Inventory visibility depends
+               on this credential.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: engineering, production (checked only in part: identity and access; CI/CD and supply chain).
+See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Identity and access, CI/CD and supply chain.
+Not checked      Secrets: see Coverage.
+Not requested    Not part of this run: cloud configuration, data stores and backups, external
+                 surface, web application, hosts, email and domain, logging and incident readiness.
+                 To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  critical   A departed person or retired account retains access (production)
+             base high, raised: pat left on 2026-09-01 and still administers the production
+             repository
+  2  high      An outside collaborator administers a production repository (production)
+  3  high      The organization does not require two-factor authentication (engineering)
+  4  high      An organization owner has no two-factor authentication (engineering)
+  5  high      An owner is not among the declared expected owners (engineering)
+             base medium, raised: the expected owners declaration names Alex; unexpected was also
+             observed as an owner
+4 more open at medium or above; see Findings. Below: 0 low, 0 informational, 0 accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: identity and access, CI/CD and supply chain. Not checked: secrets, cloud configuration,
+data stores and backups, external surface, web application, hosts, email and domain, logging and
+incident readiness. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      checked in part
+  2 of 2 assets read.
+  This version of scheck has no rule for it (Delegated organization roles, repository invitations,
+  sign-in history, selected-repository visibility and unobserved repository administrators are not
+  assessed).
+Secrets                  not checked
+  2 of 2 assets read.
+  This version of scheck has no rule for it (GitHub secrets, provider alerts and repository history
+  are not assessed in this step).
+CI/CD and supply chain   checked in part
+  2 of 2 assets read.
+  This version of scheck has no rule for it (Workflow permissions, branch controls, actions, runners
+  and App grants are not assessed in this step).
+Not requested            Not part of this run: cloud configuration, data stores and backups,
+                         external surface, web application, hosts, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 9 open (1 critical, 6 high, 2 medium), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  critical  A departed person or retired account retains access (production)
+   [identity.former_person_has_access]
+   Subject       former (account former)
+   You declared  engagement.yaml people.pat.left: Operator declaration at people.pat.left
+   Observed      collaborators (12:00, as alice (user ID 41)): former permissions.admin=true
+   Concluded from request:collaborators, declared:people.pat.left
+   Severity      critical: base high, +1 attribute admin (collaborators: former
+                 permissions.admin=true)
+   Why here      Pat left on 2026-09-01 and still administers the production repository.
+   Fix           Remove its memberships and repository access, and review credentials and sessions.
+
+2  high  An outside collaborator administers a production repository (production)
+   [github.outside_admin_on_production]
+   Subject       external (account external)
+   You declared  engagement.yaml assets.production.context.deploys_to: Operator declaration at
+                 assets.production.context.deploys_to
+   Observed      outside (12:00, as alice (user ID 41)): external permissions.admin=true
+   Observed      collaborators (12:00, as alice (user ID 41)): external permissions.admin=true
+   Concluded from request:outside, request:collaborators,
+                  declared:assets.production.context.deploys_to
+   Severity      high
+   Why here      The repository deploys to production and external has effective administrative
+                 permission.
+   Fix           Confirm the administrative need and reduce repository permissions where possible.
+
+3  high  The organization does not require two-factor authentication (engineering)
+   [github.mfa_not_required]
+   Observed      organization (12:00, as alice (user ID 41)): two_factor_requirement_enabled=false
+   Severity      high
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Enable GitHub's organization two-factor requirement after checking users and
+                 automation; SAML or identity-provider MFA does not replace this GitHub control.
+
+4  high  An organization owner has no two-factor authentication (engineering)
+   [github.owner_without_mfa]
+   Subject       alex (account alex)
+   Observed      owners-no-mfa (12:00, as alice (user ID 41)): owner alex appears in the provider's
+                 2fa_disabled owner list
+   Severity      high
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Enable strong GitHub two-factor authentication for this account, preferably
+                 security keys; check it even when SAML sign-in uses MFA.
+
+5  high  An owner is not among the declared expected owners (engineering)
+   [identity.unexpected_admin]
+   Subject       unexpected (account unexpected)
+   You declared  engagement.yaml identity.expected_owners: Operator declaration at
+                 identity.expected_owners
+   Observed      owners (12:00, as alice (user ID 41)): owner unexpected
+   Concluded from request:owners, declared:identity.expected_owners
+   Severity      high: base medium, +1 contradiction (identity.expected_owners)
+   Why here      The expected owners declaration names Alex; unexpected was also observed as an
+                 owner.
+   Fix           Confirm whether the person needs owner access; remove it or correct the expected
+                 owner declaration.
+
+6  high  A repository is public without a public declaration (production)
+   [github.undeclared_public_repository]
+   Subject       example-org/production (repository example-org/production)
+   Observed      repository (12:00, as alice (user ID 41)): visibility=public
+   Severity      high
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Confirm public visibility is intentional and declare public: true, or change the
+                 repository visibility.
+
+7  high  A deploy key can write to the repository (production) [github.writable_deploy_key]
+   Subject       deploy key 9 (deploy_key deploy-key:9)
+   You declared  engagement.yaml assets.production.context: Operator declaration at
+                 assets.production.context
+   Observed      keys (12:00, as alice (user ID 41)): deploy key 9 read_only=false
+   Concluded from request:keys, declared:assets.production.context
+   Severity      high: base medium, +1 deploys to production (assets.production.context.deploys_to)
+   Why here      This repository deploys to production.
+   Fix           Replace the key with a read-only deploy key or a narrowly scoped application
+                 credential.
+
+8  medium  Organization members receive broad default repository access (engineering)
+   [github.broad_default_member_permission]
+   Observed      organization (12:00, as alice (user ID 41)): default_repository_permission=write
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Set a narrow base permission and grant repository access through specific teams.
+
+9  medium  The organization has more owners than its size needs (engineering)
+   [github.too_many_owners]
+   Observed      owners (12:00, as alice (user ID 41)): observed owners=5 members=6
+   Observed      members (12:00, as alice (user ID 41)): observed owners=5 members=6
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Reduce owner privileges to the people who need them while retaining at least two
+                 recovery-capable owners.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
+intent.accepted_risks in engagement.yaml and write the reason.
+
+  # A departed person or retired account retains access (production)
+  # critical: accept only with whoever owns the business, never to quiet the report
+    - id: identity.former_person_has_access
+      asset: production
+      subject: former              # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # An outside collaborator administers a production repository (production)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: github.outside_admin_on_production
+      asset: production
+      subject: external            # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # The organization does not require two-factor authentication (engineering)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: github.mfa_not_required
+      asset: engineering
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # An organization owner has no two-factor authentication (engineering)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: github.owner_without_mfa
+      asset: engineering
+      subject: alex                # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # An owner is not among the declared expected owners (engineering)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: identity.unexpected_admin
+      asset: engineering
+      subject: unexpected          # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # A repository is public without a public declaration (production)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: github.undeclared_public_repository
+      asset: production
+      subject: example-org/production # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # A deploy key can write to the repository (production)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: github.writable_deploy_key
+      asset: production
+      subject: deploy-key:9        # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # Organization members receive broad default repository access (engineering)
+    - id: github.broad_default_member_permission
+      asset: engineering
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-04-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # The organization has more owners than its size needs (engineering)
+    - id: github.too_many_owners
+      asset: engineering
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-04-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its
+      value appears nowhere); 13 requests.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read, including people's names and email addresses from saas:github:example-org, is
+    stored only on this machine, in /state/engagements/github-inventory/2026-10-09T12:00:00Z;
+    deleting that directory removes it.
+
+NOTES FOR THE READOUT
+  saas:github:example-org: members: observed 6; owners: observed 5; outside collaborators: observed
+    1; pending invitations: observed 0; repositories visible to this credential: observed 4.
+    Identity and repository-access rules were evaluated; unobserved permissions remain unknown.
+  saas:github:example-org: The credential may hide private repositories or concealed memberships.
+    Completing pagination does not establish a complete organization inventory.
+
+FOR AUTOMATION
+Exit 1: 9 open findings at or above their asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+Files  /state/engagements/github-inventory/2026-10-09T12:00:00Z/: report.txt, report.json,
+       audit.jsonl (every command and request, in order), evidence/

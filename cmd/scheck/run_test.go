@@ -440,7 +440,7 @@ func TestRunHostAndGitHubIsIncompleteWithFindings(t *testing.T) {
 	if code != exitIncomplete || !strings.Contains(msg, "saas:github:example-org: no_credentials") {
 		t.Fatalf("exit %d: %s", code, msg)
 	}
-	if !strings.Contains(out, "no access was given for it") {
+	if !strings.Contains(strings.Join(strings.Fields(out), " "), "neither GITHUB_TOKEN nor GH_TOKEN is set") {
 		t.Errorf("report:\n%s", out)
 	}
 	var doc engagement.FindingsDoc

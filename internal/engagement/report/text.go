@@ -690,6 +690,7 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"audience_internet":        "the declared audience is internet, so no restriction contradiction was judged",
 			"login_flow":               "the login flow was not read, so session cookies were not fully checked",
 			"web_evidence":             "some web-response checks could not reach a decision",
+			"github_evidence":          "required GitHub authority, visibility, context or recognized evidence was missing",
 			"tls_interception":         "your network inspects TLS, so certificates were not judged",
 			"certificate_unclassified": "certificate verification failed without a recognized cause",
 			"certificate":              "the HTTPS certificate could not be verified",

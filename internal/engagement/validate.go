@@ -433,7 +433,7 @@ func (v *validator) people() {
 			what  string
 		}{
 			{"workspace", p.Workspace, isAddress, "an address; write it as name@example.com"},
-			{"github", p.GitHub, loginRe.MatchString, "a GitHub login (letters, digits and single hyphens, up to 39)"},
+			{"github", p.GitHub, isPeopleGitHubLogin, "a GitHub login (letters, digits and single hyphens, up to 39), optionally followed by [bot] for an App account"},
 		} {
 			v.identifiers(key, handle, id.field, id.vals, id.ok, id.what, byIdent)
 		}
@@ -446,6 +446,12 @@ func (v *validator) people() {
 		v.usedBy(key, handle, p)
 		v.date(key+".left", p.Left)
 	}
+}
+
+// App bot identities are people context only; this does not widen any locator
+// or gate parameter (docs/spec/engagement.md, "People").
+func isPeopleGitHubLogin(login string) bool {
+	return loginRe.MatchString(strings.TrimSuffix(login, "[bot]"))
 }
 
 // personKind checks a kind, with the message an operator pasting the recon
@@ -634,6 +640,7 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	only("first_party", a.FirstParty != nil, KindDomain, KindURL, KindHost)
 	only("deploys_to", a.DeploysTo != "", KindRepo)
 	only("ci", a.CI != "", KindRepo)
+	only("public", a.Public != nil, KindRepo)
 
 	if r.Kind == KindHost {
 		v.hostSettings(key, r, a)

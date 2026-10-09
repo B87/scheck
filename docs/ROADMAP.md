@@ -635,7 +635,7 @@ successes would have answered (carried from E4 step 4a) and prints the changed p
 in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
 
-**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–2 built, later
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–3 built, later
 steps planned; later rules and permissions in `spec/github-collector.md` remain
 proposals until reviewed and frozen):
 
@@ -659,9 +659,22 @@ proposals until reviewed and frozen):
    exit 2; coverage counts successful inventory reads rather than execution status.
    The assessment-token reporting decision and
    E3 rest-lab seal remain pending; no live acceptance is claimed.
-3. **Identity and repository access.** Existing E5a people/admin/MFA rules; repository
-   public intent, default member permission, production outside-admin and write
-   deploy-key rules. Freeze privilege maps, bases and subject keys before building.
+3. **Identity and repository access (built).** E5a people/admin/MFA conditions gain
+   their finding definitions and rules; repository `public` intent, default member
+   permission, production outside-admin and write deploy-key rules. Five compiled
+   reads add owner-gated MFA filters and exact repository objects, collaborators and
+   deploy keys. Fourteen finding ids, bases, subject keys, privilege recognition and
+   three outcomes are frozen in `spec/github-collector.md`, "Rule evidence".
+   Missing authority sends no owner-only MFA filter; partial populations can fire
+   but never disprove. Collaborator visibility stays unknown after pagination.
+   Recon prints per-account candidates and exact attribution; readout notes consume
+   shared-account users, recovery accounts, pending owner invitations and MFA beliefs.
+   Delegated organization roles, repository invitations, sign-in
+   dates and unobserved private repositories remain unassessed. CI, secrets and
+   history remain later steps; the rest-lab seal and live acceptance remain pending.
+   Adversarial-review defects in repository provenance, recon privilege labels, MFA
+   readout counts, per-asset offboarding instances and covered-asset inventory were
+   fixed with regression tests. None of those review defects is deferred.
 4. **CI controls.** Organization/repository workflow defaults, default-branch
    protection and active rules, supported workflow parsing, immutable action
    references and dangerous PR-target combinations. Freeze supported syntax and

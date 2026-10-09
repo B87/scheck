@@ -131,6 +131,46 @@ func TestMinimalFile(t *testing.T) {
 	}
 }
 
+func TestRepositoryPublicDeclaration(t *testing.T) {
+	for _, value := range []string{"true", "false", ""} {
+		t.Run("public="+value, func(t *testing.T) {
+			file := minimal + "assets:\n  source:\n    repo: github:Example-Org/Shop\n"
+			if value != "" {
+				file += "    public: " + value + "\n"
+			}
+			res, err := Parse("e.yaml", []byte(file), testOpts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, a := range res.Assets {
+				if a.Name != "source" {
+					continue
+				}
+				if a.ID != "repo:github:example-org/shop" || a.Root != "saas:github:example-org" {
+					t.Fatalf("repository resolution = %+v", a)
+				}
+				if value == "" {
+					if a.Public != nil {
+						t.Fatal("absent public declaration became explicit")
+					}
+				} else if a.Public == nil || *a.Public != (value == "true") {
+					t.Fatalf("public = %v, want %s", a.Public, value)
+				}
+				return
+			}
+			t.Fatal("resolved repository missing")
+		})
+	}
+	for _, locator := range []string{"host: 203.0.113.5", "domain: example.com", "url: https://shop.example.com/", "saas: github:example-org"} {
+		for _, value := range []string{"true", "false"} {
+			file := minimal + "assets:\n  target:\n    " + locator + "\n    public: " + value + "\n"
+			if _, err := Parse("e.yaml", []byte(file), testOpts); err == nil || !strings.Contains(err.Error(), "assets.target.public") || !strings.Contains(err.Error(), "only to a repo asset") {
+				t.Errorf("nonrepository %s public:%s error = %v", locator, value, err)
+			}
+		}
+	}
+}
+
 func TestValidationErrors(t *testing.T) {
 	cases := []struct {
 		name string

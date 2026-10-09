@@ -440,7 +440,7 @@ type Assessment struct {
 
 // AssessmentOutcome retains a subject-specific observed decision and its detail.
 type AssessmentOutcome struct {
-	Subject Subject        `json:"subject"`
+	Subject *Subject       `json:"subject"`
 	Outcome string         `json:"outcome"`
 	Detail  map[string]any `json:"detail"`
 }

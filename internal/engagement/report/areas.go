@@ -18,7 +18,9 @@ func feeds(area finding.Area, a AssetInput) bool {
 	github := strings.HasPrefix(a.ID, "saas:github:")
 	switch area {
 	case finding.AreaIdentity:
-		return a.Kind == "saas"
+		return a.Kind == "saas" || (a.Kind == "repo" && a.Collector == "github" && slices.ContainsFunc(a.Judged, func(j Judgment) bool {
+			return j.ID == finding.IDIdentityUnattributedAdmin || j.ID == finding.IDIdentityFormerPersonHasAccess || j.ID == finding.IDGitHubOutsideAdminOnProduction
+		}))
 	case finding.AreaSecrets:
 		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "repo" || github
 	case finding.AreaCICD:
@@ -87,7 +89,7 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
-		if a.Collector == "web" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
+		if (a.Collector == "web" || (a.Collector == "github" && len(a.Judged) > 0)) && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets || area == finding.AreaIdentity || area == finding.AreaCICD) {
 			out = append(out, a)
 		}
 	}

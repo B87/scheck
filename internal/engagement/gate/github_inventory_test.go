@@ -60,11 +60,19 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		case "/user/memberships/orgs/acme":
 			fmt.Fprintf(w, `{"state":"active","role":"admin","organization":{"id":2,"login":"acme"},"user":{"id":%d,"login":%q,"type":"User"}}`, userID, login)
 		case "/orgs/acme/members":
+			if r.URL.Query().Get("filter") == "2fa_disabled" {
+				fmt.Fprint(w, `[]`)
+				return
+			}
 			fmt.Fprintf(w, `[{"id":%d,"login":%q,"type":"User"}]`, userID, login)
 		case "/orgs/acme/outside_collaborators":
 			fmt.Fprint(w, `[]`)
 		case "/orgs/acme/invitations":
 			fmt.Fprint(w, `[{"id":7,"login":null,"role":"direct_member","email":"do-not-persist@example.test"}]`)
+		case "/repos/acme/shop":
+			fmt.Fprint(w, `{"id":3,"name":"shop","full_name":"acme/shop","owner":{"id":2,"login":"acme","type":"Organization"},"visibility":"private"}`)
+		case "/repos/acme/shop/collaborators", "/repos/acme/shop/keys":
+			fmt.Fprint(w, `[]`)
 		case "/orgs/acme/repos":
 			fmt.Fprint(w, `[{"id":3,"name":"shop","full_name":"acme/shop","owner":{"id":2,"login":"acme","type":"Organization"},"visibility":"private"},{"id":4,"name":"excluded","full_name":"acme/excluded","owner":{"id":2,"login":"acme","type":"Organization"}}]`)
 		default:
@@ -188,7 +196,7 @@ func assertInventoryReport(t *testing.T, r *ereport.Report) {
 	t.Helper()
 	for _, row := range r.Coverage {
 		if row.Area == "identity" || row.Area == "secrets" || row.Area == "cicd" {
-			if row.Mark != "not_assessed" {
+			if row.Mark != "not_assessed" && row.Mark != "partial" {
 				t.Errorf("inventory judged security: %+v", row)
 			}
 			found := false

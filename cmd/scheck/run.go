@@ -440,6 +440,10 @@ func writeStage(w io.Writer, opts *globalOpts, out *engagement.Outcome, dir *eng
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", a.Name, a.ID, statusWord(a.Status, a.Reason), report.Sanitize(strings.TrimSuffix(detail, "; ")))
 		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writeGitHubPeople(w, doc)
 	case *engagement.PlanDoc:
 		fmt.Fprintf(w, "# %s: plan (%s): empty until 0.0.2 E9\n# run directory: %s\n", doc.Engagement, doc.Method, where)
 	case *engagement.CheckDoc:
