@@ -59,6 +59,31 @@ func TestBodyCutShortIsNotARead(t *testing.T) {
 	})
 }
 
+// A reset before any response is retried, and when the retries run out the
+// result's detail, a transport error naming the URL, is redacted as the
+// audit line is: a redact_extra match in the path never reaches a collector.
+func TestResetRetriesEndRedacted(t *testing.T) {
+	w := newWorld(t)
+	w.extra = []string{"zebrafish"}
+	w.scope.sites = map[string]SitePaths{"https://www.example.com": {Paths: []string{"/", "/zebrafish/"}}}
+	cert := w.leaf([]string{"www.example.com"}, time.Now().Add(time.Hour), false)
+	srv := w.serve("www.example.com", "198.51.100.93", 443, &cert, func(rw http.ResponseWriter, _ *http.Request) {
+		if conn, _, err := rw.(http.Hijacker).Hijack(); err == nil {
+			_ = conn.Close()
+		}
+	})
+	res := w.gate().Send(context.Background(), web("https", "www.example.com", "/zebrafish/"))
+	if res.Decision != "unavailable:connection_reset" || res.OK() {
+		t.Fatalf("%+v", res)
+	}
+	if n := srv.hits.Load(); n != int32(1+len(retryDelays)) {
+		t.Errorf("%d attempts", n)
+	}
+	if strings.Contains(res.Detail, "zebrafish") || !strings.Contains(res.Detail, "[REDACTED:") {
+		t.Errorf("detail %q", res.Detail)
+	}
+}
+
 // A secret that straddles the cap is redacted whole before the cut, and the
 // cut of a body larger than what was read is marked as a lower bound
 // (AGENTS.md rule 5; docs/spec/host-collector.md §4.2).

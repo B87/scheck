@@ -44,8 +44,8 @@ Hypotheses drawn from the operator's own words, the part of the job that earns t
   not done until the consumers it owns exist, and a consumer is never stubbed to pass
   that test.
 - **The lab comes before the checks it measures.** Each release's lab is seeded by
-  someone who does not write that release's checks, and its labels are sealed before
-  the first collector slice starts. One author cannot be blind to their own seeding.
+  someone who does not write that release's checks, and each part of it is sealed
+  before the first slice whose checks it measures starts. One author cannot be blind to their own seeding.
   The seeder may be a second person or an **AI agent in its own session**, under these
   conditions: the seeding session reads the vision, the specs and this roadmap's
   example tables but never the collector code, the rules or their fixtures; it writes
@@ -252,11 +252,12 @@ words, replaces them with plain descriptions in text and keeps the paths in JSON
 ### E3 — the lab, sealed
 
 **Delivers:** a GitHub test organization the team owns, a Google Workspace test tenant
-on a domain the team owns, and one Linux host over SSH (nginx in front of a Next.js app,
-postgres on the same host) in a docker-compose file; a seeded issue list written by a
-seeder who is not the implementer (a person, or an agent in its own session, under the
-rule above) and sealed before E5 starts; two context cases and a clean variant; the
-false-positive target for the clean variant, fixed now.
+on a domain the team owns, a second domain the team owns, separate from the tenant's,
+with its DNS, mail records and a small website, and one Linux host over SSH (nginx in
+front of a Next.js app, postgres on the same host) in a docker-compose file; a seeded
+issue list written by a seeder who is not the implementer (a person, or an agent in its
+own session, under the rule above) and sealed in two parts (below); two context cases
+and a clean variant; the false-positive target for the clean variant, fixed now.
 
 | Example seeded issue | Found through |
 |---|---|
@@ -270,10 +271,29 @@ false-positive target for the clean variant, fixed now.
 | A GitHub organization owner nobody declared, tied to no person | GitHub API and `people` (E5, E9) |
 | A third-party OAuth app with full Drive scope | Admin SDK (E6) |
 | DMARC published at `p=none` | DNS (E7) |
-| A CNAME to a hosting service that no longer serves the name | DNS (E7) |
+| A CNAME to a hosting service that no longer serves the name, built so that nobody outside the team can claim it while the lab is up (a provider-verified domain, or a target under a domain the team holds outside the lab's roots) | DNS and the front-page read (E7); high when the provider's fingerprint matches, medium when the target name does not exist |
 | `PasswordAuthentication yes` on the host | host collector (E1b) |
 | postgres bound to all interfaces with no host firewall rule in front | multi-fact rule (E9) |
-| Missing `Strict-Transport-Security` header | response headers (E7); low, must rank below every item above |
+| Missing `Strict-Transport-Security` header, on a site under a TLD that is not preloaded (a declared `url` root or `first_party`) | response headers (E7); low; must rank below every item above |
+
+No seeded issue may be exploitable by anyone outside the team while the lab exists. A
+takeover is seeded only where the provider's verification or the team's own
+registration stops anyone else from claiming the name.
+
+Sites under a preloaded TLD (`.page`) exercise the preloaded branch of the HSTS and
+plain-HTTP rules (`spec/web-collector.md`, "Preloaded TLDs") and count in the clean
+variant's false positives. If the team owns no domain under a TLD that is not
+preloaded, the acceptance record says that HSTS and plain-HTTP recall was measured on
+fixtures only. A lab root that is a subdomain (`lab.<x>.page`) publishes its DMARC
+explicitly at `_dmarc.<lab root>`, or `<x>.page` is declared a root too; otherwise the
+DMARC rules abstain, its organizational domain not being a root.
+For the dangling CNAME, either point a name at GitHub Pages on a domain the lab's GitHub
+organization has verified, with no Pages site for that name and the verification record
+kept published while the lab exists (a takeover candidate, high), or point it at a name
+that does not exist under a second domain the team owns outside the lab's roots (a
+dangling record, medium). Never point it at an S3, Azure or Elastic Beanstalk name
+nobody holds, and never reserve the bucket or app under the matching name, which leaves
+nothing to find.
 
 The host collector's checks predate the lab, and E1b adds none, so wiring the host in
 before the labels are sealed shapes nothing; the recall gate measures its checks like
@@ -291,9 +311,16 @@ Docker-published listener is a different issue, which the seeder may add, and on
 the 0.0.2 rule correctly abstains (`spec/engagement.md`, "Stages").
 
 **Done when:** the labels are committed encrypted or stored outside the tree, with
-their hash in `docs/eval/`, before the first commit of E5; the seeder is named in the
-acceptance record, with the model when it is an agent. E1a to E2 and E4 need no lab and
-may proceed while it is being built.
+their hash in `docs/eval/`, in two parts, each seeded blind and sealed before the
+commit the table names:
+
+| Part | What it holds | Sealed before |
+|---|---|---|
+| Domain | the second domain, its DNS and mail records, and the small website, with E7's seeded issues, the context cases, the domain's clean variant and its share of the false-positive target | the first commit of E7 |
+| The rest | the GitHub organization, the Workspace tenant and the SSH host, with their seeded issues, clean variant and share of the false-positive target | the first commit of E5 or E6, whichever comes first |
+
+The seeder of each part is named in the acceptance record, with the model when it is an
+agent. E1a to E2 and E4 need no lab and may proceed while it is being built.
 
 ### E4 — scope stage and the scope gate
 
@@ -391,7 +418,7 @@ prove:
    evidence. A resolver that rewrites NXDOMAIN, and a root with wildcard DNS, are
    caught by the control queries, with nothing read on the matched names.
 9. **Discovered names:** for a discovered name without first-party evidence, the
-   server sees exactly `GET /` over https and over http plus one TLS handshake; a
+   server sees exactly `GET /` over https and over http, and one TLS handshake; a
    collector's request for `/robots.txt` on it is `refused:entry_point` and audited.
 10. **Entry points:** a `url` root reads only its entry points, `robots.txt` and
     `security.txt`.
@@ -434,8 +461,9 @@ prove:
 19. **Population:** a list cut by a cap is marked incomplete in its evidence, and a
     test rule over it, through the rule evaluator, fires, is never disproved, and
     prints its count as "at least". E4 proves the page's population and the predicate
-    (`AnyRecord` over a partial population); the rule evaluator reads collector
-    evidence from E5, whose first list rule carries this test through it.
+    (`AnyRecord` over a partial population); the rule evaluator reads no collector
+    evidence before a collector lands, and E5's first list rule carries this test
+    through it.
 20. **Resume:**
     - a rate-limited request is sent again and kept;
     - a refused request is re-admitted and refused again;
@@ -467,7 +495,7 @@ prove:
 the gate by the identity (another principal or scope set gives another identity) and by
 a success on record under a principal the gate does not know being sent again; E5,
 whose principal op tells the gate who a credential is, carries it through a real
-principal. A web asset's vantage joins a request's identity when `--vantage` lands in E7
+principal. A web asset's vantage joins a request's identity in E7 step 5
 (`spec/scope.md`, "Resume").
 
 **Deferred from E4's design review** (a modularity pass over the gate, kept here so the
@@ -479,13 +507,17 @@ slices that add callers do them first):
   (`repo:github:{key}`), as an op's subject already is, so the gate stops writing the
   engagement's id syntax; org-unit matching moves behind `Scope`, beside every other
   exclude match;
-- before E7: `Scope.Site` becomes one `Admits(path, resolution)` decision written once
-  in the engagement, which the gate calls before and after resolving the name and
-  discovery and the report read, in place of today's paths partitioned by the evidence
-  each needs;
-- with E5's first op: a request's `Reason` derived from its decision by one table, and the
-  gate's longest functions (`attempt`, `send`, op validation, discovery's per-root
-  loop, `shape`) split into steps.
+- before E7, done in E7 step 1a: `Scope.Site`, paths partitioned by the evidence each
+  needs, became one `Scope.Admits(origin, path, lookup)` decision written once in the
+  engagement. The gate asks it at steps 7 and 8 and, when the answer needs the lookup,
+  again at step 12 (`spec/scope.md`, "Admission"); discovery's listing decides
+  first-party evidence after resolution with the same function, and the report counts
+  a site as first-party from the gate's answer;
+- with E7's first op, E7 being the first network collector, done in E7 step 1a ahead
+  of it: a request's `Reason` comes from its decision by one table, and only a sent
+  request's from its status; the gate's longest functions (`attempt`, `send`, op
+  validation, discovery's per-root loop, `shape`) are split into steps, `attempt`'s in
+  the order of `spec/scope.md`, "Admission".
 
 **Deferred from E4's slice-closing review** (2026-10-08), each carried by the slice
 named:
@@ -494,15 +526,15 @@ named:
   check of `spec/scope.md`, "Admission", step 6 ("allowed by the asset's mode") exists.
   Today only `ceiling` is checked, and the window tests admit a test-only probe op that
   has no mode at all.
-- E7: `mergeEgress` (`internal/engagement/resume.go`) ORs a site's first-party flag
-  across sessions, so a name sent without first-party evidence in one session and with
-  it in another moves wholly to "websites shown to be yours". No site op exists before
-  E7; E7 keeps each session's counts split by first-party status.
+- done in E7 step 5: each session's site request counts remain split by
+  first-party status across sessions, so later evidence never moves earlier
+  unconfirmed requests into "websites shown to be yours".
 - E7: `unavailable:blocked`, a firewall that blocks scheck's User-Agent, is the web
   collector's to decide from the page it is served (`spec/scope.md`, "Connections").
 - E5, E6, E7: a collector marks coverage by `spec/scope.md`'s "Outcomes" table, its
   row for a request that got no answer (`unavailable:connection_reset`,
-  `unavailable:timeout`, `unavailable:unreachable`: exit 2) included.
+  `unavailable:timeout`, `unavailable:unreachable`: exit 2 for what was declared)
+  included.
 
 ### E5a — people, access and acceptances
 
@@ -561,7 +593,7 @@ repositories as `secret_location` keyed `actions:<name>` or a new kind (E5).
 collector that declares the kind lands (E5, E6); empty password raised to critical by
 the E9 multi-fact rule `sshd.empty_password_login` (`permitemptypasswords yes` with
 password or keyboard-interactive login, and the shell; high for a refusing shell when
-TCP forwarding is allowed, since nologin does not stop `ssh -N`); handed to E7 step 5:
+TCP forwarding is allowed, since nologin does not stop `ssh -N`); done in E7 step 5:
 `--vantage internet` from an office the admin panel allowlists gives a false
 contradiction, so the flag help, the warning and the finding define "internet" as
 outside every address the page allows (not the office, not the VPN).
@@ -585,9 +617,8 @@ finding declares its subject kind (consultant's E5a list: `account` for members 
 collaborators, `invitation`, `repository`, `branch`, `workflow`, `deploy_key`,
 `webhook`, `secret_location`, `principal`, `oauth_app` for App installations; none for
 the organization's 2FA requirement, too many owners and the default workflow token).
-Before E5 starts, the `security-consultant` reviews and freezes the base severity
-anchors (`spec/engagement.md`, "Severity in context"), and every base E5 assigns is
-placed against them.
+Every base E5 assigns is placed against the base severity anchors frozen on 2026-10-09
+(`spec/engagement.md`, "Severity in context").
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
 two-factor requirement is visible only to an owner's token and is three-valued (absent
@@ -610,9 +641,7 @@ table carries what is now hard-coded per provider (a display name, page keys, ra
 recognition), so a collector adds one entry, not six edits in two packages, and a list
 declares its item's subject as a template (`repo:github:{key}`), as an op's subject
 already is. Coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got
-no answer exiting 2. With E5's first op too: a request's `Reason` derived from its
-decision by one table, and the gate's longest functions (`attempt`, `send`, op
-validation, discovery's per-root loop, `shape`) split into steps.
+no answer exiting 2.
 
 **Carried from the engagement-spec review** (security-consultant, 2026-10-09):
 
@@ -690,40 +719,254 @@ it, from E4).
 
 ### E7 — domain, email and web observe
 
-**Delivers:** DNS records and subdomain takeover detection by provider-specific
-fingerprints, wildcard-aware, never by trying to claim the name; SPF, DKIM and DMARC
-with the DMARC policy and alignment read, not just presence; DKIM read per selector
-declared under `mail.senders`, *insufficient evidence* without one; domains declared
-under `mail.no_mail` expected to publish `v=spf1 -all` and DMARC `p=reject`, and DMARC `p=none` graded by
-whether the domain sends; TLS and certificate, response headers and cookies, technology
-fingerprint, `/robots.txt` and `/.well-known/security.txt`, from entry points only
-(`spec/scope.md`, "Web applications and sites"). Single-fact rules for each.
+**Delivers:** the reads, rules and data of `spec/web-collector.md`. DNS records and
+subdomain takeover detection by provider-specific fingerprints, wildcard-aware, never by
+trying to claim the name; SPF, DKIM and DMARC with the DMARC policy and alignment mode
+read, not just presence; DKIM read per selector declared under `mail.senders`,
+*insufficient evidence* without one; domains declared under `mail.no_mail` expected to
+publish `v=spf1 -all` and DMARC `p=reject`, DMARC `p=none` graded by whether the domain
+sends, and a domain root nobody declared judged from the mail use it shows
+(`spec/engagement.md`, "Intake"); the names the company's own MX, NS and SPF records
+point at resolved and recorded, never contacted (`spec/scope.md`, "Third-party
+sources"); TLS and certificate, response headers and cookies, technology fingerprint,
+`/robots.txt` and `/.well-known/security.txt`, from entry points only, with one
+redirect hop on the same host, on a declared or first-party site (`spec/scope.md`, "Web
+applications and sites", "Connections"); header, cookie, `security.txt` and plain-HTTP
+rules on declared and first-party sites only. Single-fact rules for each, and
+`web.restricted_reachable`, which reads one response, the declaration and the vantage.
+The gate gains what they need: TXT (a record's strings joined, TCP on truncation), MX
+and NS in its DNS client, the labels `_dmarc` and `_domainkey` and dotted selectors in
+its DNS name type, a typed certificate verification class beside the error text, and
+the TLS alert that ended a handshake (`unavailable:tls_handshake`, or
+`unavailable:tls_refused` after the handshake completed). Versioned
+data in the tree: the takeover table, `PreloadedTLDs` (from Chromium's preload list,
+pinned to a commit), an embedded public-suffix snapshot
+(`golang.org/x/net/publicsuffix` stays barred by `scripts/depcheck.sh`), the
+TLS-interception list, the session cookie names, the SPF include-to-service table and
+the block-page markers. Validation refuses one URL under both `intent` lists.
 `scheck run --vantage internet|vpn|lan`, recorded in the run and on each piece of web
-evidence and printed in the report header (`spec/engagement.md`, "Reachability and
-vantage"); a web request's identity for resume includes it (`spec/scope.md`, "Resume").
-On a resume, a changed `mail` or `intent` URL reads again only the DNS names and entry
-points it affects, where E4 runs Scope again whole (`spec/engagement.md`, "Stop and
-resume"; carried from E4 step 4b).
+and DNS evidence and printed in the report header, with a warning at the start when
+`intent.not_exposed` is listed and no vantage is given (`spec/engagement.md`,
+"Reachability and vantage"); a web request's identity for resume includes it
+(`spec/scope.md`, "Resume"). On a resume, a changed `mail` or `intent` URL reads again
+only the DNS names and entry points it affects; Scope discovery is kept when its
+inputs are unchanged
+(`spec/engagement.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
+network collector: the `security-consultant` froze the base severity anchors on
+2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
+placed against them.
+
+Built in steps, reviewed as E4 was:
+
+0. The definition: `spec/web-collector.md`, the frozen severity anchors, `PreloadedTLDs`;
+   the lab's domain part sealed (`eval/lab-0.0.2-domain.md`).
+1. The gate, in two halves:
+   - 1a, done: the refactors carried from E4's reviews (below): a request's `Reason`
+     from its decision by one table, the longest functions split into steps, and
+     `Scope.Admits`;
+   - 1b, done: what E7's reads need of the gate: TXT, MX and NS in its DNS client, and
+     a records read (`dns.records`) at a name built from the file, admitted as a
+     discovery lookup is (`spec/scope.md`, "Third-party sources"); the underscore
+     labels and DKIM selectors in its name types; a CNAME query at the chain's end,
+     once per name, when the queries there find nothing (a DNS host may hide an in-zone
+     CNAME whose target does not exist), with fixtures of that and of a DNS host's
+     compact denial of existence in the gate's fake zone; the typed certificate
+     verification class, the TLS alert that ended a handshake before or after it
+     completed, with the gate completing every handshake itself, and verification by Go's own verifier on every platform, so
+     that no intermediate is fetched outside the gate, with no roots read noted and
+     every failure then unclassified (`spec/scope.md`, "Connections").
+2. The collector, in two halves, since nothing carried a finding that is not a host's:
+   - 2a, done: the gate's follow-ups of the names a records read's answer points at
+     (`dns.follow`: by index, as answered, an excluded one refused, at most 10
+     `include:` and `redirect=` reads per SPF evaluation, one evaluation per domain;
+     `spec/scope.md`, "Third-party sources"), and `internal/collector/web`, whose
+     `Collect` reads each domain root in Recon (`spec/web-collector.md`, "Reads"): its
+     mail domains' TXT, DMARC, MX and SPF include tree and declared DKIM selectors (each
+     mail domain once, under the most specific root holding it), its
+     NS, the addresses of its MX and NS targets, and the front page over https and http
+     of each name Scope marked to read (`web.front`), the https read's handshake the
+     name's one TLS handshake and its certificate read. What it reads is kept in
+     `recon.json`, only the fields the rules read; the root is `limit_reached` when
+     `limits.timeout` ends the engagement before or while it is read. A `url` root is
+     not read yet;
+   - 2b, split in two on 2026-10-09:
+     - 2b-i, done: the path a finding takes when it is not a host's, proven with
+       `dns.dangling_external`, `dns.dangling_internal` and `dns.private_address`: a
+       rule interface over a collector's evidence (`Judge`, run in Recon, its verdicts
+       in `recon.json`), Scope's lookups with their outcome and request id in
+       `scope.json`, the report's input, findings and acceptance by subject, coverage
+       rows for the external and email areas, and E7's subject kinds in
+       `docs/engagement-report-schema.json` (`spec/web-collector.md`, "DNS and
+       takeover"; `spec/engagement.md`, "Coverage", "Findings"). A read domain root is
+       `collected`: its coverage replaces `collector_not_built`, and its findings set
+       the exit code. A finding belongs to the most specific asset holding its subject,
+       a name found under the root its own; a declared domain asset under a read root is
+       recorded with it; nothing unread counts as nothing found, a verdict standing only
+       when Scope's resolver and the one this session's Recon checked with its own
+       control lookup are known not to invent answers (`spec/scope.md`, "Discovery");
+       and the model path's store refuses an id that is not a host finding's;
+     - 2b-ii, done: takeover table `2026-10-09.1`, pinned to
+       `can-i-take-over-xyz` commit `5bd4e12837911c8475486f1da922c9b9c706e632`
+       (`2025-02-08`), reviewed `2026-10-09`; enabled fingerprints for GitHub Pages,
+       S3, Elastic Beanstalk, Azure and Vercel, with the remaining planned providers
+       explicitly unverified (`spec/web-collector.md`, "Takeover fingerprints").
+       `dns.takeover_candidate` and `dns.unclaimed_at_provider` both declare subject
+       kind `dns_name`, as the three existing DNS definitions do: an acceptance must
+       name the subject. A positive fingerprint replaces duplicate
+       `dns.dangling_external`; unknown providers and NODATA remain ordinary dangling
+       records. Scope keeps its concrete wildcard control; Recon judges it once on
+       `*.<root>` with matching undeclared names grouped, and reads its front-page
+       pair only for a resolving body-fingerprint provider through the normal gate.
+       Wildcard matching requires recognized equal chains, outcomes and addresses,
+       never shared IPs alone or equal markers. The gate redacts the lookup's name,
+       refusals included; a marked control is insufficient and never becomes an HTTP
+       target. An insufficient or unchecked control leaves Scope incomplete for
+       resume to retry; a successful control is kept with complete Scope. A positive
+       fingerprint suspends operator confirmations for its exact subject or listed
+       wildcard members in live and persisted scope; declared names keep their own
+       reads and judgments. Provider caveats reach the report, whose coverage lists
+       services with no fingerprint, including a wildcard with no certificate-log
+       members once on `*.<root>`. Gaps in discovery stay partial even when the wildcard fires.
+       Findings on discovered names get the default medium exit threshold even when
+       the name has no asset input. Reviewed with the merged `dns_name` definitions
+       from 2b-i; the code review's fixes passed fresh review, including the final
+       resume fix, and `make check` is green. No review findings deferred from this
+       step.
+3. **Done:** the eleven email rules over
+   collected DNS: DMARC enforcement, legacy sampling and subdomain policy; no-mail
+   policy; SPF presence, syntax, static tree limits, broad authorization and declared
+   sender comparison; declared DKIM selectors and RSA key sizes. Each definition
+   requires its mail-domain, SPF-mechanism or DKIM-selector subject. Findings stay on
+   the owning domain root. Missing declarations, unread or marked records, unknown
+   mail use and incomplete trees remain coverage gaps; `mail_context` notes describe
+   what DNS shows and cannot show. DMARC uses the embedded public-suffix snapshot and
+   already-collected organizational policies across roots, after every root is read;
+   current receiver DNS tree walking and actual messages are not assessed. The
+   versioned sender table maps four services by exact includes and explicit aliases.
+   SPF syntax is checked past `all`, but unreachable mechanisms and an ignored
+   redirect are not followed; the gate's request surface and cap are unchanged.
+   See `spec/web-collector.md`, "Email", for the reviewed predicates and limitations.
+   The code review's fixes are implemented: DMARC and DKIM markers survive tag
+   reduction as uncertainty; SPF record selection requires the version at byte zero
+   and its ASCII-space or end delimiter; include subjects drop trailing dots and
+   deduplicate for findings and acceptances. Uncollected or unknown read decisions
+   retain `unavailable:not_read`, so absent mail evidence or a declared selector with
+   no read cannot become an absence finding. A further fresh review's fix preserves
+   uncertainty in a marked DMARC version with the tag parser's whitespace handling;
+   SPF version recognition remains strict, and both redaction and truncation markers
+   count before version recognition and tag reduction. `make check` is green;
+   consultant and client reviews are complete, and the final fresh code review found
+   no remaining issues. No review findings deferred from this step.
+4. **Done:** three TLS and eight web rules:
+   typed certificate failures, expiry within 14 days (confirm renewal), a failed
+   TLS 1.2-or-later negotiation without claiming older versions work; HSTS, plain HTTP
+   and preloaded-browser exceptions, session cookie flags, recognized security
+   headers, version disclosure, trusted detector hits and security contacts. Subject
+   acceptances and verdict-based web/secrets coverage preserve missing evidence;
+   cookie coverage never claims the unread login flow passed. Declared URL roots and
+   assets, first-party entries, well-known files and one gate-admitted same-host hop
+   use `web.entry` after takeover suspensions, beside `web.front`. Intent alone grants
+   neither first-party status nor header eligibility. Nondefault-port URL roots make
+   no implicit 443 read. Recon retains admission metadata and collection times;
+   robots paths are neither retained there nor requested. `web_context` notes report
+   technology sources, block pages, robot counts and entry-point limits. Chromium's
+   51-TLD snapshot is pinned to `d5e6fd51b430fec89732a3976e666011ecffa0a2`, with
+   versioned inspection issuers, session names and block markers. Consultant review
+   corrections are implemented. The first code review's six confirmed fixes cover
+   trusted reused security-contact 404s, literal HTTP quoted-pairs in HSTS, nested
+   template depth, whole HTML attribute tokens, CSP nonce/hash payload grammar and
+   wildcard takeover suppression of the control hostname's TLS judgments. A fresh
+   review verified those fixes and found a related HTML tag boundary issue: slash
+   delimiters now preserve active inputs, inert containers and closing-tag recognition.
+   A subsequent review verified earlier fixes and found raw-text closing-tag
+   recognition: raw-text/RCDATA now precedes ordinary comment and attribute parsing,
+   with script escaped/double-escaped states retained, including inside templates.
+   `make check` is green after every boundary fix. Consultant and client reviews are
+   complete; the final fresh code review verified the raw-text/RCDATA, script-state
+   and earlier fixes and found no remaining issues. No review findings deferred from
+   this step. Verified follow-up fixes for URL-only engagements restrict
+   resolver-control doubt to DNS/email judgments;
+   URL assets contained by an explicit URL root inherit its authority for their exact
+   entry paths; unread redirect attempts do not suppress ordinary declared-entry
+   reads; and URL assets read with a root count as read in coverage. Scope, exclusions
+   and per-capture abstentions remain enforced. `make check` is green; consultant
+   review and a fresh code review found no remaining issues. Five offline regression
+   tests cover the real-run failure modes. No follow-up review findings deferred.
+5. **Done:** `--vantage internet|vpn|lan` is
+   declared on each invocation and recorded in sessions, HTTP/DNS evidence, audit
+   and the report. `internet` means outside every permitted source, including office
+   allowlists and VPN; no egress detection is sent. `web.restricted_reachable` judges
+   exact restricted URL entries, with an authentication caveat and outage caveat.
+   Changed mail declarations refresh records and dependent follow-ups by domain;
+   changed intent role or audience refreshes its exact URL; reasons and web
+   acceptances only regrade. Changed vantage refreshes Scope and web/DNS evidence,
+   leaving hosts unchanged. Reused evidence keeps its observation time. The
+   adversarial review fixes preserve canonical escaped entry and redirect-hop
+   paths, reuse successful MX and NS address dependencies,
+   recalculate reused DNS chain membership against current roots, mark failed declared
+   root NS reads incomplete, and scope missing accepted-subject completeness to its
+   owning asset and collector. Follow-up review corrections keep first-party egress
+   counts separate within sessions as well as across resumes, sort those rows
+   deterministically, and require the original scheme for a same-origin login redirect.
+   `make check` and `make build` are green. Consultant and final client report reviews
+   are complete; the whole E7 integration review and a fresh review of the final
+   boundary fixes found no remaining issues. Offline regressions cover these fixes,
+   selective resume and all three restricted-rule outcomes. No review findings are
+   deferred from this step. These are software checks, not external live-security
+   acceptance or a recorded 0.0.2 release-gate pass.
 
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)
 fire, disprove and abstain for every rule; the audit log shows no request outside an
-asset's entry points; a resume with a different vantage reads a web asset's entry points
-again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
+asset's entry points and its one redirect hop, and no `robots.txt` path
+requested; a resume with a different vantage reads a web asset's names and entry
+points again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
 and entry points it affects (carried from E4 step 4b).
 
 **Carried from E4's reviews:**
 
-- before E7's first op, `Scope.Site` becomes one `Admits(path, resolution)` decision
-  written once in the engagement, which the gate calls before and after resolving the
-  name and discovery and the report read, in place of today's paths partitioned by the
-  evidence each needs;
-- each session's site requests are kept split by first-party status, so a name sent
-  without first-party evidence in one session and with it in another is not moved
-  wholly to "websites shown to be yours" (today's `mergeEgress` ORs the flag);
-- the web collector decides `unavailable:blocked` from the page it is served
-  (`spec/scope.md`, "Connections");
+- done in E7 step 1a: a request's `Reason` derived from its decision by one table, and
+  the gate's longest functions (`attempt`, `send`, op validation, discovery's per-root
+  loop, `shape`) split into steps. The provider table and a list's item subject as a
+  template stay with E5 and E6;
+- done in E7 step 1a: `Scope.Site` replaced by one `Scope.Admits(origin, path, lookup)`
+  decision written once in the engagement, which the gate calls before and after
+  resolving the name, and whose evidence check after resolution discovery's listing
+  shares (E4's "Deferred from E4's design review");
+- done in step 5: site requests remain split by first-party status across
+  sessions; later confirmation never changes earlier unconfirmed request counts;
+- the web collector decides `unavailable:blocked` from the page it is served: status
+  and a block-page marker (`spec/scope.md`, "Connections");
 - coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got no
-  answer exiting 2.
+  answer exiting 2 only for what was declared.
+
+**Carried from E7 step 2b-i's review** (code review, 2026-10-09), each fixed before E7
+closes:
+
+- done in step 5: observed items use actual request collection times and
+  preserve them when reused (`spec/engagement.md`, "Findings");
+- done in step 5: network assets have a trace of redacted gate entries,
+  including DNS queries (`spec/engagement.md`, "Text and JSON");
+- done in step 5: `method.levels_used` comes from actual DNS queries and
+  request sends over the retained run, plus host collection; DNS-only reads never
+  invent `observe`
+  (`spec/engagement.md`, "Runs, state and configuration").
+
+**Carried from E7 step 2b-i** (2026-10-09), done in step 5:
+
+- Resolver controls remain a heuristic: a resolver that handles `invalid.` specially
+  can rewrite other missing names. The report explains this limitation; it makes no
+  guarantee that every dangling target is found.
+- Missing accepted subjects are removable only over a complete applicable population;
+  incomplete evidence remains `rule_not_decided`, never evidence of a fix.
+- Egress records actual reserved-name query counts in `invalid_queries`, alongside
+  the boolean `control_invalid`; wording names Scope and Recon's real total.
+- Recon's resolver control outcome is in `recon.json` and report context notes.
+- Discovery wording includes passive resolution of third-party CNAME, MX, NS and SPF
+  names outside roots; no such lookup authorizes HTTP contact.
+
+**Carried to 0.0.3 from E7's definition** (2026-10-09): an SOA lookup of a dangling
+target's registrable domain, which would tell whether anyone can register it
+(`spec/web-collector.md`, "Not assessed"); no 0.0.3 slice owns it yet.
 
 ### E8 — `scheck init`: the interview
 
@@ -817,8 +1060,9 @@ asset unchanged; a loop fixture terminates.
 - *Already built, carried here:* a resume keeps Scope and host envelopes of any age,
   so a run resumed weeks later reports old discovery as current. Keep nothing older
   than a fixed maximum, compiled in with no setting to widen it (the consultant
-  recommends 7 days; owner's decision pending), and print the date on `Observed`
-  whenever a run's collection crosses a day.
+  recommends 7 days; owner's decision pending). The date on `Observed`
+  whenever a run's collection crosses a day is implemented in E7 step 5; the maximum
+  age decision and enforcement remain E9's.
 - *Owner's decision pending:* may a context raise reach critical? Today "a person who
   left still active" with `attribute:admin` and "2-step verification not enforced" with
   `contradiction` both reach critical, while critical is defined as usable by anyone on
@@ -858,7 +1102,10 @@ asset unchanged; a loop fixture terminates.
     config file.
 
 **Sequence:** E1a → E1b → E2 → E4 → {E5, E6, E7, E8} → E9, with E1c at any point after
-E1b, E5a before E5 and E6 (alongside E7), and E3 built alongside and sealed before E5 starts. The host path and the report come first because they need no network
+E1b, E5a before E5 and E6 (alongside E7), and E3 built alongside and sealed in parts,
+its domain part before E7 and the rest before E5 or E6. E7 is the first network
+collector, before E5 and E6, because the operator needs the domain, email and web reads
+first. The host path and the report come first because they need no network
 and can be proven on evidence that already exists; the lab comes before any network
 collector so that recall is measured, not confirmed; the interview comes with the
 collectors, whose rules read its answers.
@@ -896,6 +1143,12 @@ the intake question that asks.
 **Done when:** tests against a fake API server cover every rule's three outcomes; the
 collector makes only calls on its declared list; an opt-in live test (`make live`)
 reads a test project.
+
+**Carried from E7's definition** (2026-10-09): the definition of an exposure finding
+(`spec/engagement.md`, "Severity in context") must cover "a named resource readable by
+anyone" (a public bucket), as the high anchor "a bucket readable by anyone, not
+declared public" assumes; today it covers only a URL that answers or names its
+software.
 
 ### G2 — first-party evidence from inventory
 

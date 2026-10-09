@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	webc "github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/gate"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -161,11 +162,21 @@ func TestDiscovery(t *testing.T) {
 	if doc.Resolver == nil || doc.Resolver.Address != "192.0.2.53" || doc.Resolver.Rewrites || doc.Resolver.Controls != 2 || !doc.Resolver.Invalid {
 		t.Errorf("resolver %+v", doc.Resolver)
 	}
+	// A chain the resolver answered whole is not asked again, except a
+	// dangling chain's end, once, for the CNAME a DNS host may hide.
+	ends := 0
 	for _, q := range h.Queries() {
-		if strings.Contains(q, "legacy") || strings.Contains(q, "alice") || q == "edge.cdnprovider.example." || q == "gone.shops.example-provider.net." ||
+		if q == "gone.shops.example-provider.net." {
+			ends++
+			continue
+		}
+		if strings.Contains(q, "legacy") || strings.Contains(q, "alice") || q == "edge.cdnprovider.example." ||
 			!strings.HasSuffix(q, ".example.com.") && q != "example.com." && !strings.HasSuffix(q, ".invalid.") && q != "crt.sh." {
 			t.Errorf("queried %q", q)
 		}
+	}
+	if ends != 1 {
+		t.Errorf("a dangling chain's end was asked %d times", ends)
 	}
 	// The email identity reached no file in the run directory.
 	err := filepath.WalkDir(dir, func(path string, e os.DirEntry, err error) error {
@@ -249,12 +260,12 @@ func TestDiscoveryEgress(t *testing.T) {
 	for _, want := range []string{
 		"crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com; 1 request.",
 		"Your DNS resolver at 192.0.2.53, and whatever it forwards to",
-		"including 1 random test name under your domains and one under invalid.",
+		"including 1 random test name under your domains and 4 queries for random names under invalid.",
 		"Nothing was sent to an AI model provider.",
 		"domain:legacy.example.com: dropped 1 discovered name",
 	} {
 		if !strings.Contains(text.String(), want) {
-			t.Errorf("the report lacks %q", want)
+			t.Errorf("the report lacks %q: %s", want, text.String())
 		}
 	}
 	srcs := map[string]ereport.EgressSource{}
@@ -436,6 +447,25 @@ func TestDiscoveryNetworkRootEvidence(t *testing.T) {
 	}
 	if ev := names["cdn.example.com"].FirstParty; ev != nil {
 		t.Errorf("cdn, one address outside the root: %+v", ev)
+	}
+}
+
+// A CNAME that an address query does not show, whose target does not
+// exist, is found by the CNAME query and listed as dangling, with and
+// without compact denial of existence, as the lab's DNS host answers it
+// (docs/eval/lab-0.0.2-domain.md).
+func TestDiscoveryFindsAHiddenDanglingCNAME(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		h := gate.NewHarness(t, nil)
+		h.CrtSh(`[{"name_value":"old.example.com","not_after":"2027-01-01T00:00:00"}]`)
+		h.DNS(map[string]string{"example.com": "addrs:198.51.100.1", "old.example.com": "hidden:gone.example.net"})
+		if compact {
+			h.CompactDenial()
+		}
+		doc, _ := discover(t, h, discoveryFile)
+		if old := byName(doc)["old.example.com"]; old.Status != engagement.NameDangling || !slices.Equal(old.Chain, []string{"gone.example.net"}) {
+			t.Errorf("compact %v: %+v", compact, old)
+		}
 	}
 }
 
@@ -680,5 +710,129 @@ func TestResumeRunsScopeAgainWhenAConfirmationExpired(t *testing.T) {
 	scopeRunAt(t, h, path, dir, discoveryStart.AddDate(1, 0, 2))
 	if len(crt()) != 2 {
 		t.Errorf("a confirmation that expired since: crt.sh %v", crt())
+	}
+}
+
+// Recon reads a domain root with the web collector through the gate: its
+// mail records, the names they point at (an excluded one refused unasked),
+// and each name Scope chose to read; nothing else is queried or contacted.
+func TestReconReadsADomainRoot(t *testing.T) {
+	h := gate.NewHarness(t, nil)
+	h.CrtSh(`[]`)
+	root := h.Site("example.com", "198.51.100.10")
+	www := h.Site("www.example.com", "198.51.100.11")
+	h.DNS(map[string]string{"example.com": "addrs:198.51.100.10", "www.example.com": "addrs:198.51.100.11",
+		"mx.mailhost.example": "addrs:198.51.100.25"})
+	word := "zebra" + "fish"
+	h.TXT("example.com", "v=spf1 include:_spf.esp.example ~all", "site-verification="+word+"-abc123")
+	h.TXT("_spf.esp.example", "v=spf1 -all")
+	h.TXT("_dmarc.example.com", "v=DMARC1; p=none")
+	h.MX("example.com", 10, "mx.mailhost.example")
+	h.NS("example.com", "ns1.dns-host.example", "ns.legacy.example.com")
+	file := discoveryFile + "mail:\n  senders:\n    - {domain: example.com, service: google-workspace, dkim_selectors: [Google]}\n" +
+		"redact_extra: [" + word + "]\n"
+	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }, FindingSubject: func(string) string { return "" }, HostFinding: func(string) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := engagement.CreateRunDir(t.TempDir(), "acme", discoveryStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dir.Close() })
+	out, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(file), Dir: dir, StopAfter: "recon",
+		Started: discoveryStart, Version: "test", NewGate: h.NewGate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ev *webc.Evidence
+	judged := map[string]string{}
+	for _, a := range out.Document.(*engagement.ReconDoc).Assets {
+		if a.ID == "domain:example.com" {
+			ev = a.Web
+			for _, j := range a.Judged {
+				judged[j.ID+" "+j.Subject.Key] = j.Verdict
+			}
+		}
+	}
+	// The run's own rules judged what it read: the NS target that does not
+	// exist fires, the MX target that resolves disproves.
+	// Scope's names reach the rules too: the root and www resolve to
+	// public addresses.
+	for key, want := range map[string]string{
+		"dns.dangling_external example.com/NS/ns1.dns-host.example": webc.Fired,
+		"dns.dangling_external example.com/MX/mx.mailhost.example":  webc.Disproved,
+		"dns.dangling_external example.com/TXT/_spf.esp.example":    webc.Disproved,
+		"dns.private_address example.com":                           webc.Disproved,
+		"dns.private_address www.example.com":                       webc.Disproved,
+	} {
+		if judged[key] != want {
+			t.Errorf("%s: %q, want %q (all: %v)", key, judged[key], want, judged)
+		}
+	}
+	if ev == nil || len(ev.Mail) != 1 {
+		t.Fatalf("evidence %+v", ev)
+	}
+	m := ev.Mail[0]
+	if len(m.TXT.TXT) != 1 || len(m.SPF) != 1 || !m.SPFComplete || len(m.DMARCRecords) != 1 || m.DMARCRecords[0].Tags["p"] != "none" ||
+		len(m.MXTargets) != 1 || m.MXTargets[0].Outcome != "addresses" || len(m.DKIM) != 1 || m.DKIM[0].Selector != "google" ||
+		m.DKIM[0].Read.Outcome != "nxdomain" {
+		t.Errorf("mail %+v", m)
+	}
+	if len(ev.NSTargets) != 2 || ev.NSTargets[0].Outcome != "nxdomain" || ev.NSTargets[1].Decision != "refused:excluded" {
+		t.Errorf("NS targets %+v", ev.NSTargets)
+	}
+	sites := map[string]webc.Site{}
+	for _, s := range ev.Sites {
+		sites[s.Name] = s
+	}
+	if len(sites) != 2 || sites["example.com"].HTTPS.Status != 200 || sites["www.example.com"].HTTP.Status != 200 || !sites["www.example.com"].HTTPS.TLS.Verified {
+		t.Errorf("sites %+v", ev.Sites)
+	}
+	for _, seen := range [][]string{root(), www()} {
+		slices.Sort(seen)
+		if !slices.Equal(seen, []string{"http GET /", "https GET /"}) {
+			t.Errorf("a server saw %v", seen)
+		}
+	}
+	for _, q := range h.Queries() {
+		if strings.Contains(q, "legacy") {
+			t.Errorf("queried %s", q)
+		}
+	}
+	// The seeded value reaches no file of the run, its marker does.
+	marked := false
+	err = filepath.WalkDir(dir.Path, func(path string, e os.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if strings.Contains(string(raw), word) {
+			t.Errorf("%s holds the redacted value", path)
+		}
+		marked = marked || strings.Contains(string(raw), "[REDACTED:extra:")
+		return err
+	})
+	if err != nil || !marked {
+		t.Errorf("walk %v, marker %v", err, marked)
+	}
+}
+
+// When the control lookup under invalid. says nothing, whether the resolver
+// invents answers is unknown: a discovered name without first-party
+// evidence is not read on its answer.
+func TestDiscoveryReadsNothingOnAnUnknownResolver(t *testing.T) {
+	h := gate.NewHarness(t, nil)
+	h.CrtSh(`[{"name_value":"shop.example.com","not_after":"2027-01-01T00:00:00"}]`)
+	h.DNS(map[string]string{"*.invalid": "servfail", "example.com": "addrs:198.51.100.1", "shop.example.com": "addrs:198.51.100.2",
+		"www.example.com": "addrs:198.51.100.3"})
+	doc, _ := discover(t, h, discoveryFile)
+	shop := byName(doc)["shop.example.com"]
+	if shop.Read || !strings.Contains(shop.Detail, "unknown") || doc.Resolver.Known() {
+		t.Errorf("shop %+v, resolver %+v", shop, doc.Resolver)
+	}
+	if www := byName(doc)["www.example.com"]; !www.Read {
+		t.Errorf("a declared name is still read: %+v", www)
 	}
 }

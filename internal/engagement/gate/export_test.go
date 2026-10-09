@@ -82,8 +82,9 @@ func (h *Harness) NewGate(cfg Config) (*Gate, error) {
 }
 
 // DNS sets what the resolver answers: "cname:<target>", "addrs:<a>,<b>",
-// "servfail", "refused" or "nodata"; a name not set is NXDOMAIN unless a
-// server registered it.
+// "servfail", "refused" or "nodata", or "hidden:<target>", a CNAME an
+// address query does not show when its target does not exist; a name not
+// set is NXDOMAIN unless a server registered it.
 func (h *Harness) DNS(names map[string]string) {
 	z := map[string]record{}
 	for n, v := range names {
@@ -91,6 +92,8 @@ func (h *Harness) DNS(names map[string]string) {
 		switch kind {
 		case "cname":
 			z[n] = record{cname: val}
+		case "hidden":
+			z[n] = record{cname: val, hidden: true}
 		case "addrs":
 			z[n] = record{addrs: strings.Split(val, ",")}
 		case "servfail":
@@ -103,6 +106,34 @@ func (h *Harness) DNS(names map[string]string) {
 	}
 	h.w.zone = newZone(z)
 }
+
+// TXT adds TXT records to a name the resolver answers; call it after DNS.
+func (h *Harness) TXT(name string, records ...string) {
+	r := h.w.zone.names[name]
+	for _, t := range records {
+		r.txt = append(r.txt, []string{t})
+	}
+	h.w.zone.names[name] = r
+}
+
+// MX adds a mail exchanger to a name; call it after DNS.
+func (h *Harness) MX(name string, pref uint16, target string) {
+	r := h.w.zone.names[name]
+	r.mx = append(r.mx, mxRecord{pref, target})
+	h.w.zone.names[name] = r
+}
+
+// NS adds name servers to a name; call it after DNS.
+func (h *Harness) NS(name string, targets ...string) {
+	r := h.w.zone.names[name]
+	r.ns = append(r.ns, targets...)
+	h.w.zone.names[name] = r
+}
+
+// CompactDenial answers a name that does not exist with NOERROR and no
+// record, as a signed zone with compact denial of existence does; call it
+// after DNS.
+func (h *Harness) CompactDenial() { h.w.zone.compact = true }
 
 // Queries lists the names the resolver was asked, with their trailing dot.
 func (h *Harness) Queries() []string {
@@ -125,4 +156,60 @@ func (h *Harness) CrtSh(body string) func() []string {
 		}
 		return out
 	}
+}
+
+// FingerprintSite serves a provider error from an in-scope name (or a
+// wildcard certificate's concrete control host), counting every request.
+func (h *Harness) FingerprintSite(name, ip string, status int, body string, configured ...string) func() []string {
+	cert := h.w.leaf([]string{name}, time.Now().Add(time.Hour), false)
+	reply := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if slices.Contains(configured, r.Host) {
+			_, _ = w.Write([]byte("A configured site"))
+			return
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}
+	a := h.w.serve(name, ip, 443, &cert, reply)
+	b := h.w.serve(name, ip, 80, nil, reply)
+	return func() []string {
+		var out []string
+		for _, s := range []*server{a, b} {
+			for _, r := range s.requests() {
+				out = append(out, r.Host+r.URL.Path)
+			}
+		}
+		return out
+	}
+}
+
+// ResponseSite serves a fake site with a caller's offline handler on both ports.
+func (h *Harness) ResponseSite(name, ip string, handler http.HandlerFunc) func() []string {
+	cert := h.w.leaf([]string{name}, time.Now().Add(45*24*time.Hour), false)
+	https := h.w.serve(name, ip, 443, &cert, handler)
+	httpSrv := h.w.serve(name, ip, 80, nil, handler)
+	return func() []string {
+		var out []string
+		for scheme, s := range map[string]*server{"https": https, "http": httpSrv} {
+			for _, r := range s.requests() {
+				out = append(out, scheme+" "+r.URL.Path)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+}
+
+// ExpiredSite serves a declared test endpoint whose certificate is expired.
+func (h *Harness) ExpiredSite(name, ip string) {
+	cert := h.w.leaf([]string{name}, time.Now().Add(-time.Minute), false)
+	h.w.serve(name, ip, 443, &cert, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+}
+
+// FailNS makes only the NS read fail while the name's other answers remain intact.
+func (h *Harness) FailNS(name string) {
+	r := h.w.zone.names[name]
+	r.failType = typeNS
+	h.w.zone.names[name] = r
 }

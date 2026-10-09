@@ -19,14 +19,16 @@ func feeds(area finding.Area, a AssetInput) bool {
 	switch area {
 	case finding.AreaIdentity:
 		return a.Kind == "saas"
-	case finding.AreaSecrets, finding.AreaCICD:
+	case finding.AreaSecrets:
+		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "repo" || github
+	case finding.AreaCICD:
 		return a.Kind == "repo" || github
 	case finding.AreaCloud, finding.AreaData:
 		return a.Kind == "cloud"
 	case finding.AreaExternal:
 		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "network"
 	case finding.AreaWeb:
-		return a.Kind == "url"
+		return a.Kind == "url" || a.Kind == "domain"
 	case finding.AreaHosts:
 		return a.Kind == "host"
 	case finding.AreaEmail:
@@ -61,6 +63,8 @@ func (b *builder) coverage() []Row {
 				Detail: "you declared it does not apply (not_used)"}
 		case area == finding.AreaHosts:
 			row = b.hostsRow()
+		case len(b.judged(area)) > 0:
+			row = b.judgedRow(area, b.judged(area))
 		default:
 			row = b.areaRow(area)
 		}
@@ -76,6 +80,18 @@ func (b *builder) coverage() []Row {
 			Reasons: []ReasonDetail{{Reason: "collector_not_built"}}})
 	}
 	return append(rows, outside...)
+}
+
+// judged are the assets feeding area that a network collector read: the
+// domain collector feeds the external and email rows.
+func (b *builder) judged(area finding.Area) []AssetInput {
+	var out []AssetInput
+	for _, a := range b.in.Assets {
+		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // areaRow is an area no collector in this build reads: not declared, or

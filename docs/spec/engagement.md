@@ -15,7 +15,7 @@ run can resume from a saved output.
 |---|---|---|
 | **1. Intake** | Ask what a consultant would ask (below). | Engagement file |
 | **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
-| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (mail records, NS, SOA, CAA) is read here, per domain root and declared mail domain. Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
+| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
 | **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. With a model (0.0.4), hypotheses as well. | Plan |
 | **5. Check** | Run the follow-up reads that rules named and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
 | **6. Analyze** | Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. | Findings and follow-ups |
@@ -74,7 +74,7 @@ exists, and the release gate proves they all do. A consumer is never stubbed to 
 |---|---|---|
 | Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted", worded in "The report" |
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
-| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is *insufficient evidence* for the sending rules, never treated as non-sending. The severity of DMARC `p=none` depends on whether the domain sends |
+| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: a non-null MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; recognized complete MX and SPF evidence showing neither makes it judged as a domain that sends no mail; missing or invalid evidence leaves mail use unknown. The report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
 | Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
 | People | Who are the admins and contractors, and the shared, service and break-glass accounts, with every Workspace address and GitHub login each uses? Everyone else is named from the stanza `--stop-after recon` prints, one account at a time ("People" below). | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply; a contractor holding an admin role is a finding whether listed or not; a shared account names who uses it, so a leaver among them says to rotate it |
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
@@ -193,8 +193,8 @@ intent:
     - {url: https://shop.example.com/admin, audience: vpn}
   accepted_risks:                     # pasted from a report, at the readout
     - id: sshd.password_auth_enabled
-      asset: deploy                   # subject: the instance key (a login, a repository, port/proto);
-                                      # omitted, every instance of the id on the asset is accepted
+      asset: deploy                   # subject: the instance key (a login, a DNS name, port/proto), required
+                                      # when the finding declares one; a host finding has none in 0.0.2
       reason: "break-glass path; MFA at the bastion"
       accepted_by: alice
       expires: 2026-12-31
@@ -556,7 +556,8 @@ it to that list, with none of the target's documented artefacts.
   `true` and `false` exit 3 as ambiguous; a tenant appears at most once.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
-  under a root.
+  under a root, and one URL listed under both `intent.exposed_on_purpose` and
+  `intent.not_exposed` exits 3.
 - An accepted risk needs `id`, `asset`, `reason` and `accepted_by`; an empty `reason`
   counts as missing. It needs `subject` when the finding's definition declares a
   subject kind, and may not have one on a non-host id whose definition declares none
@@ -601,7 +602,8 @@ nobody listed, so the engagement's adjustments are a closed table:
 - **Exposed on purpose** applies only to exposure findings: those whose whole claim is
   that a URL answers or names its software (reachable, version or technology
   disclosed), on that exact URL. A finding about what the response contains (a secret,
-  a file, a debug page) is not one. Every finding definition declares whether it is
+  a file, a debug page) is not one, and neither is a contradiction of a declared
+  restriction (`web.restricted_reachable`), though its claim is that a URL answers. Every finding definition declares whether it is
   one (`exposure_finding`). Secrets, TLS and configuration findings on the same asset
   never move: an exposed `.env` on a public-on-purpose site is still high. Listeners on
   a host are governed by its `expected_services`, not by intent.
@@ -629,15 +631,21 @@ to `info`.
 **Base severity anchors.** With rules only, the ranking is the base-severity table plus
 context, so bases must agree across collectors or "Fix these first" fails whatever the
 renderer does. Each anchor is a base before context, with the context step that moves
-it beside it. The `security-consultant` reviews and freezes them before E5 assigns the
-first network collector's bases, and every later base is placed against them:
+it beside it. The `security-consultant` reviewed and froze them on 2026-10-09, before
+E7, the first network collector, assigned its bases; every later base is placed
+against them:
 
-| Base | Anchors |
-|---|---|
-| critical | a usable empty password: an account with an empty password that sshd accepts empty passwords for (a multi-fact rule, E9); a credential in a public repository or its history; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
-| high | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); a super admin or owner nobody can name; 2-step verification not enforced at the identity provider; a person who left still active (+1 `attribute:admin`); the GCP Owner role (`roles/owner`) on a human or service account; a public bucket; an admin without 2-step verification; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); a write-all default workflow token with actions not pinned to a commit |
-| medium | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC `p=none` on a domain that sends (a domain under `mail.no_mail` falls under the non-sending rules instead); an OAuth app with a broad scope (+1 `attribute:admin_grantor`); more super admins or owners than the tenant needs; a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one |
-| low | missing HSTS; pending updates of unknown class |
+| Base | Means | Anchors |
+|---|---|---|
+| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant. | a usable empty password: an account with an empty password that sshd accepts empty passwords for (a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
+| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`) |
+| low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone |
+| info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
+
+A declared admin who holds Owner is a note for the readout, not a finding. Of the
+example seeded issues in ROADMAP E3, every one but missing HSTS anchors at medium or
+above, and HSTS is the only low.
 
 ## Reachability and vantage
 
@@ -645,10 +653,18 @@ Whether something is reachable depends on where the request came from. `scheck r
 --vantage internet|vpn|lan` records the run's vantage in the run, not in the file. A
 `not_exposed` rule fires only when the run's vantage is `internet` and the declared
 audience is not `internet`; every other combination, and an unknown vantage, abstains.
-`/admin` declared VPN-only and reached from the VPN is not a contradiction. The vantage
-is the operator's word, printed in the report header and recorded on each piece of
-evidence like the principal; a resume with a different vantage reads those entry
-points again.
+`/admin` declared VPN-only and reached from the VPN is not a contradiction; from the
+`internet` vantage, a connection refusal or timeout disproves the contradiction
+with an outage caveat, rather than making that restricted read incomplete ([web-collector.md](web-collector.md#headers-and-cookies),
+`web.restricted_reachable`). The vantage is the operator's word, declared separately
+on each invocation; omission
+means unknown, including on resume. `internet` means outside every permitted source,
+including office allowlists and VPN. scheck does not detect or verify it, and asks no
+external service for an egress address. It is printed in the report
+header and recorded on each piece of evidence like the principal, DNS evidence
+included; a resume with a different vantage reads those names and entry points again.
+A run whose file lists `intent.not_exposed` and that has no `--vantage` warns at its
+start that those URLs will not be checked for reachability; it does not refuse to run.
 
 ## One command, one file
 
@@ -856,9 +872,17 @@ from the file (a `url` or `host` root, a `network` root holding its address, or
 target is contacted, a host or jump host without an SSH user. From E4 it also expands
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
-is collected; an asset of any other kind is `not_collected` with reason
-`collector_not_built`, which makes the run exit 2 when the asset is a root. Plan writes an
-empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
+is collected. `domain` and `url` roots are read through the web collector
+([web-collector.md](web-collector.md#reads)) and judged in Recon by the applicable
+DNS, email, TLS and response rules (E7 steps 2a–4), then recorded as `collected`, or
+with `limit_reached` when `limits.timeout` ends the engagement before it is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
+`not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
+when the asset is a root. A declared `domain` or `url` asset under a root that was read is
+recorded with the root's status and the detail "read with *root*"
+([web-collector.md](web-collector.md#reads)). The report's `method.levels_used` names
+the levels the run's requests used: `observe` when a host was collected or a site's
+front page requested, `passive` when a domain root was read.
+Plan writes an empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
@@ -899,9 +923,12 @@ written. `scheck run <directory>` resumes:
   accepted risks that name it and `engagement.timezone` included: nothing regrades a kept envelope, so a changed
   accepted risk on a host collects that host again rather than re-running only Analyze
   and Report, which adds only contact the file already authorizes. A change to people,
-  access, data, secrets or anything no host or Scope reads contacts no target. Reading
-  again only the DNS names and entry points a changed `mail` or `intent` URL names is
-  not built (0.0.2 E7): Scope runs again whole.
+  access, data, secrets or anything no host or Scope reads contacts no target. E7 step 5 keeps Scope when only `mail` or `intent` changes: discovery reads
+  neither. Mail declarations are hashed by canonical domain; changed senders, selectors
+  or no-mail declarations refresh that domain's records and dependent follow-ups.
+  Changed intent role or audience refreshes its exact URL entry; reasons and web
+  accepted risks only regrade retained evidence. Unaffected successful reads are kept.
+  Changed vantage reruns Scope and web/DNS reads; hosts are unaffected.
 - **Hand edits.** A file the resume uses is used as written, and the report names each
   one edited since scheck wrote it; a host's envelope is never used as written (below).
   An edit cannot widen scope: the gate checks every request against the engagement
@@ -947,7 +974,7 @@ the first session's: the directory's name, the stage documents' headers, the rep
 `run.json` holds the run's start, the source `{path, sha256}`, `file` (the engagement
 file's absolute path, written by the first session and never by a resume, so a relative
 path is resolved against the first session's working directory; empty for `--host`),
-`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, egress, ended}`), `files` (each file a stage wrote,
+`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, vantage, egress, ended}`), `files` (each file a stage wrote,
 relative to the directory, with the sha256 of the bytes written) and `scope_inputs`. It
 is written when a session starts, after each file a stage writes, and after each stage
 with what the session has sent so far as its `egress`; `ended` is set when the session
@@ -955,8 +982,8 @@ ends.
 
 - **Scope** is kept, its `scope.json` used as written and nothing sent, when
   `scope_inputs` is unchanged (a hash of the build version, the resolved roots,
-  exclude, defaults, assets, `redact_extra`, `mail`, `intent` and `authorization`, and
-  each asset's first-party evidence evaluated at the session's start, so a confirmation
+  exclude, defaults, assets, `redact_extra`, `authorization` and the invocation's
+  vantage, and each asset's first-party evidence evaluated at the session's start, so a confirmation
   that expired or became current since runs Scope again) and the earlier Scope found no
   gap: every domain root's certificate transparency answer read, and no name
   `insufficient_evidence` or `not_checked`. Otherwise Scope runs again.
@@ -981,11 +1008,13 @@ ends.
   `evidence/requests/<identity>.json` and listed in `run.json`'s `files`; the next
   session's gate is handed only those `run.json` lists, so a file placed there by hand is
   ignored ([scope.md](scope.md#resume)). A success this session sends again and keeps
-  replaces the stored one, so a record that could not be reused is rewritten. No op in this build yields a reusable success,
-  so the directory stays empty.
+  replaces the stored one, so a record that could not be reused is rewritten. In this
+  build the web collector's front pages and entry reads (`web.front`, `web.entry`) yield
+  successes kept there.
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
-  that everything else was read again. A file the resume used (`scope.json` when kept;
+  that everything else was read again. It states that kept evidence was not read again
+  and retains its original observation date. A file the resume used (`scope.json` when kept;
   `evidence/<asset>.collection.json` for a kept host; a success the gate reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An
@@ -997,7 +1026,9 @@ ends.
 - **What left this machine** covers this session and every earlier one, merged: sources
   by name and host, so DNS once per resolver (a session on another network asked
   another one) and DNS first, with their subjects and credentials unioned and counts
-  summed; sites' requests summed; SSH names unioned. Each session records in `run.json`
+  summed; sites' requests summed by host and first-party admission status, within
+  each session and across resumes; SSH names unioned. Later first-party evidence
+  never reclassifies earlier requests. Each session records in `run.json`
   the hosts it reached (`sessions[].egress.Contacts`), each counted once Recon finished
   it, with the checks it ran there that may make a host contact its package
   repositories. The hosts row counts every session's: a kept host's contact and SSH
@@ -1179,7 +1210,7 @@ report is on stdout.`
 ```
 WHAT LEFT THIS MACHINE
   Third-party services:
-    Your DNS resolver at 192.168.1.1, and whatever it forwards to, as for any web browsing on this network: names under your domains, the names they point to, and the services above; 214 lookups, including 2 random test names under your domains and one under invalid.
+    Your DNS resolver at 192.168.1.1, and whatever it forwards to, as for any web browsing on this network: names under your domains, the names they point to (including third-party mail and DNS providers), and the services above; 214 lookups, including 2 random test names under your domains and 2 queries for random names under invalid.
     crt.sh, a public certificate log run by Sectigo: asked which certificates exist for example.com and example.net; 2 requests. crt.sh sees this machine's internet address and those names, and may keep logs.
     api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its value appears nowhere); 96 requests.
   Your own systems:
@@ -1187,7 +1218,7 @@ WHAT LEFT THIS MACHINE
     servers: 1 SSH session.
     One server check may make the server download its package list from its own update servers (pkg.dnf_check_update).
   Names under your domains not shown to be yours:
-    www.example.com, blog.example.com and 10 more: 36 requests, what a browser sends when it opens the page (the certificate, and the home page over https and http). These servers may be a provider's or someone else's.
+    www.example.com, blog.example.com and 10 more: 24 requests, what a browser sends when it opens the page (the certificate, and the home page over https and http). These servers may be a provider's or someone else's.
   AI models:
     Nothing was sent to an AI model provider.
   Nothing was sent to the makers of scheck: no telemetry, no update check.
@@ -1206,7 +1237,7 @@ line words what it was sent; GitHub's and Google's are worded with their collect
 [scope.md](scope.md#third-party-sources) follows the DNS line when it applies. Who
 runs a public source is data held beside its op, so it cannot drift from the code.
 JSON carries the block as `egress: {sources: [{source, operator, host, sent, requests,
-credentials, control_lookups, control_invalid, scoped_resolvers_ignored}], assets:
+credentials, control_lookups, control_invalid, invalid_queries, scoped_resolvers_ignored}], assets:
 [{kind, requests | sessions | unreached | jump_hosts | jump_unreached | runs, sites}], unconfirmed: {names,
 requests}, host_side_effects: [check ids], model: "none", telemetry: "none",
 user_agent, stored, tenants_read, ssh_resolved, ssh_resolved_by_jump,
@@ -1216,7 +1247,9 @@ states, so a reader of the JSON gets the same answer.
 **Notes for the readout.** Not findings, and not counted: `first_party` entries that
 expired or whose target moved, so someone removes them; what each acceptance came to
 when it was not applied ("Acceptances" below), acceptances that expire within 30 days
-or have no `expires`; a listed admin who is not one; a declared person or system
+or have no `expires`; a listed admin who is not one, and a listed admin who holds
+Owner; a domain under `mail.no_mail` that shows mail use
+([web-collector.md](web-collector.md#email)); a declared person or system
 scheck found no trace of; declarations scheck could not verify; the count of
 unattributed members; the service and break-glass accounts, listed ("People").
 
@@ -1250,8 +1283,10 @@ renderer:
 
 **A sub-item is a rule, never a check.** A rule that is not applicable on a platform
 is no answer about the host: it leaves the count, and a family whose only applicable
-member could not decide is *not assessed*. For a network collector it is a rule (or a
-family of rules sharing a finding id) applied to an asset. For a host it is a finding
+member could not decide is *not assessed*. For a network collector it is a rule or a
+family of rules (rules sharing a finding id, or one rule split by where its target
+lies, as `dns.dangling_external` and `dns.dangling_internal` are, count as one)
+applied to an asset. For a host it is a finding
 id on that host: a host domain is *assessed* when every selected rule in it decided
 (matched, not matched, or not applicable on recognized evidence), *partial* when some
 did, *not assessed* when none did. A domain whose checks ran but that no rule judges is
@@ -1319,11 +1354,25 @@ the target:
 | `unavailable:exclusion_unknown` | scheck could not tell which items your exclusions cover, so it kept none |
 | `unavailable:redirect_out_of_scope` | the site sent scheck somewhere outside your roots, which it did not follow (`<location host>`) |
 | `unavailable:redirect_not_entry_point` | the site redirected to another of its pages, which scheck read only as the redirect (`<path>`) |
+| `unavailable:blocked` | a firewall or bot protection in front of the site (`<vendor>`) answered instead of the site, so this page was not judged; to have it checked, let scheck through for the run (it identifies itself as "`<user agent>`"), or run from another network |
 | `unavailable:address_not_public` | the name points at a private or reserved address, which scheck does not contact from outside a declared network |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
 
 A token is never wrapped across lines; the detail wraps.
+
+**A missing intake answer.** A rule that reads an intake answer the file does not give
+says so in the report, in these words (0.0.2 E7; [web-collector.md](web-collector.md)):
+
+| Rules | Read | When the answer is missing |
+|---|---|---|
+| `email.dmarc_*`, `email.spf_missing`, `email.spf_invalid`, `email.spf_permits_anyone`, `email.no_mail_spoofable` | `mail.senders[].domain`, `mail.no_mail`; for an undeclared domain, the MX and SPF observed ("Intake", Mail) | "You did not say whether *d* sends mail. It shows signs of mail use (MX), so DMARC was judged as for a sending domain." or "…it shows none, so it was judged as a domain that sends no mail." |
+| `email.dkim_*` | `mail.senders[].dkim_selectors` | "DKIM for *service* on *d* was not checked: no selector was given, and DNS cannot list them. Find it as `s=` in the DKIM-Signature header of a message *service* sent." |
+| `email.spf_undeclared_sender` | `mail.senders` for that domain | "SPF was not compared with your senders: none were listed for *d*." |
+| `web.version_disclosed` | `intent.exposed_on_purpose[].url`, exactly | its `why_here`: "No page was declared public on purpose; this is the standard rating." |
+| `web.restricted_reachable` | `intent.not_exposed[]` and `--vantage` | with no vantage: "Pages you said are restricted were not checked for reachability: the run's vantage was not given (`--vantage internet`)."; with `vpn` or `lan`: "…you declared this run came from inside your network."; with no `not_exposed` entry, no line |
+| headers, cookies, `security.txt`, plain HTTP | `url` roots and entries, `first_party` | "*N* names under *root* were read but not judged for headers: none is declared as your site. Add a `url` entry for the ones you run." |
+| ranking | `data.matters_most[].asset` | no line |
 
 Each row also carries the assets covered and those excluded by name; the principal the
 data was read as (once per asset in text, per row and per piece of evidence in JSON),
@@ -1346,8 +1395,8 @@ not *assessed*; JSON carries them all, and every `not_applicable` assessment.
 | Cloud configuration | public storage and snapshots, broad IAM, service account keys, VPC firewall rules |
 | Data stores and backups | public access to databases, backup existence and location. A declaration alone is *not assessed* |
 | CI/CD and supply chain | branch protection, workflow token permissions, deploy keys, action pinning, dependency alerts |
-| External surface | domains, subdomain takeover, exposed services, TLS |
-| Web application | headers and cookies at entry points; exposed files and debug routes from 0.0.3 |
+| External surface | domains, subdomain takeover, exposed services, TLS. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)), the registrar account among it: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
+| Web application | headers and cookies at the entry points of declared and first-party sites, with a count of names read but not judged; exposed files and debug routes from 0.0.3. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` |
 | Hosts | the host collector's catalog (`host-collector.md`), expanded below |
 | Email and domain | SPF, DKIM per declared selector, DMARC, non-sending domains |
 | Logging and incident readiness | audit logging enabled, alerting on administrative changes |
@@ -1374,6 +1423,62 @@ anything, a check with no rule included; and `Declared, not verified:` for host 
 no rule consumes in this version (`expected_services` before E9). With more than three
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
+
+**The external, email and web rows, in this build** (E7 steps 2b–4). A domain root the web
+collector read feeds these rows; a URL root feeds external, web and secrets coverage.
+In the external row each such root has *dangling records*
+(`dns.dangling_external` and `dns.dangling_internal`), *subdomain takeover*
+(`dns.takeover_candidate` and `dns.unclaimed_at_provider`) and *private addresses*
+(`dns.private_address`), each marked from its rules' verdicts on that root and the
+names under it (*assessed* when none abstained, *partial* when some decided, *not
+assessed* when none did) with each abstention's reason and subject, or
+`not_applicable` when its rules had nothing to judge on complete evidence. A wildcard
+finding that shares its subject with a discovery gap retains the gap's reason and
+leaves coverage partial ([web-collector.md](web-collector.md#dns-and-takeover)).
+*Services your names point at* lists names without a verified takeover fingerprint,
+with the count not checked and `no_rule`; an unknown-provider wildcard is listed once
+as `*.<root>`, even with no certificate-log members, and grouped names are omitted.
+*TLS and certificates* is marked from the certificate and negotiation verdicts;
+unknown handshake, inspection and takeover reasons remain gaps. A row whose
+sub-items are each *assessed* or `not_applicable` is *assessed*. The email row has four
+families per root: *DMARC policy* (including no-mail policy), *SPF policy*, *SPF
+senders* and *DKIM selectors*. The same verdict-based marks apply. No mail evidence
+is `unavailable:mail_evidence`; missing senders, selectors, inherited policy, marked
+records and incomplete trees remain explicit reasons, never a pass. Default text
+coverage retains the affected domain or service when no DKIM selector was given. `mail_context`
+notes print under "Mail context" in text and in `notes` in JSON: declared or inferred
+mail use, observed alignment tags and report-destination presence, unclassified SPF
+terms, missing declarations and the limits of a DNS-only review. Current receiver
+DMARC tree walking and actual message authentication or delivery are not assessed
+([web-collector.md](web-collector.md#email)). A declared `domain` asset
+read with its root counts as read in both rows; its names are judged under its root's
+sub-items, and it has none of its own. A declared URL asset read with its root likewise
+counts as read in external, web and secrets coverage, using the root's judged
+sub-items rather than `collector_not_built`. A root that was not read gives its own
+reason in the rows it feeds.
+
+Network redaction totals use trusted gate hits retained on pages, counted once per
+request id even when a front-page read is reused as an entry. Built-in and operator
+rule counts never come from marker-shaped text a target supplied.
+
+Web coverage uses header, plain-HTTP, cookie, security-contact and version families;
+secrets coverage includes response-secret judgments. Missing web evidence is
+`unavailable:web_evidence`, never a pass. Cookie coverage retains the unread login
+flow even when the observed cookies have good flags. `web_context` notes describe
+technology and CDN fingerprints with their sources, robot counts, block pages and
+entry-point limits. Assessment `outcomes` carry subject-specific derived details,
+including the preloaded-TLD reason, TLD and list version. Shared-origin reads retain
+one finding per `{id, asset, subject}` and one assessment per `{id, asset}`; merged
+evidence and read references are united, retaining the strongest observed severity
+and status. TLS versions beyond the
+observed negotiation, ciphers and revocation, and scripts and pages beyond the entries
+remain explicit unassessed sub-items. Findings and acceptances
+use the owner and subject rules in [web-collector.md](web-collector.md#subjects).
+`attribute:password_form` raises a plaintext HTTP finding one level from an active
+password input; its evidence cites the page containing that input, and no form was
+submitted. The browser finding under a preloaded TLD is disproved and gets no raise. `web.version_disclosed` moves to info only on an exact URL declared public on
+purpose. A Slack webhook has high base severity; other accepted secret detectors
+retain critical, regardless of public-on-purpose intent.
 
 **The fold line.** Rows whose reason is `not_declared` fold into one line, labeled `Not
 requested`, only when no declaration in the file points at the area. An area the file
@@ -1431,8 +1536,8 @@ one id graded differently.
 | Field | Holds |
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
-| `asset_name`, `bound_id` | the `assets` name, or the id; the bound id or null |
-| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `url`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
 | `category` | the collector's own grouping |
@@ -1440,7 +1545,7 @@ one id graded differently.
 | `severity`, `severity_base`, `adjustments[]` | each adjustment `{rule, by, delta, source}`: `rule` from the closed table of "Severity in context" or the collector's own, `by` `collector` or `engagement`, `source` either `{file, key}` for a declaration or `{observation, excerpt}` for a fact; no non-base severity without its chain |
 | `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance}` |
 | `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]`. `single_fact` is one fact per subject, which includes a host rule that joins a second check of the same host per account (`host-collector.md §6.5`, both checks in `reads`); `multi_fact` combines facts across checks or assets ("Multi-fact rules") |
-| `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
+| `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, vantage, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
 | `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
 | `impact` | from the definition |
@@ -1455,7 +1560,8 @@ combined by reference (`people.carol.left`, `workspace.users#1`), then derived v
 in words ("last sign-in 2026-09-28, 13 days after the declared leaving date; scheck
 cannot tell who signed in"), `Severity` with its chain, `Why here`, `Not checked`,
 `Fix`, and the paste. A contradiction prints both sides on two lines, the declaration
-and the observation.
+and the observation. `Observed` includes the date when the collection span crosses
+a day, so retained evidence is not presented as newly collected.
 
 **Subjects.** Host findings carry no subject in E2: no rules-only host finding names a
 listener, and the host grader accepts a whole id. A listener's subject, `{kind:
@@ -1469,7 +1575,11 @@ grant is one finding per app, keyed by client id, with the users who granted it 
 on the app. A secret found in a repository is keyed `<detector>:<path>@<commit, 12
 hex>` and labeled with the detector type and first commit, never a hash of the value,
 which a low-entropy secret does not survive and which would sit in every comparison of
-runs; two secrets in one file stay two findings. A subject whose key matches
+runs; two secrets in one file stay two findings. A secret in a web page is keyed
+`<detector>:<url>`, one per detector per page. The domain, email and web collector's
+subjects, and how their keys are written, are in
+[web-collector.md](web-collector.md#subjects); its findings carry them from E7 step 2b-i.
+A subject whose key matches
 `redact_extra` renders as its marker; its paste uses `provider_id` when there is one,
 and otherwise has `by_subject: false` and says the finding cannot be accepted by
 subject while the pattern hides its name.
@@ -1522,8 +1632,28 @@ needs observed evidence.
 carry one), `not_matched` (its rule decided on complete evidence and found no
 instance: "likely fixed. Confirm, then remove the entry"), `rule_not_decided` (its rule
 could not decide, or found nothing in only part of what is there: the acceptance still
-stands and scheck cannot say whether the problem is gone) or `subject_not_found` (the
-rule found instances, none with that subject). Only `not_matched` may say "fixed".
+stands and scheck cannot say whether the problem is gone) or `subject_not_found` (no
+instance with that subject was read on this run: the rule judged no such subject,
+whatever it found elsewhere). Only `not_matched` may say "fixed".
+On an asset a network collector judged (a domain root and the names under it, from E7
+step 2b-i), acceptance is per instance and by the finding's asset
+([web-collector.md](web-collector.md#subjects)): the entry in effect for an instance is
+the last one for its asset and id that names its subject or none, and an entry that
+later entries displace on every instance it touches is `not_applied`, with that reason.
+An entry covers its own asset's instances only. When its asset holds no instance of its
+id (with its subject, when it names one) and a name under it, a `domain:` asset of its
+own, holds one that no unexpired entry of its own accepts, the outcome is `rule_not_decided` with
+"an instance is open under it, on *name*, which is its own asset: accept it there
+(asset: domain:*name*)", never `not_matched` or `subject_not_found`. A `domain:` name
+under a root the collector read was read with it, declared or not, so an entry that
+names a subject on a name now gone is `subject_not_found` only when the applicable
+population on the owning asset and collector is complete; an unrelated asset's
+incomplete collection does not change that population. Incomplete or unknown evidence
+there gives `rule_not_decided`. For a complete population the message is "nothing
+with that subject points anywhere on this run: if the record was removed, remove the entry", never "the
+asset was not read on this run". When that subject was read on a name under the entry's
+asset, it is `subject_not_found` with "that subject was read on *name*, which is its own
+asset (asset: domain:*name*)".
 
 **One severity.** The engagement's `findings[]` is authoritative. A host asset's
 embedded collector envelope stays whole as that collector's evidence and grading; an
@@ -1553,6 +1683,7 @@ status, refused before incomplete, each in the order of `roots`:
 | Session lost | `INCOMPLETE: deploy: the connection was lost after 18 of 33 checks; 15 were not run. What was read before is kept and assessed. scheck only reads; an interrupted run leaves nothing half-changed.` | 2 |
 | Host run timeout | `INCOMPLETE: deploy: the host collector's timeout (10m, assets.deploy.timeout) stopped it after 25 of 33 checks.` | 2 |
 | `limits.timeout` | `INCOMPLETE: limits.timeout (1h) ended the engagement: <assets> were not read.` | 2 |
+| `limits.timeout` while a domain root is read | `INCOMPLETE: example.com: limits.timeout ended the engagement while it was read.` | 2 |
 | Unreachable before contact | `INCOMPLETE: deploy: could not connect from this machine (connection timed out). This does not tell you whether it is up for anyone else. Nothing was read.` | 2 |
 | Root with no collector | `INCOMPLETE: example-org (GitHub organization): this version of scheck does not read it. Nothing was read from it.` | 2 |
 | Credential rejected | `REFUSED: example-org (GitHub organization): GitHub did not accept the token in GITHUB_TOKEN (expired, revoked or mistyped). Nothing was read from it.` (or `37 requests were read from it.` when it was rejected mid-run) `Set GITHUB_TOKEN to a current, read-only token.` | 3 |
@@ -1606,7 +1737,10 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
 
 - `run: {started, directory, resumed}`, the scheck version and `rules_version`, so a
   finding that disappears because a rule changed between versions is never read as
-  fixed; the engagement source `{path, sha256}`, where for `--host` the hash is of the
+  fixed. For network reports, `rules_version` combines the binary version with the
+  pinned web, preload, takeover and sender-data versions. `scheck_version` remains
+  the binary version, and host-only `rules_version` retains its existing value;
+  the engagement source `{path, sha256}`, where for `--host` the hash is of the
   engagement exactly as `--write-engagement` would write it;
 - `exit: {code, reasons: [{code, why, asset}], thresholds}`, each threshold with its
   basis (`profile:baseline`, `default`);
@@ -1624,7 +1758,10 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   capture, and not a command whose non-zero exit was tolerated), its reason, and every input
   it read, declarations included (`declared:people.carol.left`), so a later run reads an
   instance as *fixed* only when its rule decided on complete evidence with the same
-  declared inputs, and otherwise as *no longer observed, not assessed*;
+  declared inputs, and otherwise as *no longer observed, not assessed*. An assessment
+  may have an empty `reads` list when no read was collected or a static preload rule
+  decided without a request; it never invents a request id. A finding still requires
+  nonempty rule inputs and observed evidence;
 - `summary` with its items (`kind`, `ids[]`, `person`, member keys, severity,
   `rank_basis`) and disjoint area counts (`assessed`, `partial`, `not_assessed`,
   `not_applicable`, `total`);

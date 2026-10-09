@@ -62,7 +62,8 @@ type ScopeDomain struct {
 	Dropped []gate.Drop `json:"dropped,omitempty"`
 	// Wildcard is the control label's answer, when the root has wildcard
 	// DNS.
-	Wildcard []string `json:"wildcard,omitempty"`
+	Wildcard []string   `json:"wildcard,omitempty"`
+	Control  *ScopeName `json:"control,omitempty"`
 	// WildcardCerts are the names a wildcard certificate covers (*.x).
 	WildcardCerts []string    `json:"wildcard_certificates,omitempty"`
 	Names         []ScopeName `json:"names"`
@@ -70,7 +71,9 @@ type ScopeDomain struct {
 
 // ScopeName is one name under a domain root and what resolving it found.
 type ScopeName struct {
-	Name string `json:"name"`
+	Vantage     string    `json:"vantage"`
+	CollectedAt time.Time `json:"collected_at"`
+	Name        string    `json:"name"`
 	// From says where it came from: root, declared or certificate
 	// transparency.
 	From []string `json:"from"`
@@ -83,12 +86,18 @@ type ScopeName struct {
 	ExcludedBy string   `json:"excluded_by,omitempty"`
 	Chain      []string `json:"chain,omitempty"`
 	Addresses  []string `json:"addresses,omitempty"`
+	// Outcome is what the lookup came to (gate.Outcome); FinalInRoot says
+	// the name its chain ends at is under a root; RequestID is the
+	// lookup's id in the audit log.
+	Outcome     string `json:"outcome,omitempty"`
+	RequestID   string `json:"request_id,omitempty"`
+	FinalInRoot bool   `json:"final_in_root,omitempty"`
 	// Target is where the name points, as a first_party confirmation
 	// records it.
 	Target     string    `json:"target,omitempty"`
 	FirstParty *Evidence `json:"first_party,omitempty"`
-	// Read marks a name Recon reads (its front page and certificate, and
-	// more with first-party evidence).
+	// Read marks a name Recon reads (its front page, whose https handshake
+	// is its certificate read, and more with first-party evidence).
 	Read bool `json:"read"`
 }
 
@@ -98,9 +107,22 @@ type Resolver struct {
 	Address  string `json:"address"`
 	Rewrites bool   `json:"rewrites_nxdomain"`
 	// Controls counts the control lookups sent; Invalid is whether the one
-	// under invalid. was.
-	Controls int  `json:"control_lookups"`
-	Invalid  bool `json:"control_invalid"`
+	// under invalid. was, and Control what it came to: whether the
+	// resolver rewrites is known only when it said NXDOMAIN or NODATA, or
+	// answered.
+	Controls int    `json:"control_lookups"`
+	Invalid  bool   `json:"control_invalid"`
+	Control  string `json:"control_outcome,omitempty"`
+}
+
+// Known reports whether it is known if the resolver answers names that do
+// not exist: its control lookup said NXDOMAIN or NODATA, or answered.
+func (r *Resolver) Known() bool {
+	switch gate.Outcome(r.Control) {
+	case gate.OutcomeNXDomain, gate.OutcomeNoData, gate.OutcomeAddresses:
+		return true
+	}
+	return false
 }
 
 // PointsAt is one service outside every root that names under a root
@@ -142,6 +164,10 @@ func (d *discovery) run(ctx context.Context) ([]ScopeDomain, *Resolver, []Points
 	// resolver invents addresses for names that do not exist.
 	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: roots[0].ID, Name: randomLabel() + ".invalid", Stage: "scope", Control: true})
 	resolver.Rewrites = ctl.Lookup.Outcome == gate.OutcomeAddresses
+	resolver.Control = string(ctl.Lookup.Outcome)
+	if ctl.Decision != gate.DecisionSent {
+		resolver.Control = ctl.Decision
+	}
 	if ctl.Decision == gate.DecisionSent {
 		resolver.Controls, resolver.Invalid = 1, true
 	}
@@ -163,45 +189,99 @@ func (d *discovery) run(ctx context.Context) ([]ScopeDomain, *Resolver, []Points
 	return out, resolver, pa
 }
 
+// domain expands one domain root: a wildcard control, the declared names
+// and the names in certificates, then each looked up in order.
 func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, points map[string][]string) ScopeDomain {
-	rewrites := resolver.Rewrites
 	sd := ScopeDomain{Root: root.ID, Names: []ScopeName{}}
 	d.log("scope: discovering names under %s", root.name)
-	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: root.ID, Name: randomLabel() + "." + root.name, Stage: "scope", Control: true})
+	controlName := randomLabel() + "." + root.name
+	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: root.ID, Name: controlName, Stage: "scope", Control: true})
 	if ctl.Decision == gate.DecisionSent {
 		resolver.Controls++
 	}
-	var wildcard []string
 	if ctl.Lookup.Outcome == gate.OutcomeAddresses {
-		wildcard = addrStrings(ctl.Lookup.Addrs)
-		sd.Wildcard = wildcard
+		sd.Wildcard = addrStrings(ctl.Lookup.Addrs)
 	}
-
-	cands := map[string]*candidate{}
-	add := func(name, from string, notAfter time.Time, declared bool) {
-		c, ok := cands[name]
-		if !ok {
-			c = &candidate{name: name}
-			cands[name] = c
-		}
-		if !slices.Contains(c.from, from) {
-			c.from = append(c.from, from)
-		}
-		if notAfter.After(c.notAfter) {
-			c.notAfter = notAfter
-		}
-		c.declared = c.declared || declared
+	sn := ScopeName{Vantage: ctl.Vantage, CollectedAt: ctl.CollectedAt, Name: ctl.Lookup.Name, RequestID: ctl.RequestID, Outcome: string(ctl.Lookup.Outcome),
+		Chain: ctl.Lookup.Chain, Addresses: addrStrings(ctl.Lookup.Addrs), FinalInRoot: ctl.Lookup.FinalInRoot}
+	switch ctl.Decision {
+	case gate.DecisionSent:
+		d.classify(&sn, ctl.Lookup, true, nil, resolver.Rewrites, map[string][]string{})
+	case "refused:excluded":
+		sn.Status = NameExcluded
+	default:
+		sn.Status, sn.Detail = NameNotChecked, ctl.Decision
 	}
-	add(root.name, "root", time.Time{}, true)
+	sd.Control = &sn
+	cands := candidates{}
+	cands.add(root.name, "root", time.Time{}, true)
 	for _, a := range d.res.Assets {
 		switch a.Kind {
 		case KindDomain, KindURL, KindHost:
 			if a.name != "" && !a.Local() && domainUnder(a.name, root.name) {
-				add(a.name, "declared", time.Time{}, true)
+				cands.add(a.name, "declared", time.Time{}, true)
 			}
 		}
 	}
+	d.fromCT(ctx, root, &sd, cands)
+	d.lookUp(ctx, root, &sd, cands.ordered(d.at), resolver, points)
+	return sd
+}
 
+// candidates are the names found under a root, by name.
+type candidates map[string]*candidate
+
+func (cs candidates) add(name, from string, notAfter time.Time, declared bool) {
+	c, ok := cs[name]
+	if !ok {
+		c = &candidate{name: name}
+		cs[name] = c
+	}
+	if !slices.Contains(c.from, from) {
+		c.from = append(c.from, from)
+	}
+	if notAfter.After(c.notAfter) {
+		c.notAfter = notAfter
+	}
+	c.declared = c.declared || declared
+}
+
+// group places a candidate: declared names first, then names in
+// unexpired certificates, then names seen only in expired ones.
+func (c *candidate) group(at time.Time) int {
+	switch {
+	case c.declared:
+		return 0
+	case !c.notAfter.Before(at):
+		return 1
+	}
+	return 2
+}
+
+// ordered lists the candidates by group, unexpired ones by latest
+// not_after, and by name within each.
+func (cs candidates) ordered(at time.Time) []*candidate {
+	list := make([]*candidate, 0, len(cs))
+	for _, c := range cs {
+		list = append(list, c)
+	}
+	slices.SortFunc(list, func(a, b *candidate) int {
+		if c := cmp.Compare(a.group(at), b.group(at)); c != 0 {
+			return c
+		}
+		if a.group(at) == 1 {
+			if c := b.notAfter.Compare(a.notAfter); c != 0 {
+				return c
+			}
+		}
+		return cmp.Compare(a.name, b.name)
+	})
+	return list
+}
+
+// fromCT adds the names in the root's certificates from certificate
+// transparency.
+func (d *discovery) fromCT(ctx context.Context, root Ref, sd *ScopeDomain, cands candidates) {
 	res := d.g.Send(ctx, gate.Request{Op: "ct.search", Asset: root.ID, Stage: "scope", Params: map[string]string{"domain": root.name}})
 	switch {
 	case !res.OK():
@@ -229,45 +309,24 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 					continue
 				}
 				if domainUnder(n, root.name) {
-					add(n, "certificate_transparency", na, false)
+					cands.add(n, "certificate_transparency", na, false)
 				}
 			}
 		}
 		slices.Sort(sd.WildcardCerts)
 	}
+}
 
-	// Declared names first, then names in unexpired certificates by latest
-	// not_after, then names seen only in expired ones; by name within each.
-	list := make([]*candidate, 0, len(cands))
-	for _, c := range cands {
-		list = append(list, c)
-	}
-	group := func(c *candidate) int {
-		switch {
-		case c.declared:
-			return 0
-		case !c.notAfter.Before(d.at):
-			return 1
-		}
-		return 2
-	}
-	slices.SortFunc(list, func(a, b *candidate) int {
-		if c := cmp.Compare(group(a), group(b)); c != 0 {
-			return c
-		}
-		if group(a) == 1 {
-			if c := b.notAfter.Compare(a.notAfter); c != 0 {
-				return c
-			}
-		}
-		return cmp.Compare(a.name, b.name)
-	})
-
+// lookUp resolves each candidate in order, up to the caps, and settles its
+// status and whether it is read.
+func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list []*candidate, resolver *Resolver, points map[string][]string) {
+	rewrites := resolver.Rewrites
+	wildcard := sd.Control
 	// The caps count names the gate looked up: one an exclude covers is
 	// refused before any query, and counts toward neither.
 	resolved, unverified := 0, 0
 	for _, c := range list {
-		sn := ScopeName{Name: c.name, From: c.from, ExpiredOnly: group(c) == 2}
+		sn := ScopeName{Name: c.name, From: c.from, ExpiredOnly: c.group(d.at) == 2}
 		if resolved >= maxResolved {
 			sn.Status, sn.Detail = NameNotChecked, fmt.Sprintf("past the first %d names under this root", maxResolved)
 			sd.Names = append(sd.Names, sn)
@@ -287,6 +346,8 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 		resolved++
 		l := r.Lookup
 		sn.Chain, sn.Addresses = l.Chain, addrStrings(l.Addrs)
+		sn.CollectedAt, sn.Vantage = r.CollectedAt, r.Vantage
+		sn.Outcome, sn.FinalInRoot, sn.RequestID = string(l.Outcome), l.FinalInRoot, r.RequestID
 		d.classify(&sn, l, c.declared, wildcard, rewrites, points)
 		if sn.Status == NameResolves {
 			sn.FirstParty = d.evidence(c.name, l)
@@ -296,6 +357,9 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 				sn.Read = true
 			case rewrites:
 				sn.Detail = "not read: the resolver answers names that do not exist"
+			case !resolver.Known():
+				// Its answers would choose which servers are contacted.
+				sn.Detail = "not read: whether the resolver answers names that do not exist is unknown"
 			case unverified >= maxUnverified:
 				sn.Detail = fmt.Sprintf("not read: past the first %d names without first-party evidence", maxUnverified)
 			default:
@@ -305,38 +369,18 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 		}
 		sd.Names = append(sd.Names, sn)
 	}
-	return sd
 }
 
 // evidence is a resolved name's first-party evidence as the gate will
-// weigh it once the name is resolved (docs/spec/scope.md, "First-party
-// evidence"): the file's, except that a confirmation whose name no longer
-// points at its target is "moved", and a name every address of which a
-// network root holds has that root's.
+// weigh it once the name is resolved: the file's, held against the lookup
+// (Resolved.resolvedEvidence).
 func (d *discovery) evidence(name string, l gate.Lookup) *Evidence {
-	ev := d.res.firstParty(ResolvedAsset{Kind: KindDomain, ID: "domain:" + name, name: name}, d.at)
-	if ev != nil && ev.Kind == "operator" && !l.PointsAt(ev.Target) {
-		ev = &Evidence{Kind: "moved", ConfirmedBy: ev.ConfirmedBy, Date: ev.Date, Target: ev.Target}
-	}
-	if ev.counts() || len(l.Addrs) == 0 || !slices.ContainsFunc(d.res.Roots, func(r Ref) bool { return r.Kind == KindNetwork }) {
-		return ev
-	}
-	held := ""
-	for _, a := range l.Addrs {
-		root := d.res.networkRoot(a)
-		if root == "" {
-			return ev
-		}
-		if held == "" {
-			held = root
-		}
-	}
-	return &Evidence{Kind: "network_root", Root: held}
+	return d.res.resolvedEvidence(d.res.firstParty(ResolvedAsset{Kind: KindDomain, ID: "domain:" + name, name: name}, d.at), l)
 }
 
 // classify settles a resolved name's status (docs/spec/scope.md,
 // "Discovery", step 4).
-func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildcard []string, rewrites bool, points map[string][]string) {
+func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildcard *ScopeName, rewrites bool, points map[string][]string) {
 	// A chain that enters an excluded name stops there: the resolver
 	// already followed it, and the gate went no further.
 	if l.Outcome == gate.OutcomeExcluded {
@@ -351,6 +395,8 @@ func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildca
 	switch {
 	case l.Insufficient():
 		sn.Status, sn.Detail = NameInsufficient, string(l.Outcome)
+	case !declared && matchesWildcard(l, wildcard):
+		sn.Status = NameMatchesWildcard
 	case (l.Outcome == gate.OutcomeNXDomain || l.Outcome == gate.OutcomeNoData) && len(l.Chain) > 0:
 		sn.Status = NameDangling
 		if rewrites {
@@ -367,8 +413,6 @@ func (d *discovery) classify(sn *ScopeName, l gate.Lookup, declared bool, wildca
 		sn.Status = NameGone
 	case l.Outcome == gate.OutcomeNoData:
 		sn.Status = NameNoAddress
-	case !declared && wildcard != nil && slices.Equal(addrStrings(l.Addrs), wildcard):
-		sn.Status = NameMatchesWildcard
 	default:
 		sn.Status = NameResolves
 	}
@@ -393,4 +437,22 @@ func randomLabel() string {
 		b[i] = alphabet[int(b[i])%len(alphabet)]
 	}
 	return string(b)
+}
+
+// matchesWildcard compares recognized DNS answers, not shared CDN addresses
+// alone. Equal redaction markers do not establish equal targets
+// (docs/spec/web-collector.md, "Wildcards").
+func matchesWildcard(l gate.Lookup, control *ScopeName) bool {
+	if control == nil || (control.Status != NameResolves && control.Status != NameDangling) ||
+		(len(l.Chain) == 0 && len(l.Addrs) == 0) {
+		return false
+	}
+	for _, chain := range [][]string{l.Chain, control.Chain} {
+		for _, hop := range chain {
+			if strings.Contains(hop, "[REDACTED:") || strings.Contains(hop, "[TRUNCATED:") {
+				return false
+			}
+		}
+	}
+	return string(l.Outcome) == control.Outcome && slices.Equal(l.Chain, control.Chain) && slices.Equal(addrStrings(l.Addrs), control.Addresses)
 }

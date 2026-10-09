@@ -58,7 +58,9 @@ var (
 	rateRe  = regexp.MustCompile(`^([1-9][0-9]{0,5})/(s|m)$`)
 	loginRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
 	emailRe = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+)$`)
-	dkimRe  = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*$`)
+	// A DKIM selector: RFC 6376's sub-domain syntax, at most 63 characters
+	// a label, no underscore (docs/spec/scope.md, "The resolver").
+	dkimRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`)
 )
 
 // Options carry the catalogs the file is checked against, so this package
@@ -913,6 +915,17 @@ func (v *validator) references() {
 
 func (v *validator) intent() {
 	in := v.f.Intent
+	public := map[string]bool{}
+	for _, e := range in.ExposedOnPurpose {
+		if ref, err := parseURL(e.URL); err == nil {
+			public[ref.ID] = true
+		}
+	}
+	for i, e := range in.NotExposed {
+		if ref, err := parseURL(e.URL); err == nil && public[ref.ID] {
+			v.fail(fmt.Sprintf("intent.not_exposed[%d].url", i), "the same URL is also declared exposed_on_purpose")
+		}
+	}
 	for _, list := range []struct {
 		key     string
 		entries []Exposure
@@ -995,6 +1008,12 @@ func words(kind string) string {
 		return "OAuth app"
 	case "dns_name":
 		return "DNS name"
+	case "dns_record":
+		return "DNS record"
+	case "dkim_selector":
+		return "DKIM selector"
+	case "spf_mechanism":
+		return "SPF mechanism"
 	case "url":
 		return "URL"
 	case "org_unit":

@@ -1,0 +1,1398 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.dkim_key_1024",
+      "instances": 0,
+      "reads": [
+        "request:dkim1"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.dkim_key_breakable",
+      "instances": 1,
+      "reads": [
+        "request:dkim1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "email.dkim_missing",
+      "instances": 0,
+      "reads": [
+        "request:dkim1"
+      ],
+      "reason": "unavailable:dkim_selector",
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.dmarc_not_enforced",
+      "instances": 0,
+      "reads": [
+        "request:dmarc1"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.dmarc_partial",
+      "instances": 1,
+      "reads": [
+        "request:dmarc1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.dmarc_subdomains_open",
+      "instances": 0,
+      "reads": [
+        "request:dmarc1"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.spf_invalid",
+      "instances": 0,
+      "reads": [
+        "request:spf1",
+        "request:spf2"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.spf_missing",
+      "instances": 0,
+      "reads": [
+        "request:spf1"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "email.spf_permits_anyone",
+      "instances": 0,
+      "reads": [
+        "request:spf1",
+        "request:spf2"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "email.spf_undeclared_sender",
+      "instances": 1,
+      "reads": [
+        "request:spf1",
+        "request:spf2"
+      ],
+      "reason": "no_rule",
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "tls.certificate_expiring",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "days_remaining": 6
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "example.com",
+            "kind": "dns_name",
+            "label": "example.com"
+          }
+        }
+      ],
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.plaintext_http",
+      "instances": 1,
+      "reads": [
+        "request:http1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.secret_in_response",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "count": 1,
+            "detector": "github-token"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "github-token:https://example.com/",
+            "kind": "secret_location",
+            "label": "GitHub token in https://example.com/"
+          }
+        }
+      ],
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "web.security_txt",
+      "instances": 0,
+      "reads": [
+        "request:contact1"
+      ],
+      "reason": "unavailable:redirect_not_entry_point",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "web.session_cookie_flags",
+      "instances": 1,
+      "reads": [
+        "request:page1"
+      ],
+      "reason": "unavailable:login_flow",
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.version_disclosed",
+      "instances": 1,
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "web",
+      "id": "domain:example.com",
+      "kind": "domain",
+      "name": "example.com",
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "domain:example.com"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "loaded scripts and pages beyond entry points",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "specific secret detector hits in inspected responses"
+          ],
+          "mark": "assessed",
+          "name": "response secrets",
+          "reasons": [],
+          "rules": [
+            "web.secret_in_response"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "loaded scripts and pages beyond entry points",
+          "read_not_judged": [
+            "loaded scripts and pages beyond entry points"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "assets_covered": [
+        "domain:example.com"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "TLS versions and ciphers other than those negotiated, and revocation",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "mark": "not_applicable",
+          "name": "restricted URL reachability",
+          "reasons": [],
+          "rules": [
+            "web.restricted_reachable"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_applicable",
+          "name": "dangling records",
+          "reasons": [],
+          "rules": [
+            "dns.dangling_external",
+            "dns.dangling_internal"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_applicable",
+          "name": "subdomain takeover",
+          "reasons": [],
+          "rules": [
+            "dns.takeover_candidate",
+            "dns.unclaimed_at_provider"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_applicable",
+          "name": "private addresses",
+          "reasons": [],
+          "rules": [
+            "dns.private_address"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "one TLS negotiation and its certificate verification and expiry"
+          ],
+          "mark": "assessed",
+          "name": "TLS and certificates",
+          "reasons": [],
+          "rules": [
+            "tls.certificate_invalid",
+            "tls.certificate_expiring",
+            "tls.legacy_only"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "TLS versions and ciphers other than those negotiated, and revocation",
+          "read_not_judged": [
+            "TLS versions and ciphers other than those negotiated, and revocation"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "assets_covered": [
+        "domain:example.com"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "https://example.com",
+          "reason": "unavailable:login_flow"
+        },
+        {
+          "detail": "https://example.com",
+          "reason": "unavailable:redirect_not_entry_point"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "HSTS and plain HTTP responses from the recorded vantage"
+          ],
+          "mark": "assessed",
+          "name": "HTTPS and plain HTTP",
+          "reasons": [],
+          "rules": [
+            "web.hsts_missing",
+            "web.plaintext_http",
+            "web.plaintext_http_clients"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "entry response headers",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_headers"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "observed session-like cookie flags"
+          ],
+          "mark": "partial",
+          "name": "session cookies",
+          "reasons": [
+            {
+              "detail": "https://example.com",
+              "reason": "unavailable:login_flow"
+            }
+          ],
+          "rules": [
+            "web.session_cookie_flags"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "explicit versions in inspected responses"
+          ],
+          "mark": "assessed",
+          "name": "software versions",
+          "reasons": [],
+          "rules": [
+            "web.version_disclosed"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "security contact",
+          "reasons": [
+            {
+              "detail": "https://example.com",
+              "reason": "unavailable:redirect_not_entry_point"
+            }
+          ],
+          "rules": [
+            "web.security_txt"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "assets_covered": [
+        "domain:example.com"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "SPF term ip4:192.0.2.0/24 has no service mapping",
+          "reason": "no_rule"
+        },
+        {
+          "detail": "DKIM for sendgrid on news.example.com: no selector given",
+          "reason": "unavailable:dkim_selector"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "published DMARC enforcement and subdomain policy"
+          ],
+          "mark": "assessed",
+          "name": "DMARC policy",
+          "reasons": [],
+          "rules": [
+            "email.dmarc_not_enforced",
+            "email.dmarc_partial",
+            "email.dmarc_subdomains_open",
+            "email.no_mail_spoofable"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "SPF presence, syntax, static lookup limits and broad authorization"
+          ],
+          "mark": "assessed",
+          "name": "SPF policy",
+          "reasons": [],
+          "rules": [
+            "email.spf_missing",
+            "email.spf_invalid",
+            "email.spf_permits_anyone"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "recognized positive SPF includes compared with declared senders"
+          ],
+          "mark": "partial",
+          "name": "SPF senders",
+          "reasons": [
+            {
+              "detail": "SPF term ip4:192.0.2.0/24 has no service mapping",
+              "reason": "no_rule"
+            }
+          ],
+          "rules": [
+            "email.spf_undeclared_sender"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "judged": [
+            "declared DKIM keys and their strength"
+          ],
+          "mark": "partial",
+          "name": "DKIM selectors",
+          "reasons": [
+            {
+              "detail": "DKIM for sendgrid on news.example.com: no selector given",
+              "reason": "unavailable:dkim_selector"
+            }
+          ],
+          "rules": [
+            "email.dkim_missing",
+            "email.dkim_key_breakable",
+            "email.dkim_key_1024"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [
+      {
+        "kind": "websites",
+        "requests": 3,
+        "sites": 1
+      }
+    ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-07T07:12:03Z",
+      "to": "2026-10-07T07:12:03Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "passive",
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "web-review",
+    "operator": null,
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": null
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "3 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "domain:example.com": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-01-05",
+        "id": "web.secret_in_response",
+        "needs_people": false,
+        "reason": "",
+        "subject": "github-token:https://example.com/"
+      },
+      "adjustments": [],
+      "area": "secrets",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "derived": [
+        {
+          "name": "count",
+          "value": 1
+        },
+        {
+          "name": "detector",
+          "value": "github-token"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "One GitHub token match was removed from the captured response before reporting",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.secret_in_response",
+      "impact": "The response contains a credential matching a specific secret detector. Validity was not tested; it may already have been copied.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.secret_in_response",
+        "subject": "github-token:https://example.com/"
+      },
+      "not_checked": [
+        "Credential validity was not tested"
+      ],
+      "remediation": {
+        "summary": "Revoke the credential at its provider first, then remove it from the response and review its use."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "critical",
+      "status": "open",
+      "subject": {
+        "key": "github-token:https://example.com/",
+        "kind": "secret_location",
+        "label": "GitHub token in https://example.com/"
+      },
+      "title": "A secret-shaped credential is published in the response",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-01-05",
+        "id": "email.dkim_key_breakable",
+        "needs_people": false,
+        "reason": "",
+        "subject": "google._domainkey.example.com"
+      },
+      "adjustments": [],
+      "area": "email",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "email",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "DKIM at google._domainkey.example.com; RSA modulus 512 bits",
+          "kind": "observed",
+          "observation": "dkim1",
+          "principal": "anonymous",
+          "request": "dkim1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "email.dkim_key_breakable",
+      "impact": "This RSA key is below the minimum DKIM key size and is weak enough to put signatures at risk of forgery. Whether the selector signs current mail was not checked.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "email.dkim_key_breakable",
+        "subject": "google._domainkey.example.com"
+      },
+      "not_checked": [
+        "Whether this selector signs current mail and whether that mail aligns were not assessed"
+      ],
+      "remediation": {
+        "summary": "Rotate to a 2048-bit RSA key at your sender, publish its new selector, verify delivery, then retire the old key."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dkim1"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "google._domainkey.example.com",
+        "kind": "dkim_selector",
+        "label": "selector google (google-workspace) on example.com"
+      },
+      "title": "A DKIM RSA key is shorter than 1024 bits",
+      "why_here": [
+        "You declared selector google for google-workspace."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.plaintext_http",
+        "needs_people": false,
+        "reason": "",
+        "subject": "http://example.com"
+      },
+      "adjustments": [
+        {
+          "by": "collector",
+          "delta": "+1",
+          "rule": "attribute:password_form",
+          "source": {
+            "excerpt": "HTTP serves a page containing a password input",
+            "observation": "http1"
+          }
+        }
+      ],
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "HTTP serves a page containing a password input",
+          "kind": "observed",
+          "observation": "http1",
+          "principal": "anonymous",
+          "request": "http1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.plaintext_http",
+      "impact": "Clients configured for HTTP can send and receive unencrypted data.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.plaintext_http",
+        "subject": "http://example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Redirect HTTP entry points to HTTPS, or close port 80."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:http1"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "http://example.com",
+        "kind": "origin",
+        "label": "http://example.com"
+      },
+      "title": "The origin serves plain HTTP instead of redirecting to HTTPS",
+      "why_here": [
+        "The HTTP page contains a password input, so it ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.session_cookie_flags",
+        "needs_people": false,
+        "reason": "",
+        "subject": "https://example.com"
+      },
+      "adjustments": [],
+      "affected": {
+        "cap": 1,
+        "count": 1,
+        "listed": [
+          "session"
+        ]
+      },
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Session cookie lacks HttpOnly",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.session_cookie_flags",
+      "impact": "A session-like cookie may be readable by scripts or sent without encryption. Names alone do not prove it authenticates a session.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.session_cookie_flags",
+        "subject": "https://example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Set Secure and HttpOnly on session cookies, and serve their application over HTTPS."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "https://example.com",
+        "kind": "origin",
+        "label": "https://example.com"
+      },
+      "title": "An observed session cookie lacks Secure or HttpOnly",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "email.dmarc_partial",
+        "needs_people": false,
+        "reason": "",
+        "subject": "example.com"
+      },
+      "adjustments": [],
+      "area": "email",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "email",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "DMARC p=reject; legacy pct=25; test mode=false",
+          "kind": "observed",
+          "observation": "dmarc1",
+          "principal": "anonymous",
+          "request": "dmarc1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "email.dmarc_partial",
+      "impact": "The published pct value asks legacy receivers to apply the policy to only some failing mail. Current DMARC receivers may ignore this historic tag.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "email.dmarc_partial",
+        "subject": "example.com"
+      },
+      "not_checked": [
+        "Actual receiver enforcement and message alignment were not assessed"
+      ],
+      "remediation": {
+        "summary": "Verify each legitimate sender in DMARC reports, then remove pct or set it to 100."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dmarc1"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "example.com",
+        "kind": "mail_domain",
+        "label": "example.com (declared sending: google-workspace)"
+      },
+      "title": "DMARC publishes a partial percentage for legacy receivers",
+      "why_here": [
+        "You listed google-workspace as sending for example.com. DNS does not show whether it sends current mail."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "email.spf_undeclared_sender",
+        "needs_people": false,
+        "reason": "",
+        "subject": "example.com/include:sendgrid.net"
+      },
+      "adjustments": [],
+      "area": "email",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "email",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "SPF includes senders through include:sendgrid.net maps to sendgrid, absent from declared senders",
+          "kind": "observed",
+          "observation": "spf1",
+          "principal": "anonymous",
+          "request": "spf1"
+        },
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "SPF includes senders through include:sendgrid.net maps to sendgrid, absent from declared senders",
+          "kind": "observed",
+          "observation": "spf2",
+          "principal": "anonymous",
+          "request": "spf2"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "email.spf_undeclared_sender",
+      "impact": "SPF includes a recognized sending service that was not listed for this domain. This may be an incomplete declaration or an obsolete authorization; DNS does not show whether the service is still used.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "email.spf_undeclared_sender",
+        "subject": "example.com/include:sendgrid.net"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm who owns and uses this sending service. Add it to mail.senders if intended; otherwise remove its include after checking mail delivery."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:spf1",
+          "request:spf2"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "example.com/include:sendgrid.net",
+        "kind": "spf_mechanism",
+        "label": "SPF include:sendgrid.net on example.com"
+      },
+      "title": "SPF includes a service absent from the declared senders",
+      "why_here": [
+        "You listed google-workspace as sending for example.com."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "tls.certificate_expiring",
+        "needs_people": false,
+        "reason": "",
+        "subject": "example.com"
+      },
+      "adjustments": [],
+      "area": "external",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "tls",
+      "derived": [
+        {
+          "name": "days_remaining",
+          "value": 6
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Certificate expires in six days; confirm renewal is working",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "tls.certificate_expiring",
+      "impact": "Expiry is approaching. Short-lived certificates can renew normally within this window; renewal success was not checked.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "tls.certificate_expiring",
+        "subject": "example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm automatic renewal is working and monitor the replacement certificate."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "info",
+      "severity_base": "info",
+      "status": "open",
+      "subject": {
+        "key": "example.com",
+        "kind": "dns_name",
+        "label": "example.com"
+      },
+      "title": "The certificate expires within 14 days",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.version_disclosed",
+        "needs_people": false,
+        "reason": "",
+        "subject": "https://example.com/"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "-1",
+          "rule": "exposed_on_purpose",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "intent.exposed_on_purpose[0]"
+          }
+        }
+      ],
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Server: nginx/1.24.0",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": true,
+      "id": "web.version_disclosed",
+      "impact": "The response reveals a software version or build identifier. This does not establish any vulnerability.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.version_disclosed",
+        "subject": "https://example.com/"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Remove unnecessary version details from headers, generator metadata and public version responses."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "info",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "https://example.com/",
+        "kind": "url",
+        "label": "https://example.com/"
+      },
+      "title": "The URL reveals a software version",
+      "why_here": [
+        "You declared this URL exposed on purpose: public build information"
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "You listed google-workspace as sending for example.com. DNS does not show whether it sends current mail",
+      "kind": "mail_context",
+      "source": "example.com"
+    },
+    {
+      "detail": "adkim=r (default relaxed), aspf=r (default relaxed); whether your senders' mail actually aligns is not visible in DNS. Aggregate-report destination present: true",
+      "kind": "mail_context",
+      "source": "example.com"
+    },
+    {
+      "detail": "DMARC coverage is limited to the DNS records read, including legacy pct percentages. Receivers may discover or apply policies differently; actual mail handling was not tested",
+      "kind": "mail_context",
+      "source": "example.com"
+    },
+    {
+      "detail": "SPF term read, not compared with declared senders: ip4:192.0.2.0/24",
+      "kind": "mail_context",
+      "source": "example.com"
+    },
+    {
+      "detail": "DKIM for sendgrid was not checked: no selector given. Find s= in the DKIM-Signature header of a recent message from this service",
+      "kind": "mail_context",
+      "source": "news.example.com"
+    },
+    {
+      "detail": "Entry points only: no authenticated login flow or loaded scripts were read.",
+      "kind": "web_context",
+      "source": "domain:example.com"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {
+      "github-token": 1
+    },
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-07T07:12:03Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 6,
+      "partial": 4,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 2,
+      "low": 3
+    },
+    "items": [
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "web.secret_in_response"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "web.secret_in_response",
+            "subject": "github-token:https://example.com/"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:secrets"
+        ],
+        "severity": "critical",
+        "title": "A secret-shaped credential is published in the response"
+      },
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "email.dkim_key_breakable"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "email.dkim_key_breakable",
+            "subject": "google._domainkey.example.com"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:email"
+        ],
+        "severity": "high",
+        "title": "A DKIM RSA key is shorter than 1024 bits"
+      },
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "web.plaintext_http"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "web.plaintext_http",
+            "subject": "http://example.com"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 3,
+        "rank_basis": [
+          "severity:medium",
+          "area:web"
+        ],
+        "severity": "medium",
+        "title": "The origin serves plain HTTP instead of redirecting to HTTPS"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 15,
+      "selected": 16,
+      "without_evidence": 1
+    }
+  }
+}

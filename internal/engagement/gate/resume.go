@@ -57,6 +57,11 @@ func (g *Gate) identity(op *compiled, r Request, params map[string]string, cred 
 	if err != nil {
 		return ""
 	}
+	path := params["path"]
+	if path == "" {
+		path = "/"
+	}
+	inputs := g.webInputs[params["scheme"]+"://"+params["host"]+path]
 	keys := slices.Sorted(maps.Keys(params))
 	pairs := make([][2]string, 0, len(keys))
 	for _, k := range keys {
@@ -69,7 +74,9 @@ func (g *Gate) identity(op *compiled, r Request, params map[string]string, cred 
 		Exists    bool            `json:"exists"`
 		Principal string          `json:"principal"`
 		Rules     string          `json:"rules"`
-	}{def, r.Asset, pairs, r.Exists, principal, g.rules})
+		Vantage   string          `json:"vantage"`
+		Inputs    string          `json:"inputs"`
+	}{def, r.Asset, pairs, r.Exists, principal, g.rules, g.requestVantage(op), inputs})
 	if err != nil {
 		return ""
 	}

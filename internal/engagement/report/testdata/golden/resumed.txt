@@ -2,7 +2,8 @@ scheck engagement report: host-ubuntu
 Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
 Trigger        not declared (one-host check)
 Resumed        this run was stopped and resumed: what an earlier session read completely was kept,
-               and everything else was read again.
+               and everything else was read again. Kept evidence was not read again and retains its
+               original observation date.
 Edited by hand evidence/deploy.collection.json: changed since scheck wrote it, and used as written.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
@@ -94,7 +95,8 @@ WHAT LEFT THIS MACHINE
   audit.jsonl in the run directory lists every request this run made.
   Third-party services:
     Your DNS resolver at 192.0.2.53, and whatever it forwards to, as for any web browsing on this
-      network: names under your domains, the names they point to, and the services above; 4 lookups.
+      network: names under your domains, the names they point to (including third-party mail and DNS
+      providers), and the services above; 4 lookups.
   Your own systems:
     servers: 1 SSH session.
   Names under your domains not shown to be yours:

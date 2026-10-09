@@ -1,0 +1,166 @@
+scheck engagement report: mail-review
+Read 2026-10-07 07:12 to 07:12 (UTC). scheck test.
+Trigger        not declared
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: example.com (checked only in part: email and domain). See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Email and domain.
+Not checked      Secrets, External surface, Web application: see Coverage.
+Not requested    Not part of this run: identity and access, cloud configuration, data stores and
+                 backups, CI/CD and supply chain, hosts, logging and incident readiness. To include
+                 one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      A DKIM RSA key is shorter than 1024 bits (example.com)
+Nothing else open ranks at medium or above among what was checked. Below: 2 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: email and domain. Not checked: secrets, external surface, web application, identity and
+access, cloud configuration, data stores and backups, CI/CD and supply chain, hosts, logging and
+incident readiness. Anything not checked is unknown, not fine.
+
+COVERAGE
+Secrets                  not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision; this version of scheck has no rule for it
+  (loaded scripts and pages beyond entry points).
+External surface         not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision; this version of scheck has no rule for it
+  (TLS versions and ciphers other than those negotiated, and revocation).
+Web application          not checked
+  1 of 1 asset read.
+  Some web-response checks could not reach a decision.
+Email and domain         checked in part
+  1 of 1 asset read.
+  This version of scheck has no rule for it (SPF term ip4:192.0.2.0/24 has no service mapping); DKIM
+  was not checked: no selector given (DKIM for sendgrid on news.example.com: no selector given).
+Not requested            Not part of this run: identity and access, cloud configuration, data stores
+                         and backups, CI/CD and supply chain, hosts, logging and incident readiness.
+                         To include one, list it under roots in the engagement file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 3 open (1 high, 2 low), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  A DKIM RSA key is shorter than 1024 bits (example.com) [email.dkim_key_breakable]
+   Subject       selector google (google-workspace) on example.com (dkim_selector
+                 google._domainkey.example.com)
+   Observed      dkim1 (07:12, as anonymous): DKIM at google._domainkey.example.com; RSA modulus 512
+                 bits
+   Severity      high
+   Why here      You declared selector google for google-workspace.
+   Not checked   Whether this selector signs current mail and whether that mail aligns were not
+                 assessed
+   Fix           Rotate to a 2048-bit RSA key at your sender, publish its new selector, verify
+                 delivery, then retire the old key.
+
+2  low  DMARC publishes a partial percentage for legacy receivers (example.com)
+   [email.dmarc_partial]
+   Subject       example.com (declared sending: google-workspace) (mail_domain example.com)
+   Observed      dmarc1 (07:12, as anonymous): DMARC p=reject; legacy pct=25; test mode=false
+   Severity      low
+   Why here      You listed google-workspace as sending for example.com. DNS does not show whether
+                 it sends current mail.
+   Not checked   Actual receiver enforcement and message alignment were not assessed
+   Fix           Verify each legitimate sender in DMARC reports, then remove pct or set it to 100.
+
+3  low  SPF includes a service absent from the declared senders (example.com)
+   [email.spf_undeclared_sender]
+   Subject       SPF include:sendgrid.net on example.com (spf_mechanism
+                 example.com/include:sendgrid.net)
+   Observed      spf1 (07:12, as anonymous): SPF includes senders through include:sendgrid.net maps
+                 to sendgrid, absent from declared senders
+   Observed      spf2 (07:12, as anonymous): SPF includes senders through include:sendgrid.net maps
+                 to sendgrid, absent from declared senders
+   Severity      low
+   Why here      You listed google-workspace as sending for example.com.
+   Fix           Confirm who owns and uses this sending service. Add it to mail.senders if intended;
+                 otherwise remove its include after checking mail delivery.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
+intent.accepted_risks in engagement.yaml and write the reason.
+
+  # A DKIM RSA key is shorter than 1024 bits (example.com)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: email.dkim_key_breakable
+      asset: example.com
+      subject: google._domainkey.example.com # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alice (listed employee)
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # DMARC publishes a partial percentage for legacy receivers (example.com)
+    - id: email.dmarc_partial
+      asset: example.com
+      subject: example.com         # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alice (listed employee)
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # SPF includes a service absent from the declared senders (example.com)
+    - id: email.spf_undeclared_sender
+      asset: example.com
+      subject: example.com/include:sendgrid.net # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alice (listed employee)
+      expires: 2027-04-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    Your DNS resolver at 192.0.2.53:53, and whatever it forwards to, as for any web browsing on this
+      network: names under your domains, the names they point to (including third-party mail and DNS
+      providers), and the services above; 12 lookups, including 1 random test name under your
+      domains and one under invalid.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  example.com: You listed google-workspace as sending for example.com. DNS does not show whether it
+    sends current mail.
+  example.com: adkim=r (default relaxed), aspf=r (default relaxed); whether your senders' mail
+    actually aligns is not visible in DNS. Aggregate-report destination present: true.
+  example.com: DMARC coverage is limited to the DNS records read, including legacy pct percentages.
+    Receivers may discover or apply policies differently; actual mail handling was not tested.
+  example.com: SPF term read, not compared with declared senders: ip4:192.0.2.0/24.
+  news.example.com: DKIM for sendgrid was not checked: no selector given. Find s= in the
+    DKIM-Signature header of a recent message from this service.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

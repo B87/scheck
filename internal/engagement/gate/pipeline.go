@@ -476,47 +476,78 @@ type shaped struct {
 
 // shape parses the redacted body, drops excluded items, projects to the
 // op's fields and reads the next cursor. raw is never parsed: only
-// redacted is (docs/spec/scope.md, "Responses"). RedactJSON keeps the
-// structure by construction and checked the raw bytes were one document,
-// so a parse failure here means redaction broke it.
+// redacted is (docs/spec/scope.md, "Responses").
 func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shaped {
 	op := a.b.op
-	dec := json.NewDecoder(bytes.NewReader(redacted))
-	dec.UseNumber()
-	var doc any
-	if err := dec.Decode(&doc); err != nil {
-		return shaped{code: codeBrokeJSON}
-	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return shaped{code: codeBrokeJSON}
+	doc, code := parseRedacted(redacted)
+	if code != "" {
+		return shaped{code: code}
 	}
 	if op.List == nil {
 		return shaped{body: marshal(project(doc, op.keep))}
 	}
-	l := op.List
-	var items []any
-	if l.Items == "$" {
-		arr, ok := doc.([]any)
-		if !ok {
-			return shaped{code: codeMalformed}
-		}
-		items = arr
-	} else if f, ok := fieldAt(doc, l.Items); ok && f != nil {
-		arr, ok := f.([]any)
-		if !ok {
-			return shaped{code: codeMalformed}
-		}
-		items = arr
-	} else if _, isObj := doc.(map[string]any); !isObj {
-		return shaped{code: codeMalformed}
+	items, code := listItems(op.List, doc)
+	if code != "" {
+		return shaped{code: code}
 	}
-
-	// The set being built is this page's own copy: the page before keeps
-	// its own, so nothing another request reads is written here.
-	n, building := 1, (*userSet)(nil)
+	n := 1
 	if a.prev != nil {
 		n = a.prev.n + 1
 	}
+	ous := g.scope.OrgUnits(r.Asset)
+	kept, pop, building := g.filter(r, a, items, n, ous)
+	out := shaped{body: marshal(kept), pop: pop}
+	g.pageAfter(&out, r, a, doc, h, building, len(ous) > 0)
+	return out
+}
+
+// parseRedacted parses a redacted JSON body. RedactJSON keeps the structure
+// by construction and checked the raw bytes were one document, so a parse
+// failure here means redaction broke it.
+func parseRedacted(redacted []byte) (any, string) {
+	dec := json.NewDecoder(bytes.NewReader(redacted))
+	dec.UseNumber()
+	var doc any
+	if err := dec.Decode(&doc); err != nil {
+		return nil, codeBrokeJSON
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, codeBrokeJSON
+	}
+	return doc, ""
+}
+
+// listItems finds a list's item array; a missing array in an object is an
+// empty page, as Google leaves an empty list out.
+func listItems(l *List, doc any) ([]any, string) {
+	if l.Items == "$" {
+		arr, ok := doc.([]any)
+		if !ok {
+			return nil, codeMalformed
+		}
+		return arr, ""
+	}
+	if f, ok := fieldAt(doc, l.Items); ok && f != nil {
+		arr, ok := f.([]any)
+		if !ok {
+			return nil, codeMalformed
+		}
+		return arr, ""
+	}
+	if _, isObj := doc.(map[string]any); !isObj {
+		return nil, codeMalformed
+	}
+	return nil, ""
+}
+
+// filter drops the page's excluded items before anything is stored and
+// projects the rest, counting what it dropped by rule. A users list that
+// builds the excluded-subject set adds every user it saw to this page's
+// own copy of the set: the page before keeps its own, so nothing another
+// request reads is written here.
+func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) ([]any, *Population, *userSet) {
+	op, l := a.b.op, a.b.op.List
+	var building *userSet
 	if len(l.UserKeys) > 0 {
 		building = newUserSet(r.Asset)
 		if a.prev != nil {
@@ -527,7 +558,6 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 	if l.UserRef != "" {
 		set = g.excludedUsers(r.Asset)
 	}
-	ous := g.scope.OrgUnits(r.Asset)
 	pop := &Population{Page: n, Items: len(items)}
 	counts := map[string]int{}
 	kept := []any{}
@@ -558,29 +588,34 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 	if slices.ContainsFunc(pop.Dropped, func(d Drop) bool { return d.Rule != ruleNotAName }) {
 		pop.Incomplete = append(pop.Incomplete, "dropped")
 	}
-	out := shaped{body: marshal(kept), pop: pop}
+	return kept, pop, building
+}
 
-	cursor, found := g.nextCursor(op, doc, h)
+// pageAfter reads the next cursor: the page state for the page after this
+// one, a list left incomplete, or, on the last page, the excluded-subject
+// set a users list finished.
+func (g *Gate) pageAfter(out *shaped, r Request, a admitted, doc any, h http.Header, building *userSet, unitExcluded bool) {
+	l, pop := a.b.op.List, out.pop
+	cursor, found := g.nextCursor(a.b.op, doc, h)
 	switch {
 	case !found:
 		// The set exists only for an excluded unit: with none, nobody is
 		// excluded and nothing is refused by it. A list that returned no
 		// one while a unit is excluded tells no excluded user apart from a
 		// kept one: the set stays unknown.
-		if building != nil && len(ous) > 0 && len(building.seen) > 0 {
+		if building != nil && unitExcluded && len(building.seen) > 0 {
 			out.done = building
 		}
 	case cursor == "":
 		pop.Incomplete = append(pop.Incomplete, "next_page_unreadable")
-	case n >= l.MaxPages:
+	case pop.Page >= l.MaxPages:
 		pop.Incomplete = append(pop.Incomplete, "page_limit")
 	default:
 		params := maps.Clone(a.b.params)
 		delete(params, l.Next.Param)
 		pop.More = true
-		out.next = &page{asset: r.Asset, op: r.Op, params: params, cursor: cursor, n: n, users: building}
+		out.next = &page{asset: r.Asset, op: r.Op, params: params, cursor: cursor, n: pop.Page, users: building}
 	}
-	return out
 }
 
 // ruleNotAName counts identities in a name record that are not DNS names;

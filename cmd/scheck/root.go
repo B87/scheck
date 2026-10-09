@@ -15,6 +15,7 @@ import (
 // milestone, or to a stage this build does not run, are registered so the
 // surface is stable, and rejected at run time.
 type globalOpts struct {
+	Vantage         string
 	IncludeEvidence bool
 	Format          string
 	Out             string

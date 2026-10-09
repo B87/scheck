@@ -3,6 +3,7 @@ package engagement
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -65,6 +67,7 @@ type RunOptions struct {
 	Dir *RunDir
 	// StopAfter ends the run after that stage; "" runs through LastStage.
 	StopAfter string
+	Vantage   string
 	Started   time.Time
 	Version   string
 	Log       func(format string, args ...any)
@@ -156,7 +159,7 @@ type Evidence struct {
 
 // counts reports whether the evidence is first-party evidence.
 func (e *Evidence) counts() bool {
-	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved"
+	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved" && e.Kind != "suspended"
 }
 
 // String is the evidence as the Scope stage prints it.
@@ -170,6 +173,8 @@ func (e *Evidence) String() string {
 		return "none: the confirmation of " + e.Date + " expired"
 	case e.Kind == "future":
 		return "none: the confirmation is dated " + e.Date + ", after this run"
+	case e.Kind == "suspended":
+		return "none: the provider returned an unconfigured-service fingerprint"
 	case e.Kind == "moved":
 		return "none: confirmed for " + e.Target + ", which the name no longer points at"
 	case e.Kind == "network_root":
@@ -181,7 +186,8 @@ func (e *Evidence) String() string {
 // ReconDoc is recon.json, the asset map.
 type ReconDoc struct {
 	Header
-	Assets []ReconAsset `json:"assets"`
+	Assets   []ReconAsset `json:"assets"`
+	Resolver *Resolver    `json:"resolver,omitempty"`
 }
 
 // How far reaching a host got, in recon.json and the report.
@@ -231,6 +237,11 @@ type ReconAsset struct {
 	Host         *report.Host                  `json:"host,omitempty"`
 	Facts        map[string]report.Fact        `json:"facts,omitempty"`
 	Observations map[string]report.Observation `json:"observations,omitempty"`
+	// Web is what the web collector read under a domain root, redacted by
+	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
+	// verdicts on it.
+	Web    *web.Evidence  `json:"web,omitempty"`
+	Judged []web.Judgment `json:"judged,omitempty"`
 }
 
 // PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
@@ -355,9 +366,12 @@ type run struct {
 	auditFile io.Writer
 	// gate is the run's scope gate, built when something sends through
 	// it.
-	gate *gate.Gate
-	// scoped is what the Scope stage found.
-	scoped *ScopeDoc
+	gate     *gate.Gate
+	webScope *scope
+	// scoped is what the Scope stage found; reconResolver what this
+	// session's control lookup found of the resolver Recon reads through.
+	scoped        *ScopeDoc
+	reconResolver *Resolver
 	// session is when this session started.
 	session time.Time
 	// manifest is run.json, nil under --no-persist.
@@ -386,6 +400,9 @@ func Run(ctx context.Context, res *Resolved, o RunOptions) (*Outcome, error) {
 	last := slices.Index(Stages, stop)
 	if last < 0 || last > slices.Index(Stages, LastStage) {
 		return nil, refuse("--stop-after must be one of %s", strings.Join(Stages, "|"))
+	}
+	if !ValidVantage(o.Vantage) {
+		return nil, refuse("--vantage must be internet|vpn|lan")
 	}
 	if o.Log == nil {
 		o.Log = func(string, ...any) {}
@@ -584,7 +601,7 @@ func (r *run) scope(ctx context.Context) (any, error) {
 	// is unchanged and it found no gap to close; the gate still decides
 	// every request from the file (docs/spec/engagement.md, "Stop and
 	// resume").
-	inputs := scopeInputs(r.res, r.o.Version, r.session)
+	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
 	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
 		r.o.Log("scope: kept from an earlier session")
 		r.used("scope.json")
@@ -658,12 +675,14 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(discoveryOps...)
+	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops)...)
 	if err != nil {
 		return nil, err
 	}
-	cfg := gate.Config{Registry: reg, Scope: r.res.GateScope(r.session), RedactExtra: r.res.RedactExtra(),
-		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1}
+	r.webScope = r.res.GateScope(r.session).(*scope)
+	cfg := gate.Config{Registry: reg, Scope: r.webScope, RedactExtra: r.res.RedactExtra(),
+		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1, Vantage: r.o.Vantage,
+		DNSInputs: mailInputs(r.res), WebInputs: intentInputs(r.res)}
 	if p := r.o.Resume; p != nil {
 		cfg.Prior, cfg.Session = p.Requests, len(r.manifest.Sessions)
 	}
@@ -691,9 +710,219 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	return r.gate, nil
 }
 
-// reconStage runs every declared read per asset: in this build, the host
-// collector on host assets. A root of a kind with no collector yet is
-// recorded as not collected and makes the run incomplete.
+// collectDomain reads a domain root through the gate with the web collector
+// (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
+// the names those records point at, and the names Scope chose to read; and
+// judges them with its rules together with Scope's lookups.
+func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
+	if ctx.Err() != nil {
+		ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
+		ra.Detail = "limits.timeout ended the engagement before this asset was read"
+		r.incomplete(a, ra)
+		return ra
+	}
+	g, err := r.gateFor(ctx)
+	if err != nil {
+		ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
+		r.incomplete(a, ra)
+		return ra
+	}
+	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	r.checkResolver(ctx, g, a)
+	ev := web.Collect(ctx, g, r.webDomain(a))
+	ra.Web = &ev
+	ra.Judged = web.Judge(r.webInput(a, ev))
+	r.suspendConfirmations(ra.Judged)
+	ev = web.Enrich(ctx, g, r.webDomain(a), ev)
+	ra.Web = &ev
+	ra.Judged = web.Judge(r.webInput(a, ev))
+	ra.Status = StatusCollected
+	if ctx.Err() != nil || ev.Cut() {
+		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
+		ra.Detail = fmt.Sprintf("limits.timeout (%s) ended the engagement while it was read", r.res.Limits.Timeout)
+		r.incomplete(a, ra)
+	}
+	return ra
+}
+
+// webInput is what the web collector's rules judge under a domain root:
+// the names Scope looked up, what it could not list, whether the resolver
+// invents answers, and what Recon read.
+func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
+	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev, Now: r.session, Vantage: r.o.Vantage}
+	for _, plan := range r.webPlans(a) {
+		for _, entry := range plan.Entries {
+			raw := entry.Scheme + "://" + entry.Host + entry.Path
+			for i, e := range r.res.Intent.NotExposed {
+				ref, _ := parseURL(e.URL)
+				if raw == strings.TrimPrefix(ref.ID, "url:") {
+					in.Restricted = append(in.Restricted, web.Restriction{URL: raw, Audience: e.Audience, Source: fmt.Sprintf("intent.not_exposed[%d]", i)})
+				}
+			}
+		}
+	}
+	if a.Kind == KindURL {
+		in.Root = ""
+	}
+	for _, b := range r.res.Assets {
+		if b.Kind == KindURL {
+			in.URLAssets = append(in.URLAssets, web.URLAsset{ID: b.ID, URL: strings.TrimPrefix(b.ID, "url:")})
+		}
+	}
+	for _, m := range ev.Mail {
+		context := web.MailContext{Domain: m.Domain}
+		for _, sender := range r.res.Mail.Senders {
+			if strings.TrimSuffix(strings.ToLower(sender.Domain), ".") != m.Domain {
+				continue
+			}
+			selectors := []string{}
+			for _, sel := range sender.DKIMSelectors {
+				selectors = append(selectors, strings.ToLower(sel))
+			}
+			context.Senders = append(context.Senders, web.MailSender{Service: sender.Service, Selectors: selectors})
+		}
+		for _, domain := range r.res.Mail.NoMail {
+			if strings.TrimSuffix(strings.ToLower(domain), ".") == m.Domain {
+				context.NoMail = true
+			}
+		}
+		in.MailContext = append(in.MailContext, context)
+	}
+	if r.recon != nil {
+		for _, ra := range r.recon.Assets {
+			if ra.Web != nil && ra.ID != a.ID {
+				in.MailPolicies = append(in.MailPolicies, ra.Web.Mail...)
+				in.Evidence = web.MergeSites(in.Evidence, *ra.Web)
+			}
+		}
+	}
+	if r.scoped == nil {
+		in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:not_listed", Detail: "Scope did not run"})
+		return in
+	}
+	// Scope's names were answered by the resolver Scope asked, Recon's
+	// reads by this session's: each must be known not to invent answers
+	// (a resumed session may be on another network).
+	in.Doubt = cmp.Or(resolverDoubt(r.scoped.Resolver), resolverDoubt(r.reconResolver))
+	for _, sd := range r.scoped.Domains {
+		if sd.Root != a.ID {
+			continue
+		}
+		if sd.Control != nil {
+			n := webName(*sd.Control)
+			in.Wildcard = &n
+		}
+		if sd.CT != "ok" {
+			in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:ct_source", Detail: "certificate transparency did not answer"})
+		}
+		for _, d := range sd.Dropped {
+			// An excluded name or a non-name was never part of the root's
+			// names; anything else dropped hides names.
+			if !strings.HasPrefix(d.Rule, "exclude[") && d.Rule != "not_a_name" {
+				in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:" + d.Rule, Detail: fmt.Sprintf("%d dropped (%s)", d.Count, d.Rule)})
+			}
+		}
+		for _, sn := range sd.Names {
+			// A name under a more specific domain root is that root's.
+			if r.innerRoot(a, sn.Name) {
+				continue
+			}
+			in.Names = append(in.Names, webName(sn))
+		}
+	}
+	return in
+}
+
+// resolverDoubt is why no answer of a resolver stands, "" when it is known
+// not to invent them.
+func resolverDoubt(res *Resolver) string {
+	switch {
+	case res == nil:
+		return "unavailable:resolver_unchecked"
+	case res.Rewrites:
+		return "unavailable:resolver_rewrites"
+	case !res.Known():
+		return "unavailable:resolver_unchecked"
+	}
+	return ""
+}
+
+// checkResolver sends this session's control lookup under invalid., once,
+// before Recon reads any domain root through the gate's resolver.
+func (r *run) checkResolver(ctx context.Context, g *gate.Gate, a ResolvedAsset) {
+	if r.reconResolver != nil {
+		return
+	}
+	ctl := g.Resolve(ctx, gate.Resolve{Asset: a.ID, Name: randomLabel() + ".invalid", Stage: "recon", Control: true})
+	r.reconResolver = &Resolver{Address: g.Resolver(), Rewrites: ctl.Lookup.Outcome == gate.OutcomeAddresses,
+		Control: string(ctl.Lookup.Outcome)}
+	if ctl.Decision != gate.DecisionSent {
+		r.reconResolver.Control = ctl.Decision
+	}
+	if r.recon != nil {
+		r.recon.Resolver = r.reconResolver
+	}
+}
+
+// innerRoot reports a name under a domain root more specific than a.
+func (r *run) innerRoot(a ResolvedAsset, name string) bool {
+	return slices.ContainsFunc(r.res.Roots, func(o Ref) bool {
+		return o.Kind == KindDomain && o.name != a.name && domainUnder(o.name, a.name) && domainUnder(name, o.name)
+	})
+}
+
+// webDomain is what the web collector reads under a domain root: the mail
+// domains under it, the root first, with the DKIM selectors declared for
+// each, and the names Scope chose to read.
+func (r *run) webDomain(a ResolvedAsset) web.Domain {
+	d := web.Domain{Asset: a.ID, Name: a.name, Stage: "recon", Sites: r.webPlans(a)}
+	selectors := map[string][]string{}
+	order := []string{a.name}
+	// A mail domain is read under the most specific root holding it, once.
+	add := func(name string) {
+		name = strings.TrimSuffix(strings.ToLower(name), ".")
+		if domainUnder(name, a.name) && !r.innerRoot(a, name) && !slices.Contains(order, name) {
+			order = append(order, name)
+		}
+	}
+	for _, s := range r.res.Mail.Senders {
+		add(s.Domain)
+		dom := strings.TrimSuffix(strings.ToLower(s.Domain), ".")
+		for _, sel := range s.DKIMSelectors {
+			if sel = strings.ToLower(sel); !slices.Contains(selectors[dom], sel) {
+				selectors[dom] = append(selectors[dom], sel)
+			}
+		}
+	}
+	for _, n := range r.res.Mail.NoMail {
+		add(n)
+	}
+	for _, name := range order {
+		d.Mail = append(d.Mail, web.MailDomain{Name: name, Selectors: selectors[name]})
+	}
+	if r.scoped != nil {
+		for _, sd := range r.scoped.Domains {
+			if sd.Root != a.ID {
+				continue
+			}
+			if sd.Control != nil && resolverDoubt(r.scoped.Resolver) == "" && resolverDoubt(r.reconResolver) == "" &&
+				web.NeedsWildcardPage(webName(*sd.Control)) {
+				d.Names = append(d.Names, sd.Control.Name)
+			}
+			for _, sn := range sd.Names {
+				if sn.Read && !r.innerRoot(a, sn.Name) {
+					d.Names = append(d.Names, sn.Name)
+				}
+			}
+		}
+	}
+	return d
+}
+
+// reconStage runs every declared read per asset: the host collector on
+// host assets and the web collector on domain roots. A root of a kind with
+// no collector yet is recorded as not collected and makes the run
+// incomplete.
 func (r *run) reconStage(ctx context.Context) (any, error) {
 	doc := &ReconDoc{Header: r.header("recon")}
 	// What the session reached is on record as each host ends, so a stage
@@ -713,6 +942,10 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	for _, a := range r.res.Assets {
 		ra := ReconAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root}
 		switch {
+		case a.Kind == KindDomain && isRoot(a):
+			ra = r.collectDomain(ctx, a, ra)
+		case a.Kind == KindURL && isRoot(a):
+			ra = r.collectURL(ctx, a, ra)
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -794,6 +1027,38 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			}
 		}
 		doc.Assets = append(doc.Assets, ra)
+	}
+	// Judge again after all roots are read so inherited mail policy can use
+	// already-collected organizational evidence regardless of root order.
+	// No new request is made (docs/spec/web-collector.md, "Email").
+	for i, ra := range doc.Assets {
+		if ra.Web == nil {
+			continue
+		}
+		for _, a := range r.res.Assets {
+			if a.ID == ra.ID {
+				doc.Assets[i].Judged = web.Judge(r.webInput(a, *ra.Web))
+				break
+			}
+		}
+	}
+	// A declared domain under a root the web collector read was read with
+	// it: its names were among the root's.
+	for i, ra := range doc.Assets {
+		if (ra.Kind != KindDomain && ra.Kind != KindURL) || ra.Root == ra.ID {
+			continue
+		}
+		for _, root := range doc.Assets {
+			if root.ID == ra.Root && root.Web != nil {
+				doc.Assets[i].Status, doc.Assets[i].Reason = root.Status, root.Reason
+				doc.Assets[i].Detail = "read with " + root.Name
+			}
+		}
+	}
+	if r.scoped != nil {
+		if err := r.write("scope.json", r.scoped); err != nil {
+			return nil, err
+		}
 	}
 	return doc, r.write("recon.json", doc)
 }
@@ -1002,7 +1267,38 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	if strings.HasPrefix(file, "-") {
 		file = "./" + file
 	}
+	in.Observations = map[string]ereport.Observation{}
+	if r.scoped != nil {
+		for _, d := range r.scoped.Domains {
+			names := slices.Clone(d.Names)
+			if d.Control != nil {
+				names = append(names, *d.Control)
+			}
+			for _, n := range names {
+				in.Observations[n.RequestID] = ereport.Observation{CollectedAt: n.CollectedAt, Vantage: n.Vantage}
+			}
+		}
+	}
+	if r.gate != nil {
+		for id, meta := range r.gate.Observations() {
+			in.Observations[id] = ereport.Observation{CollectedAt: meta.CollectedAt, Vantage: meta.Vantage}
+		}
+	}
+	if r.gate != nil {
+		for _, e := range r.gate.Entries() {
+			if e.Event == "dns" && !slices.Contains(in.LevelsUsed, "passive") {
+				in.LevelsUsed = append(in.LevelsUsed, "passive")
+			}
+			if e.Event == "send" && e.Level != "" && !slices.Contains(in.LevelsUsed, e.Level) {
+				in.LevelsUsed = append(in.LevelsUsed, e.Level)
+			}
+		}
+	}
+	in.Vantage = r.o.Vantage
 	in.Rerun = "scheck run " + file
+	if r.o.Vantage != "" {
+		in.Rerun += " --vantage " + r.o.Vantage
+	}
 	if in.FromHost {
 		// --host writes a trigger only so the file it builds validates; the
 		// operator declared none.
@@ -1022,6 +1318,10 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		in.Authorization = auth
 	}
+	for i, e := range r.res.Intent.ExposedOnPurpose {
+		ref, _ := parseURL(e.URL)
+		in.Exposures = append(in.Exposures, ereport.ExposureInput{URL: strings.TrimPrefix(ref.ID, "url:"), Reason: e.Reason, Source: fmt.Sprintf("intent.exposed_on_purpose[%d]", i)})
+	}
 	for _, ra := range r.recon.Assets {
 		asset, _ := r.asset(ra.Name)
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
@@ -1033,6 +1333,44 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		if c, ok := r.hosts[ra.Name]; ok {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
 			ai.Host.Graded = r.graded[ra.Name]
+		}
+		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
+			ai.ReadWith = ra.Root
+		}
+		if ra.Web != nil {
+			ai.Collector = "web"
+			ai.WebShortfalls = r.webShortfalls(asset, *ra.Web)
+			if r.gate != nil {
+				for _, e := range r.gate.Entries() {
+					if e.Asset == ra.ID {
+						ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: e.RequestID, Params: e.Params, At: e.Time, Decision: e.Decision, OutputSHA256: e.OutputHash})
+					}
+				}
+			}
+			in.RulesVersion = r.o.Version + ":web:" + web.BrowserDataVersion + ":preload:" + web.PreloadVersion + ":takeover:" + web.TakeoverVersion + ":senders:" + web.SenderTableVersion + ":login-redirect:" + web.LoginRedirectVersion
+			wi := r.webInput(asset, *ra.Web)
+			ai.PopulationIncomplete = len(wi.Gaps) > 0 || ra.Web.Cut() || slices.ContainsFunc(wi.Names, func(n web.Name) bool { return n.Status == web.StatusNotChecked || n.Status == web.StatusInsufficient })
+			if len(wi.Restricted) > 0 {
+				for _, warn := range VantageWarnings(res, r.o.Vantage) {
+					ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: ra.ID, Detail: warn})
+				}
+			}
+			if r.reconResolver != nil && ra.Kind == KindDomain {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: ra.ID, Detail: fmt.Sprintf("Recon resolver control: %s at %s. A reserved-name control is a heuristic; it does not prove the resolver never rewrites other missing names.", r.reconResolver.Control, r.reconResolver.Address)})
+			}
+			ai.Redactions = web.RedactionHits(*ra.Web)
+			ai.Unfingerprinted = web.Unfingerprinted(wi)
+			for _, n := range web.SiteNotes(wi) {
+				ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: n.Source, Detail: n.Detail})
+			}
+			for _, n := range web.MailNotes(wi) {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
+			}
+			for _, j := range ra.Judged {
+				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
+					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context, Attributes: j.Attributes, Listed: j.Listed, Details: j.Details,
+					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
+			}
 		}
 		in.Assets = append(in.Assets, ai)
 	}
@@ -1082,6 +1420,21 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		in.ExcludeMatches = r.excludeMatches()
 	}
 	in.Egress = r.egress()
+	// Levels describe the whole retained run, like egress, not only this session.
+	for _, source := range in.Egress.Sources {
+		if source.Requests > 0 && !slices.Contains(in.LevelsUsed, "passive") {
+			in.LevelsUsed = append(in.LevelsUsed, "passive")
+		}
+	}
+	for _, site := range in.Egress.Sites {
+		if site.Requests > 0 && !slices.Contains(in.LevelsUsed, "observe") {
+			in.LevelsUsed = append(in.LevelsUsed, "observe")
+		}
+	}
+	slices.SortFunc(in.LevelsUsed, func(a, b string) int {
+		levels := []string{"passive", "observe", "probe", "scan"}
+		return cmp.Compare(slices.Index(levels, a), slices.Index(levels, b))
+	})
 	handles := make([]string, 0, len(res.People))
 	for h, p := range res.People {
 		if p.Kind == "employee" && p.Left == "" {
@@ -1146,19 +1499,9 @@ func (r *run) sessionEgress() *ereport.EgressInput {
 		for _, u := range uses {
 			e.Sources = append(e.Sources, ereport.SourceInput{Source: u.Source, Operator: u.Operator, Host: u.Host,
 				Sent: u.Subjects, Requests: u.Requests, Credentials: u.Credentials, RootControls: u.RootControls,
-				InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
+				InvalidQueries: u.InvalidQueries, InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
 		}
-		byName := map[string]int{}
-		for _, st := range sites {
-			i, ok := byName[st.Name]
-			if !ok {
-				i = len(e.Sites)
-				byName[st.Name] = i
-				e.Sites = append(e.Sites, ereport.SiteInput{Name: st.Name})
-			}
-			e.Sites[i].Requests += st.Requests
-			e.Sites[i].FirstParty = e.Sites[i].FirstParty || st.FirstParty
-		}
+		e.Sites = sessionSites(sites)
 	}
 	// The names SSH resolved, as the transport recorded them: a host's
 	// own or its jump host's here, a host's behind a jump host there.
@@ -1271,4 +1614,71 @@ func fileName(name string) string {
 		}
 		return '_'
 	}, name)
+}
+
+func webName(sn ScopeName) web.Name {
+	return web.Name{Name: sn.Name, Status: sn.Status, Detail: sn.Detail, Outcome: sn.Outcome,
+		Chain: sn.Chain, Addresses: sn.Addresses, FinalInRoot: sn.FinalInRoot, Request: sn.RequestID}
+}
+
+// Positive fingerprints narrow the live scope and mark the persisted
+// confirmation as suspended (docs/spec/web-collector.md, "Never claim a name").
+func (r *run) suspendConfirmations(judged []web.Judgment) {
+	for _, j := range judged {
+		if j.Verdict != web.Fired || (j.ID != finding.IDDNSTakeoverCandidate && j.ID != finding.IDDNSUnclaimedAtProvider) {
+			continue
+		}
+		names := append([]string{j.Subject.Key}, j.Members...)
+		for _, name := range names {
+			if strings.HasPrefix(name, "*.") {
+				continue
+			}
+			if r.webScope != nil {
+				r.webScope.suspended.Store(name, true)
+			}
+			if r.scoped == nil {
+				continue
+			}
+			suspend := func(e *Evidence) {
+				if e != nil && e.Kind == "operator" {
+					e.Kind = "suspended"
+				}
+			}
+			for i := range r.scoped.Assets {
+				a := &r.scoped.Assets[i]
+				if ref, ok := parseSubject(a.ID); ok && ref.name == name {
+					suspend(a.FirstParty)
+				}
+			}
+			for i := range r.scoped.Domains {
+				for k := range r.scoped.Domains[i].Names {
+					n := &r.scoped.Domains[i].Names[k]
+					if n.Name == name {
+						suspend(n.FirstParty)
+					}
+				}
+			}
+		}
+	}
+}
+
+// sessionSites totals hosts across assets without reclassifying requests whose
+// admission did not use first-party evidence (docs/spec/scope.md, "Resume").
+func sessionSites(sites []gate.Site) []ereport.SiteInput {
+	var out []ereport.SiteInput
+	byName := map[[2]string]int{}
+	for _, st := range sites {
+		key := [2]string{st.Name, strconv.FormatBool(st.FirstParty)}
+		i, ok := byName[key]
+		if !ok {
+			i = len(out)
+			byName[key] = i
+			out = append(out, ereport.SiteInput{Name: st.Name, FirstParty: st.FirstParty})
+		}
+		out[i].Requests += st.Requests
+	}
+	slices.SortFunc(out, func(a, b ereport.SiteInput) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(strconv.FormatBool(a.FirstParty), strconv.FormatBool(b.FirstParty)))
+	})
+	return out
 }

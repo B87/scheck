@@ -49,7 +49,7 @@ func Build(in Input) *Report {
 	}
 	r := &Report{
 		SchemaVersion: SchemaVersion, ScheckVersion: in.Version, RulesVersion: in.Version,
-		Run:        Run{Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
+		Run:        Run{Vantage: in.Vantage, Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
@@ -61,6 +61,9 @@ func Build(in Input) *Report {
 		dir := in.Directory
 		r.Run.Directory = &dir
 	}
+	if in.RulesVersion != "" {
+		r.RulesVersion = in.RulesVersion
+	}
 	b.r = r
 	for _, a := range in.Assets {
 		if a.Host != nil {
@@ -70,12 +73,28 @@ func Build(in Input) *Report {
 	for _, a := range in.Assets {
 		r.Assets = append(r.Assets, b.asset(a))
 		b.shortfall(a)
+		r.Incomplete = append(r.Incomplete, a.WebShortfalls...)
 		if v := b.hosts[a.ID]; v != nil {
 			r.Findings = append(r.Findings, b.hostFindings(v)...)
 			r.Assessments = append(r.Assessments, v.assessments()...)
 			r.Redaction.Operator.Matches += v.redactions(r.Redaction.Builtin)
 		}
+		if a.Collector != "" {
+			r.Notes = append(r.Notes, a.MailNotes...)
+			r.Notes = append(r.Notes, a.WebNotes...)
+			for _, h := range a.Redactions {
+				if strings.HasPrefix(h.Rule, "extra:") {
+					r.Redaction.Operator.Matches++
+				} else {
+					r.Redaction.Builtin[h.Rule]++
+				}
+			}
+			r.Findings = append(r.Findings, b.judgedFindings(a)...)
+			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
+		}
 	}
+	r.Findings = uniqueFindings(r.Findings)
+	r.Assessments = uniqueAssessments(r.Assessments)
 	b.rankFindings()
 	b.acceptances()
 	r.Coverage = b.coverage()
@@ -99,7 +118,7 @@ func (b *builder) engagement() Engagement {
 		Name: in.Name, Timezone: b.zone.String(), BuiltFrom: "file",
 		Source:        Source{SHA256: in.SHA256},
 		Collected:     Span{From: in.Started.UTC(), To: in.Finished.UTC()},
-		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: []string{}},
+		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...)},
 		Authorization: in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
 	}
 	if in.Operator != "" {
@@ -117,9 +136,9 @@ func (b *builder) engagement() Engagement {
 		e.Source.Path = &p
 	}
 	for _, a := range in.Assets {
-		if a.Host != nil {
-			e.Method.LevelsUsed = []string{"observe"}
-			break
+		switch {
+		case a.Host != nil && !slices.Contains(e.Method.LevelsUsed, "observe"):
+			e.Method.LevelsUsed = append(e.Method.LevelsUsed, "observe")
 		}
 	}
 	return e
@@ -132,12 +151,17 @@ func (b *builder) asset(a AssetInput) Asset {
 		host := "host"
 		out.Collector = &host
 	}
+	if a.Collector != "" {
+		c := a.Collector
+		out.Collector = &c
+	}
 	// Every collection attempt's commands, a refused or failed one's
 	// included: the trace says what touched every asset.
 	for _, e := range a.Trace {
 		out.Trace = append(out.Trace, Trace{Observation: e.Observation, Check: e.CheckID, Params: e.Params,
 			At: e.Time.UTC(), Decision: e.Decision, OutputSHA256: e.OutputHash})
 	}
+	out.Trace = append(out.Trace, a.NetworkTrace...)
 	v := b.hosts[a.ID]
 	if v == nil {
 		return out
@@ -218,6 +242,9 @@ func (b *builder) acceptances() {
 }
 
 func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string) {
+	if judged, read := b.judgedFor(acc.AssetID); read {
+		return b.judgedOutcome(acc, out, judged)
+	}
 	v := b.hosts[acc.AssetID]
 	if v == nil {
 		return "rule_not_decided", "the asset was not read on this run"
@@ -477,6 +504,14 @@ func (b *builder) exit() Exit {
 			t = Threshold{Severity: string(finding.Threshold(p)), Basis: "profile:" + p.String()}
 		}
 		e.Thresholds[a.ID] = t
+	}
+	// Discovered names have their own finding assets without a declared
+	// AssetInput. Their default threshold is still medium (engagement.md,
+	// "Exit codes"); a missing map entry must not discard their findings.
+	for _, f := range b.r.Findings {
+		if _, ok := e.Thresholds[f.Key.Asset]; !ok {
+			e.Thresholds[f.Key.Asset] = Threshold{Severity: string(finding.SevMedium), Basis: "default"}
+		}
 	}
 	for _, s := range b.r.Refused {
 		e.Reasons = append(e.Reasons, ExitReason{Code: 3, Why: s.AssetName + " was not assessed: " + s.Detail, Asset: s.Asset})

@@ -3,9 +3,11 @@ package engagement
 import (
 	"fmt"
 	"net/netip"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
@@ -38,10 +40,11 @@ func (r *Resolved) GateScope(at time.Time) gate.Scope {
 }
 
 type scope struct {
-	res    *Resolved
-	at     time.Time
-	assets map[string]ResolvedAsset // by canonical id
-	intent []Ref                    // the intent URLs, entry points of their site
+	suspended sync.Map // names whose provider fingerprint invalidated operator confirmation
+	res       *Resolved
+	at        time.Time
+	assets    map[string]ResolvedAsset // by canonical id
+	intent    []Ref                    // the intent URLs, entry points of their site
 }
 
 // parse reads a subject id leniently: a GitHub login or repository, a host
@@ -65,7 +68,34 @@ func parseSubject(id string) (Ref, bool) {
 		}
 	}
 	r, err := parseLocator(Kind(kind), rest)
+	if err != nil && Kind(kind) == KindDomain {
+		// A name whose records the gate reads may hold underscore labels
+		// (_dmarc.example.com, s1._domainkey.example.com): it is placed by
+		// its labels, as any name is (docs/spec/scope.md, "The resolver").
+		d := strings.TrimSuffix(strings.ToLower(rest), ".")
+		if recordDomain(d) {
+			return Ref{Kind: KindDomain, ID: "domain:" + d, Written: rest, name: d}, true
+		}
+	}
 	return r, err == nil
+}
+
+// underscoreLabel is a label of a name read from or for its records.
+var underscoreLabel = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
+
+// recordDomain reports whether d is a lowercase DNS name of two labels or
+// more, any of which may hold underscores.
+func recordDomain(d string) bool {
+	labels := strings.Split(d, ".")
+	if len(d) > 253 || len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
+		return false
+	}
+	for _, l := range labels {
+		if !underscoreLabel.MatchString(l) {
+			return false
+		}
+	}
+	return true
 }
 
 // under is Under, and also places a URL root's robots.txt and security.txt
@@ -154,23 +184,68 @@ func (r *Resolved) allowAddress(a netip.Addr) error {
 	return nil
 }
 
-// Site lists the paths an origin may be read at (docs/spec/scope.md,
+// sitePaths are the paths an origin may be read at, by the evidence each
+// needs (docs/spec/scope.md, "Admission", "First-party evidence"). A path
+// in both network and confirmed may be read when either holds.
+type sitePaths struct {
+	// paths need nothing more than the file.
+	paths []string
+	// firstParty says the file's own evidence (a root) admits paths, not
+	// only a domain root's front page: what the report counts as a site
+	// shown to be the operator's.
+	firstParty bool
+	// network need every address the name resolves to inside a network
+	// root; confirmed need the name to point at the confirmation's target.
+	network, confirmed []string
+	// ev is the file's evidence for the origin, which confirmed rests on.
+	ev *Evidence
+}
+
+// Admits decides whether path may be read at origin (docs/spec/scope.md,
+// "Admission", steps 7 and 8): the one decision the gate makes before it
+// resolves the name, with l nil, and again after, with the lookup as
+// answered. It is the only check on a web op's port: an origin it admits
+// no path at is refused, so a discovered name's other ports are never read.
+func (s *scope) Admits(origin, path string, l *gate.Lookup) gate.Admission {
+	sp := s.site(origin)
+	switch {
+	case slices.Contains(sp.paths, path):
+		return gate.Admission{FirstParty: sp.firstParty}
+	case !slices.Contains(sp.network, path) && !slices.Contains(sp.confirmed, path):
+		return gate.Admission{Refused: "entry_point"}
+	case l == nil:
+		return gate.Admission{Resolve: true}
+	}
+	// A confirmation admits only the paths it lists; a network root
+	// holding every address admits the rest, and a confirmation that moved.
+	ev := sp.ev
+	if !slices.Contains(sp.confirmed, path) {
+		ev = nil
+	}
+	if !s.res.resolvedEvidence(ev, *l).counts() {
+		return gate.Admission{Refused: "address_moved"}
+	}
+	return gate.Admission{FirstParty: true}
+}
+
+// site lists the paths an origin may be read at (docs/spec/scope.md,
 // "Admission", "Levels in 0.0.2"):
 //
 //   - a name under a domain root, on the default port, has its front page;
 //   - a first-party site also has its entry points (a url root or a
-//     confirmed url entry, and the intent URLs on it), robots.txt and
-//     security.txt: as Paths when a root is the evidence, as Confirmed
-//     with the confirmation's target when only the operator's word is;
+//     declared url entry contained by a url root, a confirmed url entry,
+//     and the intent URLs on it), robots.txt and
+//     security.txt: as paths when a root is the evidence, as confirmed
+//     when only the operator's word is;
 //   - when the file has a network root, those beyond the front page of a
-//     site without root evidence are also Network paths, which the gate
+//     site without root evidence are also network paths, which the gate
 //     allows once every address the name resolves to is inside one.
 //
 // An origin not written canonically, or on another port, lists nothing.
-func (s *scope) Site(origin string) gate.SitePaths {
+func (s *scope) site(origin string) sitePaths {
 	o, err := parseURL(origin + "/")
 	if err != nil || o.path != "/" || o.ID != "url:"+origin+"/" {
-		return gate.SitePaths{}
+		return sitePaths{}
 	}
 	front := false
 	if o.Port == 0 {
@@ -186,12 +261,15 @@ func (s *scope) Site(origin string) gate.SitePaths {
 		}
 	}
 	ev, entries := s.res.evidence(o, s.at)
-	if !front && ev == nil {
-		return gate.SitePaths{}
+	if ev != nil && ev.Kind == "operator" && s.confirmationSuspended(o.name) {
+		ev, entries = nil, nil
 	}
-	var sp gate.SitePaths
+	if !front && ev == nil {
+		return sitePaths{}
+	}
+	sp := sitePaths{ev: ev}
 	if front {
-		sp.Paths = append(sp.Paths, "/")
+		sp.paths = append(sp.paths, "/")
 	}
 	more := append(slices.Clone(wellKnown), entries...)
 	for _, u := range s.intent {
@@ -201,27 +279,53 @@ func (s *scope) Site(origin string) gate.SitePaths {
 	}
 	switch {
 	case ev != nil && ev.Kind != "operator":
-		sp.Paths, sp.FirstParty = append(sp.Paths, more...), true
+		sp.paths, sp.firstParty = append(sp.paths, more...), true
 	case ev != nil:
-		sp.Confirmed, sp.Target = more, ev.Target
+		sp.confirmed = more
 	}
 	if (ev == nil || ev.Kind == "operator") && slices.ContainsFunc(s.res.Roots, func(r Ref) bool { return r.Kind == KindNetwork }) {
 		// Evidence only a network root holding every address can give,
 		// checked once the gate has resolved the name; with no network
 		// root there is none to give.
-		sp.Network = slices.Clone(more)
+		sp.network = slices.Clone(more)
 	}
-	for _, l := range []*[]string{&sp.Paths, &sp.Network, &sp.Confirmed} {
+	for _, l := range []*[]string{&sp.paths, &sp.network, &sp.confirmed} {
 		slices.Sort(*l)
 		*l = slices.Compact(*l)
 	}
 	return sp
 }
 
+// resolvedEvidence is first-party evidence once the name is resolved
+// (docs/spec/scope.md, "First-party evidence"), the decision the gate's
+// Admits and discovery's listing share: a confirmation holds only while the
+// name points at its target, and is "moved" otherwise; without evidence
+// that holds, a name every address of which a network root holds has that
+// root's.
+func (r *Resolved) resolvedEvidence(ev *Evidence, l gate.Lookup) *Evidence {
+	if ev != nil && ev.Kind == "operator" && !l.PointsAt(ev.Target) {
+		ev = &Evidence{Kind: "moved", ConfirmedBy: ev.ConfirmedBy, Date: ev.Date, Target: ev.Target}
+	}
+	if ev.counts() || len(l.Addrs) == 0 {
+		return ev
+	}
+	held := ""
+	for _, a := range l.Addrs {
+		root := r.networkRoot(a)
+		if root == "" {
+			return ev
+		}
+		if held == "" {
+			held = root
+		}
+	}
+	return &Evidence{Kind: "network_root", Root: held}
+}
+
 // evidence is an origin's first-party evidence from the file, nil when it
 // has none, and the entry points it brings: the paths of the url roots and
 // confirmed url entries on the origin (docs/spec/scope.md, "First-party
-// evidence"). Site and scope.json both read it, so what the Scope stage
+// evidence"). Admits and scope.json both read it, so what the Scope stage
 // prints is what the gate admits. A root comes first, then a network root
 // holding an address literal, then the operator's confirmation, which
 // counts only through its year (at is the run's start); a name or address
@@ -253,6 +357,16 @@ func (r *Resolved) evidence(o Ref, at time.Time) (*Evidence, []string) {
 		}
 	}
 	for _, a := range r.Assets {
+		// The containing URL root already supplies first-party authority;
+		// the declaration contributes only this exact entry path. A root
+		// on /app cannot authorize a sibling /login through a domain root
+		// (docs/spec/scope.md, "First-party evidence", "URL roots").
+		if a.Kind == KindURL && sameOrigin(a.Ref, o) && slices.ContainsFunc(r.Roots, func(root Ref) bool {
+			return root.Kind == KindURL && Under(a.Ref, root)
+		}) {
+			entries = append(entries, a.path)
+			continue
+		}
 		if a.FirstParty == nil || !r.current(a.FirstParty, at) {
 			continue
 		}
@@ -397,4 +511,9 @@ func (r *Resolved) firstParty(a ResolvedAsset, at time.Time) *Evidence {
 		return &Evidence{Kind: kind, ConfirmedBy: a.FirstParty.ConfirmedBy, Date: a.FirstParty.Date}
 	}
 	return nil
+}
+
+func (s *scope) confirmationSuspended(name string) bool {
+	_, found := s.suspended.Load(name)
+	return found
 }

@@ -16,6 +16,7 @@
         "started": { "type": "string", "format": "date-time" },
         "directory": { "type": ["string", "null"], "description": "null under --no-persist." },
         "resumed": { "type": "boolean" },
+        "vantage": { "enum": ["internet", "vpn", "lan"] },
         "command": { "type": "string", "description": "The command that runs this engagement again." }
       }
     },
@@ -196,8 +197,9 @@
           "instances": { "type": "integer", "minimum": 0 },
           "complete": { "type": "boolean", "description": "Decided on unmarked evidence and read the whole population: no cap, sample, excluded unit or page limit." },
           "reason": { "$ref": "#/$defs/reason" },
-          "reads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids, the vocabulary of finding.rule.reads." },
-          "observations": { "type": "array", "items": { "type": "string" } }
+          "reads": { "type": "array", "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids; empty when no read was collected or a static preload decision needed no request." },
+          "observations": { "type": "array", "items": { "type": "string" } },
+          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"$ref": "#/$defs/subject"}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
         }
       }
     },
@@ -258,7 +260,8 @@
               "requests": { "type": "integer", "minimum": 0 },
               "credentials": { "type": "array", "items": { "type": "string" }, "description": "Environment variables a credential came from." },
               "control_lookups": { "type": "integer", "minimum": 0, "description": "dns: lookups of random names under the domain roots, among requests, which test whether the resolver answers names that do not exist." },
-              "control_invalid": { "type": "boolean", "description": "dns: one such lookup was under invalid., among requests." },
+              "invalid_queries": { "type": "integer", "minimum": 0 },
+              "control_invalid": { "type": "boolean", "description": "dns: whether any reserved-name control query was sent under invalid.; invalid_queries counts actual queries." },
               "scoped_resolvers_ignored": { "type": "boolean", "description": "dns: only a Mac's main resolver was asked, not its per-interface (VPN) resolvers." }
             }
           }
@@ -344,7 +347,7 @@
                 "request": { "type": "string" },
                 "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Bound parameters, post-redaction." },
                 "at": { "type": "string", "format": "date-time" },
-                "decision": { "type": "string", "pattern": "^(run|denied:.+|unavailable:.+|not_run:.+)$" },
+                "decision": { "type": "string", "pattern": "^(run|sent|reused|refused:.+|denied:.+|unavailable:.+|not_run:.+)$" },
                 "output_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
               },
               "oneOf": [{ "required": ["check"] }, { "required": ["request"] }]
@@ -435,7 +438,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }
@@ -447,7 +450,7 @@
     "subject": {
       "type": "object", "required": ["kind", "key", "label"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name", "url", "declaration"] },
+        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
         "key": { "type": "string", "description": "What accepted_risks[].subject takes; a redact_extra marker when the name is redacted." },
         "label": { "type": "string", "description": "Built only from fields rules read." },
         "provider_id": { "type": "string" },
@@ -473,6 +476,7 @@
         "source": { "type": "string", "description": "For declared evidence: engagement.yaml <key path>." },
         "collected_at": { "type": "string", "format": "date-time" },
         "principal": { "type": "string" },
+        "vantage": { "enum": ["internet", "vpn", "lan"] },
         "excerpt": { "type": "string" }
       },
       "if": { "properties": { "kind": { "const": "observed" } } },

@@ -41,6 +41,7 @@ type Report struct {
 
 // Run identifies the run the report is about.
 type Run struct {
+	Vantage   string    `json:"vantage,omitempty"`
 	Started   time.Time `json:"started"`
 	Directory *string   `json:"directory"`
 	Resumed   bool      `json:"resumed"`
@@ -354,6 +355,7 @@ type Rule struct {
 
 // Evidence is observed (a fact) or declared (the engagement file).
 type Evidence struct {
+	Vantage     string     `json:"vantage,omitempty"`
 	Kind        string     `json:"kind"` // observed | declared
 	Asset       string     `json:"asset,omitempty"`
 	Check       string     `json:"check,omitempty"`
@@ -417,14 +419,22 @@ type Candidate struct {
 
 // Assessment is one selected rule on one asset.
 type Assessment struct {
-	ID           string   `json:"id"`
-	Asset        string   `json:"asset"`
-	Status       string   `json:"status"`
-	Instances    int      `json:"instances"`
-	Complete     bool     `json:"complete"`
-	Reason       string   `json:"reason,omitempty"`
-	Reads        []string `json:"reads"`
-	Observations []string `json:"observations,omitempty"`
+	Outcomes     []AssessmentOutcome `json:"outcomes,omitempty"`
+	ID           string              `json:"id"`
+	Asset        string              `json:"asset"`
+	Status       string              `json:"status"`
+	Instances    int                 `json:"instances"`
+	Complete     bool                `json:"complete"`
+	Reason       string              `json:"reason,omitempty"`
+	Reads        []string            `json:"reads"`
+	Observations []string            `json:"observations,omitempty"`
+}
+
+// AssessmentOutcome retains a subject-specific observed decision and its detail.
+type AssessmentOutcome struct {
+	Subject Subject        `json:"subject"`
+	Outcome string         `json:"outcome"`
+	Detail  map[string]any `json:"detail"`
 }
 
 // Acceptance is one intent.accepted_risks entry and what became of it.

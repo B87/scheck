@@ -1,6 +1,10 @@
 package finding
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -126,9 +130,47 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for id := range judgementDefs {
 		reachable[id] = true
 	}
+	// The web collector's own rules raise these; its tests prove each one
+	// fires, is disproved and abstains (internal/collector/web).
+	for _, d := range webDefs {
+		reachable[d.ID] = true
+	}
 	for _, d := range Defs() {
 		if !reachable[d.ID] {
 			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)
 		}
+	}
+}
+
+// The subject kinds a definition may declare are the engagement report
+// schema's enum, so a finding can never carry a kind the report rejects.
+func TestSubjectKindsMatchTheReportSchema(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "engagement-report-schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Defs struct {
+			Subject struct {
+				Properties struct {
+					Kind struct {
+						Enum []string `json:"enum"`
+					} `json:"kind"`
+				} `json:"properties"`
+			} `json:"subject"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := doc.Defs.Subject.Properties.Kind.Enum
+	got := make([]string, len(SubjectKinds))
+	for i, k := range SubjectKinds {
+		got[i] = string(k)
+	}
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("SubjectKinds %v, schema enum %v", got, want)
 	}
 }

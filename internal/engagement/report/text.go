@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,13 @@ func WriteText(w io.Writer, r *Report, opt Options) error {
 	t := &text{w: bw, r: r, opt: opt, names: map[string]string{}}
 	for _, a := range r.Assets {
 		t.names[a.ID] = a.Name
+	}
+	// A finding may belong to a name found under a root, not declared: it
+	// is named as itself.
+	for _, f := range r.Findings {
+		if _, ok := t.names[f.Key.Asset]; !ok && f.AssetName != "" {
+			t.names[f.Key.Asset] = f.AssetName
+		}
 	}
 	t.zone = time.UTC
 	if z, err := time.LoadLocation(r.Engagement.Timezone); err == nil {
@@ -102,7 +110,13 @@ func (t *text) name(id string) string {
 	return clean(id)
 }
 
-func (t *text) clock(ts time.Time) string { return ts.In(t.zone).Format("15:04") }
+func (t *text) clock(ts time.Time) string {
+	format := "15:04"
+	if t.r.Engagement.Collected.From.In(t.zone).Format("2006-01-02") != t.r.Engagement.Collected.To.In(t.zone).Format("2006-01-02") {
+		format = "2006-01-02 15:04"
+	}
+	return ts.In(t.zone).Format(format)
+}
 
 // --- header ----------------------------------------------------------------
 
@@ -124,9 +138,15 @@ func (t *text) header() {
 			"incident": "incident", "routine": "routine"}[*e.Trigger]
 	}
 	t.field("", "Trigger", 15, trigger)
+	if t.r.Run.Vantage == "" && slices.ContainsFunc(t.r.Assessments, func(a Assessment) bool { return a.ID == finding.IDWebRestrictedReachable }) {
+		t.field("", "Vantage", 15, "not given: restricted pages were not checked for outside reachability (--vantage internet). internet means outside every permitted source, including office allowlists and VPN.")
+	}
+	if t.r.Run.Vantage != "" {
+		t.field("", "Vantage", 15, clean(t.r.Run.Vantage)+" (your declaration; not verified). internet means outside every permitted source, including office allowlists and VPN.")
+	}
 	if t.r.Run.Resumed {
 		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely was kept, and "+
-			"everything else was read again.")
+			"everything else was read again. Kept evidence was not read again and retains its original observation date.")
 	}
 	if len(e.EditedByHand) > 0 {
 		names := make([]string, len(e.EditedByHand))
@@ -275,6 +295,9 @@ func (t *text) shortfall(s Shortfall) string {
 	case "collector_not_built":
 		return n + " (" + kindLabel(s.Asset) + "): this version of scheck does not read it. Nothing was read from it."
 	case "limit_reached":
+		if strings.Contains(s.Detail, "while it was read") {
+			return n + ": limits.timeout ended the engagement while it was read."
+		}
 		return n + ": limits.timeout ended the engagement before it was read."
 	case "failed":
 		return n + ": could not connect from this machine (" + strings.TrimSuffix(clean(s.Detail), ".") +
@@ -643,6 +666,39 @@ func (t *text) reasonText(rd ReasonDetail) string {
 	case "sampled":
 		return "only part was read; the rest is unknown"
 	case "unavailable":
+		if detail, ok := map[string]string{
+			"not_read":                 "the required read was not collected",
+			"vantage_unknown":          "restricted pages were not checked for outside reachability: no --vantage given",
+			"vantage_inside":           "restricted pages were not checked for outside reachability: you declared this run came from inside your network",
+			"audience_internet":        "the declared audience is internet, so no restriction contradiction was judged",
+			"login_flow":               "the login flow was not read, so session cookies were not fully checked",
+			"web_evidence":             "some web-response checks could not reach a decision",
+			"tls_interception":         "your network inspects TLS, so certificates were not judged",
+			"certificate_unclassified": "certificate verification failed without a recognized cause",
+			"certificate":              "the HTTPS certificate could not be verified",
+			"tls_handshake":            "the TLS handshake did not give sufficient evidence",
+			"takeover":                 "the takeover candidate subsumes this certificate check",
+			"response_shape":           "the response format or incomplete body prevented this check",
+			"security_txt":             "the contact file had no recognized current expiry or valid retrieval scope",
+			"http_status":              "the HTTP status did not give usable evidence",
+			"blocked":                  "a protection service blocked this read",
+			"redirect_not_entry_point": "the redirect could not be followed within the declared entry points",
+			"dkim_selector":            "DKIM was not checked: no selector given",
+			"mail_senders":             "SPF was not compared with declared senders: none were listed",
+			"mail_use":                 "mail use could not be established from the declaration or DNS evidence",
+			"mail_evidence":            "email evidence was not judged",
+			"dmarc_parent":             "inherited DMARC is unknown: the organizational-domain policy was not read",
+			"dmarc_descendants":        "descendant policies were not assessed for a non-organizational domain",
+			"dmarc_existence":          "inherited np policy is uncertain: whether the domain exists was not established",
+			"dmarc_policy":             "a DMARC policy value was not recognized",
+			"spf_incomplete":           "the relevant SPF include tree was not read completely",
+			"spf_path":                 "earlier SPF denials leave later authorization uncertain",
+			"spf_macro":                "SPF uses macros that require a message sender to evaluate",
+			"dkim_key":                 "the DKIM key could not be parsed or was absent or revoked",
+			"dkim_multiple_keys":       "multiple DKIM keys leave the selector ambiguous",
+		}[arg]; ok {
+			return detail
+		}
 		if arg == "command_missing" {
 			return "the tool that would tell is not installed on the host, so scheck could not tell (this is not a finding)"
 		}
@@ -657,7 +713,7 @@ func (t *text) reasonsText(rs []ReasonDetail) string {
 	var out []string
 	for _, rd := range rs {
 		s := t.reasonText(rd)
-		if rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule") {
+		if rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule" || rd.Reason == "unavailable:dkim_selector" || rd.Reason == "unavailable:mail_senders") {
 			s += " (" + clean(rd.Detail) + ")"
 		}
 		out = append(out, s)
@@ -725,6 +781,14 @@ func (t *text) row(row Row) {
 				}
 			}
 			t.hang("  ", "  ", s+".")
+		}
+	}
+	for _, item := range row.SubItems {
+		if item.Name == "Services your names point at" {
+			t.hang("  Services your names point at: ", "    ", clean(item.Asset))
+			for _, name := range item.ReadNotJudged {
+				t.hang("    ", "    ", clean(name)+"; not checked for takeover: no fingerprint for this provider.")
+			}
 		}
 	}
 	for _, n := range row.DeclaredNotVerified {
@@ -1134,7 +1198,13 @@ func (t *text) paste(p *AcceptTemplate) {
 	kv("asset", clean(p.Asset), "")
 	switch {
 	case p.Subject != "":
-		kv("subject", clean(p.Subject), "required: this entry accepts this one only")
+		subject := clean(p.Subject)
+		// A wildcard starts YAML's alias syntax: quote it so the pasted
+		// acceptance names the DNS subject (web-collector.md, "Wildcards").
+		if strings.HasPrefix(subject, "*") {
+			subject = strconv.Quote(subject)
+		}
+		kv("subject", subject, "required: this entry accepts this one only")
 	case p.SubjectNote != "":
 		t.line(in + "    # " + clean(p.SubjectNote))
 	}
@@ -1295,7 +1365,7 @@ func (t *text) notes() {
 				who = t.acceptanceName(a)
 			}
 		}
-		lines = append(lines, who+": "+clean(n.Detail)+".")
+		lines = append(lines, who+": "+strings.TrimSuffix(clean(n.Detail), ".")+".")
 	}
 	if len(lines) == 0 {
 		return

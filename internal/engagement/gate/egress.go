@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -25,6 +27,7 @@ type Use struct {
 	// system's main resolver on macOS, whose per-interface (VPN) resolvers
 	// it did not ask.
 	RootControls           int
+	InvalidQueries         int
 	InvalidControl         bool
 	ScopedResolversIgnored bool
 }
@@ -41,12 +44,13 @@ type Site struct {
 }
 
 type egress struct {
-	mu       sync.Mutex
-	uses     map[string]*Use
-	sites    map[[2]string]*Site // {asset, name}
-	dns      int
-	controls int
-	invalid  bool
+	mu             sync.Mutex
+	uses           map[string]*Use
+	sites          map[[3]string]*Site // {asset, name}
+	dns            int
+	controls       int
+	invalid        bool
+	invalidQueries int
 }
 
 func (x *egress) use(source string) *Use {
@@ -67,9 +71,9 @@ func (g *Gate) countSend(a admitted, asset string) {
 	defer g.egress.mu.Unlock()
 	if a.prov.web {
 		if g.egress.sites == nil {
-			g.egress.sites = map[[2]string]*Site{}
+			g.egress.sites = map[[3]string]*Site{}
 		}
-		k := [2]string{asset, a.b.name}
+		k := [3]string{asset, a.b.name, strconv.FormatBool(a.firstParty)}
 		st, ok := g.egress.sites[k]
 		if !ok {
 			st = &Site{Asset: asset, Name: a.b.name}
@@ -94,10 +98,13 @@ func (g *Gate) countSend(a admitted, asset string) {
 	}
 }
 
-func (g *Gate) countDNS() {
+func (g *Gate) countDNS(name string) {
 	g.egress.mu.Lock()
 	defer g.egress.mu.Unlock()
 	g.egress.dns++
+	if strings.HasSuffix(name, ".invalid") {
+		g.egress.invalidQueries++
+	}
 }
 
 // countControl records a control lookup the gate admitted.
@@ -128,7 +135,7 @@ func (g *Gate) Egress() ([]Use, []Site) {
 	var uses []Use
 	if g.egress.dns > 0 {
 		uses = append(uses, Use{Source: "dns", Host: g.Resolver(), Requests: g.egress.dns, RootControls: g.egress.controls,
-			InvalidControl: g.egress.invalid, ScopedResolversIgnored: g.scopedResolvers})
+			InvalidQueries: g.egress.invalidQueries, InvalidControl: g.egress.invalid, ScopedResolversIgnored: g.scopedResolvers})
 	}
 	for _, k := range slices.Sorted(maps.Keys(g.egress.uses)) {
 		u := *g.egress.uses[k]
@@ -139,6 +146,8 @@ func (g *Gate) Egress() ([]Use, []Site) {
 	for _, st := range g.egress.sites {
 		sites = append(sites, *st)
 	}
-	slices.SortFunc(sites, func(a, b Site) int { return cmp.Or(cmp.Compare(a.Asset, b.Asset), cmp.Compare(a.Name, b.Name)) })
+	slices.SortFunc(sites, func(a, b Site) int {
+		return cmp.Or(cmp.Compare(a.Asset, b.Asset), cmp.Compare(a.Name, b.Name), cmp.Compare(strconv.FormatBool(a.FirstParty), strconv.FormatBool(b.FirstParty)))
+	})
 	return uses, sites
 }

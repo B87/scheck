@@ -72,6 +72,7 @@ type SourceInput struct {
 	// For DNS, the gate's control lookups and whether it read only the
 	// main resolver of a Mac.
 	RootControls           int
+	InvalidQueries         int
 	InvalidControl         bool
 	ScopedResolversIgnored bool
 }
@@ -123,6 +124,7 @@ type EgressSource struct {
 	// do not exist.
 	ControlLookups int  `json:"control_lookups,omitempty"`
 	ControlInvalid bool `json:"control_invalid,omitempty"`
+	InvalidQueries int  `json:"invalid_queries,omitempty"`
 	// ScopedResolversIgnored says only a Mac's main resolver was asked,
 	// not its per-interface (VPN) resolvers.
 	ScopedResolversIgnored bool `json:"scoped_resolvers_ignored,omitempty"`
@@ -179,7 +181,7 @@ func (b *builder) egress() Egress {
 		}
 		e.Sources = append(e.Sources, EgressSource{Source: s.Source, Operator: s.Operator, Host: s.Host, Sent: sent,
 			Requests: s.Requests, Credentials: slices.Clone(s.Credentials), ControlLookups: s.RootControls,
-			ControlInvalid: s.InvalidControl, ScopedResolversIgnored: s.ScopedResolversIgnored})
+			InvalidQueries: s.InvalidQueries, ControlInvalid: s.InvalidControl, ScopedResolversIgnored: s.ScopedResolversIgnored})
 	}
 	var web EgressAsset
 	for _, s := range in.Sites {
@@ -363,8 +365,15 @@ func sourceLine(s EgressSource) string {
 			who = "Your DNS resolver"
 		}
 		line := who + ", and whatever it forwards to, as for any web browsing on this network: names under your domains, " +
-			"the names they point to, and the services above; " + fmt.Sprintf("%d %s", s.Requests, plural(s.Requests, "lookup"))
+			"the names they point to (including third-party mail and DNS providers), and the services above; " + fmt.Sprintf("%d %s", s.Requests, plural(s.Requests, "lookup"))
 		switch c := s.ControlLookups; {
+		case s.InvalidQueries > 0:
+			line += fmt.Sprintf(", including %d random test %s under your domains and %d %s for random names under invalid", c, plural(c, "name"), s.InvalidQueries, func() string {
+				if s.InvalidQueries == 1 {
+					return "query"
+				}
+				return "queries"
+			}())
 		case c > 0 && s.ControlInvalid:
 			line += fmt.Sprintf(", including %d random test %s under your domains and one under invalid", c, plural(c, "name"))
 		case c > 0:

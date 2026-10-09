@@ -42,11 +42,13 @@ type Scope interface {
 	// (Forms) ("" when none), and whether a declared network root holds
 	// the form it carries.
 	Address(a netip.Addr) (excludedBy string, inNetworkRoot bool)
-	// Site lists the paths an origin (scheme://host[:port]) may be read
-	// at, by the evidence each needs. It is the only check on a web op's
-	// port: an origin it lists no path for is refused, so a discovered
-	// name's other ports are never read.
-	Site(origin string) SitePaths
+	// Admits decides whether path may be read at origin
+	// (scheme://host[:port]) (docs/spec/scope.md, "Admission", steps 7 and
+	// 8). The gate asks before it resolves the name, with l nil, and when
+	// the answer is Resolve, again with the lookup as answered. It is the
+	// only check on a web op's port: an origin it admits no path at is
+	// refused, so a discovered name's other ports are never read.
+	Admits(origin, path string, l *Lookup) Admission
 	// Throttle is the asset's own throttle in requests per second and
 	// concurrency; 0 for either means it sets none. For a SaaS asset it is
 	// only what its own assets entry sets, which can only lower the
@@ -59,24 +61,21 @@ type Scope interface {
 	OrgUnits(asset string) []OrgUnit
 }
 
-// SitePaths are the paths an origin may be read at (docs/spec/scope.md,
-// "Admission", "First-party evidence"). A path in both Network and
-// Confirmed may be read when either holds.
-type SitePaths struct {
-	// Paths need nothing more than the file.
-	Paths []string
-	// FirstParty says the file's own evidence (a root) admits Paths, not
-	// only a domain root's front page: what the report counts as a site
+// Admission is Scope.Admits' answer for one path (docs/spec/scope.md,
+// "Admission", "First-party evidence").
+type Admission struct {
+	// Refused is the rule a path is refused by: entry_point when it is not
+	// one of the origin's, address_moved when the lookup did not hold the
+	// evidence it needs. "" admits it.
+	Refused string
+	// Resolve says the path needs evidence only the lookup can give: every
+	// address inside a network root, or the name pointing at its
+	// confirmation's target.
+	Resolve bool
+	// FirstParty says the path is read on first-party evidence, not only
+	// as a domain root's front page: what the report counts as a site
 	// shown to be the operator's.
 	FirstParty bool
-	// Network need every address the name resolves to inside a network
-	// root.
-	Network []string
-	// Confirmed need the name to point where the operator's confirmation
-	// says: Target is the first CNAME hop outside every root, else the
-	// addresses, sorted and joined with commas.
-	Confirmed []string
-	Target    string
 }
 
 // OrgUnit is an organizational unit an exclude names, with the exclude
@@ -113,7 +112,11 @@ type Net struct {
 // Config builds a gate.
 type Config struct {
 	Registry *Registry
-	Scope    Scope
+	Vantage  string
+	// Inputs fingerprint declarations by canonical mail domain and exact URL.
+	DNSInputs map[string]string
+	WebInputs map[string]string
+	Scope     Scope
 	// RedactExtra is the engagement's redact_extra, applied to every
 	// response as to host output.
 	RedactExtra []string
@@ -154,10 +157,12 @@ type Gate struct {
 	kept   map[string]*Response
 	reused map[string]bool
 	// rules fingerprints the redaction rules for a request's identity.
-	rules  string
-	ua     string
-	getenv func(string) string
-	notes  []string
+	vantage              string
+	dnsInputs, webInputs map[string]string
+	rules                string
+	ua                   string
+	getenv               func(string) string
+	notes                []string
 
 	dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// nameserver and exchange are the gate's DNS client (dns.go).
@@ -165,19 +170,29 @@ type Gate struct {
 	scopedResolvers bool
 	exchange        func(ctx context.Context, server string, query []byte, tcp bool) ([]byte, error)
 	roots           *x509.CertPool
-	sleep           func(ctx context.Context, d time.Duration) error
-	now             func() time.Time
+	// noRoots says no root could be read: every chain fails to verify, and
+	// none is classed (docs/spec/scope.md, "Connections").
+	noRoots bool
+	sleep   func(ctx context.Context, d time.Duration) error
+	now     func() time.Time
 
 	limits limiters
 	dns    *limiter
 	egress egress
 
-	mu        sync.Mutex
-	seq       int
-	stopped   map[string]stop     // provider → why it stopped
-	redirects map[string]redirect // request id → the 3xx it received
-	pages     map[string]*page    // request id → the page after it
-	users     map[string]*userSet // asset → its excluded-subject set, once known
+	mu           sync.Mutex
+	entries      []Entry
+	observations map[string]Observation
+	seq          int
+	stopped      map[string]stop     // provider → why it stopped
+	redirects    map[string]redirect // request id → the 3xx it received
+	pages        map[string]*page    // request id → the page after it
+	users        map[string]*userSet // asset → its excluded-subject set, once known
+	// pointed is what each records read's answer pointed at, by its
+	// request id; spfLookups counts the include: and redirect= reads of
+	// each SPF evaluation (dns.go).
+	pointed    map[string]*pointed
+	spfLookups map[string]int
 }
 
 // redirect is a 3xx the gate received: the asset it was for, where it
@@ -208,9 +223,10 @@ func New(cfg Config) (*Gate, error) {
 	}
 	g := &Gate{
 		reg: cfg.Registry, scope: cfg.Scope, audit: cfg.Audit, redactor: red,
+		vantage: cfg.Vantage, dnsInputs: cfg.DNSInputs, webInputs: cfg.WebInputs,
 		deadline: cfg.Deadline, getenv: cfg.Getenv,
 		windows: cfg.Windows, prior: cfg.Prior, rules: rulesFingerprint(cfg.Version, cfg.RedactExtra),
-		session: cfg.Session, kept: map[string]*Response{}, reused: map[string]bool{},
+		session: cfg.Session, kept: map[string]*Response{}, observations: map[string]Observation{}, reused: map[string]bool{},
 		ua:         UserAgent(cfg.Version),
 		dial:       (&net.Dialer{}).DialContext,
 		nameserver: systemNameserver(), exchange: exchange,
@@ -222,10 +238,13 @@ func New(cfg Config) (*Gate, error) {
 		dns:     newLimiter(dnsRate, 4),
 		stopped: map[string]stop{}, redirects: map[string]redirect{},
 		pages: map[string]*page{}, users: map[string]*userSet{},
+		pointed: map[string]*pointed{}, spfLookups: map[string]int{},
 	}
 	if g.getenv == nil {
 		g.getenv = os.Getenv
 	}
+	var rootsNote string
+	g.roots, rootsNote = systemRoots()
 	if n := cfg.Net; n != nil {
 		if n.Dial != nil {
 			g.dial = n.Dial
@@ -239,7 +258,12 @@ func New(cfg Config) (*Gate, error) {
 		if n.Exchange != nil {
 			g.exchange = n.Exchange
 		}
-		g.roots = n.RootCAs
+		if n.RootCAs != nil {
+			g.roots, rootsNote = n.RootCAs, ""
+		}
+	}
+	if rootsNote != "" {
+		g.notes, g.noRoots = append(g.notes, rootsNote), true
 	}
 	// A proxy resolves names itself, which defeats the address checks, and
 	// it sees every URL (docs/spec/scope.md, "Connections").
@@ -334,7 +358,9 @@ func (g *Gate) Send(ctx context.Context, r Request) Result {
 			e := Entry{Event: "refused", RequestID: g.nextID(), Stage: r.Stage, Asset: r.Asset, Op: r.Op, Attempt: i + 2,
 				RetryOf: first, Decision: "refused:canceled", Detail: "the run was cancelled before the retry"}
 			_ = g.record(e)
-			return Result{RequestID: e.RequestID, Decision: e.Decision, Reason: "limit_reached", Detail: e.Detail, Response: res.Response}
+			out := Result{RequestID: e.RequestID, Response: res.Response}
+			out.end(e.Decision, e.Detail)
+			return out
 		}
 		res, rt = g.attempt(ctx, r, g.nextID(), first, i+2)
 	}

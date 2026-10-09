@@ -196,6 +196,8 @@ func TestValidationErrors(t *testing.T) {
 		{"intent url outside scope", minimal + "intent:\n  not_exposed:\n    - {url: https://admin.example.org/, audience: vpn}\n", 12, "intent.not_exposed[0].url", "falls under no root", false},
 		{"mail domain outside scope", minimal + "mail:\n  no_mail: [example.org]\n", 11, "mail.no_mail[0]", "no domain root", false},
 		{"sending and no_mail", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid}\n  no_mail: [example.com]\n", 13, "mail.no_mail[0]", "also has a sender", false},
+		{"dkim selector with an underscore", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid, dkim_selectors: [s_1]}\n", 12, "mail.senders[0].dkim_selectors[0]", "not a DKIM selector", false},
+		{"dkim selector label too long", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid, dkim_selectors: [" + strings.Repeat("s", 64) + "]}\n", 12, "mail.senders[0].dkim_selectors[0]", "not a DKIM selector", false},
 		{"not_used area", minimal + "not_used: [servers]\n", 10, "not_used[0]", "not one of", false},
 		{"ci not declared", minimal + "assets:\n  shop-repo:\n    repo: github:example-org/shop\n    ci: circleci\n", 13, "assets.shop-repo.ci", "not a tool declared", false},
 		{"empty kind, as the recon stanza writes it", minimal + "people:\n  dave: {kind: \"\", workspace: [dave@example.com]}\n", 11, "people.dave.kind", "find out: an admin nobody can name", false},
@@ -527,5 +529,19 @@ func TestSubjectOnAWholeAssetFinding(t *testing.T) {
 	if !errors.As(err, &errs) || len(errs) != 1 || errs[0].Key != "intent.accepted_risks[0].subject" ||
 		!strings.Contains(errs[0].Msg, "about the asset as a whole") {
 		t.Fatalf("want one error on the organization-wide acceptance, the host one left to Recon; got %v", err)
+	}
+}
+
+func TestIntentURLCannotBeBothPublicAndRestricted(t *testing.T) {
+	file := `schema: 1
+engagement: {name: contradictory, timezone: UTC, trigger: routine}
+roots: [{url: 'https://example.com/'}]
+intent:
+ exposed_on_purpose: [{url: 'https://EXAMPLE.com:443/admin', audience: internet}]
+ not_exposed: [{url: 'https://example.com/admin', audience: vpn}]
+`
+	_, err := Parse("e.yaml", []byte(file), testOpts)
+	if err == nil || !strings.Contains(err.Error(), "same URL is also declared exposed_on_purpose") {
+		t.Fatal(err)
 	}
 }

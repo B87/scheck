@@ -37,8 +37,9 @@ func (l Level) String() string {
 	return "level(" + strconv.Itoa(int(l)) + ")"
 }
 
-// Method is what an op sends. TLS is a handshake and nothing after it: the
-// certificate read of a discovered name.
+// Method is what an op sends. TLS is a handshake and nothing after it, a
+// capability no collector declares in 0.0.2: a name's certificate is read
+// from its https response.
 type Method string
 
 // The methods an op may declare.
@@ -254,37 +255,64 @@ func neverReadIn(s string) string {
 }
 
 // validate is the invariants test of one op: it names the first rule the op
-// breaks.
+// breaks, checking in a fixed order so that the rule named does not depend
+// on how the checks are grouped.
 func validate(op Op) (*compiled, error) {
-	fail := func(format string, a ...any) error {
-		return fmt.Errorf("op %q: %s", op.ID, fmt.Sprintf(format, a...))
+	fail := func(err error) error { return fmt.Errorf("op %q: %v", op.ID, err) }
+	prov, err := checkDeclaration(op)
+	if err != nil {
+		return nil, fail(err)
 	}
+	c, rawQuery, wholePath, err := parseTemplate(op)
+	if err != nil {
+		return nil, fail(err)
+	}
+	u := uses{c: c, seen: map[string]bool{}}
+	for _, check := range []func() error{
+		func() error { return c.declareParams(prov, wholePath) },
+		func() error { return c.checkDestination(prov, rawQuery) },
+		func() error { return u.template(rawQuery) },
+		u.subject,
+		u.unused,
+		func() error { return c.checkResponse(prov) },
+	} {
+		if err := check(); err != nil {
+			return nil, fail(err)
+		}
+	}
+	return c, nil
+}
+
+// checkDeclaration checks what an op declares about itself: its id, its
+// provider, level, method and class, and that it reads nothing that
+// returns credentials.
+func checkDeclaration(op Op) (provider, error) {
 	if op.ID == "" {
-		return nil, fail("has no id")
+		return provider{}, errors.New("has no id")
 	}
 	prov, ok := providers[op.Provider]
 	if !ok {
-		return nil, fail("provider %q is not in the provider table", op.Provider)
+		return provider{}, fmt.Errorf("provider %q is not in the provider table", op.Provider)
 	}
 	switch op.Level {
 	case Passive, Observe, Probe, Scan:
 	default:
-		return nil, fail("declares no level")
+		return provider{}, errors.New("declares no level")
 	}
 	switch op.Method {
 	case GET, HEAD, TLS:
 	case POST:
 		if op.Class != CredentialExchange {
-			return nil, fail("POST is allowed only for a credential exchange")
+			return provider{}, errors.New("POST is allowed only for a credential exchange")
 		}
 	default:
-		return nil, fail("method %q is not GET, HEAD, TLS or POST", op.Method)
+		return provider{}, fmt.Errorf("method %q is not GET, HEAD, TLS or POST", op.Method)
 	}
 	if op.Class == CredentialExchange && op.Method != POST {
-		return nil, fail("a credential exchange is a POST")
+		return provider{}, errors.New("a credential exchange is a POST")
 	}
 	if op.Class != Read && op.Class != Principal && op.Class != CredentialExchange {
-		return nil, fail("class %q is unknown", op.Class)
+		return provider{}, fmt.Errorf("class %q is unknown", op.Class)
 	}
 	// Reads that return a credential itself, which no finding needs and no
 	// redaction rule could recognize: Workspace's verificationCodes.list
@@ -292,9 +320,15 @@ func validate(op Op) (*compiled, error) {
 	// template is read decoded, as the server reads the path; bind checks
 	// the path it builds again.
 	if never := neverReadIn(op.URL); never != "" {
-		return nil, fail("reads %s, which returns credentials and is never declared", never)
+		return provider{}, fmt.Errorf("reads %s, which returns credentials and is never declared", never)
 	}
+	return prov, nil
+}
 
+// parseTemplate splits the URL template into scheme, host, path and query.
+// A path is literal from its first slash, or one whole placeholder, which
+// must then be a URLPath (declareParams).
+func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err error) {
 	scheme, rest, ok := strings.Cut(op.URL, "://")
 	host, pathQuery := rest, ""
 	if after, isWeb := strings.CutPrefix(rest, "{host}"); isWeb {
@@ -303,155 +337,185 @@ func validate(op Op) (*compiled, error) {
 		host, pathQuery = rest[:i], rest[i:]
 	}
 	tmplPath, rawQuery, _ := strings.Cut(pathQuery, "?")
-	// A path is literal from its first slash, or one whole placeholder,
-	// which must then be a URLPath (checked below).
-	wholePath := tmplPath != "" && placeholder.FindString(tmplPath) == tmplPath
+	wholePath = tmplPath != "" && placeholder.FindString(tmplPath) == tmplPath
 	if !ok || host == "" || !strings.HasPrefix(tmplPath, "/") && !wholePath || strings.ContainsAny(op.URL, "#@ ") {
-		return nil, fail("URL template %q is not scheme://host/path?query", op.URL)
+		return nil, "", false, fmt.Errorf("URL template %q is not scheme://host/path?query", op.URL)
 	}
-	c := &compiled{Op: op, scheme: scheme, host: host, path: tmplPath, types: map[string]Param{}}
-	for _, p := range op.Params {
+	return &compiled{Op: op, scheme: scheme, host: host, path: tmplPath, types: map[string]Param{}}, rawQuery, wholePath, nil
+}
+
+// declareParams checks each parameter's name and type.
+func (c *compiled) declareParams(prov provider, wholePath bool) error {
+	for _, p := range c.Params {
 		if p.Name == "" || p.Type < Login || p.Type > UserKey {
-			return nil, fail("parameter %q has no type", p.Name)
+			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
-			return nil, fail("parameter %q is declared twice", p.Name)
+			return fmt.Errorf("parameter %q is declared twice", p.Name)
 		}
 		c.types[p.Name] = p
 	}
-	if wholePath && c.types[strings.Trim(tmplPath, "{}")].Type != URLPath {
-		return nil, fail("a path that is one placeholder must be a URLPath")
+	if wholePath && c.types[strings.Trim(c.path, "{}")].Type != URLPath {
+		return errors.New("a path that is one placeholder must be a URLPath")
 	}
-	for _, p := range op.Params {
+	for _, p := range c.Params {
 		// An API's path is declared, never supplied: a URLPath there could
 		// name any endpoint of the provider.
 		if p.Type == URLPath && !prov.web {
-			return nil, fail("parameter %q is a URLPath, which only a web op takes", p.Name)
+			return fmt.Errorf("parameter %q is a URLPath, which only a web op takes", p.Name)
 		}
 	}
-	used := map[string]bool{}
-	use := func(where, s string, whole bool) error {
-		for _, m := range placeholder.FindAllStringSubmatch(s, -1) {
-			p, ok := c.types[m[1]]
-			if !ok {
-				return fmt.Errorf("%s uses {%s}, which is not declared", where, m[1])
-			}
-			if p.Optional && !whole {
-				return fmt.Errorf("%s uses optional {%s}; only a whole query value may be optional", where, m[1])
-			}
-			used[m[1]] = true
+	if c.Class != Read && (len(c.Params) > 0 || strings.Contains(c.URL, "{")) {
+		// Nothing scopes a principal op or a credential exchange but its
+		// asset, so nothing in its URL may vary.
+		return fmt.Errorf("a %s op takes no parameters", c.Class)
+	}
+	return nil
+}
+
+// checkDestination checks where the op sends: a web op to an asset's own
+// site, whose subject is its URL, so what is admitted is what is sent; an
+// API op over https to a literal host of its provider.
+func (c *compiled) checkDestination(prov provider, rawQuery string) error {
+	if !prov.web {
+		if c.scheme != "https" {
+			return errors.New("an API op is https")
+		}
+		if strings.Contains(c.host, "{") || !slices.Contains(prov.hosts, c.host) {
+			return fmt.Errorf("host %q is not a literal host of provider %q", c.host, c.Provider)
+		}
+		if c.Class == CredentialExchange && !slices.Contains(tokenEndpoints, c.host) {
+			return errors.New("a credential exchange posts only to a declared token endpoint")
 		}
 		return nil
 	}
+	switch {
+	case c.scheme != "{scheme}" && c.scheme != "https" && c.scheme != "http" || c.host != "{host}":
+		return errors.New("a web op's URL starts {scheme}://{host}, or https:// or http:// before {host}")
+	case c.Auth != NoAuth:
+		return errors.New("a web op never carries a credential")
+	case c.Class != Read:
+		return errors.New("a web op is a read")
+	case rawQuery != "":
+		return errors.New("a web op sends no query")
+	case c.Subject != "":
+		return errors.New("a web op's subject is its URL; it declares none")
+	}
+	c.Subject = "url:" + c.scheme + "://" + c.host + c.path
+	return nil
+}
 
-	if op.Class != Read && (len(op.Params) > 0 || strings.Contains(op.URL, "{")) {
-		// Nothing scopes a principal op or a credential exchange but its
-		// asset, so nothing in its URL may vary.
-		return nil, fail("a %s op takes no parameters", op.Class)
+// uses records the placeholders an op's templates use.
+type uses struct {
+	c    *compiled
+	seen map[string]bool
+}
+
+// in checks the placeholders s uses: each declared, and an optional one only
+// as a whole query value.
+func (u uses) in(where, s string, whole bool) error {
+	for _, m := range placeholder.FindAllStringSubmatch(s, -1) {
+		p, ok := u.c.types[m[1]]
+		if !ok {
+			return fmt.Errorf("%s uses {%s}, which is not declared", where, m[1])
+		}
+		if p.Optional && !whole {
+			return fmt.Errorf("%s uses optional {%s}; only a whole query value may be optional", where, m[1])
+		}
+		u.seen[m[1]] = true
 	}
-	if prov.web {
-		if c.scheme != "{scheme}" && c.scheme != "https" && c.scheme != "http" || c.host != "{host}" {
-			return nil, fail("a web op's URL starts {scheme}://{host}, or https:// or http:// before {host}")
-		}
-		if op.Auth != NoAuth {
-			return nil, fail("a web op never carries a credential")
-		}
-		if op.Class != Read {
-			return nil, fail("a web op is a read")
-		}
-		if rawQuery != "" {
-			return nil, fail("a web op sends no query")
-		}
-		if op.Subject != "" {
-			return nil, fail("a web op's subject is its URL; it declares none")
-		}
-		// The subject is the URL itself, so what is admitted is what is sent.
-		c.Subject = "url:" + c.scheme + "://" + c.host + c.path
-	} else {
-		if c.scheme != "https" {
-			return nil, fail("an API op is https")
-		}
-		if strings.Contains(c.host, "{") || !slices.Contains(prov.hosts, c.host) {
-			return nil, fail("host %q is not a literal host of provider %q", c.host, op.Provider)
-		}
-		if op.Class == CredentialExchange && !slices.Contains(tokenEndpoints, c.host) {
-			return nil, fail("a credential exchange posts only to a declared token endpoint")
-		}
+	return nil
+}
+
+// template checks the URL's placeholders and reads its query, which the
+// template writes escaped, as a URL is; bind encodes the query again, so it
+// is held decoded.
+func (u uses) template(rawQuery string) error {
+	c := u.c
+	if err := u.in("the URL host", c.scheme+"://"+c.host, false); err != nil {
+		return err
 	}
-	if err := use("the URL host", c.scheme+"://"+c.host, false); err != nil {
-		return nil, fail("%v", err)
-	}
-	if err := use("the URL path", c.path, false); err != nil {
-		return nil, fail("%v", err)
+	if err := u.in("the URL path", c.path, false); err != nil {
+		return err
 	}
 	for kv := range strings.SplitSeq(rawQuery, "&") {
 		if kv == "" {
 			continue
 		}
 		k, v, _ := strings.Cut(kv, "=")
-		// The template is written escaped, as a URL is; bind encodes the
-		// query again, so it is held decoded.
 		var err error
 		if k, err = url.QueryUnescape(k); err != nil {
-			return nil, fail("query key %q is not escaped as a URL's is", k)
+			return fmt.Errorf("query key %q is not escaped as a URL's is", k)
 		}
 		if v, err = url.QueryUnescape(v); err != nil {
-			return nil, fail("query value %q is not escaped as a URL's is", v)
+			return fmt.Errorf("query value %q is not escaped as a URL's is", v)
 		}
 		whole := placeholder.FindString(v) == v && v != ""
-		if err := use("the query", v, whole); err != nil {
-			return nil, fail("%v", err)
+		if err := u.in("the query", v, whole); err != nil {
+			return err
 		}
 		c.query = append(c.query, [2]string{k, v})
 	}
+	return nil
+}
 
+// subject checks the op's subject. Every placeholder that picks the
+// target, in the host or the path, is in the subject, so the subject
+// admitted is the target sent to. Only the query (a page, a cursor) may
+// vary outside it.
+func (u uses) subject() error {
+	c := u.c
 	switch {
-	case op.Class == Read && c.Subject == "":
-		return nil, fail("declares no subject")
-	case op.Class != Read && op.Subject != "":
-		return nil, fail("a %s op has no subject", op.Class)
+	case c.Class == Read && c.Subject == "":
+		return errors.New("declares no subject")
+	case c.Class != Read && c.Subject != "":
+		return fmt.Errorf("a %s op has no subject", c.Class)
 	}
-	if err := use("the subject", c.Subject, false); err != nil {
-		return nil, fail("%v", err)
+	if err := u.in("the subject", c.Subject, false); err != nil {
+		return err
 	}
-	// Every placeholder that picks the target, in the host or the path, is
-	// in the subject, so the subject admitted is the target sent to. Only
-	// the query (a page, a cursor) may vary outside it.
 	inSubject := map[string]bool{}
 	for _, m := range placeholder.FindAllStringSubmatch(c.Subject, -1) {
 		inSubject[m[1]] = true
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(c.scheme+"://"+c.host+c.path, -1) {
 		if !inSubject[m[1]] {
-			return nil, fail("{%s} picks the target but is not in the subject", m[1])
+			return fmt.Errorf("{%s} picks the target but is not in the subject", m[1])
 		}
 	}
 	for _, kv := range c.query {
 		for _, m := range placeholder.FindAllStringSubmatch(kv[1], -1) {
 			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count {
-				return nil, fail("{%s} in the query is not a page or a cursor, so it must be in the subject", m[1])
+				return fmt.Errorf("{%s} in the query is not a page or a cursor, so it must be in the subject", m[1])
 			}
 		}
 	}
-	for name := range c.types {
-		if !used[name] {
-			return nil, fail("parameter %q is declared but not used", name)
+	return nil
+}
+
+// unused refuses a parameter no template uses.
+func (u uses) unused() error {
+	for name := range u.c.types {
+		if !u.seen[name] {
+			return fmt.Errorf("parameter %q is declared but not used", name)
 		}
 	}
+	return nil
+}
 
-	if op.Method != TLS && len(op.Accept) == 0 {
-		return nil, fail("declares no response content type")
+// checkResponse checks what the op declares about its response: content
+// types, a size cap and the fields it keeps.
+func (c *compiled) checkResponse(prov provider) error {
+	if c.Method != TLS && len(c.Accept) == 0 {
+		return errors.New("declares no response content type")
 	}
-	if op.Method != TLS && op.MaxBytes <= 0 {
-		return nil, fail("declares no size cap")
+	if c.Method != TLS && c.MaxBytes <= 0 {
+		return errors.New("declares no size cap")
 	}
-	if !prov.web && op.Method == GET && len(op.Keep) == 0 && op.Class != CredentialExchange {
-		return nil, fail("declares no fields it keeps")
+	if !prov.web && c.Method == GET && len(c.Keep) == 0 && c.Class != CredentialExchange {
+		return errors.New("declares no fields it keeps")
 	}
-	if err := c.validateBody(); err != nil {
-		return nil, fail("%v", err)
-	}
-	return c, nil
+	return c.validateBody()
 }
 
 // pageKeys are the query keys a set builder may send its cursor and its
@@ -729,14 +793,52 @@ func userKey(v string) (string, error) {
 	return strings.ToLower(local) + "@" + d, nil
 }
 
+// dnsName is a host name: letters, digits and hyphens, lowercased.
 func dnsName(v string) (string, error) {
+	return checkName(v, labelRE.MatchString)
+}
+
+// answerLabelRE is a label of a name read from an answer, which may hold
+// underscores anywhere (RFC 2181 §11; _spf.google.com).
+var answerLabelRE = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
+
+// answerName is a name read from an answer: a CNAME hop, an MX or NS target,
+// an SPF include (docs/spec/scope.md, "The resolver").
+func answerName(v string) (string, error) {
+	return checkName(v, answerLabelRE.MatchString)
+}
+
+// recordName is a name scheck builds from the engagement file to read its
+// records: a host name, with either _dmarc as its first label or one
+// _domainkey label after a DKIM selector of one or more labels
+// (docs/spec/scope.md, "The resolver"); no other underscore label.
+func recordName(v string) (string, error) {
+	d, err := answerName(v)
+	if err != nil {
+		return "", err
+	}
+	labels := strings.Split(d, ".")
+	dmarc := labels[0] == "_dmarc"
+	for i, l := range labels {
+		switch {
+		case labelRE.MatchString(l):
+		case l == "_dmarc" && i == 0:
+		case l == "_domainkey" && i > 0 && !dmarc && !slices.Contains(labels[:i], "_domainkey"):
+		default:
+			return "", errors.New("not a DNS name scheck reads records at")
+		}
+	}
+	return d, nil
+}
+
+func checkName(v string, label func(string) bool) (string, error) {
 	d := strings.ToLower(v)
 	labels := strings.Split(d, ".")
 	if len(d) > 253 || len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
 		return "", errors.New("not a DNS name")
 	}
 	for _, l := range labels {
-		if !labelRE.MatchString(l) {
+		if !label(l) {
 			return "", errors.New("not a DNS name")
 		}
 	}

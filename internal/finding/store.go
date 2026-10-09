@@ -82,6 +82,17 @@ var customSlug = regexp.MustCompile(`^custom:[a-z0-9][a-z0-9_-]{2,63}$`)
 // tool can send the message back to the model as an error result.
 var ErrInvalid = errors.New("invalid finding")
 
+// hostIDs lists the catalog ids of host findings, sorted.
+func hostIDs() []string {
+	var out []string
+	for _, id := range IDs() {
+		if defs[id].Area == AreaHosts {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // Report validates a candidate and either merges it into an existing finding
 // with the same id or adds it as a model finding. The returned finding is
 // graded. An invalid candidate leaves the store untouched.
@@ -154,8 +165,10 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 		return f, nil
 	}
 	def, ok := Lookup(c.ID)
-	if !ok {
-		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
+	// The model reads a host: another collector's findings are not its to
+	// report, and are not offered to it.
+	if !ok || def.Area != AreaHosts {
+		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if err := s.ruleAllows(def); err != nil {
 		return f, err
@@ -211,8 +224,8 @@ func (s *Store) RuleOut(c Candidate) (RuledOut, error) {
 		if !customSlug.MatchString(c.ID) {
 			return r, fmt.Errorf("%w: a custom id is custom:<slug> with [a-z0-9_-], 3..64 characters", ErrInvalid)
 		}
-	} else if _, ok := Lookup(c.ID); !ok {
-		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
+	} else if def, ok := Lookup(c.ID); !ok || def.Area != AreaHosts {
+		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if i, seen := s.byID[c.ID]; seen {
 		return r, fmt.Errorf("%w: %s is a %s finding of this run and cannot be ruled out; report it with a context_note to qualify it", ErrInvalid, c.ID, s.findings[i].Source)

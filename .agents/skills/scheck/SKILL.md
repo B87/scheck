@@ -48,13 +48,69 @@ the installed CLI's behaviour differs from this skill: v0.0.1 has only `local` a
 ## What this build does
 
 `scheck run` takes an engagement file or `--host`, runs the stages (intake, scope,
-recon, plan, check, analyze, report) and prints the **engagement report**. Only hosts
-are collected in this build. A declared root of any other kind (a SaaS tenant, a GitHub
-organization, a domain) is recorded as not read (`collector_not_built`) and the run
-exits 2; tell the user that area was not assessed, never that it is fine.
+recon, plan, check, analyze, report) and prints the **engagement report**. Hosts are
+assessed, and `domain` and `url` roots in part. A `domain` root is read (DNS and mail records,
+and the certificate and front page of each name Scope chose, which contacts the
+company's web servers) and judged by DNS and email rules. The DNS rules find a record
+pointing at a name that does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
+publishing a private address (`dns.private_address`), a provider fingerprint that may
+be claimable (`dns.takeover_candidate`, high), or an unconfigured service at a provider
+with an ownership-verification policy (`dns.unclaimed_at_provider`, low); the binding's
+ownership was not checked. A candidate is not proof of
+claimability: retain its `not_checked` caveats, including GitHub verification and Azure
+App Service's `asuid` record when applicable. A wildcard is filed once on `*.<root>`
+with matching undeclared names grouped as DNS matches whose pages were not read;
+declared names keep their own reads and judgments. A discovery gap still leaves
+coverage partial. Services
+without a verified fingerprint are listed as not checked for takeover. Both new
+findings require a DNS-name subject in an acceptance. Email rules judge DMARC policy,
+SPF presence, validity, broad grants and declared sender comparison, and declared DKIM
+keys. Their findings belong to the domain root and require a `mail_domain`,
+`spf_mechanism` or `dkim_selector` subject. The email row has DMARC policy, SPF policy,
+SPF senders and DKIM selectors sub-items, marked from the rules that decided. No
+selector is a coverage gap, never a missing-key finding. No senders listed leaves SPF
+comparison unassessed; unmapped includes and literal IP ranges are listed, not judged.
+`mail_context` notes explain declared or inferred mail use, alignment tags, missing
+context and DNS-only limits. DMARC uses legacy organizational-domain fallback and
+`pct`; current receiver tree walking and actual delivery are not assessed. Test-mode
+`p=reject` or legacy `pct=0; p=reject` can still request quarantine. SPF lookup counts
+are a static tree review, not a result for every message. A published DKIM key does
+not show current use. TLS rules judge the one observed negotiation and certificate;
+expiry within 14 days asks the operator to confirm renewal, and `tls.legacy_only`
+means the TLS 1.2-or-later attempt failed with a protocol-version alert, not proof that
+older versions work. Declared URL roots and first-party sites get entry-point header,
+HTTP, cookie and security-contact rules. A declared URL asset contained by a URL
+root is an exact entry point using the root's authority; it needs no separate
+first-party confirmation and counts as read with that root in coverage. Version disclosure and trusted secret
+redaction hits are judged on every read name. Findings require their DNS-name,
+origin, URL or secret-location subject in an acceptance. A version exposed on purpose
+on the exact URL becomes info; a secret never does. Password inputs raise plaintext
+HTTP one level, except the browser rule is disproved under a preloaded TLD.
+`web_context` notes explain fingerprints, counts of robots exclusions, block pages
+and the limits: no loaded scripts or authenticated login flow, no robots paths
+requested, and only whole-TLD browser preloads checked. Correct cookie flags on an
+entry do not establish a safe login flow. Missing evidence remains explicit in web,
+secrets and external coverage. E7 step 5 adds `--vantage internet|vpn|lan` on each
+invocation, including resume; omission means unknown. `internet` declares outside
+every permitted source, including office allowlists and VPN, and is not detected or
+verified. A restricted exact URL answering 2xx, 401 or a recognized login redirect
+from that vantage produces `web.restricted_reachable`, high after the contradiction
+raise. This establishes reachability, not authentication bypass. Refusal or timeout
+disproves with an outage caveat; blocked, denied, unknown or invalid TLS evidence
+abstains. No identity-provider redirect is contacted by the rule.
+On resume, changed mail declarations refresh the affected records and follow-ups;
+changed intent role or audience refreshes its exact entry. Reasons and web
+acceptances only regrade retained observations. Changed vantage refreshes web/DNS
+evidence and Scope, without recollecting hosts. Reused evidence keeps its actual time.
+A declared root of any other kind (a
+SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
+exits 2. Tell the user what was not assessed, never that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
+The web collector's findings come from DNS, email, TLS and response rules, one per
+record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
+through the scope gate as `anonymous`.
 **No model assesses anything.** A model-assessed pass exists in the codebase, did not
 earn its cost against criteria frozen before it was built, and is not in the CLI: a run
 needs no API key and sends nothing it read off the machine. The model flags
@@ -112,10 +168,20 @@ and prints the file resolved without contacting anything. `scope` also expands e
 company's: in `scope.json`, `domains[].names[]` carries each name's `status` (`resolves`,
 `dangling` with whether it is a stale record or a takeover candidate, `no_longer_exists`,
 `no_address`, `insufficient_evidence`, `matches_wildcard`, `excluded`, `not_checked`),
-its `target` (what a hand-written `first_party: {confirmed_by, date, target}` must
-name) and whether Recon reads it; `points_at` lists the services outside every root that
+its lookup's `outcome` and `request_id` (its line in `audit.jsonl`), its `target` (what
+a hand-written `first_party: {confirmed_by, date, target}` must name) and whether Recon
+reads it; `points_at` lists the services outside every root that
 names point at, recorded and never contacted; `resolver.rewrites_nxdomain` true means
-discovered names were not checked.
+discovered names were not checked, and `resolver.control_outcome` is what the test
+lookup under `invalid.` came to: unless it is `nxdomain`, `nodata` or `addresses`,
+nobody knows whether the resolver invents answers, discovered names without first-party
+evidence were not read, and every DNS verdict on a domain abstains
+(`unavailable:resolver_unchecked`, or `unavailable:resolver_rewrites` when it does).
+Recon tests its own session's resolver for domain roots the same way, and DNS and
+email verdicts abstain when either control is unknown or rewrites. TLS and response
+verdicts use their gate-admitted connection and capture evidence; URL-only runs do
+not need a discovery control for those rules. Unread or insufficient captures still
+remain unassessed.
 
 | Exit | Meaning |
 |---|---|
@@ -161,12 +227,16 @@ in this order:
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no
-   rule judges; say so when you report it.
+   rule judges; say so when you report it. The external row has sub-items per domain
+   root; one there is `not_applicable` when its rules had nothing to judge (no CNAME, no
+   MX), since anything scheck could not read makes it `partial` or `not_assessed`.
 4. **`summary`**: up to five `items` to fix first (open, medium or above), `more` past
    those, and counts of areas and of rules that had no usable evidence.
 5. **`findings`**: one record per instance, keyed `{id, asset, subject}`, already in
    ranking order: open findings by severity in context first, then informational, then
-   accepted. Lead with the first. `severity`
+   accepted. Lead with the first. A domain finding's `asset` is the most specific one
+   holding its subject: a name found under a root is its own asset (`domain:<name>`,
+   `asset_name` the name) even when nobody declared it. `severity`
    comes from code, never a model: `severity_base` plus `adjustments`, each with its
    `rule`, `by` (`collector` or `engagement`) and `source` (a key in the engagement file
    or an observation). `status` is `open` or `accepted`; an accepted finding has an
@@ -176,16 +246,29 @@ in this order:
    `remediation` is advice for the human; scheck never runs it, and neither should you
    unless the user asks. `accept_template` is the entry to paste into
    `intent.accepted_risks` for a risk the user decides not to fix; `reason` and
-   `accepted_by` are left empty on purpose for the risk's owner to write.
+   `accepted_by` are left empty on purpose for the risk's owner to write. A finding
+   with a `subject` puts it in the template; an entry without one accepts every
+   instance of that id on the asset when the definition allows it, and only on that
+   asset. DNS and email findings require a subject. For DNS, a name under a domain root
+   is its own asset, and the template names it by its id (`domain:<name>`) when it is
+   not declared.
 6. **`assessments`**: every selected rule per asset, `matched`, `not_matched`,
    `not_applicable` or `not_assessed`, and whether it decided on `complete` evidence.
    `not_matched` means the evidence disproved that one predicate; `not_assessed` is
    never a pass.
 7. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
    `expired`, `not_applied`, `not_matched` for likely fixed, `rule_not_decided`,
-   `subject_not_found`), and the items for a readout.
+   `subject_not_found` when no instance with that subject was read on this run), and the
+   items for a readout. A `rule_not_decided` whose `why` says "an instance is open under
+   it" means the entry is on a root while the finding is on a name under it: tell the
+   user to accept it on the asset it names. A `subject_not_found` whose `why` says "that
+   subject was read on" names the asset the entry belongs on; one that says "nothing
+   with that subject points anywhere" means the record is gone: confirm, then remove the
+   entry.
 8. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
-   count, of which `control_lookups` and `control_invalid` are the random test names,
+   count, of which `control_lookups` counts root controls and `invalid_queries` counts
+   actual queries for reserved-name controls; `control_invalid` says whether any
+   such query was sent,
    crt.sh with the domains asked about, a provider with the environment variable its
    credential came from, never the value), `assets` (SSH sessions, `unreached` servers
    a connection was attempted to, `jump_hosts` and `jump_unreached` counted apart,

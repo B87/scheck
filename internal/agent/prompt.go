@@ -125,6 +125,10 @@ func catalogBlock() string {
 	var b strings.Builder
 	b.WriteString("<finding_catalog>\n")
 	for _, d := range finding.Defs() {
+		// The model reads a host: other collectors' findings are not its.
+		if d.Area != finding.AreaHosts {
+			continue
+		}
 		fmt.Fprintf(&b, "%s [%s, base %s]: %s\n", d.ID, d.Category, d.BaseSeverity, d.Title)
 	}
 	b.WriteString("custom:<slug> [custom, proposed severity capped at medium]: anything genuinely outside the catalog; needs title, impact, remediation and proposed_severity\n")

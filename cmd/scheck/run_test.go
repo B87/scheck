@@ -20,6 +20,7 @@ import (
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/target/fixture"
 	"github.com/b87/scheck/internal/version"
 )
@@ -744,5 +745,98 @@ func TestRunResumesAFileNamedHost(t *testing.T) {
 	// From another directory, by the absolute path it was read from.
 	if got := command(out); !strings.HasPrefix(got, "scheck run /") || !strings.HasSuffix(got, string(filepath.Separator)+"--host") {
 		t.Errorf("the resume's command %q", got)
+	}
+}
+
+// DNS findings are per name, including the merge's original three ids.
+// Their acceptances must name a subject; a quoted wildcard is one subject.
+func TestDNSAcceptancesRequireSubject(t *testing.T) {
+	for _, id := range []string{"dns.dangling_external", "dns.dangling_internal", "dns.private_address", "dns.takeover_candidate", "dns.unclaimed_at_provider"} {
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{domain: example.com}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "DNS name") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '*.example.com'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}
+
+func TestEmailAcceptancesRequireTheirSubject(t *testing.T) {
+	for _, id := range finding.WebIDs() {
+		if !strings.HasPrefix(id, "email.") {
+			continue
+		}
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{domain: example.com}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		subject := "example.com"
+		switch finding.SubjectOf(id) {
+		case "dkim_selector":
+			subject = "google._domainkey.example.com"
+		case "spf_mechanism":
+			subject = "example.com/include:sendgrid.net"
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '"+subject+"'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}
+
+func TestWebAcceptancesRequireTheirSubject(t *testing.T) {
+	for _, id := range finding.WebIDs() {
+		if !strings.HasPrefix(id, "web.") && !strings.HasPrefix(id, "tls.") {
+			continue
+		}
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{url: https://example.com/}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: 'url:https://example.com/', reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		subject := "https://example.com"
+		switch finding.SubjectOf(id) {
+		case "dns_name":
+			subject = "example.com"
+		case "url":
+			subject = "https://example.com/"
+		case "secret_location":
+			subject = "github-token:https://example.com/"
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '"+subject+"'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}
+
+func TestRunVantageValidatedBeforeContact(t *testing.T) {
+	hermetic(t)
+	calls := collectFrom(t, recorded(t, "macos"))
+	for _, v := range []string{"internet", "vpn", "lan"} {
+		_, stderr, code := runEngagement(t, "--host", "local", "--vantage", v, "--stop-after", "intake", "--no-persist")
+		if code != 0 {
+			t.Fatal(v, stderr, code)
+		}
+	}
+	_, stderr, code := runEngagement(t, "--host", "local", "--vantage", "office")
+	if code != 3 || !strings.Contains(stderr, "--vantage must be internet|vpn|lan") || *calls != 0 {
+		t.Fatal(stderr, code, *calls)
 	}
 }

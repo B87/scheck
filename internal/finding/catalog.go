@@ -66,7 +66,7 @@ type SubjectKind string
 var SubjectKinds = []SubjectKind{
 	"account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service",
 	"repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name",
-	"url", "declaration",
+	"url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism",
 }
 
 // SubjectOf returns the subject kind a finding id declares, or "" when the id

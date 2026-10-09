@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 )
@@ -669,5 +670,26 @@ func TestResumeKeepsAnEarlierSessionsHostSideEffects(t *testing.T) {
 	}
 	if !slices.Contains(out.Report.Egress.HostSideEffects, "pkg.dnf_check_update") {
 		t.Errorf("after the resume %v: the first session's dnf contact is gone", out.Report.Egress.HostSideEffects)
+	}
+}
+
+func TestSessionSitesPreserveFirstPartyAdmission(t *testing.T) {
+	sites := []gate.Site{
+		{Asset: "domain:example.com", Name: "app.example.com", Requests: 2},
+		{Asset: "domain:example.com", Name: "app.example.com", Requests: 3, FirstParty: true},
+		{Asset: "url:https://app.example.com/", Name: "app.example.com", Requests: 1},
+	}
+	want := []ereport.SiteInput{{Name: "app.example.com", Requests: 3}, {Name: "app.example.com", Requests: 3, FirstParty: true}}
+	for range 3 {
+		got := sessionSites(sites)
+		if !slices.Equal(got, want) {
+			t.Fatal(got)
+		}
+		slices.Reverse(sites)
+	}
+	into := &ereport.EgressInput{Sites: sessionSites(sites)}
+	mergeEgress(into, &ereport.EgressInput{Sites: []ereport.SiteInput{{Name: "app.example.com", Requests: 2}}})
+	if len(into.Sites) != 2 || into.Sites[0].FirstParty || into.Sites[0].Requests != 5 || !into.Sites[1].FirstParty || into.Sites[1].Requests != 3 {
+		t.Fatal(into.Sites)
 	}
 }

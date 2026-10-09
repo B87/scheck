@@ -32,7 +32,13 @@ import (
 // table, a dialer that maps public test addresses onto local listeners, a
 // CA the gate trusts, and an audit log in memory.
 type world struct {
-	t       *testing.T
+	t *testing.T
+	// tlsConfig, when set, changes the next servers' TLS settings.
+	tlsConfig func(*tls.Config)
+	// systemRoots leaves the gate's roots to New, as in production.
+	systemRoots bool
+	// http2 makes the next TLS servers offer HTTP/2.
+	http2   bool
 	ca      *x509.Certificate
 	caKey   *ecdsa.PrivateKey
 	pool    *x509.CertPool
@@ -171,6 +177,10 @@ func (w *world) serve(name, ip string, port int, cert *tls.Certificate, reply ht
 	s.Config.ErrorLog = log.New(io.Discard, "", 0)
 	if cert != nil {
 		s.TLS = &tls.Config{Certificates: []tls.Certificate{*cert}}
+		if w.tlsConfig != nil {
+			w.tlsConfig(s.TLS)
+		}
+		s.EnableHTTP2 = w.http2
 		s.StartTLS()
 	} else {
 		s.Start()
@@ -226,7 +236,7 @@ func (w *world) exchange(ctx context.Context, server string, q []byte, tcp bool)
 		}
 	}
 	w.mu.Unlock()
-	return zone{mu: w.zone.mu, names: names, queries: w.zone.queries}.exchange(ctx, server, q, tcp)
+	return zone{mu: w.zone.mu, names: names, queries: w.zone.queries, compact: w.zone.compact}.exchange(ctx, server, q, tcp)
 }
 
 func (w *world) dial(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -265,7 +275,11 @@ func (w *world) gate() *Gate {
 
 // net is the world's seams: its dialer, CA, resolver and sleep.
 func (w *world) net() *Net {
-	return &Net{Dial: w.dial, RootCAs: w.pool, Nameserver: netip.MustParseAddr("192.0.2.53"), Exchange: w.exchange,
+	pool := w.pool
+	if w.systemRoots {
+		pool = nil
+	}
+	return &Net{Dial: w.dial, RootCAs: pool, Nameserver: netip.MustParseAddr("192.0.2.53"), Exchange: w.exchange,
 		Sleep: func(ctx context.Context, d time.Duration) error {
 			w.mu.Lock()
 			w.sleeps = append(w.sleeps, d)
@@ -347,11 +361,42 @@ func (s *fakeScope) Address(a netip.Addr) (string, bool) {
 	return excludedBy, in
 }
 
-func (s *fakeScope) Site(origin string) SitePaths {
-	if site, ok := s.sites[origin]; ok {
-		return site
+// SitePaths are the paths a fake origin may be read at, by the evidence
+// each needs, as the engagement's Scope lists them before it decides.
+type SitePaths struct {
+	Paths      []string
+	FirstParty bool
+	Network    []string
+	Confirmed  []string
+	Target     string
+}
+
+// Admits decides as the engagement's Scope does: Paths need nothing more,
+// Network every address in a network root, Confirmed the name pointing at
+// Target; either of the last two suffices.
+func (s *fakeScope) Admits(origin, path string, l *Lookup) Admission {
+	site, ok := s.sites[origin]
+	if !ok {
+		site = SitePaths{Paths: []string{"/"}}
 	}
-	return SitePaths{Paths: []string{"/"}}
+	network, confirmed := slices.Contains(site.Network, path), slices.Contains(site.Confirmed, path)
+	switch {
+	case slices.Contains(site.Paths, path):
+		return Admission{FirstParty: site.FirstParty}
+	case !network && !confirmed:
+		return Admission{Refused: "entry_point"}
+	case l == nil:
+		return Admission{Resolve: true}
+	}
+	all := len(l.Addrs) > 0
+	for _, a := range l.Addrs {
+		_, in := s.Address(a)
+		all = all && in
+	}
+	if network && all || confirmed && l.PointsAt(site.Target) {
+		return Admission{FirstParty: true}
+	}
+	return Admission{Refused: "address_moved"}
 }
 
 // throttle is an asset's own rate and concurrency.

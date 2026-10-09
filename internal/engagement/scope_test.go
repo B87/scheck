@@ -1,6 +1,7 @@
 package engagement
 
 import (
+	"fmt"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 )
 
@@ -105,6 +107,13 @@ func TestScopeSubject(t *testing.T) {
 		{"network:198.51.100.0/24", "url:https://198.51.100.7/", gate.Standing{UnderAsset: true, Root: "network:198.51.100.0/24"}},
 		{"network:198.51.100.0/24", "url:https://198.51.100.200/", gate.Standing{UnderAsset: true, Root: "network:198.51.100.0/24", ExcludedBy: "exclude[1]"}},
 		{"host:203.0.113.5:22", "url:https://203.0.113.5/", gate.Standing{UnderAsset: true, Root: "host:203.0.113.5:22"}},
+		// A name read for its records may hold underscore labels; it is
+		// placed by its labels, its excludes included.
+		{"domain:example.com", "domain:_dmarc.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com"}},
+		{"domain:example.com", "domain:s1._domainkey.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com"}},
+		{"domain:example.com", "domain:_dmarc.a.legacy.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com", ExcludedBy: "exclude[0]"}},
+		{"domain:example.com", "domain:_dmarc.example.org", gate.Standing{}},
+		{"domain:example.com", "domain:_dmarc.example.123", gate.Standing{}},
 		// A Workspace per-user subject is its tenant's; an organizational
 		// unit exclude never covers the tenant itself.
 		{"saas:google-workspace:example.com", "saas:google-workspace:example.com/users/12345", gate.Standing{UnderAsset: true, Root: "saas:google-workspace:example.com"}},
@@ -193,46 +202,62 @@ func TestScopeSite(t *testing.T) {
 	well := []string{"/.well-known/security.txt", "/robots.txt"}
 	for _, tc := range []struct {
 		origin string
-		want   gate.SitePaths
+		want   siteList
 	}{
 		// Discovered, no evidence: the front page, over https and http.
-		{"https://shop.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well}},
-		{"http://shop.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well}},
+		{"https://shop.example.com", siteList{Paths: []string{"/"}, Network: well}},
+		{"http://shop.example.com", siteList{Paths: []string{"/"}, Network: well}},
 		// No other port, and nothing outside every root.
-		{"https://shop.example.com:8443", gate.SitePaths{}},
-		{"https://example.org", gate.SitePaths{}},
+		{"https://shop.example.com:8443", siteList{}},
+		{"https://example.org", siteList{}},
 		// Confirmed by the operator: while it points at its target, or
 		// through a network root.
-		{"https://blog.example.com", gate.SitePaths{Paths: []string{"/"}, Network: well, Confirmed: well, Target: "blog.example-hosting.net"}},
+		{"https://blog.example.com", siteList{Paths: []string{"/"}, Network: well, Confirmed: well, Target: "blog.example-hosting.net"}},
 		// The intent URL on a discovered name is an entry point only with
 		// first-party evidence.
-		{"https://www.example.com", gate.SitePaths{Paths: []string{"/"}, Network: []string{"/.well-known/security.txt", "/api/", "/robots.txt"}}},
+		{"https://www.example.com", siteList{Paths: []string{"/"}, Network: []string{"/.well-known/security.txt", "/api/", "/robots.txt"}}},
 		// A url root: its own path, the intent URL on it, the two files;
 		// not its front page.
-		{"https://app.example.net", gate.SitePaths{Paths: []string{"/.well-known/security.txt", "/portal/", "/portal/status", "/robots.txt"}}},
-		{"http://app.example.net", gate.SitePaths{}},
+		{"https://app.example.net", siteList{Paths: []string{"/.well-known/security.txt", "/portal/", "/portal/status", "/robots.txt"}}},
+		{"http://app.example.net", siteList{}},
 		// A host root and an address in a network root are first-party.
-		{"https://203.0.113.5", gate.SitePaths{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
-		{"https://198.51.100.7", gate.SitePaths{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
+		{"https://203.0.113.5", siteList{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
+		{"https://198.51.100.7", siteList{Paths: []string{"/", "/.well-known/security.txt", "/robots.txt"}}},
 		// An origin not written canonically lists nothing.
-		{"https://Shop.example.com", gate.SitePaths{}},
-		{"https://shop.example.com:443", gate.SitePaths{}},
-		{"https://shop.example.com/x", gate.SitePaths{}},
+		{"https://Shop.example.com", siteList{}},
+		{"https://shop.example.com:443", siteList{}},
+		{"https://shop.example.com/x", siteList{}},
 	} {
-		if got := s.Site(tc.origin); !sameSite(got, tc.want) {
+		if got := siteOf(s, tc.origin); !sameSite(got, tc.want) {
 			t.Errorf("Site(%s) = %+v; want %+v", tc.origin, got, tc.want)
 		}
 	}
 }
 
-func sameSite(a, b gate.SitePaths) bool {
+// siteList is site's lists as these tests write them, with the
+// confirmation's target the confirmed paths wait on.
+type siteList struct {
+	Paths, Network, Confirmed []string
+	Target                    string
+}
+
+func siteOf(s gate.Scope, origin string) siteList {
+	sp := s.(*scope).site(origin)
+	out := siteList{Paths: sp.paths, Network: sp.network, Confirmed: sp.confirmed}
+	if sp.ev != nil {
+		out.Target = sp.ev.Target
+	}
+	return out
+}
+
+func sameSite(a, b siteList) bool {
 	return slices.Equal(a.Paths, b.Paths) && slices.Equal(a.Network, b.Network) && slices.Equal(a.Confirmed, b.Confirmed) && a.Target == b.Target
 }
 
 // With no network root, nothing beyond a discovered name's front page
 // waits on one.
 func TestScopeSiteWithoutNetworkRoots(t *testing.T) {
-	if got := scopeOf(t, minimal).Site("https://www.example.com"); !sameSite(got, gate.SitePaths{Paths: []string{"/"}}) {
+	if got := siteOf(scopeOf(t, minimal), "https://www.example.com"); !sameSite(got, siteList{Paths: []string{"/"}}) {
 		t.Errorf("Site = %+v", got)
 	}
 }
@@ -251,7 +276,7 @@ func TestConfirmationYear(t *testing.T) {
 		time.Date(2027, 10, 7, 23, 59, 0, 0, madrid): "198.51.100.8,198.51.100.9",
 		time.Date(2027, 10, 8, 0, 0, 0, 0, madrid):   "",
 	} {
-		if got := res.GateScope(at).Site("https://www.example.com"); got.Target != want {
+		if got := siteOf(res.GateScope(at), "https://www.example.com"); got.Target != want {
 			t.Errorf("at %s: %+v", at, got)
 		}
 	}
@@ -262,7 +287,7 @@ func TestConfirmationYear(t *testing.T) {
 	future := strings.Replace(file, "date: 2026-10-07", "date: 2062-10-07", 1)
 	if res, err := Parse("e.yaml", []byte(future), testOpts); err != nil {
 		t.Fatal(err)
-	} else if got := res.GateScope(runStart).Site("https://www.example.com"); got.Target != "" || len(got.Confirmed) != 0 {
+	} else if got := siteOf(res.GateScope(runStart), "https://www.example.com"); got.Target != "" || len(got.Confirmed) != 0 {
 		t.Errorf("a future confirmation: %+v", got)
 	} else if ev := res.firstParty(res.Assets[len(res.Assets)-1], runStart); ev.String() != "none: the confirmation is dated 2062-10-07, after this run" {
 		t.Errorf("future: %s", ev)
@@ -387,7 +412,7 @@ assets:
 				if o.Port != 0 {
 					host += ":" + strconv.Itoa(o.Port)
 				}
-				site := s.Site(o.scheme + "://" + host)
+				site := siteOf(s, o.scheme+"://"+host)
 				paths, netPaths := slices.Concat(site.Paths, site.Confirmed), site.Network
 				if reads := slices.Contains(paths, "/robots.txt"); reads != (ev != nil) {
 					t.Errorf("%s %s at %s://%s: evidence %v, the gate reads %v", name, a.Name, o.scheme, host, ev, paths)
@@ -478,6 +503,162 @@ func TestScopeAddressTranslatedRoot(t *testing.T) {
 	} {
 		if _, in := s.Address(netip.MustParseAddr(addr)); in != want {
 			t.Errorf("Address(%s) in a root = %v, want %v", addr, in, want)
+		}
+	}
+}
+
+// A mail domain is read under the most specific domain root that holds it,
+// once: nested roots do not read it twice or give it two SPF budgets.
+func TestWebDomainNestedRoots(t *testing.T) {
+	file := strings.Replace(minimal, "  - domain: example.com\n", "  - domain: example.com\n  - domain: sub.example.com\n", 1) +
+		"mail:\n  senders:\n    - {domain: sub.example.com, service: sendgrid, dkim_selectors: [S1]}\n    - {domain: example.com, service: google-workspace}\n  no_mail: [old.example.com]\n"
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &run{res: res}
+	mail := map[string][]string{}
+	for _, a := range res.Assets {
+		if a.Kind == KindDomain && a.Root == a.ID {
+			for _, m := range r.webDomain(a).Mail {
+				mail[a.ID] = append(mail[a.ID], m.Name+fmt.Sprint(m.Selectors))
+			}
+		}
+	}
+	if !slices.Equal(mail["domain:example.com"], []string{"example.com[]", "old.example.com[]"}) ||
+		!slices.Equal(mail["domain:sub.example.com"], []string{"sub.example.com[s1]"}) {
+		t.Errorf("%v", mail)
+	}
+}
+
+// The web collector reads Scope's name statuses as scope.json writes them.
+func TestWebCollectorReadsScopeStatuses(t *testing.T) {
+	for theirs, ours := range map[string]string{
+		web.StatusResolves: NameResolves, web.StatusDangling: NameDangling, web.StatusGone: NameGone,
+		web.StatusNoAddress: NameNoAddress, web.StatusInsufficient: NameInsufficient, web.StatusWildcard: NameMatchesWildcard,
+		web.StatusExcluded: NameExcluded, web.StatusNotChecked: NameNotChecked,
+	} {
+		if theirs != ours {
+			t.Errorf("%q != %q", theirs, ours)
+		}
+	}
+}
+
+// Each name is judged under the most specific domain root that holds it,
+// and a resolver whose control lookup said nothing is not trusted.
+func TestWebInputNestedRootsAndResolver(t *testing.T) {
+	file := strings.Replace(minimal, "  - domain: example.com\n", "  - domain: example.com\n  - domain: sub.example.com\n", 1)
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root ResolvedAsset
+	for _, a := range res.Assets {
+		if a.ID == "domain:example.com" {
+			root = a
+		}
+	}
+	names := []ScopeName{{Name: "www.example.com", Status: NameResolves}, {Name: "sub.example.com", Status: NameResolves},
+		{Name: "x.sub.example.com", Status: NameResolves}}
+	for control, doubt := range map[string]string{"nxdomain": "", "nodata": "", "timeout": "unavailable:resolver_unchecked",
+		"unavailable:no_resolver": "unavailable:resolver_unchecked"} {
+		r := &run{res: res, scoped: &ScopeDoc{Resolver: &Resolver{Control: control},
+			Domains: []ScopeDomain{{Root: "domain:example.com", CT: "ok", Names: names}}},
+			reconResolver: &Resolver{Control: "nxdomain"}}
+		in := r.webInput(root, web.Evidence{})
+		var got []string
+		for _, n := range in.Names {
+			got = append(got, n.Name)
+		}
+		if !slices.Equal(got, []string{"www.example.com"}) || in.Doubt != doubt {
+			t.Errorf("control %s: names %v, doubt %q", control, got, in.Doubt)
+		}
+	}
+	// A resumed session reads through its own resolver, which may rewrite
+	// where Scope's did not.
+	r := &run{res: res, scoped: &ScopeDoc{Resolver: &Resolver{Control: "nxdomain"}}, reconResolver: &Resolver{Rewrites: true, Control: "addresses"}}
+	if in := r.webInput(root, web.Evidence{}); in.Doubt != "unavailable:resolver_rewrites" {
+		t.Errorf("this session's resolver rewrites: doubt %q", in.Doubt)
+	}
+}
+
+// A matched provider fingerprint invalidates only the operator confirmation;
+// subsequent admission still requires independent root evidence or the front
+// page allowance (docs/spec/web-collector.md, "Never claim a name").
+func TestFingerprintSuspendsConfirmation(t *testing.T) {
+	s := scopeOf(t, scopeFile).(*scope)
+	l := gate.Lookup{Outcome: gate.OutcomeAddresses, Chain: []string{"blog.example-hosting.net"}, Addrs: []netip.Addr{netip.MustParseAddr("203.0.113.70")}}
+	if a := s.Admits("https://blog.example.com", "/robots.txt", nil); a.Refused != "" || !a.Resolve || !slices.Contains(s.site("https://blog.example.com").confirmed, "/robots.txt") {
+		t.Fatal(a)
+	}
+	fp := &Evidence{Kind: "operator", Target: "blog.example-hosting.net"}
+	r := run{webScope: s, scoped: &ScopeDoc{Assets: []ScopeAsset{{ID: "domain:blog.example.com", FirstParty: fp}}, Domains: []ScopeDomain{{Root: "domain:example.com", Names: []ScopeName{{Name: "blog.example.com", FirstParty: &Evidence{Kind: "operator"}}}}}}}
+	r.suspendConfirmations([]web.Judgment{{ID: "dns.takeover_candidate", Verdict: web.Fired, Subject: web.Subject{Key: "*.example.com"}, Members: []string{"blog.example.com"}}})
+	if a := s.Admits("https://blog.example.com", "/robots.txt", &l); a.Refused != "address_moved" {
+		t.Fatal(a)
+	}
+	if a := s.Admits("https://blog.example.com", "/", &l); a.Refused != "" || a.FirstParty {
+		t.Fatal(a)
+	}
+	if s.confirmationSuspended("other.example.com") {
+		t.Fatal("unobserved sibling confirmation suspended")
+	}
+	if fp.Kind != "suspended" || fp.counts() || r.scoped.Domains[0].Names[0].FirstParty.Kind != "suspended" {
+		t.Fatal(r.scoped)
+	}
+	if a := s.Admits("https://app.example.net", "/portal/", &l); a.Refused != "" || !a.FirstParty {
+		t.Fatal(a)
+	}
+}
+
+func TestWildcardNeedsRecognizedEqualChains(t *testing.T) {
+	l := gate.Lookup{Outcome: gate.OutcomeAddresses, Chain: []string{"[REDACTED:extra:0:12 bytes]"}, Addrs: []netip.Addr{netip.MustParseAddr("198.51.100.77")}}
+	c := &ScopeName{Status: NameResolves, Outcome: "addresses", Chain: l.Chain, Addresses: []string{"198.51.100.77"}}
+	if matchesWildcard(l, c) {
+		t.Fatal("equal redaction markers treated as equal DNS targets")
+	}
+	l.Chain = []string{"one.provider.example"}
+	c.Chain = []string{"two.provider.example"}
+	if matchesWildcard(l, c) {
+		t.Fatal("equal addresses treated as equal CNAME chains")
+	}
+	c.Chain = l.Chain
+	if !matchesWildcard(l, c) {
+		t.Fatal("recognized equal answer rejected")
+	}
+}
+
+func TestDeclaredURLEntriesInheritContainingURLRoot(t *testing.T) {
+	s := scopeOf(t, `schema: 1
+engagement: {name: entries, timezone: Europe/Madrid, trigger: routine}
+roots:
+ - {domain: example.com}
+ - {url: 'https://admin.example.com/app/'}
+assets:
+ login: {url: 'https://admin.example.com/app/login'}
+ sibling: {url: 'https://admin.example.com/login'}
+ other-host: {url: 'https://other.example.com/login'}
+ other-scheme: {url: 'http://admin.example.com/app/login'}
+ other-port: {url: 'https://admin.example.com:8443/app/login'}
+`)
+	for _, tc := range []struct {
+		origin, path string
+		allowed      bool
+	}{
+		{"https://admin.example.com", "/app/login", true},
+		{"https://admin.example.com", "/app/login/extra", false},
+		{"https://admin.example.com", "/login", false},
+		{"https://other.example.com", "/login", false},
+		{"http://admin.example.com", "/app/login", false},
+		{"https://admin.example.com:8443", "/app/login", false},
+	} {
+		got := s.Admits(tc.origin, tc.path, nil)
+		if tc.allowed {
+			if got.Refused != "" || !got.FirstParty || got.Resolve {
+				t.Fatal(tc, got)
+			}
+		} else if got.Refused != "entry_point" {
+			t.Fatal(tc, got)
 		}
 	}
 }

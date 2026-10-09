@@ -28,7 +28,7 @@ import (
 
 // runFlags are the global flags `scheck run` reads. Every other flag is a
 // usage error rather than a silent no-op.
-var runFlags = []string{"format", "out", "verbose", "stop-after", "state-dir", "no-persist", "host", "write-engagement", "include-evidence"}
+var runFlags = []string{"format", "out", "verbose", "stop-after", "state-dir", "no-persist", "host", "write-engagement", "include-evidence", "vantage"}
 
 // hostReachFlags are accepted only with --host, which writes them into the
 // asset it builds: an engagement file holds its assets' settings
@@ -83,8 +83,9 @@ func newRunCmd(opts *globalOpts) *cobra.Command {
 			"engagement in memory from the reach flags. Each run writes its stage outputs to\n" +
 			"<state-dir>/engagements/<name>/<started>/, created 0700 and locked; --stop-after intake\n" +
 			"validates the file and contacts nothing. scheck run RUN_DIRECTORY resumes a run: it keeps\n" +
-			"what earlier sessions read completely and reads everything else again. In this build a host root is collected; a root\n" +
-			"of any other kind is recorded as not collected (collector_not_built).\n" +
+			"what earlier sessions read completely and reads everything else again. In this build a host root is collected;\n" +
+			"domain and URL roots are collected and judged with DNS, email, TLS and web rules; a root of any\n" +
+			"other kind is not collected (both collector_not_built).\n" +
 			"Exit 0 no open finding at or above an asset's threshold (not a claim of full coverage),\n" +
 			"1 findings, 2 incomplete (a root not read, a transport failure, a timeout), 3 usage,\n" +
 			"validation, policy or canary error.",
@@ -103,6 +104,7 @@ func newRunCmd(opts *globalOpts) *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
+	f.StringVar(&opts.Vantage, "vantage", "", "source of this invocation: internet|vpn|lan; internet means outside every permitted source, including office allowlists and VPN")
 	f.StringVar(&ho.host, "host", "", "run on one host: user@address[:port] or local")
 	f.StringVar(&ho.identity, "identity", "", "with --host: private key file (otherwise ssh-agent)")
 	f.StringVar(&ho.knownHosts, "known-hosts", "", "with --host: known_hosts file (default ~/.ssh/known_hosts)")
@@ -122,6 +124,9 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 // stages; `scheck run` and the 0.0.1 aliases both end here, so they give the
 // same report and the same command trace.
 func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args []string) error {
+	if !engagement.ValidVantage(opts.Vantage) {
+		return usageErr("--vantage must be internet|vpn|lan")
+	}
 	switch {
 	case opts.StopAfter == "", slices.Contains(engagement.Stages, opts.StopAfter):
 	default:
@@ -183,6 +188,9 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 			return err
 		}
 	}
+	for _, warn := range engagement.VantageWarnings(res, opts.Vantage) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
+	}
 	for _, warn := range res.Warnings {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", report.Sanitize(warn))
 	}
@@ -199,7 +207,7 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 	}
 
 	started := runClock()
-	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Session: started, Version: version.Version,
+	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Session: started, Version: version.Version, Vantage: opts.Vantage,
 		RecordFixtures: opts.RecordFixtures, Collect: collectHost, NewGate: newGate, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
 	// Refuse what cannot be reached before a run directory exists, so a
 	// refused run leaves nothing behind.

@@ -21,6 +21,7 @@ operating manual for a coding agent in this repository.
 | `docs/ROADMAP.md` | 0.0.2 (first engagement: Workspace, GitHub, domain, host; reading only), 0.0.3 (GCP, probes, host depth, comparing runs), 0.0.4 (model, scans, `auto`): slices and release gates |
 | `docs/spec/host-collector.md` | Contract of the built host collector. Wins on any conflict about host collection. |
 | `docs/spec/engagement.md`, `docs/spec/scope.md` | Designs for the engagement and its scope rules; each section becomes contract when its release lands |
+| `docs/spec/web-collector.md` | Design of the domain, email and web collector (E7): its reads, rules, takeover table and what the report never claims; contract when E7 lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
 | `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
@@ -95,11 +96,12 @@ test passes.
 | `internal/runner` | the one exec path (rule 3) |
 | `internal/baseline` | the host plan, run and fact sheet; the golden command traces in `testdata/golden` |
 | `internal/report` | the host report envelope and JSON renderer, embedded whole in the engagement report; the fact sheet the engagement report prints per host at `-v` (`text.go`, `text_layout.go`, `domains.go`); golden fact sheets and JSON reports in `testdata/golden`; `docs/report-schema.json` |
-| `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test |
+| `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test. The web collector's definitions are here (`web.go`), its rules in the collector |
 | `internal/state` | the state directory, under which run directories live |
-| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2); the engagement's scope as the gate checks it, passive discovery in Scope, and resume: `run.json` and what a session keeps (E4) |
-| `internal/engagement/gate` | the scope gate (E4): the one place an HTTP request, API call or DNS query is sent; the op registry and its invariants, admission, its own DNS client, the response pipeline, throttle and retries, authorization windows, the audit lines and the resume ledger |
-| `internal/engagement/report` | the engagement report (E2): built from what a run collected, never contacting a target; coverage marked from the rules that decided, findings keyed `{id, asset, subject}`, ranking, acceptances' outcomes, the exit code; `docs/engagement-report-schema.json` |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2); the engagement's scope as the gate checks it, passive discovery in Scope, and resume: `run.json` and what a session keeps (E4); Recon of domain roots through the web collector (E7) |
+| `internal/engagement/gate` | the scope gate (E4): the one place an HTTP request, API call or DNS query is sent; the op registry and its invariants, admission, its own DNS client with records reads and the follow-ups of the names their answers point at (E7), the response pipeline, throttle and retries, authorization windows, the audit lines and the resume ledger |
+| `internal/collector/web` | the domain, email and web collector (E7, `docs/spec/web-collector.md`): its declared ops (`web.front`, `web.entry`) and `Collect`, which reads a domain root's mail records, NS, the names they point at and each read name's front page over https and http, the https read giving its certificate, through the gate; `Judge`, its DNS rules over Scope's lookups and what `Collect` read, each verdict `fired`, `disproved` or `abstained` on one subject; the versioned takeover table (`takeover.go`), provider fingerprints and wildcard judgments (E7 step 2b); the email rules over collected DNS (`email.go`, `dmarc.go`, `spf.go`, `dkim.go`), an embedded public-suffix snapshot and exact sender-include table (E7 step 3); entry-point enrichment after takeover suspensions and TLS, HTTP, header, cookie, secret and security-contact rules with pinned browser data (E7 step 4); restricted URL reachability from a declared vantage (E7 step 5) |
+| `internal/engagement/report` | the engagement report (E2): built from what a run collected, never contacting a target; coverage marked from the rules that decided, findings keyed `{id, asset, subject}`, a network collector's verdicts as findings, assessments and coverage (`judged.go`, E7), ranking, acceptances' outcomes, the exit code; `docs/engagement-report-schema.json` |
 | `internal/engagement/hostasset` | the host collector as an asset: reach (local, SSH dial, canary, platform), the baseline through the runner, the posture rules graded through the asset's context; fixture recording (`--record-fixtures`) |
 | `internal/sudoers` | NOPASSWD fragment generator from elevated checks |
 | `internal/operator` | operator context for the host collector: sources, schema, per-kind merge, budget, the `<operator_context>` block |
@@ -282,6 +284,11 @@ a population the gate marks incomplete (a cap, a page limit, an exclusion drop),
 may fire on what it saw but is never disproved, and its counts print as "at least"
 (`docs/spec/scope.md`, "Responses").
 
+The steps below are for a host rule. A network collector's rules live in its package
+beside its reads (`Judge` in `internal/collector/web`), their definitions in
+`internal/finding` as step 1 says, and the collector's tests prove each fires, is
+disproved and abstains.
+
 1. Add or reuse a `finding.Def` in `internal/finding/catalog.go`: a rule finding has no
    model to write its text, so title, category, base severity, impact and remediation
    are all required. So are `Area`, the engagement report's risk area, and `Exposure`,
@@ -364,9 +371,12 @@ code is tested offline in `make check`, and a change that breaks one is still wr
 - `run_check` and `read_file` call `runner.RunAs` with an `Origin`; the menu gate
   (profile tier, no canary) is enforced there, not in the tool. `report_finding` goes
   through `finding.Store.Report`, which validates every excerpt against the exact cited
-  observation's output and refuses an id the posture rules already settled. Put a new
-  deterministic guard there, never in the prompt alone. A `verdict: ruled_out` call goes
-  through `finding.Store.RuleOut`: validated the same way, never a finding.
+  observation's output and refuses an id the posture rules already settled and an id
+  that is not a host finding's (another collector's findings are not the model's, and
+  the prompt's catalog lists host findings only). Put a new deterministic guard there,
+  never in the prompt alone. A `verdict: ruled_out` call goes through
+  `finding.Store.RuleOut`: validated the same way, a non-host id refused too, never a
+  finding.
 - Severity never comes from the model. A `severity` in `report_finding` is ignored.
 - Every budget in `policy.Budgets` ends the run `incomplete` by name; a request is
   checked with `llm.CheckFit` before it is sent, and overflow never drops evidence.

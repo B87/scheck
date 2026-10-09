@@ -12,7 +12,12 @@ import (
 // report's own terms, so this package never imports the engagement or a
 // collector, and never contacts a target.
 type Input struct {
-	Version string
+	Vantage      string
+	Observations map[string]Observation
+	LevelsUsed   []string
+	RulesVersion string
+	Exposures    []ExposureInput
+	Version      string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string
@@ -67,10 +72,17 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
-	Name string
-	ID   string
-	Kind string
-	Root bool
+	PopulationIncomplete bool
+	NetworkTrace         []Trace
+	WebShortfalls        []Shortfall
+	Redactions           []policy.Hit
+	WebNotes             []Note
+	MailNotes            []Note
+	Unfingerprinted      []string
+	Name                 string
+	ID                   string
+	Kind                 string
+	Root                 bool
 	// Status and Reason are Recon's (collected, incomplete, failed,
 	// refused, not_collected) and the coverage reason when not collected.
 	Status string
@@ -100,6 +112,13 @@ type AssetInput struct {
 	// Kept says a resume kept the host from the earlier session that
 	// collected it: this session did not contact it.
 	Kept bool
+	// Collector names the network collector that read the asset ("web"),
+	// and Judged are its rules' verdicts there.
+	Collector string
+	Judged    []Judgment
+	// ReadWith is the root a declared domain asset was read with, its
+	// names among the root's.
+	ReadWith string
 }
 
 // HostInput is a host asset's collection.
@@ -154,4 +173,13 @@ type AcceptanceInput struct {
 	Reason     string
 	AcceptedBy string
 	Expires    string
+}
+
+// ExposureInput is an exact declared public URL and its reason.
+type ExposureInput struct{ URL, Reason, Source string }
+
+// Observation is the original collection metadata, including reused evidence.
+type Observation struct {
+	CollectedAt time.Time
+	Vantage     string
 }

@@ -2,7 +2,7 @@
 name: client
 description: The operator scheck is built for — the CTO, founder or lone IT person at a small company who answers `scheck init` and has to act on the report. Use to answer the interview in character from a fixed company profile in `.agents/clients/`, to say which questions they cannot answer or would guess at, to produce an engagement file as that operator would write it, and to read a report and say what they would do first and what they would misread. Never reads the code. Not for security judgement; that is the security-consultant's job.
 tools: Read, Glob, Grep, Bash, Write
-model: opus
+model: sonnet
 ---
 
 # The operator scheck is for
