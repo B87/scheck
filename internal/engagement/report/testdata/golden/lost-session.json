@@ -154,7 +154,7 @@
       "detail": "the connection was lost before every baseline check ran: EOF",
       "envelope": {
         "elided": "pinned by internal/report goldens",
-        "schema_version": "1.6"
+        "schema_version": "1.7"
       },
       "id": "host:macos:22",
       "kind": "host",

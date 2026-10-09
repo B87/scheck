@@ -273,7 +273,9 @@ by hand (this happened with `slices.Contains` in `internal/check`).
 
 ## Adding a rule
 
-Host posture rules read one fact (`docs/spec/host-collector.md §6.5`). Engagement rules
+Host posture rules read one fact, or two of the same host joined per subject through a
+join predicate when the first alone cannot tell a weakness from a harmless state
+(`With`; `accounts.empty_password` is the one such rule, `docs/spec/host-collector.md §6.5`). Engagement rules
 may combine facts from several checks or assets (`docs/spec/engagement.md`, "Multi-fact
 rules"). Both must declare exactly what they read and abstain when it is unknown. Over
 a population the gate marks incomplete (a cap, a page limit, an exclusion drop), a rule
@@ -284,7 +286,10 @@ may fire on what it saw but is never disproved, and its counts print as "at leas
    model to write its text, so title, category, base severity, impact and remediation
    are all required. So are `Area`, the engagement report's risk area, and `Exposure`,
    whether "exposed on purpose" may move it (`docs/spec/engagement.md`, "Severity in
-   context"); place a new base severity against that section's anchors.
+   context"); place a new base severity against that section's anchors. Set `Subject`
+   when one finding is about one instance (an account, an OAuth app, a DNS name): an
+   acceptance must then name it (`docs/spec/engagement.md`, "Accepted risks"). No host
+   finding sets it in 0.0.2.
 2. Add the `Rule` in `internal/finding/rule.go`. Pick the predicate that matches the
    check's parser and fill in what makes the evidence *recognizable* (`Requires`,
    `Known`, `Recognize`) — without it the predicate cannot abstain, and an answer scheck

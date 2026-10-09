@@ -47,10 +47,13 @@ func Evaluate(in Input) Result {
 		if rule.Platform != check.Any && rule.Platform != platform {
 			continue
 		}
-		a := Assessment{Finding: rule.Finding, Check: rule.Check}
+		a := Assessment{Finding: rule.Finding, Check: rule.Check, With: rule.With}
 		v := evalRule(rule, platform, disabled, in.Sheet)
 		a.Status, a.Reason = v.Status, v.Reason
 		a.Observation = in.Sheet.Results[rule.Check].Observation
+		if rule.With != "" {
+			a.WithObservation = in.Sheet.Results[rule.With].Observation
+		}
 		res.Assessments = append(res.Assessments, a)
 		if v.Status != Matched {
 			continue
@@ -60,8 +63,15 @@ func Evaluate(in Input) Result {
 			continue // ValidateRules makes this unreachable in a built binary
 		}
 		ev := Evidence{Observation: a.Observation, Check: rule.Check, Excerpt: v.Excerpt}
+		evidence := []Evidence{ev}
+		if rule.With != "" && v.WithExcerpt != "" {
+			evidence = append(evidence, Evidence{Observation: in.Sheet.Results[rule.With].Observation,
+				Check: rule.With, Excerpt: v.WithExcerpt})
+		}
 		if i, seen := byID[rule.Finding]; seen {
-			res.Findings[i].Evidence = appendEvidence(res.Findings[i].Evidence, ev)
+			for _, e := range evidence {
+				res.Findings[i].Evidence = appendEvidence(res.Findings[i].Evidence, e)
+			}
 			continue
 		}
 		byID[rule.Finding] = len(res.Findings)
@@ -72,7 +82,7 @@ func Evaluate(in Input) Result {
 			// A rule fires only on recognized evidence, so its confidence is
 			// not a judgement call (docs/spec/host-collector.md §6.5).
 			Confidence: ConfidenceHigh, Platform: string(platform),
-			Evidence: []Evidence{ev}, Impact: def.Impact, Remediation: def.Remediation,
+			Evidence: evidence, Impact: def.Impact, Remediation: def.Remediation,
 		})
 	}
 	sort.SliceStable(res.Findings, func(i, j int) bool {
@@ -93,20 +103,49 @@ func evalRule(rule Rule, platform check.Platform, disabled map[string]bool, shee
 	if !ok || !c.AppliesTo(platform) {
 		return Verdict{Status: NotApplicable, Reason: "check-not-in-platform-catalog"}
 	}
-	if disabled[rule.Check] {
-		return notAssessed("check-disabled-by-config")
+	r, why := usable(rule.Check, disabled, sheet)
+	if why != "" {
+		return notAssessed(why)
 	}
-	r, ran := sheet.Results[rule.Check]
+	if rule.With == "" {
+		return rule.When.Eval(r.Parsed)
+	}
+	jp, ok := rule.When.(JoinPredicate)
+	if !ok {
+		return notAssessed("rule-with-check-needs-join-predicate") // ValidateRules makes this unreachable
+	}
+	// The With check is read only when it gave a usable fact. Otherwise the
+	// predicate decides from the first check alone, which can disprove (no
+	// account without a password) but never fire; when it needed the second
+	// check, the reason is that check's, so coverage names the right one.
+	w, whyWith := usable(rule.With, disabled, sheet)
+	if whyWith == "" {
+		return jp.EvalWith(r.Parsed, w.Parsed)
+	}
+	v := jp.EvalWith(r.Parsed, nil)
+	if v.Status == NotAssessed && v.Reason == ReasonWithUnread {
+		v.Reason = ReasonWith + whyWith
+	}
+	return v
+}
+
+// usable returns a check's result, or why it gave no fact a rule can read:
+// disabled, not run, denied or unavailable (docs/spec/host-collector.md §6.5).
+func usable(id string, disabled map[string]bool, sheet *baseline.FactSheet) (runner.Result, string) {
+	if disabled[id] {
+		return runner.Result{}, "check-disabled-by-config"
+	}
+	r, ran := sheet.Results[id]
 	if !ran {
-		return notAssessed("check-not-run")
+		return r, "check-not-run"
 	}
 	switch r.Status {
 	case runner.StatusDenied:
-		return notAssessed("check-denied:" + reasonCode(r))
+		return r, "check-denied:" + reasonCode(r)
 	case runner.StatusUnavailable:
-		return notAssessed("check-unavailable:" + reasonCode(r))
+		return r, "check-unavailable:" + reasonCode(r)
 	}
-	return rule.When.Eval(r.Parsed)
+	return r, ""
 }
 
 func reasonCode(r runner.Result) string {

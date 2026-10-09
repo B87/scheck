@@ -27,6 +27,13 @@ type Def struct {
 	// rejects a model candidate for this id (docs/spec/host-collector.md §6.5): a correlation cannot
 	// stand on a fact the rule read and found the other way.
 	Premise []string
+	// Subject is the kind of instance one finding of this id is about (a
+	// login, an OAuth app, a DNS name), or empty when the finding is about
+	// the asset as a whole. An accepted risk for an id with a subject kind
+	// must name its subject: an acceptance of the whole id would also accept
+	// every instance the asset gains later (docs/spec/engagement.md,
+	// "Accepted risks").
+	Subject SubjectKind
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as
@@ -50,6 +57,21 @@ const (
 
 // Areas lists the risk areas in the coverage table's order.
 var Areas = []Area{AreaIdentity, AreaSecrets, AreaCloud, AreaData, AreaCICD, AreaExternal, AreaWeb, AreaHosts, AreaEmail, AreaLogging}
+
+// SubjectKind is the kind of a finding's instance key, from the closed list
+// of docs/spec/engagement.md, "Findings".
+type SubjectKind string
+
+// SubjectKinds lists the kinds a finding definition may declare.
+var SubjectKinds = []SubjectKind{
+	"account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service",
+	"repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name",
+	"url", "declaration",
+}
+
+// SubjectOf returns the subject kind a finding id declares, or "" when the id
+// has none or is not in the catalog.
+func SubjectOf(id string) SubjectKind { return defs[id].Subject }
 
 // Exposure says whether a finding is an exposure finding, the only kind
 // "exposed on purpose" may lower: one whose whole claim is that a URL or
@@ -208,19 +230,33 @@ var defs = map[string]Def{
 		},
 	},
 	IDEmptyPassword: {
-		ID: IDEmptyPassword, Title: "A local account has no password set",
-		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "accounts with no password", BaseSeverity: SevCritical,
-		Impact: "The account authenticates with no credential wherever password authentication is accepted. " +
-			"Whether that includes remote logins depends on this host's PAM and sshd configuration.",
+		ID: IDEmptyPassword, Title: "A local account with a login shell has no password",
+		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "accounts with no password and a login shell",
+		// High, not critical: host facts show the account usable locally, not
+		// from the network (docs/spec/engagement.md, "Severity in context").
+		BaseSeverity: SevHigh,
+		Impact: "The account has an empty password field and a shell that lets someone log in. Most Linux " +
+			"distributions accept an empty password for local logins by default (su, the console, a provider's " +
+			"serial console), so anyone or anything already running on this host can become this account without " +
+			"a credential, and become root if the account is root. scheck did not check whether sshd or another " +
+			"network service accepts empty passwords; if one does, the account can be logged into remotely.",
 		Remediation: Remediation{
-			Summary: "Give the account a password or lock it, depending on what it is for.",
+			Summary: "Lock the account, or set a password if a person really logs in with one.",
 			Commands: []string{
-				"# inspect first:",
+				"# who is it, and does anyone use it?",
 				"sudo passwd -S <account>",
-				"# then either lock it:",
+				"last <account> | head",
+				"# nobody logs in with a password: lock it",
 				"sudo passwd -l <account>",
+				"# a service account that should never log in: also",
+				"sudo usermod -s /usr/sbin/nologin <account>",
+				"# a person who needs it: set one",
+				"sudo passwd <account>",
+				"# confirm sshd refuses empty passwords (expect \"permitemptypasswords no\")",
+				"sudo sshd -T | grep -i permitemptypasswords",
 			},
-			Caveat: "Locking an account a service depends on will break that service; find out what the account is for before changing it.",
+			Caveat: "Find out what the account is for before you change it. Locking stops password logins only; " +
+				"with UsePAM no in sshd it also blocks SSH key logins for that account.",
 		},
 	},
 	IDShadowPermissions: {

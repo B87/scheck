@@ -21,7 +21,9 @@ var testOpts = Options{
 		}
 		return false
 	},
-	KnownFinding: func(id string) bool { _, ok := finding.Lookup(id); return ok },
+	KnownFinding:   func(id string) bool { _, ok := finding.Lookup(id); return ok },
+	FindingSubject: func(id string) string { return string(finding.SubjectOf(id)) },
+	HostFinding:    func(id string) bool { d, ok := finding.Lookup(id); return ok && d.Area == finding.AreaHosts },
 }
 
 // specExample is the complete file docs/spec/engagement.md shows under
@@ -196,7 +198,33 @@ func TestValidationErrors(t *testing.T) {
 		{"sending and no_mail", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid}\n  no_mail: [example.com]\n", 13, "mail.no_mail[0]", "also has a sender", false},
 		{"not_used area", minimal + "not_used: [servers]\n", 10, "not_used[0]", "not one of", false},
 		{"ci not declared", minimal + "assets:\n  shop-repo:\n    repo: github:example-org/shop\n    ci: circleci\n", 13, "assets.shop-repo.ci", "not a tool declared", false},
-		{"same login twice", minimal + "people:\n  a: {kind: employee, github: Alice}\n  b: {kind: contractor, github: alice}\n", 12, "people.b.github", "also a's", false},
+		{"empty kind, as the recon stanza writes it", minimal + "people:\n  dave: {kind: \"\", workspace: [dave@example.com]}\n", 11, "people.dave.kind", "find out: an admin nobody can name", false},
+		{"admin is not a kind", minimal + "people:\n  dave: {kind: admin}\n", 11, "people.dave.kind", "admins are listed under access.admins", false},
+		{"agency is gone", minimal + "people:\n  acme: {kind: agency}\n", 11, "people.acme.kind", "\"agency\" is not a kind", false},
+		{"a scalar where a list belongs", minimal + "people:\n  alice: {kind: employee, github: alice-ex}\n", 11, "people.alice.github", "put the value in brackets", false},
+		{"an empty list", minimal + "people:\n  carol: {kind: employee, github: []}\n", 11, "people.carol.github", "an empty list says nothing", false},
+		{"a display name for an address", minimal + "people:\n  alice: {kind: employee, workspace: [\"Alice <alice@example.com>\"]}\n", 11, "people.alice.workspace[0]", "is not an address", false},
+		{"a marker for an address", minimal + "people:\n  dave: {kind: employee, workspace: [\"[REDACTED:custom:9 bytes]\"]}\n", 11, "people.dave.workspace[0]", "a marker scheck printed", false},
+		{"the same login twice under one handle", minimal + "people:\n  carol: {kind: employee, github: [carol-codes, Carol-Codes]}\n", 11, "people.carol.github[1]", "listed twice", false},
+		{"org on an employee", minimal + "people:\n  alice: {kind: employee, org: Acme}\n", 11, "people.alice.org", "alice is an employee", false},
+		{"used_by on a person", minimal + "people:\n  alice: {kind: employee}\n  bob: {kind: employee, used_by: [alice]}\n", 12, "people.bob.used_by", "only a shared account has used_by", false},
+		{"shared without used_by", minimal + "people:\n  ops: {kind: shared, workspace: [ops@example.com]}\n", 11, "people.ops.used_by", "whose departure means rotating it", false},
+		{"shared used by a service", minimal + "people:\n  bot: {kind: service}\n  ops: {kind: shared, used_by: [bot]}\n", 12, "people.ops.used_by[0]", "not a person who signs in", false},
+		{"shared used by itself", minimal + "people:\n  ops: {kind: shared, used_by: [ops]}\n", 11, "people.ops.used_by[0]", "names the account itself", false},
+		{"an admin with no identifier there", minimal + "people:\n  carol: {kind: employee, workspace: [carol@example.com]}\naccess:\n  admins:\n    github:example-org: [carol]\n", 14, "access.admins.github:example-org[0]", "people.carol has no GitHub login", false},
+		{"mfa as a boolean", minimal + "access:\n  mfa:\n    - {where: github:example-org, enforced: true}\n", 12, "access.mfa[0].enforced", "true is ambiguous", false},
+		{"mfa unknown value", minimal + "access:\n  mfa:\n    - {where: github:example-org, enforced: mostly}\n", 12, "access.mfa[0].enforced", "mostly", false},
+		{"mfa twice for one tenant", minimal + "access:\n  mfa:\n    - {where: github:example-org, enforced: everyone}\n    - {where: github:example-org, enforced: admins}\n", 13, "access.mfa[1].where", "already declared at access.mfa[0]", false},
+		{"mfa enforcement missing", minimal + "access:\n  mfa:\n    - {where: github:example-org}\n", 12, "access.mfa[0].enforced", "is required: everyone, admins, some, none, or unknown", false},
+		{"mfa twice through an asset name", minimal + "assets:\n  gh: {saas: github:example-org}\naccess:\n  mfa:\n    - {where: gh, enforced: everyone}\n    - {where: github:example-org, enforced: none}\n", 15, "access.mfa[1].where", "already declared at access.mfa[0]", false},
+		{"admins twice through an asset name", minimal + "assets:\n  gh: {saas: github:example-org}\npeople:\n  alice: {kind: employee, github: [alice-ex]}\naccess:\n  admins:\n    gh: [alice]\n    github:example-org: [alice]\n", 17, "access.admins.github:example-org", "names the same tenant as access.admins.gh", false},
+		{"an admin through an asset name with no identifier", minimal + "assets:\n  gh: {saas: github:example-org}\npeople:\n  carol: {kind: employee, workspace: [carol@example.com]}\naccess:\n  admins:\n    gh: [carol]\n", 16, "access.admins.gh[0]", "people.carol has no GitHub login", false},
+		{"used_by names nobody", minimal + "people:\n  ops: {kind: shared, used_by: [zed]}\n", 11, "people.ops.used_by[0]", "\"zed\" is not a handle under people", false},
+		{"used_by twice", minimal + "people:\n  a: {kind: employee}\n  ops: {kind: shared, used_by: [a, a]}\n", 12, "people.ops.used_by[1]", "a is listed twice", false},
+		{"an empty used_by on a person", minimal + "people:\n  a: {kind: employee, used_by: []}\n", 11, "people.a.used_by", "only a shared account has used_by", false},
+		{"a malformed login", minimal + "people:\n  bob: {kind: contractor, github: [\"bob acme\"]}\n", 11, "people.bob.github[0]", "is not a GitHub login (letters, digits and single hyphens, up to 39)", false},
+		{"a marker for an org", minimal + "people:\n  bob: {kind: contractor, org: \"[REDACTED:custom:9 bytes]\"}\n", 11, "people.bob.org", "a marker scheck printed", false},
+		{"same login twice", minimal + "people:\n  a: {kind: employee, github: [Alice]}\n  b: {kind: contractor, github: [alice]}\n", 12, "people.b.github[0]", "is also people.a.github[0]", false},
 		{"alias", minimal + "defaults: &d\n  probe: off\n", 10, "defaults", "anchors and aliases", false},
 		{"not yaml", "schema: 1\nroots: [\n", 2, "(file)", "not valid YAML", false},
 		{"organization under an organization", minimal + "  - cloud: gcp:organizations/123\nassets:\n  other:\n    cloud: gcp:organizations/999\n", 13, "assets.other.cloud", "never adds scope", false},
@@ -437,5 +465,67 @@ func TestRedactExtraMatchingANameWarns(t *testing.T) {
 	}
 	if res, _ := Parse("e.yaml", []byte(minimal+"redact_extra: [\"tanger[i]ne\"]\n"), testOpts); len(res.Warnings) != 0 {
 		t.Errorf("a pattern that matches no name warns: %q", res.Warnings)
+	}
+}
+
+// An acceptance must name its subject when the finding id is reported per
+// instance: without one it would also accept every instance found later
+// (docs/spec/engagement.md, "Accepted risks"). No 0.0.2 catalog id has a
+// subject kind yet, so the catalog is stubbed with the E6 OAuth finding.
+func TestAcceptedRiskNeedsSubjectWhenTheFindingHasOne(t *testing.T) {
+	opts := testOpts
+	opts.KnownFinding = func(id string) bool { return id == "workspace.oauth_broad_scope" || testOpts.KnownFinding(id) }
+	opts.FindingSubject = func(id string) string {
+		if id == "workspace.oauth_broad_scope" {
+			return "oauth_app"
+		}
+		return ""
+	}
+	file := func(subject string) []byte {
+		return []byte(minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+			"    - {id: workspace.oauth_broad_scope, asset: deploy@203.0.113.5" + subject + ", reason: r, accepted_by: alice, expires: 2026-12-31}\n" +
+			"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice, expires: 2026-12-31}\n")
+	}
+	_, err := Parse("e.yaml", file(""), opts)
+	var errs Errors
+	if !errors.As(err, &errs) {
+		t.Fatalf("want validation errors, got %v", err)
+	}
+	if len(errs) != 1 || errs[0].Key != "intent.accepted_risks[0].subject" ||
+		!strings.Contains(errs[0].Msg, "reported per OAuth app") || !strings.Contains(errs[0].Msg, "each new one found later") {
+		t.Fatalf("want one subject error on the OAuth entry, the whole-id host entry accepted; got %v", errs)
+	}
+	if _, err := Parse("e.yaml", file(", subject: \"1234.apps.googleusercontent.com\""), opts); err != nil {
+		t.Fatalf("an acceptance naming its subject must validate: %v", err)
+	}
+}
+
+func TestOptionsNeedFindingSubject(t *testing.T) {
+	for _, field := range []string{"FindingSubject", "HostFinding"} {
+		opts := testOpts
+		if field == "FindingSubject" {
+			opts.FindingSubject = nil
+		} else {
+			opts.HostFinding = nil
+		}
+		if _, err := Parse("e.yaml", []byte(minimal), opts); err == nil || !strings.Contains(err.Error(), field) {
+			t.Fatalf("want Options.%s required, got %v", field, err)
+		}
+	}
+}
+
+// A subject on an id about the whole asset could never match: refused for a
+// network collector's id, listed as not applied for a host's.
+func TestSubjectOnAWholeAssetFinding(t *testing.T) {
+	opts := testOpts
+	opts.KnownFinding = func(id string) bool { return id == "github.too_many_owners" || testOpts.KnownFinding(id) }
+	file := minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+		"    - {id: github.too_many_owners, asset: github:example-org, subject: alice-ex, reason: r, accepted_by: alice, expires: 2026-12-31}\n" +
+		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, subject: \"22/tcp\", reason: r, accepted_by: alice, expires: 2026-12-31}\n"
+	_, err := Parse("e.yaml", []byte(file), opts)
+	var errs Errors
+	if !errors.As(err, &errs) || len(errs) != 1 || errs[0].Key != "intent.accepted_risks[0].subject" ||
+		!strings.Contains(errs[0].Msg, "about the asset as a whole") {
+		t.Fatalf("want one error on the organization-wide acceptance, the host one left to Recon; got %v", err)
 	}
 }

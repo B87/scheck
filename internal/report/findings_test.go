@@ -41,6 +41,7 @@ func TestJSONCarriesRuleFindings(t *testing.T) {
 	env := postureEnv(t, check.Linux, map[string]string{
 		"sshd.config":            "passwordauthentication yes\npermitrootlogin no",
 		"accounts.passwd_status": "root L 2026-09-11\nalice NP 2026-09-11",
+		"accounts.passwd":        "root:x:0:0:root:/root:/bin/bash\nalice:x:1000:1000::/home/alice:/bin/bash",
 	})
 	var buf bytes.Buffer
 	if err := WriteJSON(&buf, env); err != nil {

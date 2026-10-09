@@ -7,10 +7,12 @@
       "id": "accounts.empty_password",
       "instances": 0,
       "observations": [
-        "accounts.passwd_status#1"
+        "accounts.passwd_status#1",
+        "accounts.passwd#1"
       ],
       "reads": [
-        "check:accounts.passwd_status"
+        "check:accounts.passwd_status",
+        "check:accounts.passwd"
       ],
       "status": "not_matched"
     },
@@ -142,7 +144,7 @@
       "collector": "host",
       "envelope": {
         "elided": "pinned by internal/report goldens",
-        "schema_version": "1.6"
+        "schema_version": "1.7"
       },
       "id": "host:ubuntu:22",
       "kind": "host",
@@ -353,7 +355,7 @@
         {
           "asset": "host:ubuntu:22",
           "judged": [
-            "accounts with no password",
+            "accounts with no password and a login shell",
             "the mode of /etc/shadow"
           ],
           "mark": "assessed",
@@ -363,9 +365,6 @@
             "kind": "rules",
             "read": 2
           },
-          "read_not_judged": [
-            "22 accounts, 4 with a login shell"
-          ],
           "reasons": [],
           "rules": [
             "accounts.empty_password",

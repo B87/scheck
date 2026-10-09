@@ -222,7 +222,13 @@ func (p *parser) walk(n *yaml.Node, t reflect.Type, path string) {
 		}
 	case reflect.Slice:
 		if n.Kind != yaml.SequenceNode {
-			p.fail(path, "must be a list")
+			// The value is not echoed: a misplaced one may be a credential,
+			// which the scan after the walk reports by key only.
+			if n.Kind == yaml.ScalarNode {
+				p.fail(path, "must be a list: put the value in brackets, as in [value]")
+			} else {
+				p.fail(path, "must be a list")
+			}
 			return
 		}
 		for i, item := range n.Content {

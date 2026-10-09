@@ -35,7 +35,7 @@ exclude:
 defaults:
   throttle: {rate: 120/m, concurrency: 3}
 people:
-  alice: {kind: employee, workspace: alice@example.com}
+  alice: {kind: employee, workspace: [alice@example.com]}
 assets:
   blog:
     domain: blog.example.com
@@ -240,7 +240,7 @@ func TestScopeSiteWithoutNetworkRoots(t *testing.T) {
 // A confirmation names its target canonically and holds for a year, through
 // its last day in engagement.timezone.
 func TestConfirmationYear(t *testing.T) {
-	file := strings.Replace(minimal, "  - saas: github:example-org\n", "  - saas: github:example-org\npeople:\n  alice: {kind: employee, workspace: alice@example.com}\nassets:\n"+
+	file := strings.Replace(minimal, "  - saas: github:example-org\n", "  - saas: github:example-org\npeople:\n  alice: {kind: employee, workspace: [alice@example.com]}\nassets:\n"+
 		"  www:\n    domain: www.example.com\n    first_party: {confirmed_by: alice, date: 2026-10-07, target: \"198.51.100.9, 198.51.100.8\"}\n", 1)
 	res, err := Parse("e.yaml", []byte(file), testOpts)
 	if err != nil {
@@ -345,7 +345,7 @@ roots:
   - url: http://app.example.org:8080/x/
   - host: deploy@web.example.com
 people:
-  alice: {kind: employee, workspace: alice@example.com}
+  alice: {kind: employee, workspace: [alice@example.com]}
 assets:
   sub:
     url: https://app.example.net/sub/

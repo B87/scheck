@@ -740,13 +740,16 @@ package finding
 
 type Rule struct {
     Finding  string         // finding id (§6.1); the Def supplies title, severity, impact, remediation
-    Check    string         // the one check whose fact the rule reads
+    Check    string         // the check whose fact the rule reads
+    With     string         // a second check of the same host, read by a join predicate only
     Platform check.Platform // macos | linux | any
     When     Predicate      // KeyEquals{Key, Value, Known} over kv
                             // RawMatch{Regexp, Requires} over raw
                             // AnyLine{Regexp} over lines
                             // FieldEquals{Field, Value, Known}, FieldOutside{Field, Allowed,
                             //   Recognize}, AnyRecord{} over a typed shape
+                            // StatusWithLoginShell{Field, Value, Known} over a typed
+                            //   shape, joined per account with With (accounts)
 }
 ```
 
@@ -757,10 +760,25 @@ truncated capture is `not_assessed`, never a pass.
 
 - **Rules read the fact sheet; they never execute a command.** The command surface is
   unchanged and the runner is untouched.
-- **One rule reads one check.** A conclusion that needs two facts (no firewall active at
-  all, password auth *and* a public listener) is the model's job in phase 2. Single-fact
-  rules stay obvious, and every one is testable with a fixture where it fires and one
-  where it does not.
+- **One rule reads one check, or two joined per subject.** A rule reads one check,
+  unless that check alone cannot tell a weakness from a harmless state on the same
+  subject: then it may read one second check of the same host (`With`), joined on a
+  declared key (the account name), through a join predicate that decides each subject
+  and combines the answers. It fires when one subject is proven, is disproved only when
+  every subject is, and is insufficient evidence when any subject cannot be decided or
+  the second check gave no usable fact. The invariants test checks both checks and that
+  a `With` has a join predicate and the reverse. `accounts.empty_password` is the one
+  such rule: an empty password matters only on an account with a login shell. A
+  conclusion across unrelated facts (no firewall active at all, password auth *and* a
+  public listener) stays out of host rules; it is an engagement multi-fact rule
+  (engagement.md, "Multi-fact rules"). The join lives here, not in the engagement,
+  because the host envelope is embedded whole as the collector's grading and would
+  otherwise keep the weaker finding. Every rule stays testable with fixtures where it
+  fires, is disproved and abstains. Its assessment names the second check and its
+  capture (`with`, `with_observation`, schema 1.7), and when the rule could not decide
+  because that check was disabled, denied, unavailable or not run, its reason is that
+  check's, prefixed `with-` (`with-check-disabled-by-config`), so coverage names the
+  check that was missing rather than the one that ran.
 - **Evaluate recognized evidence, not failure to recognize a good state.** A predicate
   may fire only on a complete, recognized value or record proving its condition.
   Missing fields, unknown output, parse failures and redacted values are not matches
@@ -776,7 +794,9 @@ truncated capture is `not_assessed`, never a pass.
   its own check may establish `not_applicable`; a missing executable alone cannot.
   Otherwise unavailable, denied or insufficient evidence produces `not_assessed`.
   Keep this interpretation in the check/parser and evaluator, not in the renderer.
-  Do not add cross-check applicability predicates to the single-fact rule mechanism.
+  Do not add cross-check applicability predicates to the rule mechanism: a rule's
+  second check (`With`, below) decides a subject's condition, never whether the rule
+  applies.
   Rules outside the selected platform/profile are omitted. Disabled selected checks
   leave their rules `not_assessed`, with the disabling reason.
 - **Render coverage honestly.** Group not-assessed rules by check and reason, with a
@@ -808,7 +828,7 @@ Seed table. Base severities are the §6.1 table entries for these ids:
 | `time.ntp_disabled` | macos | `time.ntp` | raw matches `: Off` | low |
 | `sshd.password_auth_enabled` | any | `sshd.config` | `passwordauthentication` = `yes` | medium |
 | `sshd.root_login_enabled` | any | `sshd.config` | `permitrootlogin` = `yes` | high |
-| `accounts.empty_password` | linux | `accounts.passwd_status` | a record with status `NP` | critical |
+| `accounts.empty_password` | linux | `accounts.passwd_status` with `accounts.passwd` | a record with status `NP` whose account has an interactive shell: by basename `sh bash dash zsh ksh mksh fish tcsh csh ash busybox rbash git-shell`, or an empty shell field, which runs `/bin/sh`. Every such account is listed in the evidence, not only the first, since an acceptance by id covers them all. Disproved when every `NP` account has a shell that refuses logins or runs one fixed command, by full path (`/usr/sbin/nologin`, `/sbin/nologin`, `/usr/bin/nologin`, `/bin/false`, `/usr/bin/false`, `/bin/true`, `/usr/bin/true`, `/dev/null`, `sync`, `shutdown`, `halt` under `/bin`, `/sbin`, `/usr/bin` or `/usr/sbin`), and, with no `NP` record on a complete listing, without the second check. An empty listing, an unrecognized shell, or an `NP` account whose `/etc/passwd` line is missing, marked, unread or the last line of a cut listing is insufficient evidence. The fact summary's "with a login shell" counts by the same shell lists | high |
 | `accounts.shadow_permissions_unexpected` | linux | `accounts.shadow_meta` | parsed mode is outside `0`, `600`, `640` | high |
 | `mac.selinux_disabled` | linux | `mac.sestatus` | `selinux status` = `disabled` | medium |
 | `log.auditd_inactive` | linux | `log.auditd` | recognized `inactive` or `failed` state | low |
@@ -1278,4 +1298,5 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§7). | One meaning per exit code; CI can gate on the offline run. |
 | Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | A typed record serves the screen, the model and `scheck diff`, and is diffable; a closure serves one consumer and is not. |
 | Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` are aliases for 0.0.2 and go in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
+| An empty password on an account that cannot log in? | Not a finding. `accounts.empty_password` joins `passwd -S -a` with `/etc/passwd` and fires only on an account with a login shell, at high; critical is for an empty password sshd accepts, an engagement multi-fact rule (E9). Libuser's `PS` and `LK` are recognized, and an empty status listing is a broken read, not a pass (E5a). | The 0.0.1 rule fired critical on `NP` alone, so a system account with `/usr/sbin/nologin` topped the first report a reader saw: a false critical costs trust in the whole report. Host facts show local use only; Debian's and RHEL's default PAM accept an empty password locally, so high, not lower. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |

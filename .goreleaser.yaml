@@ -38,7 +38,7 @@ release:
 
     **Draft: publication requires the completed [release checklist](https://github.com/b87/scheck/blob/{{ .Commit }}/docs/RELEASING.md).**
 
-    Commit: `{{ .Commit }}`. Report schema: **1.6** (separate from the product version).
+    Commit: `{{ .Commit }}`. Report schema: **1.7** (separate from the product version).
     Linux and macOS (`darwin` assets), each on amd64 and arm64. MIT licensed.
     macOS binaries are unsigned and unnotarized.
 

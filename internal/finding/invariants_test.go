@@ -44,6 +44,16 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 			RuleNoPredicate},
 		{"bad regexp", Rule{Finding: IDFileVaultOff, Check: "disk.fdesetup", Platform: check.MacOS,
 			When: RawMatch{Regexp: "("}}, RuleBadRegexp},
+		{"second check without a join predicate", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd",
+			Platform: check.Linux, When: FieldEquals{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate without a second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check is the first", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check not in the catalog", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "nope.invented",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate cannot read the second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.shadow_meta",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -78,6 +88,7 @@ func TestValidateRulesCatchesIncompleteDefs(t *testing.T) {
 		{"unknown area", func(d *Def) { d.Area = "network" }, RuleDefArea},
 		{"exposure undeclared", func(d *Def) { d.Exposure = exposureUndeclared }, RuleDefExposure},
 		{"judges missing", func(d *Def) { d.Judges = "" }, RuleDefJudges},
+		{"unknown subject kind", func(d *Def) { d.Subject = "listener" }, RuleDefSubject},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

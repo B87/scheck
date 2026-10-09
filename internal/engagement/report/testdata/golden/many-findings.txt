@@ -19,7 +19,7 @@ Not requested    A one-host check reads this host only. Your accounts, code, clo
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  1  critical   A local account has no password set (ubuntu)
+  1  high      A local account with a login shell has no password (ubuntu)
   2  high      /etc/shadow has an unexpected mode (ubuntu)
   3  high      sshd permits direct root login (ubuntu)
   4  medium    World-writable paths without the sticky bit (ubuntu)
@@ -48,9 +48,8 @@ Hosts                    checked in part
                              Findings)
     Remote access            not judged: this version of scheck has no rule for it (read: 2 service
                              states: disabled, not-found)
-    Accounts                 checked (accounts with no password, the mode of /etc/shadow): 2 open
-                             findings (see Findings); also read, not judged: 22 accounts, 4 with a
-                             login shell
+    Accounts                 checked (accounts with no password and a login shell, the mode of
+                             /etc/shadow): 2 open findings (see Findings)
     Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
                              lines; 33 sudoers.d lines)
     Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
@@ -73,24 +72,33 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
-FINDINGS: 6 open (1 critical, 2 high, 3 medium), 0 informational, 0 accepted
+FINDINGS: 6 open (3 high, 3 medium), 0 informational, 0 accepted
 Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
 problems than anything here.
 To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
 
-1  critical  A local account has no password set (ubuntu) [accounts.empty_password]
-   Observed      accounts.passwd_status#1 (07:12, as deploy (sudo -n)): backup NP 2026-09-11
-   Severity      critical
+1  high  A local account with a login shell has no password (ubuntu) [accounts.empty_password]
+   Observed      accounts.passwd_status#1 (07:12, as deploy (sudo -n)): name=ops status=NP
+   Observed      accounts.passwd#1 (07:12, as deploy): name=ops uid=1001 shell=/bin/bash
+   Severity      high
    Why here      scheck was not told how this machine is used (for example, whether it faces the
                  internet), so this is the standard rating.
-   Fix           Give the account a password or lock it, depending on what it is for.
-                 Caveat: Locking an account a service depends on will break that service; find out
-                   what the account is for before changing it.
+   Fix           Lock the account, or set a password if a person really logs in with one.
+                 Caveat: Find out what the account is for before you change it. Locking stops
+                   password logins only; with UsePAM no in sshd it also blocks SSH key logins for
+                   that account.
                  Commands (review before running):
-                   # inspect first:
+                   # who is it, and does anyone use it?
                    sudo passwd -S <account>
-                   # then either lock it:
+                   last <account> | head
+                   # nobody logs in with a password: lock it
                    sudo passwd -l <account>
+                   # a service account that should never log in: also
+                   sudo usermod -s /usr/sbin/nologin <account>
+                   # a person who needs it: set one
+                   sudo passwd <account>
+                   # confirm sshd refuses empty passwords (expect "permitemptypasswords no")
+                   sudo sshd -T | grep -i permitemptypasswords
 
 2  high  /etc/shadow has an unexpected mode (ubuntu) [accounts.shadow_permissions_unexpected]
    Observed      accounts.shadow_meta#1 (07:12, as deploy): -rw-r--rw-:646:root:shadow
@@ -161,8 +169,8 @@ Only for a risk you decide not to fix, and decided by whoever owns it: write the
 file (--write-engagement FILE), add yourself under people, paste the entry under
 intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
 
-  # A local account has no password set (ubuntu)
-  # critical: accept only with whoever owns the business, never to quiet the report
+  # A local account with a login shell has no password (ubuntu)
+  # high: accept only with whoever owns the business, never to quiet the report
     - id: accounts.empty_password
       asset: ubuntu
       reason: ""                   # why this is acceptable here; required

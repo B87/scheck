@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/report-schema.json",
   "title": "scheck run envelope",
-  "description": "spec/host-collector.md §6.4, schema 1.6. Released with v0.0.1: additions bump MINOR; renames, removals and type changes bump MAJOR.",
+  "description": "spec/host-collector.md §6.4, schema 1.7 (1.7 added an assessment's with and with_observation). Released with v0.0.1: additions bump MINOR; renames, removals and type changes bump MAJOR.",
   "type": "object",
   "required": ["schema_version", "host", "run", "facts", "observations", "assessments", "findings"],
   "additionalProperties": false,
@@ -258,6 +258,8 @@
           "observation": { "type": "string", "minLength": 1 },
           "finding": { "type": "string" },
           "check": { "type": "string" },
+          "with": { "type": "string", "minLength": 1, "description": "the rule's second check, joined per subject (spec/host-collector.md §6.5); a reason starting with \"with-\" is that check's" },
+          "with_observation": { "type": "string", "minLength": 1 },
           "status": { "enum": ["matched", "not_matched", "not_applicable", "not_assessed"] },
           "reason": { "type": "string" }
         }
