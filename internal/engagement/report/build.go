@@ -61,6 +61,9 @@ func Build(in Input) *Report {
 		dir := in.Directory
 		r.Run.Directory = &dir
 	}
+	if in.RulesVersion != "" {
+		r.RulesVersion = in.RulesVersion
+	}
 	b.r = r
 	for _, a := range in.Assets {
 		if a.Host != nil {
@@ -77,10 +80,20 @@ func Build(in Input) *Report {
 		}
 		if a.Collector != "" {
 			r.Notes = append(r.Notes, a.MailNotes...)
+			r.Notes = append(r.Notes, a.WebNotes...)
+			for _, h := range a.Redactions {
+				if strings.HasPrefix(h.Rule, "extra:") {
+					r.Redaction.Operator.Matches++
+				} else {
+					r.Redaction.Builtin[h.Rule]++
+				}
+			}
 			r.Findings = append(r.Findings, b.judgedFindings(a)...)
 			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 		}
 	}
+	r.Findings = uniqueFindings(r.Findings)
+	r.Assessments = uniqueAssessments(r.Assessments)
 	b.rankFindings()
 	b.acceptances()
 	r.Coverage = b.coverage()

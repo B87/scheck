@@ -29,11 +29,15 @@ policies, compare recognized SPF services with declared senders, and check decla
 DKIM keys. The report shows mail context and missing evidence; DNS does not establish
 actual delivery, alignment or whether a selector signs current mail. DMARC uses legacy
 organizational-domain fallback and sampling; current receiver tree walking is not
-assessed. TLS and header rules are not built yet, and coverage says so. The report's
-"What left this machine" says what was sent where.
+assessed. TLS rules judge the one observed negotiation and certificate. Declared
+and first-party sites also get entry-point, header, cookie, HTTP and security-contact
+rules; version and secret rules cover every read name. URL roots are read, with the
+two well-known files and one admitted same-host redirect, without crawling. Coverage
+preserves unknown evidence and the unread login flow; browser HTTPS-only exceptions
+use a pinned whole-TLD list. The report's "What left this machine" says what was sent where.
 Findings come from compiled-in rules: a host's posture rules, graded through the
-context the engagement declares, and a domain's DNS and email rules. They judge the
-collected evidence, so a short list of findings and exit 0 mean no rule fired — not that anything is secure; the
+context the engagement declares, and the web collector's DNS, email, TLS and response
+rules. They judge the collected evidence, so a short list of findings and exit 0 mean no rule fired — not that anything is secure; the
 report's coverage says what was not checked. **No model assesses anything:** a
 model-assessed pass exists in the codebase, was measured against criteria frozen
 before it was built, did not earn its cost, and is not part of this build

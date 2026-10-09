@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
@@ -32,8 +33,11 @@ type Subject struct {
 
 // Judgment is one rule's verdict on one subject, and what it read.
 type Judgment struct {
-	ID      string `json:"id"`
-	Context string `json:"context,omitempty"`
+	ID         string         `json:"id"`
+	Attributes []string       `json:"attributes,omitempty"`
+	Listed     []string       `json:"listed,omitempty"`
+	Details    map[string]any `json:"details,omitempty"`
+	Context    string         `json:"context,omitempty"`
 	// Asset is the most specific asset holding the subject: the name's own
 	// id under the root (docs/spec/web-collector.md, "Subjects").
 	Asset   string  `json:"asset"`
@@ -82,6 +86,8 @@ type Gap struct {
 // looked up and what it could not list, whether the resolver answers names
 // that do not exist, and what Recon read.
 type Input struct {
+	Now          time.Time
+	URLAssets    []URLAsset
 	Asset, Root  string
 	MailPolicies []MailEvidence
 	MailContext  []MailContext
@@ -118,7 +124,10 @@ func Judge(in Input) []Judgment {
 		j.records(m.Domain, "MX", m.MX, m.MXTargets, true)
 		j.records(m.Domain, "TXT", m.TXT, m.SPF, m.SPFComplete)
 	}
-	j.records(in.Root, "NS", in.Evidence.NS, in.Evidence.NSTargets, true)
+	if in.Root != "" {
+		j.records(in.Root, "NS", in.Evidence.NS, in.Evidence.NSTargets, true)
+	}
+	j.sites()
 	return j.out
 }
 
@@ -160,7 +169,14 @@ func (j *judging) add(x Judgment) {
 		reason = x.Reason
 	}
 	rank := map[string]int{Disproved: 0, Abstained: 1, Fired: 2}
-	if rank[x.Verdict] > rank[j.out[i].Verdict] {
+	if rank[x.Verdict] > rank[j.out[i].Verdict] || x.Verdict == Fired && slices.Contains(x.Attributes, "password_form") && !slices.Contains(j.out[i].Attributes, "password_form") {
+		prior := reads
+		reads = slices.Clone(x.Reads)
+		for _, r := range prior {
+			if !slices.Contains(reads, r) {
+				reads = append(reads, r)
+			}
+		}
 		j.out[i] = x
 	}
 	j.out[i].Reads = reads

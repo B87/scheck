@@ -239,10 +239,53 @@
     },
     {
       "area": "secrets",
+      "assets_covered": [
+        "domain:example.com"
+      ],
       "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
       "reasons": [
         {
-          "reason": "not_declared"
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "loaded scripts and pages beyond entry points",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "response secrets",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.secret_in_response"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "loaded scripts and pages beyond entry points",
+          "read_not_judged": [
+            "loaded scripts and pages beyond entry points"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
         }
       ]
     },
@@ -289,7 +332,10 @@
           "reason": "unavailable:dns_servfail"
         },
         {
-          "detail": "TLS and certificates",
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "TLS versions and ciphers other than those negotiated, and revocation",
           "reason": "no_rule"
         }
       ],
@@ -338,8 +384,24 @@
           "asset": "domain:example.com",
           "mark": "not_assessed",
           "name": "TLS and certificates",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "tls.certificate_invalid",
+            "tls.certificate_expiring",
+            "tls.legacy_only"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "TLS versions and ciphers other than those negotiated, and revocation",
           "read_not_judged": [
-            "TLS and certificates"
+            "TLS versions and ciphers other than those negotiated, and revocation"
           ],
           "reasons": [
             {
@@ -352,10 +414,93 @@
     },
     {
       "area": "web",
+      "assets_covered": [
+        "domain:example.com"
+      ],
       "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
       "reasons": [
         {
-          "reason": "not_declared"
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "HTTPS and plain HTTP",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.hsts_missing",
+            "web.plaintext_http",
+            "web.plaintext_http_clients"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "entry response headers",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_headers"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "session cookies",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.session_cookie_flags"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "software versions",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.version_disclosed"
+          ]
+        },
+        {
+          "asset": "domain:example.com",
+          "mark": "not_assessed",
+          "name": "security contact",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_txt"
+          ]
         }
       ]
     },

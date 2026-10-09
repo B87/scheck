@@ -12,8 +12,11 @@ import (
 // (docs/spec/engagement.md, "Findings"): fired, disproved or abstained,
 // with the gate requests it read.
 type Judgment struct {
-	ID      string
-	Context string
+	Attributes []string
+	Listed     []string
+	Details    map[string]any
+	ID         string
+	Context    string
 	// Asset is the most specific asset holding the subject, "" for the
 	// asset the collector read.
 	Asset   string
@@ -72,6 +75,42 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		} else {
 			// What is configured is not moved by how the asset is used.
 			f.WhyHere = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
+		}
+		for _, attr := range j.Attributes {
+			if attr == "password_form" && j.ID == finding.IDWebPlaintextHTTP {
+				sev = raise(sev)
+				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:password_form", By: "collector", Delta: "+1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
+			}
+			if attr == "slack_webhook" && j.ID == finding.IDWebSecretInResponse {
+				sev = finding.SevHigh
+				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:slack_webhook", By: "collector", Delta: "-1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
+			}
+		}
+		for _, e := range b.in.Exposures {
+			if j.ID == finding.IDWebVersionDisclosed && e.URL == key {
+				sev = finding.SevInfo
+				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "exposed_on_purpose", By: "engagement", Delta: "-1", Source: SourceRef{File: b.in.Path, Key: e.Source}})
+				f.WhyHere = []string{"You declared this URL exposed on purpose: " + e.Reason}
+			}
+		}
+		if len(j.Listed) > 0 {
+			f.Affected = &Affected{Count: len(j.Listed), Listed: j.Listed, Cap: len(j.Listed)}
+		}
+		keys := []string{}
+		for k := range j.Details {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		for _, k := range keys {
+			f.Derived = append(f.Derived, Derived{Name: k, Value: j.Details[k]})
+		}
+		if strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls.") {
+			if j.Context == "" && len(f.Adjustments) == 0 {
+				f.WhyHere = []string{"This is the standard rating for the response or connection observed."}
+			}
+			if slices.Contains(j.Attributes, "password_form") {
+				f.WhyHere = []string{"The HTTP page contains a password input, so it ranks one step higher."}
+			}
 		}
 		f.Severity = string(sev)
 		for _, r := range j.Reads {
@@ -178,6 +217,13 @@ func (b *builder) ownerOf(a AssetInput, j Judgment) AssetInput {
 	return AssetInput{ID: j.Asset, Name: strings.TrimPrefix(j.Asset, "domain:"), Kind: "domain"}
 }
 
+func firstRead(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
 func requestRefs(ids []string) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -218,6 +264,9 @@ func judgedAssessments(a AssetInput) []Assessment {
 			ea = &Assessment{ID: j.ID, Asset: asset, Status: finding.NotAssessed, Complete: true, Reads: []string{}}
 			byKey[k] = ea
 			keys = append(keys, k)
+		}
+		if len(j.Details) > 0 {
+			ea.Outcomes = append(ea.Outcomes, AssessmentOutcome{Subject: j.Subject, Outcome: j.Verdict, Detail: j.Details})
 		}
 		for _, r := range requestRefs(j.Reads) {
 			ea.Reads = appendUnique(ea.Reads, r)
@@ -347,19 +396,26 @@ var judgedFamilies = map[finding.Area][]struct {
 		{"SPF senders", "recognized positive SPF includes compared with declared senders", []string{finding.IDEmailSPFUndeclaredSender}},
 		{"DKIM selectors", "declared DKIM keys and their strength", []string{finding.IDEmailDKIMMissing, finding.IDEmailDKIMKeyBreakable, finding.IDEmailDKIMKey1024}},
 	},
+	finding.AreaSecrets: {{"response secrets", "specific secret detector hits in inspected responses", []string{finding.IDWebSecretInResponse}}},
+	finding.AreaWeb: {
+		{"HTTPS and plain HTTP", "HSTS and plain HTTP responses from the recorded vantage", []string{finding.IDWebHSTSMissing, finding.IDWebPlaintextHTTP, finding.IDWebPlaintextHTTPClients}},
+		{"entry response headers", "browser security instruction presence", []string{finding.IDWebSecurityHeaders}},
+		{"session cookies", "observed session-like cookie flags", []string{finding.IDWebSessionCookieFlags}},
+		{"software versions", "explicit versions in inspected responses", []string{finding.IDWebVersionDisclosed}},
+		{"security contact", "the current security.txt contact file", []string{finding.IDWebSecurityTXT}},
+	},
 	finding.AreaExternal: {
 		{"dangling records", "records pointing at names that do not exist",
 			[]string{finding.IDDNSDanglingExternal, finding.IDDNSDanglingInternal}},
 		{"subdomain takeover", "names pointing at providers with verified fingerprints", []string{finding.IDDNSTakeoverCandidate, finding.IDDNSUnclaimedAtProvider}},
 		{"private addresses", "public names publishing private addresses", []string{finding.IDDNSPrivateAddress}},
+		{"TLS and certificates", "one TLS negotiation and its certificate verification and expiry", []string{finding.IDTLSCertificateInvalid, finding.IDTLSCertificateExpiring, finding.IDTLSLegacyOnly}},
 	},
 }
 
 // notJudged lists, per area, what the domain collector reads or would read
 // that no rule judges in this build.
-var notJudged = map[finding.Area][]string{
-	finding.AreaExternal: {"TLS and certificates"},
-}
+var notJudged = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
 
 // judgedRow is an area a network collector reads: one sub-item per rule
 // family per asset, marked from the judgments (docs/spec/engagement.md,
@@ -411,6 +467,10 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			case decided == 0 && undecided == 0:
 				// Everything was read and nothing of this kind exists.
 				si.Mark = "not_applicable"
+				if (area == finding.AreaWeb || area == finding.AreaSecrets) || (area == finding.AreaExternal && fam.name == "TLS and certificates") {
+					si.Mark = "not_assessed"
+					si.Reasons = append(si.Reasons, ReasonDetail{Reason: "unavailable:web_evidence", Detail: "no judgments from web responses were recorded"})
+				}
 				if area == finding.AreaEmail && !slices.ContainsFunc(a.Judged, func(j Judgment) bool { return strings.HasPrefix(j.ID, "email.") }) {
 					si.Mark = "not_assessed"
 					si.Reasons = append(si.Reasons, ReasonDetail{Reason: "unavailable:mail_evidence", Detail: "no email judgments were recorded"})
@@ -425,7 +485,7 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			some = some || si.Mark == "assessed" || si.Mark == "partial"
 			for _, r := range si.Reasons {
 				detail := ReasonDetail{Reason: r.Reason}
-				if area == finding.AreaEmail {
+				if area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets {
 					detail = r
 				}
 				row.Reasons = appendReason(row.Reasons, detail)
@@ -460,4 +520,94 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 	}
 	row.Population = &Population{Kind: "assets", InScope: fed, Read: read}
 	return row
+}
+
+// Shared origins can be read under several roots. Their report identity
+// remains {id,asset,subject}, not which collector supplied the evidence
+// (docs/spec/engagement.md, "Findings").
+func uniqueFindings(in []Finding) []Finding {
+	out := make([]Finding, 0, len(in))
+	index := map[string]int{}
+	for _, f := range in {
+		subject := ""
+		if f.Key.Subject != nil {
+			subject = *f.Key.Subject
+		}
+		key := f.ID + "\x00" + f.Key.Asset + "\x00" + subject
+		i, ok := index[key]
+		if !ok {
+			index[key] = len(out)
+			out = append(out, f)
+			continue
+		}
+		old := out[i]
+		if finding.Severity(f.Severity).Rank() > finding.Severity(old.Severity).Rank() {
+			out[i] = f
+			f = old
+		}
+		for _, r := range f.Rule.Reads {
+			out[i].Rule.Reads = appendUnique(out[i].Rule.Reads, r)
+		}
+		for _, e := range f.Evidence {
+			if !slices.ContainsFunc(out[i].Evidence, func(x Evidence) bool {
+				return x.Request == e.Request && x.Observation == e.Observation && x.Excerpt == e.Excerpt
+			}) {
+				out[i].Evidence = append(out[i].Evidence, e)
+			}
+		}
+	}
+	return out
+}
+func uniqueAssessments(in []Assessment) []Assessment {
+	out := make([]Assessment, 0, len(in))
+	index := map[string]int{}
+	rank := map[string]int{finding.NotAssessed: 0, finding.NotApplicable: 0, finding.NotMatched: 1, finding.Matched: 2}
+	for _, a := range in {
+		key := a.ID + "\x00" + a.Asset
+		i, ok := index[key]
+		if !ok {
+			index[key] = len(out)
+			out = append(out, a)
+			continue
+		}
+		old := &out[i]
+		old.Complete = old.Complete && a.Complete
+		if old.Reason == "" {
+			old.Reason = a.Reason
+		}
+		if rank[a.Status] > rank[old.Status] {
+			old.Status = a.Status
+		}
+		if a.Instances > old.Instances {
+			old.Instances = a.Instances
+		}
+		for _, r := range a.Reads {
+			old.Reads = appendUnique(old.Reads, r)
+		}
+		for _, observation := range a.Observations {
+			old.Observations = appendUnique(old.Observations, observation)
+		}
+		for _, outcome := range a.Outcomes {
+			at := slices.IndexFunc(old.Outcomes, func(x AssessmentOutcome) bool {
+				return x.Subject.Kind == outcome.Subject.Kind && x.Subject.Key == outcome.Subject.Key
+			})
+			if at < 0 {
+				old.Outcomes = append(old.Outcomes, outcome)
+			} else if verdictPriority(outcome.Outcome) > verdictPriority(old.Outcomes[at].Outcome) {
+				old.Outcomes[at] = outcome
+			}
+		}
+	}
+	return out
+}
+
+func verdictPriority(verdict string) int {
+	switch verdict {
+	case verdictFired:
+		return 2
+	case verdictAbstained:
+		return 1
+	default:
+		return 0
+	}
 }

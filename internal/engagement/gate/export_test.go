@@ -183,3 +183,20 @@ func (h *Harness) FingerprintSite(name, ip string, status int, body string, conf
 		return out
 	}
 }
+
+// ResponseSite serves a fake site with a caller's offline handler on both ports.
+func (h *Harness) ResponseSite(name, ip string, handler http.HandlerFunc) func() []string {
+	cert := h.w.leaf([]string{name}, time.Now().Add(45*24*time.Hour), false)
+	https := h.w.serve(name, ip, 443, &cert, handler)
+	httpSrv := h.w.serve(name, ip, 80, nil, handler)
+	return func() []string {
+		var out []string
+		for scheme, s := range map[string]*server{"https": https, "http": httpSrv} {
+			for _, r := range s.requests() {
+				out = append(out, scheme+" "+r.URL.Path)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+}

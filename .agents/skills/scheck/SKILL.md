@@ -49,7 +49,7 @@ the installed CLI's behaviour differs from this skill: v0.0.1 has only `local` a
 
 `scheck run` takes an engagement file or `--host`, runs the stages (intake, scope,
 recon, plan, check, analyze, report) and prints the **engagement report**. Hosts are
-assessed, and a `domain` root in part. A `domain` root is read (DNS and mail records,
+assessed, and `domain` and `url` roots in part. A `domain` root is read (DNS and mail records,
 and the certificate and front page of each name Scope chose, which contacts the
 company's web servers) and judged by DNS and email rules. The DNS rules find a record
 pointing at a name that does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
@@ -75,15 +75,28 @@ context and DNS-only limits. DMARC uses legacy organizational-domain fallback an
 `pct`; current receiver tree walking and actual delivery are not assessed. Test-mode
 `p=reject` or legacy `pct=0; p=reject` can still request quarantine. SPF lookup counts
 are a static tree review, not a result for every message. A published DKIM key does
-not show current use. TLS and certificates are not judged yet, so `external` is
-`partial` at best. A declared root of any other kind (a
+not show current use. TLS rules judge the one observed negotiation and certificate;
+expiry within 14 days asks the operator to confirm renewal, and `tls.legacy_only`
+means the TLS 1.2-or-later attempt failed with a protocol-version alert, not proof that
+older versions work. Declared URL roots and first-party sites get entry-point header,
+HTTP, cookie and security-contact rules. Version disclosure and trusted secret
+redaction hits are judged on every read name. Findings require their DNS-name,
+origin, URL or secret-location subject in an acceptance. A version exposed on purpose
+on the exact URL becomes info; a secret never does. Password inputs raise plaintext
+HTTP one level, except the browser rule is disproved under a preloaded TLD.
+`web_context` notes explain fingerprints, counts of robots exclusions, block pages
+and the limits: no loaded scripts or authenticated login flow, no robots paths
+requested, and only whole-TLD browser preloads checked. Correct cookie flags on an
+entry do not establish a safe login flow. Missing evidence remains explicit in web,
+secrets and external coverage. Vantage and restricted reachability remain step 5.
+A declared root of any other kind (a
 SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
 exits 2. Tell the user what was not assessed, never that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
-A domain's findings come from the web collector's DNS and email rules, one per
-record, name, mail domain, include or selector (its `subject`), with evidence read
+The web collector's findings come from DNS, email, TLS and response rules, one per
+record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
 through the scope gate as `anonymous`.
 **No model assesses anything.** A model-assessed pass exists in the codebase, did not
 earn its cost against criteria frozen before it was built, and is not in the CLI: a run

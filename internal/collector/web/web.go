@@ -9,8 +9,10 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
+	"github.com/b87/scheck/internal/policy"
 )
 
 // Gate is what the collector asks of the scope gate.
@@ -24,6 +26,8 @@ type Gate interface {
 // "Reads").
 const OpFront = "web.front"
 
+const OpEntry = "web.entry"
+
 // frontMax caps a front page: enough for a provider's "not configured"
 // page and the generator meta tag.
 const frontMax = 64 << 10
@@ -35,6 +39,9 @@ var Ops = []gate.Op{
 	{ID: OpFront, Provider: "web", Method: gate.GET, URL: "{scheme}://{host}/",
 		Params: []gate.Param{{Name: "scheme", Type: gate.Scheme}, {Name: "host", Type: gate.Host}},
 		Level:  gate.Observe, Accept: []string{"text/html", "text/plain", "*/*"}, MaxBytes: frontMax},
+	{ID: OpEntry, Provider: "web", Method: gate.GET, URL: "{scheme}://{host}{path}",
+		Params: []gate.Param{{Name: "scheme", Type: gate.Scheme}, {Name: "host", Type: gate.Host}, {Name: "path", Type: gate.URLPath}},
+		Level:  gate.Observe, Accept: []string{"text/html", "text/plain", "*/*"}, MaxBytes: frontMax},
 }
 
 // Domain is one domain root to read.
@@ -44,8 +51,10 @@ type Domain struct {
 	// Mail are the mail domains under the root, the root first.
 	Mail []MailDomain
 	// Names are the names Scope chose to read under the root.
-	Names []string
-	Stage string
+	Names   []string
+	Sites   []SitePlan
+	URLOnly bool
+	Stage   string
 }
 
 // MailDomain is a mail domain and the DKIM selectors declared for it.
@@ -156,36 +165,46 @@ type TargetRead struct {
 // Site is what was read of one name: its front page over https, whose
 // TLS is the name's certificate, and over http.
 type Site struct {
-	Name  string `json:"name"`
-	HTTPS Page   `json:"https"`
-	HTTP  Page   `json:"http"`
+	Name     string `json:"name"`
+	HTTPS    Page   `json:"https"`
+	HTTP     Page   `json:"http"`
+	Declared bool   `json:"declared,omitempty"`
+	Pages    []Page `json:"pages,omitempty"`
 }
 
 // Page is one web request's result.
 type Page struct {
-	RequestID string              `json:"request_id"`
-	Decision  string              `json:"decision"`
-	Reason    string              `json:"reason,omitempty"`
-	Detail    string              `json:"detail,omitempty"`
-	Status    int                 `json:"status,omitempty"`
-	Header    map[string][]string `json:"header,omitempty"`
-	Body      string              `json:"body,omitempty"`
-	Truncated bool                `json:"truncated,omitempty"`
-	TLS       *gate.TLSInfo       `json:"tls,omitempty"`
+	CollectedAt   time.Time           `json:"collected_at"`
+	RobotsCount   *int                `json:"robots_disallow_count,omitempty"`
+	BlockedVendor string              `json:"blocked_vendor,omitempty"`
+	RedirectOf    string              `json:"redirect_of,omitempty"`
+	URL           string              `json:"url,omitempty"`
+	FirstParty    bool                `json:"first_party,omitempty"`
+	Redactions    []policy.Hit        `json:"redactions,omitempty"`
+	RequestID     string              `json:"request_id"`
+	Decision      string              `json:"decision"`
+	Reason        string              `json:"reason,omitempty"`
+	Detail        string              `json:"detail,omitempty"`
+	Status        int                 `json:"status,omitempty"`
+	Header        map[string][]string `json:"header,omitempty"`
+	Body          string              `json:"body,omitempty"`
+	Truncated     bool                `json:"truncated,omitempty"`
+	TLS           *gate.TLSInfo       `json:"tls,omitempty"`
 }
 
 // Collect reads one domain root through the gate.
 func Collect(ctx context.Context, g Gate, d Domain) Evidence {
 	c := collector{g: g, d: d}
 	var ev Evidence
+	if d.URLOnly {
+		return Enrich(ctx, g, d, ev)
+	}
 	for _, m := range d.Mail {
 		ev.Mail = append(ev.Mail, c.mail(ctx, m))
 	}
 	ev.NS = c.read(ctx, d.Name, "NS")
 	ev.NSTargets = c.followAll(ctx, d.Name, ev.NS)
-	for _, name := range d.Names {
-		ev.Sites = append(ev.Sites, c.site(ctx, name))
-	}
+	ev.Sites = c.sites(ctx)
 	return ev
 }
 
@@ -496,8 +515,10 @@ func (e Evidence) Cut() bool {
 		}
 	}
 	for _, s := range e.Sites {
-		if cut(s.HTTPS.Decision, s.HTTPS.Reason) || cut(s.HTTP.Decision, s.HTTP.Reason) {
-			return true
+		for _, p := range allPages(s) {
+			if cut(p.Decision, p.Reason) {
+				return true
+			}
 		}
 	}
 	return false
@@ -531,6 +552,8 @@ func page(r gate.Result) Page {
 	if resp := r.Response; resp != nil {
 		p.Status, p.Header, p.Truncated, p.TLS = resp.Status, resp.Header, resp.Truncated, resp.TLS
 		p.Body = string(resp.Body)
+		p.Redactions, p.FirstParty = resp.Redactions, resp.FirstParty
+		p.CollectedAt = resp.CollectedAt
 	}
 	return p
 }

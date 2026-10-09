@@ -65,6 +65,7 @@ func TestGoldenReports(t *testing.T) {
 		"domain-root":            withDomainRoot,
 		"takeover-root":          withTakeoverRoot,
 		"email-root":             withEmailRoot,
+		"web-root":               withWebRoot,
 		"lost-session":           lostSession,
 		"refused-host":           canaryRefused,
 		"jump-refused":           jumpRefused,

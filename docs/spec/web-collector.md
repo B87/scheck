@@ -89,7 +89,7 @@ evidence as absence or valid evidence.
 each mail domain under it, in that order, TXT at the domain and at `_dmarc.<d>`, MX and
 its targets' addresses, the SPF include tree and each declared DKIM selector; the root's
 NS and its targets' addresses; and for each name Scope marked to read, `GET /` over
-https, then http (`web.front`, the collector's one op), the https read's handshake
+https, then http (`web.front`), the https read's handshake
 giving the certificate and TLS result. A mail domain is read once, under the most
 specific domain root that holds it, so nested roots never read it twice or give it two
 SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
@@ -100,11 +100,24 @@ email in step 3) and the root is `collected`. It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
-as `Collect` returned (`incomplete`). A declared or first-party site's
-entry points, `/robots.txt`, `/.well-known/security.txt` and its redirect hop are step
-4; a `url` root is not read yet. A declared `domain` asset under a root that was read
+as `Collect` returned (`incomplete`). A declared `domain` asset under a root that was read
 is read with it: it is recorded with the root's status and the detail "read with
 *root*", and its findings are those whose subject it holds ("Subjects").
+
+**Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. After
+DNS takeover judgments have suspended stale first-party confirmations, `Enrich`
+requests declared entries and the two well-known files through the typed `web.entry`
+op. Intent URLs are entry points but never first-party evidence or sufficient on their
+own to make a site eligible for header rules. Every read rechecks live admission at
+the gate. One same-host redirect per initial read is submitted with its source
+request id; it is never followed automatically. `robots.txt` retains only the count
+of nonempty `Disallow` entries; its body and paths are discarded from Recon and never
+become requests. A URL root on a nondefault port does not imply a second read on 443;
+its absent port-443 certificate evidence stays unknown. Pages retain the gate's
+first-party admission metadata and actual collection time. A URL root plans only
+its own declared path and descendants, not peer paths on the same origin. After
+collection, judgments join captured pages from matching site names across roots so
+origin-wide rules see all observed responses; this merge sends no additional read.
 
 **Not read in 0.0.2:** SOA, CAA, DNSKEY and DS, `_mta-sts`, `_smtp._tls`, BIMI.
 
@@ -311,11 +324,11 @@ separate finding.
 | Rule | Fires | Disproved | Abstains | Base | Area |
 |---|---|---|---|---|---|
 | `tls.certificate_invalid`: "The certificate for *name* is *expired / for another name / not from a trusted issuer / missing its intermediate*" | the gate's typed verification class | verified | no handshake; an unclassified error; an issuer on the TLS-interception list, worded "your network inspects TLS, so certificates were not judged"; the name is a takeover candidate, which subsumes it | low | external |
-| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; automatic renewal may be failing" | valid, with 14 days or fewer left, worded: ACME clients renew at about a third of a certificate's lifetime, so this usually means renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
-| `tls.legacy_only`: "*name* accepts only TLS versions older than 1.2, which current browsers refuse" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
+| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at collection; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
+| `tls.legacy_only`: "*name* did not negotiate TLS 1.2 or later" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
 
-A missing intermediate is worded "browsers may still accept it; command-line tools and
-API clients will not." scheck fetches no intermediate from the certificate's AIA URL,
+A missing intermediate is worded "browsers may recover, but clients that do not fetch
+intermediates may fail." scheck fetches no intermediate from the certificate's AIA URL,
 on any platform ([scope.md](scope.md#connections)). When the gate could read no root
 certificate, every verification failure is classed `unclassified`, so the certificate
 rules abstain on every name.
@@ -323,11 +336,47 @@ rules abstain on every name.
 **The TLS-interception list** is versioned data in the tree: the issuers of products
 that inspect TLS on the operator's network (Zscaler, Netskope, Fortinet, Palo Alto,
 Cisco Umbrella, Sophos, Kaspersky, ESET, Avast, Bitdefender). A chain from one makes
-every certificate rule abstain for that name.
+every certificate rule abstain for that name. A wildcard takeover candidate also
+subsumes certificate judgments on the concrete wildcard-control hostname.
 
 ### Headers and cookies
 
-Declared or first-party sites, except where a row says every read name.
+Declared or first-party sites, except where a row says every read name. Built in
+E7 step 4: the three TLS and eight web rules below; `web.restricted_reachable` stays
+with step 5. Each requires its subject kind in an acceptance.
+
+HSTS parses the complete syntax of the first header field: duplicate directives,
+invalid tokens or values, and valued `includeSubDomains` or `preload` are invalid.
+Quoted decimal values decode HTTP quoted-pairs literally, not Go escape sequences.
+A valid policy on any observed HTTPS entry disproves the origin finding. Security
+headers require recognized values, including supported CSP source grammar; an
+unknown CSP source or marked header makes its protection unknown, never present.
+Nonce and hash sources require a nonempty base64-value payload.
+Password inputs and generator metadata are read from active HTML tags, excluding
+comments and inert script, style, nested template and text containers. Cookie
+attribute names are trimmed and compared by name: assigned `Secure` and `HttpOnly`
+attributes still count, including retained `Secure=true`.
+A correctly flagged cookie does not disprove the cookie rule for the origin: the
+login flow was not read. Session-like names were seen in anonymous responses; their
+authentication role was not verified. A password input is observed without submitting
+any form, and its page supplies the evidence for the severity attribute. Attribute
+tokens are parsed whole; text inside a malformed quoted attribute never invents a
+password field. HTML tag names end at ASCII HTML whitespace or a slash, for opening
+and closing tags alike; slash-delimited attributes do not hide active password
+inputs or inert containers. Only a nested template increases the inert template depth.
+Raw-text and RCDATA closing tags are recognized before ordinary comment or attribute
+parsing, including inside templates. Script escaped and double-escaped states follow
+the HTML Standard: text inside them stays inert, and content after the real closing
+tag can supply a generator or password input.
+
+Secret findings use only detector hits with the gate's trusted redaction provenance,
+never marker-shaped text supplied by a page. A marked body blocks negative secret
+claims. `security.txt` must be HTTPS plain text with a usable Contact URI and a single
+parseable future Expires; Canonical, when present, must include the read URL.
+Malformed or unrecognized fields that prevent this judgment leave coverage unknown.
+A cleartext-signed file is parsed for its contact fields; signature trust and contact
+delivery are not checked. Malformed `mailto:` and `tel:` contacts never validate.
+A trusted 404 is absence evidence both when sent and when reused on resume.
 
 | Rule | Fires | Disproved | Abstains | Base | Area | Exposure |
 |---|---|---|---|---|---|---|
@@ -346,9 +395,12 @@ Chromium's `net/http/transport_security_state_static.json`, pinned to a commit a
 dated: the entries that are a single label, with mode `force-https`,
 `include_subdomains` true and a policy other than `test`. Known members include `app`,
 `dev`, `page`, `bank`, `insurance` and `foo`; the rest come only from the pinned file.
-It is part of `rules_version`, regenerated each release by a small script that reads
-the pinned file, and a test asserts that the data's header names the commit. Only a
-name's own last label counts, in punycode, never a CNAME target's. An apex preloaded on
+Step 4 embeds 51 TLDs in `data/preloaded_tlds.txt`, version `2026-10-09.1`, from
+Chromium commit `d5e6fd51b430fec89732a3976e666011ecffa0a2` (`2026-09-11`). The
+local `scripts/preloaded_tlds.py` reads the pinned input; it sends no request. The list
+is part of `rules_version`, refreshed each release, and a test pins its commit header.
+The inspection issuers, session names and block markers share version `2026-10-09.1`.
+Only a name's own last label counts, in punycode, never a CNAME target's. An apex preloaded on
 its own is not handled in 0.0.2.
 
 | Rule disproved | Text | JSON |
@@ -401,7 +453,10 @@ the name's own id (`domain:<name>`), declared or not, and the root for the root 
 and for a name the engagement file cannot name as an asset (one holding an underscore
 label, or one redaction marked); a `dns_record`'s is that of the domain whose records
 were read (the root for its NS, the mail domain for its MX and its whole SPF tree). An
-`origin` or `url` belongs to the declared `url` asset, else to the name's id; an email
+`origin` belongs to the same-origin declared `/` URL asset when there is one, otherwise
+to the deepest declared path on that origin (lexical asset id breaks a tie). A `url`
+belongs to the longest declared path containing it. Without a declared URL owner,
+both belong to the name's id; an email
 finding to the domain root the mail domain falls under. Acceptances and assessments go
 by that asset, and an undeclared name's findings print the name as their asset and its
 canonical id as the paste's `asset` ([engagement.md](engagement.md#findings), "The

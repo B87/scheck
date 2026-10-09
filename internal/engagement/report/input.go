@@ -12,7 +12,9 @@ import (
 // report's own terms, so this package never imports the engagement or a
 // collector, and never contacts a target.
 type Input struct {
-	Version string
+	RulesVersion string
+	Exposures    []ExposureInput
+	Version      string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string
@@ -67,6 +69,8 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
+	Redactions      []policy.Hit
+	WebNotes        []Note
 	MailNotes       []Note
 	Unfingerprinted []string
 	Name            string
@@ -164,3 +168,6 @@ type AcceptanceInput struct {
 	AcceptedBy string
 	Expires    string
 }
+
+// ExposureInput is an exact declared public URL and its reason.
+type ExposureInput struct{ URL, Reason, Source string }

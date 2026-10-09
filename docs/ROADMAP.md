@@ -857,8 +857,35 @@ Built in steps, reviewed as E4 was:
    count before version recognition and tag reduction. `make check` is green;
    consultant and client reviews are complete, and the final fresh code review found
    no remaining issues. No review findings deferred from this step.
-4. **Next:** the web, TLS and header rules, and their data.
-5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
+4. **Done:** three TLS and eight web rules:
+   typed certificate failures, expiry within 14 days (confirm renewal), a failed
+   TLS 1.2-or-later negotiation without claiming older versions work; HSTS, plain HTTP
+   and preloaded-browser exceptions, session cookie flags, recognized security
+   headers, version disclosure, trusted detector hits and security contacts. Subject
+   acceptances and verdict-based web/secrets coverage preserve missing evidence;
+   cookie coverage never claims the unread login flow passed. Declared URL roots and
+   assets, first-party entries, well-known files and one gate-admitted same-host hop
+   use `web.entry` after takeover suspensions, beside `web.front`. Intent alone grants
+   neither first-party status nor header eligibility. Nondefault-port URL roots make
+   no implicit 443 read. Recon retains admission metadata and collection times;
+   robots paths are neither retained there nor requested. `web_context` notes report
+   technology sources, block pages, robot counts and entry-point limits. Chromium's
+   51-TLD snapshot is pinned to `d5e6fd51b430fec89732a3976e666011ecffa0a2`, with
+   versioned inspection issuers, session names and block markers. Consultant review
+   corrections are implemented. The first code review's six confirmed fixes cover
+   trusted reused security-contact 404s, literal HTTP quoted-pairs in HSTS, nested
+   template depth, whole HTML attribute tokens, CSP nonce/hash payload grammar and
+   wildcard takeover suppression of the control hostname's TLS judgments. A fresh
+   review verified those fixes and found a related HTML tag boundary issue: slash
+   delimiters now preserve active inputs, inert containers and closing-tag recognition.
+   A subsequent review verified earlier fixes and found raw-text closing-tag
+   recognition: raw-text/RCDATA now precedes ordinary comment and attribute parsing,
+   with script escaped/double-escaped states retained, including inside templates.
+   `make check` is green after every boundary fix. Consultant and client reviews are
+   complete; the final fresh code review verified the raw-text/RCDATA, script-state
+   and earlier fixes and found no remaining issues. No review findings deferred from
+   this step.
+5. **Next:** `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
    and the report's wording read by the `client`.
 
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)

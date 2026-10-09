@@ -868,11 +868,10 @@ from the file (a `url` or `host` root, a `network` root holding its address, or
 target is contacted, a host or jump host without an SSH user. From E4 it also expands
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
-is collected. A `domain` root is read through the web collector (E7 step 2a,
-[web-collector.md](web-collector.md#reads)), judged by its DNS and takeover rules in Recon (step
-2b, [web-collector.md](web-collector.md#dns-and-takeover)) and recorded as
-`collected`, or with `limit_reached` when `limits.timeout` ends the engagement before it
-is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
+is collected. `domain` and `url` roots are read through the web collector
+([web-collector.md](web-collector.md#reads)) and judged in Recon by the applicable
+DNS, email, TLS and response rules (E7 steps 2a–4), then recorded as `collected`, or
+with `limit_reached` when `limits.timeout` ends the engagement before it is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
 when the asset is a root. A declared `domain` asset under a root that was read is
 recorded with the root's status and the detail "read with *root*"
@@ -1003,7 +1002,8 @@ ends.
   session's gate is handed only those `run.json` lists, so a file placed there by hand is
   ignored ([scope.md](scope.md#resume)). A success this session sends again and keeps
   replaces the stored one, so a record that could not be reused is rewritten. In this
-  build only the web collector's front pages (`web.front`) yield successes kept there.
+  build the web collector's front pages and entry reads (`web.front`, `web.entry`) yield
+  successes kept there.
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
   that everything else was read again. A file the resume used (`scope.json` when kept;
@@ -1414,8 +1414,9 @@ no rule consumes in this version (`expected_services` before E9). With more than
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
-**The external and email rows, in this build** (E7 steps 2b and 3). A domain root the web
-collector read feeds both. In the external row each such root has *dangling records*
+**The external, email and web rows, in this build** (E7 steps 2b–4). A domain root the web
+collector read feeds these rows; a URL root feeds external, web and secrets coverage.
+In the external row each such root has *dangling records*
 (`dns.dangling_external` and `dns.dangling_internal`), *subdomain takeover*
 (`dns.takeover_candidate` and `dns.unclaimed_at_provider`) and *private addresses*
 (`dns.private_address`), each marked from its rules' verdicts on that root and the
@@ -1426,9 +1427,10 @@ finding that shares its subject with a discovery gap retains the gap's reason an
 leaves coverage partial ([web-collector.md](web-collector.md#dns-and-takeover)).
 *Services your names point at* lists names without a verified takeover fingerprint,
 with the count not checked and `no_rule`; an unknown-provider wildcard is listed once
-as `*.<root>`, even with no certificate-log members, and grouped names are omitted. *TLS and certificates* is *not assessed*
-with `no_rule`. A row whose sub-items are each *assessed* or `not_applicable` is
-*assessed*; the external row is therefore *partial* at best. The email row has four
+as `*.<root>`, even with no certificate-log members, and grouped names are omitted.
+*TLS and certificates* is marked from the certificate and negotiation verdicts;
+unknown handshake, inspection and takeover reasons remain gaps. A row whose
+sub-items are each *assessed* or `not_applicable` is *assessed*. The email row has four
 families per root: *DMARC policy* (including no-mail policy), *SPF policy*, *SPF
 senders* and *DKIM selectors*. The same verdict-based marks apply. No mail evidence
 is `unavailable:mail_evidence`; missing senders, selectors, inherited policy, marked
@@ -1442,6 +1444,29 @@ DMARC tree walking and actual message authentication or delivery are not assesse
 read with its root counts as read in both rows; its names are judged under its root's
 sub-items, and it has none of its own. A root that was not read gives its own reason
 in both rows.
+
+Network redaction totals use trusted gate hits retained on pages, counted once per
+request id even when a front-page read is reused as an entry. Built-in and operator
+rule counts never come from marker-shaped text a target supplied.
+
+Web coverage uses header, plain-HTTP, cookie, security-contact and version families;
+secrets coverage includes response-secret judgments. Missing web evidence is
+`unavailable:web_evidence`, never a pass. Cookie coverage retains the unread login
+flow even when the observed cookies have good flags. `web_context` notes describe
+technology and CDN fingerprints with their sources, robot counts, block pages and
+entry-point limits. Assessment `outcomes` carry subject-specific derived details,
+including the preloaded-TLD reason, TLD and list version. Shared-origin reads retain
+one finding per `{id, asset, subject}` and one assessment per `{id, asset}`; merged
+evidence and read references are united, retaining the strongest observed severity
+and status. TLS versions beyond the
+observed negotiation, ciphers and revocation, and scripts and pages beyond the entries
+remain explicit unassessed sub-items. Findings and acceptances
+use the owner and subject rules in [web-collector.md](web-collector.md#subjects).
+`attribute:password_form` raises a plaintext HTTP finding one level from an active
+password input; its evidence cites the page containing that input, and no form was
+submitted. The browser finding under a preloaded TLD is disproved and gets no raise. `web.version_disclosed` moves to info only on an exact URL declared public on
+purpose. A Slack webhook has high base severity; other accepted secret detectors
+retain critical, regardless of public-on-purpose intent.
 
 **The fold line.** Rows whose reason is `not_declared` fold into one line, labeled `Not
 requested`, only when no declaration in the file points at the area. An area the file
@@ -1696,7 +1721,10 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
 
 - `run: {started, directory, resumed}`, the scheck version and `rules_version`, so a
   finding that disappears because a rule changed between versions is never read as
-  fixed; the engagement source `{path, sha256}`, where for `--host` the hash is of the
+  fixed. For network reports, `rules_version` combines the binary version with the
+  pinned web, preload, takeover and sender-data versions. `scheck_version` remains
+  the binary version, and host-only `rules_version` retains its existing value;
+  the engagement source `{path, sha256}`, where for `--host` the hash is of the
   engagement exactly as `--write-engagement` would write it;
 - `exit: {code, reasons: [{code, why, asset}], thresholds}`, each threshold with its
   basis (`profile:baseline`, `default`);
@@ -1714,7 +1742,10 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   capture, and not a command whose non-zero exit was tolerated), its reason, and every input
   it read, declarations included (`declared:people.carol.left`), so a later run reads an
   instance as *fixed* only when its rule decided on complete evidence with the same
-  declared inputs, and otherwise as *no longer observed, not assessed*;
+  declared inputs, and otherwise as *no longer observed, not assessed*. An assessment
+  may have an empty `reads` list when no read was collected or a static preload rule
+  decided without a request; it never invents a request id. A finding still requires
+  nonempty rule inputs and observed evidence;
 - `summary` with its items (`kind`, `ids[]`, `person`, member keys, severity,
   `rank_basis`) and disjoint area counts (`assessed`, `partial`, `not_assessed`,
   `not_applicable`, `total`);

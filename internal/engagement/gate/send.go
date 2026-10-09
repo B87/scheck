@@ -39,6 +39,9 @@ const (
 // the body, all redacted, the body cut at the op's cap.
 type Response struct {
 	Status int
+	// FirstParty records the live scope admission, after address checks.
+	FirstParty  bool
+	CollectedAt time.Time
 	// Header holds only the allowlisted headers, redacted; set-cookie as
 	// its name and attributes, never its value.
 	Header http.Header
@@ -261,6 +264,8 @@ func (s *sending) finish(resp *Response, rt *retry) (Result, *retry) {
 	}
 	if resp != nil {
 		resp.DestIP = e.DestIP
+		resp.FirstParty = s.a.firstParty
+		resp.CollectedAt = s.g.now()
 		s.res.Response = resp
 		e.Status, e.Stored, e.Truncated = resp.Status, len(resp.Body), resp.Truncated
 		e.Redactions = len(resp.Redactions)
@@ -331,6 +336,8 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 		}
 	case errors.Is(err, context.DeadlineExceeded) || errors.As(err, &nerr) && nerr.Timeout():
 		s.res.end("unavailable:timeout", err.Error())
+	case errors.Is(err, syscall.ECONNREFUSED):
+		s.res.end("unavailable:connection_refused", err.Error())
 	default:
 		s.res.end("unavailable:unreachable", err.Error())
 	}

@@ -132,13 +132,19 @@ func TestEveryRuleFiresDisprovesAndAbstains(t *testing.T) {
 		}
 		seen[id][v] = true
 	}
-	for _, j := range append(takeoverOutcomes(t), emailOutcomes(t)...) {
+	for _, j := range append(append(takeoverOutcomes(t), emailOutcomes(t)...), httpOutcomes(t)...) {
 		if seen[j.ID] == nil {
 			seen[j.ID] = map[string]bool{}
 		}
 		seen[j.ID][j.Verdict] = true
 	}
 	for _, id := range finding.WebIDs() {
+		if id == finding.IDWebSessionCookieFlags {
+			if !seen[id][Fired] || !seen[id][Abstained] || seen[id][Disproved] {
+				t.Errorf("cookie coverage must never globally disprove: %v", seen[id])
+			}
+			continue
+		}
 		if len(seen[id]) != 3 {
 			t.Errorf("%s covered %v", id, seen[id])
 		}

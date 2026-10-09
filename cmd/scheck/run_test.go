@@ -795,3 +795,33 @@ intent:
 		}
 	}
 }
+
+func TestWebAcceptancesRequireTheirSubject(t *testing.T) {
+	for _, id := range finding.WebIDs() {
+		if !strings.HasPrefix(id, "web.") && !strings.HasPrefix(id, "tls.") {
+			continue
+		}
+		base := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots: [{url: https://example.com/}]
+people: {alice: {kind: employee}}
+intent:
+ accepted_risks:
+  - {id: ` + id + `, asset: 'url:https://example.com/', reason: temporary, accepted_by: alice`
+		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
+			t.Fatalf("%s: %v", id, err)
+		}
+		subject := "https://example.com"
+		switch finding.SubjectOf(id) {
+		case "dns_name":
+			subject = "example.com"
+		case "url":
+			subject = "https://example.com/"
+		case "secret_location":
+			subject = "github-token:https://example.com/"
+		}
+		if _, err := engagement.Parse("e.yaml", []byte(base+", subject: '"+subject+"'}\n"), engagementOptions); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}

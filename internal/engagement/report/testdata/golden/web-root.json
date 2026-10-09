@@ -105,6 +105,95 @@
       ],
       "reason": "no_rule",
       "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "tls.certificate_expiring",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "days_remaining": 6
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "example.com",
+            "kind": "dns_name",
+            "label": "example.com"
+          }
+        }
+      ],
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.plaintext_http",
+      "instances": 1,
+      "reads": [
+        "request:http1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.secret_in_response",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "count": 1,
+            "detector": "github-token"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "github-token:https://example.com/",
+            "kind": "secret_location",
+            "label": "GitHub token in https://example.com/"
+          }
+        }
+      ],
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "web.security_txt",
+      "instances": 0,
+      "reads": [
+        "request:contact1"
+      ],
+      "reason": "unavailable:redirect_not_entry_point",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": false,
+      "id": "web.session_cookie_flags",
+      "instances": 1,
+      "reads": [
+        "request:page1"
+      ],
+      "reason": "unavailable:login_flow",
+      "status": "matched"
+    },
+    {
+      "asset": "domain:example.com",
+      "complete": true,
+      "id": "web.version_disclosed",
+      "instances": 1,
+      "reads": [
+        "request:page1"
+      ],
+      "status": "matched"
     }
   ],
   "assets": [
@@ -134,17 +223,13 @@
       "assets_covered": [
         "domain:example.com"
       ],
-      "mark": "not_assessed",
+      "mark": "partial",
       "population": {
         "in_scope": 1,
         "kind": "assets",
         "read": 1
       },
       "reasons": [
-        {
-          "detail": "no judgments from web responses were recorded",
-          "reason": "unavailable:web_evidence"
-        },
         {
           "detail": "loaded scripts and pages beyond entry points",
           "reason": "no_rule"
@@ -153,14 +238,12 @@
       "sub_items": [
         {
           "asset": "domain:example.com",
-          "mark": "not_assessed",
-          "name": "response secrets",
-          "reasons": [
-            {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
-            }
+          "judged": [
+            "specific secret detector hits in inspected responses"
           ],
+          "mark": "assessed",
+          "name": "response secrets",
+          "reasons": [],
           "rules": [
             "web.secret_in_response"
           ]
@@ -213,16 +296,13 @@
       "assets_covered": [
         "domain:example.com"
       ],
-      "mark": "not_assessed",
+      "mark": "partial",
       "population": {
         "in_scope": 1,
         "kind": "assets",
         "read": 1
       },
       "reasons": [
-        {
-          "reason": "unavailable:web_evidence"
-        },
         {
           "detail": "TLS versions and ciphers other than those negotiated, and revocation",
           "reason": "no_rule"
@@ -260,14 +340,12 @@
         },
         {
           "asset": "domain:example.com",
-          "mark": "not_assessed",
-          "name": "TLS and certificates",
-          "reasons": [
-            {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
-            }
+          "judged": [
+            "one TLS negotiation and its certificate verification and expiry"
           ],
+          "mark": "assessed",
+          "name": "TLS and certificates",
+          "reasons": [],
           "rules": [
             "tls.certificate_invalid",
             "tls.certificate_expiring",
@@ -295,7 +373,7 @@
       "assets_covered": [
         "domain:example.com"
       ],
-      "mark": "not_assessed",
+      "mark": "partial",
       "population": {
         "in_scope": 1,
         "kind": "assets",
@@ -305,19 +383,25 @@
         {
           "detail": "no judgments from web responses were recorded",
           "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "https://example.com",
+          "reason": "unavailable:login_flow"
+        },
+        {
+          "detail": "https://example.com",
+          "reason": "unavailable:redirect_not_entry_point"
         }
       ],
       "sub_items": [
         {
           "asset": "domain:example.com",
-          "mark": "not_assessed",
-          "name": "HTTPS and plain HTTP",
-          "reasons": [
-            {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
-            }
+          "judged": [
+            "HSTS and plain HTTP responses from the recorded vantage"
           ],
+          "mark": "assessed",
+          "name": "HTTPS and plain HTTP",
+          "reasons": [],
           "rules": [
             "web.hsts_missing",
             "web.plaintext_http",
@@ -340,12 +424,15 @@
         },
         {
           "asset": "domain:example.com",
-          "mark": "not_assessed",
+          "judged": [
+            "observed session-like cookie flags"
+          ],
+          "mark": "partial",
           "name": "session cookies",
           "reasons": [
             {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
+              "detail": "https://example.com",
+              "reason": "unavailable:login_flow"
             }
           ],
           "rules": [
@@ -354,14 +441,12 @@
         },
         {
           "asset": "domain:example.com",
-          "mark": "not_assessed",
-          "name": "software versions",
-          "reasons": [
-            {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
-            }
+          "judged": [
+            "explicit versions in inspected responses"
           ],
+          "mark": "assessed",
+          "name": "software versions",
+          "reasons": [],
           "rules": [
             "web.version_disclosed"
           ]
@@ -372,8 +457,8 @@
           "name": "security contact",
           "reasons": [
             {
-              "detail": "no judgments from web responses were recorded",
-              "reason": "unavailable:web_evidence"
+              "detail": "https://example.com",
+              "reason": "unavailable:redirect_not_entry_point"
             }
           ],
           "rules": [
@@ -515,19 +600,16 @@
     }
   ],
   "egress": {
-    "assets": [],
-    "host_side_effects": [],
-    "model": "none",
-    "sources": [
+    "assets": [
       {
-        "control_invalid": true,
-        "control_lookups": 1,
-        "host": "192.0.2.53:53",
-        "requests": 12,
-        "sent": [],
-        "source": "dns"
+        "kind": "websites",
+        "requests": 3,
+        "sites": 1
       }
     ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [],
     "ssh_resolved": [],
     "ssh_resolved_by_jump": [],
     "stored": null,
@@ -555,7 +637,7 @@
       ],
       "plan": "checklist"
     },
-    "name": "mail-review",
+    "name": "web-review",
     "operator": null,
     "source": {
       "path": "engagement.yaml",
@@ -570,7 +652,7 @@
     "reasons": [
       {
         "code": 1,
-        "why": "1 open finding at or above its asset's threshold"
+        "why": "3 open findings at or above their asset's threshold"
       }
     ],
     "thresholds": {
@@ -581,6 +663,82 @@
     }
   },
   "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-01-05",
+        "id": "web.secret_in_response",
+        "needs_people": false,
+        "reason": "",
+        "subject": "github-token:https://example.com/"
+      },
+      "adjustments": [],
+      "area": "secrets",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "derived": [
+        {
+          "name": "count",
+          "value": 1
+        },
+        {
+          "name": "detector",
+          "value": "github-token"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "One GitHub token match was removed from the captured response before reporting",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.secret_in_response",
+      "impact": "The response contains a credential matching a specific secret detector. Validity was not tested; it may already have been copied.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.secret_in_response",
+        "subject": "github-token:https://example.com/"
+      },
+      "not_checked": [
+        "Credential validity was not tested"
+      ],
+      "remediation": {
+        "summary": "Revoke the credential at its provider first, then remove it from the response and review its use."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "critical",
+      "status": "open",
+      "subject": {
+        "key": "github-token:https://example.com/",
+        "kind": "secret_location",
+        "label": "GitHub token in https://example.com/"
+      },
+      "title": "A secret-shaped credential is published in the response",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
+      ]
+    },
     {
       "accept_template": {
         "accepted_by": "",
@@ -645,6 +803,151 @@
       "title": "A DKIM RSA key is shorter than 1024 bits",
       "why_here": [
         "You declared selector google for google-workspace."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.plaintext_http",
+        "needs_people": false,
+        "reason": "",
+        "subject": "http://example.com"
+      },
+      "adjustments": [
+        {
+          "by": "collector",
+          "delta": "+1",
+          "rule": "attribute:password_form",
+          "source": {
+            "excerpt": "HTTP serves a page containing a password input",
+            "observation": "http1"
+          }
+        }
+      ],
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "HTTP serves a page containing a password input",
+          "kind": "observed",
+          "observation": "http1",
+          "principal": "anonymous",
+          "request": "http1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.plaintext_http",
+      "impact": "Clients configured for HTTP can send and receive unencrypted data.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.plaintext_http",
+        "subject": "http://example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Redirect HTTP entry points to HTTPS, or close port 80."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:http1"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "http://example.com",
+        "kind": "origin",
+        "label": "http://example.com"
+      },
+      "title": "The origin serves plain HTTP instead of redirecting to HTTPS",
+      "why_here": [
+        "The HTTP page contains a password input, so it ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.session_cookie_flags",
+        "needs_people": false,
+        "reason": "",
+        "subject": "https://example.com"
+      },
+      "adjustments": [],
+      "affected": {
+        "cap": 1,
+        "count": 1,
+        "listed": [
+          "session"
+        ]
+      },
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Session cookie lacks HttpOnly",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "web.session_cookie_flags",
+      "impact": "A session-like cookie may be readable by scripts or sent without encryption. Names alone do not prove it authenticates a session.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.session_cookie_flags",
+        "subject": "https://example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Set Secure and HttpOnly on session cookies, and serve their application over HTTPS."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "https://example.com",
+        "kind": "origin",
+        "label": "https://example.com"
+      },
+      "title": "An observed session cookie lacks Secure or HttpOnly",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
       ]
     },
     {
@@ -786,6 +1089,150 @@
       "why_here": [
         "You listed google-workspace as sending for example.com."
       ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "tls.certificate_expiring",
+        "needs_people": false,
+        "reason": "",
+        "subject": "example.com"
+      },
+      "adjustments": [],
+      "area": "external",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "tls",
+      "derived": [
+        {
+          "name": "days_remaining",
+          "value": 6
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Certificate expires in six days; confirm renewal is working",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "tls.certificate_expiring",
+      "impact": "Expiry is approaching. Short-lived certificates can renew normally within this window; renewal success was not checked.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "tls.certificate_expiring",
+        "subject": "example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm automatic renewal is working and monitor the replacement certificate."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "info",
+      "severity_base": "info",
+      "status": "open",
+      "subject": {
+        "key": "example.com",
+        "kind": "dns_name",
+        "label": "example.com"
+      },
+      "title": "The certificate expires within 14 days",
+      "why_here": [
+        "This is the standard rating for the response or connection observed."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alice",
+            "why": "listed employee"
+          }
+        ],
+        "asset": "example.com",
+        "by_subject": true,
+        "expires": "2027-04-05",
+        "id": "web.version_disclosed",
+        "needs_people": false,
+        "reason": "",
+        "subject": "https://example.com/"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "-1",
+          "rule": "exposed_on_purpose",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "intent.exposed_on_purpose[0]"
+          }
+        }
+      ],
+      "area": "web",
+      "asset_name": "example.com",
+      "bound_id": null,
+      "category": "web",
+      "evidence": [
+        {
+          "asset": "domain:example.com",
+          "collected_at": "2026-10-07T07:12:03Z",
+          "excerpt": "Server: nginx/1.24.0",
+          "kind": "observed",
+          "observation": "page1",
+          "principal": "anonymous",
+          "request": "page1"
+        }
+      ],
+      "exposure_finding": true,
+      "id": "web.version_disclosed",
+      "impact": "The response reveals a software version or build identifier. This does not establish any vulnerability.",
+      "key": {
+        "asset": "domain:example.com",
+        "id": "web.version_disclosed",
+        "subject": "https://example.com/"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Remove unnecessary version details from headers, generator metadata and public version responses."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:page1"
+        ]
+      },
+      "severity": "info",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "https://example.com/",
+        "kind": "url",
+        "label": "https://example.com/"
+      },
+      "title": "The URL reveals a software version",
+      "why_here": [
+        "You declared this URL exposed on purpose: public build information"
+      ]
     }
   ],
   "incomplete": [],
@@ -814,6 +1261,11 @@
       "detail": "DKIM for sendgrid was not checked: no selector given. Find s= in the DKIM-Signature header of a recent message from this service",
       "kind": "mail_context",
       "source": "news.example.com"
+    },
+    {
+      "detail": "Entry points only: no authenticated login flow or loaded scripts were read.",
+      "kind": "web_context",
+      "source": "domain:example.com"
     }
   ],
   "notice": {
@@ -822,7 +1274,9 @@
     "personal_data": true
   },
   "redaction": {
-    "builtin": {},
+    "builtin": {
+      "github-token": 1
+    },
     "operator": {
       "matches": 0,
       "rules": 0
@@ -842,16 +1296,40 @@
     "areas": {
       "assessed": 0,
       "not_applicable": 0,
-      "not_assessed": 9,
-      "partial": 1,
+      "not_assessed": 6,
+      "partial": 4,
       "total": 10
     },
     "below": {
       "accepted": 0,
-      "info": 0,
-      "low": 2
+      "info": 2,
+      "low": 3
     },
     "items": [
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "web.secret_in_response"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "web.secret_in_response",
+            "subject": "github-token:https://example.com/"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:secrets"
+        ],
+        "severity": "critical",
+        "title": "A secret-shaped credential is published in the response"
+      },
       {
         "assets": [
           "domain:example.com"
@@ -868,20 +1346,44 @@
         ],
         "kind": "finding_id",
         "person": null,
-        "rank": 1,
+        "rank": 2,
         "rank_basis": [
           "severity:high",
           "area:email"
         ],
         "severity": "high",
         "title": "A DKIM RSA key is shorter than 1024 bits"
+      },
+      {
+        "assets": [
+          "domain:example.com"
+        ],
+        "ids": [
+          "web.plaintext_http"
+        ],
+        "keys": [
+          {
+            "asset": "domain:example.com",
+            "id": "web.plaintext_http",
+            "subject": "http://example.com"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 3,
+        "rank_basis": [
+          "severity:medium",
+          "area:web"
+        ],
+        "severity": "medium",
+        "title": "The origin serves plain HTTP instead of redirecting to HTTPS"
       }
     ],
     "more": 0,
     "rules": {
-      "decided": 10,
-      "selected": 10,
-      "without_evidence": 0
+      "decided": 15,
+      "selected": 16,
+      "without_evidence": 1
     }
   }
 }

@@ -754,6 +754,12 @@ never by admitting loopback.
   kept. A chain from an issuer on
   the versioned TLS-interception list (0.0.2 E7 step 4) means the operator's network inspects TLS:
   the certificate rules abstain. Reading a bad certificate needs no bypass.
+- **Collector provenance.** E7 step 4 retains the gate's first-party admission decision,
+  actual response collection time and redaction detector hits beside a page. A reused
+  response retains that collection time across resume. Marker
+  text alone is not proof that the gate found a secret. A refused TCP connection is
+  typed `unavailable:connection_refused`; the HTTP rule may distinguish it from a
+  timeout without inspecting error text.
 - **No proxy in 0.0.2.** The gate ignores `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`, and
   prints a note when one is set. A proxy resolves names itself, which defeats
   "Addresses", and it sees every URL. A later proxy would be a flag recorded as `via`,
@@ -1204,7 +1210,7 @@ stops the request or lookup before it is sent.
 | An address that lost the first-party evidence Scope recorded (`refused:address_moved`) | `unavailable:address_moved` | no change; the next Scope run shows the asset without it |
 | An address not public, a redirect out of scope or off the entry points, an invalid certificate, a handshake the server ended with a TLS alert, a TLS alert after the handshake completed and before any response (`unavailable:tls_invalid`, `unavailable:tls_handshake`, `unavailable:tls_refused`) | `unavailable:<code>` | no change, like `path_denied` |
 | A provider rate limit, `limits.timeout`, or a request outside every authorization window or cut by its end (`refused:window`, `unavailable:window_ended`), or a run cancelled with the request in flight (`unavailable:canceled`) | `limit_reached` | 2 |
-| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for a `not_exposed` URL read from the `internet` vantage, no answer is the evidence that disproves the contradiction (`engagement.md`, "Reachability and vantage") |
+| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for a `not_exposed` URL read from the `internet` vantage, no answer is the evidence that disproves the contradiction (`engagement.md`, "Reachability and vantage") |
 | A page served by a firewall that blocks scheck (`unavailable:blocked`, "Connections") | `unavailable:blocked` | no change; every rule over it abstains |
 | `refused:unknown_op`, `out_of_scope` or `method` on a collector's request | `unavailable:refused_by_gate` | no change. It is a defect, and a collector's tests fail on any |
 

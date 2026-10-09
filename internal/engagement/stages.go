@@ -727,6 +727,9 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 	ra.Web = &ev
 	ra.Judged = web.Judge(r.webInput(a, ev))
 	r.suspendConfirmations(ra.Judged)
+	ev = web.Enrich(ctx, g, r.webDomain(a), ev)
+	ra.Web = &ev
+	ra.Judged = web.Judge(r.webInput(a, ev))
 	ra.Status = StatusCollected
 	if ctx.Err() != nil || ev.Cut() {
 		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
@@ -740,7 +743,15 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 // the names Scope looked up, what it could not list, whether the resolver
 // invents answers, and what Recon read.
 func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
-	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev}
+	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev, Now: r.session}
+	if a.Kind == KindURL {
+		in.Root = ""
+	}
+	for _, b := range r.res.Assets {
+		if b.Kind == KindURL {
+			in.URLAssets = append(in.URLAssets, web.URLAsset{ID: b.ID, URL: strings.TrimPrefix(b.ID, "url:")})
+		}
+	}
 	for _, m := range ev.Mail {
 		context := web.MailContext{Domain: m.Domain}
 		for _, sender := range r.res.Mail.Senders {
@@ -764,6 +775,7 @@ func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
 		for _, ra := range r.recon.Assets {
 			if ra.Web != nil && ra.ID != a.ID {
 				in.MailPolicies = append(in.MailPolicies, ra.Web.Mail...)
+				in.Evidence = web.MergeSites(in.Evidence, *ra.Web)
 			}
 		}
 	}
@@ -843,7 +855,7 @@ func (r *run) innerRoot(a ResolvedAsset, name string) bool {
 // domains under it, the root first, with the DKIM selectors declared for
 // each, and the names Scope chose to read.
 func (r *run) webDomain(a ResolvedAsset) web.Domain {
-	d := web.Domain{Asset: a.ID, Name: a.name, Stage: "recon"}
+	d := web.Domain{Asset: a.ID, Name: a.name, Stage: "recon", Sites: r.webPlans(a)}
 	selectors := map[string][]string{}
 	order := []string{a.name}
 	// A mail domain is read under the most specific root holding it, once.
@@ -912,6 +924,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 		switch {
 		case a.Kind == KindDomain && isRoot(a):
 			ra = r.collectDomain(ctx, a, ra)
+		case a.Kind == KindURL && isRoot(a):
+			ra = r.collectURL(ctx, a, ra)
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -1011,7 +1025,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	// A declared domain under a root the web collector read was read with
 	// it: its names were among the root's.
 	for i, ra := range doc.Assets {
-		if ra.Kind != KindDomain || ra.Root == ra.ID {
+		if (ra.Kind != KindDomain && ra.Kind != KindURL) || ra.Root == ra.ID {
 			continue
 		}
 		for _, root := range doc.Assets {
@@ -1253,6 +1267,10 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		in.Authorization = auth
 	}
+	for i, e := range r.res.Intent.ExposedOnPurpose {
+		ref, _ := parseURL(e.URL)
+		in.Exposures = append(in.Exposures, ereport.ExposureInput{URL: strings.TrimPrefix(ref.ID, "url:"), Reason: e.Reason, Source: fmt.Sprintf("intent.exposed_on_purpose[%d]", i)})
+	}
 	for _, ra := range r.recon.Assets {
 		asset, _ := r.asset(ra.Name)
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
@@ -1270,14 +1288,19 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
+			in.RulesVersion = r.o.Version + ":web:" + web.BrowserDataVersion + ":preload:" + web.PreloadVersion + ":takeover:" + web.TakeoverVersion + ":senders:" + web.SenderTableVersion
 			wi := r.webInput(asset, *ra.Web)
+			ai.Redactions = web.RedactionHits(*ra.Web)
 			ai.Unfingerprinted = web.Unfingerprinted(wi)
+			for _, n := range web.SiteNotes(wi) {
+				ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: n.Source, Detail: n.Detail})
+			}
 			for _, n := range web.MailNotes(wi) {
 				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
 			}
 			for _, j := range ra.Judged {
 				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
-					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context,
+					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context, Attributes: j.Attributes, Listed: j.Listed, Details: j.Details,
 					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
 			}
 		}

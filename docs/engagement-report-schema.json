@@ -196,8 +196,9 @@
           "instances": { "type": "integer", "minimum": 0 },
           "complete": { "type": "boolean", "description": "Decided on unmarked evidence and read the whole population: no cap, sample, excluded unit or page limit." },
           "reason": { "$ref": "#/$defs/reason" },
-          "reads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids, the vocabulary of finding.rule.reads." },
-          "observations": { "type": "array", "items": { "type": "string" } }
+          "reads": { "type": "array", "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids; empty when no read was collected or a static preload decision needed no request." },
+          "observations": { "type": "array", "items": { "type": "string" } },
+          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"$ref": "#/$defs/subject"}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
         }
       }
     },
@@ -435,7 +436,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }

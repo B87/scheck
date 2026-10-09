@@ -19,14 +19,16 @@ func feeds(area finding.Area, a AssetInput) bool {
 	switch area {
 	case finding.AreaIdentity:
 		return a.Kind == "saas"
-	case finding.AreaSecrets, finding.AreaCICD:
+	case finding.AreaSecrets:
+		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "repo" || github
+	case finding.AreaCICD:
 		return a.Kind == "repo" || github
 	case finding.AreaCloud, finding.AreaData:
 		return a.Kind == "cloud"
 	case finding.AreaExternal:
 		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "network"
 	case finding.AreaWeb:
-		return a.Kind == "url"
+		return a.Kind == "url" || a.Kind == "domain"
 	case finding.AreaHosts:
 		return a.Kind == "host"
 	case finding.AreaEmail:
@@ -85,7 +87,7 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
-		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail) {
+		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
 			out = append(out, a)
 		}
 	}
