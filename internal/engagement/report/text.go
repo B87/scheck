@@ -1134,7 +1134,7 @@ func (t *text) paste(p *AcceptTemplate) {
 	kv("asset", clean(p.Asset), "")
 	switch {
 	case p.Subject != "":
-		kv("subject", clean(p.Subject), "omit to accept every instance on this asset")
+		kv("subject", clean(p.Subject), "required: this entry accepts this one only")
 	case p.SubjectNote != "":
 		t.line(in + "    # " + clean(p.SubjectNote))
 	}

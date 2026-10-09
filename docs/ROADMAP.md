@@ -136,7 +136,7 @@ built so far; `--stop-after` with the engagement's stage names. Until E4, Scope 
 the declared roots as written, without discovery. A `host:` root runs the host
 collector through the runner in Recon, its facts join the asset map
 (`internal/engagement/hostasset`), and its posture rules run in Analyze, which holds
-only single-fact rules until E9; Plan and Check pass through empty until then. A root
+only the host collector's rules (one check, or two joined per account, E5a) until E9; Plan and Check pass through empty until then. A root
 of a kind with no collector yet (`github:`, `domain:` and the rest, until their slice)
 is validated, recorded as not collected with the reason `collector_not_built`, and
 makes the run exit 2, as coverage will report it from E2. The host collector receives
@@ -504,6 +504,68 @@ named:
   row for a request that got no answer (`unavailable:connection_reset`,
   `unavailable:timeout`, `unavailable:unreachable`: exit 2) included.
 
+### E5a — people, access and acceptances
+
+**Why now:** the security-consultant's review of `spec/engagement.md` (2026-10-09) found
+that the people-and-access model E5, E6, E8 and E9 all build on would have been a
+migration across three collectors once they existed, and that the first report a reader
+saw was topped by a false critical. Defined by the consultant the same day; the owner
+adopted the recommended answers.
+
+**Delivers:**
+
+- A finding definition declares a subject kind (`finding.Def.Subject`, from the closed
+  list in `spec/engagement.md`, "Findings"), checked by the invariants test; an accepted
+  risk for such an id must name its subject, or validation exits 3 (`spec/engagement.md`,
+  "Accepted risks"). No host finding declares one in 0.0.2: host acceptance by subject
+  arrives with the listener slice.
+- `access.mfa[].enforced` is `everyone | admins | some | none | unknown`; true and false
+  exit 3 as ambiguous; a tenant appears once.
+- `people`: `workspace` and `github` are lists; kinds are `employee`, `contractor`,
+  `shared` (with `used_by`), `service` and `break_glass` (`agency` is gone: a contractor
+  is `contractor` with `org`); an admin listed for a tenant must have an identifier for
+  it; `kind: ""`, which the recon stanza prints, exits 3 asking for the kind.
+- The spec for what E5 and E6 build on it: the admin definition per provider, the
+  too-many-admins rule, the 2-step verification comparison, the alias rule, provider-id
+  binding in run state, the narrowed service and break-glass exemptions, and the recon
+  stanza and what it must never do (`spec/engagement.md`, "People", "Admins",
+  "2-step verification", "The recon stanza").
+- `accounts.empty_password` reads `/etc/passwd` beside `passwd -S -a` and fires only on
+  an account with a login shell, at high (`spec/host-collector.md §6.5`); libuser's `PS`
+  and `LK` are recognized; an empty status listing is insufficient evidence. The
+  many-findings golden takes the finding from the rule over edited captures, not from an
+  injected `backup NP` its own fixture disproved. The evaluation case `linux-empty-password` gains the
+  `/etc/passwd` line its `passwd -S` listing assumed for `deploy` (a login shell); its
+  base fixture had none, so the rule rightly abstained. Its label is unchanged. The
+  host fact summary counts "with a login shell" by the rule's own shell lists
+  (`internal/check/shells.go`), so a report never calls an account a login account in
+  one line and not the next: Ubuntu's `sync` and Fedora's `sync`, `shutdown` and `halt`
+  no longer count, and an empty shell field does. The assessment names the second check
+  (`with`, `with_observation`), the host report schema going to 1.7, and coverage names
+  that check when it was missing.
+
+**Done when:** every validation error has a test with its wording; the empty-password
+rule passes the consultant's fixtures (fires, disproved, insufficient, including a
+denied or disabled `/etc/passwd`); the real Ubuntu and Fedora fixtures, all locked, give
+the same verdict as before and the command traces are unchanged.
+
+**Open, for the owner (consultant's recommendation in brackets):** whether to add
+`sshd.permit_empty_passwords`, medium, a single-fact rule on the existing `sshd.config`
+check [yes, cheap]; `attribute:uid0` raising an empty password on a uid-0 account to
+critical [yes, with E9's attribute mechanism]; keeping Workspace's `name.fullName` as a
+declared label and stanza field [yes]; an organization Actions secret visible to all
+repositories as `secret_location` keyed `actions:<name>` or a new kind (E5).
+
+**Carried:** each subject kind's shape is validated (`org_unit` starts with `/`, a
+`service` is `<port>/<proto>`, a workflow is a `.github/workflows/` path) when the
+collector that declares the kind lands (E5, E6); empty password raised to critical by
+the E9 multi-fact rule `sshd.empty_password_login` (`permitemptypasswords yes` with
+password or keyboard-interactive login, and the shell; high for a refusing shell when
+TCP forwarding is allowed, since nologin does not stop `ssh -N`); handed to E7 step 5:
+`--vantage internet` from an office the admin panel allowlists gives a false
+contradiction, so the flag help, the warning and the finding define "internet" as
+outside every address the page allows (not the office, not the VPN).
+
 ### E5 — GitHub organization and repository secrets
 
 **Delivers:** a GitHub collector with a read-only token from the environment and a
@@ -514,13 +576,23 @@ workflows, the names (never the values) of organization and repository secrets, 
 keys with write access, pending invitations, and Dependabot and secret-scanning alerts
 where the token can read them. A secret scan of repository history, read in-process from
 the operator's mirror checkout (`checkout`, decided in E4), redacted in every output. A token with more than read access
-is itself reported. People are matched by login only (`spec/engagement.md`, "People").
+is itself reported. People are matched by login only, over every login a handle lists
+(`spec/engagement.md`, "People"); owners against `access.admins`, too many owners,
+an owner nobody can name and a contractor or shared account that is one, as
+`spec/engagement.md` "Admins" defines them; the organization's 2FA requirement against
+`access.mfa` ("2-step verification"); the recon stanza of unattributed accounts. Each
+finding declares its subject kind (consultant's E5a list: `account` for members and
+collaborators, `invitation`, `repository`, `branch`, `workflow`, `deploy_key`,
+`webhook`, `secret_location`, `principal`, `oauth_app` for App installations; none for
+the organization's 2FA requirement, too many owners and the default workflow token).
 Before E5 starts, the `security-consultant` reviews and freezes the base severity
 anchors (`spec/engagement.md`, "Severity in context"), and every base E5 assigns is
 placed against them.
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
-two-factor requirement is visible only to an owner's token, and whether a fine-grained
+two-factor requirement is visible only to an owner's token and is three-valued (absent
+is insufficient, never "not required"), the `2fa_disabled` member filter is trusted only
+for an owner's token, and whether a fine-grained
 token or an App has more than read access cannot always be read. The token advice in refusals and
 coverage says to get it from an organization owner: a fine-grained token may need the
 organization's approval, and owner-only fields need an owner's token.
@@ -542,19 +614,57 @@ no answer exiting 2. With E5's first op too: a request's `Reason` derived from i
 decision by one table, and the gate's longest functions (`attempt`, `send`, op
 validation, discovery's per-root loop, `shape`) split into steps.
 
+**Carried from the engagement-spec review** (security-consultant, 2026-10-09):
+
+- *Before E5's spec text, once E7 has merged:* split `spec/engagement.md`, which has
+  grown past what one reviewer holds, without dropping a decision. The report (order,
+  wording, coverage, ranking, findings, JSON) moves to `spec/report.md`; the run
+  directory, `run.json`, locking and resume to `spec/runs.md`; the `scheck.yaml` and
+  alias tables to `spec/host-collector.md §8`, since they go in 0.0.3; the domain
+  acceptance paragraph to `spec/web-collector.md`, "Subjects". Slice-progress prose
+  ("In 0.0.2 (E4) …") becomes a one-line "built in" marker per section, the history
+  staying here. Each decision gets one owner the others link to: exit codes in
+  `spec/scope.md` "Outcomes", reachability in `spec/web-collector.md`, and the rule
+  "an `assets` entry never adds scope", stated in both `spec/scope.md` and
+  `spec/engagement.md`, kept in one. Code comments
+  cite headings, so the `spec-steward` audits every citation in the same commit.
+- "Which repositories are public on purpose": `public: true` on a repository asset,
+  and an undeclared public repository is the finding (`intent` holds URLs only).
+- Anchors for self-hosted runners on public repositories (high), GitHub App
+  installations with write on all repositories, outside collaborators with admin on
+  production repositories, and the organization's default member permission.
+- scheck's own token with more than read access, which a classic token always has
+  for repositories, is a run note with the fix, never ranked and never counted in the
+  exit code (owner's decision pending; this is the consultant's recommendation, and
+  `spec/scope.md` calls it a finding today).
+- Under *not assessed*: GitHub shows no sign-in dates, so a former member nobody
+  listed cannot be told apart from a current one; and SAML single sign-on, if enforced,
+  does not cover git over SSH or tokens, which the 2FA rules list under what they did
+  not check.
+- SAML or SCIM linked identities may *suggest* `people` entries, never attribute one.
+- Each risk area E5 marks lists its sub-items from the practitioner's list, not from
+  the rules built, so an unbuilt one is `no_rule` and the row *partial* (owned by E9,
+  below).
+
 ### E6 — Google Workspace collector
 
 **Delivers:** read-only Admin SDK calls with scopes from the environment or the
 provider's login. Rules for: 2-step verification enforcement and enrolment, kept
-apart, since enforcement is per organizational unit with grace periods; super admins
-against `access.admins`; stale and never-logged-in accounts, not counting new hires
+apart, since enforcement is per organizational unit with grace periods, and compared
+with `access.mfa` as `spec/engagement.md` "2-step verification" says; super admins
+against `access.admins`, too many super admins, one nobody can name, and a contractor
+or shared account that is one ("Admins"), delegated roles listed for the readout; stale and never-logged-in accounts, not counting new hires
 (read the creation date) or `service` and `break_glass` accounts; suspended accounts
 only when they keep an admin role or group-granted access, since suspension is correct
 offboarding; third-party OAuth apps with broad scopes; external mail forwarding, which
 needs per-user Gmail settings through domain-wide delegation and is *not assessed*
 without it. The tenant is identified by its customer id; secondary domains and domain
-aliases belong to it; people match by `primaryEmail` only, and an alias is reported
-apart (`spec/engagement.md`, "People"). The exact list is frozen at the start of the
+aliases belong to it; people match by `primaryEmail`, a current person's declared alias
+by the alias rule and a leaver's never as disproved (`spec/engagement.md`, "People");
+each matched account's provider id is recorded in `recon.json`; the recon stanza.
+Subject kinds: `org_unit` for 2-step verification not enforced, `account` for the
+per-account findings, `oauth_app` keyed by client id, `principal` for scheck's
+credential; none for too many super admins. The exact list is frozen at the start of the
 slice against what the read scopes return.
 
 **Done when:** as E5, against a fake Admin SDK server; an opt-in live test (`make live`)
@@ -564,6 +674,13 @@ reads the lab tenant; broader-than-read scopes are reported as a finding.
 table and a list's item subject as a template, as under E5; and org-unit matching moves
 behind `Scope`, beside every other exclude match. Coverage is marked by
 `spec/scope.md`'s "Outcomes" table, a request that got no answer exiting 2.
+
+**Carried from the engagement-spec review** (security-consultant, 2026-10-09):
+domain-wide delegation has no Directory API to read it and is the tenant-takeover path,
+so it is *not assessed* with the console path printed; a break-glass super admin is
+expected but needs 2-step verification and rare sign-ins; OAuth apps are never matched
+to `tools` by display name; and, as under E5, each area's sub-items come from the
+practitioner's list.
 
 **Never declared:** `verificationCodes.list`, which answers with users' backup sign-in
 codes: no finding needs them and no redaction rule could recognize them. The gate's
@@ -624,6 +741,32 @@ file `init` writes for each company profile in `.agents/clients/` validates; an 
 that would put a credential in the file is refused by the same detector as validation;
 no code path in `init` contacts a target.
 
+**Carried from the engagement-spec review** (security-consultant, 2026-10-09). Each
+changes what the interview asks or what the file accepts, so E8 decides it before the
+wording is fixed:
+
+- *Questions with no 0.0.2 consumer*, by the spec's own rule that "printed" counts
+  only for the trigger, authorization, scope and accepted risks: the backups question
+  only unfolds a row that stays *not assessed* (the consultant recommends deferring it
+  to G1, where inventory reads it); `secrets.production[].store` is free text, so
+  whether scheck read the store cannot be computed (make it a closed list mapped to
+  collectors); and a host's `role` is prose for a model that does not run. Each is cut
+  from the interview or given a real consumer.
+- *`data.matters_most` moves almost nothing*: every finding definition today is in the
+  hosts or external area, so the example `{asset: deploy}` raises no finding and the
+  answer only breaks ranking ties. With E9, it raises along declared links: remote
+  access and account findings on the asset that holds the data, findings on
+  repositories that deploy to it, secrets whose declared store is on it. That needs
+  `deploys_to: {environment: production, targets: [deploy]}`, a schema change made
+  while the file may still change.
+- *`not_used` accepts every area*: `identity`, `secrets` and `logging` are refused,
+  and so is any area a declared root covers (`email` beside a domain root, `cicd`
+  beside a GitHub root).
+- `scheck init` writes a header comment: the file names people, departures and
+  accepted weaknesses, and is kept out of public repositories.
+- `intent.accepted_risks[].expires` becomes required, capped at one year after the
+  date it is written: a risk register without review dates is not one.
+
 ### E9 — Plan, Analyze and multi-fact rules
 
 **Delivers:** a rules-only plan per asset type, narrowed and ordered by structured
@@ -643,6 +786,45 @@ agree and says the cloud firewall was not assessed; the left-person rule fires o
 lab and abstains when the tenant was not read or the person has no identifier for it;
 "exposed on purpose" moves an exposure finding and leaves a secret finding on the same
 asset unchanged; a loop fixture terminates.
+
+**Carried from the engagement-spec review** (security-consultant, 2026-10-09):
+
+- *Plan has no job with rules only, and the stage table is wrong about where rules
+  run.* Recon runs every declared read, Plan is "the same checklist whatever its
+  order", and the web collector judges in Recon while the stage table puts rules in
+  Analyze. VISION principle 1 ("decides what it examines and in what order") is then
+  false for 0.0.2, and gate 1's "all seven stages" is theatre for Plan. E9 gives Plan
+  the one decision context makes with rules only, selection under a budget: with
+  many repositories or users under a cap or a rate limit, it reads first the
+  `deploys_to: production` repositories and those holding a declared secret store,
+  and, for per-user reads, people who left, admins and declared contractors. A cap's
+  `selection` then names the context that chose it. Every rule verdict moves to
+  Analyze, or the stage table says collectors judge in Recon.
+- *Recon "fills gaps in the context and flags where it is wrong"* (the stage table):
+  nothing does this in 0.0.2. Reword the stage table or build it, beside the item
+  above.
+- *Termination by construction.* Follow-ups are a static table of depth at most 2,
+  checked by an invariants test, rather than proven by one loop fixture; a follow-up
+  that ended without success is not reopened in the same session.
+- *"Checked" cannot be told from "checked thinly".* Each risk area's sub-items are
+  fixed from the practitioner's list, independent of the rules built, so an unbuilt
+  one is `no_rule` and the row is *partial*; every row prints "not judged in this
+  version: …" even when it is marked *assessed*, as the hosts and external rows already
+  do.
+- *`data.matters_most` raises along declared links* (see E8).
+- *A declared `not_used` area the evidence contradicts* gets a note ("you said no
+  cloud; `api.example.com` is a CNAME to `*.run.app`").
+- *Already built, carried here:* a resume keeps Scope and host envelopes of any age,
+  so a run resumed weeks later reports old discovery as current. Keep nothing older
+  than a fixed maximum, compiled in with no setting to widen it (the consultant
+  recommends 7 days; owner's decision pending), and print the date on `Observed`
+  whenever a run's collection crosses a day.
+- *Owner's decision pending:* may a context raise reach critical? Today "a person who
+  left still active" with `attribute:admin` and "2-step verification not enforced" with
+  `contradiction` both reach critical, while critical is defined as usable by anyone on
+  the internet with no further step. The consultant recommends yes, with critical's
+  definition widened to "or a high that someone with no right to it can use now, or
+  that the company believes is handled".
 
 ### Release gates
 
@@ -664,7 +846,10 @@ asset unchanged; a loop fixture terminates.
    entry points, and the audit log shows every request and API call. The lab host's
    integration diff stays the exact allowlist of `spec/host-collector.md §1`.
 8. `make check` is green; the host collector's command traces and redacted output are
-   unchanged, and its facts and findings equal 0.0.1's for the same inputs.
+   unchanged, and its facts and findings equal 0.0.1's for the same inputs, except
+   where a 0.0.2 slice changed a rule on purpose and records why (E5a: an account
+   with no password and no login shell no longer fires, and one with a login shell is
+   high, not critical; the accounts summary counts login shells by the rule's lists).
 9. **Consumers:** every consumer declared by an interview question exists, and the
    test that checks it no longer skips anything.
 10. **One command:** `scheck run --host` on the lab host and the `scheck ssh` alias
@@ -673,7 +858,7 @@ asset unchanged; a loop fixture terminates.
     config file.
 
 **Sequence:** E1a → E1b → E2 → E4 → {E5, E6, E7, E8} → E9, with E1c at any point after
-E1b, and E3 built alongside and sealed before E5 starts. The host path and the report come first because they need no network
+E1b, E5a before E5 and E6 (alongside E7), and E3 built alongside and sealed before E5 starts. The host path and the report come first because they need no network
 and can be proven on evidence that already exists; the lab comes before any network
 collector so that recall is measured, not confirmed; the interview comes with the
 collectors, whose rules read its answers.

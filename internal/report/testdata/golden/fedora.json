@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "host": {
     "id": "f7e47c01e36def0a8d4c1c908ade303940a1ec65421a35b083916c3a6551513a",
     "hostname": "fbf2f7a11b33",
@@ -40,6 +40,8 @@
       "observation": "accounts.passwd_status#1",
       "finding": "accounts.empty_password",
       "check": "accounts.passwd_status",
+      "with": "accounts.passwd",
+      "with_observation": "accounts.passwd#1",
       "status": "not_matched",
       "reason": "no-matching-record"
     },
@@ -148,7 +150,7 @@
       "observation": "accounts.passwd#1",
       "status": "ok",
       "attempted": true,
-      "summary": "22 accounts, 5 with a login shell",
+      "summary": "22 accounts, 2 with a login shell",
       "parsed": {
         "kind": "accounts",
         "items": [
@@ -1194,7 +1196,7 @@
       "observation": "accounts.passwd#1",
       "status": "ok",
       "attempted": true,
-      "summary": "22 accounts, 5 with a login shell",
+      "summary": "22 accounts, 2 with a login shell",
       "duration_ms": 0,
       "check": "accounts.passwd",
       "ran_as": "accounts.passwd",

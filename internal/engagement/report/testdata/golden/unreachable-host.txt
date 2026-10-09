@@ -48,9 +48,8 @@ Hosts                    checked in part: 1 of 2 hosts read
                              rules
     Remote access            not judged: this version of scheck has no rule for it (read: 2 service
                              states: disabled, not-found)
-    Accounts                 checked (accounts with no password, the mode of /etc/shadow): nothing
-                             found by these rules; also read, not judged: 22 accounts, 4 with a
-                             login shell
+    Accounts                 checked (accounts with no password and a login shell, the mode of
+                             /etc/shadow): nothing found by these rules
     Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
                              lines; 33 sudoers.d lines)
     Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron

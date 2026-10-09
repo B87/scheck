@@ -190,14 +190,11 @@ func byValue(r Records, field string, label map[string]string) string {
 	return ": " + strings.Join(parts, ", ")
 }
 
-// nologin shells are the conventional way to say "this account cannot log
-// in"; anything else is treated as a usable shell for the count.
-var nologinShells = map[string]bool{
-	"/usr/sbin/nologin": true, "/sbin/nologin": true, "/usr/bin/nologin": true,
-	"/bin/false": true, "/usr/bin/false": true, "/dev/null": true, "": true,
-}
-
-func isLoginShell(s string) bool { return !nologinShells[strings.TrimSpace(s)] }
+// isLoginShell counts a shell for the summary by the same lists the
+// empty-password rule reads (shells.go), so the report never calls an account
+// a login account in one line and not in the next. An unrecognized shell
+// counts: the summary is a count, not a verdict.
+func isLoginShell(s string) bool { return !RefusesLogin(s) }
 
 // countOf writes "1 SUID file" rather than "1 SUID files"; Unit is a plural
 // noun (docs/spec/host-collector.md §3).

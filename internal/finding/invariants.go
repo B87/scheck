@@ -32,6 +32,8 @@ const (
 	RuleDefArea        = "finding-def-unknown-area"
 	RuleDefExposure    = "finding-def-exposure-undeclared"
 	RuleDefJudges      = "finding-def-judges-missing"
+	RuleDefSubject     = "finding-def-unknown-subject-kind"
+	RuleWithCheck      = "rule-with-check-invalid"
 )
 
 // Categories a Def may carry (docs/spec/host-collector.md §6.1), plus the two the grader
@@ -85,6 +87,10 @@ func ValidateRules() []Violation {
 			out = append(out, Violation{d.ID, RuleDefJudges,
 				"a posture rule produces it, so the report needs what it judges to say what a \"checked\" area rests on"})
 		}
+		if d.Subject != "" && !slices.Contains(SubjectKinds, d.Subject) {
+			out = append(out, Violation{d.ID, RuleDefSubject,
+				fmt.Sprintf("subject kind %q is not in docs/spec/engagement.md's closed list", d.Subject)})
+		}
 		if d.BaseSeverity.Rank() < 0 {
 			out = append(out, Violation{d.ID, RuleDefSeverity, fmt.Sprintf("severity %q", d.BaseSeverity)})
 		}
@@ -126,7 +132,33 @@ func ValidateRules() []Violation {
 				out = append(out, Violation{name, RuleParserMismatch,
 					fmt.Sprintf("predicate %s cannot read a %q fact (%s on %s)", r.When, c.Parser, r.Check, p)})
 			}
+			out = append(out, withViolations(name, r, p)...)
 		}
 	}
 	return out
+}
+
+// withViolations checks a rule's second check: a With check needs a
+// JoinPredicate that can read it, and a JoinPredicate needs a With check
+// (docs/spec/host-collector.md §6.5, "Two checks").
+func withViolations(name string, r Rule, p check.Platform) []Violation {
+	jp, join := r.When.(JoinPredicate)
+	switch {
+	case r.With == "" && !join:
+		return nil
+	case r.With == "":
+		return []Violation{{name, RuleWithCheck, fmt.Sprintf("predicate %s reads a second check but the rule names none", r.When)}}
+	case !join:
+		return []Violation{{name, RuleWithCheck, fmt.Sprintf("names %s as a second check but predicate %s reads one", r.With, r.When)}}
+	case r.With == r.Check:
+		return []Violation{{name, RuleWithCheck, "the second check is the first"}}
+	}
+	c, ok := check.Lookup(r.With, p)
+	if !ok {
+		return []Violation{{name, RuleWithCheck, fmt.Sprintf("%s is not a catalog id on %s", r.With, p)}}
+	}
+	if !jp.AcceptsWith(c.Parser) {
+		return []Violation{{name, RuleWithCheck, fmt.Sprintf("predicate %s cannot read a %q fact (%s on %s)", r.When, c.Parser, r.With, p)}}
+	}
+	return nil
 }

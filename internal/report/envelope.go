@@ -20,7 +20,7 @@ import (
 // `run.agent` from phase 2 and carries model findings (docs/spec/host-collector.md §6.4).
 // 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.6"
+const SchemaVersion = "1.7"
 
 // Envelope is the JSON report (docs/spec/host-collector.md §6.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.

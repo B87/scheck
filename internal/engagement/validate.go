@@ -20,16 +20,19 @@ import (
 
 // Vocabularies of the engagement file (docs/spec/engagement.md).
 var (
-	Triggers      = []string{"questionnaire", "audit", "funding", "incident", "routine"}
-	PersonKinds   = []string{"employee", "contractor", "agency", "service", "break_glass"}
-	Audiences     = []string{"internet", "vpn", "lan", "localhost", "airgapped"}
-	Exposures     = []string{"internet", "vpn", "lan", "airgapped"}
-	Environments  = []string{"prod", "staging", "dev"}
-	Protos        = []string{"tcp", "udp"}
-	Areas         = areaKeys() // finding.Areas: one list for not_used and the report
-	Profiles      = []string{"baseline", "hardened"}
-	Elevations    = []string{"none", "sudo"}
-	DeployTargets = []string{"production", "staging", "development"}
+	Triggers    = []string{"questionnaire", "audit", "funding", "incident", "routine"}
+	PersonKinds = []string{"employee", "contractor", "shared", "service", "break_glass"}
+	// MFAEnforcements is who must use a second factor, as the operator
+	// believes it (docs/spec/engagement.md, "People").
+	MFAEnforcements = []string{"everyone", "admins", "some", "none", "unknown"}
+	Audiences       = []string{"internet", "vpn", "lan", "localhost", "airgapped"}
+	Exposures       = []string{"internet", "vpn", "lan", "airgapped"}
+	Environments    = []string{"prod", "staging", "dev"}
+	Protos          = []string{"tcp", "udp"}
+	Areas           = areaKeys() // finding.Areas: one list for not_used and the report
+	Profiles        = []string{"baseline", "hardened"}
+	Elevations      = []string{"none", "sudo"}
+	DeployTargets   = []string{"production", "staging", "development"}
 	// Modes are the probe and scan modes; this build runs only off.
 	Modes = []string{"off", "confirm", "auto", "all"}
 )
@@ -65,6 +68,13 @@ type Options struct {
 	KnownCheck func(id string) bool
 	// KnownFinding reports whether id is a catalog finding id.
 	KnownFinding func(id string) bool
+	// FindingSubject returns the subject kind a catalog finding id declares,
+	// or "" when its findings are about the asset as a whole.
+	FindingSubject func(id string) string
+	// HostFinding reports whether a catalog finding id is the host
+	// collector's, whose acceptances by subject are listed as not applied
+	// rather than refused (docs/spec/engagement.md, "Accepted risks").
+	HostFinding func(id string) bool
 }
 
 // Load reads and validates the engagement file at name. It contacts nothing.
@@ -79,8 +89,8 @@ func Load(name string, opts Options) (*Resolved, error) {
 // Parse validates raw as the engagement file name and resolves it. Every
 // failure is returned at once as Errors, in line order.
 func Parse(name string, raw []byte, opts Options) (*Resolved, error) {
-	if opts.KnownCheck == nil || opts.KnownFinding == nil {
-		return nil, errors.New("engagement: Options.KnownCheck and Options.KnownFinding are required")
+	if opts.KnownCheck == nil || opts.KnownFinding == nil || opts.FindingSubject == nil || opts.HostFinding == nil {
+		return nil, errors.New("engagement: Options.KnownCheck, Options.KnownFinding, Options.FindingSubject and Options.HostFinding are required")
 	}
 	p := &parser{file: name, lines: map[string]int{}}
 	f := p.parse(raw)
@@ -406,39 +416,142 @@ func (v *validator) redactExtra() {
 }
 
 func (v *validator) people() {
-	byIdent := map[string]string{}
+	byIdent := map[string]string{} // "github:alice" -> the key that declared it
 	for _, handle := range sortedKeys(v.f.People) {
 		p := v.f.People[handle]
 		key := "people." + handle
 		if !nameRe.MatchString(handle) {
 			v.fail(key, "handle %q must match ^[a-z0-9][a-z0-9-]{0,62}$", handle)
 		}
-		if v.required(key+".kind", p.Kind) {
-			v.enum(key+".kind", p.Kind, PersonKinds)
+		v.personKind(key, p.Kind)
+		for _, id := range []struct {
+			field string
+			vals  []string
+			ok    func(string) bool
+			what  string
+		}{
+			{"workspace", p.Workspace, isAddress, "an address; write it as name@example.com"},
+			{"github", p.GitHub, loginRe.MatchString, "a GitHub login (letters, digits and single hyphens, up to 39)"},
+		} {
+			v.identifiers(key, handle, id.field, id.vals, id.ok, id.what, byIdent)
 		}
-		if p.Workspace != "" {
-			if m := emailRe.FindStringSubmatch(p.Workspace); m == nil || checkLabels(strings.ToLower(m[1]), 2) != nil {
-				v.fail(key+".workspace", "%q is not an email address", p.Workspace)
-			}
+		switch {
+		case strings.Contains(p.Org, "[REDACTED") || strings.Contains(p.Org, "[TRUNCATED"):
+			v.fail(key+".org", "is a marker scheck printed in place of a hidden value, not a value; write it out")
+		case p.Org != "" && p.Kind != "contractor" && p.Kind != "shared":
+			v.fail(key+".org", "names a contractor's company, or the company behind a shared account; %s is %s", handle, kindWords(p.Kind))
 		}
-		if p.GitHub != "" && !loginRe.MatchString(p.GitHub) {
-			v.fail(key+".github", "%q is not a GitHub login", p.GitHub)
-		}
-		for _, id := range []struct{ field, val string }{{"workspace", strings.ToLower(p.Workspace)}, {"github", strings.ToLower(p.GitHub)}} {
-			if id.val == "" {
-				continue
-			}
-			k := id.field + ":" + id.val
-			if other, dup := byIdent[k]; dup {
-				v.fail(key+"."+id.field, "is also %s's: a rule could not tell the two apart", other)
-			}
-			byIdent[k] = handle
-		}
-		if p.Org != "" && p.Kind != "contractor" && p.Kind != "agency" {
-			v.fail(key+".org", "names a contractor's or agency's company; %s is %s", handle, p.Kind)
-		}
+		v.usedBy(key, handle, p)
 		v.date(key+".left", p.Left)
 	}
+}
+
+// personKind checks a kind, with the message an operator pasting the recon
+// stanza needs: the stanza leaves kind empty on purpose.
+func (v *validator) personKind(key, kind string) {
+	const kinds = "employee, contractor, shared, service or break_glass"
+	switch {
+	case kind == "":
+		v.fail(key+".kind", "is empty. Say whose account this is: %s. If you cannot tell, find out: "+
+			"an admin nobody can name is reported as a finding", kinds)
+	case kind == "admin" || kind == "owner":
+		v.fail(key+".kind", "%q is not a kind; admins are listed under access.admins. Use %s", kind, kinds)
+	case !slices.Contains(PersonKinds, kind):
+		v.fail(key+".kind", "%q is not a kind: use %s", kind, kinds)
+	}
+}
+
+// identifiers checks one list of a person's addresses or logins: each well
+// formed, none twice, none another handle's, since a rule could not tell
+// two people apart by it.
+func (v *validator) identifiers(key, handle, field string, vals []string, ok func(string) bool, what string, byIdent map[string]string) {
+	if vals == nil {
+		return
+	}
+	if len(vals) == 0 {
+		v.fail(key+"."+field, "an empty list says nothing; remove the key if %s has none", handle)
+		return
+	}
+	for i, val := range vals {
+		k := fmt.Sprintf("%s.%s[%d]", key, field, i)
+		if strings.Contains(val, "[REDACTED") || strings.Contains(val, "[TRUNCATED") {
+			v.fail(k, "is a marker scheck printed in place of a hidden value, not a value; write it out")
+			continue
+		}
+		if !ok(val) {
+			v.fail(k, "%q is not %s", val, what)
+			continue
+		}
+		ident := field + ":" + strings.ToLower(val)
+		if other, dup := byIdent[ident]; dup {
+			if strings.HasPrefix(other, key+".") {
+				v.fail(k, "%s is listed twice", val)
+			} else {
+				v.fail(k, "%s is also %s. One %s belongs to one handle; if several people sign in to it, "+
+					"declare it once with kind: shared and used_by", val, other, identWord(field))
+			}
+			continue
+		}
+		byIdent[ident] = k
+	}
+}
+
+// usedBy checks who signs in to a shared account: required on one, refused
+// on any other kind, and only people may be named.
+func (v *validator) usedBy(key, handle string, p Person) {
+	if p.Kind != "shared" {
+		if p.UsedBy != nil {
+			v.fail(key+".used_by", "only a shared account has used_by; %s is %s", handle, kindWords(p.Kind))
+		}
+		return
+	}
+	if len(p.UsedBy) == 0 {
+		v.fail(key+".used_by", "is required on a shared account: the handles of the people who sign in to it, "+
+			"so the report can say whose departure means rotating it")
+		return
+	}
+	seen := map[string]bool{}
+	for i, h := range p.UsedBy {
+		k := fmt.Sprintf("%s.used_by[%d]", key, i)
+		other, ok := v.f.People[h]
+		switch {
+		case seen[h]:
+			v.fail(k, "%s is listed twice", h)
+		case h == handle:
+			v.fail(k, "names the account itself; list the people who sign in to it")
+		case !ok:
+			v.fail(k, "%q is not a handle under people", h)
+		case other.Kind == "shared" || other.Kind == "service":
+			v.fail(k, "%s is %s, not a person who signs in", h, kindWords(other.Kind))
+		}
+		seen[h] = true
+	}
+}
+
+func isAddress(s string) bool {
+	m := emailRe.FindStringSubmatch(s)
+	return m != nil && checkLabels(strings.ToLower(m[1]), 2) == nil
+}
+
+func identWord(field string) string {
+	if field == "github" {
+		return "login"
+	}
+	return "address"
+}
+
+func kindWords(kind string) string {
+	switch kind {
+	case "":
+		return "of no kind"
+	case "employee":
+		return "an employee"
+	case "break_glass":
+		return "a break-glass account"
+	case "shared", "service":
+		return "a " + kind + " account"
+	}
+	return "a " + kind
 }
 
 func (v *validator) handle(key, h string) {
@@ -665,26 +778,63 @@ func (v *validator) acceptedAsset(key, ref string) {
 	}
 }
 
-// tenantRef resolves a reference that must name a SaaS tenant.
-func (v *validator) tenantRef(key, ref string) {
-	if r, ok := v.resolveRef(key, ref); ok && r.Kind != KindSaaS {
-		v.fail(key, "%q is %s, not a SaaS tenant", ref, r.ID)
+// tenantRef resolves a reference that must name a SaaS tenant. It returns
+// the tenant's canonical id, so an assets name and the root's value for one
+// tenant are told to be the same.
+func (v *validator) tenantRef(key, ref string) (string, bool) {
+	r, ok := v.resolveRef(key, ref)
+	if !ok {
+		return "", false
 	}
+	if r.Kind != KindSaaS {
+		v.fail(key, "%q is %s, not a SaaS tenant", ref, r.ID)
+		return "", false
+	}
+	return r.ID, true
 }
 
 func (v *validator) access() {
+	adminsOf := map[string]string{} // canonical tenant id -> the key that listed it
 	for _, tenant := range sortedKeys(v.f.Access.Admins) {
 		key := "access.admins." + tenant
-		v.tenantRef(key, tenant)
+		id, ok := v.tenantRef(key, tenant)
+		if ok {
+			if first, dup := adminsOf[id]; dup {
+				v.fail(key, "names the same tenant as %s; list its admins once", first)
+			}
+			adminsOf[id] = key
+		}
+		field, provider := tenantIdentifier(id)
 		for i, h := range v.f.Access.Admins[tenant] {
-			v.handle(fmt.Sprintf("%s[%d]", key, i), h)
+			k := fmt.Sprintf("%s[%d]", key, i)
+			v.handle(k, h)
+			// Admins are matched by identifier: a listed admin with none for
+			// this tenant could never be found, so the match would abstain.
+			if p, ok := v.f.People[h]; ok && field != "" && len(identifiersOf(p, field)) == 0 {
+				v.fail(k, "lists %s, but people.%s has no %s. Add it, or scheck cannot tell whether %s is an admin there",
+					h, h, provider, h)
+			}
 		}
 	}
+	whereSeen := map[string]int{} // canonical tenant id -> first index
 	for i, m := range v.f.Access.MFA {
 		key := fmt.Sprintf("access.mfa[%d]", i)
-		v.tenantRef(key+".where", m.Where)
-		if m.Enforced == nil {
-			v.fail(key+".enforced", "is required: true or false")
+		if id, ok := v.tenantRef(key+".where", m.Where); ok {
+			if first, dup := whereSeen[id]; dup {
+				v.fail(key+".where", "%s is already declared at access.mfa[%d]", m.Where, first)
+			}
+			whereSeen[id] = i
+		}
+		switch m.Enforced {
+		case "":
+			v.fail(key+".enforced", "is required: everyone, admins, some, none, or unknown if you are not sure")
+		case "true", "false", "yes", "no":
+			// A yes/no answer turns "I think so" into a declaration a
+			// contradiction finding then raises against.
+			v.fail(key+".enforced", "%s is ambiguous. Write everyone if every account must use 2-step verification, "+
+				"admins if only administrators must, some, none, or unknown", m.Enforced)
+		default:
+			v.enum(key+".enforced", m.Enforced, MFAEnforcements)
 		}
 	}
 }
@@ -792,6 +942,16 @@ func (v *validator) intent() {
 				}
 			} else if !v.opts.KnownFinding(a.ID) {
 				v.fail(key+".id", "%q is neither a catalog finding id nor a custom: id", a.ID)
+			} else if kind := v.opts.FindingSubject(a.ID); kind != "" && strings.TrimSpace(a.Subject) == "" {
+				// An acceptance of the whole id would also accept every
+				// instance the asset gains later (docs/spec/engagement.md,
+				// "Accepted risks").
+				v.fail(key+".subject", "is required: %s is reported per %s, and accepting every one would also accept each new one found later; name the %s, and add one entry per %s to accept",
+					a.ID, words(kind), words(kind), words(kind))
+			} else if kind == "" && strings.TrimSpace(a.Subject) != "" && !v.opts.HostFinding(a.ID) {
+				// Nothing could ever match it, and a reader would believe
+				// one instance was accepted.
+				v.fail(key+".subject", "%s is about the asset as a whole, not one instance of it; remove subject", a.ID)
 			}
 		}
 		v.acceptedAsset(key+".asset", a.Asset)
@@ -825,4 +985,39 @@ func (v *validator) authorization() {
 			v.fail(key, "%q is not a CIDR network such as 203.0.113.10/32", s)
 		}
 	}
+}
+
+// words writes a subject kind as an operator reads it ("oauth_app" as
+// "OAuth app").
+func words(kind string) string {
+	switch kind {
+	case "oauth_app":
+		return "OAuth app"
+	case "dns_name":
+		return "DNS name"
+	case "url":
+		return "URL"
+	case "org_unit":
+		return "organizational unit"
+	}
+	return strings.ReplaceAll(kind, "_", " ")
+}
+
+// tenantIdentifier names the people field that matches accounts in a SaaS
+// tenant, by its canonical id ("saas:google-workspace:example.com").
+func tenantIdentifier(id string) (field, words string) {
+	switch {
+	case strings.HasPrefix(id, "saas:google-workspace:"):
+		return "workspace", "Workspace address"
+	case strings.HasPrefix(id, "saas:github:"):
+		return "github", "GitHub login"
+	}
+	return "", ""
+}
+
+func identifiersOf(p Person, field string) []string {
+	if field == "github" {
+		return p.GitHub
+	}
+	return p.Workspace
 }

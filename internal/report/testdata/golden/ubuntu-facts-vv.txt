@@ -234,7 +234,7 @@ Remote access            ran      remote.sshd_enabled     2 service states: disa
                                                           (one state per unit name, in order)
   | disabled
   | not-found
-Accounts                 ran      accounts.passwd         22 accounts, 4 with a login shell
+Accounts                 ran      accounts.passwd         22 accounts, 3 with a login shell
                                                           Local accounts, shells and home
                                                           directories
   | root:x:0:0:root:/root:/bin/bash
