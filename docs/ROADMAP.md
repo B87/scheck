@@ -884,7 +884,14 @@ Built in steps, reviewed as E4 was:
    `make check` is green after every boundary fix. Consultant and client reviews are
    complete; the final fresh code review verified the raw-text/RCDATA, script-state
    and earlier fixes and found no remaining issues. No review findings deferred from
-   this step.
+   this step. Verified follow-up fixes for URL-only engagements restrict
+   resolver-control doubt to DNS/email judgments;
+   URL assets contained by an explicit URL root inherit its authority for their exact
+   entry paths; unread redirect attempts do not suppress ordinary declared-entry
+   reads; and URL assets read with a root count as read in coverage. Scope, exclusions
+   and per-capture abstentions remain enforced. `make check` is green; consultant
+   review and a fresh code review found no remaining issues. Five offline regression
+   tests cover the real-run failure modes. No follow-up review findings deferred.
 5. **Next:** `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
    and the report's wording read by the `client`.
 

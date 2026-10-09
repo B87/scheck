@@ -199,8 +199,10 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    ([web-collector.md](web-collector.md#dns-and-takeover)). Each session that runs
    Recon on a domain root sends a control lookup of its own under `invalid.`, once,
    before its first read through the resolver, since a resumed session may be on
-   another network; the web collector's verdicts stand only when both Scope's resolver
-   and that session's are known not to invent answers.
+   another network; its DNS and email verdicts stand only when both Scope's resolver
+   and that session's are known not to invent answers. TLS and response verdicts
+   use their own gate-admitted capture evidence; resolver-control doubt does not
+   replace those verdicts. URL-only runs need no discovery control for these rules.
 2. **Names.** Every domain root, every `domain`, `url` and `host` asset written by name
    under it, and every name certificate transparency returns under it. A wildcard
    entry `*.x` is recorded as "wildcard certificate for x" and never queried
@@ -591,7 +593,11 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
   boundary (`x.example.com` yes, `xexample.com` no) and under no exclude.
 - **URL roots.** A `url` root holds its own path prefix, and also its origin's
   `/robots.txt` and `/.well-known/security.txt`, which sit outside a root such as
-  `https://example.com/app/`; nothing else at the origin.
+  `https://example.com/app/`; nothing else at the origin. A declared URL asset
+  contained by that root contributes its exact path as an entry point, with the
+  root's first-party evidence. Containment requires the same scheme, host and port
+  and a normalized path under the root. It grants no sibling path, other origin or
+  descendant of the asset's entry path. A domain root alone grants no such entry.
 - **URL excludes.** These match by path segment after percent-encoding is normalized:
   `/checkout/` excludes `/check%6Fut/x` and `/checkout`, not `/checkoutx`. An intent URL
   or an `assets` entry an exclude covers fails validation. An exclude covers its site over both `https`
@@ -618,7 +624,9 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
 defines. A discovered name without first-party evidence gets two reads and nothing
 more: `GET https://name/`, whose TLS handshake on 443 is the name's certificate read,
 and `GET http://name/`. It gets no
-`robots.txt` or `.well-known`. A first-party `url` root gets its entry points,
+`robots.txt` or `.well-known`. A declared URL asset under a URL root needs no
+independent `first_party` confirmation for its exact entry path. A first-party `url`
+root gets its entry points,
 `/robots.txt` and `/.well-known/security.txt`: a fixed list, not "any `.well-known`". A
 discovered name with first-party evidence has `/` as its entry point and reads
 `/robots.txt` and `/.well-known/security.txt` like a `url` root. From 0.0.2 E7 both
@@ -693,7 +701,9 @@ never by admitting loopback.
   name is not admitted; that name is read on its own if discovery found it. The page
   reached is evidence for that origin's rules, never an entry point anything derives
   from. A name without first-party evidence gets no hop, and a hop after that one is
-  `unavailable:redirect_not_entry_point`. An API
+  `unavailable:redirect_not_entry_point`. A refused or unavailable redirect attempt
+  does not suppress a later ordinary read of a declared entry point; that read is
+  admitted independently and both attempts remain recorded. An API
   redirect is followed only to the op's declared host. Pagination `Link` URLs are never
   used verbatim: the gate parses the typed cursor and rebuilds the request from the
   template. A collector never passes a cursor: it asks for the next page by the id of

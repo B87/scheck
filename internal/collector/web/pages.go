@@ -71,11 +71,16 @@ func Enrich(ctx context.Context, g Gate, d Domain, ev Evidence) Evidence {
 		for _, e := range entries {
 			u := entryURL(e)
 			p, ok := cache[u]
+			// A halted redirect did not read this entry. Its ordinary
+			// declared read must be admitted independently by the gate.
+			if ok && p.RedirectOf != "" && p.Decision != gate.DecisionSent && p.Decision != gate.DecisionReused {
+				ok = false
+			}
 			if !ok {
 				p = c.entry(ctx, e, "")
 				cache[u] = p
 			}
-			if !slices.ContainsFunc(s.Pages, func(x Page) bool { return x.URL == u }) {
+			if !slices.ContainsFunc(s.Pages, func(x Page) bool { return x.RequestID == p.RequestID }) {
 				s.Pages = append(s.Pages, p)
 			}
 			if p.Status < 300 || p.Status >= 400 {

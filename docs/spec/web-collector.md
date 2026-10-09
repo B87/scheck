@@ -107,10 +107,14 @@ is read with it: it is recorded with the root's status and the detail "read with
 **Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. After
 DNS takeover judgments have suspended stale first-party confirmations, `Enrich`
 requests declared entries and the two well-known files through the typed `web.entry`
-op. Intent URLs are entry points but never first-party evidence or sufficient on their
-own to make a site eligible for header rules. Every read rechecks live admission at
+op. A declared URL asset contained by a URL root contributes its exact entry path
+using the root's first-party evidence; a domain root alone does not grant it. URL
+assets read with a root retain that relationship for report coverage. Intent URLs
+are entry points but never first-party evidence or sufficient on their own to make a site eligible for header rules. Every read rechecks live admission at
 the gate. One same-host redirect per initial read is submitted with its source
-request id; it is never followed automatically. `robots.txt` retains only the count
+request id; it is never followed automatically. A redirect that was not read does
+not satisfy an ordinary declared-entry read: that request is admitted independently,
+and both attempts remain recorded. `robots.txt` retains only the count
 of nonempty `Disallow` entries; its body and paths are discarded from Recon and never
 become requests. A URL root on a nondefault port does not imply a second read on 443;
 its absent port-443 certificate evidence stays unknown. Pages retain the gate's
@@ -200,7 +204,7 @@ never enters the takeover table. As built:
 
 | What was not read | Abstains on | Reason |
 |---|---|---|
-| a resolver that rewrites NXDOMAIN: Scope's (`scope.json` `resolver.rewrites_nxdomain`) or the one this session's Recon reads through | every applicable subject of the DNS and takeover rules, names and records alike, in place of any other verdict and reason | `unavailable:resolver_rewrites` |
+| a resolver that rewrites NXDOMAIN: Scope's (`scope.json` `resolver.rewrites_nxdomain`) or the one this session's Recon reads through | every applicable subject of the DNS, takeover and email rules, names and records alike, in place of any other verdict and reason | `unavailable:resolver_rewrites` |
 | a resolver not known not to rewrite: Scope's control lookup under `invalid.` (`resolver.control_outcome`) or this session's in Recon was neither NXDOMAIN nor NODATA nor answered, because it failed or was not sent, or `scope.json` records no resolver ([scope.md](scope.md#discovery)) | as above | `unavailable:resolver_unchecked` |
 | a name Scope did not check (`not_checked`) | the name, for the dangling and private-address rules and the applicable takeover rule, or both takeover rules when its provider is unknown | `sampled` past the cap; for a refusal (a deadline), the gate's reason |
 | a name whose lookup said nothing, with or without a chain (`insufficient_evidence`) | the name, for the dangling and private-address rules and the applicable takeover rule, or both takeover rules when its provider is unknown | `unavailable:dns_<outcome>`; `limit_reached` for a deadline or a cancel |
@@ -208,6 +212,11 @@ never enters the takeover table. As built:
 | a records read that said nothing (MX, NS, the domain's TXT) | `<owner>/<TYPE>`, for `dns.dangling_external` | the read's reason |
 | an SPF tree not read to its end | `<domain>/TXT`, for `dns.dangling_external` | `unavailable:spf_incomplete` |
 | a target read that said nothing | its `dns_record` | the read's reason |
+
+Resolver-control doubt affects only DNS-derived rules (`dns.*` and `email.*`). TLS
+and response rules use the gate's connection and capture evidence, preserving their
+own abstentions for unread, blocked or otherwise insufficient evidence. A URL-only
+run does not need discovery's resolver control to judge those captures.
 
 A wildcard finding does not settle a gap in the names listed: the merged verdict keeps
 the gap's reason, its assessment incomplete and its coverage partial. A matching body

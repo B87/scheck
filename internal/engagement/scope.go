@@ -233,7 +233,8 @@ func (s *scope) Admits(origin, path string, l *gate.Lookup) gate.Admission {
 //
 //   - a name under a domain root, on the default port, has its front page;
 //   - a first-party site also has its entry points (a url root or a
-//     confirmed url entry, and the intent URLs on it), robots.txt and
+//     declared url entry contained by a url root, a confirmed url entry,
+//     and the intent URLs on it), robots.txt and
 //     security.txt: as paths when a root is the evidence, as confirmed
 //     when only the operator's word is;
 //   - when the file has a network root, those beyond the front page of a
@@ -356,6 +357,16 @@ func (r *Resolved) evidence(o Ref, at time.Time) (*Evidence, []string) {
 		}
 	}
 	for _, a := range r.Assets {
+		// The containing URL root already supplies first-party authority;
+		// the declaration contributes only this exact entry path. A root
+		// on /app cannot authorize a sibling /login through a domain root
+		// (docs/spec/scope.md, "First-party evidence", "URL roots").
+		if a.Kind == KindURL && sameOrigin(a.Ref, o) && slices.ContainsFunc(r.Roots, func(root Ref) bool {
+			return root.Kind == KindURL && Under(a.Ref, root)
+		}) {
+			entries = append(entries, a.path)
+			continue
+		}
 		if a.FirstParty == nil || !r.current(a.FirstParty, at) {
 			continue
 		}

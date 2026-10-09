@@ -147,7 +147,10 @@ func (j *judging) add(x Judgment) {
 		}
 	}
 	x.Reads = reads
-	if j.in.Doubt != "" {
+	// Resolver controls govern DNS-derived evidence, not a verified TLS
+	// connection or a captured response (docs/spec/web-collector.md,
+	// "DNS and takeover", "TLS").
+	if j.in.Doubt != "" && (strings.HasPrefix(x.ID, "dns.") || strings.HasPrefix(x.ID, "email.")) {
 		x.Verdict, x.Reason = Abstained, j.in.Doubt
 	}
 	key := x.ID + "\x00" + x.Subject.Key

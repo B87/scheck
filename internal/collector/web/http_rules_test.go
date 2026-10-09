@@ -411,3 +411,22 @@ func TestHTMLRawElementClosingTags(t *testing.T) {
 		siteVerdict(t, siteInput("example.com", p), finding.IDWebVersionDisclosed, Disproved)
 	}
 }
+
+func TestResolverDoubtAppliesOnlyToDNSDerivedRules(t *testing.T) {
+	for _, reason := range []string{"unavailable:resolver_unchecked", "unavailable:resolver_rewrites"} {
+		p := goodPage("https://example.com/")
+		in := siteInput("example.com", p)
+		in.Doubt = reason
+		siteVerdict(t, in, finding.IDTLSCertificateInvalid, Disproved)
+		siteVerdict(t, in, finding.IDWebSecurityHeaders, Disproved)
+		delete(p.Header, "Content-Security-Policy")
+		in = siteInput("example.com", p)
+		in.Doubt = reason
+		siteVerdict(t, in, finding.IDWebSecurityHeaders, Fired)
+		p.Decision = "unavailable:timeout"
+		p.TLS = nil
+		in = siteInput("example.com", p)
+		in.Doubt = reason
+		siteVerdict(t, in, finding.IDWebSecurityHeaders, Abstained)
+	}
+}

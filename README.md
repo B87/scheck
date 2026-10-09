@@ -32,7 +32,10 @@ organizational-domain fallback and sampling; current receiver tree walking is no
 assessed. TLS rules judge the one observed negotiation and certificate. Declared
 and first-party sites also get entry-point, header, cookie, HTTP and security-contact
 rules; version and secret rules cover every read name. URL roots are read, with the
-two well-known files and one admitted same-host redirect, without crawling. Coverage
+two well-known files and one admitted same-host redirect, without crawling. Declared
+URL assets contained by a URL root are exact entry points using its authority and
+count as read with that root. URL-only TLS and response judgments use captured
+evidence without requiring a domain-discovery resolver control. Coverage
 preserves unknown evidence and the unread login flow; browser HTTPS-only exceptions
 use a pinned whole-TLD list. The report's "What left this machine" says what was sent where.
 Findings come from compiled-in rules: a host's posture rules, graded through the

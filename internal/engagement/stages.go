@@ -1283,7 +1283,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
 			ai.Host.Graded = r.graded[ra.Name]
 		}
-		if ra.Kind == KindDomain && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
+		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
 			ai.ReadWith = ra.Root
 		}
 		if ra.Web != nil {

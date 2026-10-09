@@ -627,3 +627,38 @@ func TestWildcardNeedsRecognizedEqualChains(t *testing.T) {
 		t.Fatal("recognized equal answer rejected")
 	}
 }
+
+func TestDeclaredURLEntriesInheritContainingURLRoot(t *testing.T) {
+	s := scopeOf(t, `schema: 1
+engagement: {name: entries, timezone: Europe/Madrid, trigger: routine}
+roots:
+ - {domain: example.com}
+ - {url: 'https://admin.example.com/app/'}
+assets:
+ login: {url: 'https://admin.example.com/app/login'}
+ sibling: {url: 'https://admin.example.com/login'}
+ other-host: {url: 'https://other.example.com/login'}
+ other-scheme: {url: 'http://admin.example.com/app/login'}
+ other-port: {url: 'https://admin.example.com:8443/app/login'}
+`)
+	for _, tc := range []struct {
+		origin, path string
+		allowed      bool
+	}{
+		{"https://admin.example.com", "/app/login", true},
+		{"https://admin.example.com", "/app/login/extra", false},
+		{"https://admin.example.com", "/login", false},
+		{"https://other.example.com", "/login", false},
+		{"http://admin.example.com", "/app/login", false},
+		{"https://admin.example.com:8443", "/app/login", false},
+	} {
+		got := s.Admits(tc.origin, tc.path, nil)
+		if tc.allowed {
+			if got.Refused != "" || !got.FirstParty || got.Resolve {
+				t.Fatal(tc, got)
+			}
+		} else if got.Refused != "entry_point" {
+			t.Fatal(tc, got)
+		}
+	}
+}

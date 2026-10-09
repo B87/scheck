@@ -79,7 +79,9 @@ not show current use. TLS rules judge the one observed negotiation and certifica
 expiry within 14 days asks the operator to confirm renewal, and `tls.legacy_only`
 means the TLS 1.2-or-later attempt failed with a protocol-version alert, not proof that
 older versions work. Declared URL roots and first-party sites get entry-point header,
-HTTP, cookie and security-contact rules. Version disclosure and trusted secret
+HTTP, cookie and security-contact rules. A declared URL asset contained by a URL
+root is an exact entry point using the root's authority; it needs no separate
+first-party confirmation and counts as read with that root in coverage. Version disclosure and trusted secret
 redaction hits are judged on every read name. Findings require their DNS-name,
 origin, URL or secret-location subject in an acceptance. A version exposed on purpose
 on the exact URL becomes info; a secret never does. Password inputs raise plaintext
@@ -164,8 +166,11 @@ lookup under `invalid.` came to: unless it is `nxdomain`, `nodata` or `addresses
 nobody knows whether the resolver invents answers, discovered names without first-party
 evidence were not read, and every DNS verdict on a domain abstains
 (`unavailable:resolver_unchecked`, or `unavailable:resolver_rewrites` when it does).
-Recon tests its own session's resolver the same way, and its verdicts abstain the same
-way when that one is unknown or rewrites.
+Recon tests its own session's resolver for domain roots the same way, and DNS and
+email verdicts abstain when either control is unknown or rewrites. TLS and response
+verdicts use their gate-admitted connection and capture evidence; URL-only runs do
+not need a discovery control for those rules. Unread or insufficient captures still
+remain unassessed.
 
 | Exit | Meaning |
 |---|---|

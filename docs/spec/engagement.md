@@ -873,7 +873,7 @@ is collected. `domain` and `url` roots are read through the web collector
 DNS, email, TLS and response rules (E7 steps 2a–4), then recorded as `collected`, or
 with `limit_reached` when `limits.timeout` ends the engagement before it is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
-when the asset is a root. A declared `domain` asset under a root that was read is
+when the asset is a root. A declared `domain` or `url` asset under a root that was read is
 recorded with the root's status and the detail "read with *root*"
 ([web-collector.md](web-collector.md#reads)). The report's `method.levels_used` names
 the levels the run's requests used: `observe` when a host was collected or a site's
@@ -1442,8 +1442,10 @@ terms, missing declarations and the limits of a DNS-only review. Current receive
 DMARC tree walking and actual message authentication or delivery are not assessed
 ([web-collector.md](web-collector.md#email)). A declared `domain` asset
 read with its root counts as read in both rows; its names are judged under its root's
-sub-items, and it has none of its own. A root that was not read gives its own reason
-in both rows.
+sub-items, and it has none of its own. A declared URL asset read with its root likewise
+counts as read in external, web and secrets coverage, using the root's judged
+sub-items rather than `collector_not_built`. A root that was not read gives its own
+reason in the rows it feeds.
 
 Network redaction totals use trusted gate hits retained on pages, counted once per
 request id even when a front-page read is reused as an entry. Built-in and operator
