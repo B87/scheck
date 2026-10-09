@@ -37,8 +37,9 @@ func (l Level) String() string {
 	return "level(" + strconv.Itoa(int(l)) + ")"
 }
 
-// Method is what an op sends. TLS is a handshake and nothing after it: the
-// certificate read of a discovered name.
+// Method is what an op sends. TLS is a handshake and nothing after it, a
+// capability no collector declares in 0.0.2: a name's certificate is read
+// from its https response.
 type Method string
 
 // The methods an op may declare.

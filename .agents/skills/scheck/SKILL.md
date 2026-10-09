@@ -49,9 +49,11 @@ the installed CLI's behaviour differs from this skill: v0.0.1 has only `local` a
 
 `scheck run` takes an engagement file or `--host`, runs the stages (intake, scope,
 recon, plan, check, analyze, report) and prints the **engagement report**. Only hosts
-are collected in this build. A declared root of any other kind (a SaaS tenant, a GitHub
-organization, a domain) is recorded as not read (`collector_not_built`) and the run
-exits 2; tell the user that area was not assessed, never that it is fine.
+are assessed in this build. A `domain` root is read (DNS and mail records, and the
+certificate and front page of each name Scope chose, which contacts the company's web
+servers) but no rule judges it yet. It and a declared root of any other kind (a SaaS
+tenant, a GitHub organization) are reported as `collector_not_built` and the run exits
+2; tell the user that area was not assessed, never that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.

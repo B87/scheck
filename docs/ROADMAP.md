@@ -418,7 +418,7 @@ prove:
    evidence. A resolver that rewrites NXDOMAIN, and a root with wildcard DNS, are
    caught by the control queries, with nothing read on the matched names.
 9. **Discovered names:** for a discovered name without first-party evidence, the
-   server sees exactly `GET /` over https and over http plus one TLS handshake; a
+   server sees exactly `GET /` over https and over http, and one TLS handshake; a
    collector's request for `/robots.txt` on it is `refused:entry_point` and audited.
 10. **Entry points:** a `url` root reads only its entry points, `robots.txt` and
     `security.txt`.
@@ -658,8 +658,28 @@ Built in steps, reviewed as E4 was:
      completed, with the gate completing every handshake itself, and verification by Go's own verifier on every platform, so
      that no intermediate is fetched outside the gate, with no roots read noted and
      every failure then unclassified (`spec/scope.md`, "Connections").
-2. `internal/collector/web`: its declared ops for DNS records, the names the company's
-   records point at, and takeover by fingerprint.
+2. The collector, in two halves, since nothing carried a finding that is not a host's:
+   - 2a, done: the gate's follow-ups of the names a records read's answer points at
+     (`dns.follow`: by index, as answered, an excluded one refused, at most 10
+     `include:` and `redirect=` reads per SPF evaluation, one evaluation per domain;
+     `spec/scope.md`, "Third-party sources"), and `internal/collector/web`, whose
+     `Collect` reads each domain root in Recon (`spec/web-collector.md`, "Reads"): its
+     mail domains' TXT, DMARC, MX and SPF include tree and declared DKIM selectors (each
+     mail domain once, under the most specific root holding it), its
+     NS, the addresses of its MX and NS targets, and the front page over https and http
+     of each name Scope marked to read (`web.front`), the https read's handshake the
+     name's one TLS handshake and its certificate read. What it reads is kept in
+     `recon.json`, only the fields the rules read; no rule judges it, so the root stays
+     `collector_not_built`, or `limit_reached` when `limits.timeout` ends the engagement
+     before or while it is read, and the run exits 2. A `url` root and a domain asset that is
+     not a root are not read yet;
+   - 2b: the path a finding takes when it is not a host's: a rule interface over a
+     collector's evidence, the report's input, coverage rows for the external and
+     email areas, and E7's subject kinds in `docs/engagement-report-schema.json`; on
+     it, the takeover table and the `dns.*` rules. A domain root's coverage replaces
+     `collector_not_built`, whose text ("this version of scheck does not read it.
+     Nothing was read from it.", and "is not read by this version" in the exit line) is
+     false for a domain root read in 2a and stays until then (decided 2026-10-09).
 3. The email rules.
 4. The web, TLS and header rules, and their data.
 5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,

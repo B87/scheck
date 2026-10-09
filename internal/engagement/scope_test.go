@@ -1,6 +1,7 @@
 package engagement
 
 import (
+	"fmt"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -502,5 +503,29 @@ func TestScopeAddressTranslatedRoot(t *testing.T) {
 		if _, in := s.Address(netip.MustParseAddr(addr)); in != want {
 			t.Errorf("Address(%s) in a root = %v, want %v", addr, in, want)
 		}
+	}
+}
+
+// A mail domain is read under the most specific domain root that holds it,
+// once: nested roots do not read it twice or give it two SPF budgets.
+func TestWebDomainNestedRoots(t *testing.T) {
+	file := strings.Replace(minimal, "  - domain: example.com\n", "  - domain: example.com\n  - domain: sub.example.com\n", 1) +
+		"mail:\n  senders:\n    - {domain: sub.example.com, service: sendgrid, dkim_selectors: [S1]}\n    - {domain: example.com, service: google-workspace}\n  no_mail: [old.example.com]\n"
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &run{res: res}
+	mail := map[string][]string{}
+	for _, a := range res.Assets {
+		if a.Kind == KindDomain && a.Root == a.ID {
+			for _, m := range r.webDomain(a).Mail {
+				mail[a.ID] = append(mail[a.ID], m.Name+fmt.Sprint(m.Selectors))
+			}
+		}
+	}
+	if !slices.Equal(mail["domain:example.com"], []string{"example.com[]", "old.example.com[]"}) ||
+		!slices.Equal(mail["domain:sub.example.com"], []string{"sub.example.com[s1]"}) {
+		t.Errorf("%v", mail)
 	}
 }

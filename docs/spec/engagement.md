@@ -711,9 +711,13 @@ from the file (a `url` or `host` root, a `network` root holding its address, or
 target is contacted, a host or jump host without an SSH user. From E4 it also expands
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
-is collected; an asset of any other kind is `not_collected` with reason
-`collector_not_built`, which makes the run exit 2 when the asset is a root. Plan writes an
-empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
+is collected. A `domain` root is read through the web collector (E7 step 2a,
+[web-collector.md](web-collector.md#reads)) and, until its rules land in step 2b,
+recorded as `collected` with reason `collector_not_built`, or with `limit_reached` when
+`limits.timeout` ends the engagement before it is read (`not_collected`) or while it is
+(`incomplete`); an asset of any other kind is `not_collected` with reason
+`collector_not_built`. Any of these makes the run exit 2 when the asset is a root.
+Plan writes an empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
@@ -836,8 +840,8 @@ ends.
   `evidence/requests/<identity>.json` and listed in `run.json`'s `files`; the next
   session's gate is handed only those `run.json` lists, so a file placed there by hand is
   ignored ([scope.md](scope.md#resume)). A success this session sends again and keeps
-  replaces the stored one, so a record that could not be reused is rewritten. No op in this build yields a reusable success,
-  so the directory stays empty.
+  replaces the stored one, so a record that could not be reused is rewritten. In this
+  build only the web collector's front pages (`web.front`) yield successes kept there.
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
   that everything else was read again. A file the resume used (`scope.json` when kept;
@@ -1042,7 +1046,7 @@ WHAT LEFT THIS MACHINE
     servers: 1 SSH session.
     One server check may make the server download its package list from its own update servers (pkg.dnf_check_update).
   Names under your domains not shown to be yours:
-    www.example.com, blog.example.com and 10 more: 36 requests, what a browser sends when it opens the page (the certificate, and the home page over https and http). These servers may be a provider's or someone else's.
+    www.example.com, blog.example.com and 10 more: 24 requests, what a browser sends when it opens the page (the certificate, and the home page over https and http). These servers may be a provider's or someone else's.
   AI models:
     Nothing was sent to an AI model provider.
   Nothing was sent to the makers of scheck: no telemetry, no update check.
@@ -1426,6 +1430,7 @@ status, refused before incomplete, each in the order of `roots`:
 | Session lost | `INCOMPLETE: deploy: the connection was lost after 18 of 33 checks; 15 were not run. What was read before is kept and assessed. scheck only reads; an interrupted run leaves nothing half-changed.` | 2 |
 | Host run timeout | `INCOMPLETE: deploy: the host collector's timeout (10m, assets.deploy.timeout) stopped it after 25 of 33 checks.` | 2 |
 | `limits.timeout` | `INCOMPLETE: limits.timeout (1h) ended the engagement: <assets> were not read.` | 2 |
+| `limits.timeout` while a domain root is read | `INCOMPLETE: example.com: limits.timeout ended the engagement while it was read.` | 2 |
 | Unreachable before contact | `INCOMPLETE: deploy: could not connect from this machine (connection timed out). This does not tell you whether it is up for anyone else. Nothing was read.` | 2 |
 | Root with no collector | `INCOMPLETE: example-org (GitHub organization): this version of scheck does not read it. Nothing was read from it.` | 2 |
 | Credential rejected | `REFUSED: example-org (GitHub organization): GitHub did not accept the token in GITHUB_TOKEN (expired, revoked or mistyped). Nothing was read from it.` (or `37 requests were read from it.` when it was rejected mid-run) `Set GITHUB_TOKEN to a current, read-only token.` | 3 |

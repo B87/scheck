@@ -13,11 +13,14 @@ asserts that nothing else on the target changes.
 
 **This build (0.0.2, in development):** the engagement runs its stages (intake, scope,
 recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
-of any other kind (a Google Workspace tenant, a GitHub organization, a domain) is
-recorded as *not read by this version* and makes the run exit 2; its collectors arrive
-with the [roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
-certificate transparency (`crt.sh`) and DNS, contacting no server of yours, and the
-report's "What left this machine" says what was sent where. Findings come from compiled-in posture rules,
+of another kind (a Google Workspace tenant, a GitHub organization) is recorded as *not
+read by this version* and makes the run exit 2; its collectors arrive with the
+[roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
+certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
+reads the root's DNS and mail records and, for each name Scope chose, the certificate
+and the front page over https and http; no rule judges a domain yet, so the root is
+reported as not assessed and the run exits 2. The report's "What left this machine"
+says what was sent where. Findings come from compiled-in posture rules,
 graded through the context the engagement declares. A rule reads one fact, so a short
 list of findings and exit 0 mean no rule fired — not that anything is secure; the
 report's coverage says what was not checked. **No model assesses anything:** a
@@ -46,6 +49,7 @@ flowchart TD
   scope --> recon["recon<br/>one collector per asset"]
 
   recon -->|host| host["host collector<br/>local, or SSH: strict host key, then sys.canary"]
+  recon -->|domain root| web["web collector, through the scope gate<br/>read; no rule judges it yet"]
   recon -->|any other kind| none["not read by this version<br/>collector_not_built"]
 
   catalog["catalog<br/>compiled checks, literal argv"] --> host
@@ -60,6 +64,7 @@ flowchart TD
 
   audit --> analyze["analyze<br/>posture rules, one fact each;<br/>graded through the asset's context"]
   none --> report
+  web --> report
   analyze --> report["report<br/>coverage, fix these first, findings,<br/>what was not checked, exit code"]
   report --> out["stdout: text or JSON"]
   report --> rundir["run directory<br/>report.txt, report.json, audit.jsonl, evidence/"]
@@ -176,7 +181,7 @@ elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted capt
 - [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the
   stages and the report) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
   (what a host asset reads and its guarantees), [domain, email and web
-  collector](docs/spec/web-collector.md) (planned for 0.0.2 E7), [model path](docs/spec/model.md) and
+  collector](docs/spec/web-collector.md) (0.0.2 E7, being built), [model path](docs/spec/model.md) and
   [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Engagement report schema](docs/engagement-report-schema.json) and the

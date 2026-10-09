@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	webc "github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/gate"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -709,5 +710,92 @@ func TestResumeRunsScopeAgainWhenAConfirmationExpired(t *testing.T) {
 	scopeRunAt(t, h, path, dir, discoveryStart.AddDate(1, 0, 2))
 	if len(crt()) != 2 {
 		t.Errorf("a confirmation that expired since: crt.sh %v", crt())
+	}
+}
+
+// Recon reads a domain root with the web collector through the gate: its
+// mail records, the names they point at (an excluded one refused unasked),
+// and each name Scope chose to read; nothing else is queried or contacted.
+func TestReconReadsADomainRoot(t *testing.T) {
+	h := gate.NewHarness(t, nil)
+	h.CrtSh(`[]`)
+	root := h.Site("example.com", "198.51.100.10")
+	www := h.Site("www.example.com", "198.51.100.11")
+	h.DNS(map[string]string{"example.com": "addrs:198.51.100.10", "www.example.com": "addrs:198.51.100.11",
+		"mx.mailhost.example": "addrs:198.51.100.25"})
+	word := "zebra" + "fish"
+	h.TXT("example.com", "v=spf1 include:_spf.esp.example ~all", "site-verification="+word+"-abc123")
+	h.TXT("_spf.esp.example", "v=spf1 -all")
+	h.TXT("_dmarc.example.com", "v=DMARC1; p=none")
+	h.MX("example.com", 10, "mx.mailhost.example")
+	h.NS("example.com", "ns1.dns-host.example", "ns.legacy.example.com")
+	file := discoveryFile + "mail:\n  senders:\n    - {domain: example.com, service: google-workspace, dkim_selectors: [Google]}\n" +
+		"redact_extra: [" + word + "]\n"
+	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{
+		KnownCheck: func(string) bool { return false }, KnownFinding: func(string) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := engagement.CreateRunDir(t.TempDir(), "acme", discoveryStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dir.Close() })
+	out, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(file), Dir: dir, StopAfter: "recon",
+		Started: discoveryStart, Version: "test", NewGate: h.NewGate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ev *webc.Evidence
+	for _, a := range out.Document.(*engagement.ReconDoc).Assets {
+		if a.ID == "domain:example.com" {
+			ev = a.Web
+		}
+	}
+	if ev == nil || len(ev.Mail) != 1 {
+		t.Fatalf("evidence %+v", ev)
+	}
+	m := ev.Mail[0]
+	if len(m.TXT.TXT) != 1 || len(m.SPF) != 1 || !m.SPFComplete || len(m.DMARCRecords) != 1 || m.DMARCRecords[0].Tags["p"] != "none" ||
+		len(m.MXTargets) != 1 || m.MXTargets[0].Outcome != "addresses" || len(m.DKIM) != 1 || m.DKIM[0].Selector != "google" ||
+		m.DKIM[0].Read.Outcome != "nxdomain" {
+		t.Errorf("mail %+v", m)
+	}
+	if len(ev.NSTargets) != 2 || ev.NSTargets[0].Outcome != "nxdomain" || ev.NSTargets[1].Decision != "refused:excluded" {
+		t.Errorf("NS targets %+v", ev.NSTargets)
+	}
+	sites := map[string]webc.Site{}
+	for _, s := range ev.Sites {
+		sites[s.Name] = s
+	}
+	if len(sites) != 2 || sites["example.com"].HTTPS.Status != 200 || sites["www.example.com"].HTTP.Status != 200 || !sites["www.example.com"].HTTPS.TLS.Verified {
+		t.Errorf("sites %+v", ev.Sites)
+	}
+	for _, seen := range [][]string{root(), www()} {
+		slices.Sort(seen)
+		if !slices.Equal(seen, []string{"http GET /", "https GET /"}) {
+			t.Errorf("a server saw %v", seen)
+		}
+	}
+	for _, q := range h.Queries() {
+		if strings.Contains(q, "legacy") {
+			t.Errorf("queried %s", q)
+		}
+	}
+	// The seeded value reaches no file of the run, its marker does.
+	marked := false
+	err = filepath.WalkDir(dir.Path, func(path string, e os.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if strings.Contains(string(raw), word) {
+			t.Errorf("%s holds the redacted value", path)
+		}
+		marked = marked || strings.Contains(string(raw), "[REDACTED:extra:")
+		return err
+	})
+	if err != nil || !marked {
+		t.Errorf("walk %v, marker %v", err, marked)
 	}
 }

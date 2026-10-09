@@ -275,6 +275,9 @@ func (t *text) shortfall(s Shortfall) string {
 	case "collector_not_built":
 		return n + " (" + kindLabel(s.Asset) + "): this version of scheck does not read it. Nothing was read from it."
 	case "limit_reached":
+		if strings.Contains(s.Detail, "while it was read") {
+			return n + ": limits.timeout ended the engagement while it was read."
+		}
 		return n + ": limits.timeout ended the engagement before it was read."
 	case "failed":
 		return n + ": could not connect from this machine (" + strings.TrimSuffix(clean(s.Detail), ".") +

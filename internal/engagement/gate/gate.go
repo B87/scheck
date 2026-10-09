@@ -180,6 +180,11 @@ type Gate struct {
 	redirects map[string]redirect // request id → the 3xx it received
 	pages     map[string]*page    // request id → the page after it
 	users     map[string]*userSet // asset → its excluded-subject set, once known
+	// pointed is what each records read's answer pointed at, by its
+	// request id; spfLookups counts the include: and redirect= reads of
+	// each SPF evaluation (dns.go).
+	pointed    map[string]*pointed
+	spfLookups map[string]int
 }
 
 // redirect is a 3xx the gate received: the asset it was for, where it
@@ -224,6 +229,7 @@ func New(cfg Config) (*Gate, error) {
 		dns:     newLimiter(dnsRate, 4),
 		stopped: map[string]stop{}, redirects: map[string]redirect{},
 		pages: map[string]*page{}, users: map[string]*userSet{},
+		pointed: map[string]*pointed{}, spfLookups: map[string]int{},
 	}
 	if g.getenv == nil {
 		g.getenv = os.Getenv

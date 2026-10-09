@@ -107,6 +107,29 @@ func (h *Harness) DNS(names map[string]string) {
 	h.w.zone = newZone(z)
 }
 
+// TXT adds TXT records to a name the resolver answers; call it after DNS.
+func (h *Harness) TXT(name string, records ...string) {
+	r := h.w.zone.names[name]
+	for _, t := range records {
+		r.txt = append(r.txt, []string{t})
+	}
+	h.w.zone.names[name] = r
+}
+
+// MX adds a mail exchanger to a name; call it after DNS.
+func (h *Harness) MX(name string, pref uint16, target string) {
+	r := h.w.zone.names[name]
+	r.mx = append(r.mx, mxRecord{pref, target})
+	h.w.zone.names[name] = r
+}
+
+// NS adds name servers to a name; call it after DNS.
+func (h *Harness) NS(name string, targets ...string) {
+	r := h.w.zone.names[name]
+	r.ns = append(r.ns, targets...)
+	h.w.zone.names[name] = r
+}
+
 // CompactDenial answers a name that does not exist with NOERROR and no
 // record, as a signed zone with compact denial of existence does; call it
 // after DNS.

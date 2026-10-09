@@ -20,13 +20,13 @@ Every read goes through the gate, and the collector reads only what a rule consu
 | Level | Read | Fields kept |
 |---|---|---|
 | passive | TXT at the apex | `v=spf1` records only; each record's strings concatenated (RFC 7208 §3.3); the count of SPF records |
-| passive | TXT `_dmarc.<d>` | `v=DMARC1` records; the tags `p`, `sp`, `np`, `pct`, `t`, `adkim`, `aspf`, and whether `rua` is present |
+| passive | TXT `_dmarc.<d>` | DMARC records (below); the tags `p`, `sp`, `np`, `pct`, `t`, `adkim`, `aspf`, and whether `rua` has a value |
 | passive | MX `<d>` | targets and preferences; a null MX (`0 .`) |
 | passive | NS `<d>` | host names |
-| passive | TXT `<sel>._domainkey.<d>` for each selector declared under `mail.senders`, following its CNAME | `v`, `k`, `p`, `t`, and the key's modulus size |
+| passive | TXT `<sel>._domainkey.<d>` for each selector declared under `mail.senders`, following its CNAME | DKIM keys (below): `v`, `k`, `p`, `t` (the rule computes the key's modulus size from `p`); the count of other records |
 | passive | what Scope resolved for each name | the chain, rcode, addresses and the control label's answer, already in `scope.json` |
-| passive | A and AAAA of MX and NS targets outside every root; TXT of the targets of SPF `include:` and `redirect=`, within SPF's budget (below) | rcode and chain: resolved and recorded, never contacted ([scope.md](scope.md#third-party-sources)) |
-| observe | one TLS handshake on 443 per read name | version, verified, the gate's typed verification class, the TLS alert the server ended with, before the handshake completed or after (the chain kept), and the chain's subjects, issuers, names and validity |
+| passive | A and AAAA of MX and NS targets, inside a root or outside every root; TXT of the targets of SPF `include:` and `redirect=`, within SPF's budget (below) | rcode and chain: resolved and recorded, never contacted ([scope.md](scope.md#third-party-sources)) |
+| observe | the TLS handshake on 443 of `GET https://name/` (below), the read name's one handshake | version, verified, the gate's typed verification class, the TLS alert the server ended with, before the handshake completed or after (the chain kept), and the chain's subjects, issuers, names and validity |
 | observe | `GET https://name/` and `GET http://name/` for every read name; for a declared or first-party site also its entry points, `/robots.txt`, `/.well-known/security.txt` and one redirect hop on the same host ([scope.md](scope.md#connections)) | status, `location`, `server`, `x-powered-by`, the six security headers, `set-cookie` names and attributes, the redacted body within its cap |
 
 The gate's DNS client reads TXT (each record its strings joined into one value, TCP when
@@ -42,6 +42,53 @@ underscore; the name built from it is lowercase.
 (`include`, `a`, `mx`, `ptr`, `exists`, `redirect`; RFC 7208 §4.6.4). Only `include`
 and `redirect` targets are queried, as TXT; `a`, `mx`, `ptr` and `exists` are counted
 and never resolved. An eleventh term fires `email.spf_invalid` and stops the evaluation.
+The collector reads the tree only when the domain has exactly one `v=spf1` record, depth
+first in the order its terms are written, and reads nothing more once the count passes
+10; the gate sends at most 10 `include:` and `redirect=` reads per evaluation, one
+evaluation per domain, whatever the collector counts
+([scope.md](scope.md#third-party-sources), "Follow-ups"). The tree is complete
+(`spf_complete`) when nothing in it is unknown: the domain's TXT was read, and either
+it holds no single `v=spf1` record to walk or every `include:` and `redirect=` within
+the budget was read. A failed read of the domain or of an include, a term whose target
+the gate gave none for (a macro), or a count past 10 leaves it incomplete, and so does a
+record at the domain or an include that redaction marked before anything showed it is
+not SPF (the text before the marker could still begin `v=spf1`), since how many SPF
+records there are is then unknown.
+
+**DMARC records and DKIM keys.** A DMARC record is a record at `_dmarc.<d>` whose first
+tag is `v` with the value exactly `DMARC1` (RFC 7489 §6.3); any other record there is
+not a DMARC record and is not kept. A DKIM key is a record at a selector with a `p=` tag
+and, when it has a version, `v=DKIM1` as its first tag (RFC 6376 §3.6.1); any other
+record there (not a key, another version, `v` not first) is counted as `other`, not
+kept. DMARC's tag names compare case-insensitively and `v`'s value exactly (`DMARC1`);
+other values are kept as written, and a rule reads `p`, `sp` and `np` case-insensitively,
+as RFC 7489's grammar does. DKIM's tag names are case-sensitive (RFC 6376 §3.2), and a
+part of a key that is not a tag breaks its format. Whitespace is allowed around `=`. A
+record in which a tag repeats, or a key whose format is broken, is invalid: it is kept as
+`malformed`, without its tags. `rua` counts only when it has a value. A record a
+redaction marked that may have been a DMARC record (the text before the marker could
+still begin `v=DMARC1`) or, at a selector, any marked record that is not seen as a key,
+is counted apart (`dmarc_marked`, a selector's `marked`), so a rule over that domain or
+selector abstains on it rather than reading it as absent.
+
+**Built in E7 step 2a:** Recon reads each domain root with `Collect`: for the root and
+each mail domain under it, in that order, TXT at the domain and at `_dmarc.<d>`, MX and
+its targets' addresses, the SPF include tree and each declared DKIM selector; the root's
+NS and its targets' addresses; and for each name Scope marked to read, `GET /` over
+https, then http (`web.front`, the collector's one op), the https read's handshake
+giving the certificate and TLS result. A mail domain is read once, under the most
+specific domain root that holds it, so nested roots never read it twice or give it two
+SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
+ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
+has a value but never its address, each DKIM key's tags. What it read is in
+`recon.json`, under the asset's `web`. No rule reads it until step 2b, so the root is
+reported as `collector_not_built` and the run exits 2. It is `limit_reached` instead
+when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
+while it is: the deadline ended or refused one of its reads (`refused:deadline`,
+`unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
+as `Collect` returned (`incomplete`). A declared or first-party site's
+entry points, `/robots.txt`, `/.well-known/security.txt` and its redirect hop are step
+4; a `url` root and a domain asset that is not a root are not read yet.
 
 **Not read in 0.0.2:** SOA, CAA, DNSKEY and DS, `_mta-sts`, `_smtp._tls`, BIMI.
 
@@ -239,7 +286,7 @@ suffix **and** the status **and** the body marker.
   evidence.
 
 **Never claim a name.** No provider account, no call to a provider's API, no request
-beyond the three reads of a name without first-party evidence, and no read repeated. A
+beyond the two reads of a name without first-party evidence, and no read repeated. A
 matched fingerprint suspends a `first_party` confirmation
 ([scope.md](scope.md#first-party-evidence)). The report says that scheck cannot tell
 whether someone has already claimed a name.

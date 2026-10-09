@@ -78,8 +78,9 @@ func newRunCmd(opts *globalOpts) *cobra.Command {
 			"engagement in memory from the reach flags. Each run writes its stage outputs to\n" +
 			"<state-dir>/engagements/<name>/<started>/, created 0700 and locked; --stop-after intake\n" +
 			"validates the file and contacts nothing. scheck run RUN_DIRECTORY resumes a run: it keeps\n" +
-			"what earlier sessions read completely and reads everything else again. In this build a host root is collected; a root\n" +
-			"of any other kind is recorded as not collected (collector_not_built).\n" +
+			"what earlier sessions read completely and reads everything else again. In this build a host root is collected;\n" +
+			"a domain root's DNS, mail records and front pages are read but no rule judges them yet, and a root of any\n" +
+			"other kind is not collected (both collector_not_built).\n" +
 			"Exit 0 no open finding at or above an asset's threshold (not a claim of full coverage),\n" +
 			"1 findings, 2 incomplete (a root not read, a transport failure, a timeout), 3 usage,\n" +
 			"validation, policy or canary error.",

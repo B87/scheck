@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -231,6 +232,9 @@ type ReconAsset struct {
 	Host         *report.Host                  `json:"host,omitempty"`
 	Facts        map[string]report.Fact        `json:"facts,omitempty"`
 	Observations map[string]report.Observation `json:"observations,omitempty"`
+	// Web is what the web collector read under a domain root, redacted by
+	// the gate (docs/spec/web-collector.md, "Reads").
+	Web *web.Evidence `json:"web,omitempty"`
 }
 
 // PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
@@ -658,7 +662,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(discoveryOps...)
+	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops)...)
 	if err != nil {
 		return nil, err
 	}
@@ -691,9 +695,88 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	return r.gate, nil
 }
 
-// reconStage runs every declared read per asset: in this build, the host
-// collector on host assets. A root of a kind with no collector yet is
-// recorded as not collected and makes the run incomplete.
+// collectDomain reads a domain root through the gate with the web collector
+// (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
+// the names those records point at, and the names Scope chose to read. No
+// rule judges what it read until E7 step 2b, so the root stays incomplete
+// for want of a collector's rules.
+func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
+	if ctx.Err() != nil {
+		ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
+		ra.Detail = "limits.timeout ended the engagement before this asset was read"
+		r.incomplete(a, ra)
+		return ra
+	}
+	g, err := r.gateFor(ctx)
+	if err != nil {
+		ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
+		r.incomplete(a, ra)
+		return ra
+	}
+	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	ev := web.Collect(ctx, g, r.webDomain(a))
+	ra.Web = &ev
+	ra.Status, ra.Reason = StatusCollected, ReasonCollectorNotBuilt
+	ra.Detail = "read; no rule judges domain assets in this build"
+	if ctx.Err() != nil || ev.Cut() {
+		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
+		ra.Detail = fmt.Sprintf("limits.timeout (%s) ended the engagement while it was read", r.res.Limits.Timeout)
+	}
+	r.incomplete(a, ra)
+	return ra
+}
+
+// webDomain is what the web collector reads under a domain root: the mail
+// domains under it, the root first, with the DKIM selectors declared for
+// each, and the names Scope chose to read.
+func (r *run) webDomain(a ResolvedAsset) web.Domain {
+	d := web.Domain{Asset: a.ID, Name: a.name, Stage: "recon"}
+	selectors := map[string][]string{}
+	order := []string{a.name}
+	// A mail domain is read under the most specific root holding it, once.
+	add := func(name string) {
+		name = strings.TrimSuffix(strings.ToLower(name), ".")
+		inner := slices.ContainsFunc(r.res.Roots, func(o Ref) bool {
+			return o.Kind == KindDomain && o.name != a.name && domainUnder(o.name, a.name) && domainUnder(name, o.name)
+		})
+		if domainUnder(name, a.name) && !inner && !slices.Contains(order, name) {
+			order = append(order, name)
+		}
+	}
+	for _, s := range r.res.Mail.Senders {
+		add(s.Domain)
+		dom := strings.TrimSuffix(strings.ToLower(s.Domain), ".")
+		for _, sel := range s.DKIMSelectors {
+			if sel = strings.ToLower(sel); !slices.Contains(selectors[dom], sel) {
+				selectors[dom] = append(selectors[dom], sel)
+			}
+		}
+	}
+	for _, n := range r.res.Mail.NoMail {
+		add(n)
+	}
+	for _, name := range order {
+		d.Mail = append(d.Mail, web.MailDomain{Name: name, Selectors: selectors[name]})
+	}
+	if r.scoped != nil {
+		for _, sd := range r.scoped.Domains {
+			if sd.Root != a.ID {
+				continue
+			}
+			for _, sn := range sd.Names {
+				if sn.Read {
+					d.Names = append(d.Names, sn.Name)
+				}
+			}
+		}
+	}
+	return d
+}
+
+// reconStage runs every declared read per asset: the host collector on
+// host assets and the web collector on domain roots. A root of a kind with
+// no collector yet is recorded as not collected and makes the run
+// incomplete.
 func (r *run) reconStage(ctx context.Context) (any, error) {
 	doc := &ReconDoc{Header: r.header("recon")}
 	// What the session reached is on record as each host ends, so a stage
@@ -713,6 +796,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	for _, a := range r.res.Assets {
 		ra := ReconAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root}
 		switch {
+		case a.Kind == KindDomain && isRoot(a):
+			ra = r.collectDomain(ctx, a, ra)
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"

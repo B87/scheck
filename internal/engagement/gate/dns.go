@@ -807,7 +807,41 @@ type RecordSet struct {
 	TXT []string
 	MX  []MX
 	NS  []string
+	// Targets are the names the answer points at, which FollowTarget looks
+	// up by their index here.
+	Targets []Target
+	// Addrs are a followed MX or NS target's addresses.
+	Addrs []netip.Addr
+	// FinalInRoot says the name the chain ends at is under a root.
+	FinalInRoot bool
 }
+
+// Target is a name a records read's answer points at (docs/spec/scope.md,
+// "Third-party sources"): an MX or NS target, or the target of an SPF
+// include: or redirect= term. Name is redacted; the gate keeps it as
+// answered, and the collector names a target only by its index.
+type Target struct {
+	Name string `json:"name"`
+	// Via is mx, ns, include or redirect.
+	Via string `json:"via"`
+}
+
+// pointed is what a records read's answer pointed at, as answered: what a
+// follow may look up, each once.
+type pointed struct {
+	asset string
+	// eval is the SPF evaluation the answer belongs to: the request id of
+	// the TXT read that began it.
+	eval     string
+	names    []string
+	via      []string
+	followed map[int]bool
+}
+
+// maxSPFLookups is SPF's limit of DNS-querying terms per evaluation (RFC
+// 7208 §4.6.4): the gate sends at most this many include: and redirect=
+// reads per evaluation, whatever the collector counts.
+const maxSPFLookups = 10
 
 // Insufficient reports a read that says nothing about the name's records.
 func (r RecordSet) Insufficient() bool {
@@ -858,11 +892,47 @@ func (g *Gate) ReadRecords(ctx context.Context, r Records) RecordSet {
 	case !g.nameserver.IsValid():
 		return refuse("unavailable:no_resolver", "no nameserver in /etc/resolv.conf")
 	}
+	// An SPF evaluation begins at a domain's own TXT read, never at
+	// _dmarc or a DKIM selector, and is counted per domain, so reading it
+	// again does not renew its lookups.
+	eval := ""
+	if t == typeTXT && !strings.HasPrefix(name, "_") && !strings.Contains(name, "._domainkey.") {
+		eval = r.Asset + " " + name
+	}
+	return g.readRecords(ctx, e, name, t, eval)
+}
+
+// readRecords reads name's records of type t and keeps what the answer
+// points at for FollowTarget; eval is the SPF evaluation a TXT read
+// belongs to, "" for a read whose SPF terms point at nothing (_dmarc, a
+// DKIM selector). A TXT answer points at the include: and redirect=
+// targets of its one v=spf1 record; with more than one, SPF is broken and
+// nothing is followed.
+func (g *Gate) readRecords(ctx context.Context, e Entry, name string, t dnsType, eval string) RecordSet {
 	l, records := g.chase(ctx, e, name, OutcomeRecords, t)
-	out := RecordSet{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome}
+	out := RecordSet{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
+		FinalInRoot: g.scope.Subject(e.Asset, "domain:"+l.Final()).Root != ""}
+	spf := 0
+	for _, rr := range records {
+		if rr.typ == typeTXT && isSPFRecord(strings.Join(rr.txt, "")) {
+			spf++
+		}
+	}
+	p := &pointed{asset: e.Asset, eval: eval, followed: map[int]bool{}}
+	point := func(name, via string) {
+		p.names, p.via = append(p.names, name), append(p.via, via)
+		out.Targets = append(out.Targets, Target{Name: g.redact(name), Via: via})
+	}
 	for _, rr := range records {
 		switch rr.typ {
 		case typeTXT:
+			// The terms are read from the record as answered; only the
+			// record as redacted leaves the gate.
+			if eval != "" && spf == 1 {
+				for _, term := range spfTargets(strings.Join(rr.txt, "")) {
+					point(term[1], term[0])
+				}
+			}
 			out.TXT = append(out.TXT, g.joinTXT(rr.txt))
 		case typeMX, typeNS:
 			// A target is a name the collector may look up next: one that
@@ -873,11 +943,126 @@ func (g *Gate) ReadRecords(ctx context.Context, r Records) RecordSet {
 			}
 			if rr.typ == typeMX {
 				out.MX = append(out.MX, MX{Pref: rr.pref, Target: g.redact(rr.target)})
+				if rr.target != "" {
+					point(rr.target, "mx")
+				}
 			} else {
 				out.NS = append(out.NS, g.redact(rr.target))
+				point(rr.target, "ns")
 			}
 		}
 	}
 	out.Chain = g.redactLookup(l).Chain
+	if len(p.names) > 0 {
+		g.mu.Lock()
+		g.pointed[e.RequestID] = p
+		g.mu.Unlock()
+	}
 	return out
+}
+
+// isSPFRecord reports a v=spf1 record.
+func isSPFRecord(record string) bool {
+	terms := strings.Fields(record)
+	return len(terms) > 0 && strings.EqualFold(terms[0], "v=spf1")
+}
+
+// spfTargets lists the include: and redirect= targets of an SPF record, as
+// [via, name] pairs: a term whose target is not a name scheck reads (a
+// macro, a malformed name) is not one. Anything but a v=spf1 record has
+// none.
+func spfTargets(record string) [][2]string {
+	if !isSPFRecord(record) {
+		return nil
+	}
+	terms := strings.Fields(record)
+	var out [][2]string
+	for _, term := range terms[1:] {
+		via, target := "", ""
+		lower := strings.ToLower(term)
+		mechanism := lower
+		if strings.ContainsAny(mechanism[:1], "+-~?") {
+			mechanism = mechanism[1:] // its qualifier
+		}
+		if rest, ok := strings.CutPrefix(mechanism, "include:"); ok {
+			via, target = "include", rest
+		} else if rest, ok := strings.CutPrefix(lower, "redirect="); ok {
+			via, target = "redirect", rest
+		} else {
+			continue
+		}
+		target = strings.TrimSuffix(target, ".")
+		if d, err := answerName(target); err == nil && d == target {
+			out = append(out, [2]string{via, target})
+		}
+	}
+	return out
+}
+
+// Follow looks up a name a records read's answer pointed at
+// (RecordSet.Targets): the read's request id and the target's index.
+type Follow struct {
+	Asset, Stage, From string
+	Index              int
+}
+
+// FollowTarget admits and sends the lookup of a name the company's own
+// records point at (docs/spec/scope.md, "Third-party sources"), resolved
+// and recorded, never contacted: A and AAAA of an MX or NS target, TXT of
+// an SPF include: or redirect= target, at most maxSPFLookups of those per
+// evaluation. The collector names the target by its index in an answer
+// this gate gave for the same asset, never by name, each target once; the
+// name is looked up as answered, outside every root if that is where it
+// is, and refused when an exclude covers it.
+func (g *Gate) FollowTarget(ctx context.Context, f Follow) RecordSet {
+	e := Entry{RequestID: g.nextID(), Stage: f.Stage, Asset: f.Asset, Op: "dns.follow", Source: "dns",
+		Params: map[string]string{"from": f.From, "index": strconv.Itoa(f.Index)}}
+	refuse := func(decision, detail string) RecordSet {
+		e.Event, e.Decision, e.Detail = "refused", decision, detail
+		_ = g.record(e)
+		out := RecordSet{RequestID: e.RequestID, Decision: e.Decision, Detail: detail}
+		if decision == "refused:excluded" {
+			out.ExcludedBy = detail
+		}
+		return out
+	}
+	g.mu.Lock()
+	p := g.pointed[f.From]
+	ok := p != nil && p.asset == f.Asset && f.Index >= 0 && f.Index < len(p.names) && !p.followed[f.Index]
+	var name, via string
+	budget := true
+	if ok {
+		name, via = p.names[f.Index], p.via[f.Index]
+		if via == "include" || via == "redirect" {
+			budget = g.spfLookups[p.eval] < maxSPFLookups
+			if budget {
+				g.spfLookups[p.eval]++
+			}
+		}
+		if budget {
+			p.followed[f.Index] = true
+		}
+	}
+	g.mu.Unlock()
+	switch {
+	case !ok:
+		return refuse("refused:bind", "from and index name no target of an answer this gate gave for the asset, or one already followed")
+	case !budget:
+		return refuse("refused:spf_budget", fmt.Sprintf("SPF's limit of %d lookups per evaluation is reached", maxSPFLookups))
+	}
+	e.Params["name"], e.Params["via"] = name, via
+	switch x := g.scope.Name(name); {
+	case x != "":
+		return refuse("refused:excluded", x)
+	case g.pastDeadline(g.now()):
+		return refuse("refused:deadline", "limits.timeout passed")
+	case !g.nameserver.IsValid():
+		return refuse("unavailable:no_resolver", "no nameserver in /etc/resolv.conf")
+	}
+	if via == "include" || via == "redirect" {
+		return g.readRecords(ctx, e, name, typeTXT, p.eval)
+	}
+	l := g.redactLookup(g.lookup(ctx, e, name))
+	return RecordSet{RequestID: e.RequestID, Decision: DecisionSent, ExcludedBy: l.ExcludedBy, Outcome: l.Outcome,
+		Chain: l.Chain, Addrs: l.Addrs, FinalInRoot: l.FinalInRoot}
 }

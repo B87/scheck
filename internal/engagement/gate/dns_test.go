@@ -3,6 +3,7 @@ package gate
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net/netip"
 	"slices"
 	"strings"
@@ -594,5 +595,155 @@ func TestHiddenCNAMEAndCompactDenial(t *testing.T) {
 		if cnameAsked != (tc.outcome != "addresses") {
 			t.Errorf("compact %v %s: queries %v", tc.compact, tc.name, w.zone.asked())
 		}
+	}
+}
+
+// An SPF record's include: and redirect= targets, as answered: a qualifier
+// is allowed on include only, a macro or a name that is not one is no
+// target, and anything but a v=spf1 record has none.
+func TestSPFTargets(t *testing.T) {
+	for record, want := range map[string][][2]string{
+		"v=spf1 include:_spf.google.com ~all":                    {{"include", "_spf.google.com"}},
+		"V=SPF1 -Include:A.Example.com. redirect=_spf.b.example": {{"include", "a.example.com"}, {"redirect", "_spf.b.example"}},
+		"v=spf1 include:%{d}.spf.example ip4:192.0.2.0/24 -all":  nil,
+		"v=spf1 include:not_a..name ~redirect=x.example -all":    nil,
+		"v=DMARC1; p=none":          nil,
+		"v=spf10 include:x.example": nil,
+	} {
+		if got := spfTargets(record); !slices.Equal(got, want) {
+			t.Errorf("%q: %v", record, got)
+		}
+	}
+}
+
+// The names the company's records point at are looked up by their index in
+// an answer this gate gave, as answered and outside the roots, each once;
+// an excluded one is refused unasked; an SPF evaluation sends at most ten
+// include: or redirect= reads; a target redact_extra matches is followed
+// and never printed (docs/spec/scope.md, "Third-party sources").
+func TestFollowTargets(t *testing.T) {
+	w := newWorld(t)
+	w.extra = []string{"zebrafish"}
+	names := map[string]record{
+		"example.com": {txt: [][]string{{"v=spf1 include:_spf.esp.example include:zebrafish.example -all"}},
+			mx: []mxRecord{{10, "mx.mailhost.example"}, {20, "mx.gone-host.example"}, {30, "mx.legacy.example.com"}},
+			ns: []string{"ns1.dns-host.example"}},
+		"mx.mailhost.example":  {addrs: []string{"198.51.100.25"}},
+		"ns1.dns-host.example": {addrs: []string{"198.51.100.53"}},
+		"_spf.esp.example":     {txt: [][]string{{"v=spf1 include:spf0.esp.example ~all"}}},
+		"zebrafish.example":    {txt: [][]string{{"v=spf1 ip4:192.0.2.1 -all"}}},
+	}
+	// A chain of includes longer than SPF's limit.
+	for i := range 12 {
+		names[fmt.Sprintf("spf%d.esp.example", i)] = record{txt: [][]string{{fmt.Sprintf("v=spf1 include:spf%d.esp.example -all", i+1)}}}
+	}
+	w.zone = newZone(names)
+	w.scope.excluded = map[string]string{"domain:legacy.example.com": "exclude[0]"}
+	g := w.gate()
+	ctx := context.Background()
+	asset := "domain:example.com"
+	mx := g.ReadRecords(ctx, Records{Asset: asset, Name: "example.com", Type: "MX"})
+	if !slices.Equal(mx.Targets, []Target{{"mx.mailhost.example", "mx"}, {"mx.gone-host.example", "mx"}, {"mx.legacy.example.com", "mx"}}) {
+		t.Fatalf("MX targets %+v", mx.Targets)
+	}
+	follow := func(from string, i int) RecordSet {
+		return g.FollowTarget(ctx, Follow{Asset: asset, Stage: "recon", From: from, Index: i})
+	}
+	if r := follow(mx.RequestID, 0); r.Outcome != OutcomeAddresses || len(r.Addrs) != 1 || r.FinalInRoot {
+		t.Errorf("MX 0 %+v", r)
+	}
+	if r := follow(mx.RequestID, 1); r.Outcome != OutcomeNXDomain {
+		t.Errorf("a dangling MX %+v", r)
+	}
+	if r := follow(mx.RequestID, 2); r.Decision != "refused:excluded" {
+		t.Errorf("an excluded MX %+v", r)
+	}
+	for name, f := range map[string]Follow{
+		"followed twice":   {Asset: asset, From: mx.RequestID, Index: 0},
+		"out of range":     {Asset: asset, From: mx.RequestID, Index: 3},
+		"another asset":    {Asset: "domain:example.org", From: mx.RequestID, Index: 1},
+		"an invented read": {Asset: asset, From: "g999999", Index: 0},
+	} {
+		if r := g.FollowTarget(ctx, f); r.Decision != "refused:bind" {
+			t.Errorf("%s: %+v", name, r)
+		}
+	}
+	txt := g.ReadRecords(ctx, Records{Asset: asset, Name: "example.com", Type: "TXT"})
+	if len(txt.Targets) != 2 || txt.Targets[0] != (Target{"_spf.esp.example", "include"}) ||
+		strings.Contains(txt.Targets[1].Name, "zebrafish") || txt.Targets[1].Via != "include" {
+		t.Fatalf("TXT targets %+v", txt.Targets)
+	}
+	if r := follow(txt.RequestID, 1); r.Outcome != OutcomeRecords || len(r.TXT) != 1 {
+		t.Errorf("a redacted include %+v", r)
+	}
+	// The include tree: each read's own targets, until SPF's limit.
+	from, sent := txt.RequestID, 1
+	for {
+		r := follow(from, 0)
+		if r.Decision != "sent" {
+			if r.Decision != "refused:spf_budget" || sent != maxSPFLookups {
+				t.Errorf("after %d reads: %+v", sent, r)
+			}
+			break
+		}
+		sent++
+		from = r.RequestID
+	}
+	for _, q := range w.zone.asked() {
+		if strings.Contains(q, "legacy") || strings.Contains(q, fmt.Sprintf("spf%d.", maxSPFLookups-2)) {
+			t.Errorf("queried %s", q)
+		}
+	}
+	for _, e := range w.audit.entries(t) {
+		if strings.Contains(fmt.Sprint(e.Params, e.Answers, e.Detail), "zebrafish") {
+			t.Errorf("audit %+v", e)
+		}
+	}
+}
+
+// An SPF evaluation is a domain's: reading its TXT again does not renew
+// its lookups; _dmarc and a DKIM selector's TXT point at nothing, whatever
+// they hold; and a domain with two SPF records, which SPF calls broken,
+// points at nothing either.
+func TestSPFEvaluationIsTheDomains(t *testing.T) {
+	w := newWorld(t)
+	names := map[string]record{
+		"example.com":               {txt: [][]string{{"v=spf1 include:i0.esp.example -all"}}},
+		"_dmarc.example.com":        {txt: [][]string{{"v=spf1 include:vendor.example -all"}}},
+		"s1._domainkey.example.com": {txt: [][]string{{"v=spf1 include:vendor.example -all"}}},
+		"two.example.com":           {txt: [][]string{{"v=spf1 include:a.example -all"}, {"v=spf1 include:b.example -all"}}},
+	}
+	for i := range 12 {
+		names[fmt.Sprintf("i%d.esp.example", i)] = record{txt: [][]string{{fmt.Sprintf("v=spf1 include:i%d.esp.example -all", i+1)}}}
+	}
+	w.zone = newZone(names)
+	g := w.gate()
+	ctx := context.Background()
+	read := func(name string) RecordSet {
+		return g.ReadRecords(ctx, Records{Asset: "domain:example.com", Name: name, Type: "TXT"})
+	}
+	for _, name := range []string{"_dmarc.example.com", "s1._domainkey.example.com", "two.example.com"} {
+		if r := read(name); len(r.Targets) != 0 {
+			t.Errorf("%s points at %+v", name, r.Targets)
+		}
+	}
+	// Two reads of the domain share one budget of ten.
+	sent := 0
+	for range 2 {
+		from := read("example.com").RequestID
+		for {
+			r := g.FollowTarget(ctx, Follow{Asset: "domain:example.com", From: from, Index: 0})
+			if r.Decision != DecisionSent {
+				if r.Decision != "refused:spf_budget" {
+					t.Errorf("refused %+v", r)
+				}
+				break
+			}
+			sent++
+			from = r.RequestID
+		}
+	}
+	if sent != maxSPFLookups {
+		t.Errorf("%d include reads across two reads of the domain", sent)
 	}
 }

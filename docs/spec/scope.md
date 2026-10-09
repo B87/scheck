@@ -151,7 +151,8 @@ names point, with progress and "decide later", and a "no" remembered per engagem
 the state directory for 90 days.
 
 Without any of it, an asset gets passive checks and the observe checks that read its
-front page and certificate, and nothing more. Those two reads do contact a server that
+front page over https and http, the https read's handshake giving its certificate, and
+nothing more. Those two reads do contact a server that
 may belong to someone else, as any browser following the name would; they are the only
 requests scheck sends without first-party evidence, and the audit log records each.
 
@@ -293,7 +294,7 @@ traffic that looks like an attack. That is why they have separate gates.
 | Level | Checks |
 |---|---|
 | *passive* | DNS records, certificate transparency, SPF, DKIM and DMARC records, MX and NS; the names the company's own MX, NS and SPF records point at, resolved and never contacted ("Third-party sources") |
-| *observe* | TLS handshake and certificate; `GET`/`HEAD` of the site's known entry points (its `url` root or entry and the `intent` URLs on it), plus `/robots.txt` and `/.well-known/security.txt`, and one redirect hop on the same host ("Connections"); a discovered name with first-party evidence has `/` as its entry point and reads the same; one without it gets only the certificate on 443 and `GET /` over https and http. Headers, cookies and technology fingerprint come from those responses |
+| *observe* | TLS handshake and certificate; `GET`/`HEAD` of the site's known entry points (its `url` root or entry and the `intent` URLs on it), plus `/robots.txt` and `/.well-known/security.txt`, and one redirect hop on the same host ("Connections"); a discovered name with first-party evidence has `/` as its entry point and reads the same; one without it gets only `GET /` over https and http, whose https handshake is its certificate read. Headers, cookies and technology fingerprint come from those responses |
 | *probe* | single `GET` requests from the reviewed list: `/.git/HEAD`, `/.env`, framework debug routes, common admin panels |
 | *scan* | path discovery, scanner templates, authenticated requests, port scans |
 
@@ -586,8 +587,9 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
   `/Board/Sub` and not `/Boardroom`.
 
 **Levels in 0.0.2.** Only passive and observe are admitted, whatever a registry
-defines. A discovered name without first-party evidence gets three reads and nothing
-more: the TLS handshake on 443, `GET https://name/` and `GET http://name/`. It gets no
+defines. A discovered name without first-party evidence gets two reads and nothing
+more: `GET https://name/`, whose TLS handshake on 443 is the name's certificate read,
+and `GET http://name/`. It gets no
 `robots.txt` or `.well-known`. A first-party `url` root gets its entry points,
 `/robots.txt` and `/.well-known/security.txt`: a fixed list, not "any `.well-known`". A
 discovered name with first-party evidence has `/` as its entry point and reads
@@ -685,11 +687,13 @@ never by admitting loopback.
   certificate verified and none was judged". There is no custom CA and no client
   certificate, and `InsecureSkipVerify` appears in no non-test file, which
   `scripts/depcheck.sh` checks.
-  The gate completes every TLS handshake itself, for a certificate read (an op whose
-  method is `TLS`, the handshake and nothing after it) and as the HTTP transport's TLS
-  dialer, with the same settings: TLS 1.2 minimum, the gate's roots, ALPN `h2` and
-  `http/1.1`, and the TLS timeout ("Throttle, timeouts and retries"). The chain and the
-  verification result are recorded, and a failed verification aborts the handshake
+  The gate completes every TLS handshake itself, for an op whose method is `TLS` (the
+  handshake and nothing after it, which no collector declares in 0.0.2) and as the HTTP
+  transport's TLS dialer, with the same settings: TLS 1.2 minimum, the gate's roots, ALPN
+  `h2` and `http/1.1`, and the TLS timeout ("Throttle, timeouts and retries"). The chain
+  and the verification result are recorded on the response, an `unavailable:tls_invalid`,
+  `tls_handshake` or `tls_refused` one included, so a name's `GET https://name/` is its
+  certificate read; a failed verification aborts the handshake
   before any HTTP byte is sent. A failed verification carries a typed class beside the error's text,
   since the certificate rules read the class
   ([web-collector.md](web-collector.md#tls-and-certificate)): `expired` (past the
@@ -716,9 +720,8 @@ never by admitting loopback.
   alert after the handshake completed and before any response was read comes from a
   server that requires a client certificate at TLS 1.3 (`certificate_required` arrives
   on the first read), or from any TLS 1.3 server that ends the connection then. The
-  server answered, so its verified chain is kept with the alert recorded: a
-  certificate read is a success (it ends before the alert arrives, so none is
-  recorded), and an HTTP read is `unavailable:tls_refused`, nothing read. An alert
+  server answered, so its verified chain is kept with the alert recorded: a `TLS` op is
+  a success (it ends before the alert arrives, so none is recorded), and an HTTP read is `unavailable:tls_refused`, nothing read. An alert
   after a response was read is a transport error ("Outcomes"), and the response is
   kept. A chain from an issuer on
   the versioned TLS-interception list (0.0.2 E7 step 4) means the operator's network inspects TLS:
@@ -750,9 +753,9 @@ Each source is a family of ops with its own literal host:
 A query to a source names only an in-scope root or asset. Following a CNAME chain is
 part of resolving the in-scope name; a standalone lookup of a name outside every root
 is refused, except the control query under `invalid.` ("Discovery"), the literal
-hosts of the sources in this table, which the gate resolves to reach them, and, from
-0.0.2 E7 step 2, the names the company's own records point at, resolved as a CNAME chain is
-followed: A and AAAA of its MX and NS targets, and TXT of the targets of its SPF
+hosts of the sources in this table, which the gate resolves to reach them, and the
+names the company's own records point at ("Follow-ups" below), resolved as a CNAME
+chain is followed: A and AAAA of its MX and NS targets, and TXT of the targets of its SPF
 `include:` and `redirect=`, within SPF's budget of 10 DNS-querying terms per
 evaluation, counted across the whole tree as RFC 7208 §4.6.4 counts them (`a`, `mx`,
 `ptr` and `exists` are counted and never resolved;
@@ -789,8 +792,8 @@ name scheck builds from the engagement file to read its records is a host name w
 `_dmarc` as its first label (`_dmarc.<d>`) or one `_domainkey` label after a DKIM
 selector (`<sel>._domainkey.<d>`); a selector follows RFC 6376's sub-domain syntax with
 no underscore, at most 63 characters a label, written in either case, and the name built
-from it is lowercase. A name read from an answer (a CNAME hop, an MX or NS target, and
-from 0.0.2 E7 step 2 an SPF `include:` or `redirect=`) may hold underscore labels
+from it is lowercase. A name read from an answer (a CNAME hop, an MX or NS target, an
+SPF `include:` or `redirect=`) may hold underscore labels
 anywhere, within the gate's length and charset checks (`_spf.google.com`). A label
 holding a dot byte, which joined with dots would read as another name, makes the whole
 answer unreadable: the lookup's outcome is `error`. With
@@ -831,12 +834,34 @@ covering the domain covers it. The gate follows the CNAME chain as an address lo
 does, a DKIM selector's CNAME to its sending service among them, with the same hop
 limit, the same stop at an excluded name and the same CNAME query at the chain's end
 ("Discovery"). The outcome is `records`, `nxdomain`, `nodata` or a failure, which is
-*insufficient evidence*. Names in the result, the chain and MX and NS targets, are
+*insufficient evidence*, and the result says whether the name the chain ends at is
+under a root. Names in the result, the chain and MX and NS targets, are
 redacted as a lookup's are. A TXT record's strings are joined first and the joined
 value redacted once, so a value split across two strings is redacted whole and no
 marker is redacted again. An MX or NS
-target that is not a name ends the read as `error`. The collector's records reads, and
-the lookups of the names they point at, are E7 step 2.
+target that is not a name ends the read as `error`.
+
+**Follow-ups** (0.0.2 E7 step 2a). A records read's result lists the names its answer
+points at, redacted, each with how: an MX target (a null MX has none), an NS target, or
+the target of an `include:` or `redirect=` term of a `v=spf1` TXT record, read from the
+record as answered; a term whose target is a macro or not a name has none. A TXT answer
+points at SPF targets only when it is a domain's own TXT read or an `include:` or
+`redirect=` follow-up, never at `_dmarc.<d>` or a DKIM selector, and only when it holds exactly one `v=spf1` record:
+with two, SPF is broken and nothing is followed. The
+collector asks for one by the request id of the read and the target's index in its
+answer, never by name: a target of an answer the gate gave for the same asset, each
+once, or `refused:bind`. The gate looks the name up as answered, outside every root if
+that is where it is; an exclude covering it refuses it unasked (`refused:excluded`),
+and `limits.timeout` and a missing nameserver stop it as they stop a records read. An
+MX or NS target gets A and AAAA, its CNAME chain followed. An `include:` or `redirect=`
+target gets TXT, and its own targets belong to the same SPF evaluation. An evaluation
+begins at a domain's own TXT read and is one per asset and domain, so reading the
+domain's TXT again does not renew it; the gate sends at most 10 `include:` and
+`redirect=` reads per evaluation, whatever the collector counts, and refuses the next
+(`refused:spf_budget`). The collector counts SPF's budget itself, over every
+DNS-querying term ([web-collector.md](web-collector.md#reads)), and the gate's cap
+holds whether it does or not. Each follow-up's result, like a records read's, says
+whether the name its chain ends at is under a root.
 
 The report prints what left the machine as one fixed block (`engagement.md`, "The
 report").
@@ -1081,9 +1106,11 @@ it by `request_id`; `refused`, the one line of a request admission stopped; `reu
 one line of a request a resume answered from the earlier run's success, with `decision:
 reused`, its `status` and the stored body's `output_sha256` ("Resume"); and `dns` and
 `dns_answer`, a query's line before it is sent and its answers after. A DNS lookup
-admission stops is one `refused` line with op `dns.lookup` for discovery or
-`dns.records` for a records read; one it sends is the `dns` and `dns_answer` lines of
-its queries, under its `request_id`. A `dns` line's `params` are the `name` and its
+admission stops is one `refused` line with op `dns.lookup` for discovery,
+`dns.records` for a records read or `dns.follow` for a follow-up, whose `params` are
+`from` and `index` and, once bound, the target's `name` and `via` (`mx`, `ns`,
+`include` or `redirect`); one it sends is the `dns` and `dns_answer` lines of its
+queries, under its `request_id`. A `dns` line's `params` are the `name` and its
 `type` (`A`, `AAAA`, `CNAME`, `TXT`, `MX` or `NS`). A `dns_answer` line's `answers`
 hold one record each: `<name> <address>`, `<name> CNAME <target>`, `<name> NS
 <target>`, `<name> MX <preference> <target>`, or `<name> TXT "<record>"`, each name
@@ -1109,7 +1136,8 @@ Fields:
 - `source` for a third party, or `via`;
 - `decision`: `sent`, `reused`, `refused:<rule>` or `unavailable:<code>`, with a
   redacted `detail`. The rules, in admission order: `unknown_op`, `bind`, `method`,
-  `redirect`, `redirect_depth`, `out_of_scope`, `excluded`, `level`, `entry_point`,
+  `redirect`, `redirect_depth`, `spf_budget` (a follow-up past SPF's budget,
+  "Third-party sources"), `out_of_scope`, `excluded`, `level`, `entry_point`,
   `window` (checked again after the throttle wait), `no_credentials`, `deadline`,
   `rate_limit`, `address_excluded`, `address_not_public`, `address_moved`, `canceled`
   (the run was cancelled while the request waited for its throttle or its retry). A
@@ -1185,9 +1213,9 @@ Some successes are never reused, and are sent again:
   (E5);
 - a redirect, since the hop after it needs the gate's own record of the 3xx;
 - a web page answered with 429 or a 5xx, kept as evidence but not a page that was read;
-- a records read ("Third-party sources"), which keeps no record to answer from until
-  0.0.2 E7 step 5, whose resume after a changed `mail` or `intent` URL reads again
-  only the names it affects.
+- a records read and a follow-up ("Third-party sources"), which keep no record to
+  answer from until 0.0.2 E7 step 5, whose resume after a changed `mail` or `intent`
+  URL reads again only the names it affects.
 
 A record is checked the same way when it is looked up, since a resume's records come
 from stage files the operator may have edited: a redirect, a 429 or a 5xx on record is
