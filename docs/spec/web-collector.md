@@ -26,16 +26,17 @@ Every read goes through the gate, and the collector reads only what a rule consu
 | passive | TXT `<sel>._domainkey.<d>` for each selector declared under `mail.senders`, following its CNAME | `v`, `k`, `p`, `t`, and the key's modulus size |
 | passive | what Scope resolved for each name | the chain, rcode, addresses and the control label's answer, already in `scope.json` |
 | passive | A and AAAA of MX and NS targets outside every root; TXT of the targets of SPF `include:` and `redirect=`, within SPF's budget (below) | rcode and chain: resolved and recorded, never contacted ([scope.md](scope.md#third-party-sources)) |
-| observe | one TLS handshake on 443 per read name | version, verified, the gate's typed verification class, and the chain's subjects, issuers, names and validity |
+| observe | one TLS handshake on 443 per read name | version, verified, the gate's typed verification class, the TLS alert the server ended with, before the handshake completed or after (the chain kept), and the chain's subjects, issuers, names and validity |
 | observe | `GET https://name/` and `GET http://name/` for every read name; for a declared or first-party site also its entry points, `/robots.txt`, `/.well-known/security.txt` and one redirect hop on the same host ([scope.md](scope.md#connections)) | status, `location`, `server`, `x-powered-by`, the six security headers, `set-cookie` names and attributes, the redacted body within its cap |
 
-The gate's DNS client reads TXT (several strings per record, TCP when the answer is
-truncated), MX and NS ([scope.md](scope.md#third-party-sources), "The resolver"). A
-name scheck builds from the engagement file takes no underscore label but `_dmarc` and
-`_domainkey`; a name it reads from an answer (a CNAME hop, an SPF `include:` or
-`redirect=`, an MX or NS target) may hold underscore labels anywhere, within the gate's
-length and charset checks (`_spf.google.com`). A DKIM selector follows RFC 6376's
-sub-domain syntax, lowercased, at most 63 characters a label, with no underscore.
+The gate's DNS client reads TXT (each record its strings joined into one value, TCP when
+the answer is truncated), MX and NS ([scope.md](scope.md#third-party-sources), "The
+resolver"). A name scheck builds from the engagement file takes no underscore label but
+`_dmarc` and `_domainkey`; a name it reads from an answer (a CNAME hop, an SPF
+`include:` or `redirect=`, an MX or NS target) may hold underscore labels anywhere,
+within the gate's length and charset checks (`_spf.google.com`). A DKIM selector follows
+RFC 6376's sub-domain syntax, in either case, at most 63 characters a label, with no
+underscore; the name built from it is lowercase.
 
 **SPF's budget** is 10 DNS-querying terms per evaluation, counted across the whole tree
 (`include`, `a`, `mx`, `ptr`, `exists`, `redirect`; RFC 7208 §4.6.4). Only `include`
@@ -119,7 +120,10 @@ was declared ([engagement.md](engagement.md#intake-the-engagement-file), "Mail")
 | `tls.legacy_only`: "*name* accepts only TLS versions older than 1.2, which current browsers refuse" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
 
 A missing intermediate is worded "browsers may still accept it; command-line tools and
-API clients will not." scheck fetches no intermediate from the certificate's AIA URL.
+API clients will not." scheck fetches no intermediate from the certificate's AIA URL,
+on any platform ([scope.md](scope.md#connections)). When the gate could read no root
+certificate, every verification failure is classed `unclassified`, so the certificate
+rules abstain on every name.
 
 **The TLS-interception list** is versioned data in the tree: the issuers of products
 that inspect TLS on the operator's network (Zscaler, Netskope, Fortinet, Palo Alto,

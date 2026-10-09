@@ -105,6 +105,13 @@ func TestScopeSubject(t *testing.T) {
 		{"network:198.51.100.0/24", "url:https://198.51.100.7/", gate.Standing{UnderAsset: true, Root: "network:198.51.100.0/24"}},
 		{"network:198.51.100.0/24", "url:https://198.51.100.200/", gate.Standing{UnderAsset: true, Root: "network:198.51.100.0/24", ExcludedBy: "exclude[1]"}},
 		{"host:203.0.113.5:22", "url:https://203.0.113.5/", gate.Standing{UnderAsset: true, Root: "host:203.0.113.5:22"}},
+		// A name read for its records may hold underscore labels; it is
+		// placed by its labels, its excludes included.
+		{"domain:example.com", "domain:_dmarc.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com"}},
+		{"domain:example.com", "domain:s1._domainkey.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com"}},
+		{"domain:example.com", "domain:_dmarc.a.legacy.example.com", gate.Standing{UnderAsset: true, Root: "domain:example.com", ExcludedBy: "exclude[0]"}},
+		{"domain:example.com", "domain:_dmarc.example.org", gate.Standing{}},
+		{"domain:example.com", "domain:_dmarc.example.123", gate.Standing{}},
 		// A Workspace per-user subject is its tenant's; an organizational
 		// unit exclude never covers the tenant itself.
 		{"saas:google-workspace:example.com", "saas:google-workspace:example.com/users/12345", gate.Standing{UnderAsset: true, Root: "saas:google-workspace:example.com"}},

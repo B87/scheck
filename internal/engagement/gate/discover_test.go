@@ -161,11 +161,21 @@ func TestDiscovery(t *testing.T) {
 	if doc.Resolver == nil || doc.Resolver.Address != "192.0.2.53" || doc.Resolver.Rewrites || doc.Resolver.Controls != 2 || !doc.Resolver.Invalid {
 		t.Errorf("resolver %+v", doc.Resolver)
 	}
+	// A chain the resolver answered whole is not asked again, except a
+	// dangling chain's end, once, for the CNAME a DNS host may hide.
+	ends := 0
 	for _, q := range h.Queries() {
-		if strings.Contains(q, "legacy") || strings.Contains(q, "alice") || q == "edge.cdnprovider.example." || q == "gone.shops.example-provider.net." ||
+		if q == "gone.shops.example-provider.net." {
+			ends++
+			continue
+		}
+		if strings.Contains(q, "legacy") || strings.Contains(q, "alice") || q == "edge.cdnprovider.example." ||
 			!strings.HasSuffix(q, ".example.com.") && q != "example.com." && !strings.HasSuffix(q, ".invalid.") && q != "crt.sh." {
 			t.Errorf("queried %q", q)
 		}
+	}
+	if ends != 1 {
+		t.Errorf("a dangling chain's end was asked %d times", ends)
 	}
 	// The email identity reached no file in the run directory.
 	err := filepath.WalkDir(dir, func(path string, e os.DirEntry, err error) error {
@@ -436,6 +446,25 @@ func TestDiscoveryNetworkRootEvidence(t *testing.T) {
 	}
 	if ev := names["cdn.example.com"].FirstParty; ev != nil {
 		t.Errorf("cdn, one address outside the root: %+v", ev)
+	}
+}
+
+// A CNAME that an address query does not show, whose target does not
+// exist, is found by the CNAME query and listed as dangling, with and
+// without compact denial of existence, as the lab's DNS host answers it
+// (docs/eval/lab-0.0.2-domain.md).
+func TestDiscoveryFindsAHiddenDanglingCNAME(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		h := gate.NewHarness(t, nil)
+		h.CrtSh(`[{"name_value":"old.example.com","not_after":"2027-01-01T00:00:00"}]`)
+		h.DNS(map[string]string{"example.com": "addrs:198.51.100.1", "old.example.com": "hidden:gone.example.net"})
+		if compact {
+			h.CompactDenial()
+		}
+		doc, _ := discover(t, h, discoveryFile)
+		if old := byName(doc)["old.example.com"]; old.Status != engagement.NameDangling || !slices.Equal(old.Chain, []string{"gone.example.net"}) {
+			t.Errorf("compact %v: %+v", compact, old)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -18,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -60,10 +62,29 @@ type Response struct {
 type TLSInfo struct {
 	Version  string
 	Verified bool
-	// Error is why verification failed.
+	// Error is why verification failed, as text.
 	Error string
+	// Class is why verification failed, typed for the certificate rules
+	// (docs/spec/scope.md, "Connections"): one of the Class* values.
+	Class string
+	// Alert names the TLS alert the server ended TLS with
+	// (protocol_version, handshake_failure, ...): before the handshake
+	// completed, with no chain, or after, with the chain.
+	Alert string
 	Chain []Cert
 }
+
+// The verification classes (docs/spec/web-collector.md, "TLS and
+// certificate").
+const (
+	ClassExpired             = "expired"
+	ClassHostnameMismatch    = "hostname_mismatch"
+	ClassUntrustedIssuer     = "untrusted_issuer"
+	ClassMissingIntermediate = "missing_intermediate"
+	// ClassUnclassified is a failure scheck does not type, on which the
+	// certificate rules abstain.
+	ClassUnclassified = "unclassified"
+)
 
 // Cert is one certificate of a chain, as rules read it.
 type Cert struct {
@@ -180,10 +201,53 @@ type sending struct {
 	d     *dialer
 	start time.Time
 	res   Result
+	// shook is the state of a TLS handshake that completed: the server
+	// proved it holds its certificate's key (its signature over the
+	// handshake, then its Finished). Only then does a chain count when an
+	// alert follows; Go verifies a chain before that proof, and at TLS 1.2
+	// it asks for a client certificate before it too, so neither shows
+	// that the server holds the key.
+	shook atomic.Pointer[tls.ConnectionState]
 }
 
 func (s *sending) tlsConfig() *tls.Config {
-	return &tls.Config{ServerName: s.a.b.name, MinVersion: tls.VersionTLS12, RootCAs: s.g.roots}
+	return &tls.Config{ServerName: s.a.b.name, MinVersion: tls.VersionTLS12, RootCAs: s.g.roots,
+		// What net/http offers when it makes the connection itself.
+		NextProtos: []string{"h2", "http/1.1"}}
+}
+
+// dialTLS dials a checked address and completes the TLS handshake, for the
+// TLS op and as the HTTP transport's TLS dialer, so the gate knows the
+// handshake completed (shook).
+func (s *sending) dialTLS(ctx context.Context, network, addr string) (net.Conn, error) {
+	// net/http may dial again within one request (an HTTP/2 GOAWAY): what
+	// counts is the last connection's handshake, so an earlier one's is
+	// forgotten first.
+	s.shook.Store(nil)
+	raw, err := s.d.dial(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	hctx, hcancel := context.WithTimeout(ctx, tlsTimeout)
+	defer hcancel()
+	conn := tls.Client(raw, s.tlsConfig())
+	if err := conn.HandshakeContext(hctx); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	st := conn.ConnectionState()
+	s.shook.Store(&st)
+	return conn, nil
+}
+
+// tlsInfo is tlsInfo with the gate's roots: with none, a failure is not
+// classed, since every chain fails alike.
+func (s *sending) tlsInfo(st *tls.ConnectionState, verr *tls.CertificateVerificationError) *TLSInfo {
+	info := tlsInfo(s.red, st, verr, s.g.now())
+	if verr != nil && s.g.noRoots {
+		info.Class = ClassUnclassified
+	}
+	return info
 }
 
 // finish writes the result line and returns the result.
@@ -200,10 +264,14 @@ func (s *sending) finish(resp *Response, rt *retry) (Result, *retry) {
 		s.res.Response = resp
 		e.Status, e.Stored, e.Truncated = resp.Status, len(resp.Body), resp.Truncated
 		e.Redactions = len(resp.Redactions)
-		if resp.TLS != nil {
-			e.TLS = resp.TLS.Version
-			if !resp.TLS.Verified {
+		if t := resp.TLS; t != nil {
+			switch {
+			case t.Alert != "":
+				e.TLS = "alert:" + t.Alert
+			case !t.Verified:
 				e.TLS = "invalid"
+			default:
+				e.TLS = t.Version
 			}
 		}
 		if resp.Body != nil {
@@ -231,7 +299,22 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 	switch {
 	case errors.As(err, &verr):
 		s.res.end("unavailable:tls_invalid", verr.Err.Error())
-		return s.finish(&Response{TLS: tlsInfo(s.red, nil, verr)}, nil)
+		return s.finish(&Response{TLS: s.tlsInfo(nil, verr)}, nil)
+	case resp == nil && tlsAlert(err) != "" && s.shook.Load() == nil:
+		// The server ended the handshake before it completed: what it
+		// refused is the evidence (tls.legacy_only reads
+		// protocol_version), no chain counts, and nothing was read
+		// (docs/spec/scope.md, "Connections").
+		s.res.end("unavailable:tls_handshake", err.Error())
+		return s.finish(&Response{TLS: &TLSInfo{Alert: tlsAlert(err)}}, nil)
+	case resp == nil && tlsAlert(err) != "":
+		// The server ended TLS after the handshake completed, as one that
+		// requires a client certificate does at TLS 1.3: it answered, with
+		// the chain kept, and nothing was read.
+		info := s.tlsInfo(s.shook.Load(), nil)
+		info.Alert = tlsAlert(err)
+		s.res.end("unavailable:tls_refused", err.Error())
+		return s.finish(&Response{TLS: info}, nil)
 	case s.g.pastDeadline(s.g.now()):
 		s.res.end("unavailable:deadline", "limits.timeout ended the request in flight")
 	case !s.a.windowEnd.IsZero() && !s.g.now().Before(s.a.windowEnd):
@@ -256,19 +339,12 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 
 // handshake is a TLS op: the handshake and nothing after it.
 func (s *sending) handshake(ctx context.Context) (Result, *retry) {
-	raw, err := s.d.dial(ctx, "tcp", "")
+	conn, err := s.dialTLS(ctx, "tcp", "")
 	if err != nil {
 		return s.failed(err, true, nil)
 	}
-	defer func() { _ = raw.Close() }()
-	hctx, hcancel := context.WithTimeout(ctx, tlsTimeout)
-	defer hcancel()
-	conn := tls.Client(raw, s.tlsConfig())
-	if err := conn.HandshakeContext(hctx); err != nil {
-		return s.failed(err, true, nil)
-	}
-	st := conn.ConnectionState()
-	return s.finish(&Response{TLS: tlsInfo(s.red, &st, nil)}, nil)
+	defer func() { _ = conn.Close() }()
+	return s.finish(&Response{TLS: s.tlsInfo(s.shook.Load(), nil)}, nil)
 }
 
 // roundTrip sends an HTTP request on one fresh connection and reads its
@@ -277,10 +353,11 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 	g, a := s.g, s.a
 	tr := &http.Transport{
 		// No proxy: a proxy resolves names itself and sees every URL.
-		Proxy:                 nil,
-		DialContext:           s.d.dial,
-		TLSClientConfig:       s.tlsConfig(),
-		TLSHandshakeTimeout:   tlsTimeout,
+		Proxy:       nil,
+		DialContext: s.d.dial,
+		// The gate makes the TLS connection itself (dialTLS), with the
+		// same settings and timeout net/http would use.
+		DialTLSContext:        s.dialTLS,
 		ResponseHeaderTimeout: headersTimeout,
 		// One connection per request: a pooled connection would go to an
 		// address checked for an earlier request.
@@ -314,7 +391,7 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 
 	out := &Response{Status: resp.StatusCode}
 	if resp.TLS != nil {
-		out.TLS = tlsInfo(s.red, resp.TLS, nil)
+		out.TLS = s.tlsInfo(resp.TLS, nil)
 	}
 	out.Header, s.e.Headers, out.Redactions = keepHeaders(resp.Header, s.red)
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
@@ -714,13 +791,14 @@ func cookieShape(v string) string {
 // tlsInfo records a handshake. Certificate fields are target-derived, so
 // they are redacted like a body: an operator's redact_extra may name an
 // internal host a certificate lists.
-func tlsInfo(red *policy.Redactor, st *tls.ConnectionState, verr *tls.CertificateVerificationError) *TLSInfo {
+func tlsInfo(red *policy.Redactor, st *tls.ConnectionState, verr *tls.CertificateVerificationError, now time.Time) *TLSInfo {
 	str := func(v string) string { out, _ := red.RedactString(v); return out }
 	info := &TLSInfo{Verified: verr == nil}
 	var certs []*x509.Certificate
 	if verr != nil {
 		certs = verr.UnverifiedCertificates
 		info.Error = str(verr.Err.Error())
+		info.Class = verificationClass(verr.Err, certs, now)
 	}
 	if st != nil {
 		info.Version = tls.VersionName(st.Version)
@@ -736,4 +814,60 @@ func tlsInfo(red *policy.Redactor, st *tls.ConnectionState, verr *tls.Certificat
 		info.Chain = append(info.Chain, cert)
 	}
 	return info
+}
+
+// verificationClass types a verification failure. A chain no trusted root
+// signs is missing its intermediate when the server sent one certificate,
+// not self-signed, that names where its issuer's certificate is published
+// (AIA), as a public CA's always does: browsers may fetch it themselves,
+// and scheck fetches nothing. Any other untrusted chain, a self-signed
+// certificate or a private CA's, is from an untrusted issuer.
+func verificationClass(err error, served []*x509.Certificate, now time.Time) string {
+	var inv x509.CertificateInvalidError
+	var host x509.HostnameError
+	var unknown x509.UnknownAuthorityError
+	switch {
+	case errors.As(err, &host):
+		return ClassHostnameMismatch
+	case errors.As(err, &inv) && inv.Reason == x509.Expired && inv.Cert != nil && now.After(inv.Cert.NotAfter):
+		return ClassExpired
+	case errors.As(err, &unknown) && len(served) == 1 && !selfSigned(served[0]) && len(served[0].IssuingCertificateURL) > 0:
+		return ClassMissingIntermediate
+	case errors.As(err, &unknown) && len(served) > 0:
+		return ClassUntrustedIssuer
+	}
+	return ClassUnclassified
+}
+
+func selfSigned(c *x509.Certificate) bool {
+	return bytes.Equal(c.RawIssuer, c.RawSubject) && c.CheckSignatureFrom(c) == nil
+}
+
+// alertNames are the TLS alerts a server may end a handshake with, by the
+// text crypto/tls gives a received alert (RFC 8446 §6).
+var alertNames = map[string]string{
+	"tls: handshake failure": "handshake_failure", "tls: bad certificate": "bad_certificate",
+	"tls: illegal parameter": "illegal_parameter", "tls: protocol version not supported": "protocol_version",
+	"tls: insufficient security level": "insufficient_security", "tls: internal error": "internal_error",
+	"tls: unrecognized name": "unrecognized_name", "tls: no application protocol": "no_application_protocol",
+	"tls: certificate required": "certificate_required",
+}
+
+// tlsAlert names the alert a server ended the handshake with, "" when it
+// did not end with one; "alert" for one scheck does not name. crypto/tls
+// reports a received alert as a "remote error"; a server that answers with
+// a version below the client's minimum gets the client's own
+// protocol_version alert, which it reports as text.
+func tlsAlert(err error) string {
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "remote error" && op.Err != nil {
+		if n, ok := alertNames[op.Err.Error()]; ok {
+			return n
+		}
+		return "alert"
+	}
+	if err != nil && strings.Contains(err.Error(), "tls: server selected unsupported protocol version") {
+		return "protocol_version"
+	}
+	return ""
 }

@@ -618,9 +618,11 @@ redirect hop on the same host, on a declared or first-party site (`spec/scope.md
 applications and sites", "Connections"); header, cookie, `security.txt` and plain-HTTP
 rules on declared and first-party sites only. Single-fact rules for each, and
 `web.restricted_reachable`, which reads one response, the declaration and the vantage.
-The gate gains what they need: TXT (several strings, TCP on truncation), MX and NS in
-its DNS client, the labels `_dmarc` and `_domainkey` and dotted selectors in its DNS
-name type, and a typed certificate verification class beside the error text. Versioned
+The gate gains what they need: TXT (a record's strings joined, TCP on truncation), MX
+and NS in its DNS client, the labels `_dmarc` and `_domainkey` and dotted selectors in
+its DNS name type, a typed certificate verification class beside the error text, and
+the TLS alert that ended a handshake (`unavailable:tls_handshake`, or
+`unavailable:tls_refused` after the handshake completed). Versioned
 data in the tree: the takeover table, `PreloadedTLDs` (from Chromium's preload list,
 pinned to a commit), an embedded public-suffix snapshot
 (`golang.org/x/net/publicsuffix` stays barred by `scripts/depcheck.sh`), the
@@ -642,14 +644,20 @@ Built in steps, reviewed as E4 was:
 0. The definition: `spec/web-collector.md`, the frozen severity anchors, `PreloadedTLDs`;
    the lab's domain part sealed (`eval/lab-0.0.2-domain.md`).
 1. The gate, in two halves:
-   - 1a, the refactors carried from E4's reviews (below): a request's `Reason` from its
-     decision by one table, the longest functions split into steps, and
+   - 1a, done: the refactors carried from E4's reviews (below): a request's `Reason`
+     from its decision by one table, the longest functions split into steps, and
      `Scope.Admits`;
-   - 1b, what E7's reads need of the gate: TXT, MX and NS in its DNS client, the
-     underscore labels and DKIM selectors in its name types, a CNAME query when an
-     address query finds neither an address nor a CNAME (a DNS host may hide an in-zone
-     CNAME whose target does not exist), recorded fixtures of that and of a DNS host's
-     compact denial of existence, and the typed certificate verification class.
+   - 1b, done: what E7's reads need of the gate: TXT, MX and NS in its DNS client, and
+     a records read (`dns.records`) at a name built from the file, admitted as a
+     discovery lookup is (`spec/scope.md`, "Third-party sources"); the underscore
+     labels and DKIM selectors in its name types; a CNAME query at the chain's end,
+     once per name, when the queries there find nothing (a DNS host may hide an in-zone
+     CNAME whose target does not exist), with fixtures of that and of a DNS host's
+     compact denial of existence in the gate's fake zone; the typed certificate
+     verification class, the TLS alert that ended a handshake before or after it
+     completed, with the gate completing every handshake itself, and verification by Go's own verifier on every platform, so
+     that no intermediate is fetched outside the gate, with no roots read noted and
+     every failure then unclassified (`spec/scope.md`, "Connections").
 2. `internal/collector/web`: its declared ops for DNS records, the names the company's
    records point at, and takeover by fingerprint.
 3. The email rules.

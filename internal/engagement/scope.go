@@ -3,6 +3,7 @@ package engagement
 import (
 	"fmt"
 	"net/netip"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,7 +66,34 @@ func parseSubject(id string) (Ref, bool) {
 		}
 	}
 	r, err := parseLocator(Kind(kind), rest)
+	if err != nil && Kind(kind) == KindDomain {
+		// A name whose records the gate reads may hold underscore labels
+		// (_dmarc.example.com, s1._domainkey.example.com): it is placed by
+		// its labels, as any name is (docs/spec/scope.md, "The resolver").
+		d := strings.TrimSuffix(strings.ToLower(rest), ".")
+		if recordDomain(d) {
+			return Ref{Kind: KindDomain, ID: "domain:" + d, Written: rest, name: d}, true
+		}
+	}
 	return r, err == nil
+}
+
+// underscoreLabel is a label of a name read from or for its records.
+var underscoreLabel = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
+
+// recordDomain reports whether d is a lowercase DNS name of two labels or
+// more, any of which may hold underscores.
+func recordDomain(d string) bool {
+	labels := strings.Split(d, ".")
+	if len(d) > 253 || len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
+		return false
+	}
+	for _, l := range labels {
+		if !underscoreLabel.MatchString(l) {
+			return false
+		}
+	}
+	return true
 }
 
 // under is Under, and also places a URL root's robots.txt and security.txt

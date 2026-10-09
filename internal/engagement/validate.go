@@ -55,7 +55,9 @@ var (
 	rateRe  = regexp.MustCompile(`^([1-9][0-9]{0,5})/(s|m)$`)
 	loginRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
 	emailRe = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+)$`)
-	dkimRe  = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*$`)
+	// A DKIM selector: RFC 6376's sub-domain syntax, at most 63 characters
+	// a label, no underscore (docs/spec/scope.md, "The resolver").
+	dkimRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`)
 )
 
 // Options carry the catalogs the file is checked against, so this package

@@ -82,8 +82,9 @@ func (h *Harness) NewGate(cfg Config) (*Gate, error) {
 }
 
 // DNS sets what the resolver answers: "cname:<target>", "addrs:<a>,<b>",
-// "servfail", "refused" or "nodata"; a name not set is NXDOMAIN unless a
-// server registered it.
+// "servfail", "refused" or "nodata", or "hidden:<target>", a CNAME an
+// address query does not show when its target does not exist; a name not
+// set is NXDOMAIN unless a server registered it.
 func (h *Harness) DNS(names map[string]string) {
 	z := map[string]record{}
 	for n, v := range names {
@@ -91,6 +92,8 @@ func (h *Harness) DNS(names map[string]string) {
 		switch kind {
 		case "cname":
 			z[n] = record{cname: val}
+		case "hidden":
+			z[n] = record{cname: val, hidden: true}
 		case "addrs":
 			z[n] = record{addrs: strings.Split(val, ",")}
 		case "servfail":
@@ -103,6 +106,11 @@ func (h *Harness) DNS(names map[string]string) {
 	}
 	h.w.zone = newZone(z)
 }
+
+// CompactDenial answers a name that does not exist with NOERROR and no
+// record, as a signed zone with compact denial of existence does; call it
+// after DNS.
+func (h *Harness) CompactDenial() { h.w.zone.compact = true }
 
 // Queries lists the names the resolver was asked, with their trailing dot.
 func (h *Harness) Queries() []string {

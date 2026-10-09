@@ -2,11 +2,22 @@ package gate
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"errors"
+	"io"
+	"math/big"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -202,19 +213,26 @@ func TestClassify(t *testing.T) {
 }
 
 // A dangling name is looked up as a fully qualified name, with no search
-// domain appended, and nothing is dialled.
+// domain appended, and nothing is dialled. An address query that finds no
+// address and no CNAME is followed by a CNAME query for the name.
 func TestNameThatDoesNotResolve(t *testing.T) {
 	w := newWorld(t)
 	res := w.gate().Send(context.Background(), web("https", "old.example.com", "/"))
 	if res.Decision != "unavailable:nxdomain" || w.dials.Load() != 0 {
 		t.Fatalf("%+v", res)
 	}
-	if len(w.queries) != 1 || w.queries[0] != "old.example.com." {
+	if !slices.Equal(w.queries, []string{"old.example.com.", "old.example.com."}) {
 		t.Errorf("queries %q", w.queries)
 	}
-	if es := w.audit.entries(t); len(es) != 3 || es[0].Event != "dns" || es[0].Decision != "sent" ||
-		es[1].Event != "dns_answer" || es[1].Decision != "unavailable:nxdomain" {
-		t.Errorf("audit %+v", es)
+	es := w.audit.entries(t)
+	if len(es) != 5 || es[4].Event != "refused" {
+		t.Fatalf("audit %+v", es)
+	}
+	for i, typ := range []string{"A", "CNAME"} {
+		if q, a := es[2*i], es[2*i+1]; q.Event != "dns" || q.Decision != "sent" || q.Params["type"] != typ ||
+			a.Event != "dns_answer" || a.Decision != "unavailable:nxdomain" {
+			t.Errorf("audit %d: %+v %+v", i, q, a)
+		}
 	}
 }
 
@@ -336,33 +354,189 @@ func TestRedirectsAreNotFollowed(t *testing.T) {
 	}
 }
 
-// A certificate that does not verify is recorded with its chain, and no
-// HTTP byte is sent: the server's handler never runs (E4 test 12).
+// A certificate that does not verify is recorded with its chain and its
+// typed class, and no HTTP byte is sent: the server's handler never runs
+// (E4 test 12; docs/spec/scope.md, "Connections").
 func TestInvalidCertificateSendsNoHTTP(t *testing.T) {
-	for name, cert := range map[string]func(w *world) tls.Certificate{
-		"self-signed": func(w *world) tls.Certificate {
+	for name, tc := range map[string]struct {
+		cert  func(w *world) tls.Certificate
+		class string
+	}{
+		"self-signed": {func(w *world) tls.Certificate {
 			return w.leaf([]string{"www.example.com"}, time.Now().Add(time.Hour), true)
-		},
-		"expired": func(w *world) tls.Certificate {
+		}, ClassUntrustedIssuer},
+		"expired": {func(w *world) tls.Certificate {
 			return w.leaf([]string{"www.example.com"}, time.Now().Add(-time.Hour), false)
-		},
-		"wrong name": func(w *world) tls.Certificate {
+		}, ClassExpired},
+		"wrong name": {func(w *world) tls.Certificate {
 			return w.leaf([]string{"other.example.net"}, time.Now().Add(time.Hour), false)
-		},
+		}, ClassHostnameMismatch},
+		"missing intermediate": {func(w *world) tls.Certificate {
+			return w.intermediateLeaf("www.example.com", true)
+		}, ClassMissingIntermediate},
+		"a private CA's leaf alone": {func(w *world) tls.Certificate {
+			return w.intermediateLeaf("www.example.com", false)
+		}, ClassUntrustedIssuer},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := newWorld(t)
-			c := cert(w)
+			c := tc.cert(w)
 			srv := w.serve("www.example.com", "198.51.100.50", 443, &c, ok200("hi"))
 			res := w.gate().Send(context.Background(), web("https", "www.example.com", "/"))
 			if res.Decision != "unavailable:tls_invalid" || res.Response == nil || res.Response.TLS.Verified ||
-				len(res.Response.TLS.Chain) == 0 || res.Response.TLS.Error == "" {
-				t.Fatalf("%+v", res)
+				len(res.Response.TLS.Chain) == 0 || res.Response.TLS.Error == "" || res.Response.TLS.Class != tc.class {
+				t.Fatalf("%+v %+v", res, res.Response.TLS)
 			}
 			if srv.hits.Load() != 0 {
 				t.Error("the handler ran behind a certificate that did not verify")
 			}
 		})
+	}
+}
+
+// The gate's own TLS dialer offers HTTP/2 as net/http does, and the
+// response carries the verified handshake.
+func TestHTTP2ThroughTheGatesDialer(t *testing.T) {
+	w := newWorld(t)
+	w.http2 = true
+	c := w.leaf([]string{"www.example.com"}, time.Now().Add(time.Hour), false)
+	proto := make(chan int, 1)
+	w.serve("www.example.com", "198.51.100.55", 443, &c, func(rw http.ResponseWriter, r *http.Request) {
+		proto <- r.ProtoMajor
+		ok200("hi")(rw, r)
+	})
+	res := w.gate().Send(context.Background(), web("https", "www.example.com", "/"))
+	if !res.OK() || res.Response.TLS == nil || !res.Response.TLS.Verified || len(res.Response.TLS.Chain) == 0 {
+		t.Fatalf("%+v", res)
+	}
+	if p := <-proto; p != 2 {
+		t.Errorf("HTTP/%d", p)
+	}
+}
+
+// failingSigner holds a certificate's public key and cannot sign.
+type failingSigner struct{ pub crypto.PublicKey }
+
+func (f failingSigner) Public() crypto.PublicKey { return f.pub }
+
+func (failingSigner) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	return nil, errors.New("no key")
+}
+
+// intermediateLeaf is a leaf an intermediate signs, the intermediate one
+// the test CA signs, served without the intermediate; aia says the leaf
+// names where its issuer's certificate is published, as a public CA's do.
+func (w *world) intermediateLeaf(name string, aia bool) tls.Certificate {
+	w.t.Helper()
+	ikey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	itmpl := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: "Test Intermediate"},
+		NotBefore: time.Now().Add(-2 * time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageCertSign}
+	ider, err := x509.CreateCertificate(rand.Reader, itmpl, w.ca, &ikey.PublicKey, w.caKey)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	inter, _ := x509.ParseCertificate(ider)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano() + 1), Subject: pkix.Name{CommonName: name},
+		DNSNames: []string{name}, NotBefore: time.Now().Add(-2 * time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	if aia {
+		tmpl.IssuingCertificateURL = []string{"http://ca.example/intermediate.crt"}
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, inter, &key.PublicKey, ikey)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// A server that speaks only TLS versions older than 1.2 ends the handshake
+// with a protocol_version alert: recorded as the evidence, not as a
+// certificate failure, and nothing is read (docs/spec/web-collector.md,
+// "TLS and certificate", tls.legacy_only).
+func TestHandshakeAlertIsRecorded(t *testing.T) {
+	w := newWorld(t)
+	w.tlsConfig = func(c *tls.Config) { c.MinVersion, c.MaxVersion = tls.VersionTLS10, tls.VersionTLS11 }
+	c := w.leaf([]string{"www.example.com"}, time.Now().Add(time.Hour), false)
+	srv := w.serve("www.example.com", "198.51.100.51", 443, &c, ok200("hi"))
+	g := w.gate()
+	for _, r := range []Request{web("https", "www.example.com", "/"),
+		{Op: "web.cert", Asset: "domain:example.com", Params: map[string]string{"host": "www.example.com"}}} {
+		res := g.Send(context.Background(), r)
+		if res.Decision != "unavailable:tls_handshake" || res.Reason != "unavailable:tls_handshake" || res.Response == nil ||
+			res.Response.TLS.Alert != "protocol_version" || res.Response.TLS.Class != "" {
+			t.Fatalf("%s: %+v", r.Op, res)
+		}
+	}
+	if srv.hits.Load() != 0 {
+		t.Error("the handler ran")
+	}
+	for _, e := range w.audit.entries(t) {
+		if e.Event == "result" && e.TLS != "alert:protocol_version" {
+			t.Errorf("result line %+v", e)
+		}
+	}
+	// A chain counts with an alert only once the handshake completed, which
+	// proves the server holds its key. A server that requires a client
+	// certificate alerts after that at TLS 1.3, so its chain is kept (the
+	// certificate read succeeds; a page read is tls_refused), and during the
+	// handshake at TLS 1.2, where nothing proves the key yet (a server may
+	// skip its signed key exchange and ask for a certificate at once), so
+	// no chain counts.
+	for name, version := range map[string]uint16{"TLS 1.2": tls.VersionTLS12, "TLS 1.3": tls.VersionTLS13} {
+		w := newWorld(t)
+		w.tlsConfig = func(c *tls.Config) { c.ClientAuth, c.MaxVersion = tls.RequireAnyClientCert, version }
+		c := w.leaf([]string{"mtls.example.com"}, time.Now().Add(time.Hour), false)
+		w.serve("mtls.example.com", "198.51.100.52", 443, &c, ok200("hi"))
+		g := w.gate()
+		cert := g.Send(context.Background(), Request{Op: "web.cert", Asset: "domain:example.com", Params: map[string]string{"host": "mtls.example.com"}})
+		page := g.Send(context.Background(), web("https", "mtls.example.com", "/"))
+		if version == tls.VersionTLS13 {
+			if !cert.OK() || cert.Response == nil || !cert.Response.TLS.Verified || len(cert.Response.TLS.Chain) == 0 {
+				t.Errorf("%s certificate: %+v", name, cert)
+			}
+			if page.Decision != "unavailable:tls_refused" || page.Reason != "unavailable:tls_refused" || page.Response == nil ||
+				!page.Response.TLS.Verified || len(page.Response.TLS.Chain) == 0 || page.Response.TLS.Alert != "certificate_required" {
+				t.Errorf("%s page: %+v %+v", name, page, page.Response.TLS)
+			}
+			continue
+		}
+		for op, res := range map[string]Result{"certificate": cert, "page": page} {
+			if res.Decision != "unavailable:tls_handshake" || res.Response == nil || res.Response.TLS.Verified ||
+				len(res.Response.TLS.Chain) != 0 || res.Response.TLS.Alert != "handshake_failure" {
+				t.Errorf("%s %s: %+v", name, op, res)
+			}
+		}
+	}
+	// A server that sends a valid certificate it cannot sign with, then an
+	// alert, never proved it holds the key: no chain counts, at either
+	// version, and nothing is verified.
+	for name, version := range map[string]uint16{"TLS 1.2": tls.VersionTLS12, "TLS 1.3": tls.VersionTLS13} {
+		w := newWorld(t)
+		w.tlsConfig = func(c *tls.Config) { c.MaxVersion = version }
+		c := w.leaf([]string{"keyless.example.com"}, time.Now().Add(time.Hour), false)
+		c.PrivateKey = failingSigner{c.PrivateKey.(crypto.Signer).Public()}
+		w.serve("keyless.example.com", "198.51.100.54", 443, &c, ok200("hi"))
+		g := w.gate()
+		for _, r := range []Request{web("https", "keyless.example.com", "/"),
+			{Op: "web.cert", Asset: "domain:example.com", Params: map[string]string{"host": "keyless.example.com"}}} {
+			res := g.Send(context.Background(), r)
+			if res.Decision != "unavailable:tls_handshake" || res.Response == nil || res.Response.TLS.Verified || len(res.Response.TLS.Chain) != 0 {
+				t.Errorf("%s %s: %+v", name, r.Op, res)
+			}
+		}
+	}
+	for err, want := range map[error]string{
+		&net.OpError{Op: "remote error", Err: errors.New("tls: handshake failure")}:      "handshake_failure",
+		&net.OpError{Op: "remote error", Err: errors.New("tls: alert(99)")}:              "alert",
+		errors.New("tls: server selected unsupported protocol version 301"):              "protocol_version",
+		&net.OpError{Op: "dial", Err: errors.New("tls: protocol version not supported")}: "",
+		errors.New("connection refused"):                                                 "",
+	} {
+		if got := tlsAlert(err); got != want {
+			t.Errorf("tlsAlert(%v) = %q; want %q", err, got, want)
+		}
 	}
 }
 

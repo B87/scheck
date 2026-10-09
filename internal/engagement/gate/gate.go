@@ -164,8 +164,11 @@ type Gate struct {
 	scopedResolvers bool
 	exchange        func(ctx context.Context, server string, query []byte, tcp bool) ([]byte, error)
 	roots           *x509.CertPool
-	sleep           func(ctx context.Context, d time.Duration) error
-	now             func() time.Time
+	// noRoots says no root could be read: every chain fails to verify, and
+	// none is classed (docs/spec/scope.md, "Connections").
+	noRoots bool
+	sleep   func(ctx context.Context, d time.Duration) error
+	now     func() time.Time
 
 	limits limiters
 	dns    *limiter
@@ -225,6 +228,8 @@ func New(cfg Config) (*Gate, error) {
 	if g.getenv == nil {
 		g.getenv = os.Getenv
 	}
+	var rootsNote string
+	g.roots, rootsNote = systemRoots()
 	if n := cfg.Net; n != nil {
 		if n.Dial != nil {
 			g.dial = n.Dial
@@ -238,7 +243,12 @@ func New(cfg Config) (*Gate, error) {
 		if n.Exchange != nil {
 			g.exchange = n.Exchange
 		}
-		g.roots = n.RootCAs
+		if n.RootCAs != nil {
+			g.roots, rootsNote = n.RootCAs, ""
+		}
+	}
+	if rootsNote != "" {
+		g.notes, g.noRoots = append(g.notes, rootsNote), true
 	}
 	// A proxy resolves names itself, which defeats the address checks, and
 	// it sees every URL (docs/spec/scope.md, "Connections").

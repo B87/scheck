@@ -66,11 +66,7 @@ func (g *Gate) record(e Entry) error {
 	// DestIP too: the resolver's address, or one dialled, which the gate
 	// refuses when redact_extra matches it.
 	e.URL, e.Detail, e.DestIP = red(e.URL), red(e.Detail), red(e.DestIP)
-	for i, a := range e.Answers {
-		if i == 0 {
-			e.Answers = append([]string(nil), e.Answers...)
-		}
-		e.Answers[i] = red(a)
-	}
+	// Answers are not: each is built from parts already redacted one by
+	// one (auditAnswer), and a second pass would redact their markers again.
 	return g.audit.Record(e)
 }

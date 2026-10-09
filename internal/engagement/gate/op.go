@@ -792,14 +792,52 @@ func userKey(v string) (string, error) {
 	return strings.ToLower(local) + "@" + d, nil
 }
 
+// dnsName is a host name: letters, digits and hyphens, lowercased.
 func dnsName(v string) (string, error) {
+	return checkName(v, labelRE.MatchString)
+}
+
+// answerLabelRE is a label of a name read from an answer, which may hold
+// underscores anywhere (RFC 2181 §11; _spf.google.com).
+var answerLabelRE = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
+
+// answerName is a name read from an answer: a CNAME hop, an MX or NS target,
+// an SPF include (docs/spec/scope.md, "The resolver").
+func answerName(v string) (string, error) {
+	return checkName(v, answerLabelRE.MatchString)
+}
+
+// recordName is a name scheck builds from the engagement file to read its
+// records: a host name, with either _dmarc as its first label or one
+// _domainkey label after a DKIM selector of one or more labels
+// (docs/spec/scope.md, "The resolver"); no other underscore label.
+func recordName(v string) (string, error) {
+	d, err := answerName(v)
+	if err != nil {
+		return "", err
+	}
+	labels := strings.Split(d, ".")
+	dmarc := labels[0] == "_dmarc"
+	for i, l := range labels {
+		switch {
+		case labelRE.MatchString(l):
+		case l == "_dmarc" && i == 0:
+		case l == "_domainkey" && i > 0 && !dmarc && !slices.Contains(labels[:i], "_domainkey"):
+		default:
+			return "", errors.New("not a DNS name scheck reads records at")
+		}
+	}
+	return d, nil
+}
+
+func checkName(v string, label func(string) bool) (string, error) {
 	d := strings.ToLower(v)
 	labels := strings.Split(d, ".")
 	if len(d) > 253 || len(labels) < 2 || strings.Trim(labels[len(labels)-1], "0123456789") == "" {
 		return "", errors.New("not a DNS name")
 	}
 	for _, l := range labels {
-		if !labelRE.MatchString(l) {
+		if !label(l) {
 			return "", errors.New("not a DNS name")
 		}
 	}

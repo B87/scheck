@@ -194,6 +194,8 @@ func TestValidationErrors(t *testing.T) {
 		{"intent url outside scope", minimal + "intent:\n  not_exposed:\n    - {url: https://admin.example.org/, audience: vpn}\n", 12, "intent.not_exposed[0].url", "falls under no root", false},
 		{"mail domain outside scope", minimal + "mail:\n  no_mail: [example.org]\n", 11, "mail.no_mail[0]", "no domain root", false},
 		{"sending and no_mail", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid}\n  no_mail: [example.com]\n", 13, "mail.no_mail[0]", "also has a sender", false},
+		{"dkim selector with an underscore", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid, dkim_selectors: [s_1]}\n", 12, "mail.senders[0].dkim_selectors[0]", "not a DKIM selector", false},
+		{"dkim selector label too long", minimal + "mail:\n  senders:\n    - {domain: example.com, service: sendgrid, dkim_selectors: [" + strings.Repeat("s", 64) + "]}\n", 12, "mail.senders[0].dkim_selectors[0]", "not a DKIM selector", false},
 		{"not_used area", minimal + "not_used: [servers]\n", 10, "not_used[0]", "not one of", false},
 		{"ci not declared", minimal + "assets:\n  shop-repo:\n    repo: github:example-org/shop\n    ci: circleci\n", 13, "assets.shop-repo.ci", "not a tool declared", false},
 		{"same login twice", minimal + "people:\n  a: {kind: employee, github: Alice}\n  b: {kind: contractor, github: alice}\n", 12, "people.b.github", "also a's", false},
