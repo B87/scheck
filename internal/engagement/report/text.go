@@ -30,6 +30,13 @@ func WriteText(w io.Writer, r *Report, opt Options) error {
 	for _, a := range r.Assets {
 		t.names[a.ID] = a.Name
 	}
+	// A finding may belong to a name found under a root, not declared: it
+	// is named as itself.
+	for _, f := range r.Findings {
+		if _, ok := t.names[f.Key.Asset]; !ok && f.AssetName != "" {
+			t.names[f.Key.Asset] = f.AssetName
+		}
+	}
 	t.zone = time.UTC
 	if z, err := time.LoadLocation(r.Engagement.Timezone); err == nil {
 		t.zone = z

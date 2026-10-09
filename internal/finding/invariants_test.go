@@ -115,6 +115,11 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for id := range judgementDefs {
 		reachable[id] = true
 	}
+	// The web collector's own rules raise these; its tests prove each one
+	// fires, is disproved and abstains (internal/collector/web).
+	for _, d := range webDefs {
+		reachable[d.ID] = true
+	}
 	for _, d := range Defs() {
 		if !reachable[d.ID] {
 			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)

@@ -48,15 +48,21 @@ the installed CLI's behaviour differs from this skill: v0.0.1 has only `local` a
 ## What this build does
 
 `scheck run` takes an engagement file or `--host`, runs the stages (intake, scope,
-recon, plan, check, analyze, report) and prints the **engagement report**. Only hosts
-are assessed in this build. A `domain` root is read (DNS and mail records, and the
-certificate and front page of each name Scope chose, which contacts the company's web
-servers) but no rule judges it yet. It and a declared root of any other kind (a SaaS
-tenant, a GitHub organization) are reported as `collector_not_built` and the run exits
-2; tell the user that area was not assessed, never that it is fine.
+recon, plan, check, analyze, report) and prints the **engagement report**. Hosts are
+assessed, and a `domain` root in part. A `domain` root is read (DNS and mail records,
+and the certificate and front page of each name Scope chose, which contacts the
+company's web servers) and judged by DNS rules only: a record pointing at a name that
+does not exist (`dns.dangling_external`, `dns.dangling_internal`) and a public name
+publishing a private address (`dns.private_address`). Subdomain takeover, TLS,
+certificates and email are not judged yet: the `external` row is `partial` at best and
+the `email` row `not_assessed` with `no_rule`. A declared root of any other kind (a
+SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
+exits 2. Tell the user what was not assessed, never that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
+A domain's findings come from the web collector's DNS rules, one per record or name
+(its `subject`), with evidence read through the scope gate as `anonymous`.
 **No model assesses anything.** A model-assessed pass exists in the codebase, did not
 earn its cost against criteria frozen before it was built, and is not in the CLI: a run
 needs no API key and sends nothing it read off the machine. The model flags
@@ -114,10 +120,17 @@ and prints the file resolved without contacting anything. `scope` also expands e
 company's: in `scope.json`, `domains[].names[]` carries each name's `status` (`resolves`,
 `dangling` with whether it is a stale record or a takeover candidate, `no_longer_exists`,
 `no_address`, `insufficient_evidence`, `matches_wildcard`, `excluded`, `not_checked`),
-its `target` (what a hand-written `first_party: {confirmed_by, date, target}` must
-name) and whether Recon reads it; `points_at` lists the services outside every root that
+its lookup's `outcome` and `request_id` (its line in `audit.jsonl`), its `target` (what
+a hand-written `first_party: {confirmed_by, date, target}` must name) and whether Recon
+reads it; `points_at` lists the services outside every root that
 names point at, recorded and never contacted; `resolver.rewrites_nxdomain` true means
-discovered names were not checked.
+discovered names were not checked, and `resolver.control_outcome` is what the test
+lookup under `invalid.` came to: unless it is `nxdomain`, `nodata` or `addresses`,
+nobody knows whether the resolver invents answers, discovered names without first-party
+evidence were not read, and every DNS verdict on a domain abstains
+(`unavailable:resolver_unchecked`, or `unavailable:resolver_rewrites` when it does).
+Recon tests its own session's resolver the same way, and its verdicts abstain the same
+way when that one is unknown or rewrites.
 
 | Exit | Meaning |
 |---|---|
@@ -163,12 +176,16 @@ in this order:
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no
-   rule judges; say so when you report it.
+   rule judges; say so when you report it. The external row has sub-items per domain
+   root; one there is `not_applicable` when its rules had nothing to judge (no CNAME, no
+   MX), since anything scheck could not read makes it `partial` or `not_assessed`.
 4. **`summary`**: up to five `items` to fix first (open, medium or above), `more` past
    those, and counts of areas and of rules that had no usable evidence.
 5. **`findings`**: one record per instance, keyed `{id, asset, subject}`, already in
    ranking order: open findings by severity in context first, then informational, then
-   accepted. Lead with the first. `severity`
+   accepted. Lead with the first. A domain finding's `asset` is the most specific one
+   holding its subject: a name found under a root is its own asset (`domain:<name>`,
+   `asset_name` the name) even when nobody declared it. `severity`
    comes from code, never a model: `severity_base` plus `adjustments`, each with its
    `rule`, `by` (`collector` or `engagement`) and `source` (a key in the engagement file
    or an observation). `status` is `open` or `accepted`; an accepted finding has an
@@ -178,14 +195,24 @@ in this order:
    `remediation` is advice for the human; scheck never runs it, and neither should you
    unless the user asks. `accept_template` is the entry to paste into
    `intent.accepted_risks` for a risk the user decides not to fix; `reason` and
-   `accepted_by` are left empty on purpose for the risk's owner to write.
+   `accepted_by` are left empty on purpose for the risk's owner to write. A finding
+   with a `subject` puts it in the template; an entry without one accepts every
+   instance of that id on the asset, and only on that asset: a name under a domain root
+   is its own asset, and the template names it by its id (`domain:<name>`) when it is
+   not declared.
 6. **`assessments`**: every selected rule per asset, `matched`, `not_matched`,
    `not_applicable` or `not_assessed`, and whether it decided on `complete` evidence.
    `not_matched` means the evidence disproved that one predicate; `not_assessed` is
    never a pass.
 7. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
    `expired`, `not_applied`, `not_matched` for likely fixed, `rule_not_decided`,
-   `subject_not_found`), and the items for a readout.
+   `subject_not_found` when no instance with that subject was read on this run), and the
+   items for a readout. A `rule_not_decided` whose `why` says "an instance is open under
+   it" means the entry is on a root while the finding is on a name under it: tell the
+   user to accept it on the asset it names. A `subject_not_found` whose `why` says "that
+   subject was read on" names the asset the entry belongs on; one that says "nothing
+   with that subject points anywhere" means the record is gone: confirm, then remove the
+   entry.
 8. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
    count, of which `control_lookups` and `control_invalid` are the random test names,
    crt.sh with the domains asked about, a provider with the environment variable its

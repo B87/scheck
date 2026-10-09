@@ -669,17 +669,30 @@ Built in steps, reviewed as E4 was:
      NS, the addresses of its MX and NS targets, and the front page over https and http
      of each name Scope marked to read (`web.front`), the https read's handshake the
      name's one TLS handshake and its certificate read. What it reads is kept in
-     `recon.json`, only the fields the rules read; no rule judges it, so the root stays
-     `collector_not_built`, or `limit_reached` when `limits.timeout` ends the engagement
-     before or while it is read, and the run exits 2. A `url` root and a domain asset that is
-     not a root are not read yet;
-   - 2b: the path a finding takes when it is not a host's: a rule interface over a
-     collector's evidence, the report's input, coverage rows for the external and
-     email areas, and E7's subject kinds in `docs/engagement-report-schema.json`; on
-     it, the takeover table and the `dns.*` rules. A domain root's coverage replaces
-     `collector_not_built`, whose text ("this version of scheck does not read it.
-     Nothing was read from it.", and "is not read by this version" in the exit line) is
-     false for a domain root read in 2a and stays until then (decided 2026-10-09).
+     `recon.json`, only the fields the rules read; the root is `limit_reached` when
+     `limits.timeout` ends the engagement before or while it is read. A `url` root is
+     not read yet;
+   - 2b, split in two on 2026-10-09:
+     - 2b-i, done: the path a finding takes when it is not a host's, proven with
+       `dns.dangling_external`, `dns.dangling_internal` and `dns.private_address`: a
+       rule interface over a collector's evidence (`Judge`, run in Recon, its verdicts
+       in `recon.json`), Scope's lookups with their outcome and request id in
+       `scope.json`, the report's input, findings and acceptance by subject, coverage
+       rows for the external and email areas, and E7's subject kinds in
+       `docs/engagement-report-schema.json` (`spec/web-collector.md`, "DNS and
+       takeover"; `spec/engagement.md`, "Coverage", "Findings"). A read domain root is
+       `collected`: its coverage replaces `collector_not_built`, and its findings set
+       the exit code. A finding belongs to the most specific asset holding its subject,
+       a name found under the root its own; a declared domain asset under a read root is
+       recorded with it; nothing unread counts as nothing found, a verdict standing only
+       when Scope's resolver and the one this session's Recon checked with its own
+       control lookup are known not to invent answers (`spec/scope.md`, "Discovery");
+       and the model path's store refuses an id that is not a host finding's;
+     - 2b-ii: the takeover table, `dns.takeover_candidate` and
+       `dns.unclaimed_at_provider`, and the chains they decide carved out of
+       `dns.dangling_external`; with the takeover rules' wildcards, a name matching its
+       root's wildcard answer, which 2b-i judges by neither name rule, filed once on
+       `*.<root>` (`spec/web-collector.md`, "Wildcards").
 3. The email rules.
 4. The web, TLS and header rules, and their data.
 5. `--vantage`, a resume after a changed `mail` or `intent` URL, `web.restricted_reachable`,
@@ -709,6 +722,34 @@ and entry points it affects (carried from E4 step 4b).
   and a block-page marker (`spec/scope.md`, "Connections");
 - coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got no
   answer exiting 2 only for what was declared.
+
+**Carried from E7 step 2b-i's review** (code review, 2026-10-09), each fixed before E7
+closes:
+
+- an observed item's `collected_at` is the run's start, not when its request was read
+  (`spec/engagement.md`, "Findings");
+- a domain asset's command trace is empty: the report lists no request that touched it
+  (`spec/engagement.md`, "Text and JSON"), as before 2b-i;
+- `method.levels_used` claims `observe` for every read domain root, including one whose
+  names had no front page requested (`spec/engagement.md`, "Runs, state and
+  configuration").
+
+**Carried from E7 step 2b-i** (2026-10-09), for the `security-consultant` before E7
+closes: a resolver that answers `invalid.` itself, as RFC 6761 lets it, and rewrites
+everything else passes the control lookup, so a dangling target can be missed and shown
+as disproved (`spec/scope.md`, "Discovery"; `spec/web-collector.md`, "DNS and
+takeover"). Also before E7 closes:
+
+- an acceptance with no subject on a `domain:` name now gone comes out
+  `rule_not_decided`; whether it should read as `subject_not_found` ("remove the
+  entry") is the caller's or the `security-consultant`'s;
+- "What left this machine" says "one under invalid." though Scope and Recon may each
+  send one (`gate/egress.go` keeps a bool; the schema's `control_invalid` says "one");
+  count them, and settle the wording with the `client`;
+- Recon's own resolver check is not in `recon.json`: a reader sees
+  `unavailable:resolver_*` without the outcome that caused it;
+- `spec/scope.md` "Discovery" calls the `invalid.` control "the only lookup outside
+  every root", which chain-following and the follow-ups no longer make true.
 
 **Carried to 0.0.3 from E7's definition** (2026-10-09): an SOA lookup of a dangling
 target's registrable domain, which would tell whether anyone can register it

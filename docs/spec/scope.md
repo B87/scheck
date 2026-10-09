@@ -177,7 +177,19 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    read even then. The control names are random. A resolver that answers `.invalid`
    itself, as RFC 6761 lets it, and rewrites everything else passes the first control;
    the per-root control is the safety net, and under rewriting a dangling verdict can
-   only be missed, never invented.
+   only be missed, never invented. `scope.json`'s `resolver` records what the
+   `invalid.` lookup came to (`control_outcome`: its outcome, or the gate's decision
+   when it was not sent) beside `rewrites_nxdomain`. Whether the resolver rewrites is
+   known only when that lookup said NXDOMAIN or NODATA, or got an address. Otherwise no
+   discovered name without first-party evidence is read ("not read: whether the
+   resolver answers names that do not exist is unknown"), a declared name is read even
+   then, and every DNS verdict of the web collector abstains as
+   `unavailable:resolver_unchecked`
+   ([web-collector.md](web-collector.md#dns-and-takeover)). Each session that runs
+   Recon on a domain root sends a control lookup of its own under `invalid.`, once,
+   before its first read through the resolver, since a resumed session may be on
+   another network; the web collector's verdicts stand only when both Scope's resolver
+   and that session's are known not to invent answers.
 2. **Names.** Every domain root, every `domain`, `url` and `host` asset written by name
    under it, and every name certificate transparency returns under it. A wildcard
    entry `*.x` is recorded as "wildcard certificate for x" and never queried
@@ -752,7 +764,7 @@ Each source is a family of ops with its own literal host:
 
 A query to a source names only an in-scope root or asset. Following a CNAME chain is
 part of resolving the in-scope name; a standalone lookup of a name outside every root
-is refused, except the control query under `invalid.` ("Discovery"), the literal
+is refused, except the control queries under `invalid.` ("Discovery"), the literal
 hosts of the sources in this table, which the gate resolves to reach them, and the
 names the company's own records point at ("Follow-ups" below), resolved as a CNAME
 chain is followed: A and AAAA of its MX and NS targets, and TXT of the targets of its SPF

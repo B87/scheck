@@ -712,11 +712,16 @@ target is contacted, a host or jump host without an SSH user. From E4 it also ex
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
 is collected. A `domain` root is read through the web collector (E7 step 2a,
-[web-collector.md](web-collector.md#reads)) and, until its rules land in step 2b,
-recorded as `collected` with reason `collector_not_built`, or with `limit_reached` when
-`limits.timeout` ends the engagement before it is read (`not_collected`) or while it is
-(`incomplete`); an asset of any other kind is `not_collected` with reason
-`collector_not_built`. Any of these makes the run exit 2 when the asset is a root.
+[web-collector.md](web-collector.md#reads)), judged by its DNS rules in Recon (step
+2b-i, [web-collector.md](web-collector.md#dns-and-takeover)) and recorded as
+`collected`, or with `limit_reached` when `limits.timeout` ends the engagement before it
+is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
+`not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
+when the asset is a root. A declared `domain` asset under a root that was read is
+recorded with the root's status and the detail "read with *root*"
+([web-collector.md](web-collector.md#reads)). The report's `method.levels_used` names
+the levels the run's requests used: `observe` when a host was collected or a site's
+front page requested, `passive` when a domain root was read.
 Plan writes an empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
@@ -1111,8 +1116,10 @@ renderer:
 
 **A sub-item is a rule, never a check.** A rule that is not applicable on a platform
 is no answer about the host: it leaves the count, and a family whose only applicable
-member could not decide is *not assessed*. For a network collector it is a rule (or a
-family of rules sharing a finding id) applied to an asset. For a host it is a finding
+member could not decide is *not assessed*. For a network collector it is a rule or a
+family of rules (rules sharing a finding id, or one rule split by where its target
+lies, as `dns.dangling_external` and `dns.dangling_internal` are, count as one)
+applied to an asset. For a host it is a finding
 id on that host: a host domain is *assessed* when every selected rule in it decided
 (matched, not matched, or not applicable on recognized evidence), *partial* when some
 did, *not assessed* when none did. A domain whose checks ran but that no rule judges is
@@ -1250,6 +1257,22 @@ no rule consumes in this version (`expected_services` before E9). With more than
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
+**The external and email rows, in this build** (E7 step 2b-i). A domain root the web
+collector read feeds both. In the external row each such root has three sub-items:
+*dangling records* (`dns.dangling_external` and `dns.dangling_internal`) and *private
+addresses* (`dns.private_address`), each marked from its rules' verdicts on that root
+and the names under it (*assessed* when none abstained, *partial* when some decided,
+*not assessed* when none did) with each abstention's reason and subject, or
+`not_applicable` when its rules had nothing to judge on complete evidence (no CNAME, no
+MX, no NS target), since everything unread abstains
+([web-collector.md](web-collector.md#dns-and-takeover)); and *subdomain takeover, TLS
+and certificates*, *not assessed* with `no_rule`. A row whose sub-items are each
+*assessed* or `not_applicable` is *assessed*; the external row is therefore *partial* at
+best. The email row is *not assessed* with `no_rule` ("SPF, DMARC and DKIM records"). A
+declared `domain` asset read with its root counts as read in both rows; its names are
+judged under its root's sub-items, and it has none of its own. A root that was not read
+gives its own reason in both rows.
+
 **The fold line.** Rows whose reason is `not_declared` fold into one line, labeled `Not
 requested`, only when no declaration in the file points at the area. An area the file
 half-declares (a `tools` entry with no root, backups under `data.backups`, a
@@ -1306,7 +1329,7 @@ one id graded differently.
 | Field | Holds |
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
-| `asset_name`, `bound_id` | the `assets` name, or the id; the bound id or null |
+| `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
 | `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
@@ -1347,7 +1370,8 @@ which a low-entropy secret does not survive and which would sit in every compari
 runs; two secrets in one file stay two findings. A secret in a web page is keyed
 `<detector>:<url>`, one per detector per page. The domain, email and web collector's
 subjects, and how their keys are written, are in
-[web-collector.md](web-collector.md#subjects). A subject whose key matches
+[web-collector.md](web-collector.md#subjects); its findings carry them from E7 step 2b-i.
+A subject whose key matches
 `redact_extra` renders as its marker; its paste uses `provider_id` when there is one,
 and otherwise has `by_subject: false` and says the finding cannot be accepted by
 subject while the pattern hides its name.
@@ -1399,8 +1423,25 @@ needs observed evidence.
 carry one), `not_matched` (its rule decided on complete evidence and found no
 instance: "likely fixed. Confirm, then remove the entry"), `rule_not_decided` (its rule
 could not decide, or found nothing in only part of what is there: the acceptance still
-stands and scheck cannot say whether the problem is gone) or `subject_not_found` (the
-rule found instances, none with that subject). Only `not_matched` may say "fixed".
+stands and scheck cannot say whether the problem is gone) or `subject_not_found` (no
+instance with that subject was read on this run: the rule judged no such subject,
+whatever it found elsewhere). Only `not_matched` may say "fixed".
+On an asset a network collector judged (a domain root and the names under it, from E7
+step 2b-i), acceptance is per instance and by the finding's asset
+([web-collector.md](web-collector.md#subjects)): the entry in effect for an instance is
+the last one for its asset and id that names its subject or none, and an entry that
+later entries displace on every instance it touches is `not_applied`, with that reason.
+An entry covers its own asset's instances only. When its asset holds no instance of its
+id (with its subject, when it names one) and a name under it, a `domain:` asset of its
+own, holds one that no unexpired entry of its own accepts, the outcome is `rule_not_decided` with
+"an instance is open under it, on *name*, which is its own asset: accept it there
+(asset: domain:*name*)", never `not_matched` or `subject_not_found`. A `domain:` name
+under a root the collector read was read with it, declared or not, so an entry that
+names a subject on a name now gone is `subject_not_found`, "nothing with that subject
+points anywhere on this run: if the record was removed, remove the entry", never "the
+asset was not read on this run". When that subject was read on a name under the entry's
+asset, it is `subject_not_found` with "that subject was read on *name*, which is its own
+asset (asset: domain:*name*)".
 
 **One severity.** The engagement's `findings[]` is authoritative. A host asset's
 embedded collector envelope stays whole as that collector's evidence and grading; an

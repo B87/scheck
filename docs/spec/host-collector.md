@@ -594,8 +594,11 @@ present, replaces `impact` and `remediation`. For an existing rule finding, the 
 contract in §6.5 applies: its curated text is retained.
 
 Ids are the join key for accepted risks, severity, dedupe and cross-run diffing, so the
-model must not invent them. `report_finding` accepts a catalog id, or `custom:<slug>`
-for something genuinely outside the catalog. Custom findings get `BaseSeverity` from
+model must not invent them. `report_finding` accepts a host finding's catalog id, or
+`custom:<slug>` for something genuinely outside the catalog; another collector's ids
+(area other than hosts) are refused by `finding.Store`, `open` and `ruled_out` alike,
+and left out of the prompt.
+Custom findings get `BaseSeverity` from
 a required `proposed_severity` field, are never adjusted upward, are capped at
 `medium`, and are flagged `custom: true` in the report so a reviewer can promote them
 into the catalog.

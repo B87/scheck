@@ -61,6 +61,8 @@ func (b *builder) coverage() []Row {
 				Detail: "you declared it does not apply (not_used)"}
 		case area == finding.AreaHosts:
 			row = b.hostsRow()
+		case len(b.judged(area)) > 0:
+			row = b.judgedRow(area, b.judged(area))
 		default:
 			row = b.areaRow(area)
 		}
@@ -76,6 +78,18 @@ func (b *builder) coverage() []Row {
 			Reasons: []ReasonDetail{{Reason: "collector_not_built"}}})
 	}
 	return append(rows, outside...)
+}
+
+// judged are the assets feeding area that a network collector read: the
+// domain collector feeds the external and email rows.
+func (b *builder) judged(area finding.Area) []AssetInput {
+	var out []AssetInput
+	for _, a := range b.in.Assets {
+		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail) {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // areaRow is an area no collector in this build reads: not declared, or

@@ -747,9 +747,28 @@ func TestReconReadsADomainRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ev *webc.Evidence
+	judged := map[string]string{}
 	for _, a := range out.Document.(*engagement.ReconDoc).Assets {
 		if a.ID == "domain:example.com" {
 			ev = a.Web
+			for _, j := range a.Judged {
+				judged[j.ID+" "+j.Subject.Key] = j.Verdict
+			}
+		}
+	}
+	// The run's own rules judged what it read: the NS target that does not
+	// exist fires, the MX target that resolves disproves.
+	// Scope's names reach the rules too: the root and www resolve to
+	// public addresses.
+	for key, want := range map[string]string{
+		"dns.dangling_external example.com/NS/ns1.dns-host.example": webc.Fired,
+		"dns.dangling_external example.com/MX/mx.mailhost.example":  webc.Disproved,
+		"dns.dangling_external example.com/TXT/_spf.esp.example":    webc.Disproved,
+		"dns.private_address example.com":                           webc.Disproved,
+		"dns.private_address www.example.com":                       webc.Disproved,
+	} {
+		if judged[key] != want {
+			t.Errorf("%s: %q, want %q (all: %v)", key, judged[key], want, judged)
 		}
 	}
 	if ev == nil || len(ev.Mail) != 1 {
@@ -797,5 +816,23 @@ func TestReconReadsADomainRoot(t *testing.T) {
 	})
 	if err != nil || !marked {
 		t.Errorf("walk %v, marker %v", err, marked)
+	}
+}
+
+// When the control lookup under invalid. says nothing, whether the resolver
+// invents answers is unknown: a discovered name without first-party
+// evidence is not read on its answer.
+func TestDiscoveryReadsNothingOnAnUnknownResolver(t *testing.T) {
+	h := gate.NewHarness(t, nil)
+	h.CrtSh(`[{"name_value":"shop.example.com","not_after":"2027-01-01T00:00:00"}]`)
+	h.DNS(map[string]string{"*.invalid": "servfail", "example.com": "addrs:198.51.100.1", "shop.example.com": "addrs:198.51.100.2",
+		"www.example.com": "addrs:198.51.100.3"})
+	doc, _ := discover(t, h, discoveryFile)
+	shop := byName(doc)["shop.example.com"]
+	if shop.Read || !strings.Contains(shop.Detail, "unknown") || doc.Resolver.Known() {
+		t.Errorf("shop %+v, resolver %+v", shop, doc.Resolver)
+	}
+	if www := byName(doc)["www.example.com"]; !www.Read {
+		t.Errorf("a declared name is still read: %+v", www)
 	}
 }

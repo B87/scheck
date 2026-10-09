@@ -18,10 +18,12 @@ read by this version* and makes the run exit 2; its collectors arrive with the
 [roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
 certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
 reads the root's DNS and mail records and, for each name Scope chose, the certificate
-and the front page over https and http; no rule judges a domain yet, so the root is
-reported as not assessed and the run exits 2. The report's "What left this machine"
-says what was sent where. Findings come from compiled-in posture rules,
-graded through the context the engagement declares. A rule reads one fact, so a short
+and the front page over https and http. Its DNS rules judge what was read: a record
+pointing at a name that does not exist, and a public name publishing a private address.
+Subdomain takeover, email, TLS and header rules are not built yet, and the report's
+coverage says so. The report's "What left this machine" says what was sent where.
+Findings come from compiled-in rules: a host's posture rules, graded through the
+context the engagement declares, and a domain's DNS rules. A rule reads one fact, so a short
 list of findings and exit 0 mean no rule fired — not that anything is secure; the
 report's coverage says what was not checked. **No model assesses anything:** a
 model-assessed pass exists in the codebase, was measured against criteria frozen
@@ -49,7 +51,7 @@ flowchart TD
   scope --> recon["recon<br/>one collector per asset"]
 
   recon -->|host| host["host collector<br/>local, or SSH: strict host key, then sys.canary"]
-  recon -->|domain root| web["web collector, through the scope gate<br/>read; no rule judges it yet"]
+  recon -->|domain root| web["web collector, through the scope gate<br/>DNS rules: dangling records, private addresses"]
   recon -->|any other kind| none["not read by this version<br/>collector_not_built"]
 
   catalog["catalog<br/>compiled checks, literal argv"] --> host

@@ -3,6 +3,7 @@ package engagement
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -233,8 +234,10 @@ type ReconAsset struct {
 	Facts        map[string]report.Fact        `json:"facts,omitempty"`
 	Observations map[string]report.Observation `json:"observations,omitempty"`
 	// Web is what the web collector read under a domain root, redacted by
-	// the gate (docs/spec/web-collector.md, "Reads").
-	Web *web.Evidence `json:"web,omitempty"`
+	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
+	// verdicts on it.
+	Web    *web.Evidence  `json:"web,omitempty"`
+	Judged []web.Judgment `json:"judged,omitempty"`
 }
 
 // PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
@@ -360,8 +363,10 @@ type run struct {
 	// gate is the run's scope gate, built when something sends through
 	// it.
 	gate *gate.Gate
-	// scoped is what the Scope stage found.
-	scoped *ScopeDoc
+	// scoped is what the Scope stage found; reconResolver what this
+	// session's control lookup found of the resolver Recon reads through.
+	scoped        *ScopeDoc
+	reconResolver *Resolver
 	// session is when this session started.
 	session time.Time
 	// manifest is run.json, nil under --no-persist.
@@ -697,9 +702,8 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 
 // collectDomain reads a domain root through the gate with the web collector
 // (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
-// the names those records point at, and the names Scope chose to read. No
-// rule judges what it read until E7 step 2b, so the root stays incomplete
-// for want of a collector's rules.
+// the names those records point at, and the names Scope chose to read; and
+// judges them with its rules together with Scope's lookups.
 func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
 	if ctx.Err() != nil {
 		ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
@@ -714,16 +718,91 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 		return ra
 	}
 	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	r.checkResolver(ctx, g, a)
 	ev := web.Collect(ctx, g, r.webDomain(a))
 	ra.Web = &ev
-	ra.Status, ra.Reason = StatusCollected, ReasonCollectorNotBuilt
-	ra.Detail = "read; no rule judges domain assets in this build"
+	ra.Judged = web.Judge(r.webInput(a, ev))
+	ra.Status = StatusCollected
 	if ctx.Err() != nil || ev.Cut() {
 		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
 		ra.Detail = fmt.Sprintf("limits.timeout (%s) ended the engagement while it was read", r.res.Limits.Timeout)
+		r.incomplete(a, ra)
 	}
-	r.incomplete(a, ra)
 	return ra
+}
+
+// webInput is what the web collector's rules judge under a domain root:
+// the names Scope looked up, what it could not list, whether the resolver
+// invents answers, and what Recon read.
+func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
+	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev}
+	if r.scoped == nil {
+		in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:not_listed", Detail: "Scope did not run"})
+		return in
+	}
+	// Scope's names were answered by the resolver Scope asked, Recon's
+	// reads by this session's: each must be known not to invent answers
+	// (a resumed session may be on another network).
+	in.Doubt = cmp.Or(resolverDoubt(r.scoped.Resolver), resolverDoubt(r.reconResolver))
+	for _, sd := range r.scoped.Domains {
+		if sd.Root != a.ID {
+			continue
+		}
+		if sd.CT != "ok" {
+			in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:ct_source", Detail: "certificate transparency did not answer"})
+		}
+		for _, d := range sd.Dropped {
+			// An excluded name or a non-name was never part of the root's
+			// names; anything else dropped hides names.
+			if !strings.HasPrefix(d.Rule, "exclude[") && d.Rule != "not_a_name" {
+				in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:" + d.Rule, Detail: fmt.Sprintf("%d dropped (%s)", d.Count, d.Rule)})
+			}
+		}
+		for _, sn := range sd.Names {
+			// A name under a more specific domain root is that root's.
+			if r.innerRoot(a, sn.Name) {
+				continue
+			}
+			in.Names = append(in.Names, web.Name{Name: sn.Name, Status: sn.Status, Detail: sn.Detail, Outcome: sn.Outcome,
+				Chain: sn.Chain, Addresses: sn.Addresses, FinalInRoot: sn.FinalInRoot, Request: sn.RequestID})
+		}
+	}
+	return in
+}
+
+// resolverDoubt is why no answer of a resolver stands, "" when it is known
+// not to invent them.
+func resolverDoubt(res *Resolver) string {
+	switch {
+	case res == nil:
+		return "unavailable:resolver_unchecked"
+	case res.Rewrites:
+		return "unavailable:resolver_rewrites"
+	case !res.Known():
+		return "unavailable:resolver_unchecked"
+	}
+	return ""
+}
+
+// checkResolver sends this session's control lookup under invalid., once,
+// before Recon reads any domain root through the gate's resolver.
+func (r *run) checkResolver(ctx context.Context, g *gate.Gate, a ResolvedAsset) {
+	if r.reconResolver != nil {
+		return
+	}
+	ctl := g.Resolve(ctx, gate.Resolve{Asset: a.ID, Name: randomLabel() + ".invalid", Stage: "recon", Control: true})
+	r.reconResolver = &Resolver{Address: g.Resolver(), Rewrites: ctl.Lookup.Outcome == gate.OutcomeAddresses,
+		Control: string(ctl.Lookup.Outcome)}
+	if ctl.Decision != gate.DecisionSent {
+		r.reconResolver.Control = ctl.Decision
+	}
+}
+
+// innerRoot reports a name under a domain root more specific than a.
+func (r *run) innerRoot(a ResolvedAsset, name string) bool {
+	return slices.ContainsFunc(r.res.Roots, func(o Ref) bool {
+		return o.Kind == KindDomain && o.name != a.name && domainUnder(o.name, a.name) && domainUnder(name, o.name)
+	})
 }
 
 // webDomain is what the web collector reads under a domain root: the mail
@@ -736,10 +815,7 @@ func (r *run) webDomain(a ResolvedAsset) web.Domain {
 	// A mail domain is read under the most specific root holding it, once.
 	add := func(name string) {
 		name = strings.TrimSuffix(strings.ToLower(name), ".")
-		inner := slices.ContainsFunc(r.res.Roots, func(o Ref) bool {
-			return o.Kind == KindDomain && o.name != a.name && domainUnder(o.name, a.name) && domainUnder(name, o.name)
-		})
-		if domainUnder(name, a.name) && !inner && !slices.Contains(order, name) {
+		if domainUnder(name, a.name) && !r.innerRoot(a, name) && !slices.Contains(order, name) {
 			order = append(order, name)
 		}
 	}
@@ -879,6 +955,19 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			}
 		}
 		doc.Assets = append(doc.Assets, ra)
+	}
+	// A declared domain under a root the web collector read was read with
+	// it: its names were among the root's.
+	for i, ra := range doc.Assets {
+		if ra.Kind != KindDomain || ra.Root == ra.ID {
+			continue
+		}
+		for _, root := range doc.Assets {
+			if root.ID == ra.Root && root.Web != nil {
+				doc.Assets[i].Status, doc.Assets[i].Reason = root.Status, root.Reason
+				doc.Assets[i].Detail = "read with " + root.Name
+			}
+		}
 	}
 	return doc, r.write("recon.json", doc)
 }
@@ -1118,6 +1207,17 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		if c, ok := r.hosts[ra.Name]; ok {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
 			ai.Host.Graded = r.graded[ra.Name]
+		}
+		if ra.Kind == KindDomain && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
+			ai.ReadWith = ra.Root
+		}
+		if ra.Web != nil {
+			ai.Collector = "web"
+			for _, j := range ra.Judged {
+				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
+					Reads: j.Reads, Excerpt: j.Excerpt,
+					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
+			}
 		}
 		in.Assets = append(in.Assets, ai)
 	}

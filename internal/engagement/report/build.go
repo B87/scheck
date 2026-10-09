@@ -75,6 +75,10 @@ func Build(in Input) *Report {
 			r.Assessments = append(r.Assessments, v.assessments()...)
 			r.Redaction.Operator.Matches += v.redactions(r.Redaction.Builtin)
 		}
+		if a.Collector != "" {
+			r.Findings = append(r.Findings, b.judgedFindings(a)...)
+			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
+		}
 	}
 	b.rankFindings()
 	b.acceptances()
@@ -117,9 +121,12 @@ func (b *builder) engagement() Engagement {
 		e.Source.Path = &p
 	}
 	for _, a := range in.Assets {
-		if a.Host != nil {
+		switch {
+		case a.Collector != "":
+			// DNS reads are passive; a site's front page is observe.
+			e.Method.LevelsUsed = []string{"passive", "observe"}
+		case a.Host != nil && len(e.Method.LevelsUsed) == 0:
 			e.Method.LevelsUsed = []string{"observe"}
-			break
 		}
 	}
 	return e
@@ -131,6 +138,10 @@ func (b *builder) asset(a AssetInput) Asset {
 	if a.Kind == "host" {
 		host := "host"
 		out.Collector = &host
+	}
+	if a.Collector != "" {
+		c := a.Collector
+		out.Collector = &c
 	}
 	// Every collection attempt's commands, a refused or failed one's
 	// included: the trace says what touched every asset.
@@ -218,6 +229,9 @@ func (b *builder) acceptances() {
 }
 
 func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string) {
+	if judged, read := b.judgedFor(acc.AssetID); read {
+		return b.judgedOutcome(acc, out, judged)
+	}
 	v := b.hosts[acc.AssetID]
 	if v == nil {
 		return "rule_not_decided", "the asset was not read on this run"

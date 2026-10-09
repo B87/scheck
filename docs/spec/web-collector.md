@@ -24,7 +24,7 @@ Every read goes through the gate, and the collector reads only what a rule consu
 | passive | MX `<d>` | targets and preferences; a null MX (`0 .`) |
 | passive | NS `<d>` | host names |
 | passive | TXT `<sel>._domainkey.<d>` for each selector declared under `mail.senders`, following its CNAME | DKIM keys (below): `v`, `k`, `p`, `t` (the rule computes the key's modulus size from `p`); the count of other records |
-| passive | what Scope resolved for each name | the chain, rcode, addresses and the control label's answer, already in `scope.json` |
+| passive | what Scope resolved for each name | the chain, its outcome, addresses, whether the chain ends under a root, the lookup's request id and the control label's answer, already in `scope.json` |
 | passive | A and AAAA of MX and NS targets, inside a root or outside every root; TXT of the targets of SPF `include:` and `redirect=`, within SPF's budget (below) | rcode and chain: resolved and recorded, never contacted ([scope.md](scope.md#third-party-sources)) |
 | observe | the TLS handshake on 443 of `GET https://name/` (below), the read name's one handshake | version, verified, the gate's typed verification class, the TLS alert the server ended with, before the handshake completed or after (the chain kept), and the chain's subjects, issuers, names and validity |
 | observe | `GET https://name/` and `GET http://name/` for every read name; for a declared or first-party site also its entry points, `/robots.txt`, `/.well-known/security.txt` and one redirect hop on the same host ([scope.md](scope.md#connections)) | status, `location`, `server`, `x-powered-by`, the six security headers, `set-cookie` names and attributes, the redacted body within its cap |
@@ -81,14 +81,16 @@ specific domain root that holds it, so nested roots never read it twice or give 
 SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
 ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
 has a value but never its address, each DKIM key's tags. What it read is in
-`recon.json`, under the asset's `web`. No rule reads it until step 2b, so the root is
-reported as `collector_not_built` and the run exits 2. It is `limit_reached` instead
+`recon.json`, under the asset's `web`. Recon then judges it ("Rules", built in step
+2b-i) and the root is `collected`. It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
 as `Collect` returned (`incomplete`). A declared or first-party site's
 entry points, `/robots.txt`, `/.well-known/security.txt` and its redirect hop are step
-4; a `url` root and a domain asset that is not a root are not read yet.
+4; a `url` root is not read yet. A declared `domain` asset under a root that was read
+is read with it: it is recorded with the root's status and the detail "read with
+*root*", and its findings are those whose subject it holds ("Subjects").
 
 **Not read in 0.0.2:** SOA, CAA, DNSKEY and DS, `_mta-sts`, `_smtp._tls`, BIMI.
 
@@ -117,16 +119,75 @@ contradiction of a declared restriction, which is never an exposure finding
 
 | Rule | Fires | Disproved | Abstains | Base | Area | Exposure |
 |---|---|---|---|---|---|---|
-| `dns.takeover_candidate`: "*name* points at *provider*, which says nothing is set up there; anyone with an account there may be able to claim it" | the chain ends in NXDOMAIN at a suffix whose table entry's evidence is NXDOMAIN; or it ends at a fingerprinted suffix and an https or http response matches that entry's status and body marker (and its server marker, where the entry has one) | the chain ends at a fingerprinted provider and a response is 2xx or 3xx with no marker, worded "the provider serves a site for this name; whose site it is was not checked" | SERVFAIL, REFUSED, a timeout or a loop; a resolver that rewrites NXDOMAIN; both responses unavailable (timeout, blocked, 5xx, 429); an answer equal to the root's wildcard answer (filed once on `*.root`, "Takeover fingerprints"); a provider that verifies ownership (`dns.unclaimed_at_provider` instead) | high | external | no |
+| `dns.takeover_candidate`: "*name* points at *provider*, which says nothing is set up there; anyone with an account there may be able to claim it" | the chain ends in NXDOMAIN at a suffix whose table entry's evidence is NXDOMAIN; or it ends at a fingerprinted suffix and an https or http response matches that entry's status and body marker (and its server marker, where the entry has one) | the chain ends at a fingerprinted provider and a response is 2xx or 3xx with no marker, worded "the provider serves a site for this name; whose site it is was not checked" | SERVFAIL, REFUSED, a timeout or a loop; a resolver that rewrites NXDOMAIN or is not known not to ("Nothing unread counts as nothing found"); both responses unavailable (timeout, blocked, 5xx, 429); an answer equal to the root's wildcard answer (filed once on `*.root`, "Takeover fingerprints"); a provider that verifies ownership (`dns.unclaimed_at_provider` instead) | high | external | no |
 | `dns.unclaimed_at_provider`: "*name* points at *provider*, which says nothing is set up there; *provider* checks ownership before another account can use it" | the marker matched for a provider that verifies ownership | as `dns.takeover_candidate` | as `dns.takeover_candidate` | low | external | no |
-| `dns.dangling_external`: "*name* (or the MX or NS of *d*) points at *target*, which does not exist" | every dangling chain outside every root that `dns.takeover_candidate` did not decide: NODATA at any suffix, NXDOMAIN at a suffix whose entry's evidence is the body, NXDOMAIN at a suffix with no entry; an MX or NS target outside every root that is NXDOMAIN or NODATA; an SPF `include:` target outside every root that is NXDOMAIN. NODATA at a claimable suffix is worded "the provider still knows this name but serves no address for it" | the target resolves | a lookup failure; a resolver that rewrites NXDOMAIN | medium | external | no |
+| `dns.dangling_external`: "*name* (or the MX or NS of *d*) points at *target*, which does not exist" | every dangling chain outside every root that `dns.takeover_candidate` did not decide: NODATA at any suffix, NXDOMAIN at a suffix whose entry's evidence is the body, NXDOMAIN at a suffix with no entry; an MX or NS target outside every root that is NXDOMAIN or NODATA; an SPF `include:` target outside every root that is NXDOMAIN. NODATA at a claimable suffix is worded "the provider still knows this name but serves no address for it" | the target resolves | a lookup failure; a resolver that rewrites NXDOMAIN or is not known not to | medium | external | no |
 | `dns.dangling_internal`: "a record points at *target* under your own domain, which does not exist" | the dangling target is inside a root | it resolves | as `dns.dangling_external` | info | external | no |
-| `dns.private_address`: "*name* publishes a private address" | every address is RFC 1918, unique local, CGNAT or loopback | any public address | a lookup failure | info | external | no |
+| `dns.private_address`: "*name* publishes a private address" | every address is RFC 1918, unique local, CGNAT or loopback | any public address | a lookup failure; a resolver that rewrites NXDOMAIN or is not known not to | info | external | no |
 
 A name whose provider has no entry in the takeover table is not applicable to the
 takeover rules. It is listed under "Services your names point at"
 ([scope.md](scope.md#discovery)) with "*N* not checked for takeover: no fingerprint for
 this provider".
+
+**Built in E7 step 2b-i:** `dns.dangling_external`, `dns.dangling_internal` and
+`dns.private_address`. `Judge` in `internal/collector/web` applies them to each domain
+root in Recon, right after `Collect`, over Scope's lookups and what `Collect` read; the
+session's first `Collect` follows its own control lookup under `invalid.`
+([scope.md](scope.md#discovery)), counted as a control. Each
+verdict is `fired`, `disproved` or `abstained` on one subject ("Subjects"), with the
+coverage reason of an abstention and the gate request ids it read, and is kept in
+`recon.json` under the asset's `judged`. One subject gets one verdict per rule: fired
+stands over abstained, abstained over disproved, and the verdict keeps the reads of every
+verdict merged into it. A name Scope looked up is judged only under the most specific
+domain root holding it, as a mail domain is read, so nested roots never judge it twice. The takeover table and its two rules
+are step 2b-ii. Until then `dns.dangling_external` fires on every dangling chain outside
+every root, takeover candidates included, and NODATA at a claimable suffix has no
+wording of its own. As built:
+
+- **Through a CNAME** (subject `dns_name`): a name with no CNAME is not judged. Scope's
+  status `dangling` fires, as `dns.dangling_internal` when the chain ends under a root;
+  `resolves` disproves.
+- **Through an MX, NS or SPF include target** (subject `dns_record`): NXDOMAIN fires,
+  and so does NODATA for an MX or NS target; a target that resolves disproves. An
+  include target that exists with no SPF record is `email.spf_invalid`'s and disproves
+  these rules. A `redirect=` target is not judged by them: one that does not exist is
+  SPF's own error (step 3). An excluded target is judged by no rule.
+- **`dns.private_address`** (subject `dns_name`): every name Scope resolved to at least
+  one address, its addresses as `scope.json` keeps them; it fires when every address is
+  private and is disproved by any public one. An address `redact_extra` matches leaves the lookup
+  *insufficient evidence* ([scope.md](scope.md#third-party-sources)), so the name
+  abstains as `unavailable:dns_error`.
+- **A name matching the root's wildcard answer** is judged by neither name rule: the
+  wildcard is one instance, filed once on `*.<root>` with the takeover rules' wildcards
+  in step 2b-ii ("Wildcards").
+
+**Nothing unread counts as nothing found.** Each of these abstains, never disproves:
+
+| What was not read | Abstains on | Reason |
+|---|---|---|
+| a resolver that rewrites NXDOMAIN: Scope's (`scope.json` `resolver.rewrites_nxdomain`) or the one this session's Recon reads through | every subject of the three rules, names and records alike, in place of any other verdict and reason | `unavailable:resolver_rewrites` |
+| a resolver not known not to rewrite: Scope's control lookup under `invalid.` (`resolver.control_outcome`) or this session's in Recon was neither NXDOMAIN nor NODATA nor answered, because it failed or was not sent, or `scope.json` records no resolver ([scope.md](scope.md#discovery)) | as above | `unavailable:resolver_unchecked` |
+| a name Scope did not check (`not_checked`) | the name, for both name rules | `sampled` past the cap; for a refusal (a deadline), the gate's reason |
+| a name whose lookup said nothing, with or without a chain (`insufficient_evidence`) | the name, for both name rules | `unavailable:dns_<outcome>`; `limit_reached` for a deadline or a cancel |
+| names Scope could not list: certificate transparency did not answer, the gate dropped names from its answer for any rule but an exclude and `not_a_name` (`redacted`, `unattributable`; [scope.md](scope.md#third-party-sources)), or Scope's list is missing | `*.<root>`, for `dns.dangling_external` and `dns.private_address` | `unavailable:ct_source`, `unavailable:<rule>`, `unavailable:not_listed` |
+| a records read that said nothing (MX, NS, the domain's TXT) | `<owner>/<TYPE>`, for `dns.dangling_external` | the read's reason |
+| an SPF tree not read to its end | `<domain>/TXT`, for `dns.dangling_external` | `unavailable:spf_incomplete` |
+| a target read that said nothing | its `dns_record` | the read's reason |
+
+A read the gate refused or could not make takes its reason from the gate's own table
+([scope.md](scope.md#outcomes)); a deadline or a cancel in a lookup is `limit_reached`.
+
+**Severity in context.** These are configuration findings, so only the engagement's
+`data_matters_most` moves them ([engagement.md](engagement.md#severity-in-context)):
+a finding whose asset is named under `data.matters_most` is raised one step, `by:
+engagement`, its source the file's `data.matters_most`, with the why-here line "You
+listed *asset* under data.matters_most, so this ranks one step higher." Any other
+finding of theirs says "This is the standard rating: it is about how the records are
+set up, which nothing you declared changes."
+
+The collector's reads are unauthenticated: its evidence's principal is `anonymous`, and
+an observation is the gate request it read.
 
 ### Email
 
@@ -242,15 +303,23 @@ no trailing dot, default ports dropped, no query or fragment and no spaces; a ke
 | `origin` | `scheme://host[:port]`, no path | `web.hsts_missing` (the https origin), `web.plaintext_http` and `web.plaintext_http_clients` (the http origin), `web.session_cookie_flags` (the cookie names under `affected.listed`), `web.security_headers`, `web.security_txt` |
 | `url` | the URL | `web.version_disclosed`, `web.restricted_reachable` |
 | `secret_location` | `<detector>:<url>`, one per detector per page, the count under `derived` | `web.secret_in_response` |
-| `dns_name` | the name, or `*.<root>` for a dangling wildcard | `dns.takeover_candidate`, `dns.unclaimed_at_provider`, `dns.dangling_*` through a CNAME, `dns.private_address`, `tls.*` (port 443 implied) |
-| `dns_record` | `<owner>/<TYPE>/<target>`, labelled "MX of example.com → mx.oldhost.net" | `dns.dangling_*` through an MX, an NS or an SPF include whose target is gone |
+| `dns_name` | the name, or `*.<root>` for a dangling wildcard and for names Scope could not list | `dns.takeover_candidate`, `dns.unclaimed_at_provider`, `dns.dangling_*` through a CNAME, `dns.private_address`, `tls.*` (port 443 implied) |
+| `dns_record` | `<owner>/<TYPE>/<target>`, `TYPE` one of `MX`, `NS` and `TXT` (an SPF include target), the owner the name whose record points at the target: the domain, or for a nested include the include whose record names it. Labelled "MX of example.com → mx.oldhost.net", "NS of example.com → ns1.dns-host.example", "SPF include of example.com → _spf.gone.example". A records read that said nothing is `<owner>/<TYPE>` | `dns.dangling_*` through an MX, an NS or an SPF include whose target is gone |
 | `mail_domain` | the mail domain; its label adds "declared sending (…)", "declared no mail" or "not declared" | `email.dmarc_*`, `email.spf_missing`, `email.spf_invalid`, `email.spf_permits_anyone`, `email.no_mail_spoofable` |
 | `dkim_selector` | `<sel>._domainkey.<domain>`, labelled "selector google (google-workspace) on example.com" | `email.dkim_*` |
 | `spf_mechanism` | `<domain>/include:<target>`, one per include | `email.spf_undeclared_sender` |
 
-A finding's asset is the most specific asset that holds its subject: the declared `url`
-asset; else the discovered name's id; for an email finding, the domain root the mail
-domain falls under.
+A finding's asset is the most specific asset that holds its subject. A `dns_name`'s is
+the name's own id (`domain:<name>`), declared or not, and the root for the root itself
+and for a name the engagement file cannot name as an asset (one holding an underscore
+label, or one redaction marked); a `dns_record`'s is that of the domain whose records
+were read (the root for its NS, the mail domain for its MX and its whole SPF tree). An
+`origin` or `url` belongs to the declared `url` asset, else to the name's id; an email
+finding to the domain root the mail domain falls under. Acceptances and assessments go
+by that asset, and an undeclared name's findings print the name as their asset and its
+canonical id as the paste's `asset` ([engagement.md](engagement.md#findings), "The
+paste"). An acceptance covers its own asset's instances only, never those of a name
+under it ([engagement.md](engagement.md#findings), "Acceptances").
 
 ## Takeover fingerprints
 

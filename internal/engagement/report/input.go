@@ -100,6 +100,13 @@ type AssetInput struct {
 	// Kept says a resume kept the host from the earlier session that
 	// collected it: this session did not contact it.
 	Kept bool
+	// Collector names the network collector that read the asset ("web"),
+	// and Judged are its rules' verdicts there.
+	Collector string
+	Judged    []Judgment
+	// ReadWith is the root a declared domain asset was read with, its
+	// names among the root's.
+	ReadWith string
 }
 
 // HostInput is a host asset's collection.

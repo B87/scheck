@@ -141,8 +141,10 @@ func (r RecordRead) Insufficient() bool {
 		r.Outcome != string(gate.OutcomeAddresses))
 }
 
-// TargetRead is the lookup of a name an answer pointed at.
+// TargetRead is the lookup of a name an answer pointed at: Owner is the
+// name whose record pointed at it.
 type TargetRead struct {
+	Owner string `json:"owner"`
 	From  string `json:"from"`
 	Index int    `json:"index"`
 	Via   string `json:"via"`
@@ -179,7 +181,7 @@ func Collect(ctx context.Context, g Gate, d Domain) Evidence {
 		ev.Mail = append(ev.Mail, c.mail(ctx, m))
 	}
 	ev.NS = c.read(ctx, d.Name, "NS")
-	ev.NSTargets = c.followAll(ctx, ev.NS)
+	ev.NSTargets = c.followAll(ctx, d.Name, ev.NS)
 	for _, name := range d.Names {
 		ev.Sites = append(ev.Sites, c.site(ctx, name))
 	}
@@ -195,17 +197,17 @@ func (c collector) read(ctx context.Context, name, typ string) RecordRead {
 	return recordRead(c.g.ReadRecords(ctx, gate.Records{Asset: c.d.Asset, Name: name, Type: typ, Stage: c.d.Stage}))
 }
 
-func (c collector) follow(ctx context.Context, from RecordRead, i int) TargetRead {
+func (c collector) follow(ctx context.Context, owner string, from RecordRead, i int) TargetRead {
 	t := from.Targets[i]
 	r := c.g.FollowTarget(ctx, gate.Follow{Asset: c.d.Asset, Stage: c.d.Stage, From: from.RequestID, Index: i})
-	return TargetRead{From: from.RequestID, Index: i, Via: t.Via, Name: t.Name, RecordRead: recordRead(r)}
+	return TargetRead{Owner: owner, From: from.RequestID, Index: i, Via: t.Via, Name: t.Name, RecordRead: recordRead(r)}
 }
 
-// followAll looks up every target an MX or NS answer pointed at.
-func (c collector) followAll(ctx context.Context, from RecordRead) []TargetRead {
+// followAll looks up every target owner's MX or NS answer pointed at.
+func (c collector) followAll(ctx context.Context, owner string, from RecordRead) []TargetRead {
 	var out []TargetRead
 	for i := range from.Targets {
-		out = append(out, c.follow(ctx, from, i))
+		out = append(out, c.follow(ctx, owner, from, i))
 	}
 	return out
 }
@@ -213,7 +215,7 @@ func (c collector) followAll(ctx context.Context, from RecordRead) []TargetRead 
 func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 	ev := MailEvidence{Domain: m.Name}
 	ev.TXT = c.read(ctx, m.Name, "TXT")
-	ev.SPF, ev.SPFComplete = c.spf(ctx, ev.TXT)
+	ev.SPF, ev.SPFComplete = c.spf(ctx, m.Name, ev.TXT)
 	ev.TXT.TXT = spfOnly(ev.TXT.TXT)
 	ev.DMARC = c.read(ctx, "_dmarc."+m.Name, "TXT")
 	for _, r := range ev.DMARC.TXT {
@@ -233,7 +235,7 @@ func (c collector) mail(ctx context.Context, m MailDomain) MailEvidence {
 	}
 	ev.DMARC.TXT = nil
 	ev.MX = c.read(ctx, m.Name, "MX")
-	ev.MXTargets = c.followAll(ctx, ev.MX)
+	ev.MXTargets = c.followAll(ctx, m.Name, ev.MX)
 	for _, sel := range m.Selectors {
 		r := SelectorRead{Selector: sel, Read: c.read(ctx, sel+"._domainkey."+m.Name, "TXT")}
 		for _, rec := range r.Read.TXT {
@@ -333,7 +335,7 @@ func spfOnly(records []string) []string {
 // It is complete only when nothing in it is unknown: a read that failed,
 // or an include or redirect the gate could not follow (a macro), leaves it
 // incomplete.
-func (c collector) spf(ctx context.Context, txt RecordRead) ([]TargetRead, bool) {
+func (c collector) spf(ctx context.Context, domain string, txt RecordRead) ([]TargetRead, bool) {
 	if txt.Insufficient() {
 		return nil, false
 	}
@@ -349,8 +351,8 @@ func (c collector) spf(ctx context.Context, txt RecordRead) ([]TargetRead, bool)
 	var tree []TargetRead
 	count := Lookups(records[0])
 	complete := followable(records[0], txt.Targets)
-	var walk func(from RecordRead) bool
-	walk = func(from RecordRead) bool {
+	var walk func(owner string, from RecordRead) bool
+	walk = func(owner string, from RecordRead) bool {
 		for i, t := range from.Targets {
 			if t.Via != "include" && t.Via != "redirect" {
 				continue
@@ -358,7 +360,7 @@ func (c collector) spf(ctx context.Context, txt RecordRead) ([]TargetRead, bool)
 			if count > MaxLookups {
 				return false
 			}
-			r := c.follow(ctx, from, i)
+			r := c.follow(ctx, owner, from, i)
 			tree = append(tree, r)
 			if r.Insufficient() {
 				return false
@@ -370,13 +372,13 @@ func (c collector) spf(ctx context.Context, txt RecordRead) ([]TargetRead, bool)
 			complete = complete && !markedOther(r.TXT)
 			r.TXT = spfOnly(r.TXT)
 			tree[len(tree)-1] = r
-			if !walk(r.RecordRead) {
+			if !walk(r.Name, r.RecordRead) {
 				return false
 			}
 		}
 		return true
 	}
-	complete = walk(txt) && complete && count <= MaxLookups
+	complete = walk(domain, txt) && complete && count <= MaxLookups
 	return tree, complete
 }
 

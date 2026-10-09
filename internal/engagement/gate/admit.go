@@ -146,6 +146,10 @@ var reasons = map[string]string{
 	"unavailable:canceled":     "limit_reached",
 }
 
+// ReasonOf is a decision's coverage reason, "" for one that read something:
+// what a collector reports for a read the gate refused or could not make.
+func ReasonOf(decision string) string { return reasonOf(decision) }
+
 // reasonOf is a decision's coverage reason, "" for one that read something.
 func reasonOf(decision string) string {
 	if r, ok := reasons[decision]; ok {

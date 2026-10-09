@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 )
 
@@ -527,5 +528,56 @@ func TestWebDomainNestedRoots(t *testing.T) {
 	if !slices.Equal(mail["domain:example.com"], []string{"example.com[]", "old.example.com[]"}) ||
 		!slices.Equal(mail["domain:sub.example.com"], []string{"sub.example.com[s1]"}) {
 		t.Errorf("%v", mail)
+	}
+}
+
+// The web collector reads Scope's name statuses as scope.json writes them.
+func TestWebCollectorReadsScopeStatuses(t *testing.T) {
+	for theirs, ours := range map[string]string{
+		web.StatusResolves: NameResolves, web.StatusDangling: NameDangling, web.StatusGone: NameGone,
+		web.StatusNoAddress: NameNoAddress, web.StatusInsufficient: NameInsufficient, web.StatusWildcard: NameMatchesWildcard,
+		web.StatusExcluded: NameExcluded, web.StatusNotChecked: NameNotChecked,
+	} {
+		if theirs != ours {
+			t.Errorf("%q != %q", theirs, ours)
+		}
+	}
+}
+
+// Each name is judged under the most specific domain root that holds it,
+// and a resolver whose control lookup said nothing is not trusted.
+func TestWebInputNestedRootsAndResolver(t *testing.T) {
+	file := strings.Replace(minimal, "  - domain: example.com\n", "  - domain: example.com\n  - domain: sub.example.com\n", 1)
+	res, err := Parse("e.yaml", []byte(file), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root ResolvedAsset
+	for _, a := range res.Assets {
+		if a.ID == "domain:example.com" {
+			root = a
+		}
+	}
+	names := []ScopeName{{Name: "www.example.com", Status: NameResolves}, {Name: "sub.example.com", Status: NameResolves},
+		{Name: "x.sub.example.com", Status: NameResolves}}
+	for control, doubt := range map[string]string{"nxdomain": "", "nodata": "", "timeout": "unavailable:resolver_unchecked",
+		"unavailable:no_resolver": "unavailable:resolver_unchecked"} {
+		r := &run{res: res, scoped: &ScopeDoc{Resolver: &Resolver{Control: control},
+			Domains: []ScopeDomain{{Root: "domain:example.com", CT: "ok", Names: names}}},
+			reconResolver: &Resolver{Control: "nxdomain"}}
+		in := r.webInput(root, web.Evidence{})
+		var got []string
+		for _, n := range in.Names {
+			got = append(got, n.Name)
+		}
+		if !slices.Equal(got, []string{"www.example.com"}) || in.Doubt != doubt {
+			t.Errorf("control %s: names %v, doubt %q", control, got, in.Doubt)
+		}
+	}
+	// A resumed session reads through its own resolver, which may rewrite
+	// where Scope's did not.
+	r := &run{res: res, scoped: &ScopeDoc{Resolver: &Resolver{Control: "nxdomain"}}, reconResolver: &Resolver{Rewrites: true, Control: "addresses"}}
+	if in := r.webInput(root, web.Evidence{}); in.Doubt != "unavailable:resolver_rewrites" {
+		t.Errorf("this session's resolver rewrites: doubt %q", in.Doubt)
 	}
 }

@@ -83,12 +83,18 @@ type ScopeName struct {
 	ExcludedBy string   `json:"excluded_by,omitempty"`
 	Chain      []string `json:"chain,omitempty"`
 	Addresses  []string `json:"addresses,omitempty"`
+	// Outcome is what the lookup came to (gate.Outcome); FinalInRoot says
+	// the name its chain ends at is under a root; RequestID is the
+	// lookup's id in the audit log.
+	Outcome     string `json:"outcome,omitempty"`
+	RequestID   string `json:"request_id,omitempty"`
+	FinalInRoot bool   `json:"final_in_root,omitempty"`
 	// Target is where the name points, as a first_party confirmation
 	// records it.
 	Target     string    `json:"target,omitempty"`
 	FirstParty *Evidence `json:"first_party,omitempty"`
-	// Read marks a name Recon reads (its front page and certificate, and
-	// more with first-party evidence).
+	// Read marks a name Recon reads (its front page, whose https handshake
+	// is its certificate read, and more with first-party evidence).
 	Read bool `json:"read"`
 }
 
@@ -98,9 +104,22 @@ type Resolver struct {
 	Address  string `json:"address"`
 	Rewrites bool   `json:"rewrites_nxdomain"`
 	// Controls counts the control lookups sent; Invalid is whether the one
-	// under invalid. was.
-	Controls int  `json:"control_lookups"`
-	Invalid  bool `json:"control_invalid"`
+	// under invalid. was, and Control what it came to: whether the
+	// resolver rewrites is known only when it said NXDOMAIN or NODATA, or
+	// answered.
+	Controls int    `json:"control_lookups"`
+	Invalid  bool   `json:"control_invalid"`
+	Control  string `json:"control_outcome,omitempty"`
+}
+
+// Known reports whether it is known if the resolver answers names that do
+// not exist: its control lookup said NXDOMAIN or NODATA, or answered.
+func (r *Resolver) Known() bool {
+	switch gate.Outcome(r.Control) {
+	case gate.OutcomeNXDomain, gate.OutcomeNoData, gate.OutcomeAddresses:
+		return true
+	}
+	return false
 }
 
 // PointsAt is one service outside every root that names under a root
@@ -142,6 +161,10 @@ func (d *discovery) run(ctx context.Context) ([]ScopeDomain, *Resolver, []Points
 	// resolver invents addresses for names that do not exist.
 	ctl := d.g.Resolve(ctx, gate.Resolve{Asset: roots[0].ID, Name: randomLabel() + ".invalid", Stage: "scope", Control: true})
 	resolver.Rewrites = ctl.Lookup.Outcome == gate.OutcomeAddresses
+	resolver.Control = string(ctl.Lookup.Outcome)
+	if ctl.Decision != gate.DecisionSent {
+		resolver.Control = ctl.Decision
+	}
 	if ctl.Decision == gate.DecisionSent {
 		resolver.Controls, resolver.Invalid = 1, true
 	}
@@ -186,7 +209,7 @@ func (d *discovery) domain(ctx context.Context, root Ref, resolver *Resolver, po
 		}
 	}
 	d.fromCT(ctx, root, &sd, cands)
-	d.lookUp(ctx, root, &sd, cands.ordered(d.at), resolver.Rewrites, points)
+	d.lookUp(ctx, root, &sd, cands.ordered(d.at), resolver, points)
 	return sd
 }
 
@@ -281,7 +304,8 @@ func (d *discovery) fromCT(ctx context.Context, root Ref, sd *ScopeDomain, cands
 
 // lookUp resolves each candidate in order, up to the caps, and settles its
 // status and whether it is read.
-func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list []*candidate, rewrites bool, points map[string][]string) {
+func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list []*candidate, resolver *Resolver, points map[string][]string) {
+	rewrites := resolver.Rewrites
 	wildcard := sd.Wildcard
 	// The caps count names the gate looked up: one an exclude covers is
 	// refused before any query, and counts toward neither.
@@ -307,6 +331,7 @@ func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list 
 		resolved++
 		l := r.Lookup
 		sn.Chain, sn.Addresses = l.Chain, addrStrings(l.Addrs)
+		sn.Outcome, sn.FinalInRoot, sn.RequestID = string(l.Outcome), l.FinalInRoot, r.RequestID
 		d.classify(&sn, l, c.declared, wildcard, rewrites, points)
 		if sn.Status == NameResolves {
 			sn.FirstParty = d.evidence(c.name, l)
@@ -316,6 +341,9 @@ func (d *discovery) lookUp(ctx context.Context, root Ref, sd *ScopeDomain, list 
 				sn.Read = true
 			case rewrites:
 				sn.Detail = "not read: the resolver answers names that do not exist"
+			case !resolver.Known():
+				// Its answers would choose which servers are contacted.
+				sn.Detail = "not read: whether the resolver answers names that do not exist is unknown"
 			case unverified >= maxUnverified:
 				sn.Detail = fmt.Sprintf("not read: past the first %d names without first-party evidence", maxUnverified)
 			default:

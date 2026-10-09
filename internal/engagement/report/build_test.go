@@ -207,6 +207,120 @@ func withGitHubRoot(t *testing.T) Input {
 	return in
 }
 
+// withDomainRoot is a host beside a domain root the web collector read and
+// judged: a dangling CNAME and a dangling MX fired, a resolving chain
+// disproved, a lookup that failed abstained, and one instance accepted by
+// subject.
+func withDomainRoot(t *testing.T) Input {
+	in := oneHost(t, "macos")
+	in.FromHost, in.Path = false, "engagement.yaml"
+	in.Rerun = "scheck run engagement.yaml"
+	name := func(n string) Subject { return Subject{Kind: "dns_name", Key: n, Label: n} }
+	in.Assets = append(in.Assets, AssetInput{Name: "example.com", ID: "domain:example.com", Kind: "domain", Root: true,
+		Status: "collected", Collector: "web", Judged: []Judgment{
+			{ID: finding.IDDNSDanglingExternal, Asset: "domain:old.example.com", Subject: name("old.example.com"), Verdict: "fired", Reads: []string{"g000004"},
+				Excerpt: "old.example.com → gone.saas.example: nxdomain"},
+			{ID: finding.IDDNSDanglingExternal, Subject: name("www.example.com"), Verdict: "disproved", Reads: []string{"g000005"}},
+			{ID: finding.IDDNSDanglingExternal, Subject: Subject{Kind: "dns_record", Key: "example.com/MX/mx.oldhost.example",
+				Label: "MX of example.com → mx.oldhost.example"}, Verdict: "fired", Reads: []string{"g000012"},
+				Excerpt: "MX of example.com → mx.oldhost.example: nxdomain"},
+			{ID: finding.IDDNSPrivateAddress, Subject: name("www.example.com"), Verdict: "disproved", Reads: []string{"g000005"}},
+			{ID: finding.IDDNSPrivateAddress, Subject: name("flaky.example.com"), Verdict: "abstained", Reason: "unavailable:dns_servfail",
+				Reads: []string{"g000006"}},
+		}})
+	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
+		Asset: "example.com", AssetID: "domain:example.com", Subject: "example.com/MX/mx.oldhost.example",
+		Reason: "the old mail host is ours until March", AcceptedBy: "alice", Expires: "2027-03-01"})
+	return in
+}
+
+// A domain root the web collector judged: its findings carry their subject,
+// an acceptance applies to the one instance it names, the external row is
+// marked from the judgments and names what no rule judges yet, and the
+// email row says its records were read but not judged.
+func TestDomainRootFindings(t *testing.T) {
+	r := Build(withDomainRoot(t))
+	var open, accepted []string
+	for _, f := range r.Findings {
+		if f.Key.Subject == nil {
+			continue
+		}
+		switch f.Status {
+		case finding.StatusOpen:
+			open = append(open, *f.Key.Subject)
+		case finding.StatusAccepted:
+			accepted = append(accepted, *f.Key.Subject)
+		}
+	}
+	if !slices.Equal(open, []string{"old.example.com"}) || !slices.Equal(accepted, []string{"example.com/MX/mx.oldhost.example"}) {
+		t.Errorf("open %v, accepted %v", open, accepted)
+	}
+	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "applied" {
+		t.Errorf("acceptances %+v", r.Acceptances)
+	}
+	ext := row(t, r, "external")
+	if ext.Mark != "partial" || !slices.Contains(reasons(ext.Reasons), "no_rule") || !slices.Contains(reasons(ext.Reasons), "unavailable:dns_servfail") {
+		t.Errorf("external %s %v", ext.Mark, ext.Reasons)
+	}
+	if email := row(t, r, "email"); email.Mark != "not_assessed" || !slices.Equal(reasons(email.Reasons), []string{"no_rule"}) {
+		t.Errorf("email %s %v", email.Mark, email.Reasons)
+	}
+	if len(r.Incomplete) != 0 {
+		t.Errorf("a read domain root is not incomplete: %+v", r.Incomplete)
+	}
+	// The dangling name is its own asset, under which an acceptance names
+	// it; the data that matters most raises its finding a step.
+	in := withDomainRoot(t)
+	in.DataMattersMost = []string{"domain:old.example.com"}
+	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "engagement.yaml intent.accepted_risks[1]",
+		ID: finding.IDDNSDanglingExternal, Asset: "domain:old.example.com", AssetID: "domain:old.example.com",
+		Reason: "being migrated", AcceptedBy: "alice", Expires: "2027-03-01"})
+	r = Build(in)
+	for _, f := range r.Findings {
+		if f.Key.Subject != nil && *f.Key.Subject == "old.example.com" {
+			if f.Key.Asset != "domain:old.example.com" || f.Severity != "high" || len(f.Adjustments) != 1 ||
+				f.Adjustments[0].Rule != "data_matters_most" || f.Status != finding.StatusAccepted {
+				t.Errorf("old.example.com %+v", f)
+			}
+		}
+	}
+	if len(r.Acceptances) != 2 || r.Acceptances[1].Outcome != "applied" {
+		t.Errorf("acceptances %+v", r.Acceptances)
+	}
+	// An acceptance on the root never says the problem is gone while an
+	// instance under it is open on a name of its own.
+	in = withDomainRoot(t)
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
+		Asset: "example.com", AssetID: "domain:example.com", Subject: "old.example.com", Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"}}
+	if r = Build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "domain:old.example.com") {
+		t.Errorf("an acceptance on the root %+v", r.Acceptances[0])
+	}
+	// Accepted on its own name too, the instance is not open: the root's
+	// entry is told it covers nothing there, not to accept it again.
+	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "engagement.yaml intent.accepted_risks[1]",
+		ID: finding.IDDNSDanglingExternal, Asset: "domain:old.example.com", AssetID: "domain:old.example.com",
+		Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"})
+	if r = Build(in); strings.Contains(r.Acceptances[0].Why, "open under it") || r.Acceptances[1].Outcome != "applied" {
+		t.Errorf("both entries %+v", r.Acceptances)
+	}
+	// A name once dangling and now gone was looked up: its entry is not
+	// "not read".
+	in = withDomainRoot(t)
+	in.Assets[len(in.Assets)-1].Judged = in.Assets[len(in.Assets)-1].Judged[1:]
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
+		Asset: "domain:old.example.com", AssetID: "domain:old.example.com", Subject: "old.example.com", Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"}}
+	if r = Build(in); r.Acceptances[0].Outcome != "subject_not_found" || !strings.Contains(r.Acceptances[0].Why, "remove the entry") {
+		t.Errorf("a fixed name's entry %+v", r.Acceptances[0])
+	}
+	// A declared domain read with its root is read in coverage.
+	in = withDomainRoot(t)
+	in.Assets = append(in.Assets, AssetInput{Name: "shop", ID: "domain:shop.example.com", Kind: "domain", Status: "collected",
+		Detail: "read with example.com", ReadWith: "domain:example.com"})
+	if ext := row(t, Build(in), "external"); ext.Population.Read != 2 || slices.Contains(reasons(ext.Reasons), "collector_not_built") {
+		t.Errorf("external %+v", ext)
+	}
+}
+
 // A declared root with no collector leaves the run incomplete, whatever
 // the findings, and its areas say so (docs/spec/engagement.md, "Exit codes").
 func TestARootWithoutCollectorExitsTwo(t *testing.T) {
