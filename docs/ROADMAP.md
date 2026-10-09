@@ -44,8 +44,8 @@ Hypotheses drawn from the operator's own words, the part of the job that earns t
   not done until the consumers it owns exist, and a consumer is never stubbed to pass
   that test.
 - **The lab comes before the checks it measures.** Each release's lab is seeded by
-  someone who does not write that release's checks, and its labels are sealed before
-  the first collector slice starts. One author cannot be blind to their own seeding.
+  someone who does not write that release's checks, and each part of it is sealed
+  before the first slice whose checks it measures starts. One author cannot be blind to their own seeding.
   The seeder may be a second person or an **AI agent in its own session**, under these
   conditions: the seeding session reads the vision, the specs and this roadmap's
   example tables but never the collector code, the rules or their fixtures; it writes
@@ -252,11 +252,12 @@ words, replaces them with plain descriptions in text and keeps the paths in JSON
 ### E3 — the lab, sealed
 
 **Delivers:** a GitHub test organization the team owns, a Google Workspace test tenant
-on a domain the team owns, and one Linux host over SSH (nginx in front of a Next.js app,
-postgres on the same host) in a docker-compose file; a seeded issue list written by a
-seeder who is not the implementer (a person, or an agent in its own session, under the
-rule above) and sealed before E5 starts; two context cases and a clean variant; the
-false-positive target for the clean variant, fixed now.
+on a domain the team owns, a second domain the team owns, separate from the tenant's,
+with its DNS, mail records and a small website, and one Linux host over SSH (nginx in
+front of a Next.js app, postgres on the same host) in a docker-compose file; a seeded
+issue list written by a seeder who is not the implementer (a person, or an agent in its
+own session, under the rule above) and sealed in two parts (below); two context cases
+and a clean variant; the false-positive target for the clean variant, fixed now.
 
 | Example seeded issue | Found through |
 |---|---|
@@ -270,10 +271,21 @@ false-positive target for the clean variant, fixed now.
 | A GitHub organization owner nobody declared, tied to no person | GitHub API and `people` (E5, E9) |
 | A third-party OAuth app with full Drive scope | Admin SDK (E6) |
 | DMARC published at `p=none` | DNS (E7) |
-| A CNAME to a hosting service that no longer serves the name | DNS (E7) |
+| A CNAME to a hosting service that no longer serves the name, built so that nobody outside the team can claim it while the lab is up (a provider-verified domain, or a target under a domain the team holds outside the lab's roots) | DNS and the front-page read (E7); high when the provider's fingerprint matches, medium when the target name does not exist |
 | `PasswordAuthentication yes` on the host | host collector (E1b) |
 | postgres bound to all interfaces with no host firewall rule in front | multi-fact rule (E9) |
-| Missing `Strict-Transport-Security` header | response headers (E7); low, must rank below every item above |
+| Missing `Strict-Transport-Security` header | response headers (E7); low; must rank below every item above |
+
+No seeded issue may be exploitable by anyone outside the team while the lab exists. A
+takeover is seeded only where the provider's verification or the team's own
+registration stops anyone else from claiming the name.
+For the dangling CNAME, either point a name at GitHub Pages on a domain the lab's GitHub
+organization has verified, with no Pages site for that name and the verification record
+kept published while the lab exists (a takeover candidate, high), or point it at a name
+that does not exist under a second domain the team owns outside the lab's roots (a
+dangling record, medium). Never point it at an S3, Azure or Elastic Beanstalk name
+nobody holds, and never reserve the bucket or app under the matching name, which leaves
+nothing to find.
 
 The host collector's checks predate the lab, and E1b adds none, so wiring the host in
 before the labels are sealed shapes nothing; the recall gate measures its checks like
@@ -291,9 +303,16 @@ Docker-published listener is a different issue, which the seeder may add, and on
 the 0.0.2 rule correctly abstains (`spec/engagement.md`, "Stages").
 
 **Done when:** the labels are committed encrypted or stored outside the tree, with
-their hash in `docs/eval/`, before the first commit of E5; the seeder is named in the
-acceptance record, with the model when it is an agent. E1a to E2 and E4 need no lab and
-may proceed while it is being built.
+their hash in `docs/eval/`, in two parts, each seeded blind and sealed before the
+commit the table names:
+
+| Part | What it holds | Sealed before |
+|---|---|---|
+| Domain | the second domain, its DNS and mail records, and the small website, with E7's seeded issues, the context cases, the domain's clean variant and its share of the false-positive target | the first commit of E7 |
+| The rest | the GitHub organization, the Workspace tenant and the SSH host, with their seeded issues, clean variant and share of the false-positive target | the first commit of E5 or E6, whichever comes first |
+
+The seeder of each part is named in the acceptance record, with the model when it is an
+agent. E1a to E2 and E4 need no lab and may proceed while it is being built.
 
 ### E4 — scope stage and the scope gate
 
@@ -434,8 +453,9 @@ prove:
 19. **Population:** a list cut by a cap is marked incomplete in its evidence, and a
     test rule over it, through the rule evaluator, fires, is never disproved, and
     prints its count as "at least". E4 proves the page's population and the predicate
-    (`AnyRecord` over a partial population); the rule evaluator reads collector
-    evidence from E5, whose first list rule carries this test through it.
+    (`AnyRecord` over a partial population); the rule evaluator reads no collector
+    evidence before a collector lands, and E5's first list rule carries this test
+    through it.
 20. **Resume:**
     - a rate-limited request is sent again and kept;
     - a refused request is re-admitted and refused again;
@@ -483,9 +503,9 @@ slices that add callers do them first):
   in the engagement, which the gate calls before and after resolving the name and
   discovery and the report read, in place of today's paths partitioned by the evidence
   each needs;
-- with E5's first op: a request's `Reason` derived from its decision by one table, and the
-  gate's longest functions (`attempt`, `send`, op validation, discovery's per-root
-  loop, `shape`) split into steps.
+- with E7's first op, E7 being the first network collector: a request's `Reason`
+  derived from its decision by one table, and the gate's longest functions (`attempt`,
+  `send`, op validation, discovery's per-root loop, `shape`) split into steps.
 
 **Deferred from E4's slice-closing review** (2026-10-08), each carried by the slice
 named:
@@ -502,7 +522,8 @@ named:
   collector's to decide from the page it is served (`spec/scope.md`, "Connections").
 - E5, E6, E7: a collector marks coverage by `spec/scope.md`'s "Outcomes" table, its
   row for a request that got no answer (`unavailable:connection_reset`,
-  `unavailable:timeout`, `unavailable:unreachable`: exit 2) included.
+  `unavailable:timeout`, `unavailable:unreachable`: exit 2 for what was declared)
+  included.
 
 ### E5 — GitHub organization and repository secrets
 
@@ -515,9 +536,8 @@ keys with write access, pending invitations, and Dependabot and secret-scanning 
 where the token can read them. A secret scan of repository history, read in-process from
 the operator's mirror checkout (`checkout`, decided in E4), redacted in every output. A token with more than read access
 is itself reported. People are matched by login only (`spec/engagement.md`, "People").
-Before E5 starts, the `security-consultant` reviews and freezes the base severity
-anchors (`spec/engagement.md`, "Severity in context"), and every base E5 assigns is
-placed against them.
+Every base E5 assigns is placed against the base severity anchors frozen on 2026-10-09
+(`spec/engagement.md`, "Severity in context").
 
 What a token cannot see is *insufficient evidence*, never a pass: the organization's
 two-factor requirement is visible only to an owner's token, and whether a fine-grained
@@ -538,9 +558,7 @@ table carries what is now hard-coded per provider (a display name, page keys, ra
 recognition), so a collector adds one entry, not six edits in two packages, and a list
 declares its item's subject as a template (`repo:github:{key}`), as an op's subject
 already is. Coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got
-no answer exiting 2. With E5's first op too: a request's `Reason` derived from its
-decision by one table, and the gate's longest functions (`attempt`, `send`, op
-validation, discovery's per-root loop, `shape`) split into steps.
+no answer exiting 2.
 
 ### E6 — Google Workspace collector
 
@@ -573,29 +591,52 @@ it, from E4).
 
 ### E7 — domain, email and web observe
 
-**Delivers:** DNS records and subdomain takeover detection by provider-specific
-fingerprints, wildcard-aware, never by trying to claim the name; SPF, DKIM and DMARC
-with the DMARC policy and alignment read, not just presence; DKIM read per selector
-declared under `mail.senders`, *insufficient evidence* without one; domains declared
-under `mail.no_mail` expected to publish `v=spf1 -all` and DMARC `p=reject`, and DMARC `p=none` graded by
-whether the domain sends; TLS and certificate, response headers and cookies, technology
-fingerprint, `/robots.txt` and `/.well-known/security.txt`, from entry points only
-(`spec/scope.md`, "Web applications and sites"). Single-fact rules for each.
+**Delivers:** the reads, rules and data of `spec/web-collector.md`. DNS records and
+subdomain takeover detection by provider-specific fingerprints, wildcard-aware, never by
+trying to claim the name; SPF, DKIM and DMARC with the DMARC policy and alignment mode
+read, not just presence; DKIM read per selector declared under `mail.senders`,
+*insufficient evidence* without one; domains declared under `mail.no_mail` expected to
+publish `v=spf1 -all` and DMARC `p=reject`, DMARC `p=none` graded by whether the domain
+sends, and a domain root nobody declared judged from the mail use it shows
+(`spec/engagement.md`, "Intake"); the names the company's own MX, NS and SPF records
+point at resolved and recorded, never contacted (`spec/scope.md`, "Third-party
+sources"); TLS and certificate, response headers and cookies, technology fingerprint,
+`/robots.txt` and `/.well-known/security.txt`, from entry points only, with one
+redirect hop on the same host, on a declared or first-party site (`spec/scope.md`, "Web
+applications and sites", "Connections"); header, cookie, `security.txt` and plain-HTTP
+rules on declared and first-party sites only. Single-fact rules for each, and
+`web.restricted_reachable`, which reads one response, the declaration and the vantage.
+The gate gains what they need: TXT (several strings, TCP on truncation), MX and NS in
+its DNS client, the labels `_dmarc` and `_domainkey` and dotted selectors in its DNS
+name type, and a typed certificate verification class beside the error text. Versioned
+data in the tree: the takeover table, an embedded public-suffix snapshot
+(`golang.org/x/net/publicsuffix` stays barred by `scripts/depcheck.sh`), the
+TLS-interception list, the session cookie names, the SPF include-to-service table and
+the block-page markers. Validation refuses one URL under both `intent` lists.
 `scheck run --vantage internet|vpn|lan`, recorded in the run and on each piece of web
-evidence and printed in the report header (`spec/engagement.md`, "Reachability and
-vantage"); a web request's identity for resume includes it (`spec/scope.md`, "Resume").
-On a resume, a changed `mail` or `intent` URL reads again only the DNS names and entry
-points it affects, where E4 runs Scope again whole (`spec/engagement.md`, "Stop and
-resume"; carried from E4 step 4b).
+and DNS evidence and printed in the report header, with a warning at the start when
+`intent.not_exposed` is listed and no vantage is given (`spec/engagement.md`,
+"Reachability and vantage"); a web request's identity for resume includes it
+(`spec/scope.md`, "Resume"). On a resume, a changed `mail` or `intent` URL reads again
+only the DNS names and entry points it affects, where E4 runs Scope again whole
+(`spec/engagement.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
+network collector: the `security-consultant` froze the base severity anchors on
+2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
+placed against them.
 
 **Done when:** tests against recorded HTTP and DNS fixtures (`httptest`, no network)
 fire, disprove and abstain for every rule; the audit log shows no request outside an
-asset's entry points; a resume with a different vantage reads a web asset's entry points
-again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
+asset's entry points and its one redirect hop, and no `robots.txt` path
+requested; a resume with a different vantage reads a web asset's names and entry
+points again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
 and entry points it affects (carried from E4 step 4b).
 
 **Carried from E4's reviews:**
 
+- with E7's first op: a request's `Reason` derived from its decision
+  by one table, and the gate's longest functions (`attempt`, `send`, op validation,
+  discovery's per-root loop, `shape`) split into steps. The provider table and a list's
+  item subject as a template stay with E5 and E6;
 - before E7's first op, `Scope.Site` becomes one `Admits(path, resolution)` decision
   written once in the engagement, which the gate calls before and after resolving the
   name and discovery and the report read, in place of today's paths partitioned by the
@@ -603,10 +644,14 @@ and entry points it affects (carried from E4 step 4b).
 - each session's site requests are kept split by first-party status, so a name sent
   without first-party evidence in one session and with it in another is not moved
   wholly to "websites shown to be yours" (today's `mergeEgress` ORs the flag);
-- the web collector decides `unavailable:blocked` from the page it is served
-  (`spec/scope.md`, "Connections");
+- the web collector decides `unavailable:blocked` from the page it is served: status
+  and a block-page marker (`spec/scope.md`, "Connections");
 - coverage is marked by `spec/scope.md`'s "Outcomes" table, a request that got no
-  answer exiting 2.
+  answer exiting 2 only for what was declared.
+
+**Carried to 0.0.3 from E7's definition** (2026-10-09): an SOA lookup of a dangling
+target's registrable domain, which would tell whether anyone can register it
+(`spec/web-collector.md`, "Not assessed"); no 0.0.3 slice owns it yet.
 
 ### E8 — `scheck init`: the interview
 
@@ -673,7 +718,9 @@ asset unchanged; a loop fixture terminates.
     config file.
 
 **Sequence:** E1a → E1b → E2 → E4 → {E5, E6, E7, E8} → E9, with E1c at any point after
-E1b, and E3 built alongside and sealed before E5 starts. The host path and the report come first because they need no network
+E1b, and E3 built alongside and sealed in parts, its domain part before E7 and the rest
+before E5 or E6. E7 is the first network collector, before E5 and E6, because the
+operator needs the domain, email and web reads first. The host path and the report come first because they need no network
 and can be proven on evidence that already exists; the lab comes before any network
 collector so that recall is measured, not confirmed; the interview comes with the
 collectors, whose rules read its answers.
@@ -711,6 +758,12 @@ the intake question that asks.
 **Done when:** tests against a fake API server cover every rule's three outcomes; the
 collector makes only calls on its declared list; an opt-in live test (`make live`)
 reads a test project.
+
+**Carried from E7's definition** (2026-10-09): the definition of an exposure finding
+(`spec/engagement.md`, "Severity in context") must cover "a named resource readable by
+anyone" (a public bucket), as the high anchor "a bucket readable by anyone, not
+declared public" assumes; today it covers only a URL that answers or names its
+software.
 
 ### G2 — first-party evidence from inventory
 

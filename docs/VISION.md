@@ -112,6 +112,7 @@ should.
 | [ROADMAP.md](ROADMAP.md) | 0.0.2 the first engagement (Workspace, GitHub, domain, host), 0.0.3 cloud, probes and follow-up, 0.0.4 judgement and depth |
 | [spec/engagement.md](spec/engagement.md) | The stages, the engagement file, the report's coverage, and where rules and the model each act |
 | [spec/scope.md](spec/scope.md) | Authorization, roots and exclusions, impact levels per asset type, active modes and limits |
+| [spec/web-collector.md](spec/web-collector.md) | The domain, email and web collector planned for 0.0.2 E7: reads, rules, takeover fingerprints |
 | [spec/host-collector.md](spec/host-collector.md) | The host collector released in v0.0.1: catalog, runner, policy, SSH, posture rules, host report |
 | [spec/model.md](spec/model.md) | The model path: provider contract, agent loop and tools, kept offline until it earns its place |
 | [spec/bounded.md](spec/bounded.md) | The bounded yes/no decision pattern (Jev) behind the `auto` gate |

@@ -15,7 +15,7 @@ run can resume from a saved output.
 |---|---|---|
 | **1. Intake** | Ask what a consultant would ask (below). | Engagement file |
 | **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
-| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (mail records, NS, SOA, CAA) is read here, per domain root and declared mail domain. Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
+| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
 | **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. With a model (0.0.4), hypotheses as well. | Plan |
 | **5. Check** | Run the follow-up reads that rules named and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
 | **6. Analyze** | Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. | Findings and follow-ups |
@@ -74,7 +74,7 @@ exists, and the release gate proves they all do. A consumer is never stubbed to 
 |---|---|---|
 | Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted", worded in "The report" |
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
-| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is *insufficient evidence* for the sending rules, never treated as non-sending. The severity of DMARC `p=none` depends on whether the domain sends |
+| Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: an MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; neither makes it judged as a domain that sends no mail; and the report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
 | Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
 | People | Who are the admins, contractors and agencies, and the service and break-glass accounts, with their Workspace address and GitHub login? Everyone else can be filled in from the stanza `--stop-after recon` prints. | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply |
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
@@ -409,7 +409,8 @@ it to that list, with none of the target's documented artefacts.
   agency.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
-  under a root.
+  under a root, and one URL listed under both `intent.exposed_on_purpose` and
+  `intent.not_exposed` exits 3.
 - An accepted risk needs `id`, `asset`, `reason` and `accepted_by`; an empty `reason`
   counts as missing.
 - The file is one YAML document, written out: a second document, anchors, aliases,
@@ -444,7 +445,8 @@ nobody listed, so the engagement's adjustments are a closed table:
 - **Exposed on purpose** applies only to exposure findings: those whose whole claim is
   that a URL answers or names its software (reachable, version or technology
   disclosed), on that exact URL. A finding about what the response contains (a secret,
-  a file, a debug page) is not one. Every finding definition declares whether it is
+  a file, a debug page) is not one, and neither is a contradiction of a declared
+  restriction (`web.restricted_reachable`), though its claim is that a URL answers. Every finding definition declares whether it is
   one (`exposure_finding`). Secrets, TLS and configuration findings on the same asset
   never move: an exposed `.env` on a public-on-purpose site is still high. Listeners on
   a host are governed by its `expected_services`, not by intent.
@@ -472,15 +474,21 @@ to `info`.
 **Base severity anchors.** With rules only, the ranking is the base-severity table plus
 context, so bases must agree across collectors or "Fix these first" fails whatever the
 renderer does. Each anchor is a base before context, with the context step that moves
-it beside it. The `security-consultant` reviews and freezes them before E5 assigns the
-first network collector's bases, and every later base is placed against them:
+it beside it. The `security-consultant` reviewed and froze them on 2026-10-09, before
+E7, the first network collector, assigned its bases; every later base is placed
+against them:
 
-| Base | Anchors |
-|---|---|
-| critical | a usable empty password; a credential in a public repository or its history; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
-| high | 2-step verification not enforced at the identity provider; a person who left still active (+1 `attribute:admin`); Owner on a human or service account; a public bucket; an admin without 2-step verification; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); a write-all default workflow token with actions not pinned to a commit |
-| medium | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC `p=none` on a domain that sends (a domain under `mail.no_mail` falls under the non-sending rules instead); an OAuth app with a broad scope (+1 `attribute:admin_grantor`) |
-| low | missing HSTS; pending updates of unknown class |
+| Base | Means | Anchors |
+|---|---|---|
+| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant. | a usable empty password; a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
+| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`); an admin or owner tied to no person; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); Owner on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); an admin or owner not declared but tied to a person; a human with Owner or Editor not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`) |
+| low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone |
+| info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
+
+A declared admin who holds Owner is a note for the readout, not a finding. Of the
+example seeded issues in ROADMAP E3, every one but missing HSTS anchors at medium or
+above, and HSTS is the only low.
 
 ## Reachability and vantage
 
@@ -488,10 +496,14 @@ Whether something is reachable depends on where the request came from. `scheck r
 --vantage internet|vpn|lan` records the run's vantage in the run, not in the file. A
 `not_exposed` rule fires only when the run's vantage is `internet` and the declared
 audience is not `internet`; every other combination, and an unknown vantage, abstains.
-`/admin` declared VPN-only and reached from the VPN is not a contradiction. The vantage
-is the operator's word, printed in the report header and recorded on each piece of
-evidence like the principal; a resume with a different vantage reads those entry
-points again.
+`/admin` declared VPN-only and reached from the VPN is not a contradiction; from the
+`internet` vantage, no answer is the evidence that disproves it, never an incomplete
+run ([web-collector.md](web-collector.md#headers-and-cookies),
+`web.restricted_reachable`). The vantage is the operator's word, printed in the report
+header and recorded on each piece of evidence like the principal, DNS evidence
+included; a resume with a different vantage reads those names and entry points again.
+A run whose file lists `intent.not_exposed` and that has no `--vantage` warns at its
+start that those URLs will not be checked for reachability; it does not refuse to run.
 
 ## One command, one file
 
@@ -1059,7 +1071,9 @@ states, so a reader of the JSON gets the same answer.
 **Notes for the readout.** Not findings, and not counted: `first_party` entries that
 expired or whose target moved, so someone removes them; what each acceptance came to
 when it was not applied ("Acceptances" below), acceptances that expire within 30 days
-or have no `expires`; a listed admin who is not one; a declared person or system
+or have no `expires`; a listed admin who is not one, and a listed admin who holds
+Owner; a domain under `mail.no_mail` that shows mail use
+([web-collector.md](web-collector.md#email)); a declared person or system
 scheck found no trace of; declarations scheck could not verify; the count of
 unattributed members; the service and break-glass accounts, listed ("People").
 
@@ -1162,11 +1176,25 @@ the target:
 | `unavailable:exclusion_unknown` | scheck could not tell which items your exclusions cover, so it kept none |
 | `unavailable:redirect_out_of_scope` | the site sent scheck somewhere outside your roots, which it did not follow (`<location host>`) |
 | `unavailable:redirect_not_entry_point` | the site redirected to another of its pages, which scheck read only as the redirect (`<path>`) |
+| `unavailable:blocked` | a firewall or bot protection in front of the site (`<vendor>`) answered instead of the site, so this page was not judged; to have it checked, let scheck through for the run (it identifies itself as "`<user agent>`"), or run from another network |
 | `unavailable:address_not_public` | the name points at a private or reserved address, which scheck does not contact from outside a declared network |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
 
 A token is never wrapped across lines; the detail wraps.
+
+**A missing intake answer.** A rule that reads an intake answer the file does not give
+says so in the report, in these words (0.0.2 E7; [web-collector.md](web-collector.md)):
+
+| Rules | Read | When the answer is missing |
+|---|---|---|
+| `email.dmarc_*`, `email.spf_missing`, `email.spf_invalid`, `email.spf_permits_anyone`, `email.no_mail_spoofable` | `mail.senders[].domain`, `mail.no_mail`; for an undeclared domain, the MX and SPF observed ("Intake", Mail) | "You did not say whether *d* sends mail. It shows signs of mail use (MX), so DMARC was judged as for a sending domain." or "…it shows none, so it was judged as a domain that sends no mail." |
+| `email.dkim_*` | `mail.senders[].dkim_selectors` | "DKIM for *service* on *d* was not checked: no selector was given, and DNS cannot list them. Find it as `s=` in the DKIM-Signature header of a message *service* sent." |
+| `email.spf_undeclared_sender` | `mail.senders` for that domain | "SPF was not compared with your senders: none were listed for *d*." |
+| `web.version_disclosed` | `intent.exposed_on_purpose[].url`, exactly | its `why_here`: "No page was declared public on purpose; this is the standard rating." |
+| `web.restricted_reachable` | `intent.not_exposed[]` and `--vantage` | with no vantage: "Pages you said are restricted were not checked for reachability: the run's vantage was not given (`--vantage internet`)."; with `vpn` or `lan`: "…this run came from inside your network."; with no `not_exposed` entry, no line |
+| headers, cookies, `security.txt`, plain HTTP | `url` roots and entries, `first_party` | "*N* names under *root* were read but not judged for headers: none is declared as your site. Add a `url` entry for the ones you run." |
+| ranking | `data.matters_most[].asset` | no line |
 
 Each row also carries the assets covered and those excluded by name; the principal the
 data was read as (once per asset in text, per row and per piece of evidence in JSON),
@@ -1189,8 +1217,8 @@ not *assessed*; JSON carries them all, and every `not_applicable` assessment.
 | Cloud configuration | public storage and snapshots, broad IAM, service account keys, VPC firewall rules |
 | Data stores and backups | public access to databases, backup existence and location. A declaration alone is *not assessed* |
 | CI/CD and supply chain | branch protection, workflow token permissions, deploy keys, action pinning, dependency alerts |
-| External surface | domains, subdomain takeover, exposed services, TLS |
-| Web application | headers and cookies at entry points; exposed files and debug routes from 0.0.3 |
+| External surface | domains, subdomain takeover, exposed services, TLS. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)), the registrar account among it: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
+| Web application | headers and cookies at the entry points of declared and first-party sites, with a count of names read but not judged; exposed files and debug routes from 0.0.3 |
 | Hosts | the host collector's catalog (`host-collector.md`), expanded below |
 | Email and domain | SPF, DKIM per declared selector, DMARC, non-sending domains |
 | Logging and incident readiness | audit logging enabled, alerting on administrative changes |
@@ -1275,7 +1303,7 @@ one id graded differently.
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
 | `asset_name`, `bound_id` | the `assets` name, or the id; the bound id or null |
-| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `url`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
 | `category` | the collector's own grouping |
@@ -1312,7 +1340,10 @@ grant is one finding per app, keyed by client id, with the users who granted it 
 on the app. A secret found in a repository is keyed `<detector>:<path>@<commit, 12
 hex>` and labeled with the detector type and first commit, never a hash of the value,
 which a low-entropy secret does not survive and which would sit in every comparison of
-runs; two secrets in one file stay two findings. A subject whose key matches
+runs; two secrets in one file stay two findings. A secret in a web page is keyed
+`<detector>:<url>`, one per detector per page. The domain, email and web collector's
+subjects, and how their keys are written, are in
+[web-collector.md](web-collector.md#subjects). A subject whose key matches
 `redact_extra` renders as its marker; its paste uses `provider_id` when there is one,
 and otherwise has `by_subject: false` and says the finding cannot be accepted by
 subject while the pattern hides its name.
