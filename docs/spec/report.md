@@ -46,7 +46,16 @@ first thing read; with trigger `incident`, the incident block stays above it.
 **Header.** The engagement name and `engagement.operator`; the collection span in
 `engagement.timezone`, the zone named; the scheck version; the trigger (`not declared
 (one-host check)` for `--host`); on a resume, the `Resumed` line, the files edited by
-hand and, from E5, a principal that changed ([runs.md](runs.md), "Stop and resume"). Fixed lines:
+hand and, from E5, a principal that changed ([runs.md](runs.md), "Stop and resume").
+GitHub inventory changes carry the asset, former identity label and fresh identity
+label in `engagement.principal_changes` only when both known stable user identities
+differ. Login renames and unknown-to-known transitions produce no change notice; no
+token value or credential hash is retained. GitHub inventory also names the account
+and warns that visibility depends on the credential in the normal header. Resume
+wording qualifies retained evidence by whether reuse was allowed; inventory notes
+identify reused observations by their original time and say current access was not
+validated. GitHub shortfalls refer to those notes instead of claiming nothing was
+read. Fixed lines:
 
 - Method, in 0.0.2: `rules only: a fixed checklist per asset type, no model, no
   hypotheses. Reading only: nothing was probed, scanned, exploited or changed. Not a

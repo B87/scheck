@@ -700,14 +700,10 @@ func (g *Gate) dropRule(asset string, l *List, item any, set *userSet, ous []Org
 		}
 		switch l.Kind {
 		case KindRepo, KindProject:
-			prefix := "repo:github:"
-			if l.Kind == KindProject {
-				prefix = "cloud:gcp:"
-			}
 			if l.Kind == KindRepo && strings.Count(key, "/") != 1 {
 				return "unattributable"
 			}
-			st := g.scope.Subject(asset, prefix+strings.ToLower(key))
+			st := g.scope.Subject(asset, strings.ReplaceAll(l.Subject, "{key}", strings.ToLower(key)))
 			switch {
 			case st.ExcludedBy != "":
 				return st.ExcludedBy

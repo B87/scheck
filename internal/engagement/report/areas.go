@@ -87,7 +87,7 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
-		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
+		if a.Collector == "web" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
 			out = append(out, a)
 		}
 	}
@@ -99,17 +99,32 @@ func (b *builder) judged(area finding.Area) []AssetInput {
 func (b *builder) areaRow(area finding.Area) Row {
 	row := Row{Area: string(area), Mark: "not_assessed", Reasons: []ReasonDetail{}}
 	var fed []string
+	read := 0
 	for _, a := range b.in.Assets {
-		if feeds(area, a) {
-			fed = append(fed, a.Name)
+		if !feeds(area, a) {
+			continue
+		}
+		fed = append(fed, a.Name)
+		if a.Collector == "github" {
+			if a.InventoryRead {
+				read++
+			}
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
+			if a.NetworkPrincipal != nil {
+				row.Principals = append(row.Principals, *a.NetworkPrincipal)
+			}
+			if a.Reason != "" {
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: a.Reason, Detail: a.Name})
+			}
+		} else {
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "collector_not_built", Detail: a.Name})
 		}
 	}
 	if len(fed) == 0 {
 		row.Reasons = append(row.Reasons, ReasonDetail{Reason: "not_declared"})
 		return row
 	}
-	row.Population = &Population{Kind: "assets", InScope: len(fed), Read: 0}
-	row.Reasons = append(row.Reasons, ReasonDetail{Reason: "collector_not_built", Detail: strings.Join(fed, ", ")})
+	row.Population = &Population{Kind: "assets", InScope: len(fed), Read: read}
 	return row
 }
 

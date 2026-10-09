@@ -18,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
@@ -134,7 +135,7 @@ type ScopeAsset struct {
 	ID   string `json:"id"`
 	Kind Kind   `json:"kind"`
 	Root string `json:"root"`
-	// Collector is "host", or empty when no collector reads the kind yet.
+	// Collector names the built collector, or is empty when none reads the kind yet.
 	Collector string `json:"collector,omitempty"`
 	// FirstParty is the evidence that a domain, url or host asset's server
 	// is the operator's, empty when there is none (docs/spec/scope.md,
@@ -240,8 +241,9 @@ type ReconAsset struct {
 	// Web is what the web collector read under a domain root, redacted by
 	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
 	// verdicts on it.
-	Web    *web.Evidence  `json:"web,omitempty"`
-	Judged []web.Judgment `json:"judged,omitempty"`
+	GitHub *githubc.Evidence `json:"github,omitempty"`
+	Web    *web.Evidence     `json:"web,omitempty"`
+	Judged []web.Judgment    `json:"judged,omitempty"`
 }
 
 // PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
@@ -620,6 +622,8 @@ func (r *run) scope(ctx context.Context) (any, error) {
 		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, FirstParty: r.res.firstParty(a, r.session)}
 		if a.Kind == KindHost {
 			sa.Collector = "host"
+		} else if a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") {
+			sa.Collector = "github"
 		}
 		doc.Assets = append(doc.Assets, sa)
 	}
@@ -675,7 +679,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops)...)
+	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops, githubc.Ops)...)
 	if err != nil {
 		return nil, err
 	}
@@ -946,6 +950,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			ra = r.collectDomain(ctx, a, ra)
 		case a.Kind == KindURL && isRoot(a):
 			ra = r.collectURL(ctx, a, ra)
+		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -1308,6 +1314,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	if r.o.Dir != nil {
 		in.Directory = r.o.Dir.Path
 	}
+	in.PrincipalChanges = r.githubPrincipalChanges()
 	in.Resumed, in.EditedByHand = r.o.Resume != nil, slices.Clone(r.edited)
 	if a := res.Authorization; a != nil {
 		auth := &ereport.Authorization{By: a.By, Date: a.Date, Source: a.Source, Note: a.Note}
@@ -1336,6 +1343,9 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
 			ai.ReadWith = ra.Root
+		}
+		if ra.GitHub != nil {
+			r.githubReportInput(ra, &ai)
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"

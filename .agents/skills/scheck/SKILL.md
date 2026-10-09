@@ -102,9 +102,24 @@ On resume, changed mail declarations refresh the affected records and follow-ups
 changed intent role or audience refreshes its exact entry. Reasons and web
 acceptances only regrade retained observations. Changed vantage refreshes web/DNS
 evidence and Scope, without recollecting hosts. Reused evidence keeps its actual time.
-A declared root of any other kind (a
-SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
-exits 2. Tell the user what was not assessed, never that it is fine.
+GitHub organization roots collect principal, organization metadata, own membership,
+members/owners, outside collaborators, invitations and repository inventory through
+GET reads. Credentials come from `GITHUB_TOKEN`, then `GH_TOKEN`; never print or
+request their values in an engagement file. Read the asset notes, request traces and
+coverage gaps before interpreting counts. “Observed” or “at least” is the token's
+view, not the organization's complete access or private-repository population.
+GitHub security controls are `not_assessed` with `no_rule`: inventory creates no
+security findings. Missing reads and permission gaps remain explicit. The principal
+is read fresh before authenticated reuse; changed known identity is reported in
+`engagement.principal_changes` and the header. Unknown or installation principals
+reuse no authenticated successes. The normal header names the account and its
+credential-dependent visibility. Reused-read notes give the original observation
+time and say current access was not validated. Follow the inventory notes on a
+shortfall to distinguish retained reads from missing reads; missing Members
+permission asks for owner authorization and then resume.
+A declared root of an unbuilt kind (such as Google Workspace) is reported as
+`collector_not_built` and the run exits 2. Tell the user what was not assessed, never
+that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.

@@ -474,6 +474,21 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			continue
 		}
 		fed++
+		if a.Collector == "github" {
+			if a.InventoryRead {
+				read++
+			}
+			detail := a.Name + ": inventory only; no GitHub security control was assessed"
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
+			row.SubItems = append(row.SubItems, SubItem{Name: "GitHub security controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: detail}}})
+			if a.NetworkPrincipal != nil {
+				row.Principals = append(row.Principals, *a.NetworkPrincipal)
+			}
+			if a.Reason != "" {
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: a.Reason, Detail: a.Name})
+			}
+			continue
+		}
 		if a.ReadWith != "" && slices.ContainsFunc(assets, func(x AssetInput) bool { return x.ID == a.ReadWith }) {
 			// Its names were judged under its root's sub-items.
 			read++

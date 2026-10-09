@@ -1,9 +1,10 @@
 # scheck — GitHub collector specification
 
-GitHub organization and repository assessment for 0.0.2 E5. Status: design; no
-GitHub collector is built yet. Defined with the `security-consultant` on 2026-10-09.
-The operation and rule tables are proposals to review and freeze before their build
-steps; descriptive rule names are not finding ids.
+GitHub organization and repository assessment for 0.0.2 E5. Steps 1–2 build the
+gate foundation and principal/organization inventory. The remaining operations and
+all security rules are design, defined with the `security-consultant` on 2026-10-09.
+The inventory surface was frozen on 2026-10-10.
+Descriptive rule names are not finding ids; inventory does not assess a control.
 
 The gate owns admission, sending, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)); the engagement owns people attribution, admin
@@ -34,19 +35,19 @@ completeness gate or the acceptance completeness gate.
 ## Reads
 
 Cheapest metadata comes first. Each operation projects only the fields its rules or
-coverage read. Paths below are proposed endpoint templates, not a callable surface
-until registered and reviewed. The final permission table must distinguish classic
-scopes, fine-grained permissions, organization approval and owner-only visibility.
+coverage read. The inventory surface below is compiled; later paths remain proposed
+until registered and reviewed. The permission table distinguishes classic scopes,
+fine-grained permissions, organization approval and owner-only visibility.
 
-| Read | Proposed path | Evidence and limits |
+| Read | Path (inventory built; later reads proposed) | Evidence and limits |
 |---|---|---|
 | Principal | `/user` | Stable user identity for PAT/App user tokens; public identity needs no extra permission. Missing private MFA field says nothing. Installation-token principal is unsupported and stays unknown. |
 | Organization | `/orgs/{org}` | Organization id/settings; owner visibility is required for complete settings. Absent or null `two_factor_requirement_enabled` is unknown. |
 | Own organization membership | `/user/memberships/orgs/{org}` | Recognized active membership and owner role establish authority for owner-only fields and filters; login alone does not. |
-| Members and owners | `/orgs/{org}/members`, with compiled role/filter values | Member identity and role population; trust `2fa_disabled` only after verified owner authority. |
+| Members and owners | `/orgs/{org}/members`, with compiled `role=all` or `role=admin`, `filter=all` | Member and owner inventory. Owner-only `2fa_disabled` filters are not built; later rules trust them only after verified owner authority. |
 | Outside collaborators | `/orgs/{org}/outside_collaborators` | Population of account identities; repository-effective permissions require separate evidence. |
 | Invitations | `/orgs/{org}/invitations` | Invitation id, role and identity fields needed for matching; a null login retains its invitation identity. |
-| Repositories | `/orgs/{org}/repos`, `/repos/{owner}/{repo}` | Provider id, owner/name, visibility, archived state and default branch. Visibility may be incomplete under the token. |
+| Repositories | `/orgs/{org}/repos` (built), `/repos/{owner}/{repo}` (proposed) | Provider id, owner/name, visibility, archived state and default branch. Visibility may be incomplete under the token. |
 | Branch and active rules | `/repos/{owner}/{repo}/branches/{branch}`, `/repos/{owner}/{repo}/rules/branches/{branch}` | Default-branch metadata and active rules, including organization rules; evaluate/disabled rules are not active protection. Active-rule reads need Metadata read. `protected:true` alone does not prove PR-review requirements. |
 | Workflow defaults | `/orgs/{org}/actions/permissions/workflow`, `/repos/{owner}/{repo}/actions/permissions/workflow` | Organization and repository defaults separately, plus PR-approval setting; fine-grained Administration read at the relevant level. |
 | Workflow files | Compiled contents-directory/file operations under `.github/workflows` at the assessed default-branch commit | Gate decodes base64 before secret redaction, so encoded secrets never persist. Never follow `download_url` or `git_url`. Supported syntax is frozen before rules. |
@@ -54,6 +55,49 @@ scopes, fine-grained permissions, organization approval and owner-only visibilit
 | Secret metadata | Organization/repository Actions secret list and selected-repository operations | Names, timestamps, organization visibility and selected repositories; never values. Names are inventory, not evidence of a leak. |
 | Dependabot alerts | Per-repository alert operations | Identity, state, affected manifest and severity needed by the rule. An organization-filtered view does not prove repository completeness. |
 | Secret-scanning alerts | Per-repository alert and location operations | Id, state, type, validity and location. The provider's `secret` member is dropped before persistence even when no local detector recognizes its format; arbitrary raw metadata is not retained. |
+
+### Built inventory surface
+
+All eight operations use `GET`, `https://api.github.com`, API version `2026-03-10`
+and the gate's credential binding. Object and list bodies have a 1 MiB cap; lists
+request `per_page=100` and stop at 100 pages. The gate reconstructs each next request
+from its compiled template and the preceding request id, never a returned URL.
+Repository list items have the subject template `repo:github:{key}`, where `key`
+is `full_name`; exclusions are applied before persistence.
+
+| Operation | Retained fields |
+|---|---|
+| `github.principal` | `id`, `login`, `type`, `two_factor_authentication` |
+| `github.organization` | `id`, `login`, `type`, `two_factor_requirement_enabled`, `default_repository_permission` |
+| `github.membership` | `state`, `role`, organization `id`, `login`, optional `type`; user `id`, `login`, `type` |
+| `github.members`, `github.owners`, `github.outside_collaborators` | `id`, `login`, `type` |
+| `github.invitations` | `id`, nullable `login`, `role`, `invitation_source` |
+| `github.repositories` | `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility`, `private`, `archived`, `default_branch` |
+
+An active own membership establishes member authority only when its user matches
+the freshly read principal, its organization matches the declared organization's
+id and login, and the evidence is unredacted. The nested organization's `type` may
+be absent; when present it must be `Organization`. `role: admin` additionally
+establishes owner authority. A successful member response alone can be only a
+public-member view; it does not establish active membership.
+
+Members and owners retain `member_visibility_unknown` without verified member
+authority. Outside collaborators and invitations retain `owner_visibility_unknown`
+without owner authority. `Population.Complete` describes recognized pagination,
+independent of the separate `VisibilityComplete` flag. Repository visibility always
+remains unknown: these endpoints do not establish the token's repository selection
+grants, even after every returned page is read.
+
+Classic private-organization inventory generally requires `read:org`; fine-grained
+tokens need organization Members read for own membership, private members, outside
+collaborators and invitations, with the endpoint's membership and owner requirements
+still applying. `GET /orgs/{org}` needs no extra fine-grained permission; complete
+organization details require owner visibility, and classic tokens need `admin:org`
+for those details. Public metadata availability is not proof of a complete private
+view. Denials, SAML authorization and organization approval remain coverage gaps.
+The built step does not fetch owner-only MFA filters or judge the retained settings.
+These requirements follow the official [organization read](https://docs.github.com/en/rest/orgs/orgs#get-an-organization)
+and [organization membership](https://docs.github.com/en/rest/orgs/members) references.
 
 App installation permissions and repository selection, and repository runners and
 applicable runner groups, are carried candidate reads. Their exact scope and
@@ -162,11 +206,19 @@ remain not assessed.
 
 ## Principal and resume
 
-Resolve principal before authenticated reuse. Its fingerprint is stable identity
-and sorted observed scopes, never a token value. A changed principal rereads earlier
-successes and is printed in the report header. Unknown principal reuses none.
+Resolve principal with a fresh `/user` request before authenticated reuse. A
+recognized positive user id and login establish `github:user:<id>`; its fingerprint
+is that stable identity and sorted observed scopes, never a token value. A changed
+identity or observed scope set prevents reuse of earlier authenticated successes.
+A changed known stable identity (`github:user:<id>`) is printed in the report
+header using the former and fresh labels. A login rename, scope change or
+unknown-to-known transition produces no identity-change notice. Fresh read
+attempts can still fail; the header does not claim they succeeded. Unknown principal
+reuses none.
 Installation tokens are unsupported until a separately reviewed GET-only principal
-source exists; never infer installation identity from `account.login`.
+source exists; `ghs_` credentials leave the principal unknown and do not call `/user`.
+Organization inventory can continue, but authenticated successes are not reused.
+Never infer installation identity from `account.login`.
 Fine-grained grant changes may be unobservable. Retained evidence keeps its original
 observation date and does not claim current access validation
 ([scope.md](scope.md#resume), [runs.md](runs.md)).
@@ -180,6 +232,32 @@ fine-grained/App capability says "write capability not determined", never
 "read-only". This draft changes neither the current contract nor the pending choice.
 
 ## Reporting and coverage
+
+The built inventory reports observed or “at least” counts, missing reads and
+permission/visibility gaps as asset notes. It produces no security findings and
+marks the applicable risk areas `not_assessed` with `no_rule`; a successful API read
+is not an assessed control. Inventory evidence keeps each read's status, observation
+time and reuse decision; asset principals and request traces identify the account
+and execution decisions without a credential value. A changed known identity is
+carried in optional
+`engagement.principal_changes` and printed in the header. The normal header also
+names the GitHub account and warns that inventory visibility depends on its
+credential. A resumed run says evidence was kept only where reuse was allowed.
+
+Shortfalls direct the reader to inventory notes for what was retained and what
+remains unknown; they never claim nothing was read when earlier reads succeeded.
+A response truncation or page cap stops collection as `incomplete` with
+`limit_reached` and exit 2, as the scope outcome contract requires. Coverage asset
+read counts require a successful, recognized, nontruncated organization inventory
+read; principal resolution alone, or an incomplete status after failed requests,
+never counts as a read asset. Permission or recognition gaps after some successful
+reads remain gaps; unknown installation principals do not by themselves make
+otherwise readable inventory incomplete.
+
+Population gaps are explained in words. Each reused read's note gives its original
+observation time and says current access was not validated. A missing organization
+Members permission asks the operator to obtain the organization's owner's
+authorization and resume; it does not recommend broad write-capable access.
 
 Coverage sub-items come from the practitioner's list, independent of built rules;
 unbuilt items are `no_rule`, not an assessed area (E9 owns that coverage refinement).

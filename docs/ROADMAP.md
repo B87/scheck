@@ -635,23 +635,30 @@ successes would have answered (carried from E4 step 4a) and prints the changed p
 in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
 
-**Build steps** (planned, security-consultant DEFINE, 2026-10-09; rules and
-permissions in `spec/github-collector.md` are proposals until reviewed and frozen):
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–2 built, later
+steps planned; later rules and permissions in `spec/github-collector.md` remain
+proposals until reviewed and frozen):
 
 0. **Contract preparation.** Split the engagement spec and audit citations; draft the
    operation/permission and rule-outcome tables. Resolve the assessment-token
    reporting choice and review proposed bases before their definitions are fixed.
    Confirm E3's rest-lab seal before the first E5 commit; never open its
    labels in the implementation session. This step is documentation only.
-1. **Gate foundation.** Move provider display, pagination and rate-limit metadata
+1. **Gate foundation (built).** Move provider display, pagination and rate-limit metadata
    into the provider table and list-item subject templates into operations, as E4's
    review requires. Preserve every existing admission and response guarantee.
-2. **Principal and organization inventory.** GET-only PAT/App-user principal,
+2. **Principal and organization inventory (built).** GET-only PAT/App-user principal,
    verified own membership, organization metadata, members/owners, outside
    collaborators, invitations and repository inventory; projected evidence,
    permission/population gaps, changed-principal resume and header tests. Unsupported
    installation principals stay unknown and authenticated successes are not reused.
-   No later rule id or optional check is introduced in this step.
+   No later rule id or optional check is introduced in this step. Inventory counts
+   are observed or lower bounds, never assessed security controls; applicable risk
+   areas remain `not_assessed` with `no_rule`. Repository token visibility remains
+   unknown after complete pagination. Response/page caps are `limit_reached` with
+   exit 2; coverage counts successful inventory reads rather than execution status.
+   The assessment-token reporting decision and
+   E3 rest-lab seal remain pending; no live acceptance is claimed.
 3. **Identity and repository access.** Existing E5a people/admin/MFA rules; repository
    public intent, default member permission, production outside-admin and write
    deploy-key rules. Freeze privilege maps, bases and subject keys before building.
@@ -668,6 +675,13 @@ permissions in `spec/github-collector.md` are proposals until reviewed and froze
    `make check` and a fresh whole-slice adversarial code review. Every built rule has
    firing, disproved and abstained fixtures. Missing live lab measurements remain
    *not run*, never passed.
+
+**Carried from the inventory client review** (2026-10-10): consider wording the
+empty ranking in an inventory-only report as “No security rules ran” rather than
+“Nothing open ranks at medium or above.” The current inventory warnings remain;
+the ranking adds little when no control was assessed. E5 step 7 owns reconsidering
+this optional wording after security rules exist, when its remaining relevance can
+be judged. It is not a change to coverage or exit semantics.
 
 **Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
 table carries what is now hard-coded per provider (a display name, page keys, rate-limit

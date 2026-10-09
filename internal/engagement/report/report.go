@@ -51,16 +51,24 @@ type Run struct {
 
 // Engagement is the header's material.
 type Engagement struct {
-	Name          string         `json:"name"`
-	Operator      *string        `json:"operator"`
-	Timezone      string         `json:"timezone"`
-	Trigger       *string        `json:"trigger"`
-	BuiltFrom     string         `json:"built_from"` // file | host
-	Source        Source         `json:"source"`
-	Collected     Span           `json:"collected"`
-	Method        Method         `json:"method"`
-	Authorization *Authorization `json:"authorization"`
-	EditedByHand  []string       `json:"edited_by_hand"`
+	PrincipalChanges []PrincipalChange `json:"principal_changes,omitempty"`
+	Name             string            `json:"name"`
+	Operator         *string           `json:"operator"`
+	Timezone         string            `json:"timezone"`
+	Trigger          *string           `json:"trigger"`
+	BuiltFrom        string            `json:"built_from"` // file | host
+	Source           Source            `json:"source"`
+	Collected        Span              `json:"collected"`
+	Method           Method            `json:"method"`
+	Authorization    *Authorization    `json:"authorization"`
+	EditedByHand     []string          `json:"edited_by_hand"`
+}
+
+// PrincipalChange describes a fresh provider identity change; it grants no access.
+type PrincipalChange struct {
+	Asset string `json:"asset"`
+	From  string `json:"from"`
+	To    string `json:"to"`
 }
 
 // Source names the engagement as read. Path is nil for --host.

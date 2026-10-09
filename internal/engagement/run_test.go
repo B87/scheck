@@ -143,7 +143,9 @@ func fixtureCollect(t *testing.T, name string, calls *int) func(context.Context,
 // A host root and a github root: the host is collected and assessed, the
 // github root is recorded as not collected, and the run is incomplete
 // (docs/ROADMAP.md, E1b "Done when").
-func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
+func TestRunCollectsTheHostAndRecordsMissingGitHubCredentials(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
 	raw := []byte(hostAndGitHub)
 	res, err := Parse("engagement.yaml", raw, testOpts)
 	if err != nil {
@@ -162,7 +164,7 @@ func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
 	if out.Stage != "report" || calls != 1 {
 		t.Fatalf("stage %s, %d collections", out.Stage, calls)
 	}
-	if len(out.Incomplete) != 1 || Describe(out.Incomplete[0]) != "saas:github:example-org: collector_not_built" || len(out.Refused) != 0 {
+	if len(out.Incomplete) != 1 || out.Incomplete[0].Reason != "no_credentials" || len(out.Refused) != 0 {
 		t.Fatalf("incomplete = %+v", out.Incomplete)
 	}
 	if out.ExitCode() != 2 || out.Report == nil || out.Document != out.Report {
@@ -186,7 +188,7 @@ func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
 	if web.Name != "web" || web.Status != StatusCollected || len(web.Assessments) == 0 || web.Evidence != "evidence/web.json" || web.Threshold != "medium" {
 		t.Errorf("web = %+v", web)
 	}
-	if gh.ID != "saas:github:example-org" || gh.Status != StatusNotCollected || gh.Reason != ReasonCollectorNotBuilt {
+	if gh.ID != "saas:github:example-org" || gh.Status != StatusNotCollected || gh.Reason != "no_credentials" {
 		t.Errorf("github = %+v", gh)
 	}
 	// plan.json names each host's planned and disabled checks, so it
@@ -200,14 +202,14 @@ func TestRunCollectsTheHostAndRecordsWhatHasNoCollector(t *testing.T) {
 		t.Errorf("plan.json hosts = %+v", plan.Hosts)
 	}
 	if len(findings.Incomplete) != 1 || findings.Incomplete[0].Asset != "saas:github:example-org" ||
-		findings.Incomplete[0].Reason != ReasonCollectorNotBuilt {
+		findings.Incomplete[0].Reason != "no_credentials" {
 		t.Errorf("findings.json incomplete = %+v: {asset, reason, detail}, as the report carries it", findings.Incomplete)
 	}
 	// The report's trace for the host is its audit.jsonl lines, the canary
 	// or first check first.
 	audit, _ := os.ReadFile(dir.File("audit.jsonl"))
 	trace := out.Report.Assets[0].Trace
-	if len(trace) == 0 || len(trace) != strings.Count(string(audit), "\n") {
+	if len(trace) == 0 || len(trace)+len(out.Report.Assets[1].Trace) != strings.Count(string(audit), "\n") {
 		t.Errorf("trace has %d entries, audit.jsonl %d lines", len(trace), strings.Count(string(audit), "\n"))
 	}
 	if out.Open != findings.Open || out.Open != web.Open {
@@ -283,6 +285,8 @@ func TestJumpReachesTheCollector(t *testing.T) {
 // A host that never answered is recorded as failed and the run goes on;
 // a usage error from the collector stops it.
 func TestCollectorFailures(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
 	res, err := Parse("engagement.yaml", []byte(hostAndGitHub), testOpts)
 	if err != nil {
 		t.Fatal(err)

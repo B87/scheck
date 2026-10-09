@@ -58,6 +58,7 @@
             "note": { "type": "string" }
           }
         },
+        "principal_changes": { "type": "array", "items": { "type": "object", "required": ["asset", "from", "to"], "additionalProperties": false, "properties": { "asset": { "$ref": "#/$defs/asset_id" }, "from": { "type": "string" }, "to": { "type": "string" } } } },
         "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a kept host's collection record, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. An edited envelope is never used: the host is collected again." }
       }
     },
@@ -438,7 +439,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }

@@ -107,6 +107,9 @@ type List struct {
 	// owner/name, a user's or an organizational unit's unit path, a
 	// project's id. An item without it is dropped as unattributable.
 	ExcludeKey string
+	// Subject binds {key} to the canonical item id for scope filtering.
+	// Required for repository and project lists.
+	Subject string
 	// UserRef is the item field naming a user (an id or an address), for
 	// items that reference users: role assignments, group members, tokens.
 	// An item whose user is in the excluded-subject set is dropped.
@@ -193,7 +196,9 @@ type Op struct {
 	// Provider is a key of the provider table: the third-party source the
 	// op goes to, or "web" for an asset's own site.
 	Provider string
-	Method   Method
+	// APIVersion is the compiled GitHub REST version, never operator supplied.
+	APIVersion string
+	Method     Method
 	// URL is the template: scheme, a literal host (a web op's host is
 	// {host}), a path and a query, with {name} placeholders.
 	URL string
@@ -293,6 +298,9 @@ func checkDeclaration(op Op) (provider, error) {
 	prov, ok := providers[op.Provider]
 	if !ok {
 		return provider{}, fmt.Errorf("provider %q is not in the provider table", op.Provider)
+	}
+	if op.APIVersion != "" && (op.Provider != "github" || op.APIVersion != "2026-03-10") {
+		return provider{}, errors.New("API version is not the compiled GitHub version")
 	}
 	switch op.Level {
 	case Passive, Observe, Probe, Scan:
@@ -518,12 +526,6 @@ func (c *compiled) checkResponse(prov provider) error {
 	return c.validateBody()
 }
 
-// pageKeys are the query keys a set builder may send its cursor and its
-// page size under, per provider.
-var pageKeys = map[string]struct{ cursor, size string }{
-	"google": {cursor: "pageToken", size: "maxResults"},
-}
-
 // wholeTenant checks that a users list building the excluded-subject set
 // reads every user: the set replaces the tenant's, so a filter such as
 // isAdmin=true would leave the excluded users unclassified. It sends its
@@ -531,8 +533,8 @@ var pageKeys = map[string]struct{ cursor, size string }{
 // key for it, and no other query but a literal customer.
 func (c *compiled) wholeTenant() error {
 	l := c.List
-	keys, ok := pageKeys[c.Provider]
-	if !ok || l.Next == nil {
+	keys := providers[c.Provider].pages
+	if keys.cursor == "" || l.Next == nil {
 		return fmt.Errorf("provider %q has no users list that builds the excluded-subject set", c.Provider)
 	}
 	fail := func(k string) error {
@@ -648,6 +650,17 @@ func (c *compiled) validateBody() error {
 		if f != "" && !fieldPath.MatchString(f) {
 			return fmt.Errorf("item field %q is not a field path", f)
 		}
+	}
+	if l.Kind == KindRepo || l.Kind == KindProject {
+		want := "repo:github:{key}"
+		if l.Kind == KindProject {
+			want = "cloud:gcp:{key}"
+		}
+		if l.Subject != want {
+			return fmt.Errorf("a %s list declares item subject %q", l.Kind, want)
+		}
+	} else if l.Subject != "" {
+		return errors.New("only repository and project lists declare an item subject")
 	}
 	c.users = c.users || l.UserRef != ""
 	if l.Next == nil {

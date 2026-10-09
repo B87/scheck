@@ -145,8 +145,20 @@ func (t *text) header() {
 		t.field("", "Vantage", 15, clean(t.r.Run.Vantage)+" (your declaration; not verified). internet means outside every permitted source, including office allowlists and VPN.")
 	}
 	if t.r.Run.Resumed {
-		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely was kept, and "+
+		kept := "was kept"
+		if slices.ContainsFunc(t.r.Assets, func(a Asset) bool { return a.Collector != nil && *a.Collector == "github" }) {
+			kept += " where reuse was allowed"
+		}
+		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely "+kept+", and "+
 			"everything else was read again. Kept evidence was not read again and retains its original observation date.")
+	}
+	for _, a := range t.r.Assets {
+		if a.Collector != nil && *a.Collector == "github" && a.Principal != nil {
+			t.field("", "GitHub account", 15, clean(a.ID)+": "+clean(a.Principal.Identity)+". Inventory visibility depends on this credential.")
+		}
+	}
+	for _, change := range e.PrincipalChanges {
+		t.field("", "Principal", 15, clean(change.Asset)+": GitHub principal changed from "+clean(change.From)+" to "+clean(change.To)+". Earlier authenticated GitHub evidence was not reused.")
 	}
 	if len(e.EditedByHand) > 0 {
 		names := make([]string, len(e.EditedByHand))
@@ -281,6 +293,11 @@ func (t *text) refusal(s Shortfall) string {
 
 func (t *text) shortfall(s Shortfall) string {
 	n := t.name(s.Asset)
+	for _, a := range t.r.Assets {
+		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "github" {
+			return n + ": GitHub inventory was not completed (" + strings.TrimSuffix(clean(s.Detail), ".") + "). The inventory notes show what was read and what remains unknown."
+		}
+	}
 	if e := s.Effect; e != nil {
 		attempted := e.ChecksRun + e.ChecksUnknown
 		total := attempted + e.ChecksNotRun

@@ -12,12 +12,13 @@ import (
 // report's own terms, so this package never imports the engagement or a
 // collector, and never contacts a target.
 type Input struct {
-	Vantage      string
-	Observations map[string]Observation
-	LevelsUsed   []string
-	RulesVersion string
-	Exposures    []ExposureInput
-	Version      string
+	PrincipalChanges []PrincipalChange
+	Vantage          string
+	Observations     map[string]Observation
+	LevelsUsed       []string
+	RulesVersion     string
+	Exposures        []ExposureInput
+	Version          string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string
@@ -72,6 +73,9 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
+	NetworkPrincipal     *Principal
+	InventoryNotes       []Note
+	InventoryRead        bool
 	PopulationIncomplete bool
 	NetworkTrace         []Trace
 	WebShortfalls        []Shortfall

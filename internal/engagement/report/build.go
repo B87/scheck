@@ -80,6 +80,7 @@ func Build(in Input) *Report {
 			r.Redaction.Operator.Matches += v.redactions(r.Redaction.Builtin)
 		}
 		if a.Collector != "" {
+			r.Notes = append(r.Notes, a.InventoryNotes...)
 			r.Notes = append(r.Notes, a.MailNotes...)
 			r.Notes = append(r.Notes, a.WebNotes...)
 			for _, h := range a.Redactions {
@@ -116,10 +117,11 @@ func (b *builder) engagement() Engagement {
 	in := b.in
 	e := Engagement{
 		Name: in.Name, Timezone: b.zone.String(), BuiltFrom: "file",
-		Source:        Source{SHA256: in.SHA256},
-		Collected:     Span{From: in.Started.UTC(), To: in.Finished.UTC()},
-		Method:        Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...)},
-		Authorization: in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
+		Source:           Source{SHA256: in.SHA256},
+		Collected:        Span{From: in.Started.UTC(), To: in.Finished.UTC()},
+		Method:           Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...)},
+		PrincipalChanges: append([]PrincipalChange{}, in.PrincipalChanges...),
+		Authorization:    in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
 	}
 	if in.Operator != "" {
 		op := in.Operator
@@ -162,6 +164,7 @@ func (b *builder) asset(a AssetInput) Asset {
 			At: e.Time.UTC(), Decision: e.Decision, OutputSHA256: e.OutputHash})
 	}
 	out.Trace = append(out.Trace, a.NetworkTrace...)
+	out.Principal = a.NetworkPrincipal
 	v := b.hosts[a.ID]
 	if v == nil {
 		return out

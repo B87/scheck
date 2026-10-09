@@ -1,0 +1,591 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "url:https://example.com/",
+      "complete": true,
+      "id": "web.secret_in_response",
+      "instances": 0,
+      "reads": [
+        "request:web-page"
+      ],
+      "status": "not_matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub inventory only. No GitHub security control was assessed.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "github.principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "github.organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "github.membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "github.members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "github.owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "github.outside_collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "github.invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "github.repositories"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "web",
+      "id": "url:https://example.com/",
+      "kind": "url",
+      "name": "website",
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "url:https://example.com/"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed; loaded scripts and pages beyond entry points",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "GitHub security controls",
+          "reasons": [
+            {
+              "detail": "engineering: inventory only; no GitHub security control was assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "judged": [
+            "specific secret detector hits in inspected responses"
+          ],
+          "mark": "assessed",
+          "name": "response secrets",
+          "reasons": [],
+          "rules": [
+            "web.secret_in_response"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "loaded scripts and pages beyond entry points",
+          "read_not_judged": [
+            "loaded scripts and pages beyond entry points"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "assets_covered": [
+        "url:https://example.com/"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "reason": "unavailable:web_evidence"
+        },
+        {
+          "detail": "TLS versions and ciphers other than those negotiated, and revocation",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_applicable",
+          "name": "restricted URL reachability",
+          "reasons": [],
+          "rules": [
+            "web.restricted_reachable"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_applicable",
+          "name": "dangling records",
+          "reasons": [],
+          "rules": [
+            "dns.dangling_external",
+            "dns.dangling_internal"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_applicable",
+          "name": "subdomain takeover",
+          "reasons": [],
+          "rules": [
+            "dns.takeover_candidate",
+            "dns.unclaimed_at_provider"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_applicable",
+          "name": "private addresses",
+          "reasons": [],
+          "rules": [
+            "dns.private_address"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "TLS and certificates",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "tls.certificate_invalid",
+            "tls.certificate_expiring",
+            "tls.legacy_only"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "TLS versions and ciphers other than those negotiated, and revocation",
+          "read_not_judged": [
+            "TLS versions and ciphers other than those negotiated, and revocation"
+          ],
+          "reasons": [
+            {
+              "detail": "not judged in this version",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "assets_covered": [
+        "url:https://example.com/"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [
+        {
+          "detail": "no judgments from web responses were recorded",
+          "reason": "unavailable:web_evidence"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "HTTPS and plain HTTP",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.hsts_missing",
+            "web.plaintext_http",
+            "web.plaintext_http_clients"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "entry response headers",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_headers"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "session cookies",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.session_cookie_flags"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "software versions",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.version_disclosed"
+          ]
+        },
+        {
+          "asset": "url:https://example.com/",
+          "mark": "not_assessed",
+          "name": "security contact",
+          "reasons": [
+            {
+              "detail": "no judgments from web responses were recorded",
+              "reason": "unavailable:web_evidence"
+            }
+          ],
+          "rules": [
+            "web.security_txt"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [
+      {
+        "kind": "websites",
+        "requests": 1,
+        "sites": 1
+      }
+    ],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 8,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub inventory review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 0,
+    "reasons": [],
+    "thresholds": {
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "url:https://example.com/": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub security rules are not implemented in this build. No GitHub security control was assessed.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [],
+    "more": 0,
+    "rules": {
+      "decided": 1,
+      "selected": 1,
+      "without_evidence": 0
+    }
+  }
+}

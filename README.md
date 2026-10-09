@@ -13,8 +13,8 @@ asserts that nothing else on the target changes.
 
 **This build (0.0.2, in development):** the engagement runs its stages (intake, scope,
 recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
-of another kind (a Google Workspace tenant, a GitHub organization) is recorded as *not
-read by this version* and makes the run exit 2; its collectors arrive with the
+of an unbuilt kind (such as Google Workspace) is recorded as *not read by this
+version* and makes the run exit 2; its collectors arrive with the
 [roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
 certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
 reads the root's DNS and mail records and, for each name Scope chose, the certificate
@@ -41,6 +41,12 @@ use a pinned whole-TLD list. `--vantage internet|vpn|lan` declares this invocati
 network position; `internet` means outside every permitted source, including office
 allowlists and VPN. Restricted URL findings require that declaration and observed
 reachability; they do not establish an authentication bypass. The report's "What left this machine" says what was sent where.
+GitHub organization roots get principal, organization, membership, member/owner,
+collaborator, invitation and repository inventory through compiled GET reads, using
+`GITHUB_TOKEN` or `GH_TOKEN`. Counts describe what the token revealed; permissions
+and repository visibility can leave gaps even after every page is read. GitHub
+security controls are not assessed yet. A changed principal on resume is reported;
+unknown principals, including installation tokens, reuse no authenticated results.
 Findings come from compiled-in rules: a host's posture rules, graded through the
 context the engagement declares, and the web collector's DNS, email, TLS and response
 rules. They judge the collected evidence, so a short list of findings and exit 0 mean no rule fired — not that anything is secure; the
@@ -205,7 +211,7 @@ elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted capt
 - [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the
   stages), [report](docs/spec/report.md), [runs and state](docs/spec/runs.md) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
   (what a host asset reads and its guarantees), [domain, email and web
-  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 design), [model path](docs/spec/model.md) and
+  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 inventory; remaining rules designed), [model path](docs/spec/model.md) and
   [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Engagement report schema](docs/engagement-report-schema.json) and the

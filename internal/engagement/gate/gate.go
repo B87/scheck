@@ -184,10 +184,11 @@ type Gate struct {
 	entries      []Entry
 	observations map[string]Observation
 	seq          int
-	stopped      map[string]stop     // provider → why it stopped
-	redirects    map[string]redirect // request id → the 3xx it received
-	pages        map[string]*page    // request id → the page after it
-	users        map[string]*userSet // asset → its excluded-subject set, once known
+	stopped      map[string]stop       // provider → why it stopped
+	redirects    map[string]redirect   // request id → the 3xx it received
+	pages        map[string]*page      // request id → the page after it
+	principals   map[string]Credential // exact credential → freshly resolved identity, memory only
+	users        map[string]*userSet   // asset → its excluded-subject set, once known
 	// pointed is what each records read's answer pointed at, by its
 	// request id; spfLookups counts the include: and redirect= reads of
 	// each SPF evaluation (dns.go).

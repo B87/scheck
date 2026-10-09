@@ -390,6 +390,9 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 	req.Header.Set("Accept", strings.Join(a.b.op.Accept, ", "))
 	// gzip only, decompressed under a cap (docs/spec/scope.md, "Responses").
 	req.Header.Set("Accept-Encoding", "gzip")
+	if a.b.op.APIVersion != "" {
+		req.Header.Set("X-GitHub-Api-Version", a.b.op.APIVersion)
+	}
 	if a.cred != nil {
 		req.Header.Set(a.cred.header, a.cred.value)
 	}
@@ -594,14 +597,14 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 		res.end("unavailable:server_error", res.Detail)
 		return &retry{provider: p, after: retryAfter, code: "server_error", detail: fmt.Sprintf("%s answered %d", sourceName(p), s)}
 	}
-	if p == "github" && (s == 403 || s == 429) && h.Get("X-RateLimit-Remaining") == "0" && !hasRetryAfter {
+	if a.prov.primaryExhausted != nil && a.prov.primaryExhausted(s, h) && !hasRetryAfter {
 		until := resetTime(h)
-		detail := "GitHub's rate limit for this token is used up"
+		detail := sourceName(p) + "'s rate limit for this token is used up"
 		g.stopProvider(p, detail, until)
 		res.Reason, res.Detail, res.Until = "limit_reached", detail, until
 		return nil
 	}
-	if s == 429 || s == 403 && (hasRetryAfter || p == "google" && googleRateLimited(out.Body)) {
+	if s == 429 || s == 403 && (hasRetryAfter || a.prov.rateLimited != nil && a.prov.rateLimited(out.Body)) {
 		res.Reason = "limit_reached"
 		return &retry{provider: p, after: retryAfter, rateLimit: true, detail: fmt.Sprintf("%s's rate limit", sourceName(p))}
 	}

@@ -120,7 +120,13 @@ written. `scheck run <directory>` resumes:
   that rewrites `run.json` too. The safeguard is that every resume prints on stderr which
   engagement file it read and its sha256.
 - **Principal and time.** The principal per collector is recorded; a different principal
-  on resume is printed in the report (E5).
+  on resume is printed in the report (E5). GitHub inventory keeps the prior
+  principal stable identity and display label in session state and resolves the
+  current principal with a fresh request before authenticated reuse. A header change
+  notice compares two known stable identities, not display labels; a login rename
+  or unknown-to-known transition is not reported as a changed principal. Unknown principals reuse no earlier
+  authenticated successes; retained inventory preserves its original observation
+  time and is not current access validation.
   The report prints the collection span from the run's first start, and time-based
   rules (stale accounts, expiries) are computed against collection time: scope and
   first-party confirmations are read at the start of the session that reads them, and a

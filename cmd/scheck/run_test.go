@@ -430,15 +430,17 @@ func TestRunSeededSecretNeverReachesTheRunDirectory(t *testing.T) {
 // An engagement with a host root and a github root exits 2 with the host's
 // findings written.
 func TestRunHostAndGitHubIsIncompleteWithFindings(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
 	state := hermetic(t)
 	collectFrom(t, recorded(t, "ubuntu"))
 	path := filepath.Join(t.TempDir(), "engagement.yaml")
 	writeFile(t, path, strings.Replace(validEngagement, "  - host: deploy@203.0.113.5\n", "  - host: deploy@203.0.113.5\n  - saas: github:example-org\n", 1))
 	out, msg, code := runEngagement(t, path)
-	if code != exitIncomplete || !strings.Contains(msg, "saas:github:example-org: collector_not_built") {
+	if code != exitIncomplete || !strings.Contains(msg, "saas:github:example-org: no_credentials") {
 		t.Fatalf("exit %d: %s", code, msg)
 	}
-	if !strings.Contains(out, "INCOMPLETE: saas:github:example-org (GitHub organization): this version of scheck does not read it.") {
+	if !strings.Contains(out, "no access was given for it") {
 		t.Errorf("report:\n%s", out)
 	}
 	var doc engagement.FindingsDoc
