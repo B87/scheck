@@ -274,11 +274,19 @@ and a clean variant; the false-positive target for the clean variant, fixed now.
 | A CNAME to a hosting service that no longer serves the name, built so that nobody outside the team can claim it while the lab is up (a provider-verified domain, or a target under a domain the team holds outside the lab's roots) | DNS and the front-page read (E7); high when the provider's fingerprint matches, medium when the target name does not exist |
 | `PasswordAuthentication yes` on the host | host collector (E1b) |
 | postgres bound to all interfaces with no host firewall rule in front | multi-fact rule (E9) |
-| Missing `Strict-Transport-Security` header | response headers (E7); low; must rank below every item above |
+| Missing `Strict-Transport-Security` header, on a site under a TLD that is not preloaded (a declared `url` root or `first_party`) | response headers (E7); low; must rank below every item above |
 
 No seeded issue may be exploitable by anyone outside the team while the lab exists. A
 takeover is seeded only where the provider's verification or the team's own
 registration stops anyone else from claiming the name.
+
+Sites under a preloaded TLD (`.page`) exercise the preloaded branch of the HSTS and
+plain-HTTP rules (`spec/web-collector.md`, "Preloaded TLDs") and count in the clean
+variant's false positives. If the team owns no domain under a TLD that is not
+preloaded, the acceptance record says that HSTS and plain-HTTP recall was measured on
+fixtures only. A lab root that is a subdomain (`lab.<x>.page`) publishes its DMARC
+explicitly at `_dmarc.<lab root>`, or `<x>.page` is declared a root too; otherwise the
+DMARC rules abstain, its organizational domain not being a root.
 For the dangling CNAME, either point a name at GitHub Pages on a domain the lab's GitHub
 organization has verified, with no Pages site for that name and the verification record
 kept published while the lab exists (a takeover candidate, high), or point it at a name
@@ -609,7 +617,8 @@ rules on declared and first-party sites only. Single-fact rules for each, and
 The gate gains what they need: TXT (several strings, TCP on truncation), MX and NS in
 its DNS client, the labels `_dmarc` and `_domainkey` and dotted selectors in its DNS
 name type, and a typed certificate verification class beside the error text. Versioned
-data in the tree: the takeover table, an embedded public-suffix snapshot
+data in the tree: the takeover table, `PreloadedTLDs` (from Chromium's preload list,
+pinned to a commit), an embedded public-suffix snapshot
 (`golang.org/x/net/publicsuffix` stays barred by `scripts/depcheck.sh`), the
 TLS-interception list, the session cookie names, the SPF include-to-service table and
 the block-page markers. Validation refuses one URL under both `intent` lists.

@@ -59,7 +59,7 @@ a rule"). Bases are placed against the anchors frozen on 2026-10-09
 ([engagement.md](engagement.md#severity-in-context)). *Exposure* is the definition's
 `exposure_finding`: whether "exposed on purpose" may move it. `web.version_disclosed` is
 this collector's only exposure finding. Every `email.*`, `tls.*` and `dns.*` finding, and
-`web.secret_in_response`, `web.hsts_missing`, `web.plaintext_http`,
+`web.secret_in_response`, `web.hsts_missing`, `web.plaintext_http`, `web.plaintext_http_clients`,
 `web.session_cookie_flags`, `web.security_headers` and `web.security_txt`, are
 configuration findings, which it never moves; `web.restricted_reachable` is a
 contradiction of a declared restriction, which is never an exposure finding
@@ -132,14 +132,30 @@ Declared or first-party sites, except where a row says every read name.
 
 | Rule | Fires | Disproved | Abstains | Base | Area | Exposure |
 |---|---|---|---|---|---|---|
-| `web.hsts_missing`: "*origin* does not tell browsers to always use HTTPS (HSTS)" | no valid `Strict-Transport-Security` on any https response of the origin; one invalid under RFC 6797; `max-age` under 86400 | valid on any https response of the origin; the subject is the origin | only 5xx, 429 or blocked responses; an invalid certificate | low | web | no |
-| `web.plaintext_http`: "*origin* serves pages over plain HTTP instead of redirecting to HTTPS" | the http `GET` is a 2xx with a body, or a 3xx to `http:`; +1 `attribute:password_form` when the body holds `<input type="password">` | a 3xx to `https:`; refused on port 80; a timeout on port 80, which counts as disproved from this vantage | 5xx, 429, blocked | low (+1: medium) | web | no |
+| `web.hsts_missing`: "*origin* does not tell browsers to always use HTTPS (HSTS)" | no valid `Strict-Transport-Security` on any https response of the origin; one invalid under RFC 6797; `max-age` under 86400 | valid on any https response of the origin; the subject is the origin. Also disproved when the name's own last label is a preloaded TLD ("Preloaded TLDs") | only 5xx, 429 or blocked responses; an invalid certificate | low | web | no |
+| `web.plaintext_http`: "*origin* serves pages over plain HTTP instead of redirecting to HTTPS" | the http `GET` is a 2xx with a body, or a 3xx to `http:`; +1 `attribute:password_form` when the body holds `<input type="password">` | a 3xx to `https:`; refused on port 80; a timeout on port 80, which counts as disproved from this vantage. Also disproved, with no `attribute:password_form` raise, when the name's own last label is a preloaded TLD | 5xx, 429, blocked | low (+1: medium) | web | no |
+| `web.plaintext_http_clients`: "*origin* still answers over plain HTTP; browsers never use it on .*tld*, but scripts and API clients configured with http:// would send their requests unencrypted". On a name whose own last label is a preloaded TLD; the subject is the origin | port 80 returns a 2xx with a body | a 3xx to `https:`; a refused connection | as `web.plaintext_http` | info | web | no |
 | `web.session_cookie_flags`: "A session cookie on *origin* is readable by scripts or can be sent unencrypted" | a cookie with a session-like name without `Secure` (on https, or set over http) or without `HttpOnly` | never: only entry points are read | no session cookie seen, worded "the login flow was not read, so session cookies were not checked" | low | web | no |
 | `web.security_headers`: one item per origin listing which are missing of `X-Content-Type-Options`, frame protection (`X-Frame-Options` or CSP `frame-ancestors`), `Referrer-Policy` and CSP | any missing | all present | as `web.hsts_missing` | info | web | no |
 | `web.version_disclosed`: "*url* reveals software versions (*what*)". Every read name; the subject is the URL | a version number in `server` or `x-powered-by`, in `<meta name="generator">`, or in a JSON body's top-level version, build or commit | none, or a product without a version (`nginx`, `cloudflare`, `AmazonS3`, `Vercel`) | blocked; 5xx; a body cut before `</head>` with no version in the headers | low | web | yes: to info |
 | `web.secret_in_response`: "A secret is published in the page at *url*". Every read name | a redaction hit from `private-key`, `github-token`, `slack-token`, `google-access-token`, `google-refresh-token`, `google-client-secret`, `stripe-key`, `npm-token` or `slack-webhook` | HTML read whole with no hit, for that HTML only | a truncated body fires on what it saw and is never disproved. Never fires on `google-api-key`, `jwt`, `bearer`, `kv-secret` or `json-secret`, an AWS key id alone, or `extra:*` | critical; a Slack webhook high | secrets | no |
 | `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` in the past; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
 | `web.restricted_reachable`: "*url*, which you said is reachable only from *audience*, answered from the internet" | the vantage is `internet`, the declared audience is not, and the response is a 2xx, a 401, or a 3xx to a login page on the same site or an identity provider | refused or timed out from the `internet` vantage, worded "did not answer from here; scheck cannot tell a firewall from a server that is down" | the vantage is not `internet` or not given; 403 or 404; blocked; 5xx; an invalid certificate | medium, +1 `contradiction`: high | external | no; validation also refuses one URL under both `intent` lists |
+
+**Preloaded TLDs.** `PreloadedTLDs` is versioned data in the tree, taken from
+Chromium's `net/http/transport_security_state_static.json`, pinned to a commit and
+dated: the entries that are a single label, with mode `force-https`,
+`include_subdomains` true and a policy other than `test`. Known members include `app`,
+`dev`, `page`, `bank`, `insurance` and `foo`; the rest come only from the pinned file.
+It is part of `rules_version`, regenerated each release by a small script that reads
+the pinned file, and a test asserts that the data's header names the commit. Only a
+name's own last label counts, in punycode, never a CNAME target's. An apex preloaded on
+its own is not handled in 0.0.2.
+
+| Rule disproved | Text | JSON |
+|---|---|---|
+| `web.hsts_missing` | `checked (HSTS): not needed on <name>: browsers have .<tld> on their built-in HTTPS-only list, so they use HTTPS there whatever the site's headers say.` | outcome `disproved`, detail `{reason: "tld_preloaded", tld, list_version}` |
+| `web.plaintext_http` | `checked (plain HTTP): browsers never use plain HTTP on .<tld>; see the informational finding for other clients` when `web.plaintext_http_clients` fired, otherwise `checked (plain HTTP): redirects to HTTPS` | outcome `disproved` |
 
 **Session-like names** are a versioned list: `session`, `sess`, `sid`, `connect.sid`,
 `PHPSESSID`, `JSESSIONID`, `laravel_session`, `_*_session`, `auth*`, `jwt`, `token`.
@@ -172,7 +188,7 @@ no trailing dot, default ports dropped, no query or fragment and no spaces; a ke
 
 | Kind | Key | Rules |
 |---|---|---|
-| `origin` | `scheme://host[:port]`, no path | `web.hsts_missing` (the https origin), `web.plaintext_http` (the http origin), `web.session_cookie_flags` (the cookie names under `affected.listed`), `web.security_headers`, `web.security_txt` |
+| `origin` | `scheme://host[:port]`, no path | `web.hsts_missing` (the https origin), `web.plaintext_http` and `web.plaintext_http_clients` (the http origin), `web.session_cookie_flags` (the cookie names under `affected.listed`), `web.security_headers`, `web.security_txt` |
 | `url` | the URL | `web.version_disclosed`, `web.restricted_reachable` |
 | `secret_location` | `<detector>:<url>`, one per detector per page, the count under `derived` | `web.secret_in_response` |
 | `dns_name` | the name, or `*.<root>` for a dangling wildcard | `dns.takeover_candidate`, `dns.unclaimed_at_provider`, `dns.dangling_*` through a CNAME, `dns.private_address`, `tls.*` (port 443 implied) |
@@ -270,7 +286,11 @@ Each is printed with its reason, under the coverage row it belongs to
 - pages beyond the entry points, the login flow and cookies set after it, and scripts;
 - whether a name pointing at a provider is still the company's;
 - the registrar account: who can sign in, its 2-step verification, auto-renew and the
-  domain's expiry.
+  domain's expiry;
+- whether the company's own domain is on browsers' built-in HTTPS-only list. Every run
+  with a domain or url root prints: `Only whole domain endings (such as .page, .dev,
+  .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain
+  is on it was not checked.`
 
 ## Remediation
 
@@ -286,6 +306,7 @@ Each is printed with its reason, under the coverage row it belongs to
 | `web.secret_in_response` | Revoke it at the provider first, then remove it from the page. |
 | `web.restricted_reachable` | Restrict it at the proxy or firewall to the VPN's addresses, and confirm from outside. |
 | `web.hsts_missing` | `Strict-Transport-Security: max-age=31536000`; add `includeSubDomains` only after checking that no subdomain is served over HTTP only. |
+| `web.plaintext_http_clients` | Redirect port 80 to HTTPS, or close it. |
 | `tls.certificate_invalid` | Renew or reissue it for *name*; for a missing intermediate, serve the full chain. |
 
 ## Data in the tree
@@ -295,6 +316,7 @@ Versioned with the rules, each change reviewed as one:
 - the takeover table ("Takeover fingerprints");
 - the public-suffix snapshot, embedded, which tells a registrable domain from a public
   suffix (`golang.org/x/net/publicsuffix` is barred by `scripts/depcheck.sh`);
+- `PreloadedTLDs` ("Headers and cookies", "Preloaded TLDs");
 - the TLS-interception list ("TLS and certificate");
 - the list of session-like cookie names and the include-to-service table ("Headers and
   cookies");

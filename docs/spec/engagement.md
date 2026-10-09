@@ -1218,7 +1218,7 @@ not *assessed*; JSON carries them all, and every `not_applicable` assessment.
 | Data stores and backups | public access to databases, backup existence and location. A declaration alone is *not assessed* |
 | CI/CD and supply chain | branch protection, workflow token permissions, deploy keys, action pinning, dependency alerts |
 | External surface | domains, subdomain takeover, exposed services, TLS. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)), the registrar account among it: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
-| Web application | headers and cookies at the entry points of declared and first-party sites, with a count of names read but not judged; exposed files and debug routes from 0.0.3 |
+| Web application | headers and cookies at the entry points of declared and first-party sites, with a count of names read but not judged; exposed files and debug routes from 0.0.3. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` |
 | Hosts | the host collector's catalog (`host-collector.md`), expanded below |
 | Email and domain | SPF, DKIM per declared selector, DMARC, non-sending domains |
 | Logging and incident readiness | audit logging enabled, alerting on administrative changes |
