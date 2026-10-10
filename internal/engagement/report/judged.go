@@ -73,7 +73,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				}
 			}
 		}
-		if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "identity.") {
+		if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
 			f.WhyHere = []string{"This rating is based on the access and settings observed; unobserved permissions remain unknown."}
 		}
 		if j.Context != "" {
@@ -88,7 +88,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			f.WhyHere = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
 		}
 		for _, attr := range j.Attributes {
-			if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "identity.") {
+			if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
 				rule := ""
 				source := SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}
 				if attr == "contradiction" {
@@ -150,7 +150,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		for _, k := range keys {
 			f.Derived = append(f.Derived, Derived{Name: k, Value: j.Details[k]})
 		}
-		if (strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "identity.")) && j.Context == "" && len(f.Adjustments) == 0 {
+		if (strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.")) && j.Context == "" && len(f.Adjustments) == 0 {
 			f.WhyHere = []string{"This is the standard rating for the observed access or settings."}
 		}
 		if strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls.") {
@@ -544,8 +544,12 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				read++
 				row.AssetsCovered = append(row.AssetsCovered, a.ID)
 			}
-			row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; Workspace security rules are not implemented in this build"}}})
-			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+			if len(a.Judged) > 0 {
+				some = b.workspaceCoverage(&row, a) || some
+			} else {
+				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"}}})
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+			}
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
 			}

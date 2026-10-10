@@ -750,7 +750,7 @@
       },
       "not_checked": [],
       "remediation": {
-        "summary": "Remove its memberships and repository access, and review credentials and sessions."
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions."
       },
       "rule": {
         "kind": "multi_fact",
@@ -1045,7 +1045,7 @@
       },
       "not_checked": [],
       "remediation": {
-        "summary": "Confirm whether the person needs owner access; remove it or correct the expected owner declaration."
+        "summary": "Confirm whether the person needs full administrator access; remove it or correct the expected administrator declaration."
       },
       "rule": {
         "kind": "multi_fact",
@@ -1063,7 +1063,7 @@
         "label": "unexpected",
         "provider_id": "43"
       },
-      "title": "An owner is not among the declared expected owners",
+      "title": "An administrator is not among the declared expected administrators",
       "why_here": [
         "The expected owners declaration names Alex; unexpected was also observed as an owner."
       ]
@@ -1548,7 +1548,7 @@
           "area:identity"
         ],
         "severity": "high",
-        "title": "An owner is not among the declared expected owners"
+        "title": "An administrator is not among the declared expected administrators"
       }
     ],
     "more": 4,

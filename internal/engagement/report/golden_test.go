@@ -69,6 +69,7 @@ func TestGoldenReports(t *testing.T) {
 		"github-alerts-disproved":           githubAlertsDisprovedReport,
 		"github-alerts-abstained":           githubAlertsAbstainedReport,
 		"github-inventory":                  githubInventoryReport,
+		"workspace-identity":                workspaceIdentityReport,
 		"workspace-inventory":               workspaceInventoryReport,
 		"workspace-inventory-partial":       workspacePartialInventoryReport,
 		"github-ci-fired":                   githubCIFiredReport,

@@ -203,8 +203,13 @@ A declared root of an unbuilt kind (such as GCP) is reported as
 that it is fine.
 
 Google Workspace roots collect tenant/domain/alias, organizational-unit and user
-inventory. Workspace security rules have not landed: `no_rule` and `not_assessed`
-mean no account or administrator control was judged. Read `workspace_inventory`,
+inventory and evaluate identity/admin rules: declared and unattributed admins,
+contractor/shared admins, departed accounts, super-admin counts, stale or never-signed-in
+accounts and suspended accounts retaining assignments. Assignments cover current
+admitted users only. Unknown roles, unsupported privileges and partial populations
+limit coverage; a false user flag is not proof that role inventory completed.
+2-step verification, OAuth grants, forwarding, group membership paths and effective
+permissions remain unassessed. Read `workspace_inventory`,
 `workspace_people` and `workspace_credential` notes; a
 `workspace_credential_warning` is an unranked permission warning. Partial or excluded
 populations print lower bounds and can make the run incomplete. Google credentials
@@ -212,7 +217,10 @@ come from a supported local ADC file; an already approved service-account delega
 uses `SCHECK_WORKSPACE_SUBJECT`. Do not suggest automatic delegation setup or broader
 grants. Authorized-user callers stay unknown. A freshly verified delegated account
 is identity evidence, never assurance about its privileges. Every Workspace resume
-repeats admission and reuses no authenticated Workspace responses.
+repeats admission and reuses no authenticated Workspace responses. Inactivity findings
+need fresh detail; reported sign-in is not proof that sessions or apps are inactive.
+Account acceptances name the current primary address; stable provider ids accompany
+subjects, but cross-run rename comparison is not implemented.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.

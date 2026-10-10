@@ -2,9 +2,10 @@
 
 Google Workspace assessment planned for 0.0.2 E6. The security-consultant DEFINE
 review froze this design on 2026-10-10. Steps 1 and 2 implement credentials, tenant
-binding and inventory through engagement Recon and report integration. Identity,
-administrator and 2-step-verification rules, and optional OAuth/Gmail reads remain
-planned. No live measurement or release gate is claimed here.
+binding and inventory through engagement Recon and report integration. Step 3
+implements identity and administrator rules, with offline checks and reviews
+completed on 2026-10-10. Observed 2-step-verification rules and optional OAuth/Gmail reads
+remain planned. No live measurement or release gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -233,9 +234,9 @@ secondary domains and aliases.
 | Users | `/admin/directory/v1/users`, fixed `customer={customer}` and full admin projection | Id, current primary email, relevant aliases, name label, customer/unit, suspension/archive/admin flags, creation/login/MFA flags and mailbox status |
 | Optional group context | `/admin/directory/v1/groups`, fixed `customer={customer}` | Group id, email, aliases and label only |
 | User detail | `/admin/directory/v1/users/{user}` | Same relevant fields; fresh login evidence and delegated-subject verification |
-| Roles | `/admin/directory/v1/customer/{customer}/roles` | Role ids, labels and privilege service/name pairs |
-| Privilege tree | `/admin/directory/v1/customer/{customer}/roles/ALL/privileges` | Supported parent-child privilege relationships |
-| Role assignments | `/admin/directory/v1/customer/{customer}/roleassignments` | Assignee, role id and CUSTOMER/OU scope; per-user requests fix `userKey` and `includeIndirectRoleAssignments=true` |
+| Roles | `/admin/directory/v1/customer/{customer}/roles` | `kind`, `roleId`, `roleName`, `rolePrivileges.serviceId`, `rolePrivileges.privilegeName` and `isSuperAdminRole` |
+| Privilege tree | `/admin/directory/v1/customer/{customer}/roles/ALL/privileges` | `kind`, `serviceId`, `privilegeName`, recursive `childPrivileges` and `isOuScopable` |
+| Per-user role assignments | `/admin/directory/v1/customer/{customer}/roleassignments`, fixed `userKey={user}` and `includeIndirectRoleAssignments=true` | Assignment/assignee/role ids, assignee type, CUSTOMER/OU scope, condition presence and `expirationDetails.expireTime` |
 | OAuth grants | `/admin/directory/v1/users/{user}/tokens` | Client id, scopes, grantor id and display label; no token value |
 | Auto-forwarding | `/gmail/v1/users/{user}/settings/autoForwarding` | Enabled state and destination |
 | Forwarding filters | `/gmail/v1/users/{user}/settings/filters` | Filter id and `action.forward` only |
@@ -250,6 +251,20 @@ parsing and persistence. API response headers, error bodies and unprojected hash
 are discarded. Account ids and name labels are redacted before persistence, as are
 other retained fields.
 
+Role, privilege-tree and per-user assignment operations opt into
+`PreserveMalformed`: unsupported projected nested shapes, including array members,
+become JSON null rather than disappearing. Malformed expiry therefore remains
+unknown, and malformed privilege members cannot become an apparently empty
+population. Undeclared siblings are discarded; supported positive siblings remain
+usable. Other operations retain their existing projection semantics.
+
+Step 3 declares no tenant-wide direct-assignment, group or group-member reads.
+Per-user assignment reads include direct and indirect grants for current admitted
+users only; there is no claim of a tenant-wide assignment inventory. The optional
+group-context read in the table remains planned; it is not needed to interpret a
+per-user assignment returned by Directory. Fresh user details prioritize passed leavers, administrators
+and contractors before other accounts when a budget prevents reading everyone.
+
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized MFA flags in the current list suffice
 for MFA rules. Conflicting list/detail identity or security values cause abstention
@@ -261,7 +276,9 @@ Pages continue through an empty list with a nonempty next token. The gate rebuil
 requests from compiled templates, never returned URLs. Directory list bodies require
 the exact compiled `kind` envelope, including empty populations. Provider ids are
 deduplicated; conflicting duplicates, unknown members, malformed cursors, loops and
-actual cuts mark incomplete evidence. Permission failures are not empty lists. A
+actual cuts mark incomplete evidence. Redacted populations are incomplete; conflicting
+duplicate identities revoke admission rather than selecting one version. Permission
+failures are not empty lists. A
 present null, empty or non-string next cursor is unreadable, not an end-of-population
 signal. Refreshing binding, units or
 the initial users page revokes pending continuations before contact, including when
@@ -272,11 +289,14 @@ the refresh fails. An earlier page cannot restore current-user admission.
 | Users and optional groups | 1,000 each | 10 pages of 100 |
 | Units | 1,000 | Single list |
 | Roles | 1,000 | 10 pages of 100 |
-| Direct assignments | 10,000 | 100 pages of 100 |
+| Privilege tree | 1,000 nodes, depth 32, 1 MiB | Single result; exact `admin#directory#privileges` envelope |
 | Per-user assignments | 1,000 per user | 10 pages of 100 |
 | Assignment observations | 10,000 per tenant | Across assignment reads |
 | OAuth grants | 1,000 per user | Single array |
 | Gmail filters | 1,000 per user | Single array |
+
+The privilege-tree depth counts node levels. A level-32 node with an empty child
+array is within the bound; a further child is not.
 
 Additional data or a next token beyond a cap marks incomplete execution, exit 2,
 without discarding positive findings. Reaching exactly a cap with no further data is
@@ -293,6 +313,12 @@ destructive privilege. The exact service/name table, version `2026-10-10`, recog
 | Directory `00haapch16h1ysv` | `ROOT_APP_ADMIN`, `ADMIN_APIS_ALL`, `USERS_ALL`, `USERS_CREATE`, `USERS_UPDATE`, `USERS_MOVE`, `USERS_ALIAS`, `USERS_RESET_PASSWORD`, `USERS_FORCE_PASSWORD_CHANGE`, `USERS_ADD_NICKNAME`, `USERS_SUSPEND`, `USER_SECURITY_ALL`, `ORGANIZATION_UNITS_ALL`, `ORGANIZATION_UNITS_CREATE`, `ORGANIZATION_UNITS_UPDATE`, `ORGANIZATION_UNITS_DELETE`, `GROUPS_ALL` |
 | Admin `01ci93xb3tmzyin` | `SUPER_ADMIN`, `CHANGE_USER_GROUP_MEMBERSHIP` |
 
+Recognized narrow pairs are Directory `00haapch16h1ysv` with `USERS_RETRIEVE` or
+`ORGANIZATION_UNITS_RETRIEVE`, and Admin `01ci93xb3tmzyin` with `ADMIN_DASHBOARD`.
+Unfamiliar pairs remain unknown even when returned in the tree. A known-service
+parent can prove privilege through an exact supported privileged descendant;
+unknown pairs still block an absence verdict.
+
 The returned privilege tree supplies documented parent-child relationships only in
 these known service families. Unknown pairs or conditions remain uninterpreted and
 cannot support an absence verdict. Role display names or global numeric role ids
@@ -308,6 +334,32 @@ access remain unassessed. Group inventory is never proof of effective access. A
 suspended account retaining an administrative assignment is cleanup evidence;
 suspension still prevents ordinary sign-in.
 
+Step 3 reads direct and indirect assignments through each admitted user's
+per-user response. The request is selected by an admitted stable user id and fixes
+`includeIndirectRoleAssignments=true`. A returned `GROUP` assignment whose
+`assignedTo` differs from that id is Directory's contextual association with the
+requested user, not a locally inferred membership edge. A tenant-wide direct
+`GROUP` observation proves a group grant only; it never attributes a user. Unknown
+assignee types, including a missing `assigneeType`, and service-account assignees
+remain coverage gaps. No group-member
+read fills them.
+
+Only current supported assignments establish retained administrative privilege.
+An absent condition or explicit empty string is unconditional; a nonempty, null
+or wrongly typed condition is unsupported. Absent `expirationDetails` means no
+recorded expiry. When present, a valid RFC3339 `expireTime` is interpreted even if
+unknown sibling fields are discarded. Null, empty, unknown-only or malformed
+expiration structures remain unknown. Projection
+must preserve that distinction rather than turning an unreadable shape into absence.
+Unknown expiration metadata cannot establish current privilege or absence. A
+recognized expiry at or before the assessment instant is expired and is ignored;
+a future expiry preserves
+the supported assignment. Unknown roles or privileges block absence verdicts, but a
+known supported privilege can still prove presence when an unknown sibling is also
+returned. `isAdmin:true` independently proves super-admin status even when role
+reads are unavailable. The exact service/name table above remains version
+`2026-10-10`.
+
 ## Rules
 
 Every rule returns shared `finding.Judgment` evidence with a declared subject and
@@ -316,9 +368,10 @@ unit subjects are canonical paths including `/`; OAuth app subjects are exact cl
 ids. Subject-specific acceptances name that exact instance. Missing, null, unfamiliar,
 denied, redacted or truncated evidence is unknown.
 
-Generic identity definitions currently contain GitHub-specific prose. E6 makes that
-prose provider-neutral when Workspace implementation lands; this design does not
-claim that the current finding catalog supports Workspace already.
+Shared identity definitions use provider-neutral prose. Workspace-specific definitions
+are registered from the collector beside `Judge` through `finding.Register`;
+`finding.Lookup` remains the report and explain read path. Step 3 evaluates the first
+nine rules below; the 2-step-verification, OAuth and forwarding rules remain planned.
 
 | Rule | Base severity / subject | Fires | Disproves | Abstains |
 |---|---|---|---|---|
@@ -341,8 +394,24 @@ accounts and at most two break-glass accounts from the numerator; shared and
 unattributed accounts count. Active users less service and break-glass accounts form
 the denominator. No ratio is computed on partial populations. Inactivity exemptions
 apply only to `service` and `break_glass`; no inactivity rule infers departure.
+Ambiguous or partial attribution that could exempt an account as `service` or
+`break_glass` leaves its count exemption and inactivity eligibility unknown. A zero
+denominator never produces an administrator ratio.
+
+### Dates and fresh evidence
+
 All dates use one assessment instant in `engagement.timezone`, with strict 90/30-day
-boundaries. New and break-glass admins are not exempt from enrollment findings.
+boundaries, subtracting calendar days in that timezone rather than fixed-hour
+durations. Login times and creation times require valid RFC3339 timestamps; the
+never-login marker is exactly `1970-01-01T00:00:00.000Z`. Future values, an actual
+login before creation, or conflicting list/detail security values are unknown.
+Valid list/detail creation times must agree. A fresh valid actual sign-in timestamp
+earlier than the list's valid actual sign-in is contradictory, not fresh evidence of
+inactivity. An actual list sign-in followed by the exact never-login marker in
+fresh detail is also a conflict; a never-login marker followed by an actual sign-in
+is usable new evidence. Missing detail flags alone never imply that a list flag changed.
+The collector receives the assessment instant explicitly; rules do not independently
+read the clock. New and break-glass admins are not exempt from enrollment findings.
 
 ### Observed 2-step verification
 
@@ -398,21 +467,31 @@ do not claim message disclosure was observed.
 ## Reporting and coverage
 
 The collector owns `workspace.Context`, people attribution and operation-specific
-notes. One `workspace.Collect` call sequences binding and inventory and returns
-evidence, notes, an `InventoryComplete` summary and shared judgments. Step 2 returns no posture judgments. Engagement
+notes. Step 3 extends that view with declared person kinds, `left` and `used_by`,
+addresses, an explicit expected-admin-list presence flag and its values, and one
+assessment instant and timezone. Engagement fills these declarations; it does not
+sequence role reads or interpret Directory fields. One `workspace.Collect` call
+sequences binding and inventory and returns evidence, notes, an `InventoryComplete`
+summary and shared judgments. Step 2 returns no posture judgments. Engagement
 owns report rendering, ranking, context and acceptances.
-Step 2 marks Workspace security controls `not_assessed` with `no_rule`, even when
-inventory completed and exit is 0. A mixed GitHub/Workspace identity row cannot claim
-complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
+Step 3 returns nine identity/admin rule outcomes. Its `AdministrationComplete`
+summary keeps coverage partial when roles or per-user assignments are unavailable
+or their administrative interpretation is unknown, even if observed false user
+flags settled individual rules. Collector-owned `InterpretationGaps` notes identify
+unknown roles, privileges, conditions or expiry. 2-step verification,
+OAuth grants and forwarding remain unassessed. A mixed GitHub/Workspace identity row
+cannot claim complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
 permission failures, credential uncertainty and fresh delegated verification.
 Primary-address attribution is usable on observed records; alias-only attribution
 requires a complete population. Each declared address is matched independently, so
 one person may own multiple current accounts. Competing people for one current
 account leave its attribution unknown. Display names never establish identity.
+Unexpected-admin judgments cite both `access.admins` and the matched person's
+Workspace-address declaration when their identity supplies the conclusion.
 
-When the later rules land, identity and access coverage contains OAuth and admin
-sub-items; email coverage contains forwarding. Both identify decided, partial and
-unassessed sub-items. E9 owns global coverage; no new global area is introduced.
+Identity and access coverage contains decided administrative sub-items and pending
+2-step-verification and OAuth sub-items; forwarding remains unassessed in email
+coverage. E9 owns global coverage; no new global area is introduced.
 
 Readouts include supported roles and scope limits, alias-matched recon candidates,
 declared expected admins not observed, shared-account leaver rotation, and break-glass
@@ -451,8 +530,8 @@ read, the Workspace customer could not be verified, or authentication expired. T
 do not present internal terms such as ADC, binding, bootstrap or gate as operator
 actions. Where a session must be replaced, the wording directs the operator to
 restart or resume with the intended profile and account. This wording is prepared
-for Workspace runs. Step 2 reports inventory only; a successful read is not an
-account-security assessment. Whole-slice client report review remains step 7 work.
+for Workspace runs. A successful read is not itself an account-security assessment.
+Whole-slice client report review remains step 7 work.
 
 The credential warning says observed grants permit operations beyond reads, scheck
 sent only declared reads, effective access was not tested, and an administrator should
@@ -483,8 +562,11 @@ See [ROADMAP.md](../ROADMAP.md#e6--google-workspace-collector), steps 0–7. Eac
 step receives the consultant, client, spec and adversarial reviews required by
 `AGENTS.md`; optional surfaces do not block baseline Directory collection. Targeted
 DEFINE authentication review for step 1 froze the file, assertion, exchange and
-private-bootstrap details above. A targeted parser DEFINE review still precedes
-step 3 without widening this evidence or rule surface.
+private-bootstrap details above. The targeted step-3 identity parser DEFINE contract
+is recorded in [e6-identity-definition-2026-10-10.md](../eval/e6-identity-definition-2026-10-10.md).
+Step 3 is complete offline; checks, review corrections and a fresh follow-up review
+are recorded in [e6-identity-verification-2026-10-10.md](../eval/e6-identity-verification-2026-10-10.md).
+No live measurement or independent acceptance is claimed.
 
 ## Provider references
 

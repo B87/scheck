@@ -11,8 +11,8 @@ Handle with care: this report names people, accounts, internal hosts and service
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
 
-INCOMPLETE: Workspace: Workspace inventory was not completed. The inventory notes show what was read
-  and what remains unknown.
+INCOMPLETE: Workspace: Workspace evidence is incomplete. The notes show what was read and what
+  remains unknown.
 
 SUMMARY
 Not checked      Identity and access, Logging and incident readiness: see Coverage.
@@ -59,8 +59,8 @@ Ranked by severity in your context, among what scheck checked. Areas not checked
 problems than anything here.
 
 NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
-  Run again: Workspace: Workspace inventory was not completed. The inventory notes show what was
-    read and what remains unknown.
+  Run again: Workspace: Workspace evidence is incomplete. The notes show what was read and what
+    remains unknown.
   To run again: scheck run engagement.yaml
 
 EXCLUDED, NARROWED AND NOT RUN

@@ -1,0 +1,169 @@
+scheck engagement report: Workspace inventory review
+For Dani. Read 2026-10-10 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+Credential     saas:google-workspace:example.com: Returned credential permissions are unknown;
+               effective permissions were not tested.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: Workspace (checked only in part: identity and access). See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Identity and access.
+Not checked      Logging and incident readiness: see Coverage.
+Not requested    Not part of this run: secrets, cloud configuration, data stores and backups, CI/CD
+                 and supply chain, external surface, web application, hosts, email and domain. To
+                 include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  medium    An administrator is not among the declared expected administrators (Workspace)
+  2  medium    Google reports no account sign-in for more than 90 days (Workspace)
+  3  medium    A suspended account retains an administrative assignment (Workspace)
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: identity and access. Not checked: logging and incident readiness, secrets, cloud
+configuration, data stores and backups, CI/CD and supply chain, external surface, web application,
+hosts, email and domain. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      checked in part
+  1 of 1 asset read.
+  This version of scheck has no rule for it (Workspace second-factor and application/delegation
+  controls remain unassessed).
+Logging and incident readiness not checked
+  1 of 1 asset read.
+  This version of scheck has no rule for it (Workspace: no logging or incident-readiness control was
+  assessed).
+Not requested            Not part of this run: secrets, cloud configuration, data stores and
+                         backups, CI/CD and supply chain, external surface, web application, hosts,
+                         email and domain. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 3 open (3 medium), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  medium  An administrator is not among the declared expected administrators (Workspace)
+   [identity.unexpected_admin]
+   Subject       admin@example.com (account admin@example.com)
+   You declared  engagement.yaml access.admins: Operator declaration at access.admins
+   Observed      g000008 (12:00, as unknown): admin@example.com is a super administrator attributed
+                 to declared person alice, who is absent from the expected administrator list
+   Concluded from request:g000008, declared:access.admins
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Confirm whether the person needs full administrator access; remove it or correct
+                 the expected administrator declaration.
+
+2  medium  Google reports no account sign-in for more than 90 days (Workspace)
+   [workspace.stale_account]
+   Subject       admin@example.com (account admin@example.com)
+   Observed      g000014 (12:00, as unknown): Google reports no sign-in since 2026-01-01T00:00:00Z.
+                 Sessions and application activity were not reviewed.
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Confirm whether this account is needed before suspending it; review its sessions
+                 and application grants.
+
+3  medium  A suspended account retains an administrative assignment (Workspace)
+   [workspace.suspended_admin_assignment]
+   Subject       old@example.com (account old@example.com)
+   Observed      g000008 (12:00, as unknown): suspended:true; supported Directory
+                 USERS_RESET_PASSWORD (password-reset administrator permission) assignment. The
+                 account is suspended, so this assignment does not establish usable access. Review
+                 and remove it if no longer needed.
+   Observed      g000010 (12:00, as unknown): suspended:true; supported Directory
+                 USERS_RESET_PASSWORD (password-reset administrator permission) assignment. The
+                 account is suspended, so this assignment does not establish usable access. Review
+                 and remove it if no longer needed.
+   Observed      g000012 (12:00, as unknown): suspended:true; supported Directory
+                 USERS_RESET_PASSWORD (password-reset administrator permission) assignment. The
+                 account is suspended, so this assignment does not establish usable access. Review
+                 and remove it if no longer needed.
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Ask your administrator whether this assignment is still needed, and remove it if
+                 not.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # An administrator is not among the declared expected administrators (Workspace)
+    - id: identity.unexpected_admin
+      asset: Workspace
+      subject: admin@example.com   # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-08          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # Google reports no account sign-in for more than 90 days (Workspace)
+    - id: workspace.stale_account
+      asset: Workspace
+      subject: admin@example.com   # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-08          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # A suspended account retains an administrative assignment (Workspace)
+    - id: workspace.suspended_admin_assignment
+      asset: Workspace
+      subject: old@example.com     # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-04-08          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    admin.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 7 requests.
+    oauth2.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 1 request.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  saas:google-workspace:example.com: Returned credential permissions are unknown; effective
+    permissions were not tested.
+  saas:google-workspace:example.com: Observed 6 accounts. Administrative scope is limited to
+    accounts included in these reads; group membership paths, effective permissions and application
+    activity were not tested.
+  saas:google-workspace:example.com: scheck could not identify the Google account used for this run.
+    Information from earlier Workspace reads was not used in this report.
+
+FOR AUTOMATION
+Exit 1: 3 open findings at or above their asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

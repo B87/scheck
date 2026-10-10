@@ -78,6 +78,10 @@ func TestWorkspaceInventoryPersistResumePrivacyAndCoverage(t *testing.T) {
 			}
 			fmt.Fprint(w, `{"kind":"admin#directory#users","users":[{"id":"123","primaryEmail":"alice@secondary.example","customerId":"C123","orgUnitPath":"/","isAdmin":false,"name":{"fullName":"`+token+`"},"recoveryEmail":"private-recovery@example.net"},{"id":"456","primaryEmail":"excluded@example.com","customerId":"C123","orgUnitPath":"/Board","isAdmin":true}]}`)
 		default:
+			if r.URL.Path == "/admin/directory/v1/customer/C123/roles" || r.URL.Path == "/admin/directory/v1/customer/C123/roles/ALL/privileges" || r.URL.Path == "/admin/directory/v1/customer/C123/roleassignments" || r.URL.Path == "/admin/directory/v1/users/123" {
+				w.WriteHeader(403)
+				return
+			}
 			t.Error("undeclared or excluded account path", r.URL.Path)
 			w.WriteHeader(404)
 		}
@@ -100,7 +104,7 @@ func TestWorkspaceInventoryPersistResumePrivacyAndCoverage(t *testing.T) {
 	for _, row := range out.Report.Coverage {
 		if row.Area == "identity" {
 			identityFound = true
-			if row.Mark != "not_assessed" || row.Population == nil || row.Population.Read != 1 {
+			if row.Mark != "partial" || row.Population == nil || row.Population.Read != 1 {
 				t.Fatal(row)
 			}
 		}
@@ -123,7 +127,7 @@ func TestWorkspaceInventoryPersistResumePrivacyAndCoverage(t *testing.T) {
 	if err = ereport.WriteText(&reportText, out.Report, ereport.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(strings.Fields(reportText.String()), " "), "Inventory alone does not assess account security") {
+	if !strings.Contains(strings.Join(strings.Fields(reportText.String()), " "), "inventory alone proves no security control") {
 		t.Fatal("inventory warning missing")
 	}
 	dir.Close()

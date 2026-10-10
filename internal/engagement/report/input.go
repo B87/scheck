@@ -73,20 +73,21 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
-	NetworkPrincipal     *Principal
-	InventoryNotes       []Note
-	InventoryRead        bool
-	PopulationIncomplete bool
-	NetworkTrace         []Trace
-	WebShortfalls        []Shortfall
-	Redactions           []policy.Hit
-	WebNotes             []Note
-	MailNotes            []Note
-	Unfingerprinted      []string
-	Name                 string
-	ID                   string
-	Kind                 string
-	Root                 bool
+	NetworkPrincipal           *Principal
+	InventoryNotes             []Note
+	InventoryRead              bool
+	JudgmentEvidenceIncomplete bool // collector summary of required administrative evidence
+	PopulationIncomplete       bool
+	NetworkTrace               []Trace
+	WebShortfalls              []Shortfall
+	Redactions                 []policy.Hit
+	WebNotes                   []Note
+	MailNotes                  []Note
+	Unfingerprinted            []string
+	Name                       string
+	ID                         string
+	Kind                       string
+	Root                       bool
 	// Status and Reason are Recon's (collected, incomplete, failed,
 	// refused, not_collected) and the coverage reason when not collected.
 	Status string

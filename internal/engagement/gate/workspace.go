@@ -21,21 +21,23 @@ var customerIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 // delegated identity can be established in step 2. Step 1 never reuses evidence.
 // docs/spec/workspace-collector.md, "Principal and resume".
 type workspaceSession struct {
-	credential    *Credential
-	expires       time.Time
-	scopesKnown   bool
-	customer      string
-	domains       map[string]bool
-	domainRoot    bool
-	bound         bool
-	units         map[string]bool
-	inventory     map[string]workspaceUser
-	fingerprints  map[string]string
-	owners        map[string]string
-	usersComplete bool
-	inventoryBad  bool
-	cursors       map[string]bool
-	principal     string
+	credential             *Credential
+	expires                time.Time
+	scopesKnown            bool
+	customer               string
+	domains                map[string]bool
+	domainRoot             bool
+	bound                  bool
+	units                  map[string]bool
+	unitIDs                map[string]string
+	assignmentObservations int
+	inventory              map[string]workspaceUser
+	fingerprints           map[string]string
+	owners                 map[string]string
+	usersComplete          bool
+	inventoryBad           bool
+	cursors                map[string]bool
+	principal              string
 }
 
 func workspaceTokenOp() Op {
@@ -57,7 +59,7 @@ func (c *compiled) checkWorkspaceOp() error {
 		}
 	}
 	if c.Auth != WorkspaceADC {
-		if c.UserIdentity != nil || c.List != nil && c.List.Tree != nil {
+		if c.UserIdentity != nil || c.List != nil && (c.List.Tree != nil || c.List.Assignment != nil) {
 			return errors.New("structural tenant identity constraints require Workspace admission")
 		}
 		return nil
@@ -91,8 +93,12 @@ func (c *compiled) checkWorkspaceOp() error {
 		}
 	}
 	perUser := c.types["user"].Type == UserKey
-	if perUser {
-		if c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity == nil || c.List != nil || u.Path != "/admin/directory/v1/users/{user}" || c.types["user"].Optional {
+	assignment := c.List != nil && c.List.Assignment != nil
+	if perUser && c.types["user"].Optional {
+		return errors.New("Workspace user selector is required")
+	}
+	if perUser && !assignment {
+		if c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity == nil || c.List != nil || u.Path != "/admin/directory/v1/users/{user}" {
 			return errors.New("Workspace user read requires admitted stable identity")
 		}
 		if u.Query().Get("projection") != "full" || u.Query().Get("viewType") != "admin_view" || len(u.Query()) != 2 {
@@ -113,8 +119,22 @@ func (c *compiled) checkWorkspaceOp() error {
 		if usersQuery && (u.Query().Get("projection") != "full" || u.Query().Get("viewType") != "admin_view" || u.Query().Get("maxResults") != "100") {
 			return errors.New("Workspace users require full customer inventory")
 		}
+		if assignment {
+			if u.Path != "/admin/directory/v1/customer/{customer}/roleassignments" || u.Query().Get("maxResults") != "100" || c.UserIdentity != nil {
+				return errors.New("invalid Workspace assignment selector")
+			}
+			if !perUser || u.Query().Get("userKey") != "{user}" || u.Query().Get("includeIndirectRoleAssignments") != "true" || c.Subject != workspacePrefix+"{domain}/users/{user}" || c.List.MaxPages != 10 {
+				return errors.New("invalid Workspace assignment beneficiary")
+			}
+			f := c.List.Assignment
+			for _, field := range []string{f.Assignee, f.Type, f.Scope, f.Unit} {
+				if !fieldPath.MatchString(field) || !slices.Contains(c.Keep, field) {
+					return errors.New("invalid assignment reference projection")
+				}
+			}
+		}
 		for key := range u.Query() {
-			if key != "customer" && key != "projection" && key != "viewType" && key != "maxResults" && key != "pageToken" && (c.List == nil || c.List.Tree == nil || (key != "type" && key != "orgUnitPath")) {
+			if key != "customer" && key != "projection" && key != "viewType" && key != "maxResults" && key != "pageToken" && (!assignment || (key != "userKey" && key != "includeIndirectRoleAssignments")) && (c.List == nil || c.List.Tree == nil || (key != "type" && key != "orgUnitPath")) {
 				return errors.New("unsupported Workspace selector")
 			}
 		}
@@ -210,12 +230,14 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	}
 	if p.op.ID == "workspace.bootstrap_customer" {
 		g.clearWorkspacePages(p.r.Asset)
+		session.assignmentObservations = 0
+		session.unitIDs = nil
 		session.customer, session.domains, session.bound, session.domainRoot = "", nil, false, false
 		session.units, session.inventory, session.fingerprints, session.owners = nil, nil, nil, nil
 		session.usersComplete, session.inventoryBad, session.principal = false, false, ""
 	}
 	// Reject foreign selectors before even exchanging a credential.
-	if p.op.ID != "workspace.bootstrap_customer" && p.op.types["user"].Type != UserKey && (session.customer == "" || p.b.params["customer"] != session.customer) {
+	if p.op.ID != "workspace.bootstrap_customer" && (p.op.types["user"].Type != UserKey || p.op.types["customer"].Type == CustomerID) && (session.customer == "" || p.b.params["customer"] != session.customer) {
 		return refused("tenant_binding", "the selector is not this session's bootstrap customer")
 	}
 	switch p.op.ID {
@@ -260,7 +282,7 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	}
 	if p.op.List != nil && p.op.List.Tree != nil {
 		g.clearWorkspacePages(p.r.Asset)
-		session.units = nil
+		session.units, session.unitIDs = nil, nil
 		session.usersComplete = false
 		session.principal = ""
 	}
@@ -268,7 +290,7 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		g.clearWorkspacePages(p.r.Asset)
 		g.workspaceUsersStart(p.r.Asset)
 	}
-	if p.op.types["user"].Type == UserKey {
+	if p.op.ID == "workspace.delegated_user" {
 		session.principal = ""
 	}
 	if p.op.List != nil && p.op.List.Kind == KindUser && session.units == nil {
@@ -280,6 +302,14 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		}
 		if user, ok := session.inventory[p.b.params["user"]]; !ok || user.id != p.b.params["user"] {
 			return refused("tenant_binding", "the account was not admitted from current Workspace inventory")
+		}
+	}
+	if p.op.List != nil && p.op.List.Assignment != nil {
+		if !session.usersComplete || session.unitIDs == nil {
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "Current admitted users and units are required before assignment reads"}
+		}
+		if session.assignmentObservations >= 10000 {
+			return &halt{decision: "unavailable:limit_reached", detail: "The tenant assignment observation budget was reached"}
 		}
 	}
 	p.cred = session.credential

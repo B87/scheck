@@ -17,23 +17,29 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 		r.incomplete(a, ra)
 		return ra
 	}
-	view := workspace.Context{}
+	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
+	for where, handles := range r.res.Access.Admins {
+		if ref, ok := r.res.Lookup(where); ok && ref.ID == a.ID {
+			view.AdminsDeclared = true
+			view.ExpectedAdmins = handles
+		}
+	}
 	for _, handle := range sortedKeys(r.res.People) {
 		p := r.res.People[handle]
-		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace})
+		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace, Kind: p.Kind, Left: p.Left, UsedBy: p.UsedBy})
 	}
 	r.o.Log("recon: %s (%s)", a.Name, a.ID)
 	ev := workspace.Collect(ctx, g, workspace.Target{Asset: a.ID, Stage: "recon"}, view)
 	ra.Workspace, ra.Judged = &ev, ev.Judgments
 	ra.Status = StatusCollected
-	ra.Detail = "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build."
+	ra.Detail = "Workspace inventory and identity/administrator checks collected; notes and coverage show any unresolved evidence."
 	for _, note := range ev.Notes {
 		if note.Kind == "workspace_credential_warning" {
 			r.o.Log("warning: %s", note.Detail)
 		}
 	}
-	if !ev.InventoryComplete {
-		ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonFailed, "Workspace inventory is incomplete; inventory notes show what was read and what remains unknown."
+	if !ev.InventoryComplete || !ev.Access.Complete {
+		ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonFailed, "Workspace evidence is incomplete; notes show what was read and what remains unknown."
 		for _, read := range ev.Reads() {
 			if read.Reason == "limit_reached" {
 				ra.Reason = ReasonLimitReached
@@ -52,6 +58,7 @@ func (r *run) workspaceReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 	ai.Collector = "workspace"
 	ai.Judged = e.Judgments
 	ai.InventoryRead = len(e.Users.Reads) > 0 && e.Users.Reads[0].Status == 200 && e.Users.Reads[0].Reason == ""
+	ai.JudgmentEvidenceIncomplete = !e.Access.AdministrationComplete
 	ai.PopulationIncomplete = !e.Users.Complete || !e.Units.Complete
 	identity, source := "unknown", "unknown"
 	if e.DelegatedUser != nil {

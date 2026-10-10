@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/b87/scheck/internal/engagement/gate"
+	"github.com/b87/scheck/internal/policy"
 )
 
 func inventoryResult(op, body string) gate.Result {
@@ -34,27 +35,27 @@ func inventoryFixture(op string) gate.Result {
 func TestCollectOwnsSequenceAndPreservesUnknownFlags(t *testing.T) {
 	calls := []string{}
 	sender := senderFunc(func(_ context.Context, r gate.Request) gate.Result {
-		if len(r.Params) != 1 || r.Params["domain"] != "example.com" || r.Asset != "saas:google-workspace:example.com" {
+		if (len(r.Params) != 1 && len(r.Params) != 2) || r.Params["domain"] != "example.com" || r.Asset != "saas:google-workspace:example.com" {
 			t.Fatal(r)
 		}
 		calls = append(calls, r.Op)
 		return inventoryFixture(r.Op)
 	})
 	e := Collect(context.Background(), sender, Target{Asset: "saas:google-workspace:example.com", Stage: "recon"}, Context{People: []Person{{Handle: "alice", Addresses: []string{"old@example.com"}}}})
-	want := []string{opBootstrapCustomer, opBootstrapDomains, opBootstrapAliases, OpDomains, OpAliases, OpUnits, OpUsers, opDelegatedUser}
+	want := []string{opBootstrapCustomer, opBootstrapDomains, opBootstrapAliases, OpDomains, OpAliases, OpUnits, OpUsers, opDelegatedUser, OpRoles, OpPrivileges, OpUserAssignments, OpUserDetail}
 	a, _ := json.Marshal(calls)
 	b, _ := json.Marshal(want)
 	if string(a) != string(b) {
 		t.Fatal(calls)
 	}
-	if !e.Users.Complete || len(e.Users.Items) != 1 || len(e.Judgments) != 0 || len(e.Attribution) != 1 || e.Attribution[0].MatchedBy != "alias" || e.Attribution[0].ProviderID != "123" {
+	if !e.Users.Complete || len(e.Users.Items) != 1 || len(e.Judgments) == 0 || len(e.Attribution) != 1 || e.Attribution[0].MatchedBy != "alias" || e.Attribution[0].ProviderID != "123" {
 		t.Fatal(e)
 	}
 	u := e.Users.Items[0]
 	if u.IsAdmin == nil || *u.IsAdmin || u.Enrolled == nil || *u.Enrolled || u.Enforced != nil || u.Suspended != nil {
 		t.Fatal("false/missing evidence conflated", u)
 	}
-	if len(e.Reads()) != 8 || !strings.Contains(e.Notes[1].Detail, "Inventory alone does not assess") {
+	if len(e.Reads()) != 12 || !strings.Contains(e.Notes[1].Detail, "inventory alone proves no") {
 		t.Fatal(e.Notes)
 	}
 }
@@ -82,8 +83,8 @@ func TestCollectInventoryUnavailableAndUnrecognized(t *testing.T) {
 			if op == OpUsers && e.Users.Complete {
 				t.Fatal(e.Users)
 			}
-			if len(e.Judgments) != 0 {
-				t.Fatal("inventory created verdicts")
+			if len(e.Judgments) == 0 {
+				t.Fatal("missing abstained judgments")
 			}
 		}
 	}
@@ -155,5 +156,20 @@ func TestPeopleAttributionPreservesMultipleAccountsAndDeduplicatesAliases(t *tes
 	out := attribute("tenant", users, []Person{{Handle: "person", Addresses: []string{"old@example.com", "one@example.com", "two@example.com"}}}, true)
 	if len(out) != 2 || out[0].ProviderID != "1" || out[0].MatchedBy != "primary" || out[1].ProviderID != "2" {
 		t.Fatal(out)
+	}
+}
+
+func TestWorkspaceConflictingPopulationRevokesInterpretation(t *testing.T) {
+	for _, body := range []string{`[{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_ALL"}]},{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_RETRIEVE"}]}]`, `[{"roleId":"r","rolePrivileges":[]},{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_ALL"}]}]`} {
+		p := population[Role](context.Background(), senderFunc(func(_ context.Context, r gate.Request) gate.Result { return inventoryResult(r.Op, body) }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
+		if p.Complete || len(p.Items) != 0 {
+			t.Fatal("conflicting role survived", p)
+		}
+	}
+	result := inventoryResult(OpRoles, `[]`)
+	result.Response.Redactions = []policy.Hit{{Rule: "fixture"}}
+	p := population[Role](context.Background(), senderFunc(func(context.Context, gate.Request) gate.Result { return result }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
+	if p.Complete {
+		t.Fatal("redacted absence complete")
 	}
 }

@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/finding"
 )
 
 func workspaceInventoryReport(_ *testing.T) Input {
@@ -65,5 +68,46 @@ func TestWorkspaceInventoryDoesNotClaimSecurityAssessment(t *testing.T) {
 	in.Assets = append(in.Assets, workspaceInventoryReport(t).Assets...)
 	if row(t, Build(in), "identity").Mark == "assessed" {
 		t.Fatal("GitHub controls masked unassessed Workspace")
+	}
+}
+
+func workspaceIdentityReport(t *testing.T) Input {
+	in := workspaceInventoryReport(t)
+	a := &in.Assets[0]
+	a.Detail = "Workspace inventory and identity/administrator checks collected; unresolved evidence is listed in coverage."
+	a.InventoryNotes[1].Detail = "Observed 6 accounts. Administrative scope is limited to accounts included in these reads; group membership paths, effective permissions and application activity were not tested."
+	a.Judged = []Judgment{
+		{ID: "identity.unexpected_admin", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "admin@example.com", Label: "admin@example.com", ProviderID: "123", Person: "alice"}, Verdict: "fired", Reads: []string{"g000008"}, Sources: []string{"access.admins"}, Excerpt: "admin@example.com is a super administrator attributed to declared person alice, who is absent from the expected administrator list"},
+		{ID: "workspace.stale_account", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "admin@example.com", Label: "admin@example.com", ProviderID: "123", Person: "alice"}, Verdict: "fired", Reads: []string{"g000014"}, Excerpt: "Google reports no sign-in since 2026-01-01T00:00:00Z. Sessions and application activity were not reviewed."},
+		{ID: "workspace.too_many_super_admins", Asset: a.ID, Verdict: "disproved", Reads: []string{"g000008"}, Excerpt: "Two retained super-administrator flags were observed."},
+		{ID: "workspace.suspended_admin_assignment", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "old@example.com", Label: "old@example.com", ProviderID: "456"}, Verdict: "fired", Reads: []string{"g000008", "g000010", "g000012"}, Excerpt: "suspended:true; supported Directory USERS_RESET_PASSWORD (password-reset administrator permission) assignment. The account is suspended, so this assignment does not establish usable access. Review and remove it if no longer needed."},
+		{ID: "identity.unattributed_admin", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "unknown@example.com", Label: "unknown@example.com", ProviderID: "789"}, Verdict: "abstained", Reason: "unavailable:workspace_evidence", Reads: []string{"g000008"}, NotChecked: []string{"Assignment read was denied."}},
+	}
+	return in
+}
+func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
+	in := workspaceIdentityReport(t)
+	r := Build(in)
+	if r.Exit.Code != 1 || len(r.Findings) != 3 || row(t, r, "identity").Mark != "partial" {
+		t.Fatal(r.Exit, r.Findings, row(t, r, "identity"))
+	}
+	in.Assets[0].JudgmentEvidenceIncomplete = true
+	r = Build(in)
+	found := false
+	for _, si := range row(t, r, "identity").SubItems {
+		if si.Name == "Workspace administrator assignments and counts" {
+			found = true
+			if si.Mark != "partial" {
+				t.Fatal(si)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("assignment coverage absent")
+	}
+	for _, f := range r.Findings {
+		if f.Subject == nil || f.Subject.Key == "" {
+			t.Fatal("account subject missing", f)
+		}
 	}
 }

@@ -36,7 +36,7 @@ Fix these first: a ranking of what was checked, not of all your risks
   2  high      An outside collaborator administers a production repository (production)
   3  high      The organization does not require two-factor authentication (engineering)
   4  high      An organization owner has no two-factor authentication (engineering)
-  5  high      An owner is not among the declared expected owners (engineering)
+  5  high      An administrator is not among the declared expected administrators (engineering)
              base medium, raised: the expected owners declaration names Alex; unexpected was also
              observed as an owner
 4 more open at medium or above; see Findings. Below: 0 low, 0 informational, 0 accepted.
@@ -89,7 +89,8 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Severity      critical: base high, +1 attribute admin (collaborators: former
                  permissions.admin=true)
    Why here      Pat left on 2026-09-01 and still administers the production repository.
-   Fix           Remove its memberships and repository access, and review credentials and sessions.
+   Fix           Complete offboarding: suspend or remove the account or its access, and review
+                 credentials and sessions.
 
 2  high  An outside collaborator administers a production repository (production)
    [github.outside_admin_on_production]
@@ -123,7 +124,7 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Fix           Enable strong GitHub two-factor authentication for this account, preferably
                  security keys; check it even when SAML sign-in uses MFA.
 
-5  high  An owner is not among the declared expected owners (engineering)
+5  high  An administrator is not among the declared expected administrators (engineering)
    [identity.unexpected_admin]
    Subject       unexpected (account unexpected)
    You declared  engagement.yaml identity.expected_owners: Operator declaration at
@@ -133,8 +134,8 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Severity      high: base medium, +1 contradiction (identity.expected_owners)
    Why here      The expected owners declaration names Alex; unexpected was also observed as an
                  owner.
-   Fix           Confirm whether the person needs owner access; remove it or correct the expected
-                 owner declaration.
+   Fix           Confirm whether the person needs full administrator access; remove it or correct
+                 the expected administrator declaration.
 
 6  high  A repository is public without a public declaration (production)
    [github.undeclared_public_repository]
@@ -215,7 +216,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       expires: 2027-01-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
-  # An owner is not among the declared expected owners (engineering)
+  # An administrator is not among the declared expected administrators (engineering)
   # high: accept only with whoever owns the business, never to quiet the report
     - id: identity.unexpected_admin
       asset: engineering

@@ -106,6 +106,10 @@ type UserIdentity struct {
 	Aliases                     []string
 }
 
+// AssignmentRefs names ownership and scope references on role assignment rows.
+// Indirect observations are associated only through an admitted user query.
+type AssignmentRefs struct{ Assignee, Type, Scope, Unit string }
+
 // List declares a list response: where its items are, what they are, the
 // item field an exclusion matches, and how it pages (docs/spec/scope.md,
 // "Exclusion in responses"). Fields are dotted paths into an item.
@@ -113,6 +117,11 @@ type List struct {
 	Envelope string // exact provider kind required even on empty pages
 	MaxItems int    // total population cap, zero uses only existing page bounds
 	Tree     *UnitTree
+	// Assignment declares structural tenant references, not privileges.
+	Assignment *AssignmentRefs
+	// Children is a recursively projected list with bounded nodes and depth.
+	Children string
+	MaxDepth int
 
 	// Items is the path of the item array in the body, "$" for a body
 	// that is the array. A missing array is an empty page: Google leaves
@@ -240,6 +249,9 @@ type Op struct {
 	List   *List
 	// Keep lists the response fields the op keeps.
 	Keep []string
+	// PreserveMalformed projects unsupported nested shapes to null instead of
+	// dropping them. Readers must treat null as unknown, never as absence.
+	PreserveMalformed bool
 	// MaxBytes caps the response body.
 	MaxBytes int64
 	// WorkflowYAML decodes GitHub contents before redaction and bounded parsing.
@@ -646,7 +658,16 @@ func (c *compiled) validateBody() error {
 			return fmt.Errorf("keeps %q, which is not a field path", k)
 		}
 	}
+	if op.PreserveMalformed && (!c.json || len(op.Keep) == 0) {
+		return errors.New("preserves malformed fields without a JSON projection")
+	}
 	c.keep = newKeepTree(op.Keep)
+	if op.List != nil && op.List.Children != "" {
+		if !fieldPath.MatchString(op.List.Children) || strings.Contains(op.List.Children, ".") || op.List.MaxDepth < 1 || op.List.MaxDepth > 32 || op.List.MaxItems < 1 {
+			return errors.New("invalid recursive projection bounds")
+		}
+		c.keep[op.List.Children] = c.keep
+	}
 	for _, p := range op.Params {
 		c.users = c.users || p.Type == UserKey
 	}

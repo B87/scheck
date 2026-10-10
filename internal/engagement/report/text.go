@@ -306,7 +306,7 @@ func (t *text) shortfall(s Shortfall) string {
 	n := t.name(s.Asset)
 	for _, a := range t.r.Assets {
 		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "workspace" {
-			return n + ": Workspace inventory was not completed. The inventory notes show what was read and what remains unknown."
+			return n + ": Workspace evidence is incomplete. The notes show what was read and what remains unknown."
 		}
 		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "github" {
 			return n + ": GitHub inventory was not completed (" + strings.TrimSuffix(clean(s.Detail), ".") + "). The inventory notes show what was read and what remains unknown."

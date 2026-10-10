@@ -17,6 +17,8 @@ contracts now live in `docs/spec/` (`host-collector.md`, `model.md`, `bounded.md
 | `e5-credential-decision-2026-10-10.md` | Owner-approved unranked credential warning, offline verification and honest postimplementation evaluation plan |
 | `e6-authentication-definition-2026-10-10.md` | Targeted AI authentication DEFINE contract for E6 step 1; no measurements or acceptance |
 | `e6-definition-2026-10-10.md` | E6 AI definition and wording reviews, the missed historical lab seal, and pending independent evaluation prerequisites; no measurements or acceptance |
+| `e6-identity-definition-2026-10-10.md` | Targeted E6 step-3 AI parser, privilege, date and coverage DEFINE contract; implementation and verification pending |
+| `e6-identity-verification-2026-10-10.md` | E6 step-3 offline rule verification, projection/login corrections and fresh follow-up review; no live or independent acceptance |
 | `e6-inventory-review-2026-10-10.md` | E6 step-2 AI consultant/client/modularity reviews, software-check status and deferred report wording; no live or independent acceptance |
 | `e6-inventory-verification-2026-10-10.md` | E6 step-2 adversarial cursor/refresh corrections, green final offline checks and fresh follow-up review; no live or independent acceptance |
 

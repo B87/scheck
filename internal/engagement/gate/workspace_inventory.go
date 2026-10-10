@@ -26,7 +26,7 @@ func canonicalUnit(p string) bool {
 
 func (g *Gate) workspaceUnits(asset string, l *List, items []any) bool {
 	s := g.workspace[asset]
-	s.units = nil
+	s.units, s.unitIDs = nil, nil
 	if len(items) == 0 || len(items) > l.MaxItems {
 		return false
 	}
@@ -67,6 +67,7 @@ func (g *Gate) workspaceUnits(asset string, l *List, items []any) bool {
 			return false
 		}
 	}
+	s.unitIDs = ids
 	s.units = map[string]bool{}
 	for p := range units {
 		s.units[p] = true

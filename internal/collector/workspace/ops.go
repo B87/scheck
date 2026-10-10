@@ -60,3 +60,30 @@ func init() {
 	detail.UserIdentity = userIdentity()
 	Ops = append(Ops, domains, aliases, units, users, detail)
 }
+
+const (
+	OpRoles           = "workspace.roles"
+	OpPrivileges      = "workspace.privileges"
+	OpUserAssignments = "workspace.user_assignments"
+	OpUserDetail      = "workspace.user_detail"
+)
+
+func init() {
+	roles := foundationOp(OpRoles, "/customer/{customer}/roles?maxResults=100&pageToken={page_token}", []string{"kind", "roleId", "roleName", "rolePrivileges.serviceId", "rolePrivileges.privilegeName", "isSuperAdminRole"}, true)
+	roles.PreserveMalformed = true
+	roles.Params = append(roles.Params, gate.Param{Name: "page_token", Type: gate.Cursor, Optional: true})
+	roles.List = &gate.List{Items: "items", Kind: gate.KindOther, Envelope: "admin#directory#roles", MaxItems: 1000, MaxPages: 10, Next: &gate.Pages{Param: "page_token", Field: "nextPageToken"}}
+	privileges := foundationOp(OpPrivileges, "/customer/{customer}/roles/ALL/privileges", []string{"kind", "serviceId", "privilegeName", "isOuScopable"}, true)
+	privileges.PreserveMalformed = true
+	privileges.List = &gate.List{Items: "items", Kind: gate.KindOther, Envelope: "admin#directory#privileges", MaxItems: 1000, Children: "childPrivileges", MaxDepth: 32}
+	indirect := foundationOp(OpUserAssignments, "/customer/{customer}/roleassignments?maxResults=100&pageToken={page_token}&userKey={user}&includeIndirectRoleAssignments=true", []string{"kind", "roleAssignmentId", "roleId", "assignedTo", "assigneeType", "scopeType", "orgUnitId", "condition", "expirationDetails.expireTime"}, true)
+	indirect.PreserveMalformed = true
+	indirect.Subject += "/users/{user}"
+	indirect.Params = append(indirect.Params, gate.Param{Name: "page_token", Type: gate.Cursor, Optional: true}, gate.Param{Name: "user", Type: gate.UserKey})
+	indirect.List = &gate.List{Items: "items", Kind: gate.KindOther, Envelope: "admin#directory#roleAssignments", MaxItems: 1000, MaxPages: 10, Next: &gate.Pages{Param: "page_token", Field: "nextPageToken"}, Assignment: &gate.AssignmentRefs{Assignee: "assignedTo", Type: "assigneeType", Scope: "scopeType", Unit: "orgUnitId"}}
+	detail := foundationOp(OpUserDetail, "/users/{user}?projection=full&viewType=admin_view", userKeep, false)
+	detail.Subject += "/users/{user}"
+	detail.Params = append(detail.Params, gate.Param{Name: "user", Type: gate.UserKey})
+	detail.UserIdentity = userIdentity()
+	Ops = append(Ops, roles, privileges, indirect, detail)
+}

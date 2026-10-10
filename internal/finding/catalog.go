@@ -438,6 +438,18 @@ var judgementDefs = map[string]Def{
 	},
 }
 
+// Register installs a collector-owned definition during initialization. A duplicate
+// id is a programming error; shared definitions retain one owner.
+func Register(d Def) {
+	if _, exists := defs[d.ID]; exists {
+		panic("duplicate finding definition: " + d.ID)
+	}
+	if d.ID == "" || d.Title == "" || d.Impact == "" || d.Remediation.Summary == "" || d.Area == "" || d.Exposure == 0 || d.Judges == "" {
+		panic("incomplete finding definition: " + d.ID)
+	}
+	defs[d.ID] = d
+}
+
 // Known reports whether id is a catalog finding id: what an accepted risk
 // may name besides a custom: one.
 func Known(id string) bool {

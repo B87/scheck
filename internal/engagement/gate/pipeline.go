@@ -254,6 +254,12 @@ type omitted struct{}
 // the op did not declare (a string where it keeps fields of an object) is
 // left out.
 func project(v any, t keepTree) any {
+	return projectFields(v, t, false)
+}
+
+// projectFields preserves malformed presence only for ops whose readers
+// recognize null as unknown; undeclared data still never leaves the gate.
+func projectFields(v any, t keepTree, preserveMalformed bool) any {
 	if t == nil {
 		return v
 	}
@@ -262,7 +268,7 @@ func project(v any, t keepTree) any {
 		out := map[string]any{}
 		for k, sub := range t {
 			if fv, ok := x[k]; ok {
-				if pv := project(fv, sub); pv != (omitted{}) {
+				if pv := projectFields(fv, sub, preserveMalformed); pv != (omitted{}) {
 					out[k] = pv
 				}
 			}
@@ -271,12 +277,15 @@ func project(v any, t keepTree) any {
 	case []any:
 		out := []any{}
 		for _, e := range x {
-			if pv := project(e, t); pv != (omitted{}) {
+			if pv := projectFields(e, t, preserveMalformed); pv != (omitted{}) {
 				out = append(out, pv)
 			}
 		}
 		return out
 	case nil:
+		return nil
+	}
+	if preserveMalformed {
 		return nil
 	}
 	return omitted{}
@@ -448,6 +457,7 @@ type page struct {
 	params    map[string]string // canonical, without the cursor
 	cursor    string
 	n         int
+	items     int      // cumulative rows for declared population bounds
 	users     *userSet // never written once the page is stored
 	// reading is set while a request for the page after it is in flight,
 	// so a next_of is read once at a time and a set never forks.
@@ -497,7 +507,7 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 		if op.Auth == WorkspaceADC && op.UserIdentity != nil && !g.workspaceDetail(r, a, doc) {
 			return shaped{code: codeMalformed}
 		}
-		return shaped{body: marshal(project(doc, op.keep))}
+		return shaped{body: marshal(projectFields(doc, op.keep, op.PreserveMalformed))}
 	}
 	if op.List.Envelope != "" && scalarAt(doc, "kind") != op.List.Envelope {
 		return shaped{code: codeMalformed}
@@ -513,11 +523,48 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 	if code != "" {
 		return shaped{code: code}
 	}
+	if op.List.Children != "" {
+		nodes := 0
+		var walk func([]any, int) bool
+		walk = func(rows []any, depth int) bool {
+			if depth > op.List.MaxDepth && len(rows) > 0 {
+				return false
+			}
+			for _, row := range rows {
+				nodes++
+				if nodes > op.List.MaxItems {
+					return false
+				}
+				if child, present := fieldAt(row, op.List.Children); present {
+					arr, ok := child.([]any)
+					if !ok || !walk(arr, depth+1) {
+						return false
+					}
+				}
+			}
+			return true
+		}
+		if !walk(items, 1) {
+			return shaped{code: codePopulationLimit}
+		}
+	}
+	if op.List.Assignment != nil {
+		session := g.workspace[r.Asset]
+		if session.assignmentObservations+len(items) > 10000 {
+			session.assignmentObservations = 10000
+			return shaped{code: codePopulationLimit}
+		}
+		session.assignmentObservations += len(items)
+	}
 	n := 1
 	if a.prev != nil {
 		n = a.prev.n + 1
 	}
-	if op.List.MaxItems > 0 && len(items) > op.List.MaxItems {
+	total := len(items)
+	if a.prev != nil {
+		total += a.prev.items
+	}
+	if op.List.MaxItems > 0 && (len(items) > op.List.MaxItems || total > op.List.MaxItems && op.UserIdentity == nil) {
 		return shaped{code: codePopulationLimit}
 	}
 	if op.Auth == WorkspaceADC && op.List.Tree != nil && !g.workspaceUnits(r.Asset, op.List, items) {
@@ -527,6 +574,14 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 	kept, pop, building := g.filter(r, a, items, n, ous)
 	out := shaped{body: marshal(kept), pop: pop}
 	g.pageAfter(&out, r, a, doc, h, building, len(ous) > 0)
+	if out.next != nil {
+		out.next.items = total
+		if op.List.MaxItems > 0 && total >= op.List.MaxItems && op.UserIdentity == nil {
+			out.next = nil
+			out.pop.More = false
+			out.pop.Incomplete = append(out.pop.Incomplete, "item_limit")
+		}
+	}
 	if op.Auth == WorkspaceADC && op.List.Kind == KindUser {
 		g.workspaceUsersDone(r.Asset, &out)
 	}
@@ -605,6 +660,9 @@ func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) 
 			}
 		}
 		rule := g.dropRule(r.Asset, l, it, set, ous)
+		if l.Assignment != nil {
+			rule = g.workspaceAssignment(r, a, it, ous)
+		}
 		if op.Auth == WorkspaceADC && op.UserIdentity != nil {
 			rule = g.workspaceUserItem(r.Asset, op, it, rule)
 		}
@@ -616,7 +674,7 @@ func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) 
 			building.add(userKeysAt(it, l.UserIDs), userKeysAt(it, l.UserKeys), setRule)
 		}
 		if rule == "" {
-			kept = append(kept, project(it, op.keep))
+			kept = append(kept, projectFields(it, op.keep, op.PreserveMalformed))
 			continue
 		}
 		counts[rule]++

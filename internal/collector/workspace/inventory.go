@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
@@ -14,10 +15,18 @@ import (
 // Target is a declared tenant, never a provider-returned selector.
 type Target struct{ Asset, Stage string }
 type Person struct {
-	Handle    string
-	Addresses []string
+	Handle     string
+	Kind, Left string
+	UsedBy     []string
+	Addresses  []string
 }
-type Context struct{ People []Person }
+type Context struct {
+	People         []Person
+	ExpectedAdmins []string
+	AdminsDeclared bool
+	AssessedAt     time.Time
+	Zone           *time.Location
+}
 type Attribution struct {
 	Tenant     string `json:"tenant"`
 	Key        string `json:"key"`
@@ -73,6 +82,7 @@ type Population[T any] struct {
 	Gaps     []string `json:"gaps,omitempty"`
 }
 type Evidence struct {
+	Access            AccessEvidence     `json:"access"`
 	InventoryComplete bool               `json:"inventory_complete"`
 	Binding           Binding            `json:"binding"`
 	Domains           Population[Domain] `json:"domains"`
@@ -106,6 +116,7 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 	e := Evidence{Binding: Bind(ctx, sender, target.Asset)}
 	if e.Binding.CustomerID == "" {
 		e.finish(target.Asset, view)
+		e.Judgments = Judge(e, target.Asset, view)
 		return e
 	}
 	domain := e.Binding.Domain
@@ -133,21 +144,29 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 			}
 		}
 	}
+	e.collectAccess(ctx, sender, target, view)
 	e.finish(target.Asset, view)
+	e.Judgments = Judge(e, target.Asset, view)
 	return e
 }
 
 func population[T any](ctx context.Context, sender Sender, request gate.Request, key func(T) string, valid func(T) bool) Population[T] {
+	const pages, cap = 10, 1000
 	p := Population[T]{Complete: true, Items: []T{}}
 	seen := map[string]string{}
 	cursors := map[string]bool{}
-	for range 10 {
+	conflicts := map[string]bool{}
+	for range pages {
 		r := sender.Send(ctx, request)
 		p.Reads = append(p.Reads, readOf(request.Op, r))
 		if !usable(r) {
 			p.Complete = false
 			p.Gaps = append(p.Gaps, "read_unavailable")
 			return p
+		}
+		if len(r.Response.Redactions) > 0 {
+			p.Complete = false
+			p.Gaps = append(p.Gaps, "redacted_population")
 		}
 		var items []T
 		if json.Unmarshal(r.Response.Body, &items) != nil || items == nil {
@@ -161,15 +180,20 @@ func population[T any](ctx context.Context, sender Sender, request gate.Request,
 				p.Gaps = append(p.Gaps, "unrecognized_item")
 				continue
 			}
+			if conflicts[key(item)] {
+				continue
+			}
 			raw, _ := json.Marshal(item)
 			if old, exists := seen[key(item)]; exists {
 				if old != string(raw) {
 					p.Complete = false
 					p.Gaps = append(p.Gaps, "conflicting_duplicate")
+					conflicts[key(item)] = true
+					p.Items = slices.DeleteFunc(p.Items, func(v T) bool { return key(v) == key(item) })
 				}
 				continue
 			}
-			if len(p.Items) >= 1000 {
+			if len(p.Items) >= cap {
 				p.Complete = false
 				p.Gaps = append(p.Gaps, "item_limit")
 				continue
@@ -213,6 +237,14 @@ func (e Evidence) Reads() []Read {
 	if e.PrincipalRead.Op != "" {
 		out = append(out, e.PrincipalRead)
 	}
+	out = append(out, e.Access.Roles.Reads...)
+	out = append(out, e.Access.Privileges.Reads...)
+	for _, account := range e.Access.Accounts {
+		out = append(out, account.Assignments.Reads...)
+		if account.DetailRead.Op != "" {
+			out = append(out, account.DetailRead)
+		}
+	}
 	return out
 }
 
@@ -228,7 +260,7 @@ func (e *Evidence) finish(asset string, view Context) {
 		}
 		return fmt.Sprintf("%s: %s %d", label, qualifier, n)
 	}
-	e.Notes = append(e.Notes, Note{Kind: "workspace_inventory", Source: asset, Detail: strings.Join([]string{counts("domains", len(e.Domains.Items), e.Domains.Complete), counts("organizational units", len(e.Units.Items), e.Units.Complete), counts("accounts", len(e.Users.Items), e.Users.Complete)}, "; ") + ". Inventory alone does not assess account security or administrator access."})
+	e.Notes = append(e.Notes, Note{Kind: "workspace_inventory", Source: asset, Detail: strings.Join([]string{counts("domains", len(e.Domains.Items), e.Domains.Complete), counts("organizational units", len(e.Units.Items), e.Units.Complete), counts("accounts", len(e.Users.Items), e.Users.Complete)}, "; ") + ". Account security conclusions appear separately; inventory alone proves no security control."})
 	if e.DelegatedUser == nil {
 		e.Notes = append(e.Notes, Note{Kind: "workspace_inventory", Source: asset, Detail: "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report."})
 	} else {
@@ -238,6 +270,7 @@ func (e *Evidence) finish(asset string, view Context) {
 		e.Notes = append(e.Notes, ReadNotes(read, asset)...)
 	}
 	e.Attribution = attribute(asset, e.Users.Items, view.People, e.Users.Complete)
+	e.Notes = append(e.Notes, accessNotes(*e, asset, view)...)
 	for _, a := range e.Attribution {
 		if a.MatchedBy == "alias" {
 			e.Notes = append(e.Notes, Note{Kind: "workspace_people", Source: asset, Detail: a.Handle + " → " + a.Key + ", by alias. Record the current primary address in people."})

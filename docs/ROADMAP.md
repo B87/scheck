@@ -882,7 +882,8 @@ no answer exiting 2.
 
 **Status:** DEFINE design frozen on 2026-10-10. Steps 1 and 2 implement credentials,
 tenant binding and inventory through engagement Recon and report integration.
-Posture rules and optional OAuth/Gmail reads remain planned. The design is
+Step 3 implements identity/admin rules, verified offline. Observed 2-step
+verification and optional OAuth/Gmail reads remain planned. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -932,9 +933,21 @@ Unknown grants remain unknown; a successful read does not prove write capability
    completion and stale continuation defects; both were corrected and a fresh
    follow-up review found no confirmed findings. Verification is recorded in
    [eval/e6-inventory-verification-2026-10-10.md](eval/e6-inventory-verification-2026-10-10.md).
-   No live request or independent acceptance is claimed. Step 3 is next.
+   No live request or independent acceptance is claimed.
 3. Identity and admin rules: declared admins, super-admin counts, departed and stale
    accounts, and suspended accounts retaining direct or indirect administrative roles.
+   **Done offline 2026-10-10:** one collector call owns roles, bounded privileges,
+   admitted per-user direct/indirect assignments and fresh details, with nine
+   three-outcome rules and explicit interpretation gaps. Consultant, client and
+   modularity reviews passed. The adversarial review found malformed expiry and
+   privilege projection plus a fresh-login regression; corrected regressions,
+   green `make check` and a fresh follow-up review with no confirmed findings are
+   recorded in
+   [eval/e6-identity-verification-2026-10-10.md](eval/e6-identity-verification-2026-10-10.md).
+   The targeted definition remains in
+   [eval/e6-identity-definition-2026-10-10.md](eval/e6-identity-definition-2026-10-10.md).
+   Optional attribution caching is deferred without security implications. No live
+   measurement or independent acceptance is claimed. Step 4 is next.
 4. Observed 2-step verification: per-account enforcement and enrollment, compared
    with the operator's current requirement; no inferred unit policy or grace window.
 5. Optional OAuth grant metadata, using an existing approved credential; no
@@ -972,6 +985,13 @@ credential/count/read-operation wording, repeated Workspace labels and the gener
 review. Preserve explicit inventory-only coverage and unknown effective permissions;
 wording polish never adds security assurance. The step-2 AI review record is
 [eval/e6-inventory-review-2026-10-10.md](eval/e6-inventory-review-2026-10-10.md).
+
+**Deferred report wording polish** (step-3 client REPORT re-review, 2026-10-10):
+the client found no remaining wording blocker after explanatory retained-assignment,
+password-reset-role and expected-person wording was corrected. Generic `no_rule`
+phrasing, duplicated aggregate evidence and remaining “current admitted users”
+phrasing belong to E9's final report review. Preserve explicit scope and coverage;
+wording polish never expands what the collector observed.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and

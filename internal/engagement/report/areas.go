@@ -89,7 +89,7 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
-		if (a.Collector == "web" || (a.Collector == "github" && len(a.Judged) > 0)) && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets || area == finding.AreaIdentity || area == finding.AreaCICD) {
+		if (a.Collector == "web" || ((a.Collector == "github" || a.Collector == "workspace") && len(a.Judged) > 0)) && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets || area == finding.AreaIdentity || area == finding.AreaCICD) {
 			out = append(out, a)
 		}
 	}
@@ -111,7 +111,11 @@ func (b *builder) areaRow(area finding.Area) Row {
 			if a.InventoryRead {
 				read++
 			}
-			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no " + map[string]string{"github": "GitHub", "workspace": "Workspace"}[a.Collector] + " security control was assessed"})
+			detail := a.Name + ": inventory only; no " + map[string]string{"github": "GitHub", "workspace": "Workspace"}[a.Collector] + " security control was assessed"
+			if a.Collector == "workspace" && len(a.Judged) > 0 {
+				detail = a.Name + ": no logging or incident-readiness control was assessed"
+			}
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
 			}
