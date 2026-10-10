@@ -3,6 +3,11 @@ For Alex. Read 2026-10-09 12:00 to 12:01 (UTC). scheck test.
 Trigger        routine
 GitHub account saas:github:example-org: alice (user ID 41). Inventory visibility depends on this
                credential.
+Warning        saas:github:example-org: GitHub assessment credential: observed OAuth scopes permit
+               operations beyond reads (repo). scheck sent only read requests. Prefer an
+               organization-approved fine-grained token with the read permissions this assessment
+               needs; revoke a dedicated assessment token when finished. Effective write access to
+               this organization was not tested.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
 Authorization  none recorded. This run only read, with access you already hold; scheck requires a
@@ -94,6 +99,10 @@ NOTES FOR THE READOUT
     report contains GitHub inventory only. No GitHub security control was assessed.
   saas:github:example-org: The credential may hide private repositories or concealed memberships.
     Completing pagination does not establish a complete organization inventory.
+  saas:github:example-org: GitHub assessment credential: observed OAuth scopes permit operations
+    beyond reads (repo). scheck sent only read requests. Prefer an organization-approved
+    fine-grained token with the read permissions this assessment needs; revoke a dedicated
+    assessment token when finished. Effective write access to this organization was not tested.
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 1 rules that could decide. That is not a

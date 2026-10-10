@@ -338,6 +338,11 @@
       "source": "saas:github:example-org"
     },
     {
+      "detail": "GitHub assessment credential: observed OAuth scopes permit operations beyond reads (repo). scheck sent only read requests. Prefer an organization-approved fine-grained token with the read permissions this assessment needs; revoke a dedicated assessment token when finished. Effective write access to this organization was not tested.",
+      "kind": "github_credential_warning",
+      "source": "saas:github:example-org"
+    },
+    {
       "detail": "Member list stopped before all pages were read; at least 100 members were observed.",
       "kind": "github_inventory",
       "source": "saas:github:example-org"

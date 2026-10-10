@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -20,6 +21,8 @@ func githubInventoryReport(_ *testing.T) Input {
 			{Kind: "github_inventory", Source: asset, Detail: "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed."},
 			{Kind: "github_inventory", Source: asset, Detail: "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory."},
 		}}
+	note := githubc.AssessmentCredential(githubc.PrincipalRead{Read: githubc.Read{Decision: "sent", Status: 200}, Account: &githubc.Account{ID: 41, Login: "alice", Type: "User"}, Identity: "github:user:41", Scopes: ai.NetworkPrincipal.Scopes})
+	ai.InventoryNotes = append(ai.InventoryNotes, Note{Kind: "github_credential_warning", Source: asset, Detail: note.Detail})
 	for i, op := range []string{"github.principal", "github.organization", "github.membership", "github.members", "github.owners", "github.outside_collaborators", "github.invitations", "github.repositories"} {
 		ai.NetworkTrace = append(ai.NetworkTrace, Trace{Request: op, At: at.Add(time.Duration(i) * time.Second), Decision: "sent"})
 	}
@@ -50,6 +53,7 @@ func githubChangedPrincipalReport(t *testing.T) Input {
 	in.Resumed = true
 	in.Finished = in.Started.Add(24 * time.Hour)
 	in.Assets[0].NetworkPrincipal = &Principal{Identity: "bob (user ID 72)", ScopesSource: "unknown"}
+	in.Assets[0].InventoryNotes[len(in.Assets[0].InventoryNotes)-1] = Note{Kind: "github_credential", Source: in.Assets[0].ID, Detail: githubc.AssessmentCredential(githubc.PrincipalRead{}).Detail}
 	in.PrincipalChanges = []PrincipalChange{{Asset: in.Assets[0].ID, From: "alice (user ID 41)", To: "bob (user ID 72)"}}
 	in.Assets[0].InventoryNotes = append(in.Assets[0].InventoryNotes, Note{Kind: "github_inventory", Source: in.Assets[0].ID,
 		Detail: "Earlier authenticated GitHub successes were not reused after the principal changed; this session read the inventory again."})

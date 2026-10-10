@@ -298,6 +298,11 @@
       "source": "saas:github:example-org"
     },
     {
+      "detail": "GitHub assessment credential: write capability was not determined. scheck sent only read requests. Check the credential's permissions with the organization owner; use an approved token with only the read permissions needed.",
+      "kind": "github_credential",
+      "source": "saas:github:example-org"
+    },
+    {
       "detail": "Earlier authenticated GitHub successes were not reused after the principal changed; this session read the inventory again.",
       "kind": "github_inventory",
       "source": "saas:github:example-org"

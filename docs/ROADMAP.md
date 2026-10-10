@@ -606,8 +606,9 @@ branches, third-party actions pinned to a commit and their use in `pull_request_
 workflows, the names (never the values) of organization and repository secrets, deploy
 keys with write access, pending invitations, and Dependabot and secret-scanning alerts
 where the token can read them. A secret scan of repository history, read in-process from
-the operator's mirror checkout (`checkout`, decided in E4), redacted in every output. A token with more than read access
-is itself reported. People are matched by login only, over every login a handle lists
+the operator's mirror checkout (`checkout`, decided in E4), redacted in every output.
+Recognized assessment-token scopes beyond reads produce an unranked run warning,
+not a finding. People are matched by login only, over every login a handle lists
 (`spec/engagement.md`, "People"); owners against `access.admins`, too many owners,
 an owner nobody can name and a contractor or shared account that is one, as
 `spec/engagement.md` "Admins" defines them; the organization's 2FA requirement against
@@ -640,10 +641,11 @@ offline checks and consultant/client/adversarial reviews; step 6's history rules
 and permissions frozen on 2026-10-10):
 
 0. **Contract preparation.** Split the engagement spec and audit citations; draft the
-   operation/permission and rule-outcome tables. Resolve the assessment-token
-   reporting choice and review proposed bases before their definitions are fixed.
-   Confirm E3's rest-lab seal before the first E5 commit; never open its
-   labels in the implementation session. This step is documentation only.
+   operation/permission and rule-outcome tables; review bases before their
+   definitions are fixed. Assessment-token reporting is resolved on 2026-10-10
+   as described below. The required E3 rest-lab seal before the first E5 commit
+   is not established; the implementation session never opens sealed labels.
+   This preparation step is documentation only.
 1. **Gate foundation (built).** Move provider display, pagination and rate-limit metadata
    into the provider table and list-item subject templates into operations, as E4's
    review requires. Preserve every existing admission and response guarantee.
@@ -657,8 +659,8 @@ and permissions frozen on 2026-10-10):
    areas remain `not_assessed` with `no_rule`. Repository token visibility remains
    unknown after complete pagination. Response/page caps are `limit_reached` with
    exit 2; coverage counts successful inventory reads rather than execution status.
-   The assessment-token reporting decision and
-   E3 rest-lab seal remain pending; no live acceptance is claimed.
+   Assessment-token reporting is resolved below. The E3 preimplementation rest-lab
+   seal is not established; no live acceptance is claimed.
 3. **Identity and repository access (built).** E5a people/admin/MFA conditions gain
    their finding definitions and rules; repository `public` intent, default member
    permission, production outside-admin and write deploy-key rules. Five compiled
@@ -671,7 +673,8 @@ and permissions frozen on 2026-10-10):
    shared-account users, recovery accounts, pending owner invitations and MFA beliefs.
    Delegated organization roles, repository invitations, sign-in
    dates and unobserved private repositories remain unassessed. CI, secrets and
-   history remain later steps; the rest-lab seal and live acceptance remain pending.
+   history remain later steps. The E3 preimplementation rest-lab seal is not
+   established; live acceptance remains pending.
    Adversarial-review defects in repository provenance, recon privilege labels, MFA
    readout counts, per-asset offboarding instances and covered-asset inventory were
    fixed with regression tests. None of those review defects is deferred.
@@ -697,7 +700,8 @@ and permissions frozen on 2026-10-10):
    and step structures abstain in positive and negative regression fixtures;
    unsupported runner selection leaves the entire direct job unassessed, including
    reference pinning. All reported review defects were fixed; none is deferred.
-   Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
+   The E3 preimplementation rest-lab seal is not established; live acceptance
+   remains pending.
 5. **Secret metadata and provider alerts (built; verified offline).**
    Security-consultant DEFINE on 2026-10-10 fixes six compiled metadata GETs and
    five rule ids in `spec/github-collector.md`, "Secret metadata and provider
@@ -709,7 +713,7 @@ and permissions frozen on 2026-10-10):
    claims. Provider severity/validity remain provider reports, not exploitation or
    credential tests. Public visibility raises provider-secret findings only;
    Dependabot has no automatic production/public adjustment. History, App grants,
-   runner access and the assessment-token reporting decision remain deferred.
+   runner access remain deferred. Assessment-token reporting is resolved below.
    Every rule has fired, disproved and abstained offline fixtures; fake API tests
    cover secret removal, unsupported locations and request pagination. Consultant
    and client review fixes preserve partial family coverage for incomplete owning
@@ -720,8 +724,8 @@ and permissions frozen on 2026-10-10):
    (vet, fix, zero lint issues, dependency checks and race tests) and `make build`
    pass. Consultant REVIEW, Brightcart/Dani client REPORT re-review and final
    fresh adversarial review pass. All reported review defects were fixed; none is
-   carried. Assessment-token reporting, E3 rest-lab seal and live acceptance remain
-   pending; no live acceptance is claimed.
+   carried. The E3 preimplementation rest-lab seal is not established; live acceptance
+   remains pending; no live acceptance is claimed.
 6. **Confined history reader — built and verified offline.**
    The security-consultant DEFINE on 2026-10-10 freezes the contract in
    `spec/github-collector.md`, "History": ordinary SHA-1 bare mirrors; one
@@ -765,7 +769,8 @@ and permissions frozen on 2026-10-10):
    confirmed defects are fixed and re-reviewed. Full checks and build pass after
    the final config-admission and inflation-buffer fixes. The fresh final
    adversarial review passes with no must-fix, should-fix or nit; no reviewed
-   defect is deferred. Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
+   defect is deferred. The E3 preimplementation rest-lab seal is not established;
+   live acceptance remains pending.
 7. **Closing review — built and verified offline.** Whole-slice consultant REVIEW and
    client REPORT pass. Client wording improvements clarify inventory-only and
    zero-decided reports, place the differing-mirror-ref action before the ranking,
@@ -783,11 +788,24 @@ and permissions frozen on 2026-10-10):
    checks and build pass; the fresh review of the fix passes with no must-fix,
    should-fix or nit. No reviewed defect is deferred. Every built rule
    has firing, disproved and abstained fixtures. Live lab measurements are **not
-   run**. This review does not claim E5 release acceptance: the assessment-token
-   reporting choice remains open, and no E3 preimplementation rest-lab seal is
-   recorded. That prerequisite is not established; a later seal cannot establish
-   preimplementation blindness.
+   run**. This review does not claim E5 release acceptance: no E3 preimplementation
+   rest-lab seal is recorded. That prerequisite is not established; a later seal
+   cannot establish preimplementation blindness.
    See `eval/e5-closing-review-2026-10-10.md`.
+
+**Assessment-credential decision and evaluation plan** (2026-10-10): the owner
+adopts the consultant's unranked run warning, defined in
+`spec/github-collector.md`, "Principal and resume". This closes the token-reporting
+choice without adding network calls or changing findings, coverage or exit counts.
+No E3 preimplementation rest-lab seal is recorded; a later seal cannot establish
+preimplementation blindness. A separately authorized, team-owned lab needs fresh
+independent seeder and ranker sessions, labels inaccessible to implementers until
+measurement, frozen clean-variant/false-positive criteria and recorded full,
+clean, context and missing-credential runs. This would be a postimplementation
+independent evaluation, not satisfaction or waiver of the unmet preimplementation
+prerequisite. Release acceptance remains pending owner handling of that prerequisite
+and the live measurements. No blind seeding, ranking or live assessment runs in this
+implementation session. See `eval/e5-credential-decision-2026-10-10.md`.
 
 **Resolved in step 7 from the inventory client review** (2026-10-10): the empty
 ranking says “No security rules ran; this report contains inventory only” when no
@@ -838,10 +856,11 @@ no answer exiting 2.
 - Anchors for self-hosted runners on public repositories (high), GitHub App
   installations with write on all repositories, outside collaborators with admin on
   production repositories, and the organization's default member permission.
-- scheck's own token with more than read access, which a classic token always has
-  for repositories, is a run note with the fix, never ranked and never counted in the
-  exit code (owner's decision pending; this is the consultant's recommendation, and
-  `spec/scope.md` calls it a finding today).
+- Assessment-token reporting is resolved on 2026-10-10: recognized beyond-read
+  OAuth scopes produce an unranked run warning with remediation, never a finding
+  or exit input. Exact supported read scopes carry a narrow informational note;
+  missing, unsupported or unknown capability is never read-only. The full
+  interpretation is in `spec/github-collector.md`, "Principal and resume".
 - Under *not assessed*: GitHub shows no sign-in dates, so a former member nobody
   listed cannot be told apart from a current one; and SAML single sign-on, if enforced,
   does not cover git over SSH or tokens, which the 2FA rules list under what they did

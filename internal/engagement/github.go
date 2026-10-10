@@ -22,6 +22,9 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 	}
 	r.o.Log("recon: %s (%s)", a.Name, a.ID)
 	p := githubc.ResolvePrincipal(ctx, g, a.ID, "recon")
+	if note := githubc.AssessmentCredential(p); note.Capability == githubc.CapabilityBeyondReads {
+		r.o.Log("warning: %s", note.Detail)
+	}
 	var ev githubc.Evidence
 	if a.Kind == KindRepo {
 		target := githubTarget(a.ID)
@@ -161,6 +164,12 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		ai.Judged = append(ai.Judged, j)
 	}
 	p := ev.Principal
+	note := githubc.AssessmentCredential(p)
+	kind := "github_credential"
+	if note.Capability == githubc.CapabilityBeyondReads {
+		kind = "github_credential_warning"
+	}
+	ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: kind, Source: ra.ID, Detail: note.Detail})
 	source := "unknown"
 	if len(p.Scopes) > 0 {
 		source = "provider"

@@ -51,7 +51,13 @@ GitHub principal changes carry the asset, former identity label and fresh identi
 label in `engagement.principal_changes` only when both known stable user identities
 differ. Login renames and unknown-to-known transitions produce no change notice; no
 token value or credential hash is retained. GitHub collection also names the account
-and warns that visibility depends on the credential in the normal header. Resume
+and warns that visibility depends on the credential in the normal header.
+Assessment-credential notes also precede the summary: `github_credential_warning`
+names recognized beyond-read OAuth grants; `github_credential` describes exact
+supported read scopes or unknown write capability. These are unranked run notes,
+not findings, and affect no severity, acceptance, coverage or exit count. Effective
+permissions remain untested; missing grant evidence is never called read-only
+([github-collector.md](github-collector.md#principal-and-resume)). Resume
 wording qualifies retained evidence by whether reuse was allowed; inventory notes
 identify reused observations by their original time and say current access was not
 validated. GitHub shortfalls refer to those notes instead of claiming nothing was

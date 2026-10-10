@@ -6,6 +6,9 @@ Resumed        this run was stopped and resumed: what an earlier session read co
                read again and retains its original observation date.
 GitHub account saas:github:example-org: bob (user ID 72). Inventory visibility depends on this
                credential.
+Credential     saas:github:example-org: GitHub assessment credential: write capability was not
+               determined. scheck sent only read requests. Check the credential's permissions with
+               the organization owner; use an approved token with only the read permissions needed.
 Principal      saas:github:example-org: GitHub principal changed from alice (user ID 41) to bob
                (user ID 72). Earlier authenticated GitHub evidence was not reused.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
@@ -89,6 +92,9 @@ NOTES FOR THE READOUT
     report contains GitHub inventory only. No GitHub security control was assessed.
   saas:github:example-org: The credential may hide private repositories or concealed memberships.
     Completing pagination does not establish a complete organization inventory.
+  saas:github:example-org: GitHub assessment credential: write capability was not determined. scheck
+    sent only read requests. Check the credential's permissions with the organization owner; use an
+    approved token with only the read permissions needed.
   saas:github:example-org: Earlier authenticated GitHub successes were not reused after the
     principal changed; this session read the inventory again.
 

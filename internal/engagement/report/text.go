@@ -157,6 +157,15 @@ func (t *text) header() {
 			t.field("", "GitHub account", 15, clean(a.ID)+": "+clean(a.Principal.Identity)+". Inventory visibility depends on this credential.")
 		}
 	}
+	for _, note := range t.r.Notes {
+		if note.Kind == "github_credential" || note.Kind == "github_credential_warning" {
+			label := "Credential"
+			if note.Kind == "github_credential_warning" {
+				label = "Warning"
+			}
+			t.field("", label, 15, clean(note.Source)+": "+clean(note.Detail))
+		}
+	}
 	for _, change := range e.PrincipalChanges {
 		t.field("", "Principal", 15, clean(change.Asset)+": GitHub principal changed from "+clean(change.From)+" to "+clean(change.To)+". Earlier authenticated GitHub evidence was not reused.")
 	}

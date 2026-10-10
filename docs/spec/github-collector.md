@@ -13,8 +13,9 @@ was frozen on 2026-10-10.
 Step 7's whole-slice offline closing review passes, including consultant/client
 reviews, spec audit, full checks/build and fresh adversarial review of the repaired
 cap defects ([record](../eval/e5-closing-review-2026-10-10.md)). This is not E5
-release acceptance: assessment-token reporting remains undecided, no
-preimplementation rest-lab seal is recorded, and live measurements are not run.
+release acceptance: no preimplementation rest-lab seal is recorded and live
+measurements are not run. Assessment-token reporting is resolved as an unranked
+run note ([decision](../eval/e5-credential-decision-2026-10-10.md)).
 
 The gate owns admission, sending, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)); the engagement owns people attribution, admin
@@ -562,8 +563,8 @@ subjects, severity and three outcomes. The step is built with offline fixtures f
 all three rule outcomes. Full checks, build and consultant/client/adversarial
 reviews pass. All reported review defects were fixed; none is carried. This is not
 a live acceptance result.
-History, App grants, runner access and the assessment-token reporting decision
-remain outside this step.
+History, App grants and runner access remain outside this step. Assessment-token
+reporting is defined under "Principal and resume".
 
 ### Metadata reads and persistence
 
@@ -904,13 +905,38 @@ Fine-grained grant changes may be unobservable. Retained evidence keeps its orig
 observation date and does not claim current access validation
 ([scope.md](scope.md#resume), [runs.md](runs.md)).
 
-**Assessment token decision pending.** Scope currently requires a broader-grant
-finding. The carried consultant recommendation is a run note, unranked and outside
-the exit count: the token also permits writes, scheck sent only reads, prefer an
-organization-approved fine-grained token and revoke it when finished. The owner must
-choose and update the single decision owner before implementation. Unknown
-fine-grained/App capability says "write capability not determined", never
-"read-only". This draft changes neither the current contract nor the pending choice.
+**Assessment credential.** The owner's decision on 2026-10-10 adopts the
+consultant's unranked run note. It is not a finding, has no severity or acceptance,
+and contributes nothing to ranking, coverage or exit counts. scheck sends only
+its declared reads regardless of the credential's grants.
+
+`github.AssessmentCredential` uses only scopes from a usable fresh principal read.
+Exact supported scope meanings are pinned in `credential.go`, verified against
+[GitHub's OAuth scope documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps)
+on 2026-10-10; no permission endpoint or token-prefix inference is added.
+
+- Any recognized beyond-read scope produces `beyond_reads`, even with additional
+  syntactically valid unknown scopes. `read:repo_hook` belongs here because it
+  permits webhook pings. The warning names recognized scopes, says scheck sent only
+  reads and effective write access to the organization was not tested, recommends
+  an organization-approved fine-grained token with the required read permissions,
+  and says to revoke a dedicated assessment token when finished.
+- A nonempty scope set containing only exact supported read scopes produces
+  `read_scopes_only`. The note says the observed OAuth scopes contain no recognized
+  write grant and effective permissions were not tested; it never calls the
+  credential read-only.
+- Missing or empty scopes, unrecognized scopes without a recognized beyond-read
+  grant, unsupported principals, failed or marked/truncated reads, malformed scope
+  syntax or an unrecognized identity produce `unknown`. The note says write
+  capability was not determined and asks the operator to check permissions with
+  the organization owner. Unknown fine-grained/App capability is never read-only.
+
+A beyond-read warning is logged after the fresh principal read, before other
+GitHub reads. All three outcomes are report header notes:
+`github_credential_warning` for beyond-read grants and `github_credential` for the
+other outcomes. Only safe scope names and explanatory text appear; no credential
+value or hash is kept. A resume derives the note from the fresh principal rather
+than reusing an earlier permission conclusion.
 
 ## Reporting and coverage
 

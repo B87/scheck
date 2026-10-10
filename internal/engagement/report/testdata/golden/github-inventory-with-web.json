@@ -544,6 +544,11 @@
       "detail": "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory.",
       "kind": "github_inventory",
       "source": "saas:github:example-org"
+    },
+    {
+      "detail": "GitHub assessment credential: observed OAuth scopes permit operations beyond reads (repo). scheck sent only read requests. Prefer an organization-approved fine-grained token with the read permissions this assessment needs; revoke a dedicated assessment token when finished. Effective write access to this organization was not tested.",
+      "kind": "github_credential_warning",
+      "source": "saas:github:example-org"
     }
   ],
   "notice": {

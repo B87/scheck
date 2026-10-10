@@ -105,7 +105,16 @@ evidence and Scope, without recollecting hosts. Reused evidence keeps its actual
 GitHub organization roots collect principal, organization metadata, own membership,
 members/owners, outside collaborators, invitations and repository inventory through
 GET reads. Credentials come from `GITHUB_TOKEN`, then `GH_TOKEN`; never print or
-request their values in an engagement file. Read the asset notes, request traces and
+request their values in an engagement file. The header's assessment-credential note
+is separate from security findings. A warning names recognized OAuth scopes that
+permit operations beyond reads and gives token-remediation advice; scheck still
+sends only reads. Other notes say the observed scopes have no recognized write
+grant, with effective permissions untested, or that write capability was not
+determined. Missing or unknown scopes, fine-grained/App grant evidence and failed
+principal reads never establish a read-only credential. These unranked notes
+change no finding severity, acceptance, coverage or exit count. The warning can
+also appear during collection after the fresh principal read and before further
+GitHub reads. Read the asset notes, request traces and
 coverage gaps before interpreting counts. “Observed” or “at least” is the token's
 view, not the organization's complete access or private-repository population.
 GitHub identity and repository-access rules produce subject-specific findings and

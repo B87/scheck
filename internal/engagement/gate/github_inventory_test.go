@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,7 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 	h.Setenv("GITHUB_TOKEN", token)
 	var mu sync.Mutex
 	login, userID := "alice", 1
+	scopes := "repo, read:org"
 	hits := map[string]int{}
 	h.GitHubHandler(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -51,7 +53,7 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		}
 		hits[r.URL.Path]++
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-OAuth-Scopes", "repo, read:org")
+		w.Header().Set("X-OAuth-Scopes", scopes)
 		switch r.URL.Path {
 		case "/user":
 			fmt.Fprintf(w, `{"id":%d,"login":%q,"type":"User","email":%q}`, userID, login, "alice@example.test")
@@ -92,12 +94,19 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := dir.Path
-	first, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(inventoryFile), Dir: dir, Started: start, Version: "v0.0.2", NewGate: h.Build})
+	var runLog strings.Builder
+	first, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(inventoryFile), Dir: dir, Started: start, Version: "v0.0.2", NewGate: h.Build, Log: func(format string, args ...any) { fmt.Fprintf(&runLog, format+"\n", args...) }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.ExitCode() != 0 || len(first.Report.Findings) != 0 {
 		t.Fatalf("first exit %d", first.ExitCode())
+	}
+	if !strings.Contains(runLog.String(), "warning: GitHub assessment credential:") || strings.Contains(runLog.String(), token) {
+		t.Fatal("missing safe start warning")
+	}
+	if !slices.ContainsFunc(first.Report.Notes, func(n ereport.Note) bool { return n.Kind == "github_credential_warning" }) {
+		t.Fatal("missing broad credential warning")
 	}
 	assertInventoryReport(t, first.Report)
 	reconBytes, err := os.ReadFile(dir.File("recon.json"))
@@ -170,6 +179,27 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 	}
 	if !strings.Contains(text.String(), "principal changed") {
 		t.Fatal("missing changed principal header")
+	}
+	// Every resume refreshes the principal and credential note; the earlier
+	// broad warning must disappear even when provider objects can be reused.
+	for _, scope := range []string{"read:org", ""} {
+		mu.Lock()
+		scopes = scope
+		mu.Unlock()
+		current := resume()
+		if current.ExitCode() != 0 {
+			t.Fatalf("credential note changed exit: %d", current.ExitCode())
+		}
+		if slices.ContainsFunc(current.Report.Notes, func(n ereport.Note) bool { return n.Kind == "github_credential_warning" }) {
+			t.Fatal("stale broad warning survived live principal refresh")
+		}
+		want := "contain no recognized write grant"
+		if scope == "" {
+			want = "write capability was not determined"
+		}
+		if !slices.ContainsFunc(current.Report.Notes, func(n ereport.Note) bool { return n.Kind == "github_credential" && strings.Contains(n.Detail, want) }) {
+			t.Fatalf("missing current capability: %+v", current.Report.Notes)
+		}
 	}
 	marked := false
 	if err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {

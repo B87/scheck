@@ -354,8 +354,10 @@ version-disclosure and secret rules judge every name read
 the environment or the provider's own CLI login, never from the engagement file. Use a
 read-only role (for GCP, Security Reviewer and Cloud Asset Viewer; for Google Workspace,
 read-only Admin SDK scopes); if the credentials allow
-more, scheck still calls only its read list, and the report notes the broader grant as
-a finding. This is how data stores are judged from the control plane: whether a
+more, scheck still calls only its read list. Workspace and GCP report the broader
+grant as a finding. GitHub reports recognized beyond-read OAuth scopes as an
+unranked assessment-credential warning, never a posture finding
+([github-collector.md](github-collector.md#principal-and-resume)). This is how data stores are judged from the control plane: whether a
 database is publicly accessible, what its VPC firewall rules and authorized networks
 allow, where its backups live.
 
@@ -966,10 +968,18 @@ admission; a collector never holds one. A request to a web asset never carries a
 redaction rule (`credential`) for every body, header and error string from that
 provider, including Go error text, which embeds URLs.
 
-**A token with write access is not refused.** The gate reads `X-OAuth-Scopes`, the
-collector files the broad-grant finding, and the run warns at the start. Most small
-teams will use the token they already have: refusing it ends the engagement, while
-reporting it fixes something.
+**A token with write access is not refused.** For GitHub, the gate retains
+`X-OAuth-Scopes` and the collector interprets exact supported scope names from a
+usable fresh principal read. Any recognized scope permitting operations beyond
+reads produces an unranked run warning after the principal read and before other
+GitHub reads; the report repeats it in the header. It is not a finding and affects
+neither severity, acceptances, ranking, coverage nor exit counts. Missing, unknown
+or unusable permission evidence never establishes read-only access. The exact
+interpretation and remediation are in
+[github-collector.md](github-collector.md#principal-and-resume). Workspace and GCP
+retain the broader-grant finding policy. Most small teams will use the token they
+already have: refusing it ends the engagement, while reporting it gives the operator
+an action.
 
 ### Responses
 
