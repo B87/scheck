@@ -331,13 +331,15 @@ func (s *mirrorScan) object(id string, depth int, active map[string]bool) (mirro
 	}
 	raw, err := io.ReadAll(io.LimitReader(zr, mirrorObjectMax+129))
 	closeErr := zr.Close()
-	if err != nil || closeErr != nil || br.n != stat.Size() {
-		release()
-		return empty, errMirrorCorrupt
-	}
+	// A bounded read may stop before the compressed stream ends. Report the
+	// observed expansion cap before testing complete-stream integrity.
 	if len(raw) > mirrorObjectMax+128 {
 		release()
 		return empty, gate.ErrMirrorLimit
+	}
+	if err != nil || closeErr != nil || br.n != stat.Size() {
+		release()
+		return empty, errMirrorCorrupt
 	}
 	release()
 	release, err = s.reserve(int64(cap(raw)) * 2)
@@ -347,6 +349,10 @@ func (s *mirrorScan) object(id string, depth int, active map[string]bool) (mirro
 	header, data, ok := bytes.Cut(raw, []byte{0})
 	kind, length, has := strings.Cut(string(header), " ")
 	n, e := parseSize(length)
+	if len(data) > mirrorObjectMax {
+		release()
+		return empty, gate.ErrMirrorLimit
+	}
 	if !ok || !has || e != nil || len(data) != n || !slices.Contains([]string{"commit", "tree", "blob", "tag"}, kind) || objectID(data, kind) != id {
 		release()
 		return empty, errMirrorCorrupt

@@ -507,6 +507,11 @@
       "detail": "The mirror differs from advertised branch/pull refs. Update your authorized mirror and resume; scheck never fetches or modifies it.",
       "kind": "github_inventory",
       "source": "repo:github:example-org/production"
+    },
+    {
+      "detail": "Mirror refs differ from the observed GitHub refs; update your authorized mirror and resume. scheck never fetches or modifies the mirror.",
+      "kind": "github_history_followup",
+      "source": "repo:github:example-org/production"
     }
   ],
   "notice": {

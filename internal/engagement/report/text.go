@@ -422,7 +422,7 @@ func (t *text) summary() {
 	// Provider-closed but active alerts need attention without inventing a finding.
 	// docs/spec/github-collector.md, "Coverage, wording and verification".
 	for _, n := range t.r.Notes {
-		if n.Kind == "github_alert_followup" {
+		if n.Kind == "github_alert_followup" || n.Kind == "github_history_followup" {
 			t.hang("Follow-up needed: ", "  ", clean(n.Source)+": "+clean(n.Detail))
 			t.blank()
 		}
@@ -442,8 +442,10 @@ func (t *text) summary() {
 	b := t.r.Summary.Below
 	below := fmt.Sprintf("Below: %d low, %d informational, %d accepted.", b.Low, b.Info, b.Accepted)
 	switch {
-	case len(t.r.Summary.Items) == 0 && ciSelected > 0 && t.r.Summary.Rules.Decided == 0:
-		t.hang("  ", "  ", "No security verdict was possible from the collected CI evidence. "+below)
+	case len(t.r.Summary.Items) == 0 && t.r.Summary.Rules.Selected == 0:
+		t.hang("  ", "  ", "No security rules ran; this report contains inventory only. "+below)
+	case len(t.r.Summary.Items) == 0 && t.r.Summary.Rules.Decided == 0:
+		t.hang("  ", "  ", "No security verdict was possible from the collected evidence. "+below)
 	case len(t.r.Summary.Items) == 0:
 		t.hang("  ", "  ", "Nothing open ranks at medium or above among what was checked"+t.unanswered()+". "+below)
 	case t.r.Summary.More > 0:

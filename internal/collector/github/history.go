@@ -150,6 +150,9 @@ func CollectHistory(ctx context.Context, g Sender, e Evidence, checkouts map[str
 			}
 			if len(items) > 10000 {
 				fresh = false
+				r.References[len(r.References)-1].Reason = "limit_reached"
+				r.References[len(r.References)-1].Gap = "limit_reached"
+				r.References[len(r.References)-1].Detail = "limit_reached"
 				r.Gaps = append(r.Gaps, "limit_reached")
 				continue
 			}

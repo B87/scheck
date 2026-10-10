@@ -22,8 +22,11 @@ Not requested    Not part of this run: cloud configuration, data stores and back
                  To include one, list it under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
+Follow-up needed: repo:github:example-org/production: Mirror refs differ from the observed GitHub
+  refs; update your authorized mirror and resume. scheck never fetches or modifies the mirror.
+
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+  No security verdict was possible from the collected evidence. Below: 0 low, 0 informational, 0
   accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Not
@@ -88,6 +91,8 @@ WHAT LEFT THIS MACHINE
 NOTES FOR THE READOUT
   repo:github:example-org/production: The mirror differs from advertised branch/pull refs. Update
     your authorized mirror and resume; scheck never fetches or modifies it.
+  repo:github:example-org/production: Mirror refs differ from the observed GitHub refs; update your
+    authorized mirror and resume. scheck never fetches or modifies the mirror.
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 0 rules that could decide. That is not a

@@ -25,7 +25,7 @@ Not requested    Not part of this run: cloud configuration, data stores and back
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  No security verdict was possible from the collected CI evidence. Below: 0 low, 0 informational, 0
+  No security verdict was possible from the collected evidence. Below: 0 low, 0 informational, 0
   accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Not

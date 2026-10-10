@@ -25,6 +25,7 @@ const historyAsset = "repo:github:acme/shop"
 
 type historySender struct {
 	head            string
+	refCount        int
 	changed, denied bool
 	calls           []string
 	literal         string
@@ -44,6 +45,12 @@ func (h *historySender) Send(_ context.Context, r gate.Request) gate.Result {
 		}
 		if sha != "" {
 			items = append(items, map[string]any{"ref": "refs/heads/main", "object": map[string]any{"type": "commit", "sha": sha}})
+		}
+	}
+	if r.Op == OpHistoryHeads && h.refCount > 0 {
+		items = nil
+		for i := range h.refCount {
+			items = append(items, map[string]any{"ref": "refs/heads/" + strconv.FormatInt(int64(i), 36), "object": map[string]any{"type": "commit", "sha": h.head}})
 		}
 	}
 	b, _ := json.Marshal(items)
@@ -630,5 +637,31 @@ func TestMirrorConfigSubsectionsCannotSupplyOrdinarySettings(t *testing.T) {
 		if ev.RepositoriesHistory[0].Complete || hasHistoryVerdict(JudgeHistory(ev), finding.IDGitHubHistoryCredential, Disproved) || hasHistoryVerdict(JudgeHistory(ev), finding.IDGitHubRemoteCredential, Disproved) {
 			t.Fatal(section, ev.RepositoriesHistory)
 		}
+	}
+}
+
+func TestHistoryLooseExpandedCapIsLimit(t *testing.T) {
+	for _, extra := range []int{1, 1024} {
+		t.Run(itoa(extra), func(t *testing.T) {
+			root, sha, _ := historyFixture(t, strings.Repeat("a", mirrorObjectMax+extra))
+			e := collectHistoryFixture(t, root, sha, &historySender{})
+			h := e.RepositoriesHistory[0]
+			if h.Read.Reason != "limit_reached" || h.Complete || hasHistoryVerdict(JudgeHistory(e), finding.IDGitHubHistoryCredential, Disproved) {
+				t.Fatalf("expanded cap: reason=%s gap=%s complete=%v", h.Read.Reason, h.Read.Gap, h.Complete)
+			}
+		})
+	}
+}
+
+func TestHistoryAdvertisedRefCapIsIncomplete(t *testing.T) {
+	root, sha, _ := historyFixture(t, "password=opaque-fixture-value")
+	e := collectHistoryFixture(t, root, sha, &historySender{refCount: 10001})
+	h := e.RepositoriesHistory[0]
+	if h.Complete || h.References[0].Reason != "limit_reached" || h.References[0].Gap != "limit_reached" {
+		t.Fatalf("advertised cap: %+v", h)
+	}
+	js := JudgeHistory(e)
+	if !hasHistoryVerdict(js, finding.IDGitHubHistoryCredential, Fired) || !hasHistoryVerdict(js, finding.IDGitHubHistoryCredential, Abstained) || hasHistoryVerdict(js, finding.IDGitHubHistoryCredential, Disproved) {
+		t.Fatal(js)
 	}
 }

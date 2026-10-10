@@ -89,8 +89,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Not checked   Credential usability and revocation were not tested; Unadvertised/deleted refs,
                  objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads
                  and detector misses remain unassessed
-   Fix           Treat this credential as exposed. Revoke or rotate it with its provider, review its
-                 use, then remove it from repository history and other copies.
+   Fix           Identify the credential owner and treat the credential as exposed. Revoke or rotate
+                 it with its provider, review its use, then remove it from repository history and
+                 other copies.
 
 2  medium  Credential found in mirror origin configuration (production) [github.remote_credential]
    Subject       mirror origin configuration (secret_location remote:origin)
@@ -102,8 +103,8 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Not checked   Credential usability and revocation were not tested; Unadvertised/deleted refs,
                  objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads
                  and detector misses remain unassessed
-   Fix           Remove the credential from origin configuration and revoke or rotate it; use the
-                 provider's credential helper.
+   Fix           Ask the mirror maintainer to revoke or rotate the credential, then remove it from
+                 origin configuration and use the provider's credential helper.
 
 IF YOU DECIDE NOT TO FIX A FINDING
 Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
@@ -148,9 +149,10 @@ WHAT LEFT THIS MACHINE
     deleting that directory removes it.
 
 NOTES FOR THE READOUT
-  repo:github:example-org/production: Supported mirror history read at the local observation time;
-    advertised branch and pull refs read separately. Hidden/deleted history and detector misses
-    remain unassessed.
+  repo:github:example-org/production: A mirror is the local repository copy supplied for this check;
+    its origin is its saved repository connection. Supported mirror history read at the local
+    observation time; advertised branch and pull refs read separately. Hidden/deleted history and
+    detector misses remain unassessed.
 
 FOR AUTOMATION
 Exit 1: 2 open findings at or above their asset's threshold (every asset: medium). Exit 0 would not

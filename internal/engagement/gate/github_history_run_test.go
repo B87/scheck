@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +88,7 @@ func TestGitHubHistoryRunRedactionAuditAndFreshResume(t *testing.T) {
 	h := gate.NewHarness(t, res.GateScope(time.Now()))
 	h.Setenv("GITHUB_TOKEN", literal)
 	heads, pulls := 0, 0
+	oversizedRefs := false
 	h.GitHubHandler(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Error("non-GET")
@@ -107,6 +109,17 @@ func TestGitHubHistoryRunRedactionAuditAndFreshResume(t *testing.T) {
 			heads++
 			if r.URL.RawQuery != "" {
 				t.Error("invented pagination")
+			}
+			if oversizedRefs {
+				fmt.Fprint(w, "[")
+				for i := range 10001 {
+					if i > 0 {
+						fmt.Fprint(w, ",")
+					}
+					fmt.Fprintf(w, `{"ref":"refs/heads/%s","object":{"type":"commit","sha":%q}}`, strconv.FormatInt(int64(i), 36), head)
+				}
+				fmt.Fprint(w, "]")
+				return
 			}
 			fmt.Fprintf(w, `[{"ref":"refs/heads/main","object":{"type":"commit","sha":%q},"url":"https://outside.test/never"}]`, head)
 		case "/repos/acme/shop/git/matching-refs/pull/":
@@ -217,6 +230,34 @@ func TestGitHubHistoryRunRedactionAuditAndFreshResume(t *testing.T) {
 	}
 	if attempts != 2 {
 		t.Fatal(attempts)
+	}
+	// A response can fit the HTTP byte budget but exceed the advertised-ref cap.
+	oversizedRefs = true
+	capDir, err := engagement.CreateRunDir(t.TempDir(), "history-cap", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer capDir.Close()
+	capped, err := engagement.Run(context.Background(), res, engagement.RunOptions{Dir: capDir, Raw: raw, NewGate: h.Build, Version: "v0.0.2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capped.Report.Exit.Code != 2 {
+		t.Fatal(capped.Report.Exit)
+	}
+	positives := 0
+	for _, f := range capped.Report.Findings {
+		if f.ID == finding.IDGitHubHistoryCredential {
+			positives++
+		}
+	}
+	if positives != 2 {
+		t.Fatalf("cap lost local positives: %d", positives)
+	}
+	for _, a := range capped.Report.Assessments {
+		if a.ID == finding.IDGitHubHistoryCredential && a.Status == "not_matched" {
+			t.Fatal("ref cap disproved history")
+		}
 	}
 	actual, err := os.ReadFile(filepath.Join(root, "config"))
 	if err != nil || !bytes.Equal(config, actual) {

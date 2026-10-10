@@ -17,7 +17,7 @@ func githubInventoryReport(_ *testing.T) Input {
 		Detail:           "GitHub inventory only. No GitHub security control was assessed.",
 		NetworkPrincipal: &Principal{Identity: "alice (user ID 41)", Scopes: []string{"read:org", "repo"}, ScopesSource: "provider"},
 		InventoryNotes: []Note{
-			{Kind: "github_inventory", Source: asset, Detail: "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub security rules are not implemented in this build. No GitHub security control was assessed."},
+			{Kind: "github_inventory", Source: asset, Detail: "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed."},
 			{Kind: "github_inventory", Source: asset, Detail: "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory."},
 		}}
 	for i, op := range []string{"github.principal", "github.organization", "github.membership", "github.members", "github.owners", "github.outside_collaborators", "github.invitations", "github.repositories"} {
@@ -36,7 +36,7 @@ func githubPartialInventoryReport(t *testing.T) Input {
 	a := &in.Assets[0]
 	a.Status, a.Reason, a.Detail = "incomplete", "limit_reached", "The run deadline ended the member inventory before the next page could be read."
 	a.PopulationIncomplete = true
-	a.InventoryNotes[0].Detail = "members: at least 100; owners: observed 2; outside collaborators: not read; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub security rules are not implemented in this build. No GitHub security control was assessed."
+	a.InventoryNotes[0].Detail = "members: at least 100; owners: observed 2; outside collaborators: not read; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed."
 	a.InventoryNotes = append(a.InventoryNotes,
 		Note{Kind: "github_inventory", Source: a.ID, Detail: "Member list stopped before all pages were read; at least 100 members were observed."},
 		Note{Kind: "github_inventory", Source: a.ID, Detail: "Outside collaborators were not read. Ask an organization owner to authorize the token with organization Members read permission, then resume the run."})

@@ -21,7 +21,7 @@ Not requested    Not part of this run: cloud configuration, data stores and back
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+  No security rules ran; this report contains inventory only. Below: 0 low, 0 informational, 0
   accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Not
@@ -80,8 +80,8 @@ WHAT LEFT THIS MACHINE
 
 NOTES FOR THE READOUT
   saas:github:example-org: members: observed 6; owners: observed 2; outside collaborators: observed
-    1; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub
-    security rules are not implemented in this build. No GitHub security control was assessed.
+    1; pending invitations: observed 0; repositories visible to this credential: observed 4. This
+    report contains GitHub inventory only. No GitHub security control was assessed.
   saas:github:example-org: The credential may hide private repositories or concealed memberships.
     Completing pagination does not establish a complete organization inventory.
 

@@ -297,7 +297,7 @@
   "incomplete": [],
   "notes": [
     {
-      "detail": "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub security rules are not implemented in this build. No GitHub security control was assessed.",
+      "detail": "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed.",
       "kind": "github_inventory",
       "source": "saas:github:example-org"
     },

@@ -1,6 +1,6 @@
 # scheck — GitHub collector specification
 
-GitHub organization and repository assessment for 0.0.2 E5. Steps 1–5 build the
+GitHub organization and repository assessment for 0.0.2 E5. Steps 1–6 build the
 gate foundation, principal/organization inventory, identity and repository-access
 rules, CI configuration, secret metadata and provider-alert rules. Steps 4 and 5
 were defined with the `security-consultant` on 2026-10-10. Step 6's history
@@ -10,6 +10,11 @@ verified offline; all five confirmed review defects are fixed and re-reviewed.
 Step 5 passes offline checks and consultant/client/adversarial reviews; live
 acceptance remains pending. The step 3 evidence and rule surface
 was frozen on 2026-10-10.
+Step 7's whole-slice offline closing review passes, including consultant/client
+reviews, spec audit, full checks/build and fresh adversarial review of the repaired
+cap defects ([record](../eval/e5-closing-review-2026-10-10.md)). This is not E5
+release acceptance: assessment-token reporting remains undecided, no
+preimplementation rest-lab seal is recorded, and live measurements are not run.
 
 The gate owns admission, sending, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)); the engagement owns people attribution, admin
@@ -271,7 +276,7 @@ built in E5 step 3.
 | Write deploy key | Explicit `read_only:false` | Explicit `read_only:true` | Missing or unrecognized field |
 | App can write all repositories | Explicit all-repository selection and relevant write permission | Selected scope or entirely read-only permissions | Permission or selection unavailable |
 | Open dependency alert | Recognized open alert with supported severity | Fixed/dismissed alert or complete supported empty population | Denied read, unknown state/severity or partial population |
-| Provider secret alert | Recognized open alert with identifiable location; validity never overstated | Recognized fixed/revoked resolution for that alert | Unknown state/location; false-positive dismissal does not prove rotation |
+| Provider secret alert | Recognized open alert with supported location and active, unknown or unavailable validity | Recognized resolved state with `revoked` resolution and complete applicable evidence, or complete supported empty population | Unknown state/location, inactive validity or incomplete evidence; other resolutions do not prove revocation |
 | Content or history credential | Compiled detector match; marker and location retained | Complete bounded readable scan without a match | Missing/stale/partial mirror, unsupported format or cap |
 | Credential in mirror remote | Recognized credential in matching remote configuration | Supported credential-free remote | Missing/mismatched/unreadable configuration |
 
@@ -282,9 +287,11 @@ former people with remaining access are high; former-admin access gains the exis
 `attribute:admin` step. A nonadmin member's MFA gap is medium. Unexpected
 named owners, contractor/shared owners and excessive owner counts are medium.
 The six step 4 bases and their narrowly supported predicates are frozen below.
-All-repository App writes and a credential in a mirror remote remain proposed
-medium bases. Exact alert-severity mapping and App write-permission lists remain
-for their later DEFINE reviews. Runner-access findings are deferred.
+Alert severities are frozen in "Secret metadata and provider alerts: step 5
+definition"; mirror credential bases are frozen in "Rules and subjects".
+All-repository App writes remain a proposed medium base; the App write-permission
+list and runner-access findings await a later DEFINE. No later roadmap slice yet
+owns those reads.
 
 A credential leak is high for private repositories and critical for public
 repositories under the existing anchors. Secret authenticity or usability is never
@@ -294,7 +301,7 @@ tested. A secret name alone proves neither a production credential nor exfiltrat
 
 This definition was frozen on 2026-10-10 and is implemented and verified offline.
 Consultant REVIEW, client REPORT, `make check`, `make build` and fresh adversarial
-review pass. E5's later steps and live acceptance remain pending. It adds no interview question and uses existing production deployment
+review pass. Live acceptance remains pending. It adds no interview question and uses existing production deployment
 context. Every finding has area `cicd` and `Exposure: false`.
 
 ### Findings and outcomes
@@ -858,9 +865,12 @@ counts, with no target-derived free text. A negative verdict says "No recognized
 credential pattern found in the supported mirror history read", never "no secrets".
 Detector coverage and credential usability remain gaps beside the traversal gaps.
 
-Remediation revokes or rotates the credential first, reviews its use, then removes
-it from history. For origin userinfo, remove it, rotate the credential and use a
-credential helper. Removing history does not revoke a credential.
+Remediation identifies the credential owner, revokes or rotates the credential,
+reviews its use, then removes it from history. Ask the mirror maintainer to revoke
+or rotate an origin credential, then remove it from origin configuration and use
+a credential helper. Authenticity and current usability were not tested.
+Removing history does not revoke a credential. Differing-ref notes give the
+authorized mirror update and resume action before the summary ranking.
 
 Tests must prove fires, disproves and abstains for both rules; loose, packed and
 cross-storage delta reads; corruption, caps and cycles; confinement under symlink

@@ -139,6 +139,12 @@ findings. Missing mirrors, differing refs, unsupported/corrupt objects, mutation
 compiled caps leave history unassessed or partial. Local evidence has a separate
 local-reader label and observation time. Origin configuration findings concern the
 operator's mirror, not hosted exposure.
+Differing-ref follow-ups appear before the summary ranking: ask the mirror maintainer
+to update the authorized mirror and resume. Credential remediation starts by identifying
+the credential owner and revoking or rotating it; the mirror maintainer then removes
+origin credentials and uses a credential helper. Authenticity and usability are untested.
+An empty ranking says inventory only when no rule was selected, or no security verdict
+when none could decide; neither is a clean bill of health.
 Read `github_alerts` notes for observed or lower-bound inventories,
 inactive validity, non-revocation resolutions and unsupported locations. Provider
 alerts are not a complete secret scan. Names and timestamps prove neither leakage

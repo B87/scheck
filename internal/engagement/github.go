@@ -218,6 +218,9 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		}
 		detail += " Detector misses, deleted/unadvertised refs, reflogs, submodule/LFS payloads and credential usability remain unassessed."
 		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: h.Asset, Detail: detail})
+		if slices.Contains(h.Gaps, "mirror_refs_differ") {
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_history_followup", Source: h.Asset, Detail: "Mirror refs differ from the observed GitHub refs; update your authorized mirror and resume. scheck never fetches or modifies the mirror."})
+		}
 	}
 	if len(ev.RepositoriesHistory) > 0 {
 		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: fmt.Sprintf("A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read for %d of %d selected repositories; %d complete supported traversals with matching observed refs. Hidden repositories and history outside the supported traversal remain unassessed.", readHistory, len(ev.RepositoriesHistory), completeHistory)})

@@ -164,9 +164,16 @@ Risk areas are named, never given as a fraction, which reads as a score; a host'
 are counted, because "Hosts: checked in part" hides that most of a host was never
 judged (the summary line reads `Hosts (deploy, 4 of 13 areas judged)`). Areas declared
 under `not_used` are named as not applicable. On a `--host` run the not-checked list is
-`Nothing but this host was looked at.` With nothing
-open at medium or above the lead is `Nothing open ranks at medium or above among what
-was checked.`, never "no findings", "all clear" or "nothing to fix". The summary has no
+`Nothing but this host was looked at.` With no selected rules, the empty ranking
+says `No security rules ran; this report contains inventory only.` With selected
+rules but no decided verdict, it says `No security verdict was possible from the
+collected evidence.` Otherwise, with nothing open at medium or above the lead is
+`Nothing open ranks at medium or above among what was checked.`, never "no findings",
+"all clear" or "nothing to fix". A differing-mirror-ref follow-up gives the authorized
+mirror update and resume action before the ranking. History credential remediation
+asks the operator to identify the credential owner, without claiming authenticity
+or usability was tested; origin cleanup is assigned to the mirror maintainer after
+revocation or rotation. The summary has no
 score, grade, percentage or compliance claim.
 
 **Not checked, and what would close the gap.** Grouped by the action that closes it,

@@ -86,9 +86,10 @@ WHAT LEFT THIS MACHINE
     deleting that directory removes it.
 
 NOTES FOR THE READOUT
-  repo:github:example-org/production: Supported mirror history read at the local observation time;
-    advertised branch and pull refs read separately. Hidden/deleted history and detector misses
-    remain unassessed.
+  repo:github:example-org/production: A mirror is the local repository copy supplied for this check;
+    its origin is its saved repository connection. Supported mirror history read at the local
+    observation time; advertised branch and pull refs read separately. Hidden/deleted history and
+    detector misses remain unassessed.
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 2 rules that could decide. That is not a

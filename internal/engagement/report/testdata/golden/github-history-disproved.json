@@ -463,7 +463,7 @@
   "incomplete": [],
   "notes": [
     {
-      "detail": "Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed.",
+      "detail": "A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed.",
       "kind": "github_inventory",
       "source": "repo:github:example-org/production"
     }

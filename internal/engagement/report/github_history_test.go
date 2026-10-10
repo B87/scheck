@@ -41,9 +41,10 @@ func githubHistoryReport(t *testing.T, verdict string) Input {
 	if verdict == verdictFired {
 		repo.Redactions = []policy.Hit{{Rule: "kv-secret", Bytes: 31}, {Rule: "url-credentials", Bytes: 31}}
 	}
-	repo.InventoryNotes = []Note{{Kind: "github_inventory", Source: repo.ID, Detail: "Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed."}}
+	repo.InventoryNotes = []Note{{Kind: "github_inventory", Source: repo.ID, Detail: "A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed."}}
 	if verdict == verdictAbstained {
 		repo.InventoryNotes[0].Detail = "The mirror differs from advertised branch/pull refs. Update your authorized mirror and resume; scheck never fetches or modifies it."
+		repo.InventoryNotes = append(repo.InventoryNotes, Note{Kind: "github_history_followup", Source: repo.ID, Detail: "Mirror refs differ from the observed GitHub refs; update your authorized mirror and resume. scheck never fetches or modifies the mirror."})
 	}
 	in.Observations = map[string]Observation{}
 	for _, id := range []string{"mirror-history", "heads", "pull", "repository"} {

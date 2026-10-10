@@ -596,7 +596,7 @@
         "Unadvertised/deleted refs, objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads and detector misses remain unassessed"
       ],
       "remediation": {
-        "summary": "Treat this credential as exposed. Revoke or rotate it with its provider, review its use, then remove it from repository history and other copies."
+        "summary": "Identify the credential owner and treat the credential as exposed. Revoke or rotate it with its provider, review its use, then remove it from repository history and other copies."
       },
       "rule": {
         "kind": "multi_fact",
@@ -671,7 +671,7 @@
         "Unadvertised/deleted refs, objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads and detector misses remain unassessed"
       ],
       "remediation": {
-        "summary": "Remove the credential from origin configuration and revoke or rotate it; use the provider's credential helper."
+        "summary": "Ask the mirror maintainer to revoke or rotate the credential, then remove it from origin configuration and use the provider's credential helper."
       },
       "rule": {
         "kind": "single_fact",
@@ -696,7 +696,7 @@
   "incomplete": [],
   "notes": [
     {
-      "detail": "Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed.",
+      "detail": "A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed.",
       "kind": "github_inventory",
       "source": "repo:github:example-org/production"
     }

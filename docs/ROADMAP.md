@@ -635,9 +635,9 @@ successes would have answered (carried from E4 step 4a) and prints the changed p
 in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
 
-**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–5 built with
-offline checks and consultant/client/adversarial reviews; history rules and
-permissions remain proposals until reviewed and frozen):
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–6 built with
+offline checks and consultant/client/adversarial reviews; step 6's history rules
+and permissions frozen on 2026-10-10):
 
 0. **Contract preparation.** Split the engagement spec and audit citations; draft the
    operation/permission and rule-outcome tables. Resolve the assessment-token
@@ -766,25 +766,45 @@ permissions remain proposals until reviewed and frozen):
    the final config-admission and inflation-buffer fixes. The fresh final
    adversarial review passes with no must-fix, should-fix or nit; no reviewed
    defect is deferred. Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
-7. **Closing review.** Consultant REVIEW, client REPORT, spec sync/audit,
-   `make check` and a fresh whole-slice adversarial code review. Every built rule has
-   firing, disproved and abstained fixtures. Missing live lab measurements remain
-   *not run*, never passed.
+7. **Closing review — built and verified offline.** Whole-slice consultant REVIEW and
+   client REPORT pass. Client wording improvements clarify inventory-only and
+   zero-decided reports, place the differing-mirror-ref action before the ranking,
+   identify the credential owner and assign origin cleanup to the mirror maintainer
+   after revocation or rotation. A confirmed closing self-audit defect classified
+   an over-cap loose object as corrupt instead of `limit_reached`; the fix checks
+   the expansion limit first and separately bounds decoded payload length, with
+   one-byte and 1,024-byte over-cap regressions proving no absence verdict.
+   Spec sync/audit, full `make check` and build passed before the whole-slice
+   adversarial review. That review confirmed one must-fix: the 10,000 advertised
+   ref cap did not mark the affected read `limit_reached`, allowing exit 0 or 1
+   despite partial history. The fix retains the limit reason, gap and detail;
+   collector and fake-API regressions with 10,001 refs prove exit 2, retained
+   positive findings and no negative verdict. Targeted tests, final full
+   checks and build pass; the fresh review of the fix passes with no must-fix,
+   should-fix or nit. No reviewed defect is deferred. Every built rule
+   has firing, disproved and abstained fixtures. Live lab measurements are **not
+   run**. This review does not claim E5 release acceptance: the assessment-token
+   reporting choice remains open, and no E3 preimplementation rest-lab seal is
+   recorded. That prerequisite is not established; a later seal cannot establish
+   preimplementation blindness.
+   See `eval/e5-closing-review-2026-10-10.md`.
 
-**Carried from the inventory client review** (2026-10-10): consider wording the
-empty ranking in an inventory-only report as “No security rules ran” rather than
-“Nothing open ranks at medium or above.” The current inventory warnings remain;
-the ranking adds little when no control was assessed. E5 step 7 owns reconsidering
-this optional wording after security rules exist, when its remaining relevance can
-be judged. It is not a change to coverage or exit semantics.
+**Resolved in step 7 from the inventory client review** (2026-10-10): the empty
+ranking says “No security rules ran; this report contains inventory only” when no
+rule was selected, and “No security verdict was possible from the collected
+evidence” when none decided. Coverage and exit semantics are unchanged.
 
-**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
-readout wording improvements, with no blocking issue: put the stale-mirror update
-and resume action nearer the summary; ask the operator to identify the credential
-owner while stating authenticity/usability were not tested; assign origin/helper
-cleanup to the mirror maintainer. Production notes already explain “mirror” and
-“origin” in plain language; synthetic report fixtures can use the same explanation.
-These are wording changes, not new findings or changes to coverage or exit counts.
+**Resolved in step 7 from the step 6 client review** (2026-10-10): differing-ref
+update/resume notes precede the summary ranking; history remediation identifies the
+credential owner while retaining the authenticity/usability limitation; the mirror
+maintainer revokes or rotates an origin credential before cleanup. Synthetic report
+fixtures explain “mirror” and “origin” like production notes. These changes add no
+finding and change no coverage or exit count.
+
+**Deferred, owner unassigned:** App grant and installation-principal evidence,
+runner access and runner-group/public-repository scope await a reviewed DEFINE.
+No later roadmap slice owns these reads yet; their assignment remains an open
+decision, and this closing review does not invent it.
 
 **Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
 table carries what is now hard-coded per provider (a display name, page keys, rate-limit
@@ -844,14 +864,6 @@ slice against what the read scopes return.
 
 **Done when:** as E5, against a fake Admin SDK server; an opt-in live test (`make live`)
 reads the lab tenant; broader-than-read scopes are reported as a finding.
-
-**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
-readout wording improvements, with no blocking issue: put the stale-mirror update
-and resume action nearer the summary; ask the operator to identify the credential
-owner while stating authenticity/usability were not tested; assign origin/helper
-cleanup to the mirror maintainer. Production notes already explain “mirror” and
-“origin” in plain language; synthetic report fixtures can use the same explanation.
-These are wording changes, not new findings or changes to coverage or exit counts.
 
 **Carried from E4's reviews:** before E6's first op, unless E5 did it first, the provider
 table and a list's item subject as a template, as under E5; and org-unit matching moves
@@ -1074,14 +1086,6 @@ asset's entry points and its one redirect hop, and no `robots.txt` path
 requested; a resume with a different vantage reads a web asset's names and entry
 points again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
 and entry points it affects (carried from E4 step 4b).
-
-**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
-readout wording improvements, with no blocking issue: put the stale-mirror update
-and resume action nearer the summary; ask the operator to identify the credential
-owner while stating authenticity/usability were not tested; assign origin/helper
-cleanup to the mirror maintainer. Production notes already explain “mirror” and
-“origin” in plain language; synthetic report fixtures can use the same explanation.
-These are wording changes, not new findings or changes to coverage or exit counts.
 
 **Carried from E4's reviews:**
 

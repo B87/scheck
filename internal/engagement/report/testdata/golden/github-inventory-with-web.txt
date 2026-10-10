@@ -89,8 +89,8 @@ WHAT LEFT THIS MACHINE
 
 NOTES FOR THE READOUT
   saas:github:example-org: members: observed 6; owners: observed 2; outside collaborators: observed
-    1; pending invitations: observed 0; repositories visible to this credential: observed 4. GitHub
-    security rules are not implemented in this build. No GitHub security control was assessed.
+    1; pending invitations: observed 0; repositories visible to this credential: observed 4. This
+    report contains GitHub inventory only. No GitHub security control was assessed.
   saas:github:example-org: The credential may hide private repositories or concealed memberships.
     Completing pagination does not establish a complete organization inventory.
 
