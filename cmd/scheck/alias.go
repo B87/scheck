@@ -10,8 +10,8 @@ import (
 )
 
 // The 0.0.1 commands are aliases of `scheck run --host` for 0.0.2 only and
-// are removed in 0.0.3 (docs/spec/engagement.md, "One command, one file",
-// "The aliases"). Each 0.0.1 flag maps to its run equivalent or exits 3
+// are removed in 0.0.3 (docs/spec/host-collector.md §8, "The aliases").
+// Each 0.0.1 flag maps to its run equivalent or exits 3
 // naming the replacement; nothing is accepted and silently ignored.
 
 func newLocalCmd(opts *globalOpts) *cobra.Command {
@@ -102,7 +102,7 @@ var aliasRefusals = map[string]string{
 
 // runAlias runs the one-host engagement the 0.0.1 command named, after a
 // deprecation line on stderr that names where run.assessment went
-// (docs/spec/engagement.md, "JSON consumers").
+// (docs/spec/report.md, "JSON consumers").
 func runAlias(cmd *cobra.Command, opts *globalOpts, ho *hostOpts) error {
 	fmt.Fprintf(cmd.ErrOrStderr(), "scheck %s is deprecated and is removed in 0.0.3: this is `scheck run --host %s`; "+
 		"with --format json, run.assessment is now assets[0].envelope.run.assessment\n", cmd.Name(), ho.host)

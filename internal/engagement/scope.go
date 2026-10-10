@@ -21,7 +21,7 @@ var wellKnown = []string{"/robots.txt", "/.well-known/security.txt"}
 // GateScope is the engagement file's scope as the gate reads it, built from
 // the validated file and nothing else: never from scope.json or another
 // stage output, so an edit there cannot widen what is sent
-// (docs/spec/scope.md, "Admission"; docs/spec/engagement.md, "Stop and
+// (docs/spec/scope.md, "Admission"; docs/spec/runs.md, "Stop and
 // resume"). at is the run's start, against which a confirmation's year is
 // measured.
 func (r *Resolved) GateScope(at time.Time) gate.Scope {

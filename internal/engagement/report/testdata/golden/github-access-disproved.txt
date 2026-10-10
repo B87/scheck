@@ -1,0 +1,108 @@
+scheck engagement report: GitHub identity and repository-access review
+For Alex. Read 2026-10-09 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+GitHub account saas:github:example-org: alice (user ID 41). Inventory visibility depends on this
+               credential.
+GitHub account repo:github:example-org/production: alice (user ID 41). Inventory visibility depends
+               on this credential.
+Warning        saas:github:example-org: GitHub assessment credential: observed OAuth scopes permit
+               operations beyond reads (repo). scheck sent only read requests. Prefer an
+               organization-approved fine-grained token with the read permissions this assessment
+               needs; revoke a dedicated assessment token when finished. Effective write access to
+               this organization was not tested.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: engineering, production (checked only in part: identity and access; CI/CD and supply chain).
+See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Identity and access, CI/CD and supply chain.
+Not checked      Secrets: see Coverage.
+Not requested    Not part of this run: cloud configuration, data stores and backups, external
+                 surface, web application, hosts, email and domain, logging and incident readiness.
+                 To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  Nothing open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+  accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: identity and access, CI/CD and supply chain. Not checked: secrets, cloud configuration,
+data stores and backups, external surface, web application, hosts, email and domain, logging and
+incident readiness. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      checked in part
+  2 of 2 assets read.
+  This version of scheck has no rule for it (Delegated organization roles, repository invitations,
+  sign-in history, selected-repository visibility and unobserved repository administrators are not
+  assessed).
+Secrets                  not checked
+  2 of 2 assets read.
+  This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
+  unsupported secret locations, unreported patterns and history outside the supported mirror
+  traversal are not assessed).
+CI/CD and supply chain   checked in part
+  2 of 2 assets read.
+  This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
+  policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and
+  dependency runtime exploitability are not assessed).
+Not requested            Not part of this run: cloud configuration, data stores and backups,
+                         external surface, web application, hosts, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 0 open, 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its
+      value appears nowhere); 13 requests.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read, including people's names and email addresses from saas:github:example-org, is
+    stored only on this machine, in /state/engagements/github-inventory/2026-10-09T12:00:00Z;
+    deleting that directory removes it.
+
+NOTES FOR THE READOUT
+  saas:github:example-org: members: observed 6; owners: observed 5; outside collaborators: observed
+    1; pending invitations: observed 0; repositories visible to this credential: observed 4.
+    Identity and repository-access rules were evaluated; unobserved permissions remain unknown.
+  saas:github:example-org: The credential may hide private repositories or concealed memberships.
+    Completing pagination does not establish a complete organization inventory.
+  saas:github:example-org: GitHub assessment credential: observed OAuth scopes permit operations
+    beyond reads (repo). scheck sent only read requests. Prefer an organization-approved
+    fine-grained token with the read permissions this assessment needs; revoke a dedicated
+    assessment token when finished. Effective write access to this organization was not tested.
+
+FOR AUTOMATION
+Exit 0: no open finding at or above threshold among the 9 rules that could decide. That is not a
+clean result: 0 rules had no usable evidence, and 8 areas were not checked.
+Files  /state/engagements/github-inventory/2026-10-09T12:00:00Z/: report.txt, report.json,
+       audit.jsonl (every command and request, in order), evidence/

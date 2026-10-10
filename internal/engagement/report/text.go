@@ -18,7 +18,7 @@ import (
 // cmd/scheck).
 type Options = hostreport.Options
 
-// WriteText renders the report a person reads (docs/spec/engagement.md,
+// WriteText renders the report a person reads (docs/spec/report.md,
 // "The report"): plain words for marks and reasons, never their tokens,
 // and every string that came from a target or the operator escaped.
 func WriteText(w io.Writer, r *Report, opt Options) error {
@@ -145,8 +145,29 @@ func (t *text) header() {
 		t.field("", "Vantage", 15, clean(t.r.Run.Vantage)+" (your declaration; not verified). internet means outside every permitted source, including office allowlists and VPN.")
 	}
 	if t.r.Run.Resumed {
-		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely was kept, and "+
+		kept := "was kept"
+		if slices.ContainsFunc(t.r.Assets, func(a Asset) bool { return a.Collector != nil && *a.Collector == "github" }) {
+			kept += " where reuse was allowed"
+		}
+		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely "+kept+", and "+
 			"everything else was read again. Kept evidence was not read again and retains its original observation date.")
+	}
+	for _, a := range t.r.Assets {
+		if a.Collector != nil && *a.Collector == "github" && a.Principal != nil {
+			t.field("", "GitHub account", 15, clean(a.ID)+": "+clean(a.Principal.Identity)+". Inventory visibility depends on this credential.")
+		}
+	}
+	for _, note := range t.r.Notes {
+		if note.Kind == "github_credential" || note.Kind == "github_credential_warning" {
+			label := "Credential"
+			if note.Kind == "github_credential_warning" {
+				label = "Warning"
+			}
+			t.field("", label, 15, clean(note.Source)+": "+clean(note.Detail))
+		}
+	}
+	for _, change := range e.PrincipalChanges {
+		t.field("", "Principal", 15, clean(change.Asset)+": GitHub principal changed from "+clean(change.From)+" to "+clean(change.To)+". Earlier authenticated GitHub evidence was not reused.")
 	}
 	if len(e.EditedByHand) > 0 {
 		names := make([]string, len(e.EditedByHand))
@@ -231,7 +252,7 @@ func (t *text) status() {
 	t.blank()
 }
 
-// refusal words a refused asset by its kind (docs/spec/engagement.md,
+// refusal words a refused asset by its kind (docs/spec/report.md,
 // "Incompleteness and refusals"); the raw error follows at -v. A canary
 // echo is never printed.
 func (t *text) refusal(s Shortfall) string {
@@ -281,6 +302,11 @@ func (t *text) refusal(s Shortfall) string {
 
 func (t *text) shortfall(s Shortfall) string {
 	n := t.name(s.Asset)
+	for _, a := range t.r.Assets {
+		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "github" {
+			return n + ": GitHub inventory was not completed (" + strings.TrimSuffix(clean(s.Detail), ".") + "). The inventory notes show what was read and what remains unknown."
+		}
+	}
 	if e := s.Effect; e != nil {
 		attempted := e.ChecksRun + e.ChecksUnknown
 		total := attempted + e.ChecksNotRun
@@ -367,6 +393,22 @@ func (t *text) areas() (checked, part, notChecked, folded, na []string) {
 
 func (t *text) summary() {
 	t.line(t.bold("SUMMARY"))
+	ciSelected, ciDecided := 0, 0
+	for _, a := range t.r.Assessments {
+		if slices.Contains(finding.GitHubCIIDs(), a.ID) {
+			ciSelected++
+			if a.Status != finding.NotAssessed {
+				ciDecided++
+			}
+		}
+	}
+	if ciSelected > 0 {
+		if ciDecided == 0 {
+			t.hang("", "", "No CI configuration rule could decide from the available evidence; see the missing reads and next steps below.")
+		} else {
+			t.field("", "CI configuration", 17, fmt.Sprintf("%d of %d rule assessments decided; runtime execution was not verified.", ciDecided, ciSelected))
+		}
+	}
 	checked, part, notChecked, folded, na := t.areas()
 	if len(checked) > 0 {
 		t.field("", "Checked", 17, strings.Join(checked, ", ")+".")
@@ -386,6 +428,14 @@ func (t *text) summary() {
 	t.field("", "Outside scheck", 17, "Malware on any machine, application logic, processes, lookalike domains.")
 	t.blank()
 
+	// Provider-closed but active alerts need attention without inventing a finding.
+	// docs/spec/github-collector.md, "Coverage, wording and verification".
+	for _, n := range t.r.Notes {
+		if n.Kind == "github_alert_followup" || n.Kind == "github_history_followup" {
+			t.hang("Follow-up needed: ", "  ", clean(n.Source)+": "+clean(n.Detail))
+			t.blank()
+		}
+	}
 	t.line(t.bold("Fix these first: a ranking of what was checked, not of all your risks"))
 	for _, it := range t.r.Summary.Items {
 		var names []string
@@ -401,6 +451,10 @@ func (t *text) summary() {
 	b := t.r.Summary.Below
 	below := fmt.Sprintf("Below: %d low, %d informational, %d accepted.", b.Low, b.Info, b.Accepted)
 	switch {
+	case len(t.r.Summary.Items) == 0 && t.r.Summary.Rules.Selected == 0:
+		t.hang("  ", "  ", "No security rules ran; this report contains inventory only. "+below)
+	case len(t.r.Summary.Items) == 0 && t.r.Summary.Rules.Decided == 0:
+		t.hang("  ", "  ", "No security verdict was possible from the collected evidence. "+below)
 	case len(t.r.Summary.Items) == 0:
 		t.hang("  ", "  ", "Nothing open ranks at medium or above among what was checked"+t.unanswered()+". "+below)
 	case t.r.Summary.More > 0:
@@ -429,7 +483,9 @@ func (t *text) summary() {
 		s.WriteString(" Not checked: " + lowerAll(append(append([]string{}, notChecked...), folded...)) + ".")
 	}
 	if len(na) > 0 {
-		s.WriteString(" Not applicable, as you declared: " + lowerAll(na) + ".")
+		s.WriteString(" Not applicable, as you declared: ")
+		s.WriteString(lowerAll(na))
+		s.WriteString(".")
 	}
 	s.WriteString(" Anything not checked is unknown, not fine.")
 	t.hang("", "", s.String())
@@ -630,7 +686,7 @@ var markWord = map[string]string{
 	"not_applicable": "not applicable", "outside_scheck": "outside scheck",
 }
 
-// reasonText is a reason's fixed phrase (docs/spec/engagement.md,
+// reasonText is a reason's fixed phrase (docs/spec/report.md,
 // "Reason wording"): what is unknown and what would change it, never a
 // verdict on the target.
 func (t *text) reasonText(rd ReasonDetail) string {
@@ -673,6 +729,7 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"audience_internet":        "the declared audience is internet, so no restriction contradiction was judged",
 			"login_flow":               "the login flow was not read, so session cookies were not fully checked",
 			"web_evidence":             "some web-response checks could not reach a decision",
+			"github_evidence":          "required GitHub authority, visibility, context or recognized evidence was missing",
 			"tls_interception":         "your network inspects TLS, so certificates were not judged",
 			"certificate_unclassified": "certificate verification failed without a recognized cause",
 			"certificate":              "the HTTPS certificate could not be verified",
@@ -878,7 +935,7 @@ func (t *text) hosts(row Row) {
 }
 
 // subItemText is one host area's line: what a "checked" rests on and what
-// it found, never a bare mark that reads as a pass (docs/spec/engagement.md,
+// it found, never a bare mark that reads as a pass (docs/spec/report.md,
 // "The Hosts row").
 func (t *text) subItemText(a Asset, si SubItem) string {
 	if len(si.Reasons) == 1 && si.Reasons[0].Reason == "no_rule" && si.Mark == "not_assessed" {
@@ -1145,7 +1202,7 @@ func (t *text) findingBlock(n int, f Finding) {
 }
 
 // pastes prints, once, the entry that accepts each open finding instead of
-// fixing it, headed so nobody reads it as the default (docs/spec/engagement.md,
+// fixing it, headed so nobody reads it as the default (docs/spec/report.md,
 // "The paste").
 func (t *text) pastes() {
 	var ps []*AcceptTemplate
@@ -1390,7 +1447,7 @@ func (t *text) acceptanceName(a Acceptance) string {
 
 // factSheets prints each collected host's facts at -v, one row per check
 // with an execution status, and at -vv the redacted captures too
-// (docs/spec/engagement.md, "Text and JSON"). The default report leaves
+// (docs/spec/report.md, "Text and JSON"). The default report leaves
 // them to the JSON: a reader does not act on them.
 func (t *text) factSheets() {
 	if t.opt.Verbose < 1 {

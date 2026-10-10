@@ -1,5 +1,5 @@
 // Package state resolves the state directory, under which each engagement
-// run keeps its run directory (docs/spec/engagement.md, "Runs, state and
+// run keeps its run directory (docs/spec/runs.md, "Runs, state and
 // configuration"). From 0.0.2 nothing is persisted under runs/<host.id>/: a
 // host's envelope is its asset's evidence file in the run directory.
 package state

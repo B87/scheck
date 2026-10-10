@@ -42,7 +42,7 @@ func (g *Gate) window(now time.Time) int {
 //   - a request whose credential's principal is not known, which may be
 //     another one.
 func (g *Gate) identity(op *compiled, r Request, params map[string]string, cred *Credential) string {
-	if op.List != nil || op.users || g.rules == "" {
+	if op.Class == Principal || op.List != nil || op.users || g.rules == "" {
 		return ""
 	}
 	principal := ""

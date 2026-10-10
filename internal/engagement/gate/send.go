@@ -390,6 +390,9 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 	req.Header.Set("Accept", strings.Join(a.b.op.Accept, ", "))
 	// gzip only, decompressed under a cap (docs/spec/scope.md, "Responses").
 	req.Header.Set("Accept-Encoding", "gzip")
+	if a.b.op.APIVersion != "" {
+		req.Header.Set("X-GitHub-Api-Version", a.b.op.APIVersion)
+	}
 	if a.cred != nil {
 		req.Header.Set(a.cred.header, a.cred.value)
 	}
@@ -474,7 +477,9 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	case len(raw) > 0 && !accepts(op.Accept, resp.Header.Get("Content-Type")):
 		code = codeContentType
 		redacted, _ := red.Redact(raw)
-		out.hash = hash(redacted)
+		if !op.GitHubMetadata {
+			out.hash = hash(redacted)
+		}
 	// 7. JSON is never parsed cut, so JSON over its cap is not kept; its
 	// status and headers still decide the outcome (a 401, a rate limit).
 	case op.json && len(raw) > limit:
@@ -485,6 +490,23 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	case op.json && ok && len(raw) == 0 && op.List == nil:
 	// 3–6. A 2xx JSON body is redacted value by value, parsed from the
 	// redacted bytes, filtered and projected.
+	case op.WorkflowYAML && ok:
+		clean, hits, transformCode := workflowBody(raw, red)
+		out.Redactions = append(out.Redactions, hits...)
+		code = transformCode
+		if code == "" {
+			sh := g.shape(r, a, clean, resp.Header)
+			code, out.Body = sh.code, sh.body
+		}
+	case op.GitHubMetadata && ok:
+		clean, hits, transformCode := metadataBody(raw, red, op)
+		out.Redactions = append(out.Redactions, hits...)
+		code = transformCode
+		if code == "" {
+			sh := g.shape(r, a, clean, resp.Header)
+			code, out.Body, out.Population = sh.code, sh.body, sh.pop
+			p.kept, p.next, p.done = sh.pop != nil, sh.next, sh.done
+		}
 	case op.json && ok:
 		redacted, hits, err := red.RedactJSON(raw)
 		if err != nil {
@@ -503,6 +525,15 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	// body that is JSON is first redacted value by value, as a 2xx body
 	// is, so the same body reveals no more as an error.
 	default:
+		if op.WorkflowYAML || op.GitHubMetadata {
+			// Error responses never retain an encoded contents body.
+			if op.WorkflowYAML {
+				out.Body = []byte(`{"error":"workflow read did not succeed"}`)
+			} else {
+				out.Body = []byte(`{"error":"metadata read did not succeed"}`)
+			}
+			break
+		}
 		if op.json {
 			redacted, hits, err := red.RedactJSON(raw)
 			if err != nil {
@@ -526,6 +557,9 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
 		res.end("unavailable:"+code, codeDetail(code, limit))
+		if (code == codeTooLarge && (op.WorkflowYAML || op.GitHubMetadata)) || code == codeWorkflowLimit || code == codeMetadataLimit {
+			res.Reason = "limit_reached"
+		}
 	}
 	return p, rt
 }
@@ -594,14 +628,14 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 		res.end("unavailable:server_error", res.Detail)
 		return &retry{provider: p, after: retryAfter, code: "server_error", detail: fmt.Sprintf("%s answered %d", sourceName(p), s)}
 	}
-	if p == "github" && (s == 403 || s == 429) && h.Get("X-RateLimit-Remaining") == "0" && !hasRetryAfter {
+	if a.prov.primaryExhausted != nil && a.prov.primaryExhausted(s, h) && !hasRetryAfter {
 		until := resetTime(h)
-		detail := "GitHub's rate limit for this token is used up"
+		detail := sourceName(p) + "'s rate limit for this token is used up"
 		g.stopProvider(p, detail, until)
 		res.Reason, res.Detail, res.Until = "limit_reached", detail, until
 		return nil
 	}
-	if s == 429 || s == 403 && (hasRetryAfter || p == "google" && googleRateLimited(out.Body)) {
+	if s == 429 || s == 403 && (hasRetryAfter || a.prov.rateLimited != nil && a.prov.rateLimited(out.Body)) {
 		res.Reason = "limit_reached"
 		return &retry{provider: p, after: retryAfter, rateLimit: true, detail: fmt.Sprintf("%s's rate limit", sourceName(p))}
 	}

@@ -136,6 +136,23 @@ func (r *Redactor) WithLiteral(name, value string) *Redactor {
 	return &Redactor{rules: append([]redactRule{rule}, r.rules...)}
 }
 
+// WithWorkflowReferences preserves only whole built-in GitHub token references
+// under secret-shaped keys. They name runtime credentials, not literal values.
+// Other detectors, credential literals and extra rules remain active.
+// docs/spec/github-collector.md, "Supported workflow syntax".
+func (r *Redactor) WithWorkflowReferences() *Redactor {
+	reference := `\$\{\{[ \t]{0,32}(?:github\.token|secrets\.GITHUB_TOKEN)[ \t]{0,32}\}\}`
+	keep := regexp.MustCompile(`^(?:(?i:["']?(yes|no|true|false|none|null|off|on|0|1|-|\*|x|required|optional|prompt|ask)["']?)|` + reference + `[ \t]{0,32}|"` + reference + `"[ \t]{0,32}|'` + reference + `'[ \t]{0,32})$`)
+	rules := append([]redactRule(nil), r.rules...)
+	for i := range rules {
+		if rules[i].name == "kv-secret" && rules[i].group == 2 {
+			rules[i].re = regexp.MustCompile(`(?i)\b(` + secretKey + `)\s*[=:]\s*("\$\{\{[^\r\n]*|'\$\{\{[^\r\n]*|\$\{\{[^\r\n]*|"[^"\n]*"|'[^'\n]*'|[^\s,;]+)`)
+			rules[i].keepIf = keep
+		}
+	}
+	return &Redactor{rules: rules}
+}
+
 // Marker is the text that replaces a redacted span. It is never empty, so a
 // reader can always tell that something was there (docs/spec/host-collector.md §4.2).
 func Marker(rule string, n int) string {

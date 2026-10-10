@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"regexp/syntax"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -433,7 +435,7 @@ func (v *validator) people() {
 			what  string
 		}{
 			{"workspace", p.Workspace, isAddress, "an address; write it as name@example.com"},
-			{"github", p.GitHub, loginRe.MatchString, "a GitHub login (letters, digits and single hyphens, up to 39)"},
+			{"github", p.GitHub, isPeopleGitHubLogin, "a GitHub login (letters, digits and single hyphens, up to 39), optionally followed by [bot] for an App account"},
 		} {
 			v.identifiers(key, handle, id.field, id.vals, id.ok, id.what, byIdent)
 		}
@@ -446,6 +448,12 @@ func (v *validator) people() {
 		v.usedBy(key, handle, p)
 		v.date(key+".left", p.Left)
 	}
+}
+
+// App bot identities are people context only; this does not widen any locator
+// or gate parameter (docs/spec/engagement.md, "People").
+func isPeopleGitHubLogin(login string) bool {
+	return loginRe.MatchString(strings.TrimSuffix(login, "[bot]"))
 }
 
 // personKind checks a kind, with the message an operator pasting the recon
@@ -634,6 +642,11 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	only("first_party", a.FirstParty != nil, KindDomain, KindURL, KindHost)
 	only("deploys_to", a.DeploysTo != "", KindRepo)
 	only("ci", a.CI != "", KindRepo)
+	only("public", a.Public != nil, KindRepo)
+	only("checkout", a.Checkout != "", KindRepo)
+	if a.Checkout != "" && !filepath.IsAbs(a.Checkout) {
+		v.fail(key+".checkout", "must be an absolute mirror path")
+	}
 
 	if r.Kind == KindHost {
 		v.hostSettings(key, r, a)
@@ -965,6 +978,19 @@ func (v *validator) intent() {
 				// Nothing could ever match it, and a reader would believe
 				// one instance was accepted.
 				v.fail(key+".subject", "%s is about the asset as a whole, not one instance of it; remove subject", a.ID)
+			}
+		}
+		if kind := v.opts.FindingSubject(a.ID); a.Subject != "" {
+			switch kind {
+			case "workflow":
+				name, ok := strings.CutPrefix(a.Subject, ".github/workflows/")
+				if !ok || !gate.ValidWorkflowFile(name) {
+					v.fail(key+".subject", "must name an immediate .github/workflows/*.yml or *.yaml file")
+				}
+			case "branch":
+				if !gate.ValidBranchName(a.Subject) {
+					v.fail(key+".subject", "must name a supported case-sensitive branch")
+				}
 			}
 		}
 		v.acceptedAsset(key+".asset", a.Asset)

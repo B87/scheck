@@ -258,7 +258,7 @@ func TestErrorsAreClassified(t *testing.T) {
 // Reach says how far the transport got, whatever the collection came to:
 // SSH refused before any lookup leaves nothing resolved and nothing
 // dialled, so the report claims no contact; a fixture stands for a host
-// reached (docs/spec/engagement.md, "What left this machine").
+// reached (docs/spec/report.md, "What left this machine").
 func TestReachIsWhatTheTransportDid(t *testing.T) {
 	var reach Reach
 	_, err := Collect(context.Background(), Options{Host: "srv.example.invalid", Port: 22, User: "deploy",

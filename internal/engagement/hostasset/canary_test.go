@@ -19,7 +19,7 @@ import (
 
 // A login shell that never answers the canary is a host that could not be
 // read (exit 2), never a refusal (exit 3): nothing was shown to be altered
-// (docs/spec/engagement.md, "Exit codes").
+// (docs/spec/scope.md, "Exit codes").
 func TestASilentCanaryIsATransportFailure(t *testing.T) {
 	_, hostPriv, _ := ed25519.GenerateKey(rand.Reader)
 	hostSigner, _ := xssh.NewSignerFromKey(hostPriv)

@@ -94,7 +94,7 @@ func TestAliasesGiveTheSameReportAndTrace(t *testing.T) {
 }
 
 // Each 0.0.1 flag maps to its run equivalent, or exits 3 naming the
-// replacement (docs/spec/engagement.md, "The aliases").
+// replacement (docs/spec/host-collector.md, "The aliases").
 func TestAliasFlagsMapOrExitThree(t *testing.T) {
 	hermetic(t)
 	var got hostasset.Options
@@ -191,7 +191,7 @@ func TestIncludeEvidenceReachesTheEnvelope(t *testing.T) {
 }
 
 // The aliases refuse a 0.0.1 configuration file as run does: no code path
-// reads a setting from one (docs/spec/engagement.md, "No configuration file").
+// reads a setting from one (docs/spec/host-collector.md, "No configuration file").
 func TestAliasesRefuseALegacyConfigFile(t *testing.T) {
 	hermetic(t)
 	calls := collectFrom(t, recorded(t, "ubuntu"))

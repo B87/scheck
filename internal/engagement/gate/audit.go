@@ -9,6 +9,7 @@ import (
 // result line after, keyed by request_id; a refusal has one line; every DNS
 // query has its own. Every value is redacted or typed before it is set.
 type Entry struct {
+	Counts    map[string]int    `json:"counts,omitempty"`
 	Vantage   string            `json:"vantage"`
 	Time      time.Time         `json:"time"`
 	Event     string            `json:"event"` // send | result | refused | reused | dns | dns_answer
@@ -70,7 +71,7 @@ func (g *Gate) record(e Entry) error {
 	e.URL, e.Detail, e.DestIP = red(e.URL), red(e.Detail), red(e.DestIP)
 	// Answers are not: each is built from parts already redacted one by
 	// one (auditAnswer), and a second pass would redact their markers again.
-	if e.Event == "result" || e.Event == "dns_answer" {
+	if e.Event == "result" || e.Event == "dns_answer" || e.Event == "mirror" {
 		g.observe(e.RequestID, e.Time, g.vantage)
 	}
 	err := g.audit.Record(e)

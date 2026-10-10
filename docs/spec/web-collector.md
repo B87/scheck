@@ -10,7 +10,7 @@ describes the target, not the build.
 What the gate admits, sends and keeps is [scope.md](scope.md) ("The scope gate"); base
 severity anchors and context adjustments are [engagement.md](engagement.md) ("Severity
 in context"); the report's wording when an intake answer is missing is
-[engagement.md](engagement.md) ("Coverage", "A missing intake answer"). This file holds
+[report.md](report.md) ("Coverage", "A missing intake answer"). This file holds
 the rules and the data they read.
 
 ## Reads
@@ -456,13 +456,38 @@ data in the tree.
   ("Reference #"), Imperva ("Incapsula incident ID"), Sucuri, AWS WAF and Vercel's
   checkpoint. Every rule over that response abstains, and the exit code does not change
   ([scope.md](scope.md#connections)). Its JSON detail is `{vendor, status, url}`; its
-  text is in [engagement.md](engagement.md#coverage) ("Reason wording"). The report
+  text is in [report.md](report.md#coverage) ("Reason wording"). The report
   never praises the protection and never advises turning it off.
+
+## Reachability and vantage
+
+Whether something is reachable depends on where the request came from. `scheck run
+--vantage internet|vpn|lan` records the run's vantage in the run, not in the file. A
+`not_exposed` rule fires only when the run's vantage is `internet` and the declared
+audience is not `internet`; every other combination, and an unknown vantage, abstains.
+`/admin` declared VPN-only and reached from the VPN is not a contradiction; from the
+`internet` vantage, a connection refusal or timeout disproves the contradiction
+with an outage caveat, rather than making that restricted read incomplete ([web-collector.md](web-collector.md#headers-and-cookies),
+`web.restricted_reachable`). The vantage is the operator's word, declared separately
+on each invocation; omission
+means unknown, including on resume. `internet` means outside every permitted source,
+including office allowlists and VPN. scheck does not detect or verify it, and asks no
+external service for an egress address. It is printed in the report
+header and recorded on each piece of evidence like the principal, DNS evidence
+included; a resume with a different vantage reads those names and entry points again.
+A run whose file lists `intent.not_exposed` and that has no `--vantage` warns at its
+start that those URLs will not be checked for reachability; it does not refuse to run.
 
 ## Subjects
 
+Engagement selects the names, exclusions, root ownership, canonical URLs and
+resolver-trust evidence supplied in `web.ScopeView`. `web.InputFrom` normalizes
+mail declarations and assembles rule input, including mail policies and site
+evidence from other roots. It interprets no engagement-file types and performs no
+reads; engagement still decides which assets and names are in scope.
+
 Each finding is one record per `{id, asset, subject}`
-([engagement.md](engagement.md#findings)). A key is lowercase, with punycode A-labels,
+([report.md](report.md#findings)). A key is lowercase, with punycode A-labels,
 no trailing dot, default ports dropped, no query or fragment and no spaces; a key that
 `redact_extra` matches renders as its marker.
 
@@ -488,9 +513,9 @@ belongs to the longest declared path containing it. Without a declared URL owner
 both belong to the name's id; an email
 finding to the domain root the mail domain falls under. Acceptances and assessments go
 by that asset, and an undeclared name's findings print the name as their asset and its
-canonical id as the paste's `asset` ([engagement.md](engagement.md#findings), "The
+canonical id as the paste's `asset` ([report.md](report.md#findings), "The
 paste"). An acceptance covers its own asset's instances only, never those of a name
-under it ([engagement.md](engagement.md#findings), "Acceptances"). The DNS finding
+under it ([report.md](report.md#findings), "Acceptances"). The DNS finding
 definitions, including both takeover findings, declare `Subject: "dns_name"`, so an
 acceptance must name its subject; record findings still use their `dns_record` key.
 All email definitions likewise require their tabled subject kind in an acceptance.
@@ -498,6 +523,25 @@ Email findings remain on the most specific domain root holding the mail domain, 
 when that mail domain is also a declared asset. A missing selector has a coverage-only
 key `<domain>/no-selector`; sender-comparison gaps use `<domain>/SPF` or
 `<domain>/unmapped`, never an invented include finding.
+
+On an asset a network collector judged (a domain root and the names under it), acceptance is per instance and by the finding's asset
+([web-collector.md](web-collector.md#subjects)): the entry in effect for an instance is
+the last one for its asset and id that names its subject or none, and an entry that
+later entries displace on every instance it touches is `not_applied`, with that reason.
+An entry covers its own asset's instances only. When its asset holds no instance of its
+id (with its subject, when it names one) and a name under it, a `domain:` asset of its
+own, holds one that no unexpired entry of its own accepts, the outcome is `rule_not_decided` with
+"an instance is open under it, on *name*, which is its own asset: accept it there
+(asset: domain:*name*)", never `not_matched` or `subject_not_found`. A `domain:` name
+under a root the collector read was read with it, declared or not, so an entry that
+names a subject on a name now gone is `subject_not_found` only when the applicable
+population on the owning asset and collector is complete; an unrelated asset's
+incomplete collection does not change that population. Incomplete or unknown evidence
+there gives `rule_not_decided`. For a complete population the message is "nothing
+with that subject points anywhere on this run: if the record was removed, remove the entry", never "the
+asset was not read on this run". When that subject was read on a name under the entry's
+asset, it is `subject_not_found` with "that subject was read on *name*, which is its own
+asset (asset: domain:*name*)".
 
 ## Takeover fingerprints
 
@@ -598,7 +642,7 @@ switched on, worded both ways; a TXT record over 255 characters split into strin
 ## Not assessed
 
 Each is printed with its reason, under the coverage row it belongs to
-([engagement.md](engagement.md#coverage)):
+([report.md](report.md#coverage)):
 
 - names never in a public certificate, or covered by a wildcard certificate;
 - dangling NS delegations; a SERVFAIL is hinted "may be a delegation to a DNS zone you

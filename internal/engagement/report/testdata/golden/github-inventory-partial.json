@@ -1,0 +1,399 @@
+{
+  "acceptances": [],
+  "assessments": [],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "The run deadline ended the member inventory before the next page could be read.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "reason": "limit_reached",
+      "root": true,
+      "status": "incomplete",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "github.principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "github.organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "github.membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "github.members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "github.owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "unavailable:permission_denied",
+          "request": "github.outside_collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "github.invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "github.repositories"
+        },
+        {
+          "at": "2026-10-09T12:01:00Z",
+          "decision": "refused:deadline",
+          "request": "github.members-next-page"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        },
+        {
+          "detail": "engineering",
+          "reason": "limit_reached"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        },
+        {
+          "detail": "engineering",
+          "reason": "limit_reached"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        },
+        {
+          "detail": "engineering",
+          "reason": "limit_reached"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 8,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub inventory review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 2,
+    "reasons": [
+      {
+        "asset": "saas:github:example-org",
+        "code": 2,
+        "why": "engineering: limit_reached: The run deadline ended the member inventory before the next page could be read."
+      }
+    ],
+    "thresholds": {
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [],
+  "incomplete": [
+    {
+      "asset": "saas:github:example-org",
+      "asset_name": "engineering",
+      "detail": "The run deadline ended the member inventory before the next page could be read.",
+      "reason": "limit_reached"
+    }
+  ],
+  "notes": [
+    {
+      "detail": "members: at least 100; owners: observed 2; outside collaborators: not read; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "GitHub assessment credential: observed OAuth scopes permit operations beyond reads (repo). scheck sent only read requests. Prefer an organization-approved fine-grained token with the read permissions this assessment needs; revoke a dedicated assessment token when finished. Effective write access to this organization was not tested.",
+      "kind": "github_credential_warning",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "Member list stopped before all pages were read; at least 100 members were observed.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "Outside collaborators were not read. Ask an organization owner to authorize the token with organization Members read permission, then resume the run.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 10,
+      "partial": 0,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [],
+    "more": 0,
+    "rules": {
+      "decided": 0,
+      "selected": 0,
+      "without_evidence": 0
+    }
+  }
+}

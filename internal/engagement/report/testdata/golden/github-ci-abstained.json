@@ -1,0 +1,709 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "saas:github:example-org",
+      "complete": false,
+      "id": "github.organization_workflow_default_write",
+      "instances": 0,
+      "reads": [
+        "request:organization"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": false,
+      "id": "github.default_branch_unprotected",
+      "instances": 0,
+      "outcomes": [
+        {
+          "detail": {
+            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": "Release/v1",
+            "kind": "branch",
+            "label": "Release/v1"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository",
+        "request:keys"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": false,
+      "id": "github.mutable_action_reference",
+      "instances": 0,
+      "outcomes": [
+        {
+          "detail": {
+            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": ".github/workflows/release.yml",
+            "kind": "workflow",
+            "label": ".github/workflows/release.yml"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository",
+        "request:keys"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": false,
+      "id": "github.mutable_action_with_write_token",
+      "instances": 0,
+      "outcomes": [
+        {
+          "detail": {
+            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": ".github/workflows/release.yml",
+            "kind": "workflow",
+            "label": ".github/workflows/release.yml"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository",
+        "request:keys"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": false,
+      "id": "github.pr_target_unsafe_checkout",
+      "instances": 0,
+      "outcomes": [
+        {
+          "detail": {
+            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": ".github/workflows/release.yml",
+            "kind": "workflow",
+            "label": ".github/workflows/release.yml"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository",
+        "request:keys"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": false,
+      "id": "github.repository_workflow_default_write",
+      "instances": 0,
+      "outcomes": [
+        {
+          "detail": {
+            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": "example-org/production",
+            "kind": "repository",
+            "label": "example-org/production"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository",
+        "request:keys"
+      ],
+      "reason": "unavailable:github_evidence",
+      "status": "not_assessed"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub identity and repository-access evidence collected.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "outside"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "repositories"
+        },
+        {
+          "at": "2026-10-09T12:00:08Z",
+          "decision": "sent",
+          "request": "owners-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:09Z",
+          "decision": "sent",
+          "request": "members-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:10Z",
+          "decision": "sent",
+          "request": "repository"
+        },
+        {
+          "at": "2026-10-09T12:00:11Z",
+          "decision": "sent",
+          "request": "collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:12Z",
+          "decision": "sent",
+          "request": "keys"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "github",
+      "id": "repo:github:example-org/production",
+      "kind": "repo",
+      "name": "production",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": false,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "assets_covered": [
+        "saas:github:example-org"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "example-org/production; Release/v1; .github/workflows/release.yml",
+          "reason": "unavailable:github_evidence"
+        },
+        {
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "workflow token defaults",
+          "reasons": [
+            {
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.organization_workflow_default_write",
+            "github.repository_workflow_default_write"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "workflow token defaults",
+          "reasons": [
+            {
+              "detail": "example-org/production",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.organization_workflow_default_write",
+            "github.repository_workflow_default_write"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "default-branch protection presence",
+          "reasons": [
+            {
+              "detail": "Release/v1",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.default_branch_unprotected"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "workflow dependency references",
+          "reasons": [
+            {
+              "detail": ".github/workflows/release.yml",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.mutable_action_reference"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "mutable dependencies with write permission",
+          "reasons": [
+            {
+              "detail": ".github/workflows/release.yml",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.mutable_action_with_write_token"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR-controlled execution requests",
+          "reasons": [
+            {
+              "detail": ".github/workflows/release.yml",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.pr_target_unsafe_checkout"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 13,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub CI configuration review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 0,
+    "reasons": [],
+    "thresholds": {
+      "repo:github:example-org/production": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "GitHub denied the workflow contents and branch-rule reads. Ask the repository owner to authorize Contents read and Metadata read for the intended repository, then resume.",
+      "kind": "github_ci",
+      "source": "repo:github:example-org/production"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 10,
+      "partial": 0,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [],
+    "more": 0,
+    "rules": {
+      "decided": 0,
+      "selected": 6,
+      "without_evidence": 6
+    }
+  }
+}

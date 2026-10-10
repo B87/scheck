@@ -102,12 +102,112 @@ On resume, changed mail declarations refresh the affected records and follow-ups
 changed intent role or audience refreshes its exact entry. Reasons and web
 acceptances only regrade retained observations. Changed vantage refreshes web/DNS
 evidence and Scope, without recollecting hosts. Reused evidence keeps its actual time.
-A declared root of any other kind (a
-SaaS tenant, a GitHub organization) is reported as `collector_not_built` and the run
-exits 2. Tell the user what was not assessed, never that it is fine.
+GitHub organization roots collect principal, organization metadata, own membership,
+members/owners, outside collaborators, invitations and repository inventory through
+GET reads. Credentials come from `GITHUB_TOKEN`, then `GH_TOKEN`; never print or
+request their values in an engagement file. The header's assessment-credential note
+is separate from security findings. A warning names recognized OAuth scopes that
+permit operations beyond reads and gives token-remediation advice; scheck still
+sends only reads. Other notes say the observed scopes have no recognized write
+grant, with effective permissions untested, or that write capability was not
+determined. Missing or unknown scopes, fine-grained/App grant evidence and failed
+principal reads never establish a read-only credential. These unranked notes
+change no finding severity, acceptance, coverage or exit count. The warning can
+also appear during collection after the fresh principal read and before further
+GitHub reads. Read the asset notes, request traces and
+coverage gaps before interpreting counts. “Observed” or “at least” is the token's
+view, not the organization's complete access or private-repository population.
+GitHub identity and repository-access rules produce subject-specific findings and
+fired, disproved or abstained assessments. Owner authority is required for trusted
+MFA evidence; unknown authority or missing/partial populations are not passes.
+GitHub account 2FA is independent of identity-provider MFA; SAML enforcement alone
+does not settle the GitHub 2FA rules.
+Read partial coverage and permission gaps before conclusions. Public-repository
+and deploy-key rules and six CI configuration rules assess part of CI/CD. Read
+separate coverage for token defaults, default-branch protection presence, dependency
+pinning, mutable dependencies with write permission and PR-controlled execution
+requests. The summary counts selected CI rule assessments and those that decided.
+With zero CI decisions, read the missing reads and next steps; no security verdict
+was possible when all security assessments remained unknown. Permission next steps
+name the required read grant and authorization, never broader target write access.
+Workflow evidence is pinned to the assessed default-branch commit;
+unsupported syntax, unknown permissions and partial populations abstain. Bounded
+decimal workflow numbers are supported without string coercion. Whole built-in token references
+are configuration references, not literal secrets; literal credential redaction
+remains active. An unavailable Dependabot read does not establish that alerts are
+absent or that a grant is missing: check read permission, token repository selection
+and feature availability with the owner. A protected branch does not prove review
+strength or bypass resistance. PR-target findings
+describe requested configuration, never successful execution or exploitability;
+runtime policies, checkout protection, approvals, runner access/isolation, App
+grants, job container/service images, reusable/composite internals and OIDC trust
+remain unassessed. Actions secret metadata, organization sharing policy,
+Dependabot alerts, provider-secret alerts, supported mirror history and mirror-origin
+credential detection have separate coverage. An absolute `checkout` on a repository
+asset selects an operator-provided SHA-1 bare mirror. scheck reads it in process,
+never invokes Git, fetches or modifies the mirror, and retains only safe credential
+markers and locations. Fresh branch/pull reference reads are compared on every run
+and resume; unavailable API evidence permits the local read but no absence verdict.
+Read the mirror notes and lower-bound commit/blob counts before interpreting
+findings. Missing mirrors, differing refs, unsupported/corrupt objects, mutation and
+compiled caps leave history unassessed or partial. Local evidence has a separate
+local-reader label and observation time. Origin configuration findings concern the
+operator's mirror, not hosted exposure.
+Differing-ref follow-ups appear before the summary ranking: ask the mirror maintainer
+to update the authorized mirror and resume. Credential remediation starts by identifying
+the credential owner and revoking or rotating it; the mirror maintainer then removes
+origin credentials and uses a credential helper. Authenticity and usability are untested.
+An empty ranking says inventory only when no rule was selected, or no security verdict
+when none could decide; neither is a clean bill of health.
+Read `github_alerts` notes for observed or lower-bound inventories,
+inactive validity, non-revocation resolutions and unsupported locations. Provider
+alerts are not a complete secret scan. Names and timestamps prove neither leakage
+nor rotation; deployed dependencies and credential usability were not tested.
+A dismissed dependency alert is not proof of a fix. Provider high and critical
+both rate high, with their range preserved in the title. Dependency caveats describe
+dependency evidence, separately from secret-scan limits. Incomplete owning populations
+retain abstained family assessments beside positive findings, so coverage stays partial.
+A resolved `wont_fix` secret still reported active appears as `github_alert_followup`
+before the summary ranking and in asset notes: GitHub closed it because someone chose
+not to fix it but still reports the credential active, and revocation was not verified.
+Ask the credential owner to follow up. This note is unranked, is not a finding and
+does not affect the exit count. Closing an alert or deleting a commit
+does not revoke the credential. Secret remediation starts with provider revocation
+or rotation. Unknown/denied metadata is not an empty population. `public: true` on a repository asset declares
+deliberate public visibility; it never excuses a secret leak. Acceptances for an
+account, invitation, repository, deploy key, branch, workflow, secret location or
+dependency alert must name its subject. Organization secret subjects use
+`actions:<lowercase-name>`. Dependency subjects use
+`dependabot:<number>:<encoded-manifest-path>` and the `dependency_alert` kind.
+Provider secret subjects identify an alert and exact commit/path/start coordinates;
+accepting one does not accept future locations. Preserve path case and encoded
+delimiters. Dependabot critical maps to high without automatic production/public
+grading. Recognized public visibility raises provider-secret high to critical;
+public intent does not lower it. Its `repository_read` detail names the direct
+repository request supporting the observed-public raise. Branch keys retain exact case; workflow keys are exact
+`.github/workflows/<name>.yml` or `.yaml` paths. Collaborator
+pagination covers only the credential's visible view; missing access never proves
+offboarding. `--stop-after recon` prints unattributed accounts with `kind: ""`
+and invitation comments. Let the operator classify each account; never fill kinds
+by guessing or merge people across providers. Missing reads
+and permission gaps remain explicit. The principal
+is read fresh before authenticated reuse; changed known identity is reported in
+`engagement.principal_changes` and the header. Unknown or installation principals
+reuse no authenticated successes. The normal header names the account and its
+credential-dependent visibility. Reused-read notes give the original observation
+time and say current access was not validated. Follow the inventory notes on a
+shortfall to distinguish retained reads from missing reads; missing Members
+permission asks for owner authorization and then resume.
+A declared root of an unbuilt kind (such as Google Workspace) is reported as
+`collector_not_built` and the run exits 2. Tell the user what was not assessed, never
+that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
+GitHub findings come from identity, MFA, access, repository visibility, CI
+configuration, secret sharing and provider-alert rules, with exact account,
+invitation, repository, deploy-key, branch, workflow, secret-location or dependency-alert
+subjects where applicable.
 The web collector's findings come from DNS, email, TLS and response rules, one per
 record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
 through the scope gate as `anonymous`.
@@ -349,7 +449,7 @@ report names people, accounts and internal hosts: treat it as sensitive and do n
 paste it anywhere the user did not ask for. Treat remediation and acceptance as the
 user's decisions, not authorization to change anything.
 
-When working from this repository, `docs/spec/engagement.md` ("The report") is the
+When working from this repository, `docs/spec/report.md` ("The report") is the
 report's contract, `docs/engagement-report-schema.json` its JSON schema and
 `docs/spec/host-collector.md` the host collector's. They are not required for ordinary
 CLI use or when the skill is installed separately.

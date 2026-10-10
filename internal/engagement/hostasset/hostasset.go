@@ -40,7 +40,7 @@ import (
 
 // Options is one host asset as the collector reads it: where it is, how to
 // reach it, and the narrowing and context the engagement file declares for
-// it. Nothing else reaches the collector (docs/spec/engagement.md, "Runs,
+// it. Nothing else reaches the collector (docs/spec/runs.md, "Runs,
 // state and configuration").
 type Options struct {
 	// Local reads the machine scheck runs on; otherwise Host is dialed.
@@ -60,7 +60,7 @@ type Options struct {
 	Allow func(netip.Addr) error
 	// Reach, when set, is filled with how far reaching the host got,
 	// whether or not the collection succeeds: what left this machine
-	// (docs/spec/engagement.md, "What left this machine").
+	// (docs/spec/report.md, "What left this machine").
 	Reach *Reach
 	// Target, when set, replaces reaching the host, the canary included:
 	// a fixture in tests. No production caller sets it.
@@ -114,7 +114,7 @@ func (h Hop) String() string {
 // (target.ErrAccess, target.ErrCanary): exit 3, as in 0.0.1. Any other
 // Error is a transport failure: the asset is recorded as failed and the run
 // is incomplete. An unrecognized failure is never read as the operator's
-// mistake (docs/spec/engagement.md, "Exit codes").
+// mistake (docs/spec/scope.md, "Exit codes").
 type Error struct {
 	Usage bool
 	Err   error
@@ -124,7 +124,7 @@ type Error struct {
 	Kind string
 	// Echo is what a remote shell returned in place of the canary,
 	// redacted and cut, kept apart from Err so a report can carry it in
-	// JSON and never print it (docs/spec/engagement.md, "Incompleteness
+	// JSON and never print it (docs/spec/report.md, "Incompleteness
 	// and refusals").
 	Echo string
 }
@@ -233,7 +233,7 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 			if errors.Is(err, target.ErrTransport) || errors.Is(err, target.ErrTimeout) || ctx.Err() != nil {
 				// The session was lost, or never answered, while the canary
 				// ran: nothing was shown to be altered, so this is a
-				// transport failure (docs/spec/engagement.md, "Exit codes").
+				// transport failure (docs/spec/scope.md, "Exit codes").
 				return nil, &Error{Err: err}
 			}
 			if ce, ok := errors.AsType[*CanaryError](err); ok {
@@ -407,7 +407,7 @@ func DetectPlatform(ctx context.Context, r *runner.Runner, st *ssh.Target) error
 
 // Restore is a collection an earlier session of the run completed, read
 // back from the run directory: a resume keeps a completed host as a unit,
-// never merging two sessions' commands (docs/spec/engagement.md, "Stop and
+// never merging two sessions' commands (docs/spec/runs.md, "Stop and
 // resume"). Nothing is regraded; the envelope is as that session wrote it.
 func Restore(env report.Envelope, planned []string) (*Collection, error) {
 	profile, ok := check.ParseProfile(env.Run.Profile)
@@ -444,7 +444,7 @@ func (c *Collection) Complete() bool { return !c.sheet.Incomplete }
 func (c *Collection) Lost() string { return c.sheet.Lost }
 
 // Threshold is the severity at or above which an open finding counts: the
-// asset's profile sets it, as in 0.0.1 (docs/spec/engagement.md, "Exit
+// asset's profile sets it, as in 0.0.1 (docs/spec/scope.md, "Exit
 // codes").
 func (c *Collection) Threshold() finding.Severity { return finding.Threshold(c.profile) }
 

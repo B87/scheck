@@ -1,0 +1,799 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.history_credential",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "detector": "kv-secret",
+            "line": 2,
+            "marker": "[REDACTED:kv-secret:31 bytes]",
+            "path": "config/Prod.env",
+            "repository_read": "repository"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret",
+            "kind": "secret_location",
+            "label": "config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "reads": [
+        "request:mirror-history",
+        "request:heads",
+        "request:pull"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.remote_credential",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "markers": "[REDACTED:url-credentials:31 bytes]"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "remote:origin",
+            "kind": "secret_location",
+            "label": "mirror origin configuration"
+          }
+        }
+      ],
+      "reads": [
+        "request:mirror-history"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub identity and repository-access evidence collected.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "outside"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "repositories"
+        },
+        {
+          "at": "2026-10-09T12:00:08Z",
+          "decision": "sent",
+          "request": "owners-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:09Z",
+          "decision": "sent",
+          "request": "members-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:10Z",
+          "decision": "sent",
+          "request": "repository"
+        },
+        {
+          "at": "2026-10-09T12:00:11Z",
+          "decision": "sent",
+          "request": "collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:12Z",
+          "decision": "sent",
+          "request": "keys"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "github",
+      "id": "repo:github:example-org/production",
+      "kind": "repo",
+      "name": "production",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": false,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed; Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "GitHub security controls",
+          "reasons": [
+            {
+              "detail": "engineering: inventory only; no GitHub security control was assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "supported mirror history credential detection"
+          ],
+          "mark": "assessed",
+          "name": "supported mirror history credential detection",
+          "reasons": [],
+          "rules": [
+            "github.history_credential"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "mirror origin credential detection"
+          ],
+          "mark": "assessed",
+          "name": "mirror origin credential detection",
+          "reasons": [],
+          "rules": [
+            "github.remote_credential"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "engineering: inventory only; no GitHub security control was assessed; PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "GitHub security controls",
+          "reasons": [
+            {
+              "detail": "engineering: inventory only; no GitHub security control was assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 13,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub mirror history review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "2 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "repo:github:example-org/production": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.history_credential",
+        "needs_people": false,
+        "reason": "",
+        "subject": "history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "attribute:public_repository",
+          "source": {
+            "excerpt": "Observed repository visibility: public",
+            "observation": "repository"
+          }
+        }
+      ],
+      "area": "secrets",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "secrets",
+      "derived": [
+        {
+          "name": "commit",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "name": "detector",
+          "value": "kv-secret"
+        },
+        {
+          "name": "line",
+          "value": 2
+        },
+        {
+          "name": "marker",
+          "value": "[REDACTED:kv-secret:31 bytes]"
+        },
+        {
+          "name": "path",
+          "value": "config/Prod.env"
+        },
+        {
+          "name": "repository_read",
+          "value": "repository"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "config/Prod.env:2 at commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: [REDACTED:kv-secret:31 bytes]. Observed repository visibility: public.",
+          "kind": "observed",
+          "observation": "mirror-history",
+          "principal": "local mirror reader",
+          "request": "mirror-history"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Advertised reference metadata was compared with the local mirror; credential matches came from local blob reads",
+          "kind": "observed",
+          "observation": "heads",
+          "principal": "alice (user ID 41)",
+          "request": "heads"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Advertised reference metadata was compared with the local mirror; credential matches came from local blob reads",
+          "kind": "observed",
+          "observation": "pull",
+          "principal": "alice (user ID 41)",
+          "request": "pull"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.history_credential",
+      "impact": "A recognized credential pattern exists in this commit. Authenticity and current usability were not tested.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.history_credential",
+        "subject": "history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret"
+      },
+      "not_checked": [
+        "Credential usability and revocation were not tested",
+        "Unadvertised/deleted refs, objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads and detector misses remain unassessed"
+      ],
+      "remediation": {
+        "summary": "Identify the credential owner and treat the credential as exposed. Revoke or rotate it with its provider, review its use, then remove it from repository history and other copies."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:mirror-history",
+          "request:heads",
+          "request:pull"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret",
+        "kind": "secret_location",
+        "label": "config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "title": "Credential pattern found in repository history",
+      "why_here": [
+        "This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.remote_credential",
+        "needs_people": false,
+        "reason": "",
+        "subject": "remote:origin"
+      },
+      "adjustments": [],
+      "area": "secrets",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "secrets",
+      "derived": [
+        {
+          "name": "markers",
+          "value": "[REDACTED:url-credentials:31 bytes]"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Recognized credential-bearing mirror origin userinfo: [REDACTED:url-credentials:31 bytes]. No remote URL retained.",
+          "kind": "observed",
+          "observation": "mirror-history",
+          "principal": "local mirror reader",
+          "request": "mirror-history"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.remote_credential",
+      "impact": "The operator's local mirror configuration holds credential-bearing userinfo or a recognized credential pattern. This does not establish hosted repository exposure.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.remote_credential",
+        "subject": "remote:origin"
+      },
+      "not_checked": [
+        "Credential usability and revocation were not tested",
+        "Unadvertised/deleted refs, objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads and detector misses remain unassessed"
+      ],
+      "remediation": {
+        "summary": "Ask the mirror maintainer to revoke or rotate the credential, then remove it from origin configuration and use the provider's credential helper."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:mirror-history"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "remote:origin",
+        "kind": "secret_location",
+        "label": "mirror origin configuration"
+      },
+      "title": "Credential found in mirror origin configuration",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read at the local observation time; advertised branch and pull refs read separately. Hidden/deleted history and detector misses remain unassessed.",
+      "kind": "github_inventory",
+      "source": "repo:github:example-org/production"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {
+      "kv-secret": 1,
+      "url-credentials": 1
+    },
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.history_credential"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.history_credential",
+            "subject": "history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:secrets"
+        ],
+        "severity": "critical",
+        "title": "Credential pattern found in repository history"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.remote_credential"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.remote_credential",
+            "subject": "remote:origin"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:medium",
+          "area:secrets"
+        ],
+        "severity": "medium",
+        "title": "Credential found in mirror origin configuration"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 2,
+      "selected": 2,
+      "without_evidence": 0
+    }
+  }
+}

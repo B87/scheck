@@ -173,7 +173,7 @@ diff on the target stays the exact allowlist of `spec/host-collector.md §1`.
 
 ### E2 — the engagement report, and one command
 
-**Delivers:** the coverage table by risk area (`spec/engagement.md`), with the five
+**Delivers:** the coverage table by risk area (`spec/report.md`), with the five
 marks defined there and reasons from its closed list, and per row the assets covered
 and excluded, the principal, the collection span, caps and sampling, declared facts
 not verified, and what the engagement's narrowing removed; the *outside scheck* rows;
@@ -195,7 +195,7 @@ later slice renders into the real report. Because the only real asset at this po
 a host, the schema is reviewed by the `security-consultant` and the `client` (report
 mode) against at least one non-host finding shape, a person, a token or an OAuth grant,
 before it is frozen. The content and wording were defined with the `security-consultant`
-and read by the `client` on 2026-10-07 (`spec/engagement.md`, "The report", "Severity in
+and read by the `client` on 2026-10-07 (`spec/report.md`, "The report"; `spec/engagement.md`, "Severity in
 context"): one finding record per instance keyed `{id, asset, subject}`, with `area` and
 `exposure_finding` required on every finding definition and observed evidence on every
 finding; host coverage marked from the rules that decided, never from the checks that
@@ -211,8 +211,7 @@ whose only root has no collector (`collector_not_built`, exit 2); the JSON valid
 against the schema as committed; target-derived text is control-character escaped;
 `scheck ssh user@host` and `scheck run --host user@host` produce the same report and
 the same command trace; a one-host run exits as the 0.0.1 command did for the same
-findings and failures, except a host that never answered (2, not 3, `spec/engagement.md`,
-"Exit codes"); `--format json --no-persist --include-evidence` still prints the
+findings and failures, except a host that never answered (2, not 3, `spec/scope.md`, "Outcomes"); `--format json --no-persist --include-evidence` still prints the
 host's facts with their captures; no code path reads a config file. Goldens also pin a
 lost session (exit 2, the checks after the loss *not run*), a refused host (exit 3), a
 Linux host whose Firewall and Network exposure rows are `no_rule`, and the apt, dnf and
@@ -386,7 +385,7 @@ Built in four steps, reviewed as E2 was:
      successes listed in `run.json` handed to the next session's gate, the report's
      `resumed` and `edited_by_hand` pinned by the `resumed` goldens, and "What left this
      machine" covering every session, "at least" when one ended before recording what
-     it sent (`spec/engagement.md`, "Stop and resume"). Decided 2026-10-08: a changed
+     it sent (`spec/runs.md`, "Stop and resume"). Decided 2026-10-08: a changed
      accepted risk on a host collects that host again, since nothing regrades a kept
      envelope, which adds only contact the file already authorizes. The report's changed
      principal goes to E5, the first collector that reads a principal, and reading again
@@ -547,7 +546,7 @@ adopted the recommended answers.
 **Delivers:**
 
 - A finding definition declares a subject kind (`finding.Def.Subject`, from the closed
-  list in `spec/engagement.md`, "Findings"), checked by the invariants test; an accepted
+  list in `spec/report.md`, "Findings"), checked by the invariants test; an accepted
   risk for such an id must name its subject, or validation exits 3 (`spec/engagement.md`,
   "Accepted risks"). No host finding declares one in 0.0.2: host acceptance by subject
   arrives with the listener slice.
@@ -607,8 +606,9 @@ branches, third-party actions pinned to a commit and their use in `pull_request_
 workflows, the names (never the values) of organization and repository secrets, deploy
 keys with write access, pending invitations, and Dependabot and secret-scanning alerts
 where the token can read them. A secret scan of repository history, read in-process from
-the operator's mirror checkout (`checkout`, decided in E4), redacted in every output. A token with more than read access
-is itself reported. People are matched by login only, over every login a handle lists
+the operator's mirror checkout (`checkout`, decided in E4), redacted in every output.
+Recognized assessment-token scopes beyond reads produce an unranked run warning,
+not a finding. People are matched by login only, over every login a handle lists
 (`spec/engagement.md`, "People"); owners against `access.admins`, too many owners,
 an owner nobody can name and a contractor or shared account that is one, as
 `spec/engagement.md` "Admins" defines them; the organization's 2FA requirement against
@@ -633,8 +633,214 @@ including a non-owner token on the two-factor rule; a seeded secret never appear
 output and its marker does; no non-`GET` request is ever made; a resume under another
 principal, told apart by the principal op, sends again every request the first one's
 successes would have answered (carried from E4 step 4a) and prints the changed principal
-in the report's header (`spec/engagement.md`, "Stop and resume", carried from E4 step
+in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
+
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–6 built with
+offline checks and consultant/client/adversarial reviews; step 6's history rules
+and permissions frozen on 2026-10-10):
+
+0. **Contract preparation.** Split the engagement spec and audit citations; draft the
+   operation/permission and rule-outcome tables; review bases before their
+   definitions are fixed. Assessment-token reporting is resolved on 2026-10-10
+   as described below. The required E3 rest-lab seal before the first E5 commit
+   is not established; the implementation session never opens sealed labels.
+   This preparation step is documentation only.
+1. **Gate foundation (built).** Move provider display, pagination and rate-limit metadata
+   into the provider table and list-item subject templates into operations, as E4's
+   review requires. Preserve every existing admission and response guarantee.
+2. **Principal and organization inventory (built).** GET-only PAT/App-user principal,
+   verified own membership, organization metadata, members/owners, outside
+   collaborators, invitations and repository inventory; projected evidence,
+   permission/population gaps, changed-principal resume and header tests. Unsupported
+   installation principals stay unknown and authenticated successes are not reused.
+   No later rule id or optional check is introduced in this step. Inventory counts
+   are observed or lower bounds, never assessed security controls; applicable risk
+   areas remain `not_assessed` with `no_rule`. Repository token visibility remains
+   unknown after complete pagination. Response/page caps are `limit_reached` with
+   exit 2; coverage counts successful inventory reads rather than execution status.
+   Assessment-token reporting is resolved below. The E3 preimplementation rest-lab
+   seal is not established; no live acceptance is claimed.
+3. **Identity and repository access (built).** E5a people/admin/MFA conditions gain
+   their finding definitions and rules; repository `public` intent, default member
+   permission, production outside-admin and write deploy-key rules. Five compiled
+   reads add owner-gated MFA filters and exact repository objects, collaborators and
+   deploy keys. Fourteen finding ids, bases, subject keys, privilege recognition and
+   three outcomes are frozen in `spec/github-collector.md`, "Rule evidence".
+   Missing authority sends no owner-only MFA filter; partial populations can fire
+   but never disprove. Collaborator visibility stays unknown after pagination.
+   Recon prints per-account candidates and exact attribution; readout notes consume
+   shared-account users, recovery accounts, pending owner invitations and MFA beliefs.
+   Delegated organization roles, repository invitations, sign-in
+   dates and unobserved private repositories remain unassessed. CI, secrets and
+   history remain later steps. The E3 preimplementation rest-lab seal is not
+   established; live acceptance remains pending.
+   Adversarial-review defects in repository provenance, recon privilege labels, MFA
+   readout counts, per-asset offboarding instances and covered-asset inventory were
+   fixed with regression tests. None of those review defects is deferred.
+4. **CI controls (built; verified offline).** Security-consultant DEFINE on
+   2026-10-10 freezes six finding ids, bases and three outcomes in
+   `spec/github-collector.md`, "CI controls: step 4 definition": separate
+   organization/repository write defaults, default-branch protection presence,
+   mutable references, mutable step dependencies with mutation permission, and
+   requested PR-controlled execution with write permission. Six GET templates pin
+   workflow reads to the exact default-branch SHA. Bounded sanitized YAML,
+   permission-vector replacement, supported triggers/refs/execution and caps are
+   versioned; unsupported evidence stays unknown. The PR-target rule is medium
+   (high for declared production), never an execution or exploitability claim.
+   Runtime policy and checkout protection remain gaps. Runner access and App
+   findings/operations are deferred; literal runner requests are notes only.
+   Offline fixtures prove all three outcomes, permission replacement, supported
+   command shells, redaction before persistence and GET-only SHA-pinned requests.
+   An end-to-end fake-server run retains secret markers but no seeded secret in
+   report, audit or persisted evidence. Consultant REVIEW clarified shell support,
+   branch-protection remediation and the unassessed job container/service images.
+   Full `make check` and `make build` pass. Consultant REVIEW, Brightcart/Dani
+   client REPORT and the final fresh adversarial review pass. Invalid event, job
+   and step structures abstain in positive and negative regression fixtures;
+   unsupported runner selection leaves the entire direct job unassessed, including
+   reference pinning. All reported review defects were fixed; none is deferred.
+   The E3 preimplementation rest-lab seal is not established; live acceptance
+   remains pending.
+   The 2026-10-10 live software test identified rejected numeric workflow fields
+   and redaction of runtime token references. Grammar revision
+   `github-workflow-syntax:2026-10-10.2` accepts bounded decimal numbers without
+   string coercion; workflow-only policy redaction preserves whole exact built-in
+   token references while credential and extra detectors remain active. Empty
+   permission diagnostics explain unavailable access or feature evidence, and
+   Dependabot next steps include repository selection and feature availability.
+   These fixes do not establish live security acceptance.
+5. **Secret metadata and provider alerts (built; verified offline).**
+   Security-consultant DEFINE on 2026-10-10 fixes six compiled metadata GETs and
+   five rule ids in `spec/github-collector.md`, "Secret metadata and provider
+   alerts: step 5 definition": organization all-repository secret sharing, three
+   Dependabot severities and supported commit-location provider-secret findings.
+   Secret values, arbitrary metadata and error bodies never persist; selected
+   repository items are scope-filtered without authorizing child reads. Page,
+   cursor and follow-up limits preserve affirmative findings but prevent absence
+   claims. Provider severity/validity remain provider reports, not exploitation or
+   credential tests. Public visibility raises provider-secret findings only;
+   Dependabot has no automatic production/public adjustment. History, App grants,
+   runner access remain deferred. Assessment-token reporting is resolved below.
+   Every rule has fired, disproved and abstained offline fixtures; fake API tests
+   cover secret removal, unsupported locations and request pagination. Consultant
+   and client review fixes preserve partial family coverage for incomplete owning
+   populations, direct-request provenance for public severity, provider high/critical
+   wording and dependency-specific caveats. Provider-closed alerts still reported
+   active as `wont_fix` have an unranked follow-up note before the summary ranking,
+   without creating a finding or changing the exit count. Full `make check`
+   (vet, fix, zero lint issues, dependency checks and race tests) and `make build`
+   pass. Consultant REVIEW, Brightcart/Dani client REPORT re-review and final
+   fresh adversarial review pass. All reported review defects were fixed; none is
+   carried. The E3 preimplementation rest-lab seal is not established; live acceptance
+   remains pending; no live acceptance is claimed.
+6. **Confined history reader — built and verified offline.**
+   The security-consultant DEFINE on 2026-10-10 freezes the contract in
+   `spec/github-collector.md`, "History": ordinary SHA-1 bare mirrors; one
+   read-only `os.Root` boundary in the gate; conventional matching mirror config;
+   loose objects, PACK/index v2 and cross-storage deltas; all-ref/all-parent tree
+   traversal; fixed budgets and fresh branch/pull ref comparison through two GETs.
+   Repository assets accept an absolute `checkout`. No Git invocation, transport,
+   mirror write or new dependency. The rules are `github.history_credential`
+   (high) and `github.remote_credential` (medium), both per `secret_location`.
+   Only safe markers and locations survive; compiled existing redactor detectors
+   and the exact run credential detect, without entropy heuristics. Resume rescans
+   and obtains fresh refs. Missing API evidence, unsupported formats, mutation and
+   caps never support an absence verdict. Consultant-approved partial continuation
+   ignores unsupported on-disk mechanisms while reading independently validated
+   ordinary confined objects; strict config admission still applies. No alternate
+   or replacement is followed, no object fetched and no absence claim permitted.
+   Packs stream with no decoded-object cache
+   and 128 MiB resident-buffer reservations, including retained findings/redactions
+   and traversal bookkeeping. Full tree paths are capped at 4,096 bytes before
+   join allocation, as approved by the consultant. Local audit records contain execution
+   status and numeric counts, with no content hash. Local observations retain their
+   own actor/time; partial mirror counts and actionable gaps remain visible.
+   Unit and fake-API tests cover all three rule outcomes, packed/loose/delta reads,
+   confinement, limits, fresh resume and seeded all-output secrecy. Three history
+   report outcomes are pinned by goldens. Consultant REVIEW re-review passes after
+   its two wording should-fixes; final client REPORT re-review passes without
+   blockers. Full `make check` and `make build` pass. The first adversarial pass
+   confirmed three must-fix defects: root acquisition races, index allocation/accounting and silent detector
+   candidate exhaustion. Fixes anchor root acquisition and verify directory identity,
+   reserve conservative index accounting before allocation, and make raw candidate
+   exhaustion incomplete while retaining positives. Detector transient buffers
+   reserve 32 MiB inside the existing 128 MiB budget. A second review confirmed
+   uncharged directory-list allocation as a fourth must-fix. Lists reserve 1 KiB per entry before `ReadDir`,
+   including overflow, bounded by the available resident budget; recursive parent
+   and pack lists retain their charge until no longer used. Regression tests cover
+   list limits. Pending parent identities copy only their 40-byte SHA, and header
+   iteration avoids a split-line array. A subsequent fresh review found a fifth
+   must-fix: quoted `core` or `extensions` subsections could be mistaken for ordinary admission settings.
+   The fix rejects every such subsection, including empty quotes; full collector
+   regressions prove no history or origin disproof for all four forms. All five
+   confirmed defects are fixed and re-reviewed. Full checks and build pass after
+   the final config-admission and inflation-buffer fixes. The fresh final
+   adversarial review passes with no must-fix, should-fix or nit; no reviewed
+   defect is deferred. The E3 preimplementation rest-lab seal is not established;
+   live acceptance remains pending.
+7. **Closing review — built and verified offline.** Whole-slice consultant REVIEW and
+   client REPORT pass. Client wording improvements clarify inventory-only and
+   zero-decided reports, place the differing-mirror-ref action before the ranking,
+   identify the credential owner and assign origin cleanup to the mirror maintainer
+   after revocation or rotation. A confirmed closing self-audit defect classified
+   an over-cap loose object as corrupt instead of `limit_reached`; the fix checks
+   the expansion limit first and separately bounds decoded payload length, with
+   one-byte and 1,024-byte over-cap regressions proving no absence verdict.
+   Spec sync/audit, full `make check` and build passed before the whole-slice
+   adversarial review. That review confirmed one must-fix: the 10,000 advertised
+   ref cap did not mark the affected read `limit_reached`, allowing exit 0 or 1
+   despite partial history. The fix retains the limit reason, gap and detail;
+   collector and fake-API regressions with 10,001 refs prove exit 2, retained
+   positive findings and no negative verdict. Targeted tests, final full
+   checks and build pass; the fresh review of the fix passes with no must-fix,
+   should-fix or nit. No reviewed defect is deferred. Every built rule
+   has firing, disproved and abstained fixtures. Live lab measurements are **not
+   run**. This review does not claim E5 release acceptance: no E3 preimplementation
+   rest-lab seal is recorded. That prerequisite is not established; a later seal
+   cannot establish preimplementation blindness.
+   See `eval/e5-closing-review-2026-10-10.md`.
+
+**Assessment-credential decision and evaluation plan** (2026-10-10): the owner
+adopts the consultant's unranked run warning, defined in
+`spec/github-collector.md`, "Principal and resume". This closes the token-reporting
+choice without adding network calls or changing findings, coverage or exit counts.
+No E3 preimplementation rest-lab seal is recorded; a later seal cannot establish
+preimplementation blindness. A separately authorized, team-owned lab needs fresh
+independent seeder and ranker sessions, labels inaccessible to implementers until
+measurement, frozen clean-variant/false-positive criteria and recorded full,
+clean, context and missing-credential runs. This would be a postimplementation
+independent evaluation, not satisfaction or waiver of the unmet preimplementation
+prerequisite. Release acceptance remains pending owner handling of that prerequisite
+and the live measurements. No blind seeding, ranking or live assessment runs in this
+implementation session. See `eval/e5-credential-decision-2026-10-10.md`.
+
+**Resolved in step 7 from the inventory client review** (2026-10-10): the empty
+ranking says “No security rules ran; this report contains inventory only” when no
+rule was selected, and “No security verdict was possible from the collected
+evidence” when none decided. Coverage and exit semantics are unchanged.
+
+**Collector cleanup before E6:** web, GitHub and the report share
+`finding.Judgment` and `finding.Subject`, retaining persisted field names and
+wildcard members. GitHub owns its read explanations and coverage-reason mapping;
+web owns mail normalization and rule-input assembly from `ScopeView`. Engagement
+keeps scope interpretation and final report authorship. Stage documents and web
+collection helpers live in `stage_docs.go` and `collect_web.go` within the same
+package. This cleanup changes no rule, report wording or network operation.
+Definition registration, collector report fragments and gate restructuring are
+left out; no new enforcement path is introduced.
+
+**Resolved in step 7 from the step 6 client review** (2026-10-10): differing-ref
+update/resume notes precede the summary ranking; history remediation identifies the
+credential owner while retaining the authenticity/usability limitation; the mirror
+maintainer revokes or rotates an origin credential before cleanup. Synthetic report
+fixtures explain “mirror” and “origin” like production notes. These changes add no
+finding and change no coverage or exit count.
+
+**Deferred, owner unassigned:** App grant and installation-principal evidence,
+runner access and runner-group/public-repository scope await a reviewed DEFINE.
+No later roadmap slice owns these reads yet; their assignment remains an open
+decision, and this closing review does not invent it.
 
 **Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
 table carries what is now hard-coded per provider (a display name, page keys, rate-limit
@@ -645,27 +851,24 @@ no answer exiting 2.
 
 **Carried from the engagement-spec review** (security-consultant, 2026-10-09):
 
-- *Before E5's spec text, once E7 has merged:* split `spec/engagement.md`, which has
-  grown past what one reviewer holds, without dropping a decision. The report (order,
-  wording, coverage, ranking, findings, JSON) moves to `spec/report.md`; the run
-  directory, `run.json`, locking and resume to `spec/runs.md`; the `scheck.yaml` and
-  alias tables to `spec/host-collector.md §8`, since they go in 0.0.3; the domain
-  acceptance paragraph to `spec/web-collector.md`, "Subjects". Slice-progress prose
-  ("In 0.0.2 (E4) …") becomes a one-line "built in" marker per section, the history
-  staying here. Each decision gets one owner the others link to: exit codes in
-  `spec/scope.md` "Outcomes", reachability in `spec/web-collector.md`, and the rule
-  "an `assets` entry never adds scope", stated in both `spec/scope.md` and
-  `spec/engagement.md`, kept in one. Code comments
-  cite headings, so the `spec-steward` audits every citation in the same commit.
+- *Engagement-spec split completed before E5's spec text:* report order, wording,
+  coverage, ranking, findings and JSON are owned by `spec/report.md`; run directories,
+  `run.json`, locking and resume by `spec/runs.md`; the `scheck.yaml` and alias tables
+  by `spec/host-collector.md §8`; domain acceptance ownership by
+  `spec/web-collector.md`, "Subjects". Exit outcomes are owned by `spec/scope.md`,
+  "Outcomes", reachability by `spec/web-collector.md`, and whether asset entries add
+  scope by `spec/scope.md`, "What is in scope". Citation updates and the
+  `spec-steward` audit accompany the split.
 - "Which repositories are public on purpose": `public: true` on a repository asset,
   and an undeclared public repository is the finding (`intent` holds URLs only).
 - Anchors for self-hosted runners on public repositories (high), GitHub App
   installations with write on all repositories, outside collaborators with admin on
   production repositories, and the organization's default member permission.
-- scheck's own token with more than read access, which a classic token always has
-  for repositories, is a run note with the fix, never ranked and never counted in the
-  exit code (owner's decision pending; this is the consultant's recommendation, and
-  `spec/scope.md` calls it a finding today).
+- Assessment-token reporting is resolved on 2026-10-10: recognized beyond-read
+  OAuth scopes produce an unranked run warning with remediation, never a finding
+  or exit input. Exact supported read scopes carry a narrow informational note;
+  missing, unsupported or unknown capability is never read-only. The full
+  interpretation is in `spec/github-collector.md`, "Principal and resume".
 - Under *not assessed*: GitHub shows no sign-in dates, so a former member nobody
   listed cannot be told apart from a current one; and SAML single sign-on, if enforced,
   does not cover git over SSH or tokens, which the 2FA rules list under what they did
@@ -746,12 +949,11 @@ TLS-interception list, the session cookie names, the SPF include-to-service tabl
 the block-page markers. Validation refuses one URL under both `intent` lists.
 `scheck run --vantage internet|vpn|lan`, recorded in the run and on each piece of web
 and DNS evidence and printed in the report header, with a warning at the start when
-`intent.not_exposed` is listed and no vantage is given (`spec/engagement.md`,
-"Reachability and vantage"); a web request's identity for resume includes it
+`intent.not_exposed` is listed and no vantage is given (`spec/web-collector.md`, "Reachability and vantage"); a web request's identity for resume includes it
 (`spec/scope.md`, "Resume"). On a resume, a changed `mail` or `intent` URL reads again
 only the DNS names and entry points it affects; Scope discovery is kept when its
 inputs are unchanged
-(`spec/engagement.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
+(`spec/runs.md`, "Stop and resume"; carried from E4 step 4b). E7 is the first
 network collector: the `security-consultant` froze the base severity anchors on
 2026-10-09 (`spec/engagement.md`, "Severity in context"), and every base E7 assigns is
 placed against them.
@@ -797,7 +999,7 @@ Built in steps, reviewed as E4 was:
        `scope.json`, the report's input, findings and acceptance by subject, coverage
        rows for the external and email areas, and E7's subject kinds in
        `docs/engagement-report-schema.json` (`spec/web-collector.md`, "DNS and
-       takeover"; `spec/engagement.md`, "Coverage", "Findings"). A read domain root is
+       takeover"; `spec/report.md`, "Coverage", "Findings"). A read domain root is
        `collected`: its coverage replaces `collector_not_built`, and its findings set
        the exit code. A finding belongs to the most specific asset holding its subject,
        a name found under the root its own; a declared domain asset under a read root is
@@ -943,13 +1145,13 @@ and entry points it affects (carried from E4 step 4b).
 closes:
 
 - done in step 5: observed items use actual request collection times and
-  preserve them when reused (`spec/engagement.md`, "Findings");
+  preserve them when reused (`spec/report.md`, "Findings");
 - done in step 5: network assets have a trace of redacted gate entries,
-  including DNS queries (`spec/engagement.md`, "Text and JSON");
+  including DNS queries (`spec/report.md`, "Text and JSON");
 - done in step 5: `method.levels_used` comes from actual DNS queries and
   request sends over the retained run, plus host collection; DNS-only reads never
   invent `observe`
-  (`spec/engagement.md`, "Runs, state and configuration").
+  (`spec/runs.md`, "Runs, state and configuration").
 
 **Carried from E7 step 2b-i** (2026-10-09), done in step 5:
 
@@ -1083,7 +1285,7 @@ asset unchanged; a loop fixture terminates.
    issues before seeing any scheck output; at least four of the reviewer's top five are
    in scheck's top five. Without such a reviewer the gate is recorded as *not run*.
 6. **Coverage:** every risk area's mark matches what ran by the definitions in
-   `spec/engagement.md`, for the lab and for an engagement with a collector missing or
+   `spec/report.md`, for the lab and for an engagement with a collector missing or
    credentials withheld; the reason is printed, and the run with a declared root
    unassessed exits 2.
 7. **Scope:** only the observe level reaches any asset, no request leaves the declared

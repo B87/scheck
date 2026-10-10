@@ -40,7 +40,7 @@ const (
 // and custom findings introduce.
 var Categories = []string{
 	CategoryRemoteAccess, CategoryNetwork, "accounts", "privesc", "integrity", "updates",
-	"persistence", "logging", "fs", "disk", "time", CategoryGovernance, CategoryCustom, CategoryDNS, CategoryEmail, "tls", "web",
+	"persistence", "logging", "fs", "disk", "time", CategoryGovernance, CategoryCustom, CategoryDNS, CategoryEmail, "tls", "web", "ci", "secrets",
 }
 
 func knownCategory(c string) bool {
@@ -89,7 +89,7 @@ func ValidateRules() []Violation {
 		}
 		if d.Subject != "" && !slices.Contains(SubjectKinds, d.Subject) {
 			out = append(out, Violation{d.ID, RuleDefSubject,
-				fmt.Sprintf("subject kind %q is not in docs/spec/engagement.md's closed list", d.Subject)})
+				fmt.Sprintf("subject kind %q is not in docs/spec/report.md's closed list", d.Subject)})
 		}
 		if d.BaseSeverity.Rank() < 0 {
 			out = append(out, Violation{d.ID, RuleDefSeverity, fmt.Sprintf("severity %q", d.BaseSeverity)})

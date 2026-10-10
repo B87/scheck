@@ -12,12 +12,13 @@ import (
 // report's own terms, so this package never imports the engagement or a
 // collector, and never contacts a target.
 type Input struct {
-	Vantage      string
-	Observations map[string]Observation
-	LevelsUsed   []string
-	RulesVersion string
-	Exposures    []ExposureInput
-	Version      string
+	PrincipalChanges []PrincipalChange
+	Vantage          string
+	Observations     map[string]Observation
+	LevelsUsed       []string
+	RulesVersion     string
+	Exposures        []ExposureInput
+	Version          string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string
@@ -37,7 +38,7 @@ type Input struct {
 	Directory string
 	// Resumed says an earlier session of the run left what this one kept;
 	// EditedByHand names the files it used although they changed since
-	// they were written (docs/spec/engagement.md, "Stop and resume").
+	// they were written (docs/spec/runs.md, "Stop and resume").
 	Resumed      bool
 	EditedByHand []string
 
@@ -72,6 +73,9 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
+	NetworkPrincipal     *Principal
+	InventoryNotes       []Note
+	InventoryRead        bool
 	PopulationIncomplete bool
 	NetworkTrace         []Trace
 	WebShortfalls        []Shortfall
@@ -180,6 +184,7 @@ type ExposureInput struct{ URL, Reason, Source string }
 
 // Observation is the original collection metadata, including reused evidence.
 type Observation struct {
+	Principal   string // Optional collector-specific actor for local evidence.
 	CollectedAt time.Time
 	Vantage     string
 }

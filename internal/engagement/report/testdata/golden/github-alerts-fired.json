@@ -1,0 +1,1064 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "github.org_secret_all_repositories",
+      "instances": 1,
+      "reads": [
+        "request:organization-secrets"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.dependabot_high",
+      "instances": 1,
+      "reads": [
+        "request:dependabot-alerts"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.dependabot_low",
+      "instances": 1,
+      "reads": [
+        "request:dependabot-alerts"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.dependabot_medium",
+      "instances": 1,
+      "reads": [
+        "request:dependabot-alerts"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.secret_scanning_open",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "provider_validity": "unknown",
+            "redaction_marker": "[REDACTED:json-secret:31 bytes]",
+            "repository_read": "repository"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1",
+            "kind": "secret_location",
+            "label": "Secret alert 7 in config/Prod.env:2"
+          }
+        }
+      ],
+      "reads": [
+        "request:secret-alerts",
+        "request:secret-locations",
+        "request:repository"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub identity and repository-access evidence collected.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "outside"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "repositories"
+        },
+        {
+          "at": "2026-10-09T12:00:08Z",
+          "decision": "sent",
+          "request": "owners-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:09Z",
+          "decision": "sent",
+          "request": "members-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:10Z",
+          "decision": "sent",
+          "request": "repository"
+        },
+        {
+          "at": "2026-10-09T12:00:11Z",
+          "decision": "sent",
+          "request": "collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:12Z",
+          "decision": "sent",
+          "request": "keys"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "github",
+      "id": "repo:github:example-org/production",
+      "kind": "repo",
+      "name": "production",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": false,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "assets_covered": [
+        "saas:github:example-org"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "judged": [
+            "organization Actions secret sharing"
+          ],
+          "mark": "assessed",
+          "name": "organization Actions secret sharing",
+          "reasons": [],
+          "rules": [
+            "github.org_secret_all_repositories"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "provider secret-scanning alerts at commit locations"
+          ],
+          "mark": "assessed",
+          "name": "provider secret-scanning alerts at commit locations",
+          "reasons": [],
+          "rules": [
+            "github.secret_scanning_open"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "provider dependency alerts"
+          ],
+          "mark": "assessed",
+          "name": "provider dependency alerts",
+          "reasons": [],
+          "rules": [
+            "github.dependabot_high",
+            "github.dependabot_medium",
+            "github.dependabot_low"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 13,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub secret metadata and provider alert review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "4 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "repo:github:example-org/production": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.secret_scanning_open",
+        "needs_people": false,
+        "reason": "",
+        "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "attribute:public_repository",
+          "source": {
+            "excerpt": "Observed repository visibility: public",
+            "observation": "repository"
+          }
+        }
+      ],
+      "area": "secrets",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "secrets",
+      "derived": [
+        {
+          "name": "provider_validity",
+          "value": "unknown"
+        },
+        {
+          "name": "redaction_marker",
+          "value": "[REDACTED:json-secret:31 bytes]"
+        },
+        {
+          "name": "repository_read",
+          "value": "repository"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
+          "kind": "observed",
+          "observation": "secret-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "secret-alerts"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
+          "kind": "observed",
+          "observation": "secret-locations",
+          "principal": "alice (user ID 41)",
+          "request": "secret-locations"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
+          "kind": "observed",
+          "observation": "repository",
+          "principal": "alice (user ID 41)",
+          "request": "repository"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.secret_scanning_open",
+      "impact": "The provider reports a credential in this location. Its authenticity, current usability and use were not independently tested.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.secret_scanning_open",
+        "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
+      },
+      "not_checked": [
+        "Provider patterns are not a complete repository secret scan; history and unsupported locations were not scanned; credential usability and rotation were not verified"
+      ],
+      "remediation": {
+        "summary": "Revoke or rotate this credential at its provider first. Review its use, then remove it from the reported locations. Closing an alert or deleting a commit does not revoke a credential."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:secret-alerts",
+          "request:secret-locations",
+          "request:repository"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1",
+        "kind": "secret_location",
+        "label": "Secret alert 7 in config/Prod.env:2"
+      },
+      "title": "GitHub reports an open secret-scanning alert",
+      "why_here": [
+        "This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.dependabot_high",
+        "needs_people": false,
+        "reason": "",
+        "subject": "dependabot:3:App%2Fpackage-lock.json"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "ci",
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
+          "kind": "observed",
+          "observation": "dependabot-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "dependabot-alerts"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.dependabot_high",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.dependabot_high",
+        "subject": "dependabot:3:App%2Fpackage-lock.json"
+      },
+      "not_checked": [
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
+      ],
+      "remediation": {
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dependabot-alerts"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "dependabot:3:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
+      },
+      "title": "GitHub reports an open high or critical severity dependency alert",
+      "why_here": [
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.org_secret_all_repositories",
+        "needs_people": false,
+        "reason": "",
+        "subject": "actions:prod_key"
+      },
+      "adjustments": [],
+      "area": "secrets",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "secrets",
+      "evidence": [
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Actions secret PROD_KEY: provider visibility all; names only, no value read",
+          "kind": "observed",
+          "observation": "organization-secrets",
+          "principal": "alice (user ID 41)",
+          "request": "organization-secrets"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.org_secret_all_repositories",
+      "impact": "A compromised repository workflow may reach this organization secret; its name does not establish production use or leakage.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.org_secret_all_repositories",
+        "subject": "actions:prod_key"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Limit this organization secret to the repositories that need it. Review workflows in those repositories before changing access."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:organization-secrets"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "actions:prod_key",
+        "kind": "secret_location",
+        "label": "Actions secret PROD_KEY"
+      },
+      "title": "Organization secret is available to all repositories",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.dependabot_medium",
+        "needs_people": false,
+        "reason": "",
+        "subject": "dependabot:4:App%2Fpackage-lock.json"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "ci",
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
+          "kind": "observed",
+          "observation": "dependabot-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "dependabot-alerts"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.dependabot_medium",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.dependabot_medium",
+        "subject": "dependabot:4:App%2Fpackage-lock.json"
+      },
+      "not_checked": [
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
+      ],
+      "remediation": {
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dependabot-alerts"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "dependabot:4:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
+      },
+      "title": "GitHub reports an open medium severity dependency alert",
+      "why_here": [
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.dependabot_low",
+        "needs_people": false,
+        "reason": "",
+        "subject": "dependabot:5:App%2Fpackage-lock.json"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "ci",
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
+          "kind": "observed",
+          "observation": "dependabot-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "dependabot-alerts"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.dependabot_low",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.dependabot_low",
+        "subject": "dependabot:5:App%2Fpackage-lock.json"
+      },
+      "not_checked": [
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
+      ],
+      "remediation": {
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dependabot-alerts"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "dependabot:5:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
+      },
+      "title": "GitHub reports an open low severity dependency alert",
+      "why_here": [
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "Provider alerts are not a complete repository scan. Names are metadata; values were not read. Credential usability and deployed dependency exploitability were not tested.",
+      "kind": "github_alerts",
+      "source": "repo:github:example-org/production"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 8,
+      "partial": 2,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 1
+    },
+    "items": [
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.secret_scanning_open"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.secret_scanning_open",
+            "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:secrets"
+        ],
+        "severity": "critical",
+        "title": "GitHub reports an open secret-scanning alert"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.dependabot_high"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.dependabot_high",
+            "subject": "dependabot:3:App%2Fpackage-lock.json"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:cicd"
+        ],
+        "severity": "high",
+        "title": "GitHub reports an open high or critical severity dependency alert"
+      },
+      {
+        "assets": [
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "github.org_secret_all_repositories"
+        ],
+        "keys": [
+          {
+            "asset": "saas:github:example-org",
+            "id": "github.org_secret_all_repositories",
+            "subject": "actions:prod_key"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 3,
+        "rank_basis": [
+          "severity:medium",
+          "area:secrets"
+        ],
+        "severity": "medium",
+        "title": "Organization secret is available to all repositories"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.dependabot_medium"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.dependabot_medium",
+            "subject": "dependabot:4:App%2Fpackage-lock.json"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 4,
+        "rank_basis": [
+          "severity:medium",
+          "area:cicd"
+        ],
+        "severity": "medium",
+        "title": "GitHub reports an open medium severity dependency alert"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 5,
+      "selected": 5,
+      "without_evidence": 0
+    }
+  }
+}

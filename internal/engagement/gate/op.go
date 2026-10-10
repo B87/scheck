@@ -107,6 +107,9 @@ type List struct {
 	// owner/name, a user's or an organizational unit's unit path, a
 	// project's id. An item without it is dropped as unattributable.
 	ExcludeKey string
+	// Subject binds {key} to the canonical item id for scope filtering.
+	// Required for repository and project lists.
+	Subject string
 	// UserRef is the item field naming a user (an id or an address), for
 	// items that reference users: role assignments, group members, tokens.
 	// An item whose user is in the excluded-subject set is dropped.
@@ -175,6 +178,12 @@ const (
 	// UserKey is a Workspace user's id or primary address. A request that
 	// names one is checked against the excluded-subject set.
 	UserKey
+	// CI resource parameters vary only inside a compiled repository subtree.
+	BranchName
+	CommitSHA
+	WorkflowFile
+	SecretName
+	AlertNumber
 )
 
 // Param is one typed parameter. An optional parameter may be left out; it
@@ -193,7 +202,9 @@ type Op struct {
 	// Provider is a key of the provider table: the third-party source the
 	// op goes to, or "web" for an asset's own site.
 	Provider string
-	Method   Method
+	// APIVersion is the compiled GitHub REST version, never operator supplied.
+	APIVersion string
+	Method     Method
 	// URL is the template: scheme, a literal host (a web op's host is
 	// {host}), a path and a query, with {name} placeholders.
 	URL string
@@ -212,6 +223,10 @@ type Op struct {
 	Keep []string
 	// MaxBytes caps the response body.
 	MaxBytes int64
+	// WorkflowYAML decodes GitHub contents before redaction and bounded parsing.
+	WorkflowYAML bool
+	// GitHubMetadata retains only projected metadata and discards all error bodies.
+	GitHubMetadata bool
 }
 
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
@@ -294,6 +309,9 @@ func checkDeclaration(op Op) (provider, error) {
 	if !ok {
 		return provider{}, fmt.Errorf("provider %q is not in the provider table", op.Provider)
 	}
+	if op.APIVersion != "" && (op.Provider != "github" || op.APIVersion != "2026-03-10") {
+		return provider{}, errors.New("API version is not the compiled GitHub version")
+	}
 	switch op.Level {
 	case Passive, Observe, Probe, Scan:
 	default:
@@ -347,7 +365,7 @@ func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err err
 // declareParams checks each parameter's name and type.
 func (c *compiled) declareParams(prov provider, wholePath bool) error {
 	for _, p := range c.Params {
-		if p.Name == "" || p.Type < Login || p.Type > UserKey {
+		if p.Name == "" || p.Type < Login || p.Type > AlertNumber {
 			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
@@ -479,13 +497,13 @@ func (u uses) subject() error {
 		inSubject[m[1]] = true
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(c.scheme+"://"+c.host+c.path, -1) {
-		if !inSubject[m[1]] {
+		if !inSubject[m[1]] && !c.ciResource(m[1]) {
 			return fmt.Errorf("{%s} picks the target but is not in the subject", m[1])
 		}
 	}
 	for _, kv := range c.query {
 		for _, m := range placeholder.FindAllStringSubmatch(kv[1], -1) {
-			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count {
+			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count && !c.ciResource(m[1]) {
 				return fmt.Errorf("{%s} in the query is not a page or a cursor, so it must be in the subject", m[1])
 			}
 		}
@@ -515,13 +533,10 @@ func (c *compiled) checkResponse(prov provider) error {
 	if !prov.web && c.Method == GET && len(c.Keep) == 0 && c.Class != CredentialExchange {
 		return errors.New("declares no fields it keeps")
 	}
+	if err := c.checkCIResources(); err != nil {
+		return err
+	}
 	return c.validateBody()
-}
-
-// pageKeys are the query keys a set builder may send its cursor and its
-// page size under, per provider.
-var pageKeys = map[string]struct{ cursor, size string }{
-	"google": {cursor: "pageToken", size: "maxResults"},
 }
 
 // wholeTenant checks that a users list building the excluded-subject set
@@ -531,8 +546,8 @@ var pageKeys = map[string]struct{ cursor, size string }{
 // key for it, and no other query but a literal customer.
 func (c *compiled) wholeTenant() error {
 	l := c.List
-	keys, ok := pageKeys[c.Provider]
-	if !ok || l.Next == nil {
+	keys := providers[c.Provider].pages
+	if keys.cursor == "" || l.Next == nil {
 		return fmt.Errorf("provider %q has no users list that builds the excluded-subject set", c.Provider)
 	}
 	fail := func(k string) error {
@@ -649,6 +664,17 @@ func (c *compiled) validateBody() error {
 			return fmt.Errorf("item field %q is not a field path", f)
 		}
 	}
+	if l.Kind == KindRepo || l.Kind == KindProject {
+		want := "repo:github:{key}"
+		if l.Kind == KindProject {
+			want = "cloud:gcp:{key}"
+		}
+		if l.Subject != want {
+			return fmt.Errorf("a %s list declares item subject %q", l.Kind, want)
+		}
+	} else if l.Subject != "" {
+		return errors.New("only repository and project lists declare an item subject")
+	}
 	c.users = c.users || l.UserRef != ""
 	if l.Next == nil {
 		if l.MaxPages != 0 {
@@ -729,6 +755,32 @@ func bindValue(t ParamType, v string) (string, error) {
 			return "", errors.New("not a repository name")
 		}
 		return strings.ToLower(v), nil
+	case BranchName:
+		if !ValidBranchName(v) {
+			return "", errors.New("not a supported branch name")
+		}
+		return v, nil
+	case CommitSHA:
+		if !commitSHARE.MatchString(v) {
+			return "", errors.New("not a full commit SHA")
+		}
+		return strings.ToLower(v), nil
+	case WorkflowFile:
+		if !ValidWorkflowFile(v) {
+			return "", errors.New("not an immediate workflow filename")
+		}
+		return v, nil
+	case SecretName:
+		if !ValidSecretName(v) {
+			return "", errors.New("not an Actions secret name")
+		}
+		return strings.ToUpper(v), nil
+	case AlertNumber:
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 || strconv.FormatInt(n, 10) != v {
+			return "", errors.New("not an alert number")
+		}
+		return v, nil
 	case DNSName:
 		return dnsName(v)
 	case Host:

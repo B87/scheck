@@ -1,0 +1,349 @@
+package engagement
+
+import (
+	"context"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+
+	githubc "github.com/b87/scheck/internal/collector/github"
+	ereport "github.com/b87/scheck/internal/engagement/report"
+)
+
+// collectGitHub reads and judges GitHub identity and repository access
+// (docs/spec/github-collector.md, "Reporting and coverage").
+func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
+	g, err := r.gateFor(ctx)
+	if err != nil {
+		ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
+		r.incomplete(a, ra)
+		return ra
+	}
+	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	p := githubc.ResolvePrincipal(ctx, g, a.ID, "recon")
+	if note := githubc.AssessmentCredential(p); note.Capability == githubc.CapabilityBeyondReads {
+		r.o.Log("warning: %s", note.Detail)
+	}
+	var ev githubc.Evidence
+	if a.Kind == KindRepo {
+		target := githubTarget(a.ID)
+		ev = githubc.Evidence{Principal: p, RepositoriesAccess: []githubc.RepositoryAccess{githubc.CollectRepository(ctx, g, target, "recon")}}
+	} else {
+		org := githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"}
+		ev = githubc.Collect(ctx, g, org, p)
+		targets := []githubc.RepositoryTarget{}
+		for _, repo := range ev.Repositories.Items {
+			targets = append(targets, githubTarget("repo:github:"+repo.FullName))
+		}
+		for _, repo := range r.res.Assets {
+			if repo.Kind == KindRepo && repo.Root == a.ID {
+				targets = append(targets, githubTarget(repo.ID))
+			}
+		}
+		ev = githubc.CollectAccess(ctx, g, org, ev, targets)
+	}
+	ev = githubc.CollectCI(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
+	ev = githubc.CollectAlerts(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
+	checkouts := map[string]string{}
+	for _, asset := range r.res.Assets {
+		if asset.Kind == KindRepo {
+			checkouts[asset.ID] = asset.Checkout
+		}
+	}
+	ev = githubc.CollectHistory(ctx, g, ev, checkouts)
+	for _, h := range ev.RepositoriesHistory {
+		if h.Read.Op != "" {
+			if err := g.RecordMirrorAttempt(h.Asset, h.Read.RequestID, h.Read.Decision, h.Read.Gap, h.Objects, h.Commits, h.Blobs, h.Read.ObservedAt); err != nil {
+				ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, "mirror audit could not be written"
+				r.incomplete(a, ra)
+				return ra
+			}
+		}
+	}
+	ev.Judgments = append(githubc.Judge(ev, r.githubContext(a)), githubc.JudgeCI(ev, r.githubContext(a))...)
+	ev.Judgments = append(ev.Judgments, githubc.JudgeAlerts(ev, r.githubContext(a))...)
+	ev.Judgments = append(ev.Judgments, githubc.JudgeHistory(ev)...)
+	ra.GitHub = &ev
+	ra.Status = StatusCollected
+	targetRead := false
+	for _, read := range ev.Reads() {
+		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
+			targetRead = true
+		}
+		if read.Reason == "refused" && (read.Kind == "access" || read.Kind == "mirror") {
+			ra.Status, ra.Reason, ra.Refusal, ra.Detail = StatusRefused, ReasonRefused, read.Kind, read.Detail
+			break
+		}
+		if read.Reason == "limit_reached" || read.Decision == "unavailable:response_too_large" || read.Truncated || (read.Population != nil && slices.Contains(read.Population.Incomplete, "page_limit")) || ctx.Err() != nil {
+			ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonLimitReached, read.Detail
+			if ra.Detail == "" {
+				ra.Detail = read.Op + ": a response or page limit stopped collection"
+			}
+		} else if ra.Reason != ReasonLimitReached && strings.HasPrefix(read.Decision, "unavailable:") && read.Decision != "unavailable:unsupported_principal" && read.Decision != "unavailable:owner_authority" {
+			ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonFailed, read.Op+": "+read.Decision
+		}
+	}
+	if ra.Status == StatusCollected && !targetRead {
+		ra.Status, ra.Reason, ra.Detail = StatusNotCollected, "insufficient_permission:github_organization", "no organization inventory could be read"
+		for _, read := range ev.Reads() {
+			if read.Reason == "no_credentials" {
+				ra.Reason, ra.Detail = read.Reason, read.Detail
+				break
+			}
+		}
+	}
+	if ra.Detail == "" {
+		ra.Detail = "GitHub identity, repository-access and configured CI evidence collected; coverage shows the rules assessed and remaining limits."
+	}
+	if ra.Status == StatusRefused {
+		r.out.Refused = append(r.out.Refused, ereport.Shortfall{Asset: a.ID, AssetName: a.Name, Reason: ra.Reason, Kind: ra.Refusal, Detail: ra.Detail})
+	} else if ra.Status != StatusCollected {
+		r.incomplete(a, ra)
+	}
+	if r.manifest != nil {
+		session := &r.manifest.Sessions[len(r.manifest.Sessions)-1]
+		if session.Principals == nil {
+			session.Principals = map[string]GitHubPrincipal{}
+		}
+		session.Principals[a.ID] = GitHubPrincipal{Identity: ev.Principal.Identity, Label: principalLabel(ev.Principal)}
+	}
+	return ra
+}
+
+func principalLabel(p githubc.PrincipalRead) string {
+	if p.Account == nil || p.Identity == "" {
+		return "unknown"
+	}
+	return fmt.Sprintf("%s (user ID %d)", p.Account.Login, p.Account.ID)
+}
+
+func (r *run) githubPrincipalChanges() []ereport.PrincipalChange {
+	var out []ereport.PrincipalChange
+	if r.o.Resume == nil {
+		return out
+	}
+	for _, ra := range r.recon.Assets {
+		if ra.GitHub == nil {
+			continue
+		}
+		current := principalLabel(ra.GitHub.Principal)
+		sessions := r.o.Resume.Manifest.Sessions
+		for _, session := range slices.Backward(sessions) {
+			if old, ok := session.Principals[ra.ID]; ok {
+				if old.Identity != "" && ra.GitHub.Principal.Identity != "" && old.Identity != ra.GitHub.Principal.Identity {
+					out = append(out, ereport.PrincipalChange{Asset: ra.ID, From: old.Label, To: current})
+				}
+				break
+			}
+		}
+	}
+	return out
+}
+
+func inventoryCount[T any](name string, pop githubc.Population[T]) string {
+	read := false
+	for _, r := range pop.Reads {
+		read = read || githubReadOK(r)
+	}
+	if !read {
+		return name + ": not read"
+	}
+	qualifier := "observed "
+	if !pop.Complete {
+		qualifier = "at least "
+	}
+	return fmt.Sprintf("%s: %s%d", name, qualifier, len(pop.Items))
+}
+
+func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
+	ev := ra.GitHub
+	ai.Collector = "github"
+	for _, j := range ev.Judgments {
+		j.Reason = githubc.CoverageReason(j.Reason)
+		ai.Judged = append(ai.Judged, j)
+	}
+	p := ev.Principal
+	note := githubc.AssessmentCredential(p)
+	kind := "github_credential"
+	if note.Capability == githubc.CapabilityBeyondReads {
+		kind = "github_credential_warning"
+	}
+	ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: kind, Source: ra.ID, Detail: note.Detail})
+	source := "unknown"
+	if len(p.Scopes) > 0 {
+		source = "provider"
+	}
+	ai.PopulationIncomplete = !ev.Members.Complete || !ev.Members.VisibilityComplete || !ev.Owners.Complete || !ev.Owners.VisibilityComplete
+	ai.InventoryNotes = append(ai.InventoryNotes, r.githubPeopleNotes(ra.ID, *ev)...)
+	ai.NetworkPrincipal = &ereport.Principal{Identity: principalLabel(p), Scopes: p.Scopes, ScopesSource: source}
+	ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: strings.Join([]string{
+		inventoryCount("members", ev.Members), inventoryCount("owners", ev.Owners), inventoryCount("outside collaborators", ev.OutsideCollaborators), inventoryCount("pending invitations", ev.Invitations), inventoryCount("repositories visible to this credential", ev.Repositories),
+	}, "; ") + "."})
+	ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory."})
+	if p.Identity == "" {
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: "GitHub principal could not be identified. Earlier authenticated GitHub evidence was not reused."})
+	}
+	for _, population := range []struct {
+		name string
+		gaps []string
+	}{
+		{"members", ev.Members.Gaps}, {"owners", ev.Owners.Gaps}, {"outside collaborators", ev.OutsideCollaborators.Gaps}, {"pending invitations", ev.Invitations.Gaps}, {"repositories", ev.Repositories.Gaps},
+	} {
+		if len(population.gaps) > 0 {
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: population.name + ": inventory gaps (" + githubc.InventoryGapText(population.gaps) + ")"})
+		}
+	}
+	for _, repo := range ev.RepositoriesAccess {
+		for _, pop := range []struct {
+			name string
+			gaps []string
+		}{{repo.Asset + " collaborators", repo.Collaborators.Gaps}, {repo.Asset + " deploy keys", repo.DeployKeys.Gaps}} {
+			if len(pop.gaps) > 0 {
+				ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: repo.Asset, Detail: pop.name + ": " + githubc.InventoryGapText(pop.gaps)})
+			}
+		}
+	}
+	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev)...)
+	ai.InventoryNotes = append(ai.InventoryNotes, githubAlertNotes(*ev)...)
+	readHistory, completeHistory := 0, 0
+	for _, h := range ev.RepositoriesHistory {
+		detail := "Mirror history was not read. " + githubc.HistoryGapText(h.Gaps)
+		if h.RemoteKnown && (h.Objects > 0 || h.Complete) {
+			readHistory++
+			qualifier := "at least "
+			if h.Complete {
+				qualifier = ""
+				completeHistory++
+			}
+			detail = fmt.Sprintf("Supported mirror history: %s%d commits and %d blob visits read. Traversal gaps: %s.", qualifier, h.Commits, h.Blobs, githubc.HistoryGapText(h.Gaps))
+		}
+		detail += " Detector misses, deleted/unadvertised refs, reflogs, submodule/LFS payloads and credential usability remain unassessed."
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: h.Asset, Detail: detail})
+		if slices.Contains(h.Gaps, "mirror_refs_differ") {
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_history_followup", Source: h.Asset, Detail: "Mirror refs differ from the observed GitHub refs; update your authorized mirror and resume. scheck never fetches or modifies the mirror."})
+		}
+	}
+	if len(ev.RepositoriesHistory) > 0 {
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: fmt.Sprintf("A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read for %d of %d selected repositories; %d complete supported traversals with matching observed refs. Hidden repositories and history outside the supported traversal remain unassessed.", readHistory, len(ev.RepositoriesHistory), completeHistory)})
+	}
+
+	for _, read := range ev.Reads() {
+		ai.Redactions = append(ai.Redactions, read.Redactions...)
+		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
+			ai.InventoryRead = true
+		}
+		for _, note := range githubc.ReadNotes(read) {
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: note.Detail})
+		}
+	}
+	if r.gate != nil {
+		for _, e := range r.gate.Entries() {
+			if e.Asset == ra.ID || slices.ContainsFunc(ev.Reads(), func(read githubc.Read) bool { return read.RequestID == e.RequestID }) {
+				ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: e.RequestID, Params: e.Params, At: e.Time, Decision: e.Decision, OutputSHA256: e.OutputHash})
+			}
+		}
+	}
+}
+
+func githubReadOK(read githubc.Read) bool {
+	return (read.Decision == "sent" || read.Decision == "reused") && read.Status == 200 && read.Reason == "" && read.Gap == "" && !read.Truncated
+}
+
+// Repository reads collected through an organization still belong to their exact
+// asset in report coverage (docs/spec/github-collector.md, "Reporting and coverage").
+func partitionGitHubJudgments(assets []ereport.AssetInput) {
+	byID := map[string]int{}
+	for i, a := range assets {
+		byID[a.ID] = i
+	}
+	for i := range assets {
+		if assets[i].Collector != "github" {
+			continue
+		}
+		kept := make([]ereport.Judgment, 0, len(assets[i].Judged))
+		for _, j := range assets[i].Judged {
+			target, found := byID[j.Asset]
+			if !found || target == i || assets[target].Collector != "github" {
+				kept = append(kept, j)
+				continue
+			}
+			assets[target].Judged = append(assets[target].Judged, j)
+			assets[target].NetworkPrincipal = assets[i].NetworkPrincipal
+			for _, trace := range assets[i].NetworkTrace {
+				if slices.Contains(j.Reads, trace.Request) && !slices.ContainsFunc(assets[target].NetworkTrace, func(existing ereport.Trace) bool { return existing.Request == trace.Request }) {
+					assets[target].NetworkTrace = append(assets[target].NetworkTrace, trace)
+				}
+			}
+		}
+		assets[i].Judged = kept
+	}
+}
+
+func githubTarget(id string) githubc.RepositoryTarget {
+	key := strings.TrimPrefix(id, "repo:github:")
+	owner, name, _ := strings.Cut(key, "/")
+	return githubc.RepositoryTarget{Asset: id, Owner: owner, Name: name}
+}
+func (r *run) githubContext(a ResolvedAsset) githubc.Context {
+	c := githubc.Context{OrganizationAsset: a.ID, Today: r.session.In(r.zone).Format("2006-01-02"), RepositoryContexts: map[string]githubc.RepositoryContext{}}
+	keys := sortedKeys(r.res.People)
+	for _, h := range keys {
+		p := r.res.People[h]
+		c.People = append(c.People, githubc.Person{Handle: h, Kind: p.Kind, GitHub: p.GitHub, Left: p.Left, UsedBy: p.UsedBy})
+	}
+	for where, handles := range r.res.Access.Admins {
+		if ref, ok := r.res.Lookup(where); ok && ref.ID == a.ID {
+			c.OwnersDeclared = true
+			c.ExpectedOwners = handles
+		}
+	}
+	for i, m := range r.res.Access.MFA {
+		if ref, ok := r.res.Lookup(m.Where); ok && ref.ID == a.ID {
+			c.MFA = m.Enforced
+			c.MFASource = "access.mfa[" + strconv.Itoa(i) + "]"
+		}
+	}
+	for _, repo := range r.res.Assets {
+		if repo.Kind == KindRepo {
+			c.RepositoryContexts[repo.ID] = githubc.RepositoryContext{Public: repo.Public, DeploysTo: repo.DeploysTo, Source: "assets." + repo.Name}
+		}
+	}
+	return c
+}
+
+// reconcileGitHubRepositories describes the actual object read for each declared
+// repository collected under its organization (docs/spec/github-collector.md, "Reads").
+func (r *run) reconcileGitHubRepositories(doc *ReconDoc) {
+	for i, a := range doc.Assets {
+		if a.Kind != KindRepo || a.Root == a.ID || !strings.HasPrefix(a.Root, "saas:github:") {
+			continue
+		}
+		doc.Assets[i].Status, doc.Assets[i].Reason, doc.Assets[i].Detail = StatusNotCollected, ReasonFailed, "repository metadata was not read under its organization"
+		for _, root := range doc.Assets {
+			if root.ID != a.Root || root.GitHub == nil {
+				continue
+			}
+			for _, access := range root.GitHub.RepositoriesAccess {
+				if access.Asset != a.ID {
+					continue
+				}
+				read := access.RepositoryRead
+				if githubReadOK(read) {
+					doc.Assets[i].Status, doc.Assets[i].Reason, doc.Assets[i].Detail = StatusCollected, "", "read with "+root.Name
+				} else {
+					doc.Assets[i].Detail = read.Detail
+					if doc.Assets[i].Detail == "" {
+						doc.Assets[i].Detail = "repository metadata was unavailable or could not be recognized"
+					}
+				}
+				if read.Reason == "refused" && (read.Kind == "access" || read.Kind == "mirror") {
+					doc.Assets[i].Status, doc.Assets[i].Reason, doc.Assets[i].Refusal = StatusRefused, ReasonRefused, read.Kind
+				}
+				if read.Reason == "limit_reached" || read.Truncated || read.Decision == "unavailable:response_too_large" {
+					doc.Assets[i].Status, doc.Assets[i].Reason = StatusIncomplete, ReasonLimitReached
+				}
+			}
+		}
+	}
+}

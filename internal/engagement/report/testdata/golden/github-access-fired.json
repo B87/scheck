@@ -1,0 +1,1561 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "github.broad_default_member_permission",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "permission": "write"
+          },
+          "outcome": "fired",
+          "subject": null
+        }
+      ],
+      "reads": [
+        "request:organization"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "github.mfa_not_required",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "required": false
+          },
+          "outcome": "fired",
+          "subject": null
+        }
+      ],
+      "reads": [
+        "request:organization"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "github.owner_without_mfa",
+      "instances": 1,
+      "reads": [
+        "request:owners-no-mfa"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "github.too_many_owners",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "members": 6,
+            "owners": 5
+          },
+          "outcome": "fired",
+          "subject": null
+        }
+      ],
+      "reads": [
+        "request:owners",
+        "request:members"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:github:example-org",
+      "complete": true,
+      "id": "identity.unexpected_admin",
+      "instances": 1,
+      "reads": [
+        "request:owners"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.outside_admin_on_production",
+      "instances": 1,
+      "reads": [
+        "request:outside",
+        "request:collaborators"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.undeclared_public_repository",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "public": true
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "example-org/production",
+            "kind": "repository",
+            "label": "example-org/production",
+            "provider_id": "77"
+          }
+        }
+      ],
+      "reads": [
+        "request:repository"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "github.writable_deploy_key",
+      "instances": 1,
+      "reads": [
+        "request:keys"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "identity.former_person_has_access",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "admin": true
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "former",
+            "kind": "account",
+            "label": "former",
+            "person": "pat",
+            "provider_id": "42"
+          }
+        }
+      ],
+      "reads": [
+        "request:collaborators"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub identity and repository-access evidence collected.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "outside"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "repositories"
+        },
+        {
+          "at": "2026-10-09T12:00:08Z",
+          "decision": "sent",
+          "request": "owners-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:09Z",
+          "decision": "sent",
+          "request": "members-no-mfa"
+        },
+        {
+          "at": "2026-10-09T12:00:10Z",
+          "decision": "sent",
+          "request": "repository"
+        },
+        {
+          "at": "2026-10-09T12:00:11Z",
+          "decision": "sent",
+          "request": "collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:12Z",
+          "decision": "sent",
+          "request": "keys"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "github",
+      "id": "repo:github:example-org/production",
+      "kind": "repo",
+      "name": "production",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": false,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "judged": [
+            "GitHub MFA"
+          ],
+          "mark": "assessed",
+          "name": "GitHub MFA",
+          "reasons": [],
+          "rules": [
+            "github.mfa_not_required",
+            "github.owner_without_mfa",
+            "github.member_without_mfa"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "judged": [
+            "owners and attribution"
+          ],
+          "mark": "assessed",
+          "name": "owners and attribution",
+          "reasons": [],
+          "rules": [
+            "identity.unexpected_admin",
+            "identity.unattributed_admin",
+            "identity.external_admin",
+            "identity.shared_admin",
+            "github.too_many_owners"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "judged": [
+            "repository access"
+          ],
+          "mark": "assessed",
+          "name": "repository access",
+          "reasons": [],
+          "rules": [
+            "github.broad_default_member_permission",
+            "github.outside_admin_on_production"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "departed people"
+          ],
+          "mark": "assessed",
+          "name": "departed people",
+          "reasons": [],
+          "rules": [
+            "identity.former_person_has_access",
+            "identity.former_person_invited"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "repository access"
+          ],
+          "mark": "assessed",
+          "name": "repository access",
+          "reasons": [],
+          "rules": [
+            "github.broad_default_member_permission",
+            "github.outside_admin_on_production"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "repository public intent and deploy keys"
+          ],
+          "mark": "assessed",
+          "name": "repository public intent and deploy keys",
+          "reasons": [],
+          "rules": [
+            "github.undeclared_public_repository",
+            "github.writable_deploy_key"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 13,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "GitHub identity and repository-access review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "9 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "repo:github:example-org/production": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "identity.former_person_has_access",
+        "needs_people": false,
+        "reason": "",
+        "subject": "former"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "attribute:admin",
+          "source": {
+            "excerpt": "former permissions.admin=true",
+            "observation": "collaborators"
+          }
+        }
+      ],
+      "area": "identity",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "admin",
+          "value": true
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at people.pat.left",
+          "kind": "declared",
+          "source": "engagement.yaml people.pat.left"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "former permissions.admin=true",
+          "kind": "observed",
+          "observation": "collaborators",
+          "principal": "alice (user ID 41)",
+          "request": "collaborators"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.former_person_has_access",
+      "impact": "An account whose declared leaving date has passed retains observed access.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "identity.former_person_has_access",
+        "subject": "former"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Remove its memberships and repository access, and review credentials and sessions."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:collaborators",
+          "declared:people.pat.left"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "former",
+        "kind": "account",
+        "label": "former",
+        "person": "pat",
+        "provider_id": "42"
+      },
+      "title": "A departed person or retired account retains access",
+      "why_here": [
+        "Pat left on 2026-09-01 and still administers the production repository."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.outside_admin_on_production",
+        "needs_people": false,
+        "reason": "",
+        "subject": "external"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at assets.production.context.deploys_to",
+          "kind": "declared",
+          "source": "engagement.yaml assets.production.context.deploys_to"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "external permissions.admin=true",
+          "kind": "observed",
+          "observation": "outside",
+          "principal": "alice (user ID 41)",
+          "request": "outside"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "external permissions.admin=true",
+          "kind": "observed",
+          "observation": "collaborators",
+          "principal": "alice (user ID 41)",
+          "request": "collaborators"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.outside_admin_on_production",
+      "impact": "This external account can administer the repository declared to deploy to production.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.outside_admin_on_production",
+        "subject": "external"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm the administrative need and reduce repository permissions where possible."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:outside",
+          "request:collaborators",
+          "declared:assets.production.context.deploys_to"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "external",
+        "kind": "account",
+        "label": "external",
+        "person": "contractor",
+        "provider_id": "44"
+      },
+      "title": "An outside collaborator administers a production repository",
+      "why_here": [
+        "The repository deploys to production and external has effective administrative permission."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": false,
+        "expires": "2027-01-07",
+        "id": "github.mfa_not_required",
+        "needs_people": false,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "required",
+          "value": false
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "two_factor_requirement_enabled=false",
+          "kind": "observed",
+          "observation": "organization",
+          "principal": "alice (user ID 41)",
+          "request": "organization"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.mfa_not_required",
+      "impact": "An account can join or remain without the organization's second-factor requirement.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.mfa_not_required",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Enable GitHub's organization two-factor requirement after checking users and automation; SAML or identity-provider MFA does not replace this GitHub control."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:organization"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": null,
+      "title": "The organization does not require two-factor authentication",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.owner_without_mfa",
+        "needs_people": false,
+        "reason": "",
+        "subject": "alex"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "owner alex appears in the provider's 2fa_disabled owner list",
+          "kind": "observed",
+          "observation": "owners-no-mfa",
+          "principal": "alice (user ID 41)",
+          "request": "owners-no-mfa"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.owner_without_mfa",
+      "impact": "Compromise of this owner's password can grant organization administration.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.owner_without_mfa",
+        "subject": "alex"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Enable strong GitHub two-factor authentication for this account, preferably security keys; check it even when SAML sign-in uses MFA."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:owners-no-mfa"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "alex",
+        "kind": "account",
+        "label": "alex",
+        "person": "alex",
+        "provider_id": "41"
+      },
+      "title": "An organization owner has no two-factor authentication",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "identity.unexpected_admin",
+        "needs_people": false,
+        "reason": "",
+        "subject": "unexpected"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "contradiction",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "identity.expected_owners"
+          }
+        }
+      ],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at identity.expected_owners",
+          "kind": "declared",
+          "source": "engagement.yaml identity.expected_owners"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "owner unexpected",
+          "kind": "observed",
+          "observation": "owners",
+          "principal": "alice (user ID 41)",
+          "request": "owners"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.unexpected_admin",
+      "impact": "The observed administrative access exceeds the operator's stated expectations.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "identity.unexpected_admin",
+        "subject": "unexpected"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm whether the person needs owner access; remove it or correct the expected owner declaration."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:owners",
+          "declared:identity.expected_owners"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "unexpected",
+        "kind": "account",
+        "label": "unexpected",
+        "provider_id": "43"
+      },
+      "title": "An owner is not among the declared expected owners",
+      "why_here": [
+        "The expected owners declaration names Alex; unexpected was also observed as an owner."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.undeclared_public_repository",
+        "needs_people": false,
+        "reason": "",
+        "subject": "example-org/production"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "public",
+          "value": true
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "visibility=public",
+          "kind": "observed",
+          "observation": "repository",
+          "principal": "alice (user ID 41)",
+          "request": "repository"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.undeclared_public_repository",
+      "impact": "The repository's contents are publicly available although the operator has not declared that intention.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.undeclared_public_repository",
+        "subject": "example-org/production"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm public visibility is intentional and declare public: true, or change the repository visibility."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:repository"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "example-org/production",
+        "kind": "repository",
+        "label": "example-org/production",
+        "provider_id": "77"
+      },
+      "title": "A repository is public without a public declaration",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-01-07",
+        "id": "github.writable_deploy_key",
+        "needs_people": false,
+        "reason": "",
+        "subject": "deploy-key:9"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "deploys_to:production",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "assets.production.context.deploys_to"
+          }
+        }
+      ],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at assets.production.context",
+          "kind": "declared",
+          "source": "engagement.yaml assets.production.context"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "deploy key 9 read_only=false",
+          "kind": "observed",
+          "observation": "keys",
+          "principal": "alice (user ID 41)",
+          "request": "keys"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.writable_deploy_key",
+      "impact": "Possession of this deploy key permits repository changes.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.writable_deploy_key",
+        "subject": "deploy-key:9"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Replace the key with a read-only deploy key or a narrowly scoped application credential."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:keys",
+          "declared:assets.production.context"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "deploy-key:9",
+        "kind": "deploy_key",
+        "label": "deploy key 9",
+        "provider_id": "9"
+      },
+      "title": "A deploy key can write to the repository",
+      "why_here": [
+        "This repository deploys to production."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": false,
+        "expires": "2027-04-07",
+        "id": "github.broad_default_member_permission",
+        "needs_people": false,
+        "reason": ""
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "permission",
+          "value": "write"
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "default_repository_permission=write",
+          "kind": "observed",
+          "observation": "organization",
+          "principal": "alice (user ID 41)",
+          "request": "organization"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.broad_default_member_permission",
+      "impact": "Every member receives write or administrative access by default.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.broad_default_member_permission",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Set a narrow base permission and grant repository access through specific teams."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:organization"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "Organization members receive broad default repository access",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": false,
+        "expires": "2027-04-07",
+        "id": "github.too_many_owners",
+        "needs_people": false,
+        "reason": ""
+      },
+      "adjustments": [],
+      "affected": {
+        "cap": 5,
+        "count": 5,
+        "listed": [
+          "alex",
+          "unexpected",
+          "owner3",
+          "owner4",
+          "owner5"
+        ]
+      },
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "members",
+          "value": 6
+        },
+        {
+          "name": "owners",
+          "value": 5
+        }
+      ],
+      "evidence": [
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "observed owners=5 members=6",
+          "kind": "observed",
+          "observation": "owners",
+          "principal": "alice (user ID 41)",
+          "request": "owners"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "observed owners=5 members=6",
+          "kind": "observed",
+          "observation": "members",
+          "principal": "alice (user ID 41)",
+          "request": "members"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.too_many_owners",
+      "impact": "A larger owner population increases the number of accounts that can fully administer the organization.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.too_many_owners",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Reduce owner privileges to the people who need them while retaining at least two recovery-capable owners."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:owners",
+          "request:members"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": null,
+      "title": "The organization has more owners than its size needs",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "members: observed 6; owners: observed 5; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. Identity and repository-access rules were evaluated; unobserved permissions remain unknown.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "GitHub assessment credential: observed OAuth scopes permit operations beyond reads (repo). scheck sent only read requests. Prefer an organization-approved fine-grained token with the read permissions this assessment needs; revoke a dedicated assessment token when finished. Effective write access to this organization was not tested.",
+      "kind": "github_credential_warning",
+      "source": "saas:github:example-org"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 8,
+      "partial": 2,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "identity.former_person_has_access"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "identity.former_person_has_access",
+            "subject": "former"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:identity"
+        ],
+        "severity": "critical",
+        "title": "A departed person or retired account retains access"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.outside_admin_on_production"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.outside_admin_on_production",
+            "subject": "external"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "An outside collaborator administers a production repository"
+      },
+      {
+        "assets": [
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "github.mfa_not_required"
+        ],
+        "keys": [
+          {
+            "asset": "saas:github:example-org",
+            "id": "github.mfa_not_required",
+            "subject": null
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 3,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "The organization does not require two-factor authentication"
+      },
+      {
+        "assets": [
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "github.owner_without_mfa"
+        ],
+        "keys": [
+          {
+            "asset": "saas:github:example-org",
+            "id": "github.owner_without_mfa",
+            "subject": "alex"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 4,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "An organization owner has no two-factor authentication"
+      },
+      {
+        "assets": [
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "identity.unexpected_admin"
+        ],
+        "keys": [
+          {
+            "asset": "saas:github:example-org",
+            "id": "identity.unexpected_admin",
+            "subject": "unexpected"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 5,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "An owner is not among the declared expected owners"
+      }
+    ],
+    "more": 4,
+    "rules": {
+      "decided": 9,
+      "selected": 9,
+      "without_evidence": 0
+    }
+  }
+}

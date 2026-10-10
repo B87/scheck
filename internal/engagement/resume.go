@@ -24,7 +24,7 @@ import (
 )
 
 // manifestFile is the run's own record of itself: what a resume reads
-// first (docs/spec/engagement.md, "Stop and resume").
+// first (docs/spec/runs.md, "Stop and resume").
 const manifestFile = "run.json"
 
 // requestsDir holds the gate's successes a resume may reuse, one file per
@@ -54,9 +54,10 @@ type Manifest struct {
 // Session is one invocation of the run: its start, the build, and what
 // left this machine during it, once it ended.
 type Session struct {
-	Started time.Time `json:"started"`
-	Version string    `json:"version"`
-	Vantage string    `json:"vantage"`
+	Principals map[string]GitHubPrincipal `json:"principals,omitempty"`
+	Started    time.Time                  `json:"started"`
+	Version    string                     `json:"version"`
+	Vantage    string                     `json:"vantage"`
 	// Egress is what the session sent, recorded after each stage and when
 	// it ended; Ended says it lived to record the last of it.
 	Egress *ereport.EgressInput `json:"egress,omitempty"`
@@ -530,4 +531,10 @@ func (r *run) recordHost(a ResolvedAsset, c *hostasset.Collection, inputs string
 	}
 	return r.write("evidence/"+name+".collection.json", hostRecord{Inputs: inputs, Graded: r.session.UTC(), Envelope: r.manifest.Files["evidence/"+name+".json"],
 		Recon: ra, Planned: c.Planned(), Trace: r.traces[a.Name]})
+}
+
+// GitHubPrincipal records the stable identity separately from its display label.
+type GitHubPrincipal struct {
+	Identity string `json:"identity"`
+	Label    string `json:"label"`
 }

@@ -61,22 +61,38 @@ func TestGoldenReports(t *testing.T) {
 			in.Egress = &EgressInput{SSHResolved: []string{"macos"}}
 			return in
 		},
-		"root-without-collector": withGitHubRoot,
-		"domain-root":            withDomainRoot,
-		"takeover-root":          withTakeoverRoot,
-		"email-root":             withEmailRoot,
-		"web-root":               withWebRoot,
-		"restricted-internet":    func(t *testing.T) Input { return restrictedReport(t, "internet", false) },
-		"restricted-unknown":     func(t *testing.T) Input { return restrictedReport(t, "", false) },
-		"restricted-vpn":         func(t *testing.T) Input { return restrictedReport(t, "vpn", false) },
-		"restricted-resumed":     func(t *testing.T) Input { return restrictedReport(t, "internet", true) },
-		"lost-session":           lostSession,
-		"refused-host":           canaryRefused,
-		"jump-refused":           jumpRefused,
-		"unreachable-host":       unreachableHost,
-		"many-findings":          manyFindings,
-		"context":                withContext,
-		"acceptances":            withAcceptances,
+		"root-without-collector":            withGitHubRoot,
+		"github-history-fired":              githubHistoryFiredReport,
+		"github-history-disproved":          githubHistoryDisprovedReport,
+		"github-history-abstained":          githubHistoryAbstainedReport,
+		"github-alerts-fired":               githubAlertsFiredReport,
+		"github-alerts-disproved":           githubAlertsDisprovedReport,
+		"github-alerts-abstained":           githubAlertsAbstainedReport,
+		"github-inventory":                  githubInventoryReport,
+		"github-ci-fired":                   githubCIFiredReport,
+		"github-ci-disproved":               githubCIDisprovedReport,
+		"github-ci-abstained":               githubCIAbstainedReport,
+		"github-access-fired":               githubAccessFiredReport,
+		"github-access-disproved":           githubAccessDisprovedReport,
+		"github-access-abstained":           githubAccessAbstainedReport,
+		"github-inventory-partial":          githubPartialInventoryReport,
+		"github-inventory-principal-change": githubChangedPrincipalReport,
+		"github-inventory-with-web":         githubAndWebInventoryReport,
+		"domain-root":                       withDomainRoot,
+		"takeover-root":                     withTakeoverRoot,
+		"email-root":                        withEmailRoot,
+		"web-root":                          withWebRoot,
+		"restricted-internet":               func(t *testing.T) Input { return restrictedReport(t, "internet", false) },
+		"restricted-unknown":                func(t *testing.T) Input { return restrictedReport(t, "", false) },
+		"restricted-vpn":                    func(t *testing.T) Input { return restrictedReport(t, "vpn", false) },
+		"restricted-resumed":                func(t *testing.T) Input { return restrictedReport(t, "internet", true) },
+		"lost-session":                      lostSession,
+		"refused-host":                      canaryRefused,
+		"jump-refused":                      jumpRefused,
+		"unreachable-host":                  unreachableHost,
+		"many-findings":                     manyFindings,
+		"context":                           withContext,
+		"acceptances":                       withAcceptances,
 		"resumed": func(t *testing.T) Input {
 			// A resumed run: its first session asked a DNS resolver and
 			// reached the host, then ended before recording all it sent;
@@ -164,7 +180,7 @@ func compareGolden(t *testing.T, name, got string) {
 
 // The text report never prints a reason or mark token, never prints the
 // canary echo, and escapes every control character a target sent
-// (docs/spec/engagement.md, "Words, not tokens", "What never appears").
+// (docs/spec/report.md, "Words, not tokens", "What never appears").
 func TestTextIsWordsAndSafe(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
 		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {

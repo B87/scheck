@@ -24,6 +24,19 @@ func NewHarness(t *testing.T, s Scope) *Harness {
 // Gate builds a gate in front of the world.
 func (h *Harness) Gate() *Gate { return h.w.gate() }
 
+// Build keeps an engagement's registry, resume ledger and audit while supplying
+// only offline transport and credentials.
+func (h *Harness) Build(cfg Config) (*Gate, error) {
+	cfg.Net = h.w.net()
+	cfg.Getenv = func(k string) string { return h.w.env[k] }
+	return New(cfg)
+}
+
+// GitHubHandler serves the fixed API host through the offline test transport.
+func (h *Harness) GitHubHandler(handler http.HandlerFunc) {
+	h.w.github(handler)
+}
+
 // Setenv sets a variable the gate reads.
 func (h *Harness) Setenv(k, v string) { h.w.env[k] = v }
 

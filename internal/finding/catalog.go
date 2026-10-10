@@ -37,7 +37,7 @@ type Def struct {
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as
-// the engagement file's not_used keys (docs/spec/engagement.md, "The
+// the engagement file's not_used keys (docs/spec/report.md, "The
 // report", "Coverage").
 type Area string
 
@@ -59,13 +59,13 @@ const (
 var Areas = []Area{AreaIdentity, AreaSecrets, AreaCloud, AreaData, AreaCICD, AreaExternal, AreaWeb, AreaHosts, AreaEmail, AreaLogging}
 
 // SubjectKind is the kind of a finding's instance key, from the closed list
-// of docs/spec/engagement.md, "Findings".
+// of docs/spec/report.md, "Findings".
 type SubjectKind string
 
 // SubjectKinds lists the kinds a finding definition may declare.
 var SubjectKinds = []SubjectKind{
 	"account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service",
-	"repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name",
+	"dependency_alert", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name",
 	"url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism",
 }
 

@@ -116,11 +116,8 @@ func (g *Gate) stopProvider(p, detail string, until time.Time) {
 }
 
 func sourceName(p string) string {
-	switch p {
-	case "github":
-		return "GitHub"
-	case "google":
-		return "Google"
+	if name := providers[p].display; name != "" {
+		return name
 	}
 	return p
 }
@@ -241,6 +238,7 @@ func (g *Gate) attempt(ctx context.Context, r Request, id, retryOf string, n int
 	// 14. The audit line is written, then the request is sent.
 	res, rt := g.send(ctx, p.e, admitted{b: p.b, prov: p.prov, cred: p.cred, addrs: p.addrs, depth: p.hopDepth, prev: p.prev,
 		firstParty: p.site.FirstParty, windowEnd: p.windowEnd}, r)
+	g.bindPrincipal(p.op, p.cred, res)
 	if reusable(res) && p.key != "" {
 		res.Identity = p.key
 		g.mu.Lock()
@@ -462,6 +460,15 @@ func (g *Gate) attachCredential(_ context.Context, p *pending) *halt {
 	cred, hint := g.credential(p.op.Auth)
 	if cred == nil {
 		return refused("no_credentials", hint)
+	}
+	if p.op.Class == Principal {
+		g.mu.Lock()
+		delete(g.principals, cred.secret)
+		g.mu.Unlock()
+		cred.Principal, cred.Scopes = "", nil
+	}
+	if p.op.Class == Principal && p.op.Provider == "github" && strings.HasPrefix(cred.secret, "ghs_") {
+		return &halt{decision: "unavailable:unsupported_principal", detail: "GitHub installation-token principal resolution is not supported"}
 	}
 	p.cred, p.e.Principal = cred, cred.Principal
 	return nil

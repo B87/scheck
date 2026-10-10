@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/b87/scheck/docs/engagement-report-schema.json",
   "title": "scheck engagement report",
-  "description": "spec/engagement.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
+  "description": "spec/report.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
   "type": "object",
   "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "egress", "assets", "notes"],
   "additionalProperties": false,
@@ -58,6 +58,7 @@
             "note": { "type": "string" }
           }
         },
+        "principal_changes": { "type": "array", "items": { "type": "object", "required": ["asset", "from", "to"], "additionalProperties": false, "properties": { "asset": { "$ref": "#/$defs/asset_id" }, "from": { "type": "string" }, "to": { "type": "string" } } } },
         "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a kept host's collection record, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. An edited envelope is never used: the host is collected again." }
       }
     },
@@ -199,7 +200,7 @@
           "reason": { "$ref": "#/$defs/reason" },
           "reads": { "type": "array", "items": { "$ref": "#/$defs/read_ref" }, "description": "Check, request and declaration ids; empty when no read was collected or a static preload decision needed no request." },
           "observations": { "type": "array", "items": { "type": "string" } },
-          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"$ref": "#/$defs/subject"}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
+          "outcomes": {"type": "array", "items": {"type": "object", "required": ["subject", "outcome", "detail"], "additionalProperties": false, "properties": {"subject": {"oneOf": [{"$ref": "#/$defs/subject"}, {"type": "null"}]}, "outcome": {"enum": ["fired", "disproved", "abstained"]}, "detail": {"type": "object"}}}}
         }
       }
     },
@@ -242,7 +243,7 @@
     },
     "egress": {
       "type": "object",
-      "description": "What left this machine (docs/spec/engagement.md, \"What left this machine\"): third-party sources, the operator's own systems, names without first-party evidence that were sent requests, and fixed statements. Counts only; a credential is named by its environment variable, never its value.",
+      "description": "What left this machine (docs/spec/report.md, \"What left this machine\"): third-party sources, the operator's own systems, names without first-party evidence that were sent requests, and fixed statements. Counts only; a credential is named by its environment variable, never its value.",
       "required": ["sources", "assets", "unconfirmed", "host_side_effects", "model", "telemetry", "user_agent", "stored", "tenants_read", "ssh_resolved", "ssh_resolved_by_jump"],
       "additionalProperties": false,
       "properties": {
@@ -413,7 +414,7 @@
         "reason": { "$ref": "#/$defs/reason" },
         "detail": { "type": "string", "description": "Escaped, post-redaction." },
         "echo": { "type": "string", "description": "A canary mismatch's echo, redacted and cut. Attacker-influenced: JSON only, never printed in text." },
-        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "excluded", "jump_excluded", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
+        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "excluded", "jump_excluded", "access", "canary", "mirror"], "description": "For a refusal: which one, so the text can say what to do." },
         "effect": {
           "type": "object", "additionalProperties": false,
           "properties": {
@@ -438,7 +439,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup", "github_history_followup", "github_credential", "github_credential_warning"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }
@@ -450,7 +451,8 @@
     "subject": {
       "type": "object", "required": ["kind", "key", "label"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
+        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location",
+            "dependency_alert", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
         "key": { "type": "string", "description": "What accepted_risks[].subject takes; a redact_extra marker when the name is redacted." },
         "label": { "type": "string", "description": "Built only from fields rules read." },
         "provider_id": { "type": "string" },

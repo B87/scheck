@@ -58,6 +58,8 @@ type ResolvedAsset struct {
 	FirstParty *FirstParty `json:"first_party,omitempty" yaml:"first_party,omitempty"`
 	DeploysTo  string      `json:"deploys_to,omitempty" yaml:"deploys_to,omitempty"`
 	CI         string      `json:"ci,omitempty" yaml:"ci,omitempty"`
+	Public     *bool       `json:"public,omitempty" yaml:"public,omitempty"`
+	Checkout   string      `yaml:"checkout,omitempty" json:"checkout,omitempty"`
 
 	// ownThrottle is the throttle the assets entry itself sets, nil when it
 	// sets none: a SaaS asset takes only that, never the defaults
@@ -273,7 +275,9 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 		FirstParty:  a.FirstParty,
 		DeploysTo:   a.DeploysTo,
 		CI:          a.CI,
+		Public:      a.Public,
 		ownThrottle: a.Throttle,
+		Checkout:    a.Checkout,
 	}
 	if r.Kind == KindHost {
 		out.Jump = a.Jump

@@ -27,7 +27,7 @@ import (
 // Scope is the engagement file's scope as the gate reads it. The
 // engagement implements it from the validated file and nothing else: never
 // from scope.json or another stage output, so an edit there cannot widen
-// what is sent (docs/spec/engagement.md, "Stop and resume").
+// what is sent (docs/spec/runs.md, "Stop and resume").
 type Scope interface {
 	// Subject places a canonical id against the asset a request is for:
 	// whether it is that asset or falls under it, the root it falls under
@@ -184,10 +184,11 @@ type Gate struct {
 	entries      []Entry
 	observations map[string]Observation
 	seq          int
-	stopped      map[string]stop     // provider → why it stopped
-	redirects    map[string]redirect // request id → the 3xx it received
-	pages        map[string]*page    // request id → the page after it
-	users        map[string]*userSet // asset → its excluded-subject set, once known
+	stopped      map[string]stop       // provider → why it stopped
+	redirects    map[string]redirect   // request id → the 3xx it received
+	pages        map[string]*page      // request id → the page after it
+	principals   map[string]Credential // exact credential → freshly resolved identity, memory only
+	users        map[string]*userSet   // asset → its excluded-subject set, once known
 	// pointed is what each records read's answer pointed at, by its
 	// request id; spfLookups counts the include: and redirect= reads of
 	// each SPF evaluation (dns.go).
@@ -312,7 +313,7 @@ type Result struct {
 	// Decision is sent, refused:<rule> or unavailable:<code>, as the audit
 	// line has it.
 	Decision string
-	// Reason is the coverage reason (docs/spec/engagement.md, "Coverage"),
+	// Reason is the coverage reason (docs/spec/report.md, "Coverage"),
 	// empty when the read succeeded.
 	Reason string
 	// Kind is a refusal's kind, "access" for a credential the provider did

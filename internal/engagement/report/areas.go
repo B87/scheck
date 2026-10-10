@@ -13,12 +13,14 @@ import (
 // collector exists: Workspace and GitHub tenants for identity, a GitHub
 // organization and repositories for secrets and CI/CD, cloud projects for
 // cloud and data, domains and URLs for the external surface, web and email
-// (docs/spec/engagement.md, "Coverage").
+// (docs/spec/report.md, "Coverage").
 func feeds(area finding.Area, a AssetInput) bool {
 	github := strings.HasPrefix(a.ID, "saas:github:")
 	switch area {
 	case finding.AreaIdentity:
-		return a.Kind == "saas"
+		return a.Kind == "saas" || (a.Kind == "repo" && a.Collector == "github" && slices.ContainsFunc(a.Judged, func(j Judgment) bool {
+			return j.ID == finding.IDIdentityUnattributedAdmin || j.ID == finding.IDIdentityFormerPersonHasAccess || j.ID == finding.IDGitHubOutsideAdminOnProduction
+		}))
 	case finding.AreaSecrets:
 		return a.Kind == "domain" || a.Kind == "url" || a.Kind == "repo" || github
 	case finding.AreaCICD:
@@ -40,7 +42,7 @@ func feeds(area finding.Area, a AssetInput) bool {
 }
 
 // outside are the rows scheck covers in no mode; they print on every run
-// and never fold (docs/spec/engagement.md, "Coverage").
+// and never fold (docs/spec/report.md, "Coverage").
 var outside = []Row{
 	{Area: "endpoints", Mark: "outside_scheck", Reasons: []ReasonDetail{},
 		Detail: "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of " +
@@ -87,7 +89,7 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
-		if a.Collector != "" && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets) {
+		if (a.Collector == "web" || (a.Collector == "github" && len(a.Judged) > 0)) && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets || area == finding.AreaIdentity || area == finding.AreaCICD) {
 			out = append(out, a)
 		}
 	}
@@ -99,23 +101,38 @@ func (b *builder) judged(area finding.Area) []AssetInput {
 func (b *builder) areaRow(area finding.Area) Row {
 	row := Row{Area: string(area), Mark: "not_assessed", Reasons: []ReasonDetail{}}
 	var fed []string
+	read := 0
 	for _, a := range b.in.Assets {
-		if feeds(area, a) {
-			fed = append(fed, a.Name)
+		if !feeds(area, a) {
+			continue
+		}
+		fed = append(fed, a.Name)
+		if a.Collector == "github" {
+			if a.InventoryRead {
+				read++
+			}
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
+			if a.NetworkPrincipal != nil {
+				row.Principals = append(row.Principals, *a.NetworkPrincipal)
+			}
+			if a.Reason != "" {
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: a.Reason, Detail: a.Name})
+			}
+		} else {
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "collector_not_built", Detail: a.Name})
 		}
 	}
 	if len(fed) == 0 {
 		row.Reasons = append(row.Reasons, ReasonDetail{Reason: "not_declared"})
 		return row
 	}
-	row.Population = &Population{Kind: "assets", InScope: len(fed), Read: 0}
-	row.Reasons = append(row.Reasons, ReasonDetail{Reason: "collector_not_built", Detail: strings.Join(fed, ", ")})
+	row.Population = &Population{Kind: "assets", InScope: len(fed), Read: read}
 	return row
 }
 
 // hostsRow aggregates every host asset: one block of domains per host,
 // marked from the rules that decided, never from the checks that ran
-// (docs/spec/engagement.md, "Coverage", "The Hosts row").
+// (docs/spec/report.md, "Coverage", "The Hosts row").
 func (b *builder) hostsRow() Row {
 	row := Row{Area: string(finding.AreaHosts), Reasons: []ReasonDetail{}}
 	var hosts, read int

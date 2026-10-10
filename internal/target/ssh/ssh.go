@@ -55,7 +55,7 @@ type Options struct {
 	Progress *Progress
 }
 
-// Progress is how far reaching a host got (docs/spec/engagement.md, "What
+// Progress is how far reaching a host got (docs/spec/report.md, "What
 // left this machine").
 type Progress struct {
 	// Resolved are the names this machine's resolver was asked for: the

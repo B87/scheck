@@ -33,21 +33,23 @@ func TestRegistryBodyInvariants(t *testing.T) {
 		{"fields kept from HTML", list, func(o *Op) { o.Accept = []string{"text/html"} }, "accepts only JSON"},
 		{"a kept field that is not a path", list, func(o *Op) { o.Keep = []string{"name[0]"} }, "not a field path"},
 		{"an accepted type that is not a media type", list, func(o *Op) { o.Accept = []string{"json"} }, "not a media type"},
-		{"items that are not a path", list, func(o *Op) { o.List = &List{Items: "a..b", Kind: KindRepo, ExcludeKey: "full_name"} }, "not $ or a field path"},
+		{"items that are not a path", list, func(o *Op) {
+			o.List = &List{Items: "a..b", Kind: KindRepo, Subject: "repo:github:{key}", ExcludeKey: "full_name"}
+		}, "not $ or a field path"},
 		{"an unknown item kind", list, func(o *Op) { o.List = &List{Items: "$", Kind: "pet"} }, "unknown"},
 		{"an exclusion key on an unexcludable kind", list, func(o *Op) { o.List = &List{Items: "$", Kind: KindOther, ExcludeKey: "x"} }, "nothing an exclude matches"},
 		{"user keys on a repository list", list, func(o *Op) {
-			o.List = &List{Items: "$", Kind: KindRepo, ExcludeKey: "full_name", UserKeys: []string{"id"}}
+			o.List = &List{Items: "$", Kind: KindRepo, Subject: "repo:github:{key}", ExcludeKey: "full_name", UserKeys: []string{"id"}}
 		}, "only a users list"},
 		{"pages without a limit", list, func(o *Op) {
-			o.List = &List{Items: "$", Kind: KindRepo, ExcludeKey: "full_name", Next: &Pages{Param: "page"}}
+			o.List = &List{Items: "$", Kind: KindRepo, Subject: "repo:github:{key}", ExcludeKey: "full_name", Next: &Pages{Param: "page"}}
 		}, "page limit"},
 		{"a limit without pages", list, func(o *Op) {
-			o.List = &List{Items: "$", Kind: KindRepo, ExcludeKey: "full_name", MaxPages: 2}
+			o.List = &List{Items: "$", Kind: KindRepo, Subject: "repo:github:{key}", ExcludeKey: "full_name", MaxPages: 2}
 		}, "no pages"},
 		{"a required cursor", list, func(o *Op) { o.Params[2].Optional = false }, "optional Cursor or Count"},
 		{"a cursor that is not a parameter", list, func(o *Op) {
-			o.List = &List{Items: "$", Kind: KindRepo, ExcludeKey: "full_name", Next: &Pages{Param: "after"}, MaxPages: 2}
+			o.List = &List{Items: "$", Kind: KindRepo, Subject: "repo:github:{key}", ExcludeKey: "full_name", Next: &Pages{Param: "after"}, MaxPages: 2}
 		}, "optional Cursor or Count"},
 		{"a cursor field that is not a path", users, func(o *Op) {
 			l := *o.List

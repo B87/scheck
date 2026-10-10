@@ -18,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
@@ -25,7 +26,6 @@ import (
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
-	"github.com/b87/scheck/internal/report"
 )
 
 // Stages are the engagement's stages in order (docs/spec/engagement.md,
@@ -33,11 +33,11 @@ import (
 var Stages = []string{"intake", "scope", "recon", "plan", "check", "analyze", "report"}
 
 // LastStage is the last stage: Report writes report.json and report.txt
-// (docs/spec/engagement.md, "The report").
+// (docs/spec/report.md, "The report").
 const LastStage = "report"
 
 // Reasons an asset was not collected, as coverage names them
-// (docs/spec/engagement.md, "The report", "Coverage").
+// (docs/spec/report.md, "The report", "Coverage").
 const (
 	ReasonCollectorNotBuilt = "collector_not_built"
 	ReasonFailed            = "failed"
@@ -45,7 +45,7 @@ const (
 )
 
 // ReasonRefused is a host that refused us for a reason on the positive
-// list of docs/spec/engagement.md, "Exit codes" (host key, authentication,
+// list of docs/spec/scope.md, "Exit codes" (host key, authentication,
 // identity, canary): the run goes on and exits 3.
 const ReasonRefused = "refused"
 
@@ -97,176 +97,6 @@ func (r *Refusal) Unwrap() error { return r.Err }
 
 func refuse(format string, args ...any) error {
 	return &Refusal{Err: fmt.Errorf(format, args...)}
-}
-
-// Header opens every stage document.
-type Header struct {
-	Stage      string    `json:"stage"`
-	Engagement string    `json:"engagement"`
-	Started    time.Time `json:"started"`
-	Source     Source    `json:"source"`
-}
-
-// ScopeDoc is scope.json: the assets the run starts from, the first-party
-// evidence each web asset has, what discovery found under each domain root
-// and what is excluded (docs/spec/scope.md, "What is in scope",
-// "Discovery"). It is for the operator to read, and it says which names
-// Recon reads; the gate decides from the engagement file, never from this
-// document.
-type ScopeDoc struct {
-	Header
-	Discovery string       `json:"discovery"`
-	Roots     []Ref        `json:"roots"`
-	Exclude   []Ref        `json:"exclude"`
-	Assets    []ScopeAsset `json:"assets"`
-	// Resolver is the DNS resolver discovery asked; nil without a domain
-	// root.
-	Resolver *Resolver     `json:"resolver,omitempty"`
-	Domains  []ScopeDomain `json:"domains,omitempty"`
-	// PointsAt lists the services outside every root that names under a
-	// root point at.
-	PointsAt []PointsAt `json:"points_at,omitempty"`
-}
-
-// ScopeAsset is one asset in scope and the collector that will read it.
-type ScopeAsset struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
-	Kind Kind   `json:"kind"`
-	Root string `json:"root"`
-	// Collector is "host", or empty when no collector reads the kind yet.
-	Collector string `json:"collector,omitempty"`
-	// FirstParty is the evidence that a domain, url or host asset's server
-	// is the operator's, empty when there is none (docs/spec/scope.md,
-	// "First-party evidence"); it is not asked of other kinds.
-	FirstParty *Evidence `json:"first_party,omitempty"`
-}
-
-// Evidence is one kind of first-party evidence: a url, host or network
-// root (the file's own) or the operator's confirmation, printed as such.
-type Evidence struct {
-	// Kind is url_root, host_root, network_root or operator; expired,
-	// future or moved for a confirmation past its year, dated after the
-	// run, or whose name no longer points at its target, none of which is
-	// evidence.
-	Kind string `json:"kind"`
-	// Root is the root that is the evidence, for a root.
-	Root        string `json:"root,omitempty"`
-	ConfirmedBy string `json:"confirmed_by,omitempty"`
-	Date        string `json:"date,omitempty"`
-	Target      string `json:"target,omitempty"`
-}
-
-// counts reports whether the evidence is first-party evidence.
-func (e *Evidence) counts() bool {
-	return e != nil && e.Kind != "expired" && e.Kind != "future" && e.Kind != "moved" && e.Kind != "suspended"
-}
-
-// String is the evidence as the Scope stage prints it.
-func (e *Evidence) String() string {
-	switch {
-	case e == nil:
-		return "none"
-	case e.Kind == "operator":
-		return "operator confirmed (" + e.ConfirmedBy + ", " + e.Date + ")"
-	case e.Kind == "expired":
-		return "none: the confirmation of " + e.Date + " expired"
-	case e.Kind == "future":
-		return "none: the confirmation is dated " + e.Date + ", after this run"
-	case e.Kind == "suspended":
-		return "none: the provider returned an unconfigured-service fingerprint"
-	case e.Kind == "moved":
-		return "none: confirmed for " + e.Target + ", which the name no longer points at"
-	case e.Kind == "network_root":
-		return "inside " + e.Root
-	}
-	return strings.ReplaceAll(e.Kind, "_", " ")
-}
-
-// ReconDoc is recon.json, the asset map.
-type ReconDoc struct {
-	Header
-	Assets   []ReconAsset `json:"assets"`
-	Resolver *Resolver    `json:"resolver,omitempty"`
-}
-
-// How far reaching a host got, in recon.json and the report.
-const (
-	ContactConnected = "connected"
-	ContactUnreached = "unreached"
-)
-
-// contact is a ReconAsset's Contact from a transport's progress.
-func contact(dialled, connected bool) string {
-	switch {
-	case connected:
-		return ContactConnected
-	case dialled:
-		return ContactUnreached
-	}
-	return ""
-}
-
-// ReconAsset is what Recon read from one asset.
-type ReconAsset struct {
-	Name   string `json:"name"`
-	ID     string `json:"id"`
-	Kind   Kind   `json:"kind"`
-	Root   string `json:"root"`
-	Status string `json:"status"`
-	Reason string `json:"reason,omitempty"`
-	Detail string `json:"detail,omitempty"`
-	// Echo is a canary mismatch's echo, redacted and cut, apart from the
-	// detail so text output never prints it.
-	Echo string `json:"echo,omitempty"`
-	// Refusal names a refused asset's kind: host_key_unknown,
-	// host_key_changed, access or canary.
-	Refusal string `json:"refusal,omitempty"`
-	// Contact is how far reaching a host over SSH got: connected,
-	// unreached (a connection was attempted, directly or through its jump
-	// host, and none opened), or empty when none was attempted;
-	// JumpContact the same for its jump host. ResolvedHere are the names
-	// this machine resolved to reach it, its own or its jump host's;
-	// ResolvedByJump the name its jump host resolved.
-	Contact        string   `json:"contact,omitempty"`
-	JumpContact    string   `json:"jump_contact,omitempty"`
-	ResolvedHere   []string `json:"resolved_here,omitempty"`
-	ResolvedByJump string   `json:"resolved_by_jump,omitempty"`
-	// Host, Facts and Observations are the host collector's
-	// (docs/spec/host-collector.md §6.4), post-redaction.
-	Host         *report.Host                  `json:"host,omitempty"`
-	Facts        map[string]report.Fact        `json:"facts,omitempty"`
-	Observations map[string]report.Observation `json:"observations,omitempty"`
-	// Web is what the web collector read under a domain root, redacted by
-	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
-	// verdicts on it.
-	Web    *web.Evidence  `json:"web,omitempty"`
-	Judged []web.Judgment `json:"judged,omitempty"`
-}
-
-// PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
-type PlanDoc struct {
-	Header
-	Method    string   `json:"method"`
-	Checklist []string `json:"checklist"`
-	// Hosts lists each collected host's planned checks and the checks its
-	// disable_checks removed, so the plan reconciles with audit.jsonl.
-	Hosts []PlanHost `json:"hosts"`
-}
-
-// PlanHost is one host asset's baseline plan.
-type PlanHost struct {
-	Name     string   `json:"name"`
-	ID       string   `json:"id"`
-	Planned  []string `json:"planned"`
-	Disabled []string `json:"disabled"`
-}
-
-// CheckDoc is the Check stage's output: no follow-up is opened until 0.0.2
-// E9, so it writes no evidence and no file.
-type CheckDoc struct {
-	Header
-	FollowUps []string `json:"follow_ups"`
 }
 
 // FindingsDoc is findings.json: each rule's outcome per asset, and what was
@@ -321,7 +151,7 @@ type Outcome struct {
 }
 
 // ExitCode is the run's exit code, in the precedence 3, 2, 1, 0
-// (docs/spec/engagement.md, "Exit codes").
+// (docs/spec/scope.md, "Exit codes").
 func (o *Outcome) ExitCode() int {
 	switch {
 	case o.Report != nil:
@@ -388,7 +218,7 @@ type run struct {
 
 // Run runs the stages of a resolved engagement up to StopAfter, writing
 // each stage's output into the run directory as it goes
-// (docs/spec/engagement.md, "Stages", "Runs, state and configuration").
+// (docs/spec/engagement.md, "Stages"; docs/spec/runs.md, "Runs, state and configuration").
 // It returns a *Refusal for exit 3 before any target is contacted; a host
 // that refuses us later is recorded in Outcome.Refused and the run goes on.
 // Any other error leaves the run incomplete.
@@ -599,7 +429,7 @@ func maskRedactExtra(raw []byte, res *Resolved) ([]byte, error) {
 func (r *run) scope(ctx context.Context) (any, error) {
 	// A resume keeps Scope's document while what Scope read from the file
 	// is unchanged and it found no gap to close; the gate still decides
-	// every request from the file (docs/spec/engagement.md, "Stop and
+	// every request from the file (docs/spec/runs.md, "Stop and
 	// resume").
 	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
 	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
@@ -620,6 +450,8 @@ func (r *run) scope(ctx context.Context) (any, error) {
 		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, FirstParty: r.res.firstParty(a, r.session)}
 		if a.Kind == KindHost {
 			sa.Collector = "host"
+		} else if (a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:")) || (a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:")) {
+			sa.Collector = "github"
 		}
 		doc.Assets = append(doc.Assets, sa)
 	}
@@ -675,7 +507,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops)...)
+	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops, githubc.Ops)...)
 	if err != nil {
 		return nil, err
 	}
@@ -714,211 +546,6 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 // (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
 // the names those records point at, and the names Scope chose to read; and
 // judges them with its rules together with Scope's lookups.
-func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
-	if ctx.Err() != nil {
-		ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
-		ra.Detail = "limits.timeout ended the engagement before this asset was read"
-		r.incomplete(a, ra)
-		return ra
-	}
-	g, err := r.gateFor(ctx)
-	if err != nil {
-		ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
-		r.incomplete(a, ra)
-		return ra
-	}
-	r.o.Log("recon: %s (%s)", a.Name, a.ID)
-	r.checkResolver(ctx, g, a)
-	ev := web.Collect(ctx, g, r.webDomain(a))
-	ra.Web = &ev
-	ra.Judged = web.Judge(r.webInput(a, ev))
-	r.suspendConfirmations(ra.Judged)
-	ev = web.Enrich(ctx, g, r.webDomain(a), ev)
-	ra.Web = &ev
-	ra.Judged = web.Judge(r.webInput(a, ev))
-	ra.Status = StatusCollected
-	if ctx.Err() != nil || ev.Cut() {
-		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
-		ra.Detail = fmt.Sprintf("limits.timeout (%s) ended the engagement while it was read", r.res.Limits.Timeout)
-		r.incomplete(a, ra)
-	}
-	return ra
-}
-
-// webInput is what the web collector's rules judge under a domain root:
-// the names Scope looked up, what it could not list, whether the resolver
-// invents answers, and what Recon read.
-func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
-	in := web.Input{Asset: a.ID, Root: a.name, Evidence: ev, Now: r.session, Vantage: r.o.Vantage}
-	for _, plan := range r.webPlans(a) {
-		for _, entry := range plan.Entries {
-			raw := entry.Scheme + "://" + entry.Host + entry.Path
-			for i, e := range r.res.Intent.NotExposed {
-				ref, _ := parseURL(e.URL)
-				if raw == strings.TrimPrefix(ref.ID, "url:") {
-					in.Restricted = append(in.Restricted, web.Restriction{URL: raw, Audience: e.Audience, Source: fmt.Sprintf("intent.not_exposed[%d]", i)})
-				}
-			}
-		}
-	}
-	if a.Kind == KindURL {
-		in.Root = ""
-	}
-	for _, b := range r.res.Assets {
-		if b.Kind == KindURL {
-			in.URLAssets = append(in.URLAssets, web.URLAsset{ID: b.ID, URL: strings.TrimPrefix(b.ID, "url:")})
-		}
-	}
-	for _, m := range ev.Mail {
-		context := web.MailContext{Domain: m.Domain}
-		for _, sender := range r.res.Mail.Senders {
-			if strings.TrimSuffix(strings.ToLower(sender.Domain), ".") != m.Domain {
-				continue
-			}
-			selectors := []string{}
-			for _, sel := range sender.DKIMSelectors {
-				selectors = append(selectors, strings.ToLower(sel))
-			}
-			context.Senders = append(context.Senders, web.MailSender{Service: sender.Service, Selectors: selectors})
-		}
-		for _, domain := range r.res.Mail.NoMail {
-			if strings.TrimSuffix(strings.ToLower(domain), ".") == m.Domain {
-				context.NoMail = true
-			}
-		}
-		in.MailContext = append(in.MailContext, context)
-	}
-	if r.recon != nil {
-		for _, ra := range r.recon.Assets {
-			if ra.Web != nil && ra.ID != a.ID {
-				in.MailPolicies = append(in.MailPolicies, ra.Web.Mail...)
-				in.Evidence = web.MergeSites(in.Evidence, *ra.Web)
-			}
-		}
-	}
-	if r.scoped == nil {
-		in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:not_listed", Detail: "Scope did not run"})
-		return in
-	}
-	// Scope's names were answered by the resolver Scope asked, Recon's
-	// reads by this session's: each must be known not to invent answers
-	// (a resumed session may be on another network).
-	in.Doubt = cmp.Or(resolverDoubt(r.scoped.Resolver), resolverDoubt(r.reconResolver))
-	for _, sd := range r.scoped.Domains {
-		if sd.Root != a.ID {
-			continue
-		}
-		if sd.Control != nil {
-			n := webName(*sd.Control)
-			in.Wildcard = &n
-		}
-		if sd.CT != "ok" {
-			in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:ct_source", Detail: "certificate transparency did not answer"})
-		}
-		for _, d := range sd.Dropped {
-			// An excluded name or a non-name was never part of the root's
-			// names; anything else dropped hides names.
-			if !strings.HasPrefix(d.Rule, "exclude[") && d.Rule != "not_a_name" {
-				in.Gaps = append(in.Gaps, web.Gap{Reason: "unavailable:" + d.Rule, Detail: fmt.Sprintf("%d dropped (%s)", d.Count, d.Rule)})
-			}
-		}
-		for _, sn := range sd.Names {
-			// A name under a more specific domain root is that root's.
-			if r.innerRoot(a, sn.Name) {
-				continue
-			}
-			in.Names = append(in.Names, webName(sn))
-		}
-	}
-	return in
-}
-
-// resolverDoubt is why no answer of a resolver stands, "" when it is known
-// not to invent them.
-func resolverDoubt(res *Resolver) string {
-	switch {
-	case res == nil:
-		return "unavailable:resolver_unchecked"
-	case res.Rewrites:
-		return "unavailable:resolver_rewrites"
-	case !res.Known():
-		return "unavailable:resolver_unchecked"
-	}
-	return ""
-}
-
-// checkResolver sends this session's control lookup under invalid., once,
-// before Recon reads any domain root through the gate's resolver.
-func (r *run) checkResolver(ctx context.Context, g *gate.Gate, a ResolvedAsset) {
-	if r.reconResolver != nil {
-		return
-	}
-	ctl := g.Resolve(ctx, gate.Resolve{Asset: a.ID, Name: randomLabel() + ".invalid", Stage: "recon", Control: true})
-	r.reconResolver = &Resolver{Address: g.Resolver(), Rewrites: ctl.Lookup.Outcome == gate.OutcomeAddresses,
-		Control: string(ctl.Lookup.Outcome)}
-	if ctl.Decision != gate.DecisionSent {
-		r.reconResolver.Control = ctl.Decision
-	}
-	if r.recon != nil {
-		r.recon.Resolver = r.reconResolver
-	}
-}
-
-// innerRoot reports a name under a domain root more specific than a.
-func (r *run) innerRoot(a ResolvedAsset, name string) bool {
-	return slices.ContainsFunc(r.res.Roots, func(o Ref) bool {
-		return o.Kind == KindDomain && o.name != a.name && domainUnder(o.name, a.name) && domainUnder(name, o.name)
-	})
-}
-
-// webDomain is what the web collector reads under a domain root: the mail
-// domains under it, the root first, with the DKIM selectors declared for
-// each, and the names Scope chose to read.
-func (r *run) webDomain(a ResolvedAsset) web.Domain {
-	d := web.Domain{Asset: a.ID, Name: a.name, Stage: "recon", Sites: r.webPlans(a)}
-	selectors := map[string][]string{}
-	order := []string{a.name}
-	// A mail domain is read under the most specific root holding it, once.
-	add := func(name string) {
-		name = strings.TrimSuffix(strings.ToLower(name), ".")
-		if domainUnder(name, a.name) && !r.innerRoot(a, name) && !slices.Contains(order, name) {
-			order = append(order, name)
-		}
-	}
-	for _, s := range r.res.Mail.Senders {
-		add(s.Domain)
-		dom := strings.TrimSuffix(strings.ToLower(s.Domain), ".")
-		for _, sel := range s.DKIMSelectors {
-			if sel = strings.ToLower(sel); !slices.Contains(selectors[dom], sel) {
-				selectors[dom] = append(selectors[dom], sel)
-			}
-		}
-	}
-	for _, n := range r.res.Mail.NoMail {
-		add(n)
-	}
-	for _, name := range order {
-		d.Mail = append(d.Mail, web.MailDomain{Name: name, Selectors: selectors[name]})
-	}
-	if r.scoped != nil {
-		for _, sd := range r.scoped.Domains {
-			if sd.Root != a.ID {
-				continue
-			}
-			if sd.Control != nil && resolverDoubt(r.scoped.Resolver) == "" && resolverDoubt(r.reconResolver) == "" &&
-				web.NeedsWildcardPage(webName(*sd.Control)) {
-				d.Names = append(d.Names, sd.Control.Name)
-			}
-			for _, sn := range sd.Names {
-				if sn.Read && !r.innerRoot(a, sn.Name) {
-					d.Names = append(d.Names, sn.Name)
-				}
-			}
-		}
-	}
-	return d
-}
-
 // reconStage runs every declared read per asset: the host collector on
 // host assets and the web collector on domain roots. A root of a kind with
 // no collector yet is recorded as not collected and makes the run
@@ -930,7 +557,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	r.recon = doc
 	// Every asset's commands go to audit.jsonl and are also kept per asset,
 	// so the report carries each asset's trace even under --no-persist
-	// (docs/spec/engagement.md, "Text and JSON").
+	// (docs/spec/report.md, "Text and JSON").
 	isRoot := func(a ResolvedAsset) bool { return a.Root == a.ID }
 	// A transport error quotes what the target or a resolver said (an
 	// address a name resolved to, a jump host's refusal): redacted before
@@ -946,6 +573,13 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			ra = r.collectDomain(ctx, a, ra)
 		case a.Kind == KindURL && isRoot(a):
 			ra = r.collectURL(ctx, a, ra)
+		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.Root, "saas:github:"):
+			ra.Status = StatusCollected
+			ra.Detail = "read with " + a.Root
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -1007,7 +641,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			if !c.Complete() {
 				// Say which limit cut it: a lost session, the engagement's
 				// limits.timeout, or the host collector's own run timeout
-				// (docs/spec/engagement.md, "Incompleteness and refusals").
+				// (docs/spec/report.md, "Incompleteness and refusals").
 				ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
 				switch {
 				case c.Lost() != "":
@@ -1060,6 +694,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			return nil, err
 		}
 	}
+	r.reconcileGitHubRepositories(doc)
+	r.populateGitHubPeople(doc)
 	return doc, r.write("recon.json", doc)
 }
 
@@ -1184,7 +820,7 @@ func (r *run) check(context.Context) (any, error) {
 
 // analyze reads each host asset's posture rules over its facts, from the
 // host collector's envelope Recon wrote under evidence/
-// (docs/spec/engagement.md, "Runs, state and configuration"), and builds
+// (docs/spec/runs.md, "Runs, state and configuration"), and builds
 // the report from them.
 func (r *run) analyze(context.Context) (any, error) {
 	doc := &FindingsDoc{Header: r.header("analyze")}
@@ -1228,7 +864,7 @@ func (r *run) analyze(context.Context) (any, error) {
 }
 
 // reportStage writes the engagement report, JSON and text; the text is
-// always at default verbosity (docs/spec/engagement.md, "What never
+// always at default verbosity (docs/spec/report.md, "What never
 // appears").
 func (r *run) reportStage(context.Context) (any, error) {
 	if r.o.Dir == nil {
@@ -1295,6 +931,15 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 	}
 	in.Vantage = r.o.Vantage
+	for _, ra := range r.recon.Assets {
+		if ra.GitHub != nil {
+			for _, history := range ra.GitHub.RepositoriesHistory {
+				if history.Read.Op != "" {
+					in.Observations[history.Read.RequestID] = ereport.Observation{CollectedAt: history.Read.ObservedAt, Principal: "local mirror reader"}
+				}
+			}
+		}
+	}
 	in.Rerun = "scheck run " + file
 	if r.o.Vantage != "" {
 		in.Rerun += " --vantage " + r.o.Vantage
@@ -1308,6 +953,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	if r.o.Dir != nil {
 		in.Directory = r.o.Dir.Path
 	}
+	in.PrincipalChanges = r.githubPrincipalChanges()
 	in.Resumed, in.EditedByHand = r.o.Resume != nil, slices.Clone(r.edited)
 	if a := res.Authorization; a != nil {
 		auth := &ereport.Authorization{By: a.By, Date: a.Date, Source: a.Source, Note: a.Note}
@@ -1336,6 +982,22 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
 			ai.ReadWith = ra.Root
+		}
+		if ra.Kind == KindRepo && strings.HasPrefix(ra.Root, "saas:github:") && ra.GitHub == nil {
+			ai.Collector = "github"
+			ai.ReadWith = ra.Root
+			for _, root := range r.recon.Assets {
+				if root.GitHub != nil {
+					for _, access := range root.GitHub.RepositoriesAccess {
+						if access.Asset == ra.ID {
+							ai.InventoryRead = githubReadOK(access.RepositoryRead)
+						}
+					}
+				}
+			}
+		}
+		if ra.GitHub != nil {
+			r.githubReportInput(ra, &ai)
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
@@ -1366,11 +1028,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			for _, n := range web.MailNotes(wi) {
 				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
 			}
-			for _, j := range ra.Judged {
-				ai.Judged = append(ai.Judged, ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: j.Reason,
-					Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context, Attributes: j.Attributes, Listed: j.Listed, Details: j.Details,
-					Subject: ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label}})
-			}
+			ai.Judged = append(ai.Judged, ra.Judged...)
 		}
 		in.Assets = append(in.Assets, ai)
 	}
@@ -1381,7 +1039,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		in.OtherTools = append(in.OtherTools, t.Name)
 		// A tool in an area's category with no root of its own
 		// half-declares that area: its row is kept, never folded
-		// (docs/spec/engagement.md, "The fold line").
+		// (docs/spec/report.md, "The fold line").
 		if area, ok := toolAreas[t.Category]; ok {
 			in.Declarations = append(in.Declarations, ereport.Declaration{Area: area,
 				Source: fmt.Sprintf("%s tools[%d]", res.Source.Path, i),
@@ -1445,6 +1103,16 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 	for _, h := range handles {
 		in.Candidates = append(in.Candidates, ereport.Candidate{Handle: h, Why: "employee"})
 	}
+	for _, asset := range r.recon.Assets {
+		if asset.GitHub != nil {
+			if in.RulesVersion == "" {
+				in.RulesVersion = r.o.Version
+			}
+			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion + ":" + githubc.AlertRulesVersion + ":" + githubc.HistoryVersion
+			break
+		}
+	}
+	partitionGitHubJudgments(in.Assets)
 	return in
 }
 
@@ -1473,7 +1141,7 @@ func (r *run) excludeMatches() map[string]int {
 }
 
 // egress is what left this machine through the gate and the host
-// collector (docs/spec/engagement.md, "What left this machine"), in this
+// collector (docs/spec/report.md, "What left this machine"), in this
 // session and every earlier one of the run, an earlier one that did not
 // end named as unrecorded.
 func (r *run) egress() *ereport.EgressInput {
@@ -1616,54 +1284,6 @@ func fileName(name string) string {
 	}, name)
 }
 
-func webName(sn ScopeName) web.Name {
-	return web.Name{Name: sn.Name, Status: sn.Status, Detail: sn.Detail, Outcome: sn.Outcome,
-		Chain: sn.Chain, Addresses: sn.Addresses, FinalInRoot: sn.FinalInRoot, Request: sn.RequestID}
-}
-
-// Positive fingerprints narrow the live scope and mark the persisted
-// confirmation as suspended (docs/spec/web-collector.md, "Never claim a name").
-func (r *run) suspendConfirmations(judged []web.Judgment) {
-	for _, j := range judged {
-		if j.Verdict != web.Fired || (j.ID != finding.IDDNSTakeoverCandidate && j.ID != finding.IDDNSUnclaimedAtProvider) {
-			continue
-		}
-		names := append([]string{j.Subject.Key}, j.Members...)
-		for _, name := range names {
-			if strings.HasPrefix(name, "*.") {
-				continue
-			}
-			if r.webScope != nil {
-				r.webScope.suspended.Store(name, true)
-			}
-			if r.scoped == nil {
-				continue
-			}
-			suspend := func(e *Evidence) {
-				if e != nil && e.Kind == "operator" {
-					e.Kind = "suspended"
-				}
-			}
-			for i := range r.scoped.Assets {
-				a := &r.scoped.Assets[i]
-				if ref, ok := parseSubject(a.ID); ok && ref.name == name {
-					suspend(a.FirstParty)
-				}
-			}
-			for i := range r.scoped.Domains {
-				for k := range r.scoped.Domains[i].Names {
-					n := &r.scoped.Domains[i].Names[k]
-					if n.Name == name {
-						suspend(n.FirstParty)
-					}
-				}
-			}
-		}
-	}
-}
-
-// sessionSites totals hosts across assets without reclassifying requests whose
-// admission did not use first-party evidence (docs/spec/scope.md, "Resume").
 func sessionSites(sites []gate.Site) []ereport.SiteInput {
 	var out []ereport.SiteInput
 	byName := map[[2]string]int{}

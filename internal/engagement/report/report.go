@@ -1,4 +1,4 @@
-// Package report builds the engagement report (docs/spec/engagement.md,
+// Package report builds the engagement report (docs/spec/report.md,
 // "The report"): coverage by risk area, the ranked findings, what was not
 // checked and why, and the exit code, from what a run collected. It reads
 // collected evidence and never contacts a target. Its JSON shape is
@@ -8,6 +8,7 @@ package report
 import (
 	"time"
 
+	"github.com/b87/scheck/internal/finding"
 	hostreport "github.com/b87/scheck/internal/report"
 )
 
@@ -51,16 +52,24 @@ type Run struct {
 
 // Engagement is the header's material.
 type Engagement struct {
-	Name          string         `json:"name"`
-	Operator      *string        `json:"operator"`
-	Timezone      string         `json:"timezone"`
-	Trigger       *string        `json:"trigger"`
-	BuiltFrom     string         `json:"built_from"` // file | host
-	Source        Source         `json:"source"`
-	Collected     Span           `json:"collected"`
-	Method        Method         `json:"method"`
-	Authorization *Authorization `json:"authorization"`
-	EditedByHand  []string       `json:"edited_by_hand"`
+	PrincipalChanges []PrincipalChange `json:"principal_changes,omitempty"`
+	Name             string            `json:"name"`
+	Operator         *string           `json:"operator"`
+	Timezone         string            `json:"timezone"`
+	Trigger          *string           `json:"trigger"`
+	BuiltFrom        string            `json:"built_from"` // file | host
+	Source           Source            `json:"source"`
+	Collected        Span              `json:"collected"`
+	Method           Method            `json:"method"`
+	Authorization    *Authorization    `json:"authorization"`
+	EditedByHand     []string          `json:"edited_by_hand"`
+}
+
+// PrincipalChange describes a fresh provider identity change; it grants no access.
+type PrincipalChange struct {
+	Asset string `json:"asset"`
+	From  string `json:"from"`
+	To    string `json:"to"`
 }
 
 // Source names the engagement as read. Path is nil for --host.
@@ -99,7 +108,7 @@ type Notice struct {
 	Audience         string `json:"audience"`
 }
 
-// Shortfall is one refused or incomplete asset (docs/spec/engagement.md,
+// Shortfall is one refused or incomplete asset (docs/spec/report.md,
 // "Incompleteness and refusals").
 type Shortfall struct {
 	Asset     string `json:"asset"`
@@ -109,7 +118,7 @@ type Shortfall struct {
 	// Echo is what a remote shell returned in place of the canary,
 	// redacted and cut. It is attacker-influenced text from a host that
 	// failed its trust check, so the JSON carries it and the text never
-	// prints it (docs/spec/engagement.md, "Incompleteness and refusals").
+	// prints it (docs/spec/report.md, "Incompleteness and refusals").
 	Echo string `json:"echo,omitempty"`
 	// Kind names a refusal: host_key_unknown, host_key_changed, their
 	// jump_ forms, excluded, jump_excluded, access or canary.
@@ -284,15 +293,9 @@ type Key struct {
 }
 
 // Subject is the instance a finding is about.
-type Subject struct {
-	Kind       string `json:"kind"`
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	ProviderID string `json:"provider_id,omitempty"`
-	Person     string `json:"person,omitempty"`
-}
+type Subject = finding.Subject
 
-// Finding is one finding instance (docs/spec/engagement.md, "Findings").
+// Finding is one finding instance (docs/spec/report.md, "Findings").
 type Finding struct {
 	Key             Key             `json:"key"`
 	AssetName       string          `json:"asset_name"`
@@ -432,7 +435,7 @@ type Assessment struct {
 
 // AssessmentOutcome retains a subject-specific observed decision and its detail.
 type AssessmentOutcome struct {
-	Subject Subject        `json:"subject"`
+	Subject *Subject       `json:"subject"`
 	Outcome string         `json:"outcome"`
 	Detail  map[string]any `json:"detail"`
 }

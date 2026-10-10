@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -13,7 +14,11 @@ import (
 type provider struct {
 	// source is the name the audit line and the report give the source;
 	// empty for an asset's own site.
-	source string
+	source           string
+	display          string
+	pages            pageMetadata
+	primaryExhausted func(int, http.Header) bool
+	rateLimited      func([]byte) bool
 	// operator is who runs a public source, printed with what it was sent.
 	operator    string
 	hosts       []string
@@ -30,8 +35,8 @@ type provider struct {
 // "Third-party sources"). DNS is the gate's own resolution, paced by
 // dnsRate.
 var providers = map[string]provider{
-	"github": {source: "api.github.com", hosts: []string{"api.github.com"}, concurrency: 1, rate: 10, floor: true},
-	"google": {source: "google", hosts: []string{"admin.googleapis.com", "oauth2.googleapis.com"}, concurrency: 2, rate: 5},
+	"github": {display: "GitHub", primaryExhausted: githubExhausted, source: "api.github.com", hosts: []string{"api.github.com"}, concurrency: 1, rate: 10, floor: true},
+	"google": {display: "Google", pages: pageMetadata{cursor: "pageToken", size: "maxResults"}, rateLimited: googleRateLimited, source: "google", hosts: []string{"admin.googleapis.com", "oauth2.googleapis.com"}, concurrency: 2, rate: 5},
 	"crt.sh": {source: "crt.sh", operator: "Sectigo", hosts: []string{"crt.sh"}, concurrency: 1, rate: 1, timeout: 60 * time.Second},
 	"web":    {web: true},
 }
@@ -117,4 +122,11 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// pageMetadata declares whole-tenant paging keys owned by the provider.
+type pageMetadata struct{ cursor, size string }
+
+func githubExhausted(status int, h http.Header) bool {
+	return (status == 403 || status == 429) && h.Get("X-RateLimit-Remaining") == "0"
 }

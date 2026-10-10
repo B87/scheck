@@ -299,7 +299,7 @@ evidence, what was excluded and why) before anything beyond passive runs. Showin
 not approving: the list is printed and written to `scope.json`, and only a first-party
 confirmation or a `confirm`-mode probe or scan waits for the operator. A run with no
 terminal goes on with the observe level and records every pending confirmation as
-not given ([engagement.md](engagement.md#runs-state-and-configuration), "Scope
+not given ([runs.md](runs.md#runs-state-and-configuration), "Scope
 confirmations persist").
 
 A name is resolved again when a request is sent, and the request goes to the address
@@ -354,8 +354,10 @@ version-disclosure and secret rules judge every name read
 the environment or the provider's own CLI login, never from the engagement file. Use a
 read-only role (for GCP, Security Reviewer and Cloud Asset Viewer; for Google Workspace,
 read-only Admin SDK scopes); if the credentials allow
-more, scheck still calls only its read list, and the report notes the broader grant as
-a finding. This is how data stores are judged from the control plane: whether a
+more, scheck still calls only its read list. Workspace and GCP report the broader
+grant as a finding. GitHub reports recognized beyond-read OAuth scopes as an
+unranked assessment-credential warning, never a posture finding
+([github-collector.md](github-collector.md#principal-and-resume)). This is how data stores are judged from the control plane: whether a
 database is publicly accessible, what its VPC firewall rules and authorized networks
 allow, where its backups live.
 
@@ -371,26 +373,37 @@ Secrets are searched in history as well as the current tree, and are redacted in
 output: the report shows where a secret is and what kind it is, never its value. Where
 the code host has its own secret scanning, its alerts are read as well.
 
-**History comes from the operator's mirror checkout, read in-process (decided in 0.0.2
-E4).** scheck has no git transport. Running `git` would send requests the gate never
-sees. Cloning through the gate would need a `POST` to `git-upload-pack` and would leave
+**E5 step 6 implements history from the operator's mirror checkout, read
+in-process (decided in 0.0.2 E4; definition frozen on 2026-10-10; built and verified
+offline, with checks, build and consultant/client/adversarial reviews passed).**
+scheck has no git transport. Running `git` would send requests the gate never sees. Cloning through the gate would need a `POST` to `git-upload-pack` and would leave
 plaintext secrets in a temporary directory on the operator's laptop, with a cleanup
 that a crash skips. The operator already holds the clone:
 
 - **The setting.** A repository asset names it with `checkout: /abs/path`, a path, like
   a host's `identity`, never a credential. The asset id stays
   `repo:github:owner/name`. The operator makes it with `git clone --mirror`, which
-  brings `refs/pull/*`, where secrets from deleted branches live.
+  maps advertised refs into the mirror. Advertised pull refs can retain commits from
+  deleted branches; a mirror does not prove every past pull request or deleted ref
+  was retained.
 - **Checks before reading.** The remote in the checkout's `config` must match the
-  locator, compared after removing userinfo, or the checkout is refused. The config's
+  locator, compared after removing userinfo, or the checkout is refused. The exact
+  supported mirror config and origin forms are in
+  [github-collector.md](github-collector.md#history), "History". The config's
   content is never stored or printed, and a credential in a remote URL
-  (`https://x:ghp_…@github.com/…`) is reported as a finding. Its heads are compared with the branch heads the
-  API returns through the gate. A stale checkout is read, and coverage says "behind
-  origin". Missing pull refs make coverage *partial*.
+  (`https://x:ghp_…@github.com/…`) is reported as a finding. Its refs are compared
+  with fresh advertised branch and pull refs the API returns through the gate. A differing mirror is read, and coverage says "refs differ from
+  the observed GitHub refs", not "behind origin". Missing or changed advertised
+  refs and unavailable API evidence make coverage *partial*.
 - **The reader.** It is in-process: loose objects and packs read with the standard
-  library's zlib, files opened read-only, every path confined under the checkout after
-  realpath. Nothing is executed. Each repository gets one audit line with its object
-  counts.
+  library's zlib and one read-only `os.Root` confinement boundary. Root acquisition
+  is descriptor-relative from filesystem `/`, with directory identity checked at
+  admission, open and binding before reading any mirror content. Filesystem
+  symlinks and nonregular files are rejected; hard links are rejected where reliable
+  standard platform metadata permits that check, and other platforms are unsupported.
+  Nothing is executed. Each attempt has one audit line with execution status/reason,
+  time and numeric counts. Supported formats and fixed budgets are owned by
+  [github-collector.md](github-collector.md#history), "History".
 - **Detection is redaction.** A compiled secret-shape rule, or the run's own
   `credential` rule, matching blob content is the finding, recorded as `(commit, path,
   line, rule)`. Only the marker is kept, never the value or a hash of it. A
@@ -400,8 +413,10 @@ that a crash skips. The operator already holds the clone:
   host's own secret-scanning alerts are read through the API where the token can see
   them. Commits GitHub still serves by SHA after their branch was deleted without a
   pull request are not in a mirror, and coverage says they are *not assessed*.
-- **When.** `checkout` is accepted from E5, which reads it. Validation checks only that
-  the path is absolute; the remote and heads are checked when E5 reads the checkout.
+- **When.** `checkout` accepts an absolute path on a repository asset and checks
+  the mirror config, remote and refs when reading it. Resume rescans locally and
+  compares fresh API refs, never reusing a local scan result. Missing advertised-ref
+  access still permits the confined local read, but never a negative history verdict.
 
 A gate-mediated fetch is reconsidered in 0.0.3 if operators find mirroring a burden.
 
@@ -920,8 +935,7 @@ records collected under another root; they send no additional lookup. Each follo
 result, like a records read's, says
 whether the name its chain ends at is under a root.
 
-The report prints what left the machine as one fixed block (`engagement.md`, "The
-report").
+The report prints what left the machine as one fixed block (`report.md`, "The report").
 
 ### Methods and credentials
 
@@ -954,10 +968,18 @@ admission; a collector never holds one. A request to a web asset never carries a
 redaction rule (`credential`) for every body, header and error string from that
 provider, including Go error text, which embeds URLs.
 
-**A token with write access is not refused.** The gate reads `X-OAuth-Scopes`, the
-collector files the broad-grant finding, and the run warns at the start. Most small
-teams will use the token they already have: refusing it ends the engagement, while
-reporting it fixes something.
+**A token with write access is not refused.** For GitHub, the gate retains
+`X-OAuth-Scopes` and the collector interprets exact supported scope names from a
+usable fresh principal read. Any recognized scope permitting operations beyond
+reads produces an unranked run warning after the principal read and before other
+GitHub reads; the report repeats it in the header. It is not a finding and affects
+neither severity, acceptances, ranking, coverage nor exit counts. Missing, unknown
+or unusable permission evidence never establishes read-only access. The exact
+interpretation and remediation are in
+[github-collector.md](github-collector.md#principal-and-resume). Workspace and GCP
+retain the broader-grant finding policy. Most small teams will use the token they
+already have: refusing it ends the engagement, while reporting it gives the operator
+an action.
 
 ### Responses
 
@@ -985,7 +1007,13 @@ A response goes through these steps in order, and nothing is stored before the l
    one text, a span could start in one string and end in a later one, and the result
    could still parse with every item between them gone, an excluded user among them.
    Value by value, no span crosses a string, and an escape (`\n` before a token, `\/`
-   inside one) cannot hide a secret. Under a key that looks secret (`json-secret`),
+   inside one) cannot hide a secret.
+   E5's compiled workflow-file operation is the sole encoded-content exception:
+   the gate decodes its base64 source, redacts the decoded bytes, then builds the
+   bounded neutral YAML structure described in [github-collector.md](github-collector.md#supported-workflow-syntax).
+   Neither encoded nor pre-redaction source is retained. Non-success workflow
+   response bodies are discarded; sanitized parse failures keep generic gaps and
+   any redaction marker, never source snippets. Under a key that looks secret (`json-secret`),
    every scalar is redacted whole, in an array too; a narrower rule's marker stands
    only when one hit covered the whole value. Under such a key, only these stay as they
    are: the literals `true`, `false` and `null`, the empty string `""`, and `0` or `1`,
@@ -1004,6 +1032,13 @@ A response goes through these steps in order, and nothing is stored before the l
    marker stay two members, of which a decoder keeps one; a secret-shaped key is rare
    enough that scheck accepts this rather than invent markers. A body that is not one
    JSON document is `unavailable:malformed_response`, and nothing is read from it.
+   E5's six compiled Actions-secret and provider-alert metadata operations discard
+   all error bodies and malformed, duplicate-member, unexpected or truncated bodies.
+   Success bodies are redacted and structurally projected to exact declared fields;
+   provider secret values and arbitrary metadata never persist, including literals
+   the generic redactor preserves. Only safe redactor markers may survive separately
+   from recognized metadata ([github-collector.md](github-collector.md), "Secret
+   metadata and provider alerts: step 5 definition").
 4. **Parse the redacted bytes**, never the pre-redaction ones. If they do not parse,
    which value-by-value redaction rules out, the result is
    `unavailable:redaction_broke_structure`. Only a 2xx is parsed: an API's error body
@@ -1217,6 +1252,51 @@ stops the request or lookup before it is sent.
 
 ### Outcomes
 
+**Exit codes.** The four codes keep their meanings (`host-collector.md §7`), and an
+engagement fixes how they are reached:
+
+- `1` when an open finding is at or above its asset's threshold: a host asset's profile
+  sets it as in 0.0.1 (`baseline`: medium, `hardened`: low); every other asset uses
+  medium. Accepted risks and `info` never count.
+- `2` when the run is incomplete: a declared root had no successful read ([report.md](report.md#coverage)), or any asset's collection was cut by a transport failure, a run timeout or a
+  limit (reasons `failed` and `limit_reached`). A check that is merely unavailable
+  (elevation, permission, profile, narrowing) makes coverage *partial* and does not
+  change the exit code, as in 0.0.1.
+- `3` for usage, validation, policy and canary errors. Precedence is `3`, `2`, `1`,
+  `0`.
+
+For a host, exit 3 is a positive list. A host asset or its jump host with no SSH user is
+refused by Scope before any target is contacted, so nothing is read and no run directory
+is created. An unknown or changed host key, an unreadable identity or known_hosts file,
+failed authentication and a canary mismatch are found on contact, and so are an unknown
+or changed key on a jump host and failed authentication to it, before the host itself
+is contacted: that host is recorded
+as `refused`, the other assets are still collected and every stage is written before
+the run exits 3, so nothing already read from a client's host is discarded. A canary
+that never answers is not a mismatch: nothing was shown to be altered, so it is a
+transport failure. Every other failure to reach a host (a name that
+does not resolve, TCP refused or timed out, a handshake reset, cut off or past its
+deadline, a jump host that cannot reach the host) is a transport failure: the asset is `failed` and the run exits 2. A session
+lost after it worked stops that host's plan where it was lost, keeps what was read, and
+is `incomplete` with reason `failed`: never a complete run of unavailable checks. A
+session lost while the canary itself ran is a transport failure too, not a canary
+mismatch: nothing was shown to be altered. As aliases of `scheck run --host`, `scheck
+ssh` and `scheck local` follow these rules too: a host that never answered now exits 2
+where 0.0.1 exited 3, the one change a CI job gating on `scheck ssh` sees. The canary's
+echo is printed only after redaction, and cut short, in the JSON only.
+
+For an API, a credential that is present but rejected (a 401, an invalid grant) is
+the same positive list: that asset is `refused` with kind `access`, the other assets
+are still collected, and the run exits 3. A declared SaaS root with no credential in
+the environment is `no_credentials` and exits 2, as a declared root with no successful
+read; Scope warns about it before any target is contacted, so the operator can stop
+and set it. A provider's rate limit that the gate cannot wait out is `limit_reached`,
+exit 2.
+
+So a one-host run exits as the 0.0.1 command did for the same findings and the same
+failures, except a host that never answered (2, a transport failure, where 0.0.1 said
+3), and a CI job gating on `scheck ssh` keeps its meaning.
+
 | Outcome | Coverage reason | Exit |
 |---|---|---|
 | A credential present but rejected (401, invalid grant) | `refused`, kind `access` | 3, and the other assets are still collected, as for a failed SSH login |
@@ -1225,7 +1305,7 @@ stops the request or lookup before it is sent.
 | An address that lost the first-party evidence Scope recorded (`refused:address_moved`) | `unavailable:address_moved` | no change; the next Scope run shows the asset without it |
 | An address not public, a redirect out of scope or off the entry points, an invalid certificate, a handshake the server ended with a TLS alert, a TLS alert after the handshake completed and before any response (`unavailable:tls_invalid`, `unavailable:tls_handshake`, `unavailable:tls_refused`) | `unavailable:<code>` | no change, like `path_denied` |
 | A provider rate limit, `limits.timeout`, or a request outside every authorization window or cut by its end (`refused:window`, `unavailable:window_ended`), or a run cancelled with the request in flight (`unavailable:canceled`) | `limit_reached` | 2 |
-| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for an exact `not_exposed` URL read from the `internet` vantage, only connection refusal or timeout disproves the contradiction with the outage caveat (`engagement.md`, "Reachability and vantage") |
+| A request that got no answer: the connection reset after its retries, a timeout, the address unreachable, or no nameserver to resolve its name (`unavailable:connection_refused`, `unavailable:connection_reset`, `unavailable:timeout`, `unavailable:unreachable`, `unavailable:no_resolver`) | `unavailable:<code>` | 2 for something declared: a `url` root or entry, the DNS of a domain root or a mail domain itself, an intent URL other than `not_exposed`. Nothing was read, so it says nothing about the target, and a rerun or a resume sends it again. A discovered name records "did not answer from this machine" and does not change the exit code; for an exact `not_exposed` URL read from the `internet` vantage, only connection refusal or timeout disproves the contradiction with the outage caveat (`web-collector.md`, "Reachability and vantage") |
 | A page served by a firewall that blocks scheck (`unavailable:blocked`, "Connections") | `unavailable:blocked` | no change; every rule over it abstains |
 | `refused:unknown_op`, `out_of_scope` or `method` on a collector's request | `unavailable:refused_by_gate` | no change. It is a defect, and a collector's tests fail on any |
 
@@ -1248,7 +1328,7 @@ names no commit (`dev`) or carries uncommitted changes (`-dirty`) cannot be told
 another one, and reuses nothing at all. A web asset's vantage joins it in E7 step 5,
 and the vantage is
 recorded on DNS evidence too, so a resume from another vantage reads the names again
-(`engagement.md`, "Reachability and vantage"). Exact URL intent role and audience
+(`web-collector.md`, "Reachability and vantage"). Exact URL intent role and audience
 also join web identities; mail declarations join records identities by canonical
 domain and are inherited by dependent follow-ups. The fingerprint is a hash
 of the principal's identity and sorted scopes, never of the token. A resume reuses only
@@ -1291,10 +1371,9 @@ The successes a resume may reuse are written after each stage to
 `scheck run <directory>` hands the next session's gate only those `run.json` lists, so a
 file placed there by hand is never a success on record. The gate reports which records
 it reused, and the report names each one that changed since scheck wrote it
-(`engagement.md`, "Stop and resume"). A resumed session's request ids carry its number,
+(`runs.md`, "Stop and resume"). A resumed session's request ids carry its number,
 `g<session>-<seq>` (`g2-000001`) after the first session's `g000001`, so ids stay
-unique in the run's one `audit.jsonl`. A host is resumed as a unit (`engagement.md`,
-"Stop and resume").
+unique in the run's one `audit.jsonl`. A host is resumed as a unit (`runs.md`, "Stop and resume").
 
 ### Authorization windows
 

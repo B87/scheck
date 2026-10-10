@@ -14,7 +14,7 @@ import (
 var ErrLocked = errors.New("is locked by another run")
 
 // RunDir is one run's directory, <state-dir>/engagements/<name>/<started>/,
-// created 0700 and locked while the run holds it (docs/spec/engagement.md,
+// created 0700 and locked while the run holds it (docs/spec/runs.md,
 // "Runs, state and configuration"). Every file in it is written 0600.
 type RunDir struct {
 	Path string
