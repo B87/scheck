@@ -880,7 +880,9 @@ no answer exiting 2.
 
 ### E6 — Google Workspace collector
 
-**Status:** DEFINE design frozen on 2026-10-10; no Workspace collector is built. The design is
+**Status:** DEFINE design frozen on 2026-10-10. Step 1 implements the credential and
+tenant-binding library; it is not wired into engagement stages or the CLI. Inventory,
+rules and report integration remain planned. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -895,6 +897,17 @@ Unknown grants remain unknown; a successful read does not prove write capability
    historical seal does not satisfy or waive it.
 1. Gate foundation: supported Google credentials, audited token exchange and minimal
    customer/domain bootstrap that binds the declared root before tenant reads.
+   **Done 2026-10-10, library only:** strict restricted ADC loading, in-process RSA assertions,
+   private audited token exchange through `Send`, ordered customer/domain/alias
+   binding and no ledger reuse while the principal is unknown. Every profile uses
+   baseline Directory scopes for bootstrap; optional token attempts belong to
+   steps 5 and 6 and never block baseline reads. No live Workspace
+   request, stage wiring or inventory is claimed by this step. Exclusion admission
+   and delegated-user verification belong to step 2. The targeted authentication
+   DEFINE contract is recorded in
+   [eval/e6-authentication-definition-2026-10-10.md](eval/e6-authentication-definition-2026-10-10.md),
+   including green offline checks and a fresh adversarial review with no findings.
+   These are software-verification results, not independent security acceptance.
 2. Tenant inventory: domains, organizational units and users, exclusions before
    persistence and follow-ups, stable account ids and people attribution.
 3. Identity and admin rules: declared admins, super-admin counts, departed and stale

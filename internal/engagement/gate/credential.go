@@ -23,6 +23,7 @@ type Credential struct {
 	header    string
 	value     string
 	secret    string
+	secrets   []string
 }
 
 // minTokenLength is shorter than any GitHub token. A shorter value is a

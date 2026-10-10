@@ -208,7 +208,9 @@ answer a customer's questionnaire, so it is written in plain words. Four groups,
 in this order, and a group with nothing in it prints `none`:
 
 - *Third-party services* ([scope.md](scope.md#third-party-sources)): each source, who
-  runs it when it is a public service, what it was sent, and the request count. The
+  runs it when it is a public service, what it was sent, and the request count. A
+  source has a separate row per literal host: Google token exchange and Directory
+  requests keep their own hosts and counts. The
   DNS line counts the control queries, and names `systemd-resolved` rather than
   `127.0.0.53`.
 - *Your own systems*: per kind, the count of requests, SSH sessions or local runs, for
@@ -259,7 +261,8 @@ WHAT LEFT THIS MACHINE
   What scheck read, including people's names and email addresses from google-workspace:example.com, is stored only on this machine, in ~/.local/state/scheck/engagements/acme/2026-10-07T09:00:00Z; deleting that directory removes it.
 ```
 
-A source names the environment variable a credential came from, never its value. A
+A source names the credential selection, such as its environment variable or the
+local ADC file label, never its value or file contents. A
 host named by an address puts nothing under third-party services. The names SSH
 resolved with this machine's own lookup, a host's and a jump host's written as names,
 are on a line of their own, since SSH asked the system's resolver for them, not the

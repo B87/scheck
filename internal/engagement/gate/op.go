@@ -68,8 +68,9 @@ type Auth string
 
 // The credential bindings.
 const (
-	NoAuth      Auth = ""
-	GitHubToken Auth = "github_token"
+	NoAuth       Auth = ""
+	GitHubToken  Auth = "github_token"
+	WorkspaceADC Auth = "workspace_adc"
 )
 
 // Kind is what a list op's items are. The excludable kinds need an
@@ -184,6 +185,8 @@ const (
 	WorkflowFile
 	SecretName
 	AlertNumber
+	// CustomerID is a stable Google customer token, checked against fresh binding.
+	CustomerID
 )
 
 // Param is one typed parameter. An optional parameter may be left out; it
@@ -365,7 +368,7 @@ func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err err
 // declareParams checks each parameter's name and type.
 func (c *compiled) declareParams(prov provider, wholePath bool) error {
 	for _, p := range c.Params {
-		if p.Name == "" || p.Type < Login || p.Type > AlertNumber {
+		if p.Name == "" || p.Type < Login || p.Type > CustomerID {
 			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
@@ -404,6 +407,9 @@ func (c *compiled) checkDestination(prov provider, rawQuery string) error {
 		}
 		if c.Class == CredentialExchange && !slices.Contains(tokenEndpoints, c.host) {
 			return errors.New("a credential exchange posts only to a declared token endpoint")
+		}
+		if c.Class == CredentialExchange && c.URL != workspaceTokenURL {
+			return errors.New("a credential exchange uses the literal token endpoint path")
 		}
 		return nil
 	}
@@ -497,13 +503,13 @@ func (u uses) subject() error {
 		inSubject[m[1]] = true
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(c.scheme+"://"+c.host+c.path, -1) {
-		if !inSubject[m[1]] && !c.ciResource(m[1]) {
+		if !inSubject[m[1]] && !c.ciResource(m[1]) && !c.workspaceResource(m[1]) {
 			return fmt.Errorf("{%s} picks the target but is not in the subject", m[1])
 		}
 	}
 	for _, kv := range c.query {
 		for _, m := range placeholder.FindAllStringSubmatch(kv[1], -1) {
-			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count && !c.ciResource(m[1]) {
+			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count && !c.ciResource(m[1]) && !c.workspaceResource(m[1]) {
 				return fmt.Errorf("{%s} in the query is not a page or a cursor, so it must be in the subject", m[1])
 			}
 		}
@@ -534,6 +540,9 @@ func (c *compiled) checkResponse(prov provider) error {
 		return errors.New("declares no fields it keeps")
 	}
 	if err := c.checkCIResources(); err != nil {
+		return err
+	}
+	if err := c.checkWorkspaceOp(); err != nil {
 		return err
 	}
 	return c.validateBody()
@@ -730,6 +739,19 @@ func NewRegistry(ops ...Op) (*Registry, error) {
 		}
 		r.ops[op.ID] = c
 	}
+	for _, c := range r.ops {
+		if c.Auth == WorkspaceADC {
+			token, err := validate(workspaceTokenOp())
+			if err != nil {
+				return nil, err
+			}
+			if _, exists := r.ops[token.ID]; exists {
+				return nil, errors.New("credential exchange id is reserved")
+			}
+			r.ops[token.ID] = token
+			break
+		}
+	}
 	return r, nil
 }
 
@@ -819,6 +841,11 @@ func bindValue(t ParamType, v string) (string, error) {
 		return v, nil
 	case UserKey:
 		return userKey(v)
+	case CustomerID:
+		if !customerIDRE.MatchString(v) || v == "my_customer" {
+			return "", errors.New("not a stable customer id")
+		}
+		return v, nil
 	}
 	return "", errors.New("unknown type")
 }

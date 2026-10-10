@@ -369,8 +369,10 @@ in this order:
    count, of which `control_lookups` counts root controls and `invalid_queries` counts
    actual queries for reserved-name controls; `control_invalid` says whether any
    such query was sent,
-   crt.sh with the domains asked about, a provider with the environment variable its
-   credential came from, never the value), `assets` (SSH sessions, `unreached` servers
+   crt.sh with the domains asked about, a provider with the credential selection
+   label, never the value). Provider rows are grouped by source and literal host;
+   Google token exchange and Directory requests retain separate hosts and counts.
+   `assets` (SSH sessions, `unreached` servers
    a connection was attempted to, `jump_hosts` and `jump_unreached` counted apart,
    local runs, requests to sites with first-party evidence), `unconfirmed` (names without first-party evidence that were sent
    requests), `ssh_resolved` (host and jump host names this machine's own resolver was

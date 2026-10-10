@@ -194,6 +194,12 @@ type Gate struct {
 	// each SPF evaluation (dns.go).
 	pointed    map[string]*pointed
 	spfLookups map[string]int
+	// Workspace credentials and bootstrap state remain private session memory.
+	workspaceMu          sync.Mutex
+	workspaceSource      *googleSource
+	workspaceSourceError string
+	workspaceLoaded      bool
+	workspace            map[string]*workspaceSession
 }
 
 // redirect is a 3xx the gate received: the asset it was for, where it
@@ -304,7 +310,8 @@ type Request struct {
 	// NextOf is the request id of the list page before this one. The
 	// request repeats that page's parameters without the cursor, which
 	// the gate holds and fills in.
-	NextOf string
+	NextOf   string
+	exchange *googleExchange // only gate authentication code can supply this
 }
 
 // Result is what came of a request.
@@ -343,8 +350,15 @@ const maxRetryAfter = 300 * time.Second
 // 429, 502, 503, 504 or a reset before the response. Every attempt is
 // admitted again from the first check.
 func (g *Gate) Send(ctx context.Context, r Request) Result {
+	if op := g.reg.ops[r.Op]; op != nil && op.Auth == WorkspaceADC {
+		g.workspaceMu.Lock()
+		defer g.workspaceMu.Unlock()
+	}
 	first := g.nextID()
 	res, rt := g.attempt(ctx, r, first, "", 1)
+	if r.exchange != nil {
+		return res
+	} // credential POSTs are never retried
 	for i := 0; rt != nil && i < len(retryDelays); i++ {
 		wait, asked := rt.after, rt.after > 0
 		if !asked {

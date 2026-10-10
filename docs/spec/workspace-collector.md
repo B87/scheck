@@ -1,8 +1,9 @@
 # scheck — Google Workspace collector specification
 
 Google Workspace assessment planned for 0.0.2 E6. The security-consultant DEFINE
-review froze this design on 2026-10-10. No Workspace collector is built, no live
-measurement is recorded, and no release gate is claimed here.
+review froze this design on 2026-10-10. Step 1 implements the credential and tenant
+binding library, with no engagement-stage or CLI wiring. Inventory, rules and report
+integration remain planned. No live measurement or release gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement owns people attribution, admin
@@ -16,7 +17,17 @@ Every target operation is a compiled `GET` through the gate. The only `POST` is 
 separately declared, budgeted credential exchange at the literal endpoint
 `https://oauth2.googleapis.com/token`. Its secret body and response never enter
 evidence, audit output or persisted state. Assertions are signed in process with a
-fixed audience and bounded lifetime.
+fixed audience and a 300-second lifetime. The gate signs `RS256` assertions with
+`iss`, delegated `sub`, literal token-endpoint `aud`, compiled `scope`, `iat` and
+`exp`; `kid` comes from the selected key. Credential exchange goes through `Send`,
+sharing admission, authorization windows, throttling, timeouts, budgets, TLS checks
+and audit with reads. The secret form body and token response are private, never
+ordinary response evidence. A token `POST` is not retried, including on a rate limit;
+no caller-supplied `POST` body is admitted. Target `GET` requests retain the standard
+`Send` retries for 429, 502, 503, 504 and eligible connection resets. Private failures
+expose typed execution status and fixed diagnostics, never `net/http` URL text that
+could reveal an unbound customer selector. Recognized OAuth error codes select safe
+fixed messages; returned error descriptions are discarded.
 
 No SDK, subprocess, `gcloud`, metadata server, token introspection, interactive
 consent, arbitrary token endpoint, external-account federation, executable credential
@@ -31,7 +42,40 @@ the conventional local ADC file, with only `authorized_user` and `service_accoun
 JSON types. This is not full ADC support. The gate alone holds keys, refresh tokens,
 client secrets, JWT assertions and access tokens. Credentials never come from the
 engagement file. `SCHECK_WORKSPACE_SUBJECT` supplies the delegated administrator for
-service-account authentication.
+service-account authentication. `authorized_user` credentials refuse that variable;
+this profile does not impersonate a user through a refresh token.
+
+The selected credential file must be regular and at most 256 KiB. It is opened
+read-only with `O_NOFOLLOW` and `O_NONBLOCK`; symlinks and nonregular files are refused.
+An explicitly selected unreadable or unsupported file never falls back to another
+credential. Parsing requires one JSON object, no duplicate keys or trailing data,
+valid UTF-8, and only these string-valued fields. Every present field must be a
+string, including optional metadata; JSON `null` is refused:
+
+| Type | Allowed fields |
+|---|---|
+| Both | `type`, `universe_domain`, `quota_project_id`, `token_uri` |
+| `authorized_user` | `client_id`, `client_secret`, `refresh_token`, `account` |
+| `service_account` | `project_id`, `private_key_id`, `private_key`, `client_email`, `client_id`, `auth_uri`, `auth_provider_x509_cert_url`, `client_x509_cert_url` |
+
+`token_uri`, when present, must equal the literal token endpoint; `universe_domain`,
+when present, must be `googleapis.com`. Metadata URLs are not followed. The service
+key must be one unencrypted PKCS#8 RSA private key of at least 2048 bits, with no
+extra PEM block or header. Malformed credentials produce fixed diagnostic text,
+never decoder excerpts or credential values.
+
+The selected file is loaded once as an immutable credential snapshot for the gate
+session. File replacement, rotation or a changed credential path takes effect in a
+new gate session, not by silently replacing current authentication. A changed
+profile or delegated subject stops dependent requests in the current session.
+
+Token responses are limited to 64 KiB and must contain a recognized Bearer token and
+integer expiry greater than 60 seconds. The gate subtracts a 60-second safety margin
+and caps provider expiry at one hour from request start before subtracting that
+margin. Returned scope evidence is known only when its explicit field is a usable
+string; absent, `null` or malformed scope is unknown. Requested scopes do not fill
+that gap. Tokens stay in session memory. Expiry or rejected authentication
+requires a fresh ordered bootstrap before a later tenant read.
 
 `SCHECK_WORKSPACE_PROFILE` selects one compiled read profile:
 
@@ -46,6 +90,13 @@ The nonsecret profile is recorded for coverage and invalidation. A profile narro
 the operation catalog; it never widens tenant scope or permits a write. Missing
 permissions remain a gap. No automatic broader-scope request or fallback to a
 write-capable Gmail scope fills one.
+
+Every profile authenticates the tenant-binding bootstrap with only the baseline
+Directory scopes below. Selecting optional checks does not add security or Gmail
+scopes to this initial assertion and does not make baseline checks depend on those
+grants. Steps 5 and 6 add separate token attempts for the exact selected optional
+surface after user admission; their denial remains an optional coverage gap. An
+`authorized_user` refresh uses the existing grant, never silently adds scopes.
 
 All baseline scope names below have the prefix
 `https://www.googleapis.com/auth/`:
@@ -76,7 +127,20 @@ No credential value or hash is persisted.
 The declared root is a Workspace domain; a returned customer id identifies the
 tenant. Before binding, only minimal audited bootstrap is allowed:
 `customers.get(my_customer)`, followed by that returned customer's domains and domain
-aliases. This is a narrow bootstrap exception, never authorization to read users,
+aliases, in that order. All three responses must be recognized and usable, even
+when the declared root was already a verified domain. Alias binding requires a
+verified alias whose parent is a verified domain in the returned customer domain
+set. Conflicting duplicate verification or alias-parent evidence refuses binding.
+Malformed array members refuse binding rather than disappearing in projection.
+Each domain and alias population is limited to 1,000 records; an actual excess is
+`limit_reached`, not an empty inventory. Bootstrap bodies,
+foreign names and ids, response headers and body hashes remain private; its audit
+identifies the declared root and compiled path, not unbound tenant selectors. The
+audit URL is sanitized during request binding, before any later refusal can record it. Only
+the successfully bound customer id, declared root, selected profile and usable
+returned scope evidence leave the private bootstrap.
+
+This is a narrow bootstrap exception, never authorization to read users,
 roles, grants or Gmail settings.
 
 Binding requires a valid customer id and the exact declared root as a verified
@@ -107,8 +171,14 @@ so authenticated evidence is not reused across sessions. There is no invented
 are distinct from the freshly verified Directory delegated user's stable id. A
 successful JWT exchange does not provider-verify the JSON `client_id` field.
 
-After customer binding, `users.get` verifies the delegated subject. Changes to issuer,
-subject, verified user, customer or required profile invalidate related evidence;
+Step 1 has no user admission or delegated-user verification. Its principal remains
+unknown for both credential types and no Workspace response is eligible for ledger
+reuse, even if an earlier ledger row names an apparent principal. Fresh customer
+binding alone never enables reuse.
+
+Step 2 establishes exclusions and current user admission before `users.get` verifies
+the delegated subject. Changes to issuer, subject, verified user, customer or required
+profile invalidate related evidence;
 an unknown principal disables reuse. Gmail per-user token caches are keyed by bound
 customer and admitted user id. Current primary address, customer and exclusions are
 checked before impersonation, never inferred from an arbitrary target-returned address.
@@ -324,6 +394,14 @@ no approved Gmail credential was selected for those accounts and, if wanted, ask
 operator to arrange approved access. These checks inspect settings and filter
 forwarding destinations, never messages.
 
+Execution diagnostics use plain words: the selected credential file could not be
+read, the Workspace customer could not be verified, or authentication expired. They
+do not present internal terms such as ADC, binding, bootstrap or gate as operator
+actions. Where a session must be replaced, the wording directs the operator to
+restart or resume with the intended profile and account. This wording is prepared
+for future CLI integration; step 1 does not expose a Workspace run path. Full client
+report review remains part of integration and step 7.
+
 The credential warning says observed grants permit operations beyond reads, scheck
 sent only declared reads, effective access was not tested, and an administrator should
 review a dedicated assessment credential. Unknown capability is explicit. Counts
@@ -352,8 +430,9 @@ claims release acceptance or rewrites a historical evaluation record.
 See [ROADMAP.md](../ROADMAP.md#e6--google-workspace-collector), steps 0–7. Each build
 step receives the consultant, client, spec and adversarial reviews required by
 `AGENTS.md`; optional surfaces do not block baseline Directory collection. Targeted
-DEFINE reviews precede steps 1 and 3 to freeze implementation-level token assertion
-and parser details without widening this evidence or rule surface.
+DEFINE authentication review for step 1 froze the file, assertion, exchange and
+private-bootstrap details above. A targeted parser DEFINE review still precedes
+step 3 without widening this evidence or rule surface.
 
 ## Provider references
 

@@ -53,14 +53,15 @@ type egress struct {
 	invalidQueries int
 }
 
-func (x *egress) use(source string) *Use {
+func (x *egress) use(source, host string) *Use {
 	if x.uses == nil {
 		x.uses = map[string]*Use{}
 	}
-	u, ok := x.uses[source]
+	key := source + ":" + host
+	u, ok := x.uses[key]
 	if !ok {
 		u = &Use{Source: source}
-		x.uses[source] = u
+		x.uses[key] = u
 	}
 	return u
 }
@@ -83,7 +84,7 @@ func (g *Gate) countSend(a admitted, asset string) {
 		st.FirstParty = st.FirstParty || a.firstParty
 		return
 	}
-	u := g.egress.use(a.prov.source)
+	u := g.egress.use(a.prov.source, a.b.name)
 	u.Operator, u.Host = a.prov.operator, a.b.name
 	u.Requests++
 	subject := a.b.subject

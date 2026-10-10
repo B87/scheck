@@ -637,7 +637,7 @@ func TestConfirmationTarget(t *testing.T) {
 // bound URL may reach it (docs/ROADMAP.md, E6).
 func TestRegistryRefusesVerificationCodes(t *testing.T) {
 	codes := func(url string, params ...Param) Op {
-		return Op{ID: "workspace.codes", Provider: "google", Method: GET, URL: url,
+		return Op{ID: "ws.codes", Provider: "google", Method: GET, URL: url,
 			Subject: "saas:google-workspace:example.com/users/{user}", Params: append([]Param{{Name: "user", Type: UserKey}}, params...),
 			Level: Observe, Accept: []string{"application/json"}, Keep: []string{"items"}, MaxBytes: 1 << 16}
 	}

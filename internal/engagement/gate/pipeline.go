@@ -824,7 +824,11 @@ func marshal(v any) []byte {
 // the credential's value when one is attached.
 func (g *Gate) redactFor(a admitted) *policy.Redactor {
 	if a.cred != nil {
-		return g.redactor.WithLiteral("credential", a.cred.secret)
+		red := g.redactor.WithLiteral("credential", a.cred.secret)
+		for _, secret := range a.cred.secrets {
+			red = red.WithLiteral("credential", secret)
+		}
+		return red
 	}
 	return g.redactor
 }

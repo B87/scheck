@@ -291,6 +291,17 @@ func (g *Gate) registered(_ context.Context, p *pending) *halt {
 func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	op, r := p.op, p.r
 	params := r.Params
+	if op.Auth == WorkspaceADC && (op.ID == "workspace.bootstrap_domains" || op.ID == "workspace.bootstrap_aliases") {
+		params = maps.Clone(params)
+		if params == nil {
+			params = map[string]string{}
+		}
+		if _, supplied := params["customer"]; !supplied {
+			if session := g.workspace[r.Asset]; session != nil {
+				params["customer"] = session.customer
+			}
+		}
+	}
 	if l := op.List; l != nil && l.Next != nil {
 		if _, set := r.Params[l.Next.Param]; set {
 			return refused("bind", fmt.Sprintf("parameter %q is filled by the gate from the page before", l.Next.Param))
@@ -330,6 +341,10 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	}
 	p.b = b
 	p.e.Params, p.e.URL = b.params, auditURL(b)
+	if op.Auth == WorkspaceADC && strings.HasPrefix(op.ID, "workspace.bootstrap_") {
+		p.e.URL = op.URL
+		p.e.Params = map[string]string{"domain": b.params["domain"]}
+	}
 	if p.prev != nil {
 		p.e.Page = p.prev.n + 1
 		rest := maps.Clone(b.params)
@@ -341,7 +356,9 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	if op.Class == CredentialExchange {
 		// Sent only by a credential source, which arrives with the
 		// Workspace collector (0.0.2 E6).
-		return refused("method", "a credential exchange is not a collector's request")
+		if r.exchange == nil || op.ID != workspaceTokenID {
+			return refused("method", "a credential exchange is not a collector's request")
+		}
 	}
 	return nil
 }
@@ -453,7 +470,14 @@ func (g *Gate) admitWindow(_ context.Context, p *pending) *halt {
 
 // attachCredential is step 10: a credential is present when the op binds
 // one.
-func (g *Gate) attachCredential(_ context.Context, p *pending) *halt {
+func (g *Gate) attachCredential(ctx context.Context, p *pending) *halt {
+	if p.r.exchange != nil {
+		p.cred = p.r.exchange.credential
+		return nil
+	}
+	if p.op.Auth == WorkspaceADC {
+		return g.attachWorkspace(ctx, p)
+	}
 	if p.op.Auth == NoAuth {
 		return nil
 	}

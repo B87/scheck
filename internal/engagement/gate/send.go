@@ -304,17 +304,29 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 	var verr *tls.CertificateVerificationError
 	var nerr net.Error
 	var rt *retry
+	finishFailure := func(response *Response, retry *retry) (Result, *retry) {
+		if s.r.exchange != nil || s.a.b.op.Auth == WorkspaceADC {
+			// net/http errors embed the real URL, including an unbound customer id.
+			// Private authentication/bootstrap failures expose only typed execution status.
+			s.res.Detail = "the Google request could not complete; see the execution status"
+			if retry != nil {
+				retry.detail = s.res.Detail
+			}
+			response = nil
+		}
+		return s.finish(response, retry)
+	}
 	switch {
 	case errors.As(err, &verr):
 		s.res.end("unavailable:tls_invalid", verr.Err.Error())
-		return s.finish(&Response{TLS: s.tlsInfo(nil, verr)}, nil)
+		return finishFailure(&Response{TLS: s.tlsInfo(nil, verr)}, nil)
 	case resp == nil && tlsAlert(err) != "" && s.shook.Load() == nil:
 		// The server ended the handshake before it completed: what it
 		// refused is the evidence (tls.legacy_only reads
 		// protocol_version), no chain counts, and nothing was read
 		// (docs/spec/scope.md, "Connections").
 		s.res.end("unavailable:tls_handshake", err.Error())
-		return s.finish(&Response{TLS: &TLSInfo{Alert: tlsAlert(err)}}, nil)
+		return finishFailure(&Response{TLS: &TLSInfo{Alert: tlsAlert(err)}}, nil)
 	case resp == nil && tlsAlert(err) != "":
 		// The server ended TLS after the handshake completed, as one that
 		// requires a client certificate does at TLS 1.3: it answered, with
@@ -322,7 +334,7 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 		info := s.tlsInfo(s.shook.Load(), nil)
 		info.Alert = tlsAlert(err)
 		s.res.end("unavailable:tls_refused", err.Error())
-		return s.finish(&Response{TLS: info}, nil)
+		return finishFailure(&Response{TLS: info}, nil)
 	case s.g.pastDeadline(s.g.now()):
 		s.res.end("unavailable:deadline", "limits.timeout ended the request in flight")
 	case !s.a.windowEnd.IsZero() && !s.g.now().Before(s.a.windowEnd):
@@ -344,7 +356,7 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 	default:
 		s.res.end("unavailable:unreachable", err.Error())
 	}
-	return s.finish(resp, rt)
+	return finishFailure(resp, rt)
 }
 
 // handshake is a TLS op: the handshake and nothing after it.
@@ -382,7 +394,11 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 		// "Connections").
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	req, err := http.NewRequestWithContext(ctx, string(a.b.op.Method), a.b.url.String(), nil)
+	var payload io.Reader
+	if s.r.exchange != nil {
+		payload = strings.NewReader(s.r.exchange.form.Encode())
+	}
+	req, err := http.NewRequestWithContext(ctx, string(a.b.op.Method), a.b.url.String(), payload)
 	if err != nil {
 		return s.failed(err, true, nil)
 	}
@@ -393,7 +409,10 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 	if a.b.op.APIVersion != "" {
 		req.Header.Set("X-GitHub-Api-Version", a.b.op.APIVersion)
 	}
-	if a.cred != nil {
+	if s.r.exchange != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if a.cred != nil && a.cred.header != "" {
 		req.Header.Set(a.cred.header, a.cred.value)
 	}
 	resp, err := client.Do(req)
@@ -401,6 +420,9 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 		return s.failed(err, true, nil)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if s.r.exchange != nil || a.b.op.Auth == WorkspaceADC {
+		return s.workspaceResponse(resp)
+	}
 
 	out := &Response{Status: resp.StatusCode}
 	if resp.TLS != nil {

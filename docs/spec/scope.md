@@ -816,7 +816,7 @@ Each source is a family of ops with its own literal host:
 | Certificate transparency | `crt.sh` | each declared domain root, once |
 | DNS resolver | the system's, recorded by address | every name queried |
 | GitHub | `api.github.com` | the organization name, repository names, the token |
-| Google | `admin.googleapis.com`, `oauth2.googleapis.com`; planned E6 `gmail.googleapis.com` | the customer id, user ids, the credential |
+| Google | `admin.googleapis.com`, `oauth2.googleapis.com`; planned E6 `gmail.googleapis.com` | declared domain and customer selector; private token exchange sends credential material only to the token endpoint; planned user reads send admitted user ids |
 
 A query to a source names only an in-scope root or asset. Following a CNAME chain is
 part of resolving the in-scope name; a standalone lookup of a name outside every root
