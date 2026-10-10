@@ -380,7 +380,7 @@ own directory listing limit also prevents absence.
 
 ### Supported workflow syntax
 
-Version `github-workflow-syntax:2026-10-10` describes the supported grammar. The
+Version `github-workflow-syntax:2026-10-10.2` describes the supported grammar. The
 gate decodes base64, redacts the decoded bytes, then uses the existing `yaml.v3`
 parser to produce a bounded neutral sanitized structure. The collector interprets
 that structure; no dependency exception is added and no pre-redaction content is
@@ -389,9 +389,23 @@ redaction-marker field preserves markers even when sanitization makes YAML
 unparseable; rejected source text is not retained. Parse errors retain only generic
 reasons, never raw error text, locations or snippets. A failed parse supplies no file facts.
 
+For decoded workflow bytes only, the policy redactor preserves a whole exact
+`${{ github.token }}` or `${{ secrets.GITHUB_TOKEN }}` value under a secret-shaped
+key. The reference may be unquoted or correctly single/double quoted, with at most
+32 spaces or tabs around the reference name and after the whole value. These are
+runtime credential references, not credential values. Other expressions,
+concatenations and malformed references retain normal redaction. Literal credential
+detectors, exact run credentials and `redact_extra` remain active on every byte;
+the exception does not apply to other responses or the host collector.
+
 Support one mapping-root YAML document with string keys, block and flow mappings
-and sequences, plain/quoted/block strings, expected booleans and null event
-configurations. `on` accepts a literal string, list or mapping. Supported fields are
+and sequences, plain/quoted/block strings, expected booleans, null event
+configurations and bounded decimal numbers. Integers must fit signed 64 bits;
+decimal floating-point values must parse to a finite 64-bit value. Overflow,
+nonfinite values, hexadecimal/octal forms and digit separators are unsupported.
+Numbers retain their numeric type: a number where a predicate requires a string
+is unknown, never coerced into one. `on` accepts a literal string, list or mapping.
+Supported fields are
 `permissions`, `jobs`, direct `steps`, `uses`, `run`, `with`, literal `runs-on`, `if`,
 `shell`, `defaults.run` and literal working directories. A reusable job's `uses`
 is inspected for pinning only; its execution and privilege remain opaque.
@@ -945,6 +959,10 @@ permission guidance, reuse explanations and inventory gaps. Engagement places
 those explanations on the asset; the report renders them. `github.CoverageReason`
 maps `insufficient_evidence` to `unavailable:github_evidence` at the report edge,
 while persisted Recon judgments retain the original evidence reason.
+An unavailable permission read with no provider detail says access or feature
+availability was not established. Dependabot guidance asks the owner to check
+Dependabot alerts read permission, token repository selection and feature
+availability; it does not infer a missing grant from HTTP 403 alone.
 
 Inventory reports observed or “at least” counts, missing reads and
 permission/visibility gaps as asset notes. Steps 3–6 report findings and each

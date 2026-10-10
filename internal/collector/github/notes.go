@@ -17,13 +17,19 @@ func ReadNotes(read Read) []ReadNote {
 		out = append(out, ReadNote{Detail: read.Op + ": population incomplete (" + InventoryGapText(read.Population.Incomplete) + ")"})
 	}
 	if read.Reason != "" || read.Gap != "" {
-		detail := read.Detail
+		detail := strings.TrimSpace(read.Detail)
+		if detail == "" {
+			detail = strings.TrimSpace(read.Reason + " " + read.Gap)
+			if read.Reason == "insufficient_permission" {
+				detail = "Read unavailable; access or feature availability was not established"
+			}
+		}
 		if read.Reason == "insufficient_permission" {
 			switch read.Op {
 			case OpOrganizationSecrets, OpSelectedSecretRepositories, OpRepositorySecrets:
 				detail += ". Ask the owner to authorize Secrets read at the relevant organization or repository level, then resume"
 			case OpDependabotAlerts:
-				detail += ". Ask the repository owner to authorize Dependabot alerts read for this repository, then resume"
+				detail += ". Ask the repository owner to check Dependabot alerts read permission, repository selection and feature availability, then resume"
 			case OpSecretAlerts, OpSecretLocations:
 				detail += ". Ask the repository owner to authorize Secret scanning alerts read and confirm the account has the required repository role, then resume"
 			case OpRepositoryWorkflow, OpOrganizationWorkflow:

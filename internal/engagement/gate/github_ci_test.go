@@ -75,3 +75,24 @@ func TestCIResourceBindingsStayInsideCompiledSubtree(t *testing.T) {
 		t.Fatal("CI type escaped subtree")
 	}
 }
+
+func TestWorkflowNumericScalarsAndTokenReferences(t *testing.T) {
+	source := "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    env:\n      GH_TOKEN: ${{ github.token }}\n      OTHER_TOKEN: '${{ secrets.GITHUB_TOKEN }}'\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          ratio: 1.5\n"
+	raw, _ := json.Marshal(map[string]any{"content": base64.StdEncoding.EncodeToString([]byte(source)), "encoding": "base64"})
+	red, _ := policy.NewRedactor(nil)
+	body, hits, code := workflowBody(raw, red)
+	var out map[string]any
+	_ = json.Unmarshal(body, &out)
+	if code != "" || len(hits) != 0 || out["yaml_gap"] != nil || out["workflow"] == nil {
+		t.Fatalf("code=%s hits=%v body=%s", code, hits, body)
+	}
+	job := out["workflow"].(map[string]any)["jobs"].(map[string]any)["build"].(map[string]any)
+	if job["timeout-minutes"] != float64(20) {
+		t.Fatalf("lost numeric type: %#v", job)
+	}
+	for _, value := range []string{".inf", ".nan", "1e999", "9223372036854775808", "0x10", "012", "1_000", "999999999999999999999999999999999999999999999999999999999", "0xffffffffffffffffffffffff", "0o777777777777777777777777777777", "0b11111111111111111111111111111111111111111111111111111111111111111111"} {
+		if _, gap := workflowDocument([]byte("value: " + value)); gap != "workflow_yaml_type_unknown" {
+			t.Fatalf("numeric %s: %s", value, gap)
+		}
+	}
+}

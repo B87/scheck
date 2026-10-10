@@ -119,3 +119,22 @@ func TestActiveRulesUnknownAndPartial(t *testing.T) {
 		t.Fatal("unknown rule treated absent")
 	}
 }
+
+func TestNumericWorkflowFieldsPreserveThreePinningOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		reference string
+		want      string
+	}{
+		{`"actions/checkout@v4"`, Fired},
+		{`"actions/checkout@` + strings.Repeat("a", 40) + `"`, Disproved},
+		{`42`, Abstained},
+	} {
+		f := ciFake()
+		blob := strings.Repeat("b", 40)
+		f.results[OpWorkflowFile][0].Response.Body = []byte(fmt.Sprintf(`{"name":"ci.yml","path":".github/workflows/ci.yml","type":"file","sha":%q,"size":100,"decoded_bytes":100,"workflow":{"on":"push","jobs":{"build":{"runs-on":"ubuntu-latest","timeout-minutes":20,"steps":[{"uses":%s,"with":{"fetch-depth":0}}]}}}}`, blob, tc.reference))
+		ci := collectRepositoryCI(context.Background(), f, ciAccess(), "recon")
+		if !hasVerdict(JudgeCI(Evidence{RepositoriesCI: []RepositoryCI{ci}}, Context{}), finding.IDGitHubMutableAction, tc.want) {
+			t.Fatalf("reference %s wanted %s", tc.reference, tc.want)
+		}
+	}
+}

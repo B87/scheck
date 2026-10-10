@@ -131,8 +131,13 @@ With zero CI decisions, read the missing reads and next steps; no security verdi
 was possible when all security assessments remained unknown. Permission next steps
 name the required read grant and authorization, never broader target write access.
 Workflow evidence is pinned to the assessed default-branch commit;
-unsupported syntax, unknown permissions and partial populations abstain. A protected
-branch does not prove review strength or bypass resistance. PR-target findings
+unsupported syntax, unknown permissions and partial populations abstain. Bounded
+decimal workflow numbers are supported without string coercion. Whole built-in token references
+are configuration references, not literal secrets; literal credential redaction
+remains active. An unavailable Dependabot read does not establish that alerts are
+absent or that a grant is missing: check read permission, token repository selection
+and feature availability with the owner. A protected branch does not prove review
+strength or bypass resistance. PR-target findings
 describe requested configuration, never successful execution or exploitability;
 runtime policies, checkout protection, approvals, runner access/isolation, App
 grants, job container/service images, reusable/composite internals and OIDC trust

@@ -36,7 +36,7 @@ func TestGitHubCIRunPinsGETsAndNeverPersistsEncodedSecrets(t *testing.T) {
 	commit := strings.Repeat("a", 40)
 	blob := strings.Repeat("b", 40)
 	secret := "ghp_" + strings.Repeat("s", 36)
-	workflow := "on: pull_request_target\npermissions: write-all\njobs:\n  build:\n    runs-on: [self-hosted, linux]\n    steps:\n    - uses: actions/checkout@v4\n      with:\n        ref: ${{ github.event.pull_request.head.sha }}\n        allow-unsafe-pr-checkout: true\n    - run: npm ci\n    env:\n      SEED: " + secret + "\n"
+	workflow := "on: pull_request_target\npermissions: write-all\njobs:\n  build:\n    runs-on: [self-hosted, linux]\n    timeout-minutes: 20\n    steps:\n    - uses: actions/checkout@v4\n      with:\n        fetch-depth: 0\n        ref: ${{ github.event.pull_request.head.sha }}\n        allow-unsafe-pr-checkout: true\n    - run: npm ci\n    env:\n      GH_TOKEN: ${{ github.token }}\n      OTHER_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n      SEED: " + secret + "\n"
 	encoded := base64.StdEncoding.EncodeToString([]byte(workflow))
 	repo := `{"id":10,"name":"shop","full_name":"acme/shop","owner":{"id":2,"login":"acme","type":"Organization"},"visibility":"public","default_branch":"Release/v1"}`
 	hits := []string{}
@@ -199,7 +199,7 @@ func TestGitHubCIFakeAPIThreeOutcomes(t *testing.T) {
 			if verdict == githubc.Disproved {
 				setting, trigger, reference, permissions, protected = "read", "push", sha, "read-all", true
 			}
-			source := "on: " + trigger + "\npermissions: " + permissions + "\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@" + reference + "\n      with:\n        ref: ${{ github.event.pull_request.head.sha }}\n    - run: npm test\n"
+			source := "on: " + trigger + "\npermissions: " + permissions + "\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@" + reference + "\n      with:\n        fetch-depth: 0\n        ref: ${{ github.event.pull_request.head.sha }}\n    - run: npm test\n"
 			if verdict == githubc.Abstained {
 				source = "on: push\non: pull_request_target\n"
 			}

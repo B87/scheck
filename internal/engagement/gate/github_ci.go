@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/b87/scheck/internal/policy"
@@ -15,6 +17,10 @@ import (
 
 const WorkflowMaxBytes = 512 << 10
 const codeWorkflowLimit = "workflow_limit"
+
+var workflowUnsupportedNumberRE = regexp.MustCompile(`^[+-]?(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)$`)
+
+var workflowDecimalRE = regexp.MustCompile(`^[+-]?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$`)
 
 var commitSHARE = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
 var workflowFileRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,194}\.ya?ml$`)
@@ -111,7 +117,7 @@ func workflowBody(raw []byte, red *policy.Redactor) ([]byte, []policy.Hit, strin
 	if len(decoded) > WorkflowMaxBytes {
 		return nil, hits, codeWorkflowLimit
 	}
-	sanitized, dh := red.Redact(decoded)
+	sanitized, dh := red.WithWorkflowReferences().Redact(decoded)
 	hits = append(hits, dh...)
 	document, gap := workflowDocument(sanitized)
 	if gap == "workflow_structure_limit" {
@@ -187,8 +193,27 @@ func workflowNode(n *yaml.Node, depth int, count *int) (any, string) {
 		}
 		return out, ""
 	case yaml.ScalarNode:
+		// Validate the spelling before yaml.v3's inferred tag: overflowing
+		// integers can become floats, and overflowing numbers can become strings.
+		if n.Style == 0 && workflowDecimalRE.MatchString(n.Value) {
+			if !strings.ContainsAny(n.Value, ".eE") {
+				value, err := strconv.ParseInt(n.Value, 10, 64)
+				if err == nil {
+					return value, ""
+				}
+			} else {
+				value, err := strconv.ParseFloat(n.Value, 64)
+				if err == nil && !math.IsInf(value, 0) && !math.IsNaN(value) {
+					return value, ""
+				}
+			}
+			return nil, "workflow_yaml_type_unknown"
+		}
 		switch n.Tag {
 		case "!!str":
+			if n.Style == 0 && workflowUnsupportedNumberRE.MatchString(n.Value) {
+				return nil, "workflow_yaml_type_unknown"
+			}
 			return n.Value, ""
 		case "!!null":
 			return nil, ""

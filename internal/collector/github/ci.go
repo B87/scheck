@@ -19,7 +19,7 @@ const (
 	OpBranchRules            = "github.active_branch_rules"
 	OpWorkflowDirectory      = "github.workflow_directory" //nolint:gosec // compiled operation id, not a credential
 	OpWorkflowFile           = "github.workflow_file"      //nolint:gosec // compiled operation id, not a credential
-	WorkflowSyntaxVersion    = "github-workflow-syntax:2026-10-10"
+	WorkflowSyntaxVersion    = "github-workflow-syntax:2026-10-10.2"
 	WorkflowExecutionVersion = "github-workflow-execution:2026-10-10"
 )
 

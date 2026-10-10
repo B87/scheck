@@ -702,6 +702,14 @@ and permissions frozen on 2026-10-10):
    reference pinning. All reported review defects were fixed; none is deferred.
    The E3 preimplementation rest-lab seal is not established; live acceptance
    remains pending.
+   The 2026-10-10 live software test identified rejected numeric workflow fields
+   and redaction of runtime token references. Grammar revision
+   `github-workflow-syntax:2026-10-10.2` accepts bounded decimal numbers without
+   string coercion; workflow-only policy redaction preserves whole exact built-in
+   token references while credential and extra detectors remain active. Empty
+   permission diagnostics explain unavailable access or feature evidence, and
+   Dependabot next steps include repository selection and feature availability.
+   These fixes do not establish live security acceptance.
 5. **Secret metadata and provider alerts (built; verified offline).**
    Security-consultant DEFINE on 2026-10-10 fixes six compiled metadata GETs and
    five rule ids in `spec/github-collector.md`, "Secret metadata and provider
