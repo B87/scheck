@@ -192,6 +192,17 @@ bring *should-fix* and *nits* to the user with a recommendation, and record what
 deferred in the slice's roadmap entry. Skip it for documentation-only changes (the
 `security-consultant` reviews specs) and for comments, typos and test-only renames.
 
+For module shape, use the `modularity` subagent
+([.agents/agents/modularity.md](.agents/agents/modularity.md)). It reads
+`.agents/skills/software-design-philosophy/SKILL.md` and judges depth: whether one
+decision lives in one place, and whether a caller can use the module without knowing
+how it works. Ask it in *design* mode before a new collector's or package's interface
+is fixed, and in *assess* mode when a change copies a type, a notes builder, or a
+collect sequence into a second package, or when the gate or engagement is about to
+absorb another collector's protocol. It does not replace the `code-reviewer`, and it
+does not decide what is checked, refused, redacted, or how severe a finding is. It
+never edits; the implementing session does.
+
 For the documents, use the `spec-steward` subagent
 ([.agents/agents/spec-steward.md](.agents/agents/spec-steward.md)): it keeps `docs/`,
 this file, the README and the `scheck` skill true to the code and to each other, and

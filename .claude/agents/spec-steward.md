@@ -1,1 +1,0 @@
-../../.agents/agents/spec-steward.md
