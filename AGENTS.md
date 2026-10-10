@@ -23,6 +23,7 @@ operating manual for a coding agent in this repository.
 | `docs/spec/engagement.md`, `docs/spec/scope.md` | Designs for the engagement and its scope rules; each section becomes contract when its release lands |
 | `docs/spec/report.md`, `docs/spec/runs.md` | The engagement report contract, run directories, state and resume |
 | `docs/spec/github-collector.md` | E5 gate, inventory, identity/repository-access, CI, secret metadata, provider alerts and confined mirror history |
+| `docs/spec/workspace-collector.md` | Planned E6 Google Workspace collector: tenant binding, read permissions, identity, observed 2-step verification, optional OAuth and Gmail metadata, and coverage limits |
 | `docs/spec/web-collector.md` | Design of the domain, email and web collector (E7): its reads, rules, takeover table and what the report never claims; contract when E7 lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |

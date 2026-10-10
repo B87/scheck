@@ -880,45 +880,59 @@ no answer exiting 2.
 
 ### E6 — Google Workspace collector
 
-**Delivers:** read-only Admin SDK calls with scopes from the environment or the
-provider's login. Rules for: 2-step verification enforcement and enrolment, kept
-apart, since enforcement is per organizational unit with grace periods, and compared
-with `access.mfa` as `spec/engagement.md` "2-step verification" says; super admins
-against `access.admins`, too many super admins, one nobody can name, and a contractor
-or shared account that is one ("Admins"), delegated roles listed for the readout; stale and never-logged-in accounts, not counting new hires
-(read the creation date) or `service` and `break_glass` accounts; suspended accounts
-only when they keep an admin role or group-granted access, since suspension is correct
-offboarding; third-party OAuth apps with broad scopes; external mail forwarding, which
-needs per-user Gmail settings through domain-wide delegation and is *not assessed*
-without it. The tenant is identified by its customer id; secondary domains and domain
-aliases belong to it; people match by `primaryEmail`, a current person's declared alias
-by the alias rule and a leaver's never as disproved (`spec/engagement.md`, "People");
-each matched account's provider id is recorded in `recon.json`; the recon stanza.
-Subject kinds: `org_unit` for 2-step verification not enforced, `account` for the
-per-account findings, `oauth_app` keyed by client id, `principal` for scheck's
-credential; none for too many super admins. The exact list is frozen at the start of the
-slice against what the read scopes return.
+**Status:** DEFINE design frozen on 2026-10-10; no Workspace collector is built. The design is
+[spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
+grants beyond reads produce an unranked warning, as in E5, not a posture finding.
+Unknown grants remain unknown; a successful read does not prove write capability.
 
-**Done when:** as E5, against a fake Admin SDK server; an opt-in live test (`make live`)
-reads the lab tenant; broader-than-read scopes are reported as a finding.
+**Build steps:**
 
-**Carried from E4's reviews:** before E6's first op, unless E5 did it first, the provider
-table and a list's item subject as a template, as under E5; and org-unit matching moves
-behind `Scope`, beside every other exclude match. Coverage is marked by
-`spec/scope.md`'s "Outcomes" table, a request that got no answer exiting 2.
+0. Freeze the evidence, rule outcomes, permission surface, severities and coverage
+   with the security-consultant. **Done 2026-10-10:** AI consultant DEFINE/REVIEW,
+   client wording review and spec audit are recorded in
+   [eval/e6-definition-2026-10-10.md](eval/e6-definition-2026-10-10.md).
+   Independent lab preparation and acceptance remain pending; recording the missed
+   historical seal does not satisfy or waive it.
+1. Gate foundation: supported Google credentials, audited token exchange and minimal
+   customer/domain bootstrap that binds the declared root before tenant reads.
+2. Tenant inventory: domains, organizational units and users, exclusions before
+   persistence and follow-ups, stable account ids and people attribution.
+3. Identity and admin rules: declared admins, super-admin counts, departed and stale
+   accounts, and suspended accounts retaining direct or indirect administrative roles.
+4. Observed 2-step verification: per-account enforcement and enrollment, compared
+   with the operator's current requirement; no inferred unit policy or grace window.
+5. Optional OAuth grant metadata, using an existing approved credential; no
+   automatic request for a broad security grant.
+6. Optional Gmail forwarding metadata through an existing approved delegated
+   credential; no messages, mail content or automatic delegation setup.
+7. Whole-slice offline tests and consultant/client/adversarial reviews, coverage and
+   report review, spec audit, and separately attributed live measurements.
+
+**Done when:** every rule has firing, disproved and abstained fixtures against fake
+Google API servers; scope, exclusions, pagination, unknown fields, permission failures,
+redaction and resume are proved end to end. Opt-in live measurements read only an
+authorized lab tenant and record their evidence. A software test is not release
+acceptance. The independent recall and false-positive gates remain pending.
+
+**Evaluation prerequisite:** E3's required rest-lab seal before E5 or E6 was not
+established before E5. A later seal cannot establish earlier blindness. E6 records the
+gap and prepares separately attributed measurements without rewriting past evaluation
+records or waiving the release gate.
+
+**Carried from E4's reviews:** the provider table and a list's item subject template
+remain the gate's responsibility. Org-unit matching moves behind `Scope`, beside every
+other exclusion match. Coverage follows `spec/scope.md`, "Outcomes"; an attempted
+request without a usable answer remains distinct from an optional surface not selected.
 
 **Carried from the engagement-spec review** (security-consultant, 2026-10-09):
-domain-wide delegation has no Directory API to read it and is the tenant-takeover path,
-so it is *not assessed* with the console path printed; a break-glass super admin is
-expected but needs 2-step verification and rare sign-ins; OAuth apps are never matched
-to `tools` by display name; and, as under E5, each area's sub-items come from the
-practitioner's list.
+domain-wide delegation has no Directory API to read it and remains *not assessed*,
+with the Admin console review path printed; break-glass super admins are expected but
+still need 2-step verification; OAuth app display names never establish a match to
+`tools`.
 
-**Never declared:** `verificationCodes.list`, which answers with users' backup sign-in
-codes: no finding needs them and no redaction rule could recognize them. The gate's
-registry refuses any op whose path, decoded, reads `verificationCodes`, an API op takes
-no path parameter, and a bound path is checked again before it is sent (a test pins
-it, from E4).
+**Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
+The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
+the bound path is checked again before sending (`spec/scope.md`, "The scope gate").
 
 ### E7 — domain, email and web observe
 

@@ -354,10 +354,12 @@ version-disclosure and secret rules judge every name read
 the environment or the provider's own CLI login, never from the engagement file. Use a
 read-only role (for GCP, Security Reviewer and Cloud Asset Viewer; for Google Workspace,
 read-only Admin SDK scopes); if the credentials allow
-more, scheck still calls only its read list. Workspace and GCP report the broader
-grant as a finding. GitHub reports recognized beyond-read OAuth scopes as an
-unranked assessment-credential warning, never a posture finding
-([github-collector.md](github-collector.md#principal-and-resume)). This is how data stores are judged from the control plane: whether a
+more, scheck still calls only its read list. GitHub reports recognized beyond-read
+OAuth scopes as an unranked assessment-credential warning, never a posture finding
+([github-collector.md](github-collector.md#principal-and-resume)). Planned E6 Workspace
+reporting uses the same unranked warning for supported observed grant evidence
+([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)). GCP
+retains its planned broader-grant finding policy. This is how data stores are judged from the control plane: whether a
 database is publicly accessible, what its VPC firewall rules and authorized networks
 allow, where its backups live.
 
@@ -608,7 +610,9 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
   to it. A per-user op's subject is `saas:google-workspace:<domain>/users/<key>`, placed
   as its tenant; whether the user is excluded is the excluded-subject set's to say
   ("Exclusion in responses"), so a unit exclude never covers the tenant itself. A
-  per-user op on a user in an excluded unit is refused.
+  per-user op on a user in an excluded unit is refused. E6 plans minimal audited
+  customer/domain bootstrap before binding and admits no other tenant reads until
+  binding succeeds ([workspace-collector.md](workspace-collector.md#tenant-binding-and-scope)).
 - **Discovered names.** A name is in scope when it sits under a domain root on a label
   boundary (`x.example.com` yes, `xexample.com` no) and under no exclude.
 - **URL roots.** A `url` root holds its own path prefix, and also its origin's
@@ -812,7 +816,7 @@ Each source is a family of ops with its own literal host:
 | Certificate transparency | `crt.sh` | each declared domain root, once |
 | DNS resolver | the system's, recorded by address | every name queried |
 | GitHub | `api.github.com` | the organization name, repository names, the token |
-| Google | `admin.googleapis.com`, `oauth2.googleapis.com` | the customer id, user ids, the credential |
+| Google | `admin.googleapis.com`, `oauth2.googleapis.com`; planned E6 `gmail.googleapis.com` | the customer id, user ids, the credential |
 
 A query to a source names only an in-scope root or asset. Following a CNAME chain is
 part of resolving the in-scope name; a standalone lookup of a name outside every root
@@ -957,7 +961,9 @@ admission; a collector never holds one. A request to a web asset never carries a
 - **GitHub:** `GITHUB_TOKEN` or `GH_TOKEN` only. Running `gh auth token` would start a
   process outside every enforcement point, so scheck prints it as a hint instead.
 - **Google Workspace:** an application default credentials file or a service-account
-  JSON named by the environment.
+  JSON named by the environment. E6 plans restricted ADC-file support, not full ADC,
+  and compiled Directory/optional metadata profiles
+  ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 - **Never a fragment of a token.** A value shorter than 20 characters is refused as
   `no_credentials`: no GitHub token is that short, and redacting it by value would
   mangle every response.
@@ -977,7 +983,9 @@ neither severity, acceptances, ranking, coverage nor exit counts. Missing, unkno
 or unusable permission evidence never establishes read-only access. The exact
 interpretation and remediation are in
 [github-collector.md](github-collector.md#principal-and-resume). Workspace and GCP
-retain the broader-grant finding policy. Most small teams will use the token they
+are distinct: E6 plans an unranked observed-grant warning under
+[workspace-collector.md](workspace-collector.md#credential-files-and-profiles); GCP
+retains its planned broader-grant finding policy. Most small teams will use the token they
 already have: refusing it ends the engagement, while reporting it gives the operator
 an action.
 

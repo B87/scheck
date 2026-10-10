@@ -403,16 +403,24 @@ answer, and true or false is refused as ambiguous.
 | Value | Claims | Raises as `contradiction` |
 |---|---|---|
 | `everyone` | every active account must, service and break-glass included | every instance of the not-enforced finding; on GitHub, the organization's requirement switched off even when every member has 2FA, since the claim was enforcement |
-| `admins` | every super admin or owner must | not-enforced on an organizational unit holding an unenforced super admin, and every admin without 2-step verification; GitHub cannot require it of owners only, so there it raises only an owner without 2FA, with a readout note |
-| `some` | part of the tenant must | everything, when nothing is enforced; a note when everything is |
+| `admins` | every super admin or owner must | Workspace not-enforced findings whose affected accounts include a super admin, based on an explicit enforcement-off flag; GitHub raises an owner-without-2FA finding, since owner-only enforcement is unavailable, with a readout note |
+| `some` | part of the tenant must | everything, when a complete active population has known enforcement off for every account; a partial population cannot prove this; a note when everything is |
 | `none` | nothing is enforced | nothing; a note when the tenant does better |
 | `unknown` | the operator does not know | nothing; a readout note says what scheck read ("N of M accounts not required") |
 
-Observed better than declared is never a finding. A Workspace user with enforcement on,
-not enrolled and created within the enrolment period is a new hire, a note and not a
-contradiction; a super admin in that state is still an admin without 2-step
-verification. GitHub's organization requirement is read only by an owner's token and
-is three-valued: absent or null is *insufficient evidence*, never "not required".
+Observed better than declared is never a finding. Workspace's Directory flags describe
+current per-account enforcement and enrollment, not organizational-unit policy or a
+readable enrollment grace window. Not-enforced findings group affected accounts by
+unit without claiming that the unit's policy is disabled. An explicit enforcement-off
+flag contradicts `everyone`, or `admins` when the affected account is a super admin,
+without establishing whether policy, configuration groups or grace caused it. An
+enforced but unenrolled non-admin may be in a grace period; the readout calls that
+possibility unknown, never an observed window. An unenrolled super admin is still an
+admin without 2-step verification. Workspace enrollment alone never establishes an
+enforcement contradiction, even when the admin-without-two-step finding fires. GitHub's
+organization requirement is read only by
+an owner's token and is three-valued: absent or null is *insufficient evidence*, never
+"not required".
 
 **The recon stanza.** `--stop-after recon` prints the accounts no handle names, for the
 operator to paste under `people` (in JSON, `people_candidates[]` with the same fields):
