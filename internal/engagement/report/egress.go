@@ -392,9 +392,13 @@ func sourceLine(s EgressSource) string {
 			joinAnd(s.Sent), n)
 	}
 	var line strings.Builder
-	line.WriteString(s.Host + ": " + joinAnd(s.Sent))
+	line.WriteString(s.Host)
+	line.WriteString(": ")
+	line.WriteString(joinAnd(s.Sent))
 	for _, c := range s.Credentials {
-		line.WriteString(", using the credential in " + c + " (the variable's name; its value appears nowhere)")
+		line.WriteString(", using the credential in ")
+		line.WriteString(c)
+		line.WriteString(" (the variable's name; its value appears nowhere)")
 	}
 	return line.String() + "; " + n + "."
 }

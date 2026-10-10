@@ -483,7 +483,9 @@ func (t *text) summary() {
 		s.WriteString(" Not checked: " + lowerAll(append(append([]string{}, notChecked...), folded...)) + ".")
 	}
 	if len(na) > 0 {
-		s.WriteString(" Not applicable, as you declared: " + lowerAll(na) + ".")
+		s.WriteString(" Not applicable, as you declared: ")
+		s.WriteString(lowerAll(na))
+		s.WriteString(".")
 	}
 	s.WriteString(" Anything not checked is unknown, not fine.")
 	t.hang("", "", s.String())
