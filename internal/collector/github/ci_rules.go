@@ -88,7 +88,7 @@ func defaultJudgment(id, asset string, subject *Subject, d DefaultEvidence) Judg
 func productionCI(j *Judgment, c Context) {
 	if production(c, j.Asset) {
 		j.Attributes = append(j.Attributes, "production")
-		j.Source = append(j.Source, c.RepositoryContexts[j.Asset].Source)
+		j.Sources = append(j.Sources, c.RepositoryContexts[j.Asset].Source)
 		j.Context += " This repository is declared to deploy to production, so this rating rises one step."
 	}
 }

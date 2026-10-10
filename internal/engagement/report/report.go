@@ -8,6 +8,7 @@ package report
 import (
 	"time"
 
+	"github.com/b87/scheck/internal/finding"
 	hostreport "github.com/b87/scheck/internal/report"
 )
 
@@ -292,13 +293,7 @@ type Key struct {
 }
 
 // Subject is the instance a finding is about.
-type Subject struct {
-	Kind       string `json:"kind"`
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	ProviderID string `json:"provider_id,omitempty"`
-	Person     string `json:"person,omitempty"`
-}
+type Subject = finding.Subject
 
 // Finding is one finding instance (docs/spec/report.md, "Findings").
 type Finding struct {

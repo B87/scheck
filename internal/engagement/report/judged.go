@@ -11,24 +11,7 @@ import (
 // Judgment is a network collector rule's verdict on one subject
 // (docs/spec/report.md, "Findings"): fired, disproved or abstained,
 // with the gate requests it read.
-type Judgment struct {
-	Sources    []string
-	Attributes []string
-	Listed     []string
-	Details    map[string]any
-	ID         string
-	Context    string
-	// Asset is the most specific asset holding the subject, "" for the
-	// asset the collector read.
-	Asset   string
-	Subject Subject
-	Verdict string
-	// Reason is why it abstained, as a coverage reason.
-	Reason     string
-	Reads      []string
-	NotChecked []string
-	Excerpt    string
-}
+type Judgment = finding.Judgment
 
 // The verdicts of a judgment.
 const (

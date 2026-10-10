@@ -914,6 +914,12 @@ fine-grained/App capability says "write capability not determined", never
 
 ## Reporting and coverage
 
+`github.ReadNotes` and `github.InventoryGapText` supply operation-specific
+permission guidance, reuse explanations and inventory gaps. Engagement places
+those explanations on the asset; the report renders them. `github.CoverageReason`
+maps `insufficient_evidence` to `unavailable:github_evidence` at the report edge,
+while persisted Recon judgments retain the original evidence reason.
+
 Inventory reports observed or “at least” counts, missing reads and
 permission/visibility gaps as asset notes. Steps 3–6 report findings and each
 rule's fired, disproved or abstained assessments. Declaration references are

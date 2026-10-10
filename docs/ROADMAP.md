@@ -794,6 +794,16 @@ ranking says “No security rules ran; this report contains inventory only” wh
 rule was selected, and “No security verdict was possible from the collected
 evidence” when none decided. Coverage and exit semantics are unchanged.
 
+**Collector cleanup before E6:** web, GitHub and the report share
+`finding.Judgment` and `finding.Subject`, retaining persisted field names and
+wildcard members. GitHub owns its read explanations and coverage-reason mapping;
+web owns mail normalization and rule-input assembly from `ScopeView`. Engagement
+keeps scope interpretation and final report authorship. Stage documents and web
+collection helpers live in `stage_docs.go` and `collect_web.go` within the same
+package. This cleanup changes no rule, report wording or network operation.
+Definition registration, collector report fragments and gate restructuring are
+left out; no new enforcement path is introduced.
+
 **Resolved in step 7 from the step 6 client review** (2026-10-10): differing-ref
 update/resume notes precede the summary ranking; history remediation identifies the
 credential owner while retaining the authenticity/usability limitation; the mirror

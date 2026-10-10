@@ -25,7 +25,7 @@ func githubCINotes(e githubc.Evidence) []ereport.Note {
 				add(ci.Asset, w.Path+": "+w.Gap)
 			}
 			for _, j := range e.Judgments {
-				if j.Asset == ci.Asset && j.Subject != nil && j.Subject.Key == w.Path && j.ID == "github.pr_target_unsafe_checkout" {
+				if j.Asset == ci.Asset && j.Subject != (githubc.Subject{}) && j.Subject.Key == w.Path && j.ID == "github.pr_target_unsafe_checkout" {
 					if requests, ok := j.Details["runner_requests"].([]string); ok {
 						for _, request := range requests {
 							add(ci.Asset, w.Path+": "+request)

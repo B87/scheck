@@ -480,6 +480,12 @@ start that those URLs will not be checked for reachability; it does not refuse t
 
 ## Subjects
 
+Engagement selects the names, exclusions, root ownership, canonical URLs and
+resolver-trust evidence supplied in `web.ScopeView`. `web.InputFrom` normalizes
+mail declarations and assembles rule input, including mail policies and site
+evidence from other roots. It interprets no engagement-file types and performs no
+reads; engagement still decides which assets and names are in scope.
+
 Each finding is one record per `{id, asset, subject}`
 ([report.md](report.md#findings)). A key is lowercase, with punycode A-labels,
 no trailing dot, default ports dropped, no query or fragment and no spaces; a key that

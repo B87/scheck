@@ -24,35 +24,9 @@ const (
 	SubjectDNSRecord = "dns_record"
 )
 
-// Subject is the instance a judgment is about.
-type Subject struct {
-	Kind  string `json:"kind"`
-	Key   string `json:"key"`
-	Label string `json:"label"`
-}
-
-// Judgment is one rule's verdict on one subject, and what it read.
-type Judgment struct {
-	ID         string         `json:"id"`
-	Attributes []string       `json:"attributes,omitempty"`
-	Listed     []string       `json:"listed,omitempty"`
-	Details    map[string]any `json:"details,omitempty"`
-	Context    string         `json:"context,omitempty"`
-	// Asset is the most specific asset holding the subject: the name's own
-	// id under the root (docs/spec/web-collector.md, "Subjects").
-	Asset   string  `json:"asset"`
-	Subject Subject `json:"subject"`
-	Verdict string  `json:"verdict"`
-	// Reason says why a rule abstained, as a coverage reason.
-	Reason string `json:"reason,omitempty"`
-	// Reads are the gate request ids of the reads it rests on, the Scope
-	// stage's lookups among them.
-	Reads []string `json:"reads"`
-	// Excerpt is what was observed, as read and redacted.
-	Excerpt    string   `json:"excerpt,omitempty"`
-	NotChecked []string `json:"not_checked,omitempty"`
-	Members    []string `json:"members,omitempty"`
-}
+// Subject and Judgment share the collector-to-report decision contract.
+type Subject = finding.Subject
+type Judgment = finding.Judgment
 
 // Name is a name the Scope stage looked up, as the rules read it, with its
 // lookup's request id.

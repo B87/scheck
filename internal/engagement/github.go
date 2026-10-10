@@ -157,15 +157,8 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 	ev := ra.GitHub
 	ai.Collector = "github"
 	for _, j := range ev.Judgments {
-		reason := j.Reason
-		if reason == "insufficient_evidence" {
-			reason = "unavailable:github_evidence"
-		}
-		mapped := ereport.Judgment{ID: j.ID, Asset: j.Asset, Verdict: j.Verdict, Reason: reason, Reads: j.Reads, Excerpt: j.Excerpt, NotChecked: j.NotChecked, Context: j.Context, Attributes: j.Attributes, Listed: j.Listed, Details: j.Details, Sources: j.Source}
-		if j.Subject != nil {
-			mapped.Subject = ereport.Subject{Kind: j.Subject.Kind, Key: j.Subject.Key, Label: j.Subject.Label, ProviderID: j.Subject.ProviderID, Person: j.Subject.Person}
-		}
-		ai.Judged = append(ai.Judged, mapped)
+		j.Reason = githubc.CoverageReason(j.Reason)
+		ai.Judged = append(ai.Judged, j)
 	}
 	p := ev.Principal
 	source := "unknown"
@@ -189,7 +182,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		{"members", ev.Members.Gaps}, {"owners", ev.Owners.Gaps}, {"outside collaborators", ev.OutsideCollaborators.Gaps}, {"pending invitations", ev.Invitations.Gaps}, {"repositories", ev.Repositories.Gaps},
 	} {
 		if len(population.gaps) > 0 {
-			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: population.name + ": inventory gaps (" + inventoryGapText(population.gaps) + ")"})
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: population.name + ": inventory gaps (" + githubc.InventoryGapText(population.gaps) + ")"})
 		}
 	}
 	for _, repo := range ev.RepositoriesAccess {
@@ -198,7 +191,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			gaps []string
 		}{{repo.Asset + " collaborators", repo.Collaborators.Gaps}, {repo.Asset + " deploy keys", repo.DeployKeys.Gaps}} {
 			if len(pop.gaps) > 0 {
-				ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: repo.Asset, Detail: pop.name + ": " + inventoryGapText(pop.gaps)})
+				ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: repo.Asset, Detail: pop.name + ": " + githubc.InventoryGapText(pop.gaps)})
 			}
 		}
 	}
@@ -231,43 +224,8 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
 			ai.InventoryRead = true
 		}
-		if read.Reused {
-			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: read.Op + ": reused evidence observed at " + read.ObservedAt.UTC().Format("2006-01-02T15:04:05Z") + "; current access was not validated"})
-		}
-		if read.Population != nil && len(read.Population.Incomplete) > 0 {
-			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: read.Op + ": population incomplete (" + inventoryGapText(read.Population.Incomplete) + ")"})
-		}
-		if read.Reason != "" || read.Gap != "" {
-			detail := read.Detail
-			if read.Reason == "insufficient_permission" {
-				switch read.Op {
-				case githubc.OpOrganizationSecrets, githubc.OpSelectedSecretRepositories, githubc.OpRepositorySecrets:
-					detail += ". Ask the owner to authorize Secrets read at the relevant organization or repository level, then resume"
-				case githubc.OpDependabotAlerts:
-					detail += ". Ask the repository owner to authorize Dependabot alerts read for this repository, then resume"
-				case githubc.OpSecretAlerts, githubc.OpSecretLocations:
-					detail += ". Ask the repository owner to authorize Secret scanning alerts read and confirm the account has the required repository role, then resume"
-				case githubc.OpRepositoryWorkflow, githubc.OpOrganizationWorkflow:
-					detail += ". Ask the owner to authorize Administration read at the relevant repository or organization level, then resume"
-				case githubc.OpBranch, githubc.OpWorkflowDirectory, githubc.OpWorkflowFile:
-					detail += ". Ask the repository owner to authorize Contents read for this repository, then resume"
-				case githubc.OpBranchRules:
-					detail += ". Ask the repository owner to authorize Metadata read, then resume"
-				case githubc.OpDeployKeys:
-					detail += ". Ask the repository owner to authorize Administration read permission for this credential, then resume"
-				case githubc.OpCollaborators:
-					detail += ". Ask the repository owner to authorize Metadata read and confirm this account has sufficient repository privilege to list collaborators, then resume"
-				case githubc.OpRepository, githubc.OpRepositories:
-					detail += ". Ask the owner to authorize Metadata read for the intended repositories, then resume"
-				case githubc.OpPrincipal, githubc.OpOrganization:
-				default:
-					detail += ". Ask the GitHub organization owner to authorize Members read and confirm the required organization role, then resume"
-				}
-			}
-			if detail == "" {
-				detail = read.Reason + " " + read.Gap
-			}
-			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: read.Op + ": " + strings.TrimSpace(detail)})
+		for _, note := range githubc.ReadNotes(read) {
+			ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: note.Detail})
 		}
 	}
 	if r.gate != nil {
@@ -277,32 +235,6 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			}
 		}
 	}
-}
-
-func inventoryGapText(gaps []string) string {
-	explanations := map[string]string{
-		"member_visibility_unknown":                  "complete membership visibility was not established",
-		"owner_visibility_unknown":                   "organization-owner visibility was not established",
-		"repository_visibility_unknown":              "the credential may hide repositories",
-		"repository_collaborator_visibility_unknown": "the credential may hide repository collaborators",
-		"owner_authority_unknown":                    "organization-owner authority was not established",
-		"duplicate_item":                             "duplicate entries were returned and counted once",
-		"unrecognized_item":                          "some returned entries could not be recognized",
-		"unrecognized_population":                    "the returned list could not be recognized",
-		"read_unavailable":                           "a required read did not succeed",
-		"population_unknown":                         "list completeness could not be established",
-		"pagination_unrecognized":                    "the next page could not be identified",
-		"page_limit":                                 "the page limit was reached",
-	}
-	out := make([]string, 0, len(gaps))
-	for _, gap := range gaps {
-		if phrase := explanations[gap]; phrase != "" {
-			out = append(out, phrase)
-		} else {
-			out = append(out, strings.ReplaceAll(gap, "_", " "))
-		}
-	}
-	return strings.Join(out, "; ")
 }
 
 func githubReadOK(read githubc.Read) bool {

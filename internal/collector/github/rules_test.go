@@ -83,7 +83,7 @@ func TestEveryGitHubRuleFiresDisprovesAndAbstains(t *testing.T) {
 					t.Fatalf("missing %s %s: %+v", id, v, out)
 				}
 				for _, j := range out {
-					if j.Verdict == Fired && finding.SubjectOf(j.ID) != "" && j.Subject == nil {
+					if j.Verdict == Fired && finding.SubjectOf(j.ID) != "" && j.Subject == (Subject{}) {
 						t.Fatalf("fired without required subject: %+v", j)
 					}
 				}
@@ -294,7 +294,7 @@ func TestBotMemberMFAAbstainsDespiteCompleteUserFilter(t *testing.T) {
 	e.Members.Items = append(e.Members.Items, Account{ID: 99, Login: "automation[bot]", Type: "Bot"})
 	found := false
 	for _, j := range Judge(e, c) {
-		if j.ID == finding.IDGitHubMemberWithoutMFA && j.Subject != nil && j.Subject.Key == "automation[bot]" {
+		if j.ID == finding.IDGitHubMemberWithoutMFA && j.Subject != (Subject{}) && j.Subject.Key == "automation[bot]" {
 			found = true
 			if j.Verdict != Abstained {
 				t.Fatal("user filter settled bot MFA")

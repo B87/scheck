@@ -93,7 +93,7 @@ func TestAlertUnknownAndPartialEvidenceNeverDisproves(t *testing.T) {
 	d.Vulnerability.Severity = "critical"
 	d.Advisory.Severity = "high"
 	for _, j := range judgeDependencies(e.RepositoriesAlerts[0]) {
-		if j.Subject != nil && j.Subject.ProviderID == "3" && j.Verdict != Abstained {
+		if j.Subject != (Subject{}) && j.Subject.ProviderID == "3" && j.Verdict != Abstained {
 			t.Fatal("unknown mismatch")
 		}
 	}

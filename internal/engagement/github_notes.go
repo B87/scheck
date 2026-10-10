@@ -85,7 +85,7 @@ func (r *run) githubPeopleNotes(asset string, e githubc.Evidence) []ereport.Note
 	}
 	for _, repo := range e.RepositoriesAccess {
 		for _, j := range e.Judgments {
-			if j.Asset == repo.Asset && j.ID == "identity.unattributed_admin" && j.Subject != nil {
+			if j.Asset == repo.Asset && j.ID == "identity.unattributed_admin" && j.Subject != (githubc.Subject{}) {
 				add("github_inventory", repo.Asset, "Observed production repository administrator: "+j.Subject.Label+". Effective privilege may be inherited; its grant source was not assessed")
 			}
 		}

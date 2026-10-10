@@ -34,27 +34,18 @@ type RepositoryContext struct {
 	Public            *bool
 	DeploysTo, Source string
 }
-type Subject struct {
-	Kind       string `json:"kind"`
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	ProviderID string `json:"provider_id,omitempty"`
-	Person     string `json:"person,omitempty"`
-}
-type Judgment struct {
-	ID         string         `json:"id"`
-	Asset      string         `json:"asset"`
-	Subject    *Subject       `json:"subject,omitempty"`
-	Verdict    string         `json:"verdict"`
-	Reason     string         `json:"reason,omitempty"`
-	Reads      []string       `json:"reads"`
-	Excerpt    string         `json:"excerpt,omitempty"`
-	NotChecked []string       `json:"not_checked,omitempty"`
-	Attributes []string       `json:"attributes,omitempty"`
-	Listed     []string       `json:"listed,omitempty"`
-	Source     []string       `json:"source,omitempty"`
-	Details    map[string]any `json:"details,omitempty"`
-	Context    string         `json:"context,omitempty"`
+
+// Subject and Judgment share the collector-to-report decision contract.
+type Subject = finding.Subject
+type Judgment = finding.Judgment
+
+// CoverageReason translates a collector evidence gap into report coverage.
+// The original reason remains in persisted Recon evidence.
+func CoverageReason(reason string) string {
+	if reason == "insufficient_evidence" {
+		return "unavailable:github_evidence"
+	}
+	return reason
 }
 
 func accountSubject(a Account, c Context) *Subject {
@@ -104,7 +95,11 @@ func usableRead(r Read) bool {
 	return (r.Decision == "sent" || r.Decision == "reused") && r.Status == 200 && r.Reason == "" && r.Gap == "" && !r.Truncated && len(r.Redactions) == 0
 }
 func judgment(id, asset string, s *Subject, reads []string) Judgment {
-	return Judgment{ID: id, Asset: asset, Subject: s, Verdict: Abstained, Reason: "insufficient_evidence", Reads: reads}
+	j := Judgment{ID: id, Asset: asset, Verdict: Abstained, Reason: "insufficient_evidence", Reads: reads}
+	if s != nil {
+		j.Subject = *s
+	}
+	return j
 }
 func settle(j *Judgment, fires bool, known bool, excerpt string) {
 	j.Excerpt = excerpt
@@ -144,7 +139,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		settle(&j, !b, e.OwnerAuthority && usableRead(e.OrganizationRead), fmt.Sprintf("two_factor_requirement_enabled: %t", b))
 		if !b && (c.MFA == "everyone" || c.MFA == "some") {
 			j.Attributes = []string{"contradiction"}
-			j.Source = []string{c.MFASource}
+			j.Sources = []string{c.MFASource}
 		}
 	}
 	out = append(out, j)
@@ -172,7 +167,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		settle(&j, positive, e.OwnerAuthority && complete(e.Owners) && (positive || complete(e.Members) && complete(e.Owners) && complete(e.MembersWithoutMFA)), describeAccount(a)+" in member inventory; absence/presence in owner-authorized 2FA-disabled filter")
 		if positive && c.MFA == "everyone" {
 			j.Attributes = []string{"contradiction"}
-			j.Source = []string{c.MFASource}
+			j.Sources = []string{c.MFASource}
 		}
 		out = append(out, j)
 	}
@@ -224,7 +219,7 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 	settle(&m, positive, e.OwnerAuthority && (positive || complete(e.Owners) && complete(e.OwnersWithoutMFA)), describeAccount(a)+" in owner inventory; absence/presence in owner-authorized 2FA-disabled filter")
 	if positive && (c.MFA == "everyone" || c.MFA == "admins") {
 		m.Attributes = []string{"contradiction"}
-		m.Source = []string{c.MFASource}
+		m.Sources = []string{c.MFASource}
 	}
 	out := []Judgment{m}
 	u := judgment(finding.IDIdentityUnexpectedAdmin, c.OrganizationAsset, accountSubject(a, c), reads)
@@ -233,7 +228,7 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 	} else if p != nil && c.OwnersDeclared {
 		expected := slices.Contains(c.ExpectedOwners, p.Handle)
 		settle(&u, !expected, !expected || complete(e.Owners), describeAccount(a)+" is an organization owner")
-		u.Source = []string{"access.admins", "people." + p.Handle}
+		u.Sources = []string{"access.admins", "people." + p.Handle}
 	}
 	out = append(out, u)
 	out = append(out, unattributed(c, c.OrganizationAsset, a, reads, complete(e.Owners)))
@@ -242,7 +237,7 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 		if p != nil {
 			fires := p.Kind == kind.k
 			settle(&x, fires, fires || complete(e.Owners), describeAccount(a)+" is an owner attributed as "+p.Kind)
-			x.Source = []string{"people." + p.Handle}
+			x.Sources = []string{"people." + p.Handle}
 		}
 		out = append(out, x)
 	}
@@ -254,7 +249,7 @@ func unattributed(c Context, asset string, a Account, reads []string, popComplet
 	p := personFor(a.Login, c)
 	settle(&j, p == nil, hasPeople && (p == nil || popComplete), describeAccount(a)+" has administrative access")
 	if p != nil {
-		j.Source = []string{"people." + p.Handle}
+		j.Sources = []string{"people." + p.Handle}
 	}
 	return j
 }
@@ -321,7 +316,7 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			}
 			makeAccess := func(asset string, account Account, reads []string, present, admin bool) Judgment {
 				j := judgment(finding.IDIdentityFormerPersonHasAccess, asset, accountSubject(account, c), reads)
-				j.Source = source
+				j.Sources = source
 				j.NotChecked = []string{"Accounts renamed after declaration; undeclared logins; credential or session usability"}
 				if passed(p.Left, c.Today) {
 					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left)
@@ -360,7 +355,7 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			}
 			if len(invitations) == 0 {
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, nil, readIDs(e.Invitations.Reads))
-				x.Source = source
+				x.Sources = source
 				if passed(p.Left, c.Today) {
 					settle(&x, false, complete(e.Invitations) && identifiableInvitations(e.Invitations), "No matching pending invitation for "+login)
 				} else {
@@ -371,7 +366,7 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			for _, i := range invitations {
 				key := "invitation:" + strconv.FormatInt(i.ID, 10)
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, &Subject{Kind: "invitation", Key: key, Label: login + " (" + key + ")", ProviderID: strconv.FormatInt(i.ID, 10), Person: p.Handle}, readIDs(e.Invitations.Reads))
-				x.Source = source
+				x.Sources = source
 				if passed(p.Left, c.Today) {
 					settle(&x, true, true, "Pending invitation for "+login+"; declared leaving date "+p.Left)
 				} else {
@@ -396,7 +391,7 @@ func repositoryJudgments(e Evidence, c Context, r RepositoryAccess) []Judgment {
 		known := usableRead(r.RepositoryRead) && slices.Contains([]string{"public", "private", "internal"}, v)
 		settle(&j, v == "public" && !declared, known, "visibility: "+v)
 		if declared {
-			j.Source = []string{c.RepositoryContexts[r.Asset].Source}
+			j.Sources = []string{c.RepositoryContexts[r.Asset].Source}
 		}
 	}
 	out = append(out, j)
@@ -412,7 +407,7 @@ func repositoryJudgments(e Evidence, c Context, r RepositoryAccess) []Judgment {
 			settle(&j, !*k.ReadOnly, !*k.ReadOnly || complete(r.DeployKeys), fmt.Sprintf("read_only: %t", *k.ReadOnly))
 			if !*k.ReadOnly && production(c, r.Asset) {
 				j.Attributes = []string{"production"}
-				j.Source = []string{c.RepositoryContexts[r.Asset].Source}
+				j.Sources = []string{c.RepositoryContexts[r.Asset].Source}
 			}
 		}
 		out = append(out, j)
@@ -430,7 +425,7 @@ func repositoryJudgments(e Evidence, c Context, r RepositoryAccess) []Judgment {
 		fire := outside && known && admin && prod
 		negative := outside && complete(r.Collaborators) && complete(e.OutsideCollaborators) && (nonprod || known && !admin)
 		settle(&j, fire, fire || negative, describeAccount(a.Account)+"; effective repository administrator and outside membership evaluated")
-		j.Source = []string{ctx.Source}
+		j.Sources = []string{ctx.Source}
 		out = append(out, j)
 	}
 	return out

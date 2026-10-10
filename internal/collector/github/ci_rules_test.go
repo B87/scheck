@@ -73,7 +73,7 @@ func TestEveryGitHubCIRuleFiresDisprovesAndAbstains(t *testing.T) {
 					t.Fatalf("want %s: %+v", verdict, out)
 				}
 				for _, j := range out {
-					if j.Verdict == Fired && finding.SubjectOf(j.ID) != "" && j.Subject == nil {
+					if j.Verdict == Fired && finding.SubjectOf(j.ID) != "" && j.Subject == (Subject{}) {
 						t.Fatal("fired without instance")
 					}
 				}

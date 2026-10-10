@@ -550,6 +550,15 @@ context").
 
 ### Findings
 
+Network collectors return the shared `finding.Judgment` and `finding.Subject`
+types; the report aliases these types and remains the author of the final report.
+Judgments identify the rule, asset, subject, verdict, reason and gate request ids,
+with declaration references kept separately from observations. An empty subject is
+an asset-wide judgment and is omitted from persisted collector judgments. The
+`Sources` field retains the JSON key `source`. Wildcard `Members` remain collector
+evidence used to suspend takeover confirmations, never report output. Finding
+definitions stay in `internal/finding`; collectors do not return report fragments.
+
 **One record per instance**, keyed `{id, asset, subject}`. `asset` is the canonical id
 (`host:203.0.113.5:22`, `saas:google-workspace:example.com`,
 `repo:github:example-org/shop`), declared or found under a declared root; the bound id
