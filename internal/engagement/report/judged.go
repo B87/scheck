@@ -539,6 +539,18 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			continue
 		}
 		fed++
+		if a.Collector == "workspace" {
+			if a.InventoryRead {
+				read++
+				row.AssetsCovered = append(row.AssetsCovered, a.ID)
+			}
+			row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; Workspace security rules are not implemented in this build"}}})
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+			if a.NetworkPrincipal != nil {
+				row.Principals = append(row.Principals, *a.NetworkPrincipal)
+			}
+			continue
+		}
 		if a.Collector == "github" {
 			if a.InventoryRead {
 				read++

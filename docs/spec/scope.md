@@ -356,7 +356,7 @@ read-only role (for GCP, Security Reviewer and Cloud Asset Viewer; for Google Wo
 read-only Admin SDK scopes); if the credentials allow
 more, scheck still calls only its read list. GitHub reports recognized beyond-read
 OAuth scopes as an unranked assessment-credential warning, never a posture finding
-([github-collector.md](github-collector.md#principal-and-resume)). Planned E6 Workspace
+([github-collector.md](github-collector.md#principal-and-resume)). E6 Workspace
 reporting uses the same unranked warning for supported observed grant evidence
 ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)). GCP
 retains its planned broader-grant finding policy. This is how data stores are judged from the control plane: whether a
@@ -610,9 +610,9 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
   to it. A per-user op's subject is `saas:google-workspace:<domain>/users/<key>`, placed
   as its tenant; whether the user is excluded is the excluded-subject set's to say
   ("Exclusion in responses"), so a unit exclude never covers the tenant itself. A
-  per-user op on a user in an excluded unit is refused. E6 plans minimal audited
-  customer/domain bootstrap before binding and admits no other tenant reads until
-  binding succeeds ([workspace-collector.md](workspace-collector.md#tenant-binding-and-scope)).
+  per-user op on a user in an excluded unit is refused. E6 uses minimal audited
+  customer/domain/alias bootstrap before binding and admits no other tenant reads
+  until binding succeeds ([workspace-collector.md](workspace-collector.md#tenant-binding-and-scope)).
 - **Discovered names.** A name is in scope when it sits under a domain root on a label
   boundary (`x.example.com` yes, `xexample.com` no) and under no exclude.
 - **URL roots.** A `url` root holds its own path prefix, and also its origin's
@@ -948,9 +948,9 @@ endpoint (`oauth2.googleapis.com/token`), op class `credential_exchange`. The
 credential source builds its body, its response never enters the evidence path, and it
 is audited with its status only. There is no GraphQL in 0.0.2. From 0.0.3 a read-only
 `POST` (GCP `testIamPermissions`) is a reviewed registry entry with a literal body
-template and a cited provider document, and the invariants test enforces it. Until
-the Workspace collector builds its credential source (0.0.2 E6), the gate refuses a
-credential exchange as `refused:method`.
+template and a cited provider document, and the invariants test enforces it. E6
+credential exchanges are private gate requests; a collector cannot submit a token
+body or directly sequence the exchange.
 
 **How credentials attach.** The gate attaches a credential by the op's binding, after
 admission; a collector never holds one. A request to a web asset never carries an
@@ -961,8 +961,8 @@ admission; a collector never holds one. A request to a web asset never carries a
 - **GitHub:** `GITHUB_TOKEN` or `GH_TOKEN` only. Running `gh auth token` would start a
   process outside every enforcement point, so scheck prints it as a hint instead.
 - **Google Workspace:** an application default credentials file or a service-account
-  JSON named by the environment. E6 plans restricted ADC-file support, not full ADC,
-  and compiled Directory/optional metadata profiles
+  JSON named by the environment. E6 implements restricted ADC-file support, not full
+  ADC. Directory inventory is built; optional metadata reads remain planned
   ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 - **Never a fragment of a token.** A value shorter than 20 characters is refused as
   `no_credentials`: no GitHub token is that short, and redacting it by value would
@@ -983,7 +983,7 @@ neither severity, acceptances, ranking, coverage nor exit counts. Missing, unkno
 or unusable permission evidence never establishes read-only access. The exact
 interpretation and remediation are in
 [github-collector.md](github-collector.md#principal-and-resume). Workspace and GCP
-are distinct: E6 plans an unranked observed-grant warning under
+are distinct: E6 uses an unranked observed-grant warning under
 [workspace-collector.md](workspace-collector.md#credential-files-and-profiles); GCP
 retains its planned broader-grant finding policy. Most small teams will use the token they
 already have: refusing it ends the engagement, while reporting it gives the operator

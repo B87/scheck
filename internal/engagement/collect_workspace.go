@@ -1,0 +1,93 @@
+package engagement
+
+import (
+	"context"
+	"strings"
+
+	"github.com/b87/scheck/internal/collector/workspace"
+	ereport "github.com/b87/scheck/internal/engagement/report"
+)
+
+// collectWorkspace leaves the protocol and note wording in the collector
+// (docs/spec/workspace-collector.md, "Reporting and coverage").
+func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
+	g, err := r.gateFor(ctx)
+	if err != nil {
+		ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, err.Error()
+		r.incomplete(a, ra)
+		return ra
+	}
+	view := workspace.Context{}
+	for _, handle := range sortedKeys(r.res.People) {
+		p := r.res.People[handle]
+		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace})
+	}
+	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	ev := workspace.Collect(ctx, g, workspace.Target{Asset: a.ID, Stage: "recon"}, view)
+	ra.Workspace, ra.Judged = &ev, ev.Judgments
+	ra.Status = StatusCollected
+	ra.Detail = "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build."
+	for _, note := range ev.Notes {
+		if note.Kind == "workspace_credential_warning" {
+			r.o.Log("warning: %s", note.Detail)
+		}
+	}
+	if !ev.InventoryComplete {
+		ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonFailed, "Workspace inventory is incomplete; inventory notes show what was read and what remains unknown."
+		for _, read := range ev.Reads() {
+			if read.Reason == "limit_reached" {
+				ra.Reason = ReasonLimitReached
+			}
+			if read.Reason == "no_credentials" {
+				ra.Reason, ra.Detail = read.Reason, read.Detail
+			}
+		}
+		r.incomplete(a, ra)
+	}
+	return ra
+}
+
+func (r *run) workspaceReportInput(ra ReconAsset, ai *ereport.AssetInput) {
+	e := ra.Workspace
+	ai.Collector = "workspace"
+	ai.Judged = e.Judgments
+	ai.InventoryRead = len(e.Users.Reads) > 0 && e.Users.Reads[0].Status == 200 && e.Users.Reads[0].Reason == ""
+	ai.PopulationIncomplete = !e.Users.Complete || !e.Units.Complete
+	identity, source := "unknown", "unknown"
+	if e.DelegatedUser != nil {
+		identity = "delegated Workspace account " + e.DelegatedUser.Primary + " (id " + e.DelegatedUser.ID + ")"
+	}
+	if e.Binding.ScopesKnown {
+		source = "provider"
+	}
+	ai.NetworkPrincipal = &ereport.Principal{Identity: identity, Scopes: e.Binding.Scopes, ScopesSource: source}
+	for _, note := range e.Notes {
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: note.Kind, Source: note.Source, Detail: note.Detail})
+	}
+	for _, read := range e.Reads() {
+		ai.Redactions = append(ai.Redactions, read.Redactions...)
+	}
+	if r.gate != nil {
+		for _, entry := range r.gate.Entries() {
+			if entry.Asset == ra.ID {
+				ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: entry.RequestID, Params: entry.Params, At: entry.Time, Decision: entry.Decision, OutputSHA256: entry.OutputHash})
+			}
+		}
+	}
+}
+
+// Attribution is copied as identity evidence, without guessing a person's kind.
+func populateWorkspacePeople(doc *ReconDoc) {
+	for _, asset := range doc.Assets {
+		if asset.Workspace == nil {
+			continue
+		}
+		e := asset.Workspace
+		tenant := strings.TrimPrefix(asset.ID, "saas:")
+		doc.PeopleTenantOrder = append(doc.PeopleTenantOrder, tenant)
+		doc.PeopleCandidatesPartial = doc.PeopleCandidatesPartial || !e.Users.Complete
+		for _, a := range e.Attribution {
+			doc.Attribution = append(doc.Attribution, Attribution{Tenant: tenant, Key: a.Key, ProviderID: a.ProviderID, Handle: a.Handle, MatchedBy: a.MatchedBy})
+		}
+	}
+}

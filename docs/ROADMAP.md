@@ -880,9 +880,9 @@ no answer exiting 2.
 
 ### E6 — Google Workspace collector
 
-**Status:** DEFINE design frozen on 2026-10-10. Step 1 implements the credential and
-tenant-binding library; it is not wired into engagement stages or the CLI. Inventory,
-rules and report integration remain planned. The design is
+**Status:** DEFINE design frozen on 2026-10-10. Steps 1 and 2 implement credentials,
+tenant binding and inventory through engagement Recon and report integration.
+Posture rules and optional OAuth/Gmail reads remain planned. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -914,9 +914,25 @@ Unknown grants remain unknown; a successful read does not prove write capability
    reads use the standard compiled projection and redaction pipeline. Caller-supplied
    customer ids are refused, and HTTP 401 drops authentication and binding. Ordinary
    op definitions are not repeated in gate validation. Query-based customer selection
-   and paging admission remain reviewed step 2 work.
+   and paging admission land in step 2.
 2. Tenant inventory: domains, organizational units and users, exclusions before
    persistence and follow-ups, stable account ids and people attribution.
+   **Implemented:** one `workspace.Collect` call owns binding, recognized domain/alias,
+   complete unit-tree and customer-bound user reads, people attribution and notes.
+   Query selectors and pagination remain gate-owned. Excluded identities never leave
+   the gate; partial populations carry lower bounds. Actual cuts and unknown/conflicting
+   identities prevent delegated follow-ups; known exclusion drops permit details only
+   for current admitted nonexcluded users. Root-parent sentinel compatibility remains
+   unmeasured live.
+   A service-account delegated subject is verified against current admitted stable ids;
+   authorized-user callers stay unknown. Resume repeats admission and reuses no
+   authenticated Workspace reads. Report coverage says `no_rule`: inventory alone
+   assesses no Workspace security control. **Done 2026-10-10:** consultant/client/module
+   reviews and final offline checks passed. A fresh adversarial review found cursor
+   completion and stale continuation defects; both were corrected and a fresh
+   follow-up review found no confirmed findings. Verification is recorded in
+   [eval/e6-inventory-verification-2026-10-10.md](eval/e6-inventory-verification-2026-10-10.md).
+   No live request or independent acceptance is claimed. Step 3 is next.
 3. Identity and admin rules: declared admins, super-admin counts, departed and stale
    accounts, and suspended accounts retaining direct or indirect administrative roles.
 4. Observed 2-step verification: per-account enforcement and enrollment, compared
@@ -949,6 +965,13 @@ domain-wide delegation has no Directory API to read it and remains *not assessed
 with the Admin console review path printed; break-glass super admins are expected but
 still need 2-step verification; OAuth app display names never establish a match to
 `tools`.
+
+**Deferred report wording polish** (step-2 client REPORT, 2026-10-10): plain
+credential/count/read-operation wording, repeated Workspace labels and the generic
+"Fix these first" heading remain nonblocking report-wide polish for E9's final report
+review. Preserve explicit inventory-only coverage and unknown effective permissions;
+wording polish never adds security assurance. The step-2 AI review record is
+[eval/e6-inventory-review-2026-10-10.md](eval/e6-inventory-review-2026-10-10.md).
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and

@@ -308,6 +308,36 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 		}
 	}
 
+	if op.Auth == WorkspaceADC && op.ID == "workspace.delegated_user" {
+		if _, supplied := params["user"]; supplied {
+			return refused("tenant_binding", "the delegated account is selected only by the gate")
+		}
+		session := g.workspace[r.Asset]
+		if session == nil || !session.usersComplete || g.workspaceSource == nil || g.workspaceSource.kind != "service_account" {
+			return &halt{decision: "unavailable:principal_unknown", detail: "The assessment account could not be verified; earlier authenticated evidence will not be reused"}
+		}
+		user, ok := session.inventory[g.workspaceSource.subject]
+		if !ok {
+			return &halt{decision: "unavailable:principal_unknown", detail: "The delegated account was not uniquely present in admitted current inventory"}
+		}
+		params = maps.Clone(params)
+		if params == nil {
+			params = map[string]string{}
+		}
+		params["user"] = user.id
+	}
+
+	if op.Auth == WorkspaceADC && op.types["user"].Type == UserKey {
+		session := g.workspace[r.Asset]
+		if session == nil || !session.usersComplete {
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read"}
+		}
+		user, ok := session.inventory[params["user"]]
+		if !ok || user.id != params["user"] {
+			return refused("tenant_binding", "the account was not admitted as a current stable Workspace identity")
+		}
+	}
+
 	if l := op.List; l != nil && l.Next != nil {
 		if _, set := r.Params[l.Next.Param]; set {
 			return refused("bind", fmt.Sprintf("parameter %q is filled by the gate from the page before", l.Next.Param))
@@ -335,7 +365,7 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 			prev.reading = false
 			g.mu.Unlock()
 		})
-		params = maps.Clone(r.Params)
+		params = maps.Clone(params)
 		if params == nil {
 			params = map[string]string{}
 		}

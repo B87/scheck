@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -20,13 +21,21 @@ var customerIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 // delegated identity can be established in step 2. Step 1 never reuses evidence.
 // docs/spec/workspace-collector.md, "Principal and resume".
 type workspaceSession struct {
-	credential  *Credential
-	expires     time.Time
-	scopesKnown bool
-	customer    string
-	domains     map[string]bool
-	domainRoot  bool
-	bound       bool
+	credential    *Credential
+	expires       time.Time
+	scopesKnown   bool
+	customer      string
+	domains       map[string]bool
+	domainRoot    bool
+	bound         bool
+	units         map[string]bool
+	inventory     map[string]workspaceUser
+	fingerprints  map[string]string
+	owners        map[string]string
+	usersComplete bool
+	inventoryBad  bool
+	cursors       map[string]bool
+	principal     string
 }
 
 func workspaceTokenOp() Op {
@@ -48,14 +57,22 @@ func (c *compiled) checkWorkspaceOp() error {
 		}
 	}
 	if c.Auth != WorkspaceADC {
+		if c.UserIdentity != nil || c.List != nil && c.List.Tree != nil {
+			return errors.New("structural tenant identity constraints require Workspace admission")
+		}
 		return nil
 	}
-	if c.Provider != "google" || c.Method != GET || c.Class != Read || c.Subject != workspacePrefix+"{domain}" || c.types["domain"].Type != DNSName || c.List != nil || c.WorkflowYAML || c.GitHubMetadata || len(c.Accept) != 1 || c.Accept[0] != "application/json" || c.MaxBytes != 1<<20 {
+	if c.Provider != "google" || c.Method != GET || c.Class != Read || (c.Subject != workspacePrefix+"{domain}" && c.Subject != workspacePrefix+"{domain}/users/{user}") || c.types["domain"].Type != DNSName || c.WorkflowYAML || c.GitHubMetadata || len(c.Accept) != 1 || c.Accept[0] != "application/json" || c.MaxBytes != 1<<20 {
 		return errors.New("invalid compiled Workspace foundation read")
 	}
 	u, err := url.Parse(c.URL)
-	if err != nil || u.Scheme != "https" || u.Host != "admin.googleapis.com" || u.User != nil || u.Fragment != "" || u.RawQuery != "" || strings.Contains(c.URL, "%") || path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
+	if err != nil || u.Scheme != "https" || u.Host != "admin.googleapis.com" || u.User != nil || u.Fragment != "" || strings.Contains(c.URL, "%") || path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
 		return errors.New("Workspace reads require a compiled Directory endpoint")
+	}
+	for _, values := range u.Query() {
+		if len(values) != 1 {
+			return errors.New("duplicate Workspace query selector")
+		}
 	}
 	bootstrapPath := workspaceBootstrapPath(c.ID)
 	if strings.HasPrefix(c.ID, "workspace.bootstrap_") && bootstrapPath == "" {
@@ -64,21 +81,83 @@ func (c *compiled) checkWorkspaceOp() error {
 	if bootstrapPath != "" && c.URL != "https://admin.googleapis.com"+bootstrapPath {
 		return errors.New("Workspace bootstrap requires its exact compiled path")
 	}
-	if c.ID == "workspace.bootstrap_customer" {
-		if len(c.Params) != 1 {
-			return errors.New("Workspace bootstrap customer has no caller selector")
+	if bootstrapPath != "" {
+		count := 2
+		if c.ID == "workspace.bootstrap_customer" {
+			count = 1
 		}
-	} else {
+		if len(c.Params) != count || c.List != nil || u.RawQuery != "" || c.Subject != workspacePrefix+"{domain}" {
+			return errors.New("invalid Workspace bootstrap shape")
+		}
+	}
+	perUser := c.types["user"].Type == UserKey
+	if perUser {
+		if c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity == nil || c.List != nil || u.Path != "/admin/directory/v1/users/{user}" || c.types["user"].Optional {
+			return errors.New("Workspace user read requires admitted stable identity")
+		}
+		if u.Query().Get("projection") != "full" || u.Query().Get("viewType") != "admin_view" || len(u.Query()) != 2 {
+			return errors.New("Workspace user detail uses full admin projection")
+		}
+	} else if c.ID != "workspace.bootstrap_customer" {
 		if c.types["customer"].Type != CustomerID || c.types["customer"].Optional {
 			return errors.New("Workspace customer selector must be a required gate-filled id")
 		}
-		if !strings.HasPrefix(u.Path, "/admin/directory/v1/customer/{customer}/") && u.Path != "/admin/directory/v1/customers/{customer}" && !strings.HasPrefix(u.Path, "/admin/directory/v1/customers/{customer}/") {
-			return errors.New("Workspace read must select the bound customer in its Directory path")
+		inPath := strings.HasPrefix(u.Path, "/admin/directory/v1/customer/{customer}/") || u.Path == "/admin/directory/v1/customers/{customer}" || strings.HasPrefix(u.Path, "/admin/directory/v1/customers/{customer}/")
+		usersQuery := u.Path == "/admin/directory/v1/users" && u.Query().Get("customer") == "{customer}" && c.List != nil && c.List.Kind == KindUser && c.UserIdentity != nil
+		if !inPath && !usersQuery {
+			return errors.New("Workspace read must select the bound customer")
 		}
-		if bootstrapPath != "" && len(c.Params) != 2 {
-			return errors.New("Workspace bootstrap has unexpected parameters")
+		if inPath && u.Query().Has("customer") {
+			return errors.New("duplicate Workspace tenant selector")
+		}
+		if usersQuery && (u.Query().Get("projection") != "full" || u.Query().Get("viewType") != "admin_view" || u.Query().Get("maxResults") != "100") {
+			return errors.New("Workspace users require full customer inventory")
+		}
+		for key := range u.Query() {
+			if key != "customer" && key != "projection" && key != "viewType" && key != "maxResults" && key != "pageToken" && (c.List == nil || c.List.Tree == nil || (key != "type" && key != "orgUnitPath")) {
+				return errors.New("unsupported Workspace selector")
+			}
 		}
 	}
+	if c.List != nil {
+		if c.List.Envelope == "" || c.List.MaxItems != 1000 {
+			return errors.New("Workspace inventory requires recognized bounded envelope")
+		}
+		if c.List.Kind == KindOrgUnit && (c.List.Tree == nil || u.Query().Get("type") != "all_including_parent" || u.Query().Get("orgUnitPath") != "/" || c.List.Next != nil) {
+			return errors.New("Workspace units require complete root tree")
+		}
+		if c.List.Kind == KindUser && (c.UserIdentity == nil || c.List.Next == nil || c.List.MaxPages != 10 || len(c.List.UserKeys) == 0) {
+			return errors.New("Workspace users require bounded exclusion-aware inventory")
+		}
+	}
+	if c.UserIdentity != nil {
+		f := c.UserIdentity
+		for _, key := range append([]string{f.ID, f.Primary, f.Customer, f.Unit}, f.Aliases...) {
+			if !fieldPath.MatchString(key) || !slices.Contains(c.Keep, key) {
+				return errors.New("invalid or unretained user identity field")
+			}
+		}
+	}
+	if c.List != nil && c.UserIdentity != nil {
+		f := c.UserIdentity
+		if c.List.ExcludeKey != f.Unit {
+			return errors.New("user exclusion field must equal the admitted unit field")
+		}
+		for _, field := range append([]string{f.ID, f.Primary}, f.Aliases...) {
+			if !slices.Contains(c.List.UserIDs, field) || !slices.Contains(c.List.UserKeys, field) {
+				return errors.New("user admission keys must include every structural identity")
+			}
+		}
+	}
+	if c.List != nil && c.List.Tree != nil {
+		f := c.List.Tree
+		for _, key := range []string{f.ID, f.ParentID, f.ParentPath, f.Name} {
+			if !fieldPath.MatchString(key) || !slices.Contains(c.Keep, key) {
+				return errors.New("invalid or unretained unit tree field")
+			}
+		}
+	}
+
 	if c.types["domain"].Optional {
 		return errors.New("Workspace domain is required")
 	}
@@ -130,19 +209,26 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		g.workspace[p.r.Asset] = session
 	}
 	if p.op.ID == "workspace.bootstrap_customer" {
+		g.clearWorkspacePages(p.r.Asset)
 		session.customer, session.domains, session.bound, session.domainRoot = "", nil, false, false
+		session.units, session.inventory, session.fingerprints, session.owners = nil, nil, nil, nil
+		session.usersComplete, session.inventoryBad, session.principal = false, false, ""
 	}
 	// Reject foreign selectors before even exchanging a credential.
-	if p.op.ID != "workspace.bootstrap_customer" && (session.customer == "" || p.b.params["customer"] != session.customer) {
+	if p.op.ID != "workspace.bootstrap_customer" && p.op.types["user"].Type != UserKey && (session.customer == "" || p.b.params["customer"] != session.customer) {
 		return refused("tenant_binding", "the selector is not this session's bootstrap customer")
 	}
 	switch p.op.ID {
 	case "workspace.bootstrap_customer":
 	case "workspace.bootstrap_domains":
+		g.clearWorkspacePages(p.r.Asset)
+		session.usersComplete, session.principal = false, ""
 		session.bound = false
 		session.domains = nil
 		session.domainRoot = false
 	case "workspace.bootstrap_aliases":
+		g.clearWorkspacePages(p.r.Asset)
+		session.usersComplete, session.principal = false, ""
 		session.bound = false
 		if session.domains == nil {
 			return refused("tenant_binding", "complete recognized domains are required before aliases")
@@ -171,6 +257,30 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		}
 		session.credential = &Credential{Env: source.env, header: "Authorization", value: "Bearer " + exchange.token, secret: exchange.token, secrets: exchange.credential.secrets, Scopes: exchange.scopes}
 		session.expires, session.scopesKnown = exchange.expires, exchange.scopesKnown
+	}
+	if p.op.List != nil && p.op.List.Tree != nil {
+		g.clearWorkspacePages(p.r.Asset)
+		session.units = nil
+		session.usersComplete = false
+		session.principal = ""
+	}
+	if p.op.List != nil && p.op.List.Kind == KindUser && p.r.NextOf == "" {
+		g.clearWorkspacePages(p.r.Asset)
+		g.workspaceUsersStart(p.r.Asset)
+	}
+	if p.op.types["user"].Type == UserKey {
+		session.principal = ""
+	}
+	if p.op.List != nil && p.op.List.Kind == KindUser && session.units == nil {
+		return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete organizational-unit inventory is required before users can be read"}
+	}
+	if p.op.types["user"].Type == UserKey {
+		if !session.usersComplete {
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read"}
+		}
+		if user, ok := session.inventory[p.b.params["user"]]; !ok || user.id != p.b.params["user"] {
+			return refused("tenant_binding", "the account was not admitted from current Workspace inventory")
+		}
 	}
 	p.cred = session.credential
 	return nil
@@ -396,4 +506,15 @@ func (s *workspaceSession) consume(id string, raw []byte, root string) bool {
 		return matched
 	}
 	return true
+}
+
+// Refreshes revoke pending continuations before contact, including failed reads.
+func (g *Gate) clearWorkspacePages(asset string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for id, page := range g.pages {
+		if page.asset == asset {
+			delete(g.pages, id)
+		}
+	}
 }

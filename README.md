@@ -13,7 +13,7 @@ asserts that nothing else on the target changes.
 
 **This build (0.0.2, in development):** the engagement runs its stages (intake, scope,
 recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
-of an unbuilt kind (such as Google Workspace) is recorded as *not read by this
+of an unbuilt kind (such as GCP) is recorded as *not read by this
 version* and makes the run exit 2; its collectors arrive with the
 [roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
 certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
@@ -60,6 +60,14 @@ refs. Missing mirrors, unsupported data and partial reads remain coverage gaps.
 Runtime enforcement and runner access remain unassessed. Recon prints unattributed accounts
 with empty kinds for the operator to complete. A changed principal on resume is reported;
 unknown principals, including installation tokens, reuse no authenticated results.
+Google Workspace roots get verified tenant binding, domain and alias inventory,
+organizational units and customer-bound user inventory. Unit exclusions are applied
+before evidence is retained. The supported credential types are local Google
+`authorized_user` or `service_account` ADC files; service accounts require an existing
+approved delegated subject in `SCHECK_WORKSPACE_SUBJECT`. No delegation is configured
+by scheck. Account and administrator rules are still unimplemented: Workspace coverage
+says inventory only, even when collection completes. Unknown callers and verified
+delegated callers reuse no authenticated Workspace reads on resume.
 Findings come from compiled-in rules: a host's posture rules, graded through the
 context the engagement declares, the GitHub collector's identity, repository-access, CI configuration, provider-alert and mirror credential
 rules, and the web collector's DNS, email, TLS and response rules. They judge the

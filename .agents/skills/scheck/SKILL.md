@@ -198,9 +198,21 @@ credential-dependent visibility. Reused-read notes give the original observation
 time and say current access was not validated. Follow the inventory notes on a
 shortfall to distinguish retained reads from missing reads; missing Members
 permission asks for owner authorization and then resume.
-A declared root of an unbuilt kind (such as Google Workspace) is reported as
+A declared root of an unbuilt kind (such as GCP) is reported as
 `collector_not_built` and the run exits 2. Tell the user what was not assessed, never
 that it is fine.
+
+Google Workspace roots collect tenant/domain/alias, organizational-unit and user
+inventory. Workspace security rules have not landed: `no_rule` and `not_assessed`
+mean no account or administrator control was judged. Read `workspace_inventory`,
+`workspace_people` and `workspace_credential` notes; a
+`workspace_credential_warning` is an unranked permission warning. Partial or excluded
+populations print lower bounds and can make the run incomplete. Google credentials
+come from a supported local ADC file; an already approved service-account delegation
+uses `SCHECK_WORKSPACE_SUBJECT`. Do not suggest automatic delegation setup or broader
+grants. Authorized-user callers stay unknown. A freshly verified delegated account
+is identity evidence, never assurance about its privileges. Every Workspace resume
+repeats admission and reuses no authenticated Workspace responses.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.

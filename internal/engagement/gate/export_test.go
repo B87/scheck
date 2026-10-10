@@ -226,3 +226,12 @@ func (h *Harness) FailNS(name string) {
 	r.failType = typeNS
 	h.w.zone.names[name] = r
 }
+
+// WorkspaceHandler serves only the fixed Directory API through offline transport.
+func (h *Harness) WorkspaceHandler(handler http.HandlerFunc) { h.w.google(handler) }
+
+// GoogleTokenHandler supplies the private exchange's fixed host for fake tests.
+func (h *Harness) GoogleTokenHandler(handler http.HandlerFunc) {
+	cert := h.w.leaf([]string{"oauth2.googleapis.com"}, time.Now().Add(time.Hour), false)
+	h.w.serve("oauth2.googleapis.com", "142.250.0.11", 443, &cert, handler)
+}

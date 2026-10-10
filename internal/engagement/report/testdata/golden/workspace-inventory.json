@@ -1,0 +1,301 @@
+{
+  "acceptances": [],
+  "assessments": [],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "workspace",
+      "detail": "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build.",
+      "id": "saas:google-workspace:example.com",
+      "kind": "saas",
+      "name": "Workspace",
+      "principal": {
+        "identity": "unknown",
+        "scopes_source": "unknown"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Workspace: inventory only; no Workspace security control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Workspace: inventory only; no Workspace security control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "host": "admin.googleapis.com",
+        "operator": "Google",
+        "requests": 7,
+        "sent": [
+          "google-workspace:example.com"
+        ],
+        "source": "google"
+      },
+      {
+        "credentials": [
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "host": "oauth2.googleapis.com",
+        "operator": "Google",
+        "requests": 1,
+        "sent": [
+          "google-workspace:example.com"
+        ],
+        "source": "google"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:google-workspace:example.com"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-10T12:00:00Z",
+      "to": "2026-10-10T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "Workspace inventory review",
+    "operator": "Dani",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 0,
+    "reasons": [],
+    "thresholds": {
+      "saas:google-workspace:example.com": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "Returned credential permissions are unknown; effective permissions were not tested.",
+      "kind": "workspace_credential",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "domains: observed 2; organizational units: observed 3; accounts: observed 6. Inventory alone does not assess account security or administrator access.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-10T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 10,
+      "partial": 0,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [],
+    "more": 0,
+    "rules": {
+      "decided": 0,
+      "selected": 0,
+      "without_evidence": 0
+    }
+  }
+}

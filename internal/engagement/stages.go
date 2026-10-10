@@ -20,6 +20,7 @@ import (
 
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
+	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -452,6 +453,8 @@ func (r *run) scope(ctx context.Context) (any, error) {
 			sa.Collector = "host"
 		} else if (a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:")) || (a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:")) {
 			sa.Collector = "github"
+		} else if a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:google-workspace:") {
+			sa.Collector = "workspace"
 		}
 		doc.Assets = append(doc.Assets, sa)
 	}
@@ -507,7 +510,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops, githubc.Ops)...)
+	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops, githubc.Ops, workspace.Ops)...)
 	if err != nil {
 		return nil, err
 	}
@@ -573,6 +576,8 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			ra = r.collectDomain(ctx, a, ra)
 		case a.Kind == KindURL && isRoot(a):
 			ra = r.collectURL(ctx, a, ra)
+		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:google-workspace:") && isRoot(a):
+			ra = r.collectWorkspace(ctx, a, ra)
 		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") && isRoot(a):
 			ra = r.collectGitHub(ctx, a, ra)
 		case a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:") && isRoot(a):
@@ -696,6 +701,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 	}
 	r.reconcileGitHubRepositories(doc)
 	r.populateGitHubPeople(doc)
+	populateWorkspacePeople(doc)
 	return doc, r.write("recon.json", doc)
 }
 
@@ -998,6 +1004,9 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		if ra.GitHub != nil {
 			r.githubReportInput(ra, &ai)
+		}
+		if ra.Workspace != nil {
+			r.workspaceReportInput(ra, &ai)
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"

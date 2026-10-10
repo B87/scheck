@@ -146,7 +146,9 @@ func (t *text) header() {
 	}
 	if t.r.Run.Resumed {
 		kept := "was kept"
-		if slices.ContainsFunc(t.r.Assets, func(a Asset) bool { return a.Collector != nil && *a.Collector == "github" }) {
+		if slices.ContainsFunc(t.r.Assets, func(a Asset) bool {
+			return a.Collector != nil && (*a.Collector == "github" || *a.Collector == "workspace")
+		}) {
 			kept += " where reuse was allowed"
 		}
 		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely "+kept+", and "+
@@ -158,9 +160,9 @@ func (t *text) header() {
 		}
 	}
 	for _, note := range t.r.Notes {
-		if note.Kind == "github_credential" || note.Kind == "github_credential_warning" {
+		if note.Kind == "github_credential" || note.Kind == "github_credential_warning" || note.Kind == "workspace_credential" || note.Kind == "workspace_credential_warning" {
 			label := "Credential"
-			if note.Kind == "github_credential_warning" {
+			if note.Kind == "github_credential_warning" || note.Kind == "workspace_credential_warning" {
 				label = "Warning"
 			}
 			t.field("", label, 15, clean(note.Source)+": "+clean(note.Detail))
@@ -303,6 +305,9 @@ func (t *text) refusal(s Shortfall) string {
 func (t *text) shortfall(s Shortfall) string {
 	n := t.name(s.Asset)
 	for _, a := range t.r.Assets {
+		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "workspace" {
+			return n + ": Workspace inventory was not completed. The inventory notes show what was read and what remains unknown."
+		}
 		if a.ID == s.Asset && a.Collector != nil && *a.Collector == "github" {
 			return n + ": GitHub inventory was not completed (" + strings.TrimSuffix(clean(s.Detail), ".") + "). The inventory notes show what was read and what remains unknown."
 		}
@@ -722,6 +727,9 @@ func (t *text) reasonText(rd ReasonDetail) string {
 	case "sampled":
 		return "only part was read; the rest is unknown"
 	case "unavailable":
+		if arg == "workspace_inventory" {
+			return "Workspace inventory was not completed; see inventory notes for the affected reads"
+		}
 		if detail, ok := map[string]string{
 			"not_read":                 "the required read was not collected",
 			"vantage_unknown":          "restricted pages were not checked for outside reachability: no --vantage given",
@@ -1493,6 +1501,11 @@ func (t *text) close() {
 				"collector_not_built": "is not read by this version"}[s.Reason]
 			if s.Effect != nil && s.Reason == "failed" {
 				w = "lost its connection part-way"
+			}
+			for _, asset := range t.r.Assets {
+				if asset.ID == s.Asset && asset.Collector != nil && *asset.Collector == "workspace" {
+					w = "inventory was not completed"
+				}
 			}
 			why = append(why, t.name(s.Asset)+" "+w)
 		}

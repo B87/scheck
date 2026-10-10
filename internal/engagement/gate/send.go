@@ -433,6 +433,11 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 		out.TLS = s.tlsInfo(resp.TLS, nil)
 	}
 	out.Header, s.e.Headers, out.Redactions = keepHeaders(resp.Header, s.red)
+	if a.b.op.Auth == WorkspaceADC {
+		out.Header = nil
+		s.e.Headers = 0
+		out.Redactions = nil
+	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		g.noteRedirect(s.e.RequestID, s.r.Asset, a, req.URL, resp.Header.Get("Location"))
 	}
@@ -503,7 +508,7 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	case len(raw) > 0 && !accepts(op.Accept, resp.Header.Get("Content-Type")):
 		code = codeContentType
 		redacted, _ := red.Redact(raw)
-		if !op.GitHubMetadata {
+		if !op.GitHubMetadata && op.Auth != WorkspaceADC {
 			out.hash = hash(redacted)
 		}
 	// 7. JSON is never parsed cut, so JSON over its cap is not kept; its
@@ -513,6 +518,8 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	// A 2xx with no body (a 204) is kept as its status: for an op that
 	// answers "enabled" with 204 and "disabled" with 404, the status is the
 	// evidence. A list always has a body.
+	case op.json && ok && len(raw) == 0 && op.UserIdentity != nil:
+		code = codeMalformed
 	case op.json && ok && len(raw) == 0 && op.List == nil:
 	// 3–6. A 2xx JSON body is redacted value by value, parsed from the
 	// redacted bytes, filtered and projected.
@@ -545,13 +552,15 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 			out.Body, out.Population = sh.body, sh.pop
 			p.kept, p.next, p.done = sh.pop != nil, sh.next, sh.done
 		} else {
-			out.hash = hash(redacted)
+			if op.Auth != WorkspaceADC {
+				out.hash = hash(redacted)
+			}
 		}
 	// 3, 7. Text, and an API's error body, is redacted, then cut. An error
 	// body that is JSON is first redacted value by value, as a 2xx body
 	// is, so the same body reveals no more as an error.
 	default:
-		if op.WorkflowYAML || op.GitHubMetadata {
+		if op.WorkflowYAML || op.GitHubMetadata || op.Auth == WorkspaceADC {
 			// Error responses never retain an encoded contents body.
 			if op.WorkflowYAML {
 				out.Body = []byte(`{"error":"workflow read did not succeed"}`)
@@ -583,7 +592,7 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
 		res.end("unavailable:"+code, codeDetail(code, limit))
-		if (code == codeTooLarge && (op.WorkflowYAML || op.GitHubMetadata)) || code == codeWorkflowLimit || code == codeMetadataLimit {
+		if (code == codeTooLarge && (op.WorkflowYAML || op.GitHubMetadata || op.Auth == WorkspaceADC)) || code == codeWorkflowLimit || code == codeMetadataLimit || code == codePopulationLimit {
 			res.Reason = "limit_reached"
 		}
 	}

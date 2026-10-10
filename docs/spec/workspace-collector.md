@@ -1,12 +1,13 @@
 # scheck — Google Workspace collector specification
 
 Google Workspace assessment planned for 0.0.2 E6. The security-consultant DEFINE
-review froze this design on 2026-10-10. Step 1 implements the credential and tenant
-binding library, with no engagement-stage or CLI wiring. Inventory, rules and report
-integration remain planned. No live measurement or release gate is claimed here.
+review froze this design on 2026-10-10. Steps 1 and 2 implement credentials, tenant
+binding and inventory through engagement Recon and report integration. Identity,
+administrator and 2-step-verification rules, and optional OAuth/Gmail reads remain
+planned. No live measurement or release gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
-([scope.md](scope.md#the-scope-gate)). Engagement owns people attribution, admin
+([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
 thresholds and severity adjustments ([engagement.md](engagement.md), "People",
 "Admins", "Severity in context"). Engagement remains the only report author;
 [report.md](report.md) and [runs.md](runs.md) govern report and resume behavior.
@@ -163,17 +164,28 @@ redaction and compiled `Keep` projection pipeline, not the private bootstrap par
 An HTTP 401 clears both authentication and binding before any later read. Operation
 paths, parameters and projections belong to the collector's catalog and are compiled
 by registration. Gate validation retains the bootstrap endpoint exceptions and
-structural restrictions: `GET` to the literal Directory host, declared root subject
-and a required gate-filled customer selector in a normalized path. Compiled templates
-contain no percent encoding or path traversal. Step 1 supports customer selection in
-the Directory path only; query selection and paging admission remain step 2 work.
+structural restrictions: `GET` to the literal Directory host, a declared tenant or
+admitted-user subject, and a required gate-filled customer selector for tenant lists. Compiled templates
+contain no percent encoding or path traversal. Customer selection is gate-filled in
+the path or the compiled users query. The users query fixes full admin projection,
+100 records per page and at most 10 pages. The gate fills page tokens from its ledger;
+collectors follow request ids rather than supplying cursors.
 
 Organizational-unit exclusions match canonical subtree boundaries behind `Scope` and
-the gate. The complete unit tree and customer-bound user inventory establish excluded
-subjects before persistence and follow-ups. An unknown exclusion set blocks dependent
-reads. Excluded people are never persisted; only dropped counts remain. Per-user
-parameters refer only to admitted current inventory identities. An external address
-or group member address never grants permission to read a user.
+the gate. The complete unit tree is recognized privately before exclusion filtering.
+Canonical paths match case-insensitively by subtree boundary; opaque unit ids are
+bounded. A missing root, unknown parent, conflicting identity or incomplete tree
+blocks user reads. The customer-bound user inventory establishes excluded subjects before
+persistence and follow-ups. Unrecognized user identities or conflicting current
+ids, primary addresses or aliases prevent per-user admission. An unknown exclusion
+set blocks dependent reads. Excluded people are never persisted; only dropped counts
+remain. Per-user parameters refer only to admitted current inventory identities.
+An external address or group member address never grants permission to read a user.
+A provider-complete current inventory with only known exclusion drops may still admit
+nonexcluded user details; retained coverage stays incomplete. Actual cuts, unknown
+identities or conflicts block all dependent details. The root unit currently requires
+absent or empty parent fields; compatibility with provider root-parent sentinels has
+not been measured live.
 
 Account subjects use current `primaryEmail`, with stable `subject.provider_id` beside
 it. Renames can change the subject key; cross-run provider-id comparison belongs to
@@ -189,17 +201,21 @@ so authenticated evidence is not reused across sessions. There is no invented
 are distinct from the freshly verified Directory delegated user's stable id. A
 successful JWT exchange does not provider-verify the JSON `client_id` field.
 
-Step 1 has no user admission or delegated-user verification. Its principal remains
-unknown for both credential types and no Workspace response is eligible for ledger
-reuse, even if an earlier ledger row names an apparent principal. Fresh customer
-binding alone never enables reuse.
+Step 2 establishes the complete unit tree and current customer-bound users before
+a fresh `users.get` verifies a service account's configured delegated subject. The
+subject must match an admitted primary address or alias, but the request selects its
+current stable id. Detail must agree on the current id, primary address, customer
+and unit and remain outside excluded subtrees. An incomplete or contradictory user
+inventory permits no delegated-user follow-up. `authorized_user` identity remains
+unknown; neither local account metadata nor a refresh proves the caller.
 
-Step 2 establishes exclusions and current user admission before `users.get` verifies
-the delegated subject. Changes to issuer, subject, verified user, customer or required
-profile invalidate related evidence;
-an unknown principal disables reuse. Gmail per-user token caches are keyed by bound
-customer and admitted user id. Current primary address, customer and exclusions are
-checked before impersonation, never inferred from an arbitrary target-returned address.
+No Workspace response is eligible for authenticated ledger reuse, even after a
+delegated user is verified or an earlier ledger row names a principal. Resume repeats
+ordered tenant binding, unit and user admission and delegated verification. Changes
+to issuer, subject, customer or profile require fresh evidence. Future Gmail per-user
+token caches are keyed by bound customer and admitted user id. Current primary
+address, customer and exclusions must be checked before impersonation, never inferred
+from an arbitrary target-returned address.
 
 ## Reads and projections
 
@@ -230,7 +246,9 @@ planned source host `gmail.googleapis.com`. Credential exchange uses
 custom schemas, notes, home addresses, passwords, SSH keys and photos are omitted.
 Filter criteria, queries, subjects, labels and unrelated actions are discarded before
 generic redaction and persistence. Secrets in retained fields are redacted before
-parsing and persistence.
+parsing and persistence. API response headers, error bodies and unprojected hashes
+are discarded. Account ids and name labels are redacted before persistence, as are
+other retained fields.
 
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized MFA flags in the current list suffice
@@ -240,9 +258,14 @@ and a diagnostic note.
 ### Population bounds
 
 Pages continue through an empty list with a nonempty next token. The gate rebuilds
-requests from compiled templates, never returned URLs. Provider ids are deduplicated;
-conflicting duplicates, unknown members, malformed cursors, loops and actual cuts mark
-incomplete evidence. Permission failures are not empty lists.
+requests from compiled templates, never returned URLs. Directory list bodies require
+the exact compiled `kind` envelope, including empty populations. Provider ids are
+deduplicated; conflicting duplicates, unknown members, malformed cursors, loops and
+actual cuts mark incomplete evidence. Permission failures are not empty lists. A
+present null, empty or non-string next cursor is unreadable, not an end-of-population
+signal. Refreshing binding, units or
+the initial users page revokes pending continuations before contact, including when
+the refresh fails. An earlier page cannot restore current-user admission.
 
 | Population | Item cap | Page cap and size |
 |---|---|---|
@@ -374,11 +397,22 @@ do not claim message disclosure was observed.
 
 ## Reporting and coverage
 
-The collector owns its `ScopeView`, input and operation-specific notes, and returns
-shared judgments. Engagement owns report rendering, ranking, context and acceptances.
-Identity and access coverage contains OAuth and admin sub-items; email coverage
-contains forwarding. Both identify decided, partial and unassessed sub-items. E9
-owns global coverage; no new global area is introduced.
+The collector owns `workspace.Context`, people attribution and operation-specific
+notes. One `workspace.Collect` call sequences binding and inventory and returns
+evidence, notes, an `InventoryComplete` summary and shared judgments. Step 2 returns no posture judgments. Engagement
+owns report rendering, ranking, context and acceptances.
+Step 2 marks Workspace security controls `not_assessed` with `no_rule`, even when
+inventory completed and exit is 0. A mixed GitHub/Workspace identity row cannot claim
+complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
+permission failures, credential uncertainty and fresh delegated verification.
+Primary-address attribution is usable on observed records; alias-only attribution
+requires a complete population. Each declared address is matched independently, so
+one person may own multiple current accounts. Competing people for one current
+account leave its attribution unknown. Display names never establish identity.
+
+When the later rules land, identity and access coverage contains OAuth and admin
+sub-items; email coverage contains forwarding. Both identify decided, partial and
+unassessed sub-items. E9 owns global coverage; no new global area is introduced.
 
 Readouts include supported roles and scope limits, alias-matched recon candidates,
 declared expected admins not observed, shared-account leaver rotation, and break-glass
@@ -417,8 +451,8 @@ read, the Workspace customer could not be verified, or authentication expired. T
 do not present internal terms such as ADC, binding, bootstrap or gate as operator
 actions. Where a session must be replaced, the wording directs the operator to
 restart or resume with the intended profile and account. This wording is prepared
-for future CLI integration; step 1 does not expose a Workspace run path. Full client
-report review remains part of integration and step 7.
+for Workspace runs. Step 2 reports inventory only; a successful read is not an
+account-security assessment. Whole-slice client report review remains step 7 work.
 
 The credential warning says observed grants permit operations beyond reads, scheck
 sent only declared reads, effective access was not tested, and an administrator should

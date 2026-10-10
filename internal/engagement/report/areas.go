@@ -107,16 +107,16 @@ func (b *builder) areaRow(area finding.Area) Row {
 			continue
 		}
 		fed = append(fed, a.Name)
-		if a.Collector == "github" {
+		if a.Collector == "github" || a.Collector == "workspace" {
 			if a.InventoryRead {
 				read++
 			}
-			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no " + map[string]string{"github": "GitHub", "workspace": "Workspace"}[a.Collector] + " security control was assessed"})
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
 			}
 			if a.Reason != "" {
-				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: a.Reason, Detail: a.Name})
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: inventoryCoverageReason(a), Detail: a.Name})
 			}
 		} else {
 			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "collector_not_built", Detail: a.Name})
@@ -256,4 +256,11 @@ func (b *builder) narrowing(v *hostView) []Narrowing {
 		out = append(out, Narrowing{Entry: entry, Removed: []string{}, DeniedReads: &unattributed})
 	}
 	return out
+}
+
+func inventoryCoverageReason(a AssetInput) string {
+	if a.Collector == "workspace" {
+		return "unavailable:workspace_inventory"
+	}
+	return a.Reason
 }

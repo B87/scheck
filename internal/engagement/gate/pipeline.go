@@ -56,13 +56,14 @@ type Drop struct {
 
 // Unavailable codes the pipeline gives a 2xx response it cannot keep.
 const (
-	codeContentType   = "unexpected_content_type"
-	codeEncoding      = "unexpected_content_encoding"
-	codeBomb          = "compression_bomb"
-	codeTooLarge      = "response_too_large"
-	codeBrokeJSON     = "redaction_broke_structure"
-	codeMalformed     = "malformed_response"
-	codeExclusionUnkn = "exclusion_unknown"
+	codeContentType     = "unexpected_content_type"
+	codeEncoding        = "unexpected_content_encoding"
+	codeBomb            = "compression_bomb"
+	codeTooLarge        = "response_too_large"
+	codeBrokeJSON       = "redaction_broke_structure"
+	codeMalformed       = "malformed_response"
+	codePopulationLimit = "population_limit"
+	codeExclusionUnkn   = "exclusion_unknown"
 )
 
 func codeDetail(code string, limit int) string {
@@ -79,6 +80,8 @@ func codeDetail(code string, limit int) string {
 		return fmt.Sprintf("larger than the op's cap of %d bytes", limit)
 	case codeBrokeJSON:
 		return "redaction left the JSON unparseable, so nothing was kept"
+	case codePopulationLimit:
+		return "the inventory exceeded its compiled population limit"
 	case codeMalformed:
 		return "the body is not the JSON the op expects, so nothing was kept"
 	case codeExclusionUnkn:
@@ -481,12 +484,30 @@ type shaped struct {
 // redacted is (docs/spec/scope.md, "Responses").
 func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shaped {
 	op := a.b.op
+	if op.Auth == WorkspaceADC {
+		if _, err := strictGoogleObject(redacted); err != nil {
+			return shaped{code: codeMalformed}
+		}
+	}
 	doc, code := parseRedacted(redacted)
 	if code != "" {
 		return shaped{code: code}
 	}
 	if op.List == nil {
+		if op.Auth == WorkspaceADC && op.UserIdentity != nil && !g.workspaceDetail(r, a, doc) {
+			return shaped{code: codeMalformed}
+		}
 		return shaped{body: marshal(project(doc, op.keep))}
+	}
+	if op.List.Envelope != "" && scalarAt(doc, "kind") != op.List.Envelope {
+		return shaped{code: codeMalformed}
+	}
+	if op.Auth == WorkspaceADC {
+		if obj, ok := doc.(map[string]any); ok {
+			if value, present := obj[op.List.Items]; present && value == nil {
+				return shaped{code: codeMalformed}
+			}
+		}
 	}
 	items, code := listItems(op.List, doc)
 	if code != "" {
@@ -496,10 +517,19 @@ func (g *Gate) shape(r Request, a admitted, redacted []byte, h http.Header) shap
 	if a.prev != nil {
 		n = a.prev.n + 1
 	}
+	if op.List.MaxItems > 0 && len(items) > op.List.MaxItems {
+		return shaped{code: codePopulationLimit}
+	}
+	if op.Auth == WorkspaceADC && op.List.Tree != nil && !g.workspaceUnits(r.Asset, op.List, items) {
+		return shaped{code: codeMalformed}
+	}
 	ous := g.scope.OrgUnits(r.Asset)
 	kept, pop, building := g.filter(r, a, items, n, ous)
 	out := shaped{body: marshal(kept), pop: pop}
 	g.pageAfter(&out, r, a, doc, h, building, len(ous) > 0)
+	if op.Auth == WorkspaceADC && op.List.Kind == KindUser {
+		g.workspaceUsersDone(r.Asset, &out)
+	}
 	return out
 }
 
@@ -560,6 +590,9 @@ func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) 
 	if l.UserRef != "" {
 		set = g.excludedUsers(r.Asset)
 	}
+	if op.Auth == WorkspaceADC && op.UserIdentity != nil && a.prev == nil {
+		g.workspaceUsersStart(r.Asset)
+	}
 	pop := &Population{Page: n, Items: len(items)}
 	counts := map[string]int{}
 	kept := []any{}
@@ -572,8 +605,15 @@ func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) 
 			}
 		}
 		rule := g.dropRule(r.Asset, l, it, set, ous)
+		if op.Auth == WorkspaceADC && op.UserIdentity != nil {
+			rule = g.workspaceUserItem(r.Asset, op, it, rule)
+		}
 		if building != nil {
-			building.add(userKeysAt(it, l.UserIDs), userKeysAt(it, l.UserKeys), rule)
+			setRule := rule
+			if rule == "duplicate" {
+				setRule = ""
+			}
+			building.add(userKeysAt(it, l.UserIDs), userKeysAt(it, l.UserKeys), setRule)
 		}
 		if rule == "" {
 			kept = append(kept, project(it, op.keep))
@@ -717,7 +757,7 @@ func (g *Gate) dropRule(asset string, l *List, item any, set *userSet, ous []Org
 				return "unattributable"
 			}
 			for _, ou := range ous {
-				if orgUnitUnder(key, ou.Path) {
+				if orgUnitUnder(strings.ToLower(key), strings.ToLower(ou.Path)) {
 					return ou.ExcludedBy
 				}
 			}
@@ -753,6 +793,9 @@ func (g *Gate) nextCursor(op *compiled, doc any, h http.Header) (string, bool) {
 	var v string
 	if l.Next.Field != "" {
 		f, ok := fieldAt(doc, l.Next.Field)
+		if ok && op.Auth == WorkspaceADC && (f == nil || f == "") {
+			return "", true
+		}
 		if !ok || f == nil || f == "" {
 			return "", false
 		}

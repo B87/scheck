@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/b87/scheck/internal/engagement/gate"
+	"github.com/b87/scheck/internal/policy"
 )
 
 // Binding is only the declared root's verified tenant. No foreign bootstrap
@@ -21,11 +22,15 @@ type Binding struct {
 }
 
 type Read struct {
-	Op        string `json:"op"`
-	RequestID string `json:"request_id"`
-	Decision  string `json:"decision"`
-	Reason    string `json:"reason,omitempty"`
-	Detail    string `json:"detail,omitempty"`
+	Status     int              `json:"status,omitempty"`
+	Population *gate.Population `json:"population,omitempty"`
+	Truncated  bool             `json:"truncated,omitempty"`
+	Redactions []policy.Hit     `json:"redactions,omitempty"`
+	Op         string           `json:"op"`
+	RequestID  string           `json:"request_id"`
+	Decision   string           `json:"decision"`
+	Reason     string           `json:"reason,omitempty"`
+	Detail     string           `json:"detail,omitempty"`
 }
 
 // Sender is the collector's only access to the gate.
@@ -44,7 +49,7 @@ func Bind(ctx context.Context, g Sender, asset string) Binding {
 	for _, op := range []string{opBootstrapCustomer, opBootstrapDomains, opBootstrapAliases} {
 		params := map[string]string{"domain": domain}
 		result := g.Send(ctx, gate.Request{Op: op, Asset: asset, Params: params, Stage: "recon"})
-		out.Reads = append(out.Reads, Read{Op: op, RequestID: result.RequestID, Decision: result.Decision, Reason: result.Reason, Detail: result.Detail})
+		out.Reads = append(out.Reads, readOf(op, result))
 		if !result.OK() {
 			return out
 		}

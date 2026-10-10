@@ -95,10 +95,25 @@ func (k Kind) excludable() bool {
 	return k == KindRepo || k == KindUser || k == KindOrgUnit || k == KindProject
 }
 
+// UnitTree declares the identity and parent fields needed to validate a complete
+// organizational-unit tree before any user can be admitted.
+type UnitTree struct{ ID, ParentID, ParentPath, Name string }
+
+// UserIdentity names the stable identity fields used for tenant/user admission.
+// It is structural scope evidence, not a posture parser.
+type UserIdentity struct {
+	ID, Primary, Customer, Unit string
+	Aliases                     []string
+}
+
 // List declares a list response: where its items are, what they are, the
 // item field an exclusion matches, and how it pages (docs/spec/scope.md,
 // "Exclusion in responses"). Fields are dotted paths into an item.
 type List struct {
+	Envelope string // exact provider kind required even on empty pages
+	MaxItems int    // total population cap, zero uses only existing page bounds
+	Tree     *UnitTree
+
 	// Items is the path of the item array in the body, "$" for a body
 	// that is the array. A missing array is an empty page: Google leaves
 	// an empty list out.
@@ -214,11 +229,12 @@ type Op struct {
 	// Subject is the canonical id template of what the op reads, which
 	// must fall under a root and no exclude. Empty for a principal op and
 	// a credential exchange.
-	Subject string
-	Params  []Param
-	Class   Class
-	Level   Level
-	Auth    Auth
+	Subject      string
+	Params       []Param
+	Class        Class
+	Level        Level
+	Auth         Auth
+	UserIdentity *UserIdentity
 	// Accept lists the response content types the op expects.
 	Accept []string
 	List   *List
@@ -563,7 +579,7 @@ func (c *compiled) wholeTenant() error {
 		return fmt.Errorf("a users list that builds the excluded-subject set has no filter %q", k)
 	}
 	for _, p := range c.Params {
-		if p.Name != l.Next.Param && p.Type != Count {
+		if p.Name != l.Next.Param && p.Type != Count && (c.Auth != WorkspaceADC || (p.Name != "domain" && !c.workspaceResource(p.Name))) {
 			return fmt.Errorf("a users list that builds the excluded-subject set takes no parameter %q", p.Name)
 		}
 	}
@@ -573,6 +589,10 @@ func (c *compiled) wholeTenant() error {
 		switch {
 		case kv[0] == keys.cursor && kv[1] == "{"+l.Next.Param+"}":
 		case kv[0] == keys.size && kv[1] == "{"+name+"}" && c.types[name].Type == Count:
+		case c.Auth == WorkspaceADC && kv[0] == "customer" && kv[1] == "{customer}":
+		case c.Auth == WorkspaceADC && kv[0] == "projection" && kv[1] == "full":
+		case c.Auth == WorkspaceADC && kv[0] == "viewType" && kv[1] == "admin_view":
+		case c.Auth == WorkspaceADC && kv[0] == keys.size && kv[1] == "100":
 		case kv[0] == "customer" && !strings.Contains(kv[1], "{"):
 		default:
 			return fail(kv[0])
