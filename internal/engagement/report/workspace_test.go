@@ -2,11 +2,13 @@ package report
 
 import (
 	"bytes"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	_ "github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -109,5 +111,105 @@ func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
 		if f.Subject == nil || f.Subject.Key == "" {
 			t.Fatal("account subject missing", f)
 		}
+	}
+}
+
+// workspaceTwoStepReport renders what the collector judges for observed
+// 2-step flags, with an everyone declaration raising the unit findings.
+func workspaceTwoStepReport(t *testing.T) Input {
+	in := workspaceInventoryReport(t)
+	a := &in.Assets[0]
+	a.Detail = "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence."
+	a.InventoryNotes[1].Detail = "domains: observed 2; organizational units: observed 3; accounts: observed 5. Account security conclusions appear separately; inventory alone proves no security control."
+	user := func(id, unit string, enforced, enrolled *bool) workspace.User {
+		return workspace.User{ID: id, Primary: id + "@example.com", Customer: "C123", Unit: unit, Suspended: new(false), Archived: new(false), IsAdmin: new(false), Enforced: enforced, Enrolled: enrolled}
+	}
+	admin := user("admin", "/Sales", new(false), new(false))
+	admin.IsAdmin = new(true)
+	users := []workspace.User{admin, user("carol", "/Sales", new(false), new(true)), user("dan", "/", new(true), new(true)), user("erin", "/Eng", nil, new(true)), user("new", "/", new(true), new(false))}
+	read := []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}
+	e := workspace.Evidence{Users: workspace.Population[workspace.User]{Items: users, Complete: true, Reads: read}, Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}, {ID: "sales", Path: "/Sales"}, {ID: "eng", Path: "/Eng"}}}}
+	e.Access.Roles.Complete, e.Access.Privileges.Complete = true, true
+	for i, u := range users {
+		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
+	}
+	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC, MFA: "everyone", MFASource: "access.mfa[0]"}
+	for _, j := range workspace.Judge(e, a.ID, c) {
+		if j.ID == workspace.IDTwoStepNotEnforced || j.ID == workspace.IDAdminWithoutTwoStep {
+			a.Judged = append(a.Judged, j)
+		}
+	}
+	for _, n := range workspace.Readout(e, a.ID, c) {
+		a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
+	}
+	return in
+}
+
+func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
+	r := Build(workspaceTwoStepReport(t))
+	raised, admin := false, false
+	for _, f := range r.Findings {
+		switch f.ID {
+		case "workspace.two_step_not_enforced":
+			if f.Subject == nil || f.Subject.Kind != "org_unit" || f.Subject.Key != "/sales" || f.Severity != "critical" || len(f.Adjustments) != 1 || f.Adjustments[0].Rule != "contradiction" || f.Adjustments[0].By != "engagement" || f.Adjustments[0].Source.Key != "access.mfa[0]" {
+				t.Fatalf("%+v", f)
+			}
+			raised = f.Affected != nil && f.Affected.Count == 2
+		case "workspace.admin_without_two_step":
+			admin = f.Severity == "high" && len(f.Adjustments) == 0
+		}
+	}
+	if !raised || !admin {
+		t.Fatal(r.Findings)
+	}
+	var twoStep, oauth *SubItem
+	for _, si := range row(t, r, "identity").SubItems {
+		if strings.HasPrefix(si.Name, "Workspace 2-step verification") {
+			twoStep = &si
+		}
+		if si.Name == "Workspace OAuth grants and domain-wide delegation" {
+			oauth = &si
+		}
+	}
+	if twoStep == nil || twoStep.Mark != "partial" || oauth == nil || oauth.Mark != "not_assessed" || oauth.Reasons[0].Reason != "no_rule" {
+		t.Fatal(twoStep, oauth)
+	}
+	if !slices.ContainsFunc(twoStep.Reasons, func(d ReasonDetail) bool {
+		return strings.Contains(d.Detail, "Not checked: organizational-unit policy")
+	}) {
+		t.Fatal("2-step limits missing from coverage", twoStep.Reasons)
+	}
+}
+
+func TestEveryWorkspaceRuleHasOneCoverageGroup(t *testing.T) {
+	for _, id := range workspace.RuleIDs() {
+		n := 0
+		for _, g := range workspaceGroups {
+			if slices.Contains(g.ids, id) {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Fatalf("%s is in %d coverage groups", id, n)
+		}
+	}
+}
+
+func TestWorkspaceTwoStepWithoutOutcomesIsNotAssessed(t *testing.T) {
+	r := Build(workspaceIdentityReport(t))
+	found := false
+	for _, si := range row(t, r, "identity").SubItems {
+		if !strings.HasPrefix(si.Name, "Workspace 2-step verification") {
+			continue
+		}
+		found = true
+		if si.Mark != "not_assessed" || !slices.ContainsFunc(si.Reasons, func(d ReasonDetail) bool {
+			return d.Reason == "unavailable:workspace_evidence" && strings.HasPrefix(d.Detail, "No 2-step verification outcome")
+		}) {
+			t.Fatal("2-step coverage without outcomes", si)
+		}
+	}
+	if !found {
+		t.Fatal("2-step coverage sub-item missing")
 	}
 }

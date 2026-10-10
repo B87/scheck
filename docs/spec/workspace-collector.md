@@ -4,8 +4,9 @@ Google Workspace assessment planned for 0.0.2 E6. The security-consultant DEFINE
 review froze this design on 2026-10-10. Steps 1 and 2 implement credentials, tenant
 binding and inventory through engagement Recon and report integration. Step 3
 implements identity and administrator rules, with offline checks and reviews
-completed on 2026-10-10. Observed 2-step-verification rules and optional OAuth/Gmail reads
-remain planned. No live measurement or release gate is claimed here.
+completed on 2026-10-10. Step 4 implements observed 2-step verification offline on
+2026-10-11. Optional OAuth/Gmail reads remain planned. No live measurement or release
+gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -266,9 +267,10 @@ per-user assignment returned by Directory. Fresh user details prioritize passed 
 and contractors before other accounts when a budget prevents reading everyone.
 
 A fresh `users.get` is required for every inactivity verdict: Google's list
-`lastLoginTime` can be inaccurate. Recognized MFA flags in the current list suffice
-for MFA rules. Conflicting list/detail identity or security values cause abstention
-and a diagnostic note.
+`lastLoginTime` can be inaccurate. Recognized 2-step flags in the current list suffice
+for the 2-step rules; fresh detail only fills a flag the list lacks. Conflicting
+list/detail identity or security values cause abstention and a diagnostic note.
+Flag-specific conflicts are in "Observed 2-step verification".
 
 ### Population bounds
 
@@ -371,7 +373,8 @@ denied, redacted or truncated evidence is unknown.
 Shared identity definitions use provider-neutral prose. Workspace-specific definitions
 are registered from the collector beside `Judge` through `finding.Register`;
 `finding.Lookup` remains the report and explain read path. Step 3 evaluates the first
-nine rules below; the 2-step-verification, OAuth and forwarding rules remain planned.
+nine rules below and step 4 the two 2-step-verification rules; the OAuth and
+forwarding rules remain planned.
 
 | Rule | Base severity / subject | Fires | Disproves | Abstains |
 |---|---|---|---|---|
@@ -384,8 +387,8 @@ nine rules below; the 2-step-verification, OAuth and forwarding rules remain pla
 | `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days ago | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence |
 | `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days ago | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence |
 | `workspace.suspended_admin_assignment` | medium / account | Suspended account retains super flag or supported privileged direct/indirect assignment | Complete admin metadata proves no assignment | Unknown suspension or partial/uninterpreted roles |
-| `workspace.two_step_not_enforced` | high / org_unit | An active account explicitly has `isEnforcedIn2Sv:false`, grouped once per unit | Complete unit active population has all flags true | No active accounts, unknown flags or partial absence |
-| `workspace.admin_without_two_step` | high / account | Active super admin or supported privileged delegate explicitly unenrolled | Known enrolled, inactive or not-admin | Unknown admin, enrollment or activity |
+| `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |
+| `workspace.admin_without_two_step` | high / account | Known-active super admin or supported privileged delegate explicitly has `isEnrolledIn2Sv:false`, enforced or not | Explicit enrollment `true`, known inactive, or admin status known false | Unknown admin status, enrollment, activity, or a conflict |
 | `workspace.oauth_broad_scope` | medium / oauth_app, `+1` super-admin or declared break-glass grantor | An exact supported broad scope is observed | Complete app-grant population contains only recognized narrow scopes | Unknown fields/scopes or partial/unread absence |
 | `workspace.external_forwarding` | medium / account | Active mailbox has enabled auto-forwarding or filter forwarding outside complete verified tenant domains | Both settings reads are known complete with no external destination | Missing delegation/scope/read/domain/destination evidence or malformed data |
 
@@ -419,15 +422,81 @@ Directory flags establish current per-account enforcement and enrollment, not un
 policy, grace periods, configuration groups, IdP/SSO controls, methods or phishing
 resistance. Unit findings list affected accounts and lower bounds; they say Google
 reports accounts not currently required to use 2-step verification, never that the
-unit's policy is disabled.
+unit's policy is disabled. Disproval says Google reports every active account
+observed in the unit as currently required, never that the unit is fine.
 
-An explicit false enforcement flag contradicts `access.mfa: everyone`, or `admins`
-when an affected account is a super admin. `some` is contradicted only when a complete
-active population has all known flags false. Workspace enrollment alone never
-establishes an enforcement contradiction, even when the admin-without-two-step
-finding fires. No grace window is inferred from creation
-or enrollment alone. An enforced but unenrolled non-admin gets a possible-grace note
-with the window unknown; an unenrolled admin still fires. Remediation reviews current
+**Units.** The enforcement rule groups accounts by each account's direct
+`orgUnitPath`; no subtree inheritance is claimed. The subject key is the lowercased
+path and the label the observed path. A path not in the unit tree fires under the
+observed path with "unit not found in the unit list"; a path that matches more than
+one unit when case is ignored may fire, gets a diagnostic note, and is never disproved.
+Any population drop, including exclusion drops the gate accepts for admission,
+prevents disproval anywhere ([scope.md](scope.md), "Responses"). No person kind is
+exempt. Details are `affected`, `not_enrolled`, `enrolled`, `enrollment_unknown`,
+`active_observed`, `state_unknown` (unknown flags or activity) and
+`population_complete`. `affected` lists every affected account, not enrolled first,
+then enrolled, then unknown, alphabetical within each. The excerpt names them, capped
+at 20 with a pointer to the JSON report, because the text renderer does not print
+`affected`; it explains an "at least" count by the unknown accounts or the partial
+population.
+
+**Admins.** The admin rule uses the step-3 administrative interpretation and its
+privilege table. The excerpt names the privilege, or "super administrator (isAdmin:
+true)". An admin Google requires but reports unenrolled still fires, with the clause
+"Google requires 2-step verification for this account but reports it not yet
+enrolled; until it enrolls, a password alone may sign it in." This id never carries
+`contradiction`.
+
+**Flags.** List values are used first; fresh detail fills only a missing list value.
+Fresh detail that disagrees with the list on either 2-step flag, carries a present
+null or non-boolean 2-step flag, or was returned (HTTP 200) but refused or rejected
+marks the account's 2-step state unknown (`AccountAccess.TwoStepUnknown`); only the
+2-step rules abstain on it, the unit and admin abstentions cite that detail read
+whether it was used or refused, and a note names the address and account id. A denied or
+failed detail read falls back to the list. A step-3 security conflict also makes both
+2-step rules unknown for that account. Known limit: a detail refused because the
+account's unit changed leaves the account unknown in its list unit only.
+
+**Declaration.** Engagement fills `Context.MFA` and `Context.MFASource` from the
+tenant's `access.mfa` entry ([engagement.md](engagement.md), "2-step verification").
+The collector decides the comparison once per unit, for rules and notes alike:
+
+| `access.mfa` | Raises a fired unit |
+|---|---|
+| `everyone` | every fired unit |
+| `admins` | a fired unit whose affected accounts include a known `isAdmin:true` account; delegates do not count |
+| `some` | every fired unit, only when a complete population has every active account explicitly off |
+| `none`, `unknown`, undeclared | never |
+
+A raised instance carries `contradiction`, cites the declaration, has a one-sentence
+"Why here" naming the contradicting fact, and carries the federation caveat under
+"Not checked": people who sign in through another identity provider that requires a
+second factor may make the raise inapplicable, and scheck read neither that service
+nor Google's single sign-on settings. Workspace enrollment alone never establishes an
+enforcement contradiction, even when the admin-without-two-step finding fires.
+
+**Readout notes.** The collector owns them (`workspace.Readout`):
+
+- the limits note, whenever the users read was usable;
+- a per-account flag-conflict note naming the address and account id;
+- an ambiguous-unit note asking for one unit to be renamed;
+- an unjudged-units note listing abstained units and ending "Treat these units as not
+  checked, not as fine.";
+- an incomplete-population note: no unit could be shown to require 2-step verification
+  for every account;
+- a possible-grace note for active, enforced, unenrolled non-admins: they are within an
+  enrollment period, when a password alone signs them in, or locked out until they
+  enroll, and scheck cannot read which; no grace window is inferred;
+- a note for unenrolled accounts whose admin status is unknown;
+- with no declaration or `unknown`, what scheck read in counts, and for no declaration
+  "declare it under access.mfa in the engagement file"; a partial population with no
+  observed account off says no observed active account was reported without the
+  requirement but the list of users was incomplete, never "at least 0";
+- with `none`, a note when Google requires more than declared;
+- with `everyone`, `some` or `admins`, a matching note only on a complete population
+  with no unknowns, each adding "Required is not the same as enrolled".
+
+Counts in notes say "at least" on a partial population. Remediation reviews current
 flags and console policy/grace settings, and enrolls admins using hardware keys where
 appropriate.
 
@@ -478,8 +547,9 @@ Step 3 returns nine identity/admin rule outcomes. Its `AdministrationComplete`
 summary keeps coverage partial when roles or per-user assignments are unavailable
 or their administrative interpretation is unknown, even if observed false user
 flags settled individual rules. Collector-owned `InterpretationGaps` notes identify
-unknown roles, privileges, conditions or expiry. 2-step verification,
-OAuth grants and forwarding remain unassessed. A mixed GitHub/Workspace identity row
+unknown roles, privileges, conditions or expiry. Step 4 adds `Context.MFA` and
+`Context.MFASource`, two 2-step rule outcomes and the 2-step readout notes. OAuth
+grants and forwarding remain unassessed. A mixed GitHub/Workspace identity row
 cannot claim complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
 permission failures, credential uncertainty and fresh delegated verification.
 Primary-address attribution is usable on observed records; alias-only attribution
@@ -489,9 +559,19 @@ account leave its attribution unknown. Display names never establish identity.
 Unexpected-admin judgments cite both `access.admins` and the matched person's
 Workspace-address declaration when their identity supplies the conclusion.
 
-Identity and access coverage contains decided administrative sub-items and pending
-2-step-verification and OAuth sub-items; forwarding remains unassessed in email
-coverage. E9 owns global coverage; no new global area is introduced.
+Identity and access coverage contains decided administrative sub-items, the
+"Workspace 2-step verification (Google's enforcement and enrollment flags)" sub-item
+over both 2-step ids, and a "Workspace OAuth grants and domain-wide delegation"
+sub-item that stays *not assessed* with `no_rule`; forwarding remains unassessed in
+email coverage. Every collector rule id belongs to exactly one sub-item, which a test
+enforces. The 2-step sub-item always carries a `no_rule` detail stating its limits
+(organizational-unit policy, grace periods, another identity provider, methods and
+phishing resistance not checked), whatever its mark. With no 2-step outcome it is
+*not assessed* with `unavailable:workspace_evidence`, never `not_applicable`: unlike
+the general `not_applicable` rule in [report.md](report.md), "Coverage", every read account is judged for 2-step verification, so no outcome
+means none was recorded. An abstained judgment's reason
+detail is its subject and first "Not checked" line. E9 owns global coverage; no new
+global area is introduced.
 
 Readouts include supported roles and scope limits, alias-matched recon candidates,
 declared expected admins not observed, shared-account leaver rotation, and break-glass
@@ -503,18 +583,21 @@ not described as currently usable access.
 Domain-wide delegation inventory is not assessed: Directory provides no inventory
 read. The report points to **Security → Access and data control → API controls →
 Manage Domain Wide Delegation** in the Admin console. One successful delegated read
-proves only that operation. OU policy/grace and authentication strength remain
-unassessed. Missing optional OAuth/Gmail evidence names the selection or permission
+proves only that operation. Organizational-unit 2-step policy, grace periods and
+authentication strength remain unassessed. Missing optional OAuth/Gmail evidence names the selection or permission
 gap, never a clean result.
 
 ### Client-facing wording
 
 A unit heading groups affected accounts; it does not identify a unit policy failure.
-The enforcement finding says: "For these accounts, Google reports that 2-step
-verification is not currently enforced. This does not say whether users have enrolled
-in it. scheck did not assess organizational-unit policy, grace periods or protection
-provided by another sign-in service. Ask your Workspace administrator to review these
-accounts and the current Admin console settings."
+Each fired enforcement instance leads with plain evidence, the count and the unit,
+before flag names, gives the enrollment breakdown, names the accounts, then says: "For
+these accounts, Google reports that 2-step verification is not currently enforced.
+Enrollment, counted above, is a separate flag: a user who enrolled can still turn it
+off while Google does not require it. scheck did not assess organizational-unit
+policy, grace periods or protection provided by another sign-in service. Review these
+accounts and the current Admin console settings yourself, or with whoever administers
+your Workspace."
 
 A suspended assignment says: "Ask your administrator whether this assignment is still
 needed, and remove it if not." It does not imply that suspension left normal sign-in
@@ -566,6 +649,14 @@ private-bootstrap details above. The targeted step-3 identity parser DEFINE cont
 is recorded in [e6-identity-definition-2026-10-10.md](../eval/e6-identity-definition-2026-10-10.md).
 Step 3 is complete offline; checks, review corrections and a fresh follow-up review
 are recorded in [e6-identity-verification-2026-10-10.md](../eval/e6-identity-verification-2026-10-10.md).
+The step-4 2-step DEFINE contract is recorded in
+[e6-two-step-definition-2026-10-11.md](../eval/e6-two-step-definition-2026-10-11.md),
+and its implementation and reviews in
+[e6-two-step-verification-2026-10-11.md](../eval/e6-two-step-verification-2026-10-11.md).
+Its tests cover unit grouping and listed order, partial and unknown evidence,
+abstentions, inactive accounts, admin outcomes, the declaration comparison, notes,
+fresh-detail flag evidence through a fake server, and one run through the gate to the
+report with pinned `workspace-two-step` goldens.
 No live measurement or independent acceptance is claimed.
 
 ## Provider references

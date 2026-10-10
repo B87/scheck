@@ -6,6 +6,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -122,6 +123,27 @@ func (r *Resolved) Timeout() time.Duration { return r.timeout }
 func (r *Resolved) Lookup(ref string) (Ref, bool) {
 	ref2, ok := r.refs[ref]
 	return ref2, ok
+}
+
+// MFAFor is the access.mfa declaration for one tenant and its key, or empty
+// strings when none names it; validation refuses a second entry for a tenant.
+func (r *Resolved) MFAFor(assetID string) (enforced, source string) {
+	for i, m := range r.Access.MFA {
+		if ref, ok := r.Lookup(m.Where); ok && ref.ID == assetID {
+			return m.Enforced, "access.mfa[" + strconv.Itoa(i) + "]"
+		}
+	}
+	return "", ""
+}
+
+// AdminsFor is the access.admins list for one tenant, and whether one was declared.
+func (r *Resolved) AdminsFor(assetID string) (handles []string, declared bool) {
+	for where, list := range r.Access.Admins {
+		if ref, ok := r.Lookup(where); ok && ref.ID == assetID {
+			return list, true
+		}
+	}
+	return nil, false
 }
 
 // AssetID is the canonical id an accepted risk's asset names: through

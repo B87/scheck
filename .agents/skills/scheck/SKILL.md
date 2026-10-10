@@ -208,8 +208,18 @@ contractor/shared admins, departed accounts, super-admin counts, stale or never-
 accounts and suspended accounts retaining assignments. Assignments cover current
 admitted users only. Unknown roles, unsupported privileges and partial populations
 limit coverage; a false user flag is not proof that role inventory completed.
-2-step verification, OAuth grants, forwarding, group membership paths and effective
-permissions remain unassessed. Read `workspace_inventory`,
+2-step verification is assessed from Google's current per-account flags only:
+`workspace.two_step_not_enforced` (one finding per organizational unit, affected
+accounts in `affected`) and `workspace.admin_without_two_step` (per account).
+Organizational-unit policy, grace periods, another identity provider, methods and
+phishing resistance are not read, and the 2-step coverage sub-item's `no_rule`
+detail says so even when it is assessed. A raised (`contradiction`) instance compares
+the finding with `access.mfa`; relay its federation caveat with the severity.
+Never treat an abstained, absent or disproved 2-step finding as 2-step verification
+being fine: disproval means only that Google reports every active account observed in
+that unit as required, and required is not enrolled. Units the readout lists as not
+decided are not checked. OAuth grants, forwarding, domain-wide delegation, group
+membership paths and effective permissions remain unassessed. Read `workspace_inventory`,
 `workspace_people` and `workspace_credential` notes; a
 `workspace_credential_warning` is an unranked permission warning. Partial or excluded
 populations print lower bounds and can make the run incomplete. Google credentials

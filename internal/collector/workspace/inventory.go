@@ -26,6 +26,9 @@ type Context struct {
 	AdminsDeclared bool
 	AssessedAt     time.Time
 	Zone           *time.Location
+	// MFA is the tenant's access.mfa[i].enforced and MFASource its key;
+	// both are empty when the operator declared nothing for this tenant.
+	MFA, MFASource string
 }
 type Attribution struct {
 	Tenant     string `json:"tenant"`
@@ -270,7 +273,7 @@ func (e *Evidence) finish(asset string, view Context) {
 		e.Notes = append(e.Notes, ReadNotes(read, asset)...)
 	}
 	e.Attribution = attribute(asset, e.Users.Items, view.People, e.Users.Complete)
-	e.Notes = append(e.Notes, accessNotes(*e, asset, view)...)
+	e.Notes = append(e.Notes, Readout(*e, asset, view)...)
 	for _, a := range e.Attribution {
 		if a.MatchedBy == "alias" {
 			e.Notes = append(e.Notes, Note{Kind: "workspace_people", Source: asset, Detail: a.Handle + " → " + a.Key + ", by alias. Record the current primary address in people."})

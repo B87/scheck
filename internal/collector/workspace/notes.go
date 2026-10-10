@@ -50,9 +50,15 @@ func ReadNotes(read Read, asset string) []Note {
 	return out
 }
 
+// Readout is the collector's interpretation of collected evidence for the
+// readout: administrative and 2-step verification notes beside the rules.
+func Readout(e Evidence, asset string, c Context) []Note {
+	return append(accessNotes(e, asset, c), twoStepNotes(e, asset, c)...)
+}
+
 // accessNotes owns interpretation and readout wording beside the rules.
 func accessNotes(e Evidence, asset string, c Context) []Note {
-	out := []Note{{Kind: "workspace_inventory", Source: asset, Detail: "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. 2-step verification, OAuth grants and Gmail forwarding are not assessed in this build."}, {Kind: "workspace_inventory", Source: asset, Detail: "Domain-wide delegation inventory is not assessed. Review Security → Access and data control → API controls → Manage Domain Wide Delegation in the Admin console."}}
+	out := []Note{{Kind: "workspace_inventory", Source: asset, Detail: "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. OAuth grants and Gmail forwarding are not assessed in this build."}, {Kind: "workspace_inventory", Source: asset, Detail: "Domain-wide delegation inventory is not assessed. Review Security → Access and data control → API controls → Manage Domain Wide Delegation in the Admin console."}}
 	note := func(text string) { out = append(out, Note{Kind: "workspace_inventory", Source: asset, Detail: text}) }
 	attrs := attribute(asset, e.Users.Items, c.People, e.Users.Complete)
 	for _, expected := range c.ExpectedAdmins {

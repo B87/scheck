@@ -72,6 +72,7 @@ func TestGoldenReports(t *testing.T) {
 		"workspace-identity":                workspaceIdentityReport,
 		"workspace-inventory":               workspaceInventoryReport,
 		"workspace-inventory-partial":       workspacePartialInventoryReport,
+		"workspace-two-step":                workspaceTwoStepReport,
 		"github-ci-fired":                   githubCIFiredReport,
 		"github-ci-disproved":               githubCIDisprovedReport,
 		"github-ci-abstained":               githubCIAbstainedReport,

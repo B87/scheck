@@ -882,8 +882,9 @@ no answer exiting 2.
 
 **Status:** DEFINE design frozen on 2026-10-10. Steps 1 and 2 implement credentials,
 tenant binding and inventory through engagement Recon and report integration.
-Step 3 implements identity/admin rules, verified offline. Observed 2-step
-verification and optional OAuth/Gmail reads remain planned. The design is
+Step 3 implements identity/admin rules, verified offline. Step 4 implements observed
+2-step verification, verified offline. Step 5 is next. Optional OAuth/Gmail reads
+remain planned. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -947,9 +948,25 @@ Unknown grants remain unknown; a successful read does not prove write capability
    The targeted definition remains in
    [eval/e6-identity-definition-2026-10-10.md](eval/e6-identity-definition-2026-10-10.md).
    Optional attribution caching is deferred without security implications. No live
-   measurement or independent acceptance is claimed. Step 4 is next.
+   measurement or independent acceptance is claimed.
 4. Observed 2-step verification: per-account enforcement and enrollment, compared
    with the operator's current requirement; no inferred unit policy or grace window.
+   **Done offline 2026-10-11:** `workspace.two_step_not_enforced` (high, per direct
+   unit) and `workspace.admin_without_two_step` (high, per account), each with firing,
+   disproved and abstained fixtures; fresh detail fills only missing list flags, and
+   conflicting, malformed or refused detail makes only the 2-step rules abstain. The
+   collector decides the `access.mfa` comparison once and owns the readout notes;
+   raised instances carry `contradiction` and the federation caveat. Coverage adds the
+   2-step sub-item with explicit limits, *not assessed* when no 2-step outcome was
+   recorded; OAuth grants and domain-wide delegation stay *not assessed*. Consultant,
+   client and modularity reviews passed. The adversarial review found no must-fix; its
+   should-fix (a 2-step sub-item `not_applicable` with no outcome) and nits were
+   corrected, and a fresh follow-up review found no must-fix or should-fix. Green
+   `make check` and both reviews are recorded in
+   [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-step-verification-2026-10-11.md).
+   The targeted definition remains in
+   [eval/e6-two-step-definition-2026-10-11.md](eval/e6-two-step-definition-2026-10-11.md).
+   No live tenant was contacted and no independent acceptance is claimed.
 5. Optional OAuth grant metadata, using an existing approved credential; no
    automatic request for a broad security grant.
 6. Optional Gmail forwarding metadata through an existing approved delegated
@@ -992,6 +1009,29 @@ password-reset-role and expected-person wording was corrected. Generic `no_rule`
 phrasing, duplicated aggregate evidence and remaining “current admitted users”
 phrasing belong to E9's final report review. Preserve explicit scope and coverage;
 wording polish never expands what the collector observed.
+
+**Carried from step 4** (consultant DEFINE and REVIEW, client REPORT and modularity
+assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-step-verification-2026-10-11.md)):
+
+- *Release blocker, owner's decision (E8):* a federated tenant (Okta, Entra) declaring
+  `everyone` gets a raised not-enforced finding that may be a false critical. Before
+  release, bring the owner an E8 question, "Do people sign in to Google Workspace
+  through another identity provider?", whose consumer stops `contradiction` for
+  non-super-admin accounts; it is decided with E9's pending "may a context raise reach
+  critical?". Until then every raised instance carries the federation caveat. A Cloud
+  Identity SSO profile read is a 0.0.3 candidate.
+- *E9:* "Fix these first" collapses many unit instances of one finding into one line.
+- *Deferred limit:* a fresh detail refused because the account's unit changed leaves
+  the account unknown in its list unit only, not in both units as the DEFINE asked.
+- *Deferred to E9's report review* (client REPORT): declaration evidence prints
+  "Operator declaration at access.mfa[0]" rather than the declared value; raw reason
+  codes in coverage text; the acceptance template for a unit that covers every
+  account; duplicate per-read `Observed` lines; "(as unknown)" principal wording; `-v`
+  adds nothing for Workspace; generic `no_rule` phrasing.
+- *Modularity follow-ups, not yet assigned to a slice:* F1 GitHub MFA readout notes live
+  in engagement rather than the GitHub collector; F2 coverage groups and their limits
+  should be registered by collectors; F3 a typed `access.mfa` declaration vocabulary;
+  F4 a collector-supplied asset status sentence.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
@@ -1289,6 +1329,11 @@ wording is fixed:
 - `intent.accepted_risks[].expires` becomes required, capped at one year after the
   date it is written: a risk register without review dates is not one.
 
+**Carried from E6 step 4** (2026-10-11, release blocker, owner's decision): a question
+on whether people sign in to Google Workspace through another identity provider, whose
+consumer stops the 2-step `contradiction` for non-super-admin accounts (E6, "Carried
+from step 4").
+
 ### E9 — Plan, Analyze and multi-fact rules
 
 **Delivers:** a rules-only plan per asset type, narrowed and ordered by structured
@@ -1348,6 +1393,9 @@ asset unchanged; a loop fixture terminates.
   the internet with no further step. The consultant recommends yes, with critical's
   definition widened to "or a high that someone with no right to it can use now, or
   that the company believes is handled".
+- *From E6 step 4* (2026-10-11): "Fix these first" collapses many unit instances of
+  one finding into one line, and the step-4 client REPORT wording items listed in E6,
+  "Carried from step 4".
 
 ### Release gates
 

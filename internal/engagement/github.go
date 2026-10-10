@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	githubc "github.com/b87/scheck/internal/collector/github"
@@ -292,18 +291,8 @@ func (r *run) githubContext(a ResolvedAsset) githubc.Context {
 		p := r.res.People[h]
 		c.People = append(c.People, githubc.Person{Handle: h, Kind: p.Kind, GitHub: p.GitHub, Left: p.Left, UsedBy: p.UsedBy})
 	}
-	for where, handles := range r.res.Access.Admins {
-		if ref, ok := r.res.Lookup(where); ok && ref.ID == a.ID {
-			c.OwnersDeclared = true
-			c.ExpectedOwners = handles
-		}
-	}
-	for i, m := range r.res.Access.MFA {
-		if ref, ok := r.res.Lookup(m.Where); ok && ref.ID == a.ID {
-			c.MFA = m.Enforced
-			c.MFASource = "access.mfa[" + strconv.Itoa(i) + "]"
-		}
-	}
+	c.ExpectedOwners, c.OwnersDeclared = r.res.AdminsFor(a.ID)
+	c.MFA, c.MFASource = r.res.MFAFor(a.ID)
 	for _, repo := range r.res.Assets {
 		if repo.Kind == KindRepo {
 			c.RepositoryContexts[repo.ID] = githubc.RepositoryContext{Public: repo.Public, DeploysTo: repo.DeploysTo, Source: "assets." + repo.Name}

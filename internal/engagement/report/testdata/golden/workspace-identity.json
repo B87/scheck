@@ -92,7 +92,7 @@
       ],
       "reasons": [
         {
-          "detail": "Workspace second-factor and application/delegation controls remain unassessed",
+          "detail": "Workspace OAuth grants and domain-wide delegation remain unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
           "reason": "no_rule"
         }
       ],
@@ -106,7 +106,7 @@
           "name": "Workspace administrator identity",
           "reasons": [
             {
-              "detail": "unknown@example.com",
+              "detail": "unknown@example.com: Assignment read was denied.",
               "reason": "unavailable:workspace_evidence"
             }
           ],
@@ -155,7 +155,26 @@
         {
           "asset": "saas:google-workspace:example.com",
           "mark": "not_assessed",
-          "name": "Workspace 2-step verification, OAuth grants and domain-wide delegation",
+          "name": "Workspace 2-step verification (Google's enforcement and enrollment flags)",
+          "reasons": [
+            {
+              "detail": "No 2-step verification outcome was recorded for this tenant",
+              "reason": "unavailable:workspace_evidence"
+            },
+            {
+              "detail": "Checked: each account's 2-step verification enforcement and enrollment as Google reports it. Not checked: organizational-unit policy, grace periods, sign-in through another identity provider, verification methods and phishing resistance",
+              "reason": "no_rule"
+            }
+          ],
+          "rules": [
+            "workspace.two_step_not_enforced",
+            "workspace.admin_without_two_step"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace OAuth grants and domain-wide delegation",
           "reasons": [
             {
               "detail": "Not assessed in this build; effective permissions and group membership paths were not tested",

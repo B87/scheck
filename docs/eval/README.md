@@ -21,6 +21,8 @@ contracts now live in `docs/spec/` (`host-collector.md`, `model.md`, `bounded.md
 | `e6-identity-verification-2026-10-10.md` | E6 step-3 offline rule verification, projection/login corrections and fresh follow-up review; no live or independent acceptance |
 | `e6-inventory-review-2026-10-10.md` | E6 step-2 AI consultant/client/modularity reviews, software-check status and deferred report wording; no live or independent acceptance |
 | `e6-inventory-verification-2026-10-10.md` | E6 step-2 adversarial cursor/refresh corrections, green final offline checks and fresh follow-up review; no live or independent acceptance |
+| `e6-two-step-definition-2026-10-11.md` | Targeted E6 step-4 AI DEFINE contract for observed 2-step verification; no software tests, measurements or acceptance |
+| `e6-two-step-verification-2026-10-11.md` | E6 step-4 implementation, DEFINE differences, AI consultant/client/modularity reviews, adversarial corrections, green offline checks and fresh follow-up review; no live or independent acceptance |
 
 New releases add `acceptance-<version>.md` (see `../RELEASING.md`), and any model
 feature that becomes a default adds its frozen criteria and results here first.

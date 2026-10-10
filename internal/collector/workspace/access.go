@@ -38,6 +38,9 @@ type AccountAccess struct {
 	Detail      *User                  `json:"detail,omitempty"`
 	DetailRead  Read                   `json:"detail_read"`
 	Conflict    bool                   `json:"conflict,omitempty"`
+	// TwoStepUnknown marks fresh detail that disagreed on, or could not be
+	// read for, the 2-step flags; only the 2-step rules abstain on it.
+	TwoStepUnknown bool `json:"two_step_unknown,omitempty"`
 }
 type AccessEvidence struct {
 	InterpretationGaps     []string              `json:"interpretation_gaps,omitempty"`
@@ -110,9 +113,15 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 				if json.Unmarshal(result.Response.Body, &detail) == nil && detail.ID == u.ID && strings.EqualFold(detail.Primary, u.Primary) && detail.Customer == u.Customer && strings.EqualFold(detail.Unit, u.Unit) {
 					account.Detail = &detail
 					account.Conflict = securityConflict(u, detail)
+					account.TwoStepUnknown = twoStepFlagsUnreadable(result.Response.Body) || twoStepConflict(u, detail)
 				} else {
 					account.DetailRead.Reason = "insufficient_evidence"
 				}
+			}
+			// A fresh answer that was refused or rejected must not fall back
+			// to the list's 2-step flags; a failed read still may.
+			if account.Detail == nil && result.Response != nil && result.Response.Status == 200 {
+				account.TwoStepUnknown = true
 			}
 		}
 		e.Access.Accounts = append(e.Access.Accounts, account)

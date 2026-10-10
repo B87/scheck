@@ -350,6 +350,8 @@ scheck was given, on the positive list of [scope.md](scope.md#outcomes)), `not_d
 declared), `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
 `unavailable:<reason_code>` (a collector's own per-read reason, kept verbatim after the
 colon) or `no_rule` (read, but no rule in this version judges it), with a detail line.
+A `no_rule` reason on an assessed sub-item states the limits of what was checked, not
+that the sub-item was unassessed.
 A row that is not *assessed* always carries its reasons: a *partial* row usually has
 several (a permission, an excluded unit, a sample), so a row holds a list, never one
 "main" reason. `sampled` makes a row at most *partial*. Only `failed` and

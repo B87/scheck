@@ -35,7 +35,7 @@ func workspaceDef(id, title string, severity finding.Severity, subject finding.S
 	return finding.Def{ID: id, Title: title, Category: "accounts", Area: finding.AreaIdentity, Exposure: finding.NotExposure, Subject: subject, Judges: title, BaseSeverity: severity, Impact: impact, Remediation: finding.Remediation{Summary: fix}}
 }
 func RuleIDs() []string {
-	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment}
+	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment, IDTwoStepNotEnforced, IDAdminWithoutTwoStep}
 }
 func yes(v *bool) bool     { return v != nil && *v }
 func no(v *bool) bool      { return v != nil && !*v }
@@ -107,18 +107,9 @@ func decide(j *finding.Judgment, known, fire bool, text string) {
 func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	attrs := attribute(asset, e.Users.Items, c.People, e.Users.Complete)
 	out := []finding.Judgment{}
-	for _, u := range e.Users.Items {
-		p := personForUser(u, attrs, c)
-		a := AccountAccess{ID: u.ID}
-		for _, v := range e.Access.Accounts {
-			if v.ID == u.ID {
-				a = v
-				break
-			}
-		}
-		rs := reads(e.Users.Reads)
-		admin, adminKnown, adminText := administrative(u, a, e, c)
-		adminReads := reads(e.Users.Reads, e.Access.Roles.Reads, e.Access.Privileges.Reads, a.Assignments.Reads)
+	for _, view := range accountViews(e, c, attrs) {
+		u, p, a, rs := view.user, view.person, view.access, view.reads
+		admin, adminKnown, adminText, adminReads := view.admin, view.adminKnown, view.adminText, view.adminReads
 		superKnown := u.IsAdmin != nil && !a.Conflict
 		passed := p != nil && leftPassed(p.Left, c)
 		j := newJudgment(finding.IDIdentityUnexpectedAdmin, asset, subject(u, p), rs)
@@ -200,6 +191,7 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 		}
 	}
 	out = append(out, adminCount(e, asset, c, attrs))
+	out = append(out, twoStepJudgments(e, asset, c)...)
 	if len(e.Users.Items) == 0 {
 		for _, id := range RuleIDs() {
 			if id == IDTooManySuperAdmins {
@@ -212,6 +204,36 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	}
 	return out
 }
+
+// accountView is one current account with what every rule reads about it,
+// so administrative interpretation is decided once per account.
+type accountView struct {
+	user              User
+	access            AccountAccess
+	person            *Person
+	admin, adminKnown bool
+	adminText         string
+	reads, adminReads []string
+}
+
+func accountViews(e Evidence, c Context, attrs []Attribution) []accountView {
+	out := []accountView{}
+	for _, u := range e.Users.Items {
+		a := AccountAccess{ID: u.ID}
+		for _, v := range e.Access.Accounts {
+			if v.ID == u.ID {
+				a = v
+				break
+			}
+		}
+		v := accountView{user: u, access: a, person: personForUser(u, attrs, c), reads: reads(e.Users.Reads)}
+		v.admin, v.adminKnown, v.adminText = administrative(u, a, e, c)
+		v.adminReads = reads(e.Users.Reads, e.Access.Roles.Reads, e.Access.Privileges.Reads, a.Assignments.Reads)
+		out = append(out, v)
+	}
+	return out
+}
+
 func boolValue(v *bool) any {
 	if v == nil {
 		return "unknown"

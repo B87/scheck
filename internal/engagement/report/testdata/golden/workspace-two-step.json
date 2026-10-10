@@ -1,0 +1,721 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "saas:google-workspace:example.com",
+      "complete": true,
+      "id": "workspace.admin_without_two_step",
+      "instances": 1,
+      "reads": [
+        "request:g000008",
+        "request:g000010"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:google-workspace:example.com",
+      "complete": false,
+      "id": "workspace.two_step_not_enforced",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "active_observed": 2,
+            "affected": 0,
+            "enrolled": 0,
+            "enrollment_unknown": 0,
+            "not_enrolled": 0,
+            "population_complete": true,
+            "state_unknown": 0
+          },
+          "outcome": "disproved",
+          "subject": {
+            "key": "/",
+            "kind": "org_unit",
+            "label": "/"
+          }
+        },
+        {
+          "detail": {
+            "active_observed": 1,
+            "affected": 0,
+            "enrolled": 0,
+            "enrollment_unknown": 0,
+            "not_enrolled": 0,
+            "population_complete": true,
+            "state_unknown": 1
+          },
+          "outcome": "abstained",
+          "subject": {
+            "key": "/eng",
+            "kind": "org_unit",
+            "label": "/Eng"
+          }
+        },
+        {
+          "detail": {
+            "active_observed": 2,
+            "affected": 2,
+            "enrolled": 1,
+            "enrollment_unknown": 0,
+            "not_enrolled": 1,
+            "population_complete": true,
+            "state_unknown": 0
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "/sales",
+            "kind": "org_unit",
+            "label": "/Sales"
+          }
+        }
+      ],
+      "reads": [
+        "request:g000008"
+      ],
+      "reason": "unavailable:workspace_evidence",
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "workspace",
+      "detail": "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence.",
+      "id": "saas:google-workspace:example.com",
+      "kind": "saas",
+      "name": "Workspace",
+      "principal": {
+        "identity": "unknown",
+        "scopes_source": "unknown"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "assets_covered": [
+        "saas:google-workspace:example.com"
+      ],
+      "mark": "partial",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Workspace OAuth grants and domain-wide delegation remain unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace administrator identity",
+          "reasons": [],
+          "rules": [
+            "identity.unexpected_admin",
+            "identity.unattributed_admin",
+            "identity.external_admin",
+            "identity.shared_admin"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace offboarding",
+          "reasons": [],
+          "rules": [
+            "identity.former_person_has_access"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace administrator assignments and counts",
+          "reasons": [],
+          "rules": [
+            "workspace.too_many_super_admins",
+            "workspace.suspended_admin_assignment"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace account sign-in",
+          "reasons": [],
+          "rules": [
+            "workspace.stale_account",
+            "workspace.never_signed_in"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "judged": [
+            "Workspace 2-step verification (Google's enforcement and enrollment flags)"
+          ],
+          "mark": "partial",
+          "name": "Workspace 2-step verification (Google's enforcement and enrollment flags)",
+          "reasons": [
+            {
+              "detail": "/Eng: 1 account in this unit had an unknown, missing or conflicting activity or 2-step verification flag.",
+              "reason": "unavailable:workspace_evidence"
+            },
+            {
+              "detail": "Checked: each account's 2-step verification enforcement and enrollment as Google reports it. Not checked: organizational-unit policy, grace periods, sign-in through another identity provider, verification methods and phishing resistance",
+              "reason": "no_rule"
+            }
+          ],
+          "rules": [
+            "workspace.two_step_not_enforced",
+            "workspace.admin_without_two_step"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace OAuth grants and domain-wide delegation",
+          "reasons": [
+            {
+              "detail": "Not assessed in this build; effective permissions and group membership paths were not tested",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Workspace: no logging or incident-readiness control was assessed",
+          "reason": "no_rule"
+        }
+      ]
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "host": "admin.googleapis.com",
+        "operator": "Google",
+        "requests": 7,
+        "sent": [
+          "google-workspace:example.com"
+        ],
+        "source": "google"
+      },
+      {
+        "credentials": [
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "host": "oauth2.googleapis.com",
+        "operator": "Google",
+        "requests": 1,
+        "sent": [
+          "google-workspace:example.com"
+        ],
+        "source": "google"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": null,
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:google-workspace:example.com"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-10T12:00:00Z",
+      "to": "2026-10-10T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "Workspace inventory review",
+    "operator": "Dani",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "2 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "saas:google-workspace:example.com": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "Workspace",
+        "by_subject": true,
+        "expires": "2027-01-08",
+        "id": "workspace.two_step_not_enforced",
+        "needs_people": true,
+        "reason": "",
+        "subject": "/sales"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "contradiction",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "access.mfa[0]"
+          }
+        }
+      ],
+      "affected": {
+        "cap": 2,
+        "count": 2,
+        "listed": [
+          "admin@example.com",
+          "carol@example.com"
+        ]
+      },
+      "area": "identity",
+      "asset_name": "Workspace",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "active_observed",
+          "value": 2
+        },
+        {
+          "name": "affected",
+          "value": 2
+        },
+        {
+          "name": "enrolled",
+          "value": 1
+        },
+        {
+          "name": "enrollment_unknown",
+          "value": 0
+        },
+        {
+          "name": "not_enrolled",
+          "value": 1
+        },
+        {
+          "name": "population_complete",
+          "value": true
+        },
+        {
+          "name": "state_unknown",
+          "value": 0
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at access.mfa[0]",
+          "kind": "declared",
+          "source": "engagement.yaml access.mfa[0]"
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "collected_at": "2026-10-10T12:00:00Z",
+          "excerpt": "Google reports that 2-step verification is not currently required for 2 active accounts in unit /Sales (isEnforcedIn2Sv: false). Enrollment, as Google reports it: 1 not enrolled, 1 enrolled, 0 unknown. Not enrolled: admin@example.com. Enrolled: carol@example.com. For these accounts, Google reports that 2-step verification is not currently enforced. Enrollment, counted above, is a separate flag: a user who enrolled can still turn it off while Google does not require it. scheck did not assess organizational-unit policy, grace periods or protection provided by another sign-in service. Review these accounts and the current Admin console settings yourself, or with whoever administers your Workspace.",
+          "kind": "observed",
+          "observation": "g000008",
+          "principal": "unknown",
+          "request": "g000008"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "workspace.two_step_not_enforced",
+      "impact": "For these accounts, a stolen, reused or guessed password may be enough to sign in unless the user has turned on 2-step verification themselves. That gives access to their mail and files and to password resets for other services. While Google does not require it, users can turn it off again, and new accounts in the same place may start without it.",
+      "key": {
+        "asset": "saas:google-workspace:example.com",
+        "id": "workspace.two_step_not_enforced",
+        "subject": "/sales"
+      },
+      "not_checked": [
+        "Whether these people sign in to Google through another identity provider, for example Okta or Microsoft Entra, that requires a second factor; if so, Google not requiring its own 2-step verification may be expected for them, and the raise above may not apply. scheck did not read that service or Google's single sign-on settings. Super administrators normally sign in to Google directly and need Google's 2-step verification regardless."
+      ],
+      "remediation": {
+        "summary": "In the Admin console, open Security → Authentication → 2-step verification. Check which setting applies to these accounts' organizational unit or groups, and turn on enforcement with a short new-user enrollment period. Tell users before the enforcement date so nobody is locked out. Prefer security keys or passkeys for administrators and for people with access to production or customer data. If people sign in to Google through another identity provider, confirm it requires a second factor for these accounts. Run scheck again to confirm that Google reports them as required."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:g000008",
+          "declared:access.mfa[0]"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "/sales",
+        "kind": "org_unit",
+        "label": "/Sales"
+      },
+      "title": "Google does not currently require 2-step verification for these accounts",
+      "why_here": [
+        "You declared that every account must use 2-step verification in this tenant, so this ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "Workspace",
+        "by_subject": true,
+        "expires": "2027-01-08",
+        "id": "workspace.admin_without_two_step",
+        "needs_people": true,
+        "reason": "",
+        "subject": "admin@example.com"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "Workspace",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "collected_at": "2026-10-10T12:00:00Z",
+          "excerpt": "admin@example.com: super administrator (isAdmin: true); isEnrolledIn2Sv: false.",
+          "kind": "observed",
+          "observation": "g000008",
+          "principal": "unknown",
+          "request": "g000008"
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "collected_at": "2026-10-10T12:00:00Z",
+          "excerpt": "admin@example.com: super administrator (isAdmin: true); isEnrolledIn2Sv: false.",
+          "kind": "observed",
+          "observation": "g000010",
+          "principal": "unknown",
+          "request": "g000010"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "workspace.admin_without_two_step",
+      "impact": "Anyone who gets this administrator's password, through phishing, reuse from another site's breach or malware on a laptop, can sign in and use its administrative privileges. Depending on the role, that means resetting other users' passwords and taking over their accounts or, for a super administrator, control of the whole organization, including locking you out of it.",
+      "key": {
+        "asset": "saas:google-workspace:example.com",
+        "id": "workspace.admin_without_two_step",
+        "subject": "admin@example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Have this administrator enroll in 2-step verification now, preferably with a security key or passkey. For a break-glass account, register two hardware keys and store them apart. If the role is not needed, remove it or suspend the account until it is enrolled. Then require 2-step verification for administrators in the Admin console (Security → Authentication → 2-step verification) so it cannot be turned off."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:g000008",
+          "request:g000010"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "admin@example.com",
+        "kind": "account",
+        "label": "admin@example.com",
+        "provider_id": "admin"
+      },
+      "title": "An administrator has not enrolled in 2-step verification",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "Returned credential permissions are unknown; effective permissions were not tested.",
+      "kind": "workspace_credential",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "domains: observed 2; organizational units: observed 3; accounts: observed 5. Account security conclusions appear separately; inventory alone proves no security control.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. OAuth grants and Gmail forwarding are not assessed in this build.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "Domain-wide delegation inventory is not assessed. Review Security → Access and data control → API controls → Manage Domain Wide Delegation in the Admin console.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "2-step verification checks read Google's current per-account enforcement and enrollment flags. Organizational-unit policy, grace periods, configuration groups, sign-in through another identity provider, verification methods, backup codes and phishing resistance were not assessed.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "scheck could not tell whether Google requires 2-step verification for every active account in 1 organizational unit: /Eng (1 account with a missing, unreadable or conflicting flag or activity status). Treat these units as not checked, not as fine.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "Google requires 2-step verification for 1 account that it reports as not yet enrolled: new@example.com. Either they are still within an enrollment period, when a password alone signs them in, or the period has ended and Google will not let them sign in until they enroll. scheck cannot read which. Check these accounts in the Admin console.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": null,
+    "resumed": false,
+    "started": "2026-10-10T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "saas:google-workspace:example.com"
+        ],
+        "ids": [
+          "workspace.two_step_not_enforced"
+        ],
+        "keys": [
+          {
+            "asset": "saas:google-workspace:example.com",
+            "id": "workspace.two_step_not_enforced",
+            "subject": "/sales"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:identity"
+        ],
+        "severity": "critical",
+        "title": "Google does not currently require 2-step verification for these accounts"
+      },
+      {
+        "assets": [
+          "saas:google-workspace:example.com"
+        ],
+        "ids": [
+          "workspace.admin_without_two_step"
+        ],
+        "keys": [
+          {
+            "asset": "saas:google-workspace:example.com",
+            "id": "workspace.admin_without_two_step",
+            "subject": "admin@example.com"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "An administrator has not enrolled in 2-step verification"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 2,
+      "selected": 2,
+      "without_evidence": 0
+    }
+  }
+}

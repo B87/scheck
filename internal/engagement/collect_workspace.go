@@ -18,12 +18,8 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 		return ra
 	}
 	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
-	for where, handles := range r.res.Access.Admins {
-		if ref, ok := r.res.Lookup(where); ok && ref.ID == a.ID {
-			view.AdminsDeclared = true
-			view.ExpectedAdmins = handles
-		}
-	}
+	view.ExpectedAdmins, view.AdminsDeclared = r.res.AdminsFor(a.ID)
+	view.MFA, view.MFASource = r.res.MFAFor(a.ID)
 	for _, handle := range sortedKeys(r.res.People) {
 		p := r.res.People[handle]
 		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace, Kind: p.Kind, Left: p.Left, UsedBy: p.UsedBy})
@@ -32,7 +28,7 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 	ev := workspace.Collect(ctx, g, workspace.Target{Asset: a.ID, Stage: "recon"}, view)
 	ra.Workspace, ra.Judged = &ev, ev.Judgments
 	ra.Status = StatusCollected
-	ra.Detail = "Workspace inventory and identity/administrator checks collected; notes and coverage show any unresolved evidence."
+	ra.Detail = "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence."
 	for _, note := range ev.Notes {
 		if note.Kind == "workspace_credential_warning" {
 			r.o.Log("warning: %s", note.Detail)

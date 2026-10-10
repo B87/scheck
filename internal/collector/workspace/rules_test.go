@@ -15,6 +15,10 @@ func ruleFixture() (Evidence, Context) {
 	read := Read{Op: OpUsers, RequestID: OpUsers, Decision: "sent", Status: 200}
 	e := Evidence{Users: Population[User]{Items: []User{u}, Complete: true, Reads: []Read{read}}, Access: AccessEvidence{Roles: Population[Role]{Complete: true, Items: []Role{}, Reads: []Read{{Op: OpRoles, RequestID: OpRoles, Decision: "sent", Status: 200}}}, Privileges: Population[Privilege]{Complete: true, Items: []Privilege{}, Reads: []Read{{Op: OpPrivileges, RequestID: OpPrivileges, Decision: "sent", Status: 200}}}, Accounts: []AccountAccess{{ID: "1", Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: OpUserAssignments, Decision: "sent", Status: 200}}}, Detail: &u, DetailRead: Read{Op: OpUserDetail, RequestID: OpUserDetail, Decision: "sent", Status: 200}}}}}
 	c := Context{People: []Person{{Handle: "alice", Kind: "employee", Addresses: []string{u.Primary}}}, ExpectedAdmins: []string{"alice"}, AdminsDeclared: true, AssessedAt: now, Zone: time.UTC}
+	// The list carries the 2-step flags; the fresh detail leaves them out,
+	// which never implies a change.
+	e.Users.Items[0].Enforced, e.Users.Items[0].Enrolled = new(true), new(true)
+	e.Units = Population[Unit]{Complete: true, Items: []Unit{{ID: "root", Path: "/"}}}
 	return e, c
 }
 func getRule(t *testing.T, out []finding.Judgment, id string) finding.Judgment {
@@ -53,6 +57,14 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 			e.Users.Items[0].Suspended = new(true)
 			e.Users.Items[0].IsAdmin = new(true)
 		}, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) { e.Users.Items[0].Suspended = nil }},
+		IDTwoStepNotEnforced: {func(e *Evidence, _ *Context) { e.Users.Items[0].Enforced = new(false) }, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) { e.Users.Items[0].Enforced = nil }},
+		IDAdminWithoutTwoStep: {func(e *Evidence, _ *Context) {
+			e.Users.Items[0].IsAdmin = new(true)
+			e.Users.Items[0].Enrolled = new(false)
+		}, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) {
+			e.Users.Items[0].IsAdmin = new(true)
+			e.Users.Items[0].Enrolled = nil
+		}},
 	}
 	for _, id := range RuleIDs() {
 		tc, ok := cases[id]
@@ -74,7 +86,11 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 				if !ok || def.Area != finding.AreaIdentity {
 					t.Fatal("missing definition", id)
 				}
-				if id != IDTooManySuperAdmins && def.Subject != "account" {
+				want := finding.SubjectKind("account")
+				if id == IDTwoStepNotEnforced {
+					want = "org_unit"
+				}
+				if id != IDTooManySuperAdmins && def.Subject != want {
 					t.Fatal("wrong subject", id)
 				}
 			})
