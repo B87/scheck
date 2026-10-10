@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"path"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 )
@@ -52,31 +53,51 @@ func (c *compiled) checkWorkspaceOp() error {
 	if c.Provider != "google" || c.Method != GET || c.Class != Read || c.Subject != workspacePrefix+"{domain}" || c.types["domain"].Type != DNSName || c.List != nil || c.WorkflowYAML || c.GitHubMetadata || len(c.Accept) != 1 || c.Accept[0] != "application/json" || c.MaxBytes != 1<<20 {
 		return errors.New("invalid compiled Workspace foundation read")
 	}
-	var path string
-	var fields []string
-	switch c.ID {
-	case "workspace.bootstrap_customer":
-		path, fields = "/admin/directory/v1/customers/my_customer", []string{"id"}
-	case "workspace.bootstrap_domains":
-		path, fields = "/admin/directory/v1/customer/{customer}/domains", []string{"domains.domainName", "domains.verified"}
-	case "workspace.bootstrap_aliases":
-		path, fields = "/admin/directory/v1/customer/{customer}/domainaliases", []string{"domainAliases.domainAliasName", "domainAliases.parentDomainName", "domainAliases.verified"}
-	case "workspace.customer":
-		path, fields = "/admin/directory/v1/customers/{customer}", []string{"id"}
-	default:
-		return errors.New("Workspace read is not implemented in this build step")
+	u, err := url.Parse(c.URL)
+	if err != nil || u.Scheme != "https" || u.Host != "admin.googleapis.com" || u.User != nil || u.Fragment != "" || u.RawQuery != "" || strings.Contains(c.URL, "%") || path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
+		return errors.New("Workspace reads require a compiled Directory endpoint")
 	}
-	count := 1
-	if c.ID != "workspace.bootstrap_customer" {
-		count++
+	bootstrapPath := workspaceBootstrapPath(c.ID)
+	if strings.HasPrefix(c.ID, "workspace.bootstrap_") && bootstrapPath == "" {
+		return errors.New("unknown Workspace bootstrap operation")
+	}
+	if bootstrapPath != "" && c.URL != "https://admin.googleapis.com"+bootstrapPath {
+		return errors.New("Workspace bootstrap requires its exact compiled path")
+	}
+	if c.ID == "workspace.bootstrap_customer" {
+		if len(c.Params) != 1 {
+			return errors.New("Workspace bootstrap customer has no caller selector")
+		}
+	} else {
 		if c.types["customer"].Type != CustomerID || c.types["customer"].Optional {
-			return errors.New("Workspace customer selector must be a required stable id")
+			return errors.New("Workspace customer selector must be a required gate-filled id")
+		}
+		if !strings.HasPrefix(u.Path, "/admin/directory/v1/customer/{customer}/") && u.Path != "/admin/directory/v1/customers/{customer}" && !strings.HasPrefix(u.Path, "/admin/directory/v1/customers/{customer}/") {
+			return errors.New("Workspace read must select the bound customer in its Directory path")
+		}
+		if bootstrapPath != "" && len(c.Params) != 2 {
+			return errors.New("Workspace bootstrap has unexpected parameters")
 		}
 	}
-	if c.URL != "https://admin.googleapis.com"+path || len(c.Params) != count || c.types["domain"].Optional || !slices.Equal(c.Keep, fields) {
-		return errors.New("Workspace read must use its exact compiled path and projection")
+	if c.types["domain"].Optional {
+		return errors.New("Workspace domain is required")
 	}
+
 	return nil
+}
+
+// Only these three operations may read private, unbound Directory evidence.
+func workspaceBootstrapPath(id string) string {
+	switch id {
+	case "workspace.bootstrap_customer":
+		return "/admin/directory/v1/customers/my_customer"
+	case "workspace.bootstrap_domains":
+		return "/admin/directory/v1/customer/{customer}/domains"
+	case "workspace.bootstrap_aliases":
+		return "/admin/directory/v1/customer/{customer}/domainaliases"
+	default:
+		return ""
+	}
 }
 
 func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
@@ -188,7 +209,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 		return s.finish(nil, nil)
 	}
 	session := s.g.workspace[s.r.Asset]
-	bootstrap := strings.HasPrefix(op.ID, "workspace.bootstrap_")
+	bootstrap := workspaceBootstrapPath(op.ID) != ""
 	out := &Response{Status: resp.StatusCode}
 	if resp.StatusCode != http.StatusOK {
 		s.res.end("unavailable:workspace_read", "Google Workspace read did not succeed")
@@ -259,7 +280,7 @@ func workspaceProjection(raw []byte, id string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if id == "workspace.bootstrap_customer" || id == "workspace.customer" {
+	if id == "workspace.bootstrap_customer" {
 		return marshal(map[string]json.RawMessage{"id": obj["id"]}), nil
 	}
 	key, fields := "domains", []string{"domainName", "verified"}
@@ -298,13 +319,10 @@ func (s *workspaceSession) consume(id string, raw []byte, root string) bool {
 		return false
 	}
 	switch id {
-	case "workspace.bootstrap_customer", "workspace.customer":
+	case "workspace.bootstrap_customer":
 		var customer string
 		if json.Unmarshal(obj["id"], &customer) != nil || !customerIDRE.MatchString(customer) || customer == "my_customer" {
 			return false
-		}
-		if id == "workspace.customer" {
-			return s.bound && customer == s.customer
 		}
 		s.customer = customer
 	case "workspace.bootstrap_domains":

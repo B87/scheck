@@ -143,7 +143,7 @@ func TestWorkspaceBindingAndPrivateEvidence(t *testing.T) {
 					t.Fatal("token body persisted or hashed")
 				}
 			}
-			res := g.Send(context.Background(), Request{Op: "workspace.customer", Asset: wsAsset, Params: map[string]string{"domain": "example.com", "customer": "C-opaque-123"}})
+			res := g.Send(context.Background(), Request{Op: "workspace.customer", Asset: wsAsset, Params: map[string]string{"domain": "example.com"}})
 			if !res.OK() || res.Identity != "" {
 				t.Fatalf("bound read %+v", res)
 			}
@@ -422,7 +422,7 @@ func TestWorkspaceResumeAlwaysBootstrapsAndProfilesDoNotReuse(t *testing.T) {
 	// Expired token cannot continue a previously bound read.
 	delete(w.env, "SCHECK_WORKSPACE_PROFILE")
 	g2.workspace[wsAsset].expires = time.Time{}
-	r := g2.Send(context.Background(), Request{Op: "workspace.customer", Asset: wsAsset, Params: map[string]string{"domain": "example.com", "customer": "C-opaque-123"}})
+	r := g2.Send(context.Background(), Request{Op: "workspace.customer", Asset: wsAsset, Params: map[string]string{"domain": "example.com"}})
 	if r.Decision != "unavailable:bootstrap_required" || len(api.requests()) != 6 {
 		t.Fatal(r)
 	}
@@ -462,7 +462,7 @@ func TestWorkspaceFoundationRegistryRejectsWidening(t *testing.T) {
 	for _, mutate := range []func(*Op){
 		func(o *Op) { o.URL = "https://admin.googleapis.com/admin/directory/v1/users" },
 		func(o *Op) { o.Method = POST },
-		func(o *Op) { o.Auth = NoAuth }, func(o *Op) { o.Provider = "github" }, func(o *Op) { o.Keep = []string{"private_key"} },
+		func(o *Op) { o.Auth = NoAuth }, func(o *Op) { o.Provider = "github" }, func(o *Op) { o.ID = "workspace.bootstrap_unknown" },
 		func(o *Op) { o.Subject = "saas:google-workspace:other.com" }, func(o *Op) { o.Params[1].Type = Login },
 	} {
 		o := wsFoundationOps()[1]
@@ -633,5 +633,80 @@ func TestWorkspaceMissingAliasesAndRedactedBindingCannotBind(t *testing.T) {
 	reads := wsBootstrap(w.gate())
 	if reads[len(reads)-1].OK() {
 		t.Fatal("redacted name bound")
+	}
+}
+
+func TestWorkspaceBoundReadsUseDeclaredProjectionAndInvalidateOn401(t *testing.T) {
+	w := newWorld(t)
+	w.ops = wsFoundationOps()
+	// An ordinary compiled op owns its projection; the gate does not recognize
+	// its response as Directory bootstrap data.
+	w.ops[3].ID = "workspace.projected_customer"
+	w.ops[3].Keep = []string{"description"}
+	wsAuthorized(t, w)
+	wsTokenServer(w, wsTokenBody(), 200)
+	bootstrap := wsReply(`{"domains":[{"domainName":"example.com","verified":true}]}`, `{}`)
+	unauthorized := false
+	api := w.google(func(rw http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/admin/directory/v1/customers/C-opaque-123" {
+			if unauthorized {
+				jsonReply(401, `{}`)(rw, r)
+				return
+			}
+			jsonReply(200, `{"description":"`+accessSeed+`","id":"foreign-private-id"}`)(rw, r)
+			return
+		}
+		bootstrap(rw, r)
+	})
+	g := w.gate()
+	r := Request{Op: w.ops[3].ID, Asset: wsAsset, Params: map[string]string{"domain": "example.com"}}
+	if res := g.Send(context.Background(), r); res.Decision != "refused:tenant_binding" || len(api.requests()) != 0 {
+		t.Fatal(res)
+	}
+	if reads := wsBootstrap(g); len(reads) != 3 || !reads[2].OK() {
+		t.Fatal(reads)
+	}
+	before := len(api.requests())
+	for _, customer := range []string{"C-opaque-123", "foreign", "my_customer"} {
+		res := g.Send(context.Background(), Request{Op: r.Op, Asset: wsAsset, Params: map[string]string{"domain": "example.com", "customer": customer}})
+		if res.Decision != "refused:tenant_binding" || len(api.requests()) != before {
+			t.Fatal(res)
+		}
+	}
+	res := g.Send(context.Background(), r)
+	if !res.OK() || !strings.Contains(string(res.Response.Body), "[REDACTED:") || strings.Contains(string(res.Response.Body), accessSeed) || strings.Contains(string(res.Response.Body), "foreign-private-id") {
+		t.Fatal(res)
+	}
+	unauthorized = true
+	res = g.Send(context.Background(), r)
+	if res.OK() || res.Response == nil || res.Response.Status != 401 {
+		t.Fatal(res)
+	}
+	before = len(api.requests())
+	res = g.Send(context.Background(), r)
+	if res.Decision != "refused:tenant_binding" || len(api.requests()) != before {
+		t.Fatal(res)
+	}
+	if strings.Contains(w.audit.String(), accessSeed) || strings.Contains(w.audit.String(), "foreign-private-id") {
+		t.Fatal("ordinary response leaked")
+	}
+}
+
+func TestWorkspaceOrdinaryRegistryRequiresBoundCustomerPath(t *testing.T) {
+	for _, mutate := range []func(*Op){
+		func(o *Op) { o.URL = "https://other.googleapis.com/admin/directory/v1/customers/{customer}" },
+		func(o *Op) { o.URL = "https://admin.googleapis.com/admin/directory/v1/customers/my_customer" },
+		func(o *Op) { o.URL = "https://admin.googleapis.com/admin/directory/v1/customers/foreign" },
+		func(o *Op) { o.URL += "?domain={domain}" },
+		func(o *Op) { o.URL += "/../foreign" },
+		func(o *Op) { o.URL += "/%2e%2e/foreign" },
+		func(o *Op) { o.Params[1].Optional = true },
+		func(o *Op) { o.Params[1].Type = Login },
+	} {
+		o := wsFoundationOps()[3]
+		mutate(&o)
+		if _, err := NewRegistry(o); err == nil {
+			t.Fatalf("unsafe selector registered: %+v", o)
+		}
 	}
 }

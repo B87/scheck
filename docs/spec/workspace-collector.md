@@ -140,6 +140,13 @@ audit URL is sanitized during request binding, before any later refusal can reco
 the successfully bound customer id, declared root, selected profile and usable
 returned scope evidence leave the private bootstrap.
 
+`workspace.Bind` owns the three ordered sends through a small `Sender` interface;
+engagement never sequences bootstrap operations. Bootstrap id constants are unexported
+in the collector. The gate recognizes a closed set of three exact endpoint templates and
+keeps Directory response recognition confined to them. `Bind` requires a usable final
+summary: missing, malformed or incomplete summary evidence marks the final read
+`unavailable:binding_summary` and returns no tenant or credential-summary fields.
+
 This is a narrow bootstrap exception, never authorization to read users,
 roles, grants or Gmail settings.
 
@@ -149,6 +156,17 @@ An email suffix, service-account project, local account or configured customer i
 not proof. A mismatch or unproved binding admits no further reads and prints no
 unrelated tenant inventory. After binding, requests use the literal returned id.
 Customer binding is freshly rechecked before retained evidence or follow-ups on resume.
+
+The gate fills every `customer` parameter from its session; caller-supplied values
+are refused, including the correct id. Ordinary bound reads use the standard
+redaction and compiled `Keep` projection pipeline, not the private bootstrap parser.
+An HTTP 401 clears both authentication and binding before any later read. Operation
+paths, parameters and projections belong to the collector's catalog and are compiled
+by registration. Gate validation retains the bootstrap endpoint exceptions and
+structural restrictions: `GET` to the literal Directory host, declared root subject
+and a required gate-filled customer selector in a normalized path. Compiled templates
+contain no percent encoding or path traversal. Step 1 supports customer selection in
+the Directory path only; query selection and paging admission remain step 2 work.
 
 Organizational-unit exclusions match canonical subtree boundaries behind `Scope` and
 the gate. The complete unit tree and customer-bound user inventory establish excluded

@@ -5,17 +5,17 @@ package workspace
 import "github.com/b87/scheck/internal/engagement/gate"
 
 const (
-	OpBootstrapCustomer = "workspace.bootstrap_customer"
-	OpBootstrapDomains  = "workspace.bootstrap_domains"
-	OpBootstrapAliases  = "workspace.bootstrap_aliases"
+	opBootstrapCustomer = "workspace.bootstrap_customer"
+	opBootstrapDomains  = "workspace.bootstrap_domains"
+	opBootstrapAliases  = "workspace.bootstrap_aliases"
 	OpCustomer          = "workspace.customer"
 )
 
 // Ops is step 1's binding surface; no user or mailbox reads are implemented yet.
 var Ops = []gate.Op{
-	foundationOp(OpBootstrapCustomer, "/customers/my_customer", []string{"id"}, false),
-	foundationOp(OpBootstrapDomains, "/customer/{customer}/domains", []string{"domains.domainName", "domains.verified"}, true),
-	foundationOp(OpBootstrapAliases, "/customer/{customer}/domainaliases", []string{"domainAliases.domainAliasName", "domainAliases.parentDomainName", "domainAliases.verified"}, true),
+	foundationOp(opBootstrapCustomer, "/customers/my_customer", []string{"id"}, false),
+	foundationOp(opBootstrapDomains, "/customer/{customer}/domains", []string{"domains.domainName", "domains.verified"}, true),
+	foundationOp(opBootstrapAliases, "/customer/{customer}/domainaliases", []string{"domainAliases.domainAliasName", "domainAliases.parentDomainName", "domainAliases.verified"}, true),
 	foundationOp(OpCustomer, "/customers/{customer}", []string{"id"}, true),
 }
 

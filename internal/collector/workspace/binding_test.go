@@ -147,3 +147,65 @@ func TestBindUsesGateSelectedCustomerAndExposesOnlyBinding(t *testing.T) {
 		}
 	}
 }
+
+type senderFunc func(context.Context, gate.Request) gate.Result
+
+func (f senderFunc) Send(ctx context.Context, r gate.Request) gate.Result { return f(ctx, r) }
+
+func TestBindRequiresCompleteSummaryAndOwnsSequence(t *testing.T) {
+	valid := `{"id":"C123","domain":"example.com","profile":"directory","scopes_known":false}`
+	for _, tc := range []struct {
+		name, body                string
+		missing, truncated, valid bool
+	}{
+		{name: "unknown scopes", body: valid, valid: true},
+		{name: "missing response", missing: true},
+		{name: "malformed", body: `{`},
+		{name: "empty", body: `{}`},
+		{name: "missing scopes knowledge", body: `{"id":"C123","domain":"example.com","profile":"directory"}`},
+		{name: "foreign domain", body: strings.ReplaceAll(valid, "example.com", "other.com")},
+		{name: "invalid customer", body: strings.ReplaceAll(valid, "C123", "my_customer")},
+		{name: "unknown profile", body: strings.ReplaceAll(valid, "directory", "unknown")},
+		{name: "truncated", body: valid, truncated: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			ops := []string{opBootstrapCustomer, opBootstrapDomains, opBootstrapAliases}
+			f := senderFunc(func(_ context.Context, r gate.Request) gate.Result {
+				if calls >= len(ops) || r.Op != ops[calls] || r.Asset != "saas:google-workspace:example.com" || r.Stage != "recon" || len(r.Params) != 1 || r.Params["domain"] != "example.com" {
+					t.Fatalf("unexpected request: %+v", r)
+				}
+				calls++
+				result := gate.Result{Decision: "sent", RequestID: r.Op}
+				if calls == 3 && !tc.missing {
+					result.Response = &gate.Response{Status: 200, Body: []byte(tc.body), Truncated: tc.truncated}
+				}
+				return result
+			})
+			b := Bind(context.Background(), f, "saas:google-workspace:example.com")
+			if calls != 3 || len(b.Reads) != 3 {
+				t.Fatal(b, calls)
+			}
+			if tc.valid {
+				if b.CustomerID != "C123" || b.Reads[2].Decision != "sent" {
+					t.Fatal(b)
+				}
+			} else if b.CustomerID != "" || b.Domain != "" || b.Reads[2].Decision != "unavailable:binding_summary" {
+				t.Fatal(b)
+			}
+		})
+	}
+	for stop := range 3 {
+		calls := 0
+		b := Bind(context.Background(), senderFunc(func(_ context.Context, _ gate.Request) gate.Result {
+			calls++
+			if calls == stop+1 {
+				return gate.Result{Decision: "unavailable:permission", Reason: "insufficient_permission"}
+			}
+			return gate.Result{Decision: "sent"}
+		}), "saas:google-workspace:example.com")
+		if calls != stop+1 || len(b.Reads) != calls || b.CustomerID != "" {
+			t.Fatal(b, calls)
+		}
+	}
+}

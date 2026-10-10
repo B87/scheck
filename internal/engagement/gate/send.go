@@ -420,7 +420,11 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 		return s.failed(err, true, nil)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if s.r.exchange != nil || a.b.op.Auth == WorkspaceADC {
+	if a.b.op.Auth == WorkspaceADC && resp.StatusCode == http.StatusUnauthorized {
+		session := g.workspace[s.r.Asset]
+		session.bound, session.credential = false, nil
+	}
+	if s.r.exchange != nil || workspaceBootstrapPath(a.b.op.ID) != "" {
 		return s.workspaceResponse(resp)
 	}
 

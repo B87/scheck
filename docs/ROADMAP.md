@@ -908,6 +908,13 @@ Unknown grants remain unknown; a successful read does not prove write capability
    [eval/e6-authentication-definition-2026-10-10.md](eval/e6-authentication-definition-2026-10-10.md),
    including green offline checks and a fresh adversarial review with no findings.
    These are software-verification results, not independent security acceptance.
+   **Foundation cleanup:** `Bind` owns ordered bootstrap through `Sender`, with unexported
+   bootstrap ids and an explicit failed read for an unusable final summary. The gate
+   owns customer selectors and the three exact bootstrap endpoints; ordinary bound
+   reads use the standard compiled projection and redaction pipeline. Caller-supplied
+   customer ids are refused, and HTTP 401 drops authentication and binding. Ordinary
+   op definitions are not repeated in gate validation. Query-based customer selection
+   and paging admission remain reviewed step 2 work.
 2. Tenant inventory: domains, organizational units and users, exclusions before
    persistence and follow-ups, stable account ids and people attribution.
 3. Identity and admin rules: declared admins, super-admin counts, departed and stale

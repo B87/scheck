@@ -291,17 +291,23 @@ func (g *Gate) registered(_ context.Context, p *pending) *halt {
 func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	op, r := p.op, p.r
 	params := r.Params
-	if op.Auth == WorkspaceADC && (op.ID == "workspace.bootstrap_domains" || op.ID == "workspace.bootstrap_aliases") {
-		params = maps.Clone(params)
-		if params == nil {
-			params = map[string]string{}
+	if op.Auth == WorkspaceADC {
+		if _, supplied := params["customer"]; supplied {
+			return refused("tenant_binding", "the Workspace customer selector is filled only by the gate")
 		}
-		if _, supplied := params["customer"]; !supplied {
-			if session := g.workspace[r.Asset]; session != nil {
-				params["customer"] = session.customer
+		if op.types["customer"].Type == CustomerID {
+			params = maps.Clone(params)
+			if params == nil {
+				params = map[string]string{}
 			}
+			session := g.workspace[r.Asset]
+			if session == nil || session.customer == "" {
+				return refused("tenant_binding", "this session has no bootstrap customer")
+			}
+			params["customer"] = session.customer
 		}
 	}
+
 	if l := op.List; l != nil && l.Next != nil {
 		if _, set := r.Params[l.Next.Param]; set {
 			return refused("bind", fmt.Sprintf("parameter %q is filled by the gate from the page before", l.Next.Param))
@@ -341,7 +347,7 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	}
 	p.b = b
 	p.e.Params, p.e.URL = b.params, auditURL(b)
-	if op.Auth == WorkspaceADC && strings.HasPrefix(op.ID, "workspace.bootstrap_") {
+	if op.Auth == WorkspaceADC && workspaceBootstrapPath(op.ID) != "" {
 		p.e.URL = op.URL
 		p.e.Params = map[string]string{"domain": b.params["domain"]}
 	}
