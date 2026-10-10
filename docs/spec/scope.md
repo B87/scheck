@@ -371,26 +371,34 @@ Secrets are searched in history as well as the current tree, and are redacted in
 output: the report shows where a secret is and what kind it is, never its value. Where
 the code host has its own secret scanning, its alerts are read as well.
 
-**History comes from the operator's mirror checkout, read in-process (decided in 0.0.2
-E4).** scheck has no git transport. Running `git` would send requests the gate never
-sees. Cloning through the gate would need a `POST` to `git-upload-pack` and would leave
+**Planned E5 step 6: history comes from the operator's mirror checkout, read
+in-process (decided in 0.0.2 E4; definition frozen on 2026-10-10, not built).**
+scheck has no git transport. Running `git` would send requests the gate never sees. Cloning through the gate would need a `POST` to `git-upload-pack` and would leave
 plaintext secrets in a temporary directory on the operator's laptop, with a cleanup
 that a crash skips. The operator already holds the clone:
 
 - **The setting.** A repository asset names it with `checkout: /abs/path`, a path, like
   a host's `identity`, never a credential. The asset id stays
   `repo:github:owner/name`. The operator makes it with `git clone --mirror`, which
-  brings `refs/pull/*`, where secrets from deleted branches live.
+  maps advertised refs into the mirror. Advertised pull refs can retain commits from
+  deleted branches; a mirror does not prove every past pull request or deleted ref
+  was retained.
 - **Checks before reading.** The remote in the checkout's `config` must match the
-  locator, compared after removing userinfo, or the checkout is refused. The config's
+  locator, compared after removing userinfo, or the checkout is refused. The exact
+  supported mirror config and origin forms are in
+  [github-collector.md](github-collector.md#history), "History". The config's
   content is never stored or printed, and a credential in a remote URL
-  (`https://x:ghp_…@github.com/…`) is reported as a finding. Its heads are compared with the branch heads the
-  API returns through the gate. A stale checkout is read, and coverage says "behind
-  origin". Missing pull refs make coverage *partial*.
+  (`https://x:ghp_…@github.com/…`) is reported as a finding. Its refs are compared
+  with fresh advertised branch and pull refs the API returns through the gate. A differing mirror is read, and coverage says "refs differ from
+  the observed GitHub refs", not "behind origin". Missing or changed advertised
+  refs and unavailable API evidence make coverage *partial*.
 - **The reader.** It is in-process: loose objects and packs read with the standard
-  library's zlib, files opened read-only, every path confined under the checkout after
-  realpath. Nothing is executed. Each repository gets one audit line with its object
-  counts.
+  library's zlib and one read-only `os.Root` confinement boundary. Filesystem
+  symlinks and nonregular files are rejected; hard links are rejected where reliable
+  standard platform metadata permits that check, and other platforms are unsupported.
+  Nothing is executed. Each attempt has one audit line with execution status/reason,
+  time and numeric counts. Supported formats and fixed budgets are owned by
+  [github-collector.md](github-collector.md#history), "History".
 - **Detection is redaction.** A compiled secret-shape rule, or the run's own
   `credential` rule, matching blob content is the finding, recorded as `(commit, path,
   line, rule)`. Only the marker is kept, never the value or a hash of it. A
@@ -400,8 +408,9 @@ that a crash skips. The operator already holds the clone:
   host's own secret-scanning alerts are read through the API where the token can see
   them. Commits GitHub still serves by SHA after their branch was deleted without a
   pull request are not in a mirror, and coverage says they are *not assessed*.
-- **When.** `checkout` is accepted from E5, which reads it. Validation checks only that
-  the path is absolute; the remote and heads are checked when E5 reads the checkout.
+- **When.** `checkout` is not accepted in the current build. E5 step 6 will accept an
+  absolute path and check the mirror config, remote and refs when reading it. Resume
+  will rescan locally and compare fresh API refs, never reuse a local scan result.
 
 A gate-mediated fetch is reconsidered in 0.0.3 if operators find mirroring a burden.
 

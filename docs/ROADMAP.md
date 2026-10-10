@@ -722,9 +722,22 @@ permissions remain proposals until reviewed and frozen):
    fresh adversarial review pass. All reported review defects were fixed; none is
    carried. Assessment-token reporting, E3 rest-lab seal and live acceptance remain
    pending; no live acceptance is claimed.
-6. **Confined history reader.** In-process mirror remote/head checks, bounded object
-   and history reads, detector markers and redaction assertions; freeze supported
-   formats and caps before implementation.
+6. **Confined history reader — defined, not built.** The security-consultant DEFINE
+   on 2026-10-10 freezes the planned contract in `spec/github-collector.md`,
+   "History": ordinary SHA-1 bare mirrors; one read-only `os.Root` boundary;
+   conventional matching mirror config; loose objects, PACK/index v2 and deltas;
+   all-ref/all-parent tree traversal; fixed resource budgets and fresh branch/pull
+   ref comparison through two GETs. No Git invocation, transport or mirror write.
+   `checkout` remains unavailable until this step lands. Planned rules are
+   `github.history_credential` (high) and `github.remote_credential` (medium), both
+   per `secret_location`, with safe markers and complete/partial coverage kept
+   distinct. Resume rescans and obtains fresh refs. Missing API evidence, unsupported
+   formats, mutation and caps never support an absence verdict. Stream packs, cap the
+   decoded-object cache at 64 MiB and resident reader buffers at 128 MiB; prove both
+   rules' three outcomes and all-output redaction before reviews. The definition
+   has no blocking operator/security decisions; implementation, tests and reviews
+   remain pending. Assessment-token reporting, E3 rest-lab seal and live acceptance
+   remain pending.
 7. **Closing review.** Consultant REVIEW, client REPORT, spec sync/audit,
    `make check` and a fresh whole-slice adversarial code review. Every built rule has
    firing, disproved and abstained fixtures. Missing live lab measurements remain

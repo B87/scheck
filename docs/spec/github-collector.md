@@ -3,7 +3,8 @@
 GitHub organization and repository assessment for 0.0.2 E5. Steps 1–5 build the
 gate foundation, principal/organization inventory, identity and repository-access
 rules, CI configuration, secret metadata and provider-alert rules. Steps 4 and 5
-were defined with the `security-consultant` on 2026-10-10. History remains design.
+were defined with the `security-consultant` on 2026-10-10. Step 6's history
+contract was frozen on 2026-10-10; the reader and `checkout` setting are not built.
 Step 5 passes offline checks and consultant/client/adversarial reviews; live
 acceptance remains pending. The step 3 evidence and rule surface
 was frozen on 2026-10-10.
@@ -694,15 +695,143 @@ compiled operations and no returned-URL or content follow-up.
 
 ## History
 
-The mirror reader and its safety boundary are owned by
-[scope.md](scope.md#repositories). It reads the operator's mirror in-process,
-confines paths after realpath, checks the remote against the declared locator and
-compares heads with API evidence. It executes nothing and has no git transport.
-Detection is redaction; retain detector marker, commit, path and line, never a value
-or value hash. Exact supported object/pack formats and caps remain to be frozen.
-Missing/stale mirrors, missing pull refs, caps, unsupported formats and unreadable
-objects prevent a complete-history claim. Commits served by SHA outside mirror refs
-remain not assessed.
+**Step 6 definition, frozen with the security-consultant on 2026-10-10; not built.**
+The planned mirror reader and its safety boundary are owned by
+[scope.md](scope.md#repositories). `checkout` remains unavailable until step 6
+lands. The following defines that implementation, not coverage already delivered.
+
+### Mirror admission and confinement
+
+The input is an ordinary SHA-1 bare mirror made by the operator. One read-only
+boundary uses `os.Root` for all local opens and rejects filesystem symlinks and
+nonregular files. Hard links are rejected where reliable standard platform metadata
+can identify them; platforms without that check are unsupported. No pathname check
+followed by an unconstrained open is permitted. Nothing executes Git, fetches,
+checks out files, loads hooks or writes the mirror.
+
+Parse conventional Git config sections, quoted values and comments. Require
+`core.bare=true`, repository format 0 or 1 using SHA-1, one unambiguous matching
+`remote "origin"`, `mirror=true` and `fetch=+refs/*:refs/*`. Reject includes,
+alternates, promisor repositories, replacement refs, grafts, reftable, worktrees,
+URL rewrites and extensions that change object or reference interpretation. Inert
+settings are ignored. Ambiguous or duplicate admission settings are unsupported.
+
+Origin must name the exact declared GitHub repository in HTTPS, SSH or scp form.
+Compare after removing userinfo; reject ports, queries, fragments and ambiguous
+origins. The conventional SSH username `git` is not a credential. Removing
+userinfo for comparison does not authorize using it: no remote URL is sent,
+printed or persisted.
+
+### Supported objects and traversal
+
+Support loose SHA-1 commit, tree, blob and tag objects, PACK v2 and index v2,
+including OFS_DELTA and REF_DELTA with bases in another pack or loose storage.
+Validate checksums and object identities transiently; retain no blob identity or
+value hash. Support loose and packed refs, peeled tags and symbolic HEAD. SHA-256,
+PACK v3, index v1, reftable, corrupt objects and missing delta bases leave coverage
+partial; none permits an external read.
+
+Traverse all local refs, all commit parents and their trees. Scan normal-file and
+symlink blob bytes, including binary content, without extension or directory
+filters. A symlink stored in a Git tree is scanned as bytes, never followed on disk.
+Submodules, LFS payloads, reflogs and unreachable objects are not assessed. Hidden,
+deleted or API-unadvertised refs, and commits GitHub serves only by SHA outside the
+mirror's refs, remain gaps.
+
+### Fixed budgets
+
+Budgets are compiled limits, never settings that widen collection. Each repository
+also obeys the engagement deadline. Stream packs rather than loading all pack
+bytes into memory. The decoded-object cache is at most 64 MiB; eviction is not a
+coverage gap. Aggregate resident reader buffers are at most 128 MiB; exceeding
+that processing budget stops incomplete with `limit_reached`.
+
+| Resource | Maximum |
+|---|---|
+| Config | 64 KiB |
+| One ref file / all ref bytes | 4 KiB / 8 MiB |
+| Refs / directory entries | 10,000 / 250,000 |
+| Packs | 64 |
+| One pack / all pack bytes | 256 MiB / 512 MiB |
+| One index | 16 MiB |
+| Objects / commits | 200,000 / 20,000 |
+| One expanded object / total expanded bytes | 8 MiB / 512 MiB |
+| Delta depth / symbolic-ref or tag depth | 64 / 16 |
+| Tree depth / tree visits | 128 / 250,000 |
+| Finding locations | 10,000 |
+| Time | 60 seconds |
+
+A cap yields incomplete coverage and exit 2. Retain observed positive matches;
+never turn a bounded partial traversal into an absence claim.
+
+### Fresh reference comparison and resume
+
+For each repository with `checkout`, send two fresh compiled GETs through the gate:
+`/repos/{owner}/{repo}/git/matching-refs/heads/` and
+`/repos/{owner}/{repo}/git/matching-refs/pull/`. The fine-grained permission is
+repository Contents read. Keep only `ref`, `object.type` and `object.sha`. These
+are bounded one-shot arrays: no invented pagination or returned-URL follow-up.
+The prefix is compiled and typed, never taken from an origin or a ref. No pull
+request is fetched.
+
+Compare every advertised branch and pull ref with local refs. Missing or changed
+refs make coverage partial; extra local refs are still scanned. Say "refs differ
+from the observed GitHub refs", never "behind origin": equality or ancestry has
+not been established. An empty advertised pull-ref array does not prove there
+were no past pull requests. API denial allows the confined local scan but prevents
+a negative history verdict.
+
+Snapshot config and refs before and after traversal. A change makes coverage
+partial; this is a mutation check, not an atomic snapshot claim. Resume rescans the
+mirror and reads fresh refs; it never reuses a local history result.
+
+### Rules and subjects
+
+Both planned definitions set `Subject: "secret_location"`, Secrets area and
+non-exposure findings. Acceptances must name the exact location.
+
+| Finding | Base | Fires | Disproves | Abstains |
+|---|---|---|---|---|
+| `github.history_credential` | high | A compiled existing secret-redactor pattern or exact nonempty run credential matches a read blob, even in a partial scan | Complete supported traversal with fresh matching refs finds no recognized pattern | Missing or mismatched mirror, unsupported/corrupt data, mutation, API gap, cap or other incomplete evidence |
+| `github.remote_credential` | medium | Structurally credential-bearing origin userinfo, or a compiled credential pattern in origin | Completely parsed supported matching origin contains no recognized credential | Missing, ambiguous, mismatched or unsupported origin |
+
+History's key is
+`history:<commit>:<encoded-case-sensitive-path>:<line>:<detector>`; origin's key is
+`remote:origin`. Use a full commit identity, a redacted path and one-based line.
+No entropy heuristic or `redact_extra` match creates a finding. Extra redactions
+hide client-selected text and are counted only. If path redaction prevents a stable
+subject key, record a coverage gap rather than retain unsafe text or invent a key.
+
+Explicit public visibility from the direct repository read raises the history
+finding from high to critical and cites that read. Production context does not
+raise it; public visibility does not raise the remote finding. Existing
+important-data adjustments apply. No rule tests credential usability.
+
+### Output, coverage and verification
+
+Retain only safe detector markers, commit, redacted path and line; never raw blob
+snippets, config, remote URLs, blob identities or value hashes. Each local attempt
+has one audit line naming the asset, execution status/reason, time and numeric
+counts, with no target-derived free text. A negative verdict says "No recognized
+credential pattern found in the supported mirror history read", never "no secrets".
+Detector coverage and credential usability remain gaps beside the traversal gaps.
+
+Remediation revokes or rotates the credential first, reviews its use, then removes
+it from history. For origin userinfo, remove it, rotate the credential and use a
+credential helper. Removing history does not revoke a credential.
+
+Tests must prove fires, disproves and abstains for both rules; loose, packed and
+cross-storage delta reads; corruption, caps and cycles; confinement under symlink
+and mutation races; duplicate/opaque config; literal run credentials;
+`redact_extra` without a finding; changed mirrors and fresh refs on resume.
+Seeded values must be absent from every persisted output with safe markers present.
+Fixtures are constructed without invoking Git. No live acceptance is claimed by
+this definition.
+
+Format and API references: [Git pack format](https://git-scm.com/docs/gitformat-pack),
+[GitHub Git references](https://docs.github.com/en/rest/git/refs),
+[Git clone mirror behavior](https://git-scm.com/docs/git-clone) and
+[GitHub pull-request refs](https://docs.github.com/en/enterprise-cloud%40latest/pull-requests/how-tos/review-pull-requests/checking-out-pull-requests-locally).
 
 ## Principal and resume
 
