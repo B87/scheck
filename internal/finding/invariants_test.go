@@ -138,7 +138,7 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for _, d := range githubDefs {
 		reachable[d.ID] = true
 	}
-	for _, id := range GitHubCIIDs() {
+	for _, id := range append(GitHubCIIDs(), GitHubAlertIDs()...) {
 		reachable[id] = true
 	}
 	for _, d := range Defs() {

@@ -38,11 +38,17 @@ func ValidBranchName(v string) bool {
 }
 func (c *compiled) ciResource(name string) bool {
 	t := c.types[name].Type
-	return t == BranchName || t == CommitSHA || t == WorkflowFile
+	return t == BranchName || t == CommitSHA || t == WorkflowFile || t == SecretName || t == AlertNumber
 }
 func (c *compiled) checkCIResources() error {
 	for _, p := range c.Params {
 		if !c.ciResource(p.Name) {
+			continue
+		}
+		if p.Type == SecretName || p.Type == AlertNumber {
+			if err := c.checkMetadataResource(p); err != nil {
+				return err
+			}
 			continue
 		}
 		if c.Provider != "github" || c.Method != GET || c.Subject != "repo:github:{owner}/{repo}" || c.types["owner"].Type != Login || c.types["repo"].Type != RepoName || p.Optional {
@@ -68,7 +74,7 @@ func (c *compiled) checkCIResources() error {
 	if c.WorkflowYAML && (c.Provider != "github" || c.Method != GET || c.path != "/repos/{owner}/{repo}/contents/.github/workflows/{file}" || c.types["file"].Type != WorkflowFile || c.types["sha"].Type != CommitSHA || c.List != nil) {
 		return errors.New("workflow decoding requires the compiled contents file read")
 	}
-	return nil
+	return c.checkMetadataOp()
 }
 
 // workflowBody is the sole encoded-content exception to the JSON response pipeline.

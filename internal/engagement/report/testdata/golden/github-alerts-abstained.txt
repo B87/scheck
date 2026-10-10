@@ -1,4 +1,4 @@
-scheck engagement report: GitHub CI configuration review
+scheck engagement report: GitHub secret metadata and provider alert review
 For Alex. Read 2026-10-09 12:00 to 12:01 (UTC). scheck test.
 Trigger        routine
 GitHub account saas:github:example-org: alice (user ID 41). Inventory visibility depends on this
@@ -16,16 +16,19 @@ customers.
 Read: engineering, production. See Coverage for what was not checked.
 
 SUMMARY
-No CI configuration rule could decide from the available evidence; see the missing reads and next
-steps below.
 Not checked      Identity and access, Secrets, CI/CD and supply chain: see Coverage.
 Not requested    Not part of this run: cloud configuration, data stores and backups, external
                  surface, web application, hosts, email and domain, logging and incident readiness.
                  To include one, list it under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
+Follow-up needed: repo:github:example-org/production: Review secret alert 10: GitHub marks this
+  alert closed because someone chose not to fix it (wont_fix), but still reports the credential
+  active. Revocation was not verified. Check with the credential owner; this needs follow-up even
+  though scheck could not reach a finding.
+
 Fix these first: a ranking of what was checked, not of all your risks
-  No security verdict was possible from the collected CI evidence. Below: 0 low, 0 informational, 0
+  Nothing open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
   accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Not
@@ -41,14 +44,15 @@ Identity and access      not checked
   assessed).
 Secrets                  not checked
   2 of 2 assets read.
-  This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
-  unsupported secret locations, unreported patterns and repository history are not assessed).
+  Required GitHub authority, visibility, context or recognized evidence was missing; this version of
+  scheck has no rule for it (Actions secret values, credential usability/rotation, unsupported
+  secret locations, unreported patterns and repository history are not assessed).
 CI/CD and supply chain   not checked
   2 of 2 assets read.
-  Required GitHub authority, visibility, context or recognized evidence was missing; this version of
-  scheck has no rule for it (PR review strength and bypass, Actions runtime policies, execution,
-  reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime
-  exploitability are not assessed).
+  This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
+  policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and
+  dependency runtime exploitability are not assessed); required GitHub authority, visibility,
+  context or recognized evidence was missing.
 Not requested            Not part of this run: cloud configuration, data stores and backups,
                          external surface, web application, hosts, email and domain, logging and
                          incident readiness. To include one, list it under roots in the engagement
@@ -86,12 +90,21 @@ WHAT LEFT THIS MACHINE
     deleting that directory removes it.
 
 NOTES FOR THE READOUT
-  repo:github:example-org/production: GitHub denied the workflow contents and branch-rule reads. Ask
-    the repository owner to authorize Contents read and Metadata read for the intended repository,
-    then resume.
+  repo:github:example-org/production: Provider alerts are not a complete repository scan. Names are
+    metadata; values were not read. Credential usability and deployed dependency exploitability were
+    not tested.
+  repo:github:example-org/production: Secret alert 9: provider marked inactive; rotation was not
+    verified.
+  repo:github:example-org/production: Review secret alert 10: GitHub marks this alert closed because
+    someone chose not to fix it (wont_fix), but still reports the credential active. Revocation was
+    not verified. Check with the credential owner; this needs follow-up even though scheck could not
+    reach a finding.
+  repo:github:example-org/production: Ask the repository owner to authorize Secret scanning alerts
+    read and Dependabot alerts read for this repository, then resume. History and unsupported
+    locations remain unassessed.
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 0 rules that could decide. That is not a
-clean result: 6 rules had no usable evidence, and 10 areas were not checked.
+clean result: 5 rules had no usable evidence, and 10 areas were not checked.
 Files  /state/engagements/github-inventory/2026-10-09T12:00:00Z/: report.txt, report.json,
        audit.jsonl (every command and request, in order), evidence/

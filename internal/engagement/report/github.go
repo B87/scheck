@@ -34,6 +34,11 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 			{"departed people", []string{finding.IDIdentityFormerPersonHasAccess, finding.IDIdentityFormerPersonInvited}},
 			{"repository access", []string{finding.IDGitHubBroadDefaultMemberPermission, finding.IDGitHubOutsideAdminOnProduction}},
 		}
+	case finding.AreaSecrets:
+		families = []family{
+			{"organization Actions secret sharing", []string{finding.IDGitHubOrgSecretAll}},
+			{"provider secret-scanning alerts at commit locations", []string{finding.IDGitHubSecretScanningOpen}},
+		}
 	case finding.AreaCICD:
 		families = []family{
 			{"repository public intent and deploy keys", []string{finding.IDGitHubUndeclaredPublicRepository, finding.IDGitHubWritableDeployKey}},
@@ -42,6 +47,7 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 			{"workflow dependency references", []string{finding.IDGitHubMutableAction}},
 			{"mutable dependencies with write permission", []string{finding.IDGitHubMutableActionWrite}},
 			{"PR-controlled execution requests", []string{finding.IDGitHubPRTargetUnsafe}},
+			{"provider dependency alerts", []string{finding.IDGitHubDependabotHigh, finding.IDGitHubDependabotMedium, finding.IDGitHubDependabotLow}},
 		}
 	}
 	some := false
@@ -75,12 +81,12 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		}
 		row.SubItems = append(row.SubItems, si)
 	}
-	unknown := "GitHub secrets, provider alerts and repository history are not assessed in this step"
+	unknown := "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed"
 	if area == finding.AreaIdentity {
 		unknown = "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed"
 	}
 	if area == finding.AreaCICD {
-		unknown = "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed"
+		unknown = "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed"
 	}
 	row.SubItems = append(row.SubItems, SubItem{Name: unknown, Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: unknown}}})
 	row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: unknown})

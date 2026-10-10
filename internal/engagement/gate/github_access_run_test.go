@@ -76,6 +76,10 @@ access:
 			fmt.Fprint(w, `[{"id":3,"login":"bob","type":"User","role_name":"admin","permissions":{"admin":true,"pull":true,"push":true,"triage":true,"maintain":true}}]`)
 		case "/repos/acme/shop/keys":
 			fmt.Fprint(w, `[{"id":8,"read_only":false,"key":"discarded-public-key"}]`)
+		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets", "/repos/alice/shop/actions/secrets":
+			fmt.Fprint(w, `{"secrets":[]}`)
+		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts", "/repos/alice/shop/dependabot/alerts", "/repos/alice/shop/secret-scanning/alerts":
+			fmt.Fprint(w, `[]`)
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -168,6 +172,10 @@ func TestGitHubRepositoryRootCollectsWithoutOrganizationAuthority(t *testing.T) 
 		case "/repos/alice/shop":
 			fmt.Fprint(w, `{"id":10,"name":"shop","full_name":"alice/shop","owner":{"id":1,"login":"alice","type":"User"},"visibility":"public"}`)
 		case "/repos/alice/shop/keys", "/repos/alice/shop/collaborators":
+			fmt.Fprint(w, `[]`)
+		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets", "/repos/alice/shop/actions/secrets":
+			fmt.Fprint(w, `{"secrets":[]}`)
+		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts", "/repos/alice/shop/dependabot/alerts", "/repos/alice/shop/secret-scanning/alerts":
 			fmt.Fprint(w, `[]`)
 		default:
 			t.Errorf("root escaped to %s", r.URL.Path)

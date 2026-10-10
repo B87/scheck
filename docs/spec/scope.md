@@ -1009,6 +1009,13 @@ A response goes through these steps in order, and nothing is stored before the l
    marker stay two members, of which a decoder keeps one; a secret-shaped key is rare
    enough that scheck accepts this rather than invent markers. A body that is not one
    JSON document is `unavailable:malformed_response`, and nothing is read from it.
+   E5's six compiled Actions-secret and provider-alert metadata operations discard
+   all error bodies and malformed, duplicate-member, unexpected or truncated bodies.
+   Success bodies are redacted and structurally projected to exact declared fields;
+   provider secret values and arbitrary metadata never persist, including literals
+   the generic redactor preserves. Only safe redactor markers may survive separately
+   from recognized metadata ([github-collector.md](github-collector.md), "Secret
+   metadata and provider alerts: step 5 definition").
 4. **Parse the redacted bytes**, never the pre-redaction ones. If they do not parse,
    which value-by-value redaction rules out, the result is
    `unavailable:redaction_broke_structure`. Only a 2xx is parsed: an API's error body

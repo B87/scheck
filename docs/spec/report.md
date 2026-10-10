@@ -55,9 +55,9 @@ and warns that visibility depends on the credential in the normal header. Resume
 wording qualifies retained evidence by whether reuse was allowed; inventory notes
 identify reused observations by their original time and say current access was not
 validated. GitHub shortfalls refer to those notes instead of claiming nothing was
-read. GitHub steps 3 and 4 group identity, repository-access and CI configuration
-judgments into coverage sub-items and keep delegated roles, runtime enforcement,
-runner access, alerts and history visible as unassessed. Repository identity
+read. GitHub steps 3–5 group identity, repository-access, CI configuration, secret sharing
+and provider-alert judgments into coverage sub-items. Delegated roles, runtime
+enforcement, runner access and history remain visibly unassessed. Repository identity
 judgments count in Identity and access.
 Declaration references are labeled separately from observed evidence.
 
@@ -77,6 +77,38 @@ observations. `github_ci` readout notes preserve configuration and runtime gaps.
 Permission shortfalls name the required read permission, such as Contents or
 Metadata read, and authorization/resume next steps without recommending a target
 write grant. CI-only reports do not fabricate identity evidence or notes.
+
+**GitHub metadata and alerts.** `github_alerts` asset notes distinguish Actions
+secret names/visibility from provider Dependabot and secret-scanning reports.
+Counts say observed or “at least” when populations are incomplete. Owning-population
+gaps retain abstained family judgments beside affirmative findings, keeping that
+family's coverage partial. Names and timestamps establish neither leaked values, production use nor rotation. Provider
+alerts are not a complete repository scan; deployed dependencies, exploitability
+and credential usability were not tested. Denied reads and unsupported locations
+remain coverage gaps. Safe provider metadata retains its provenance while secret
+values, snippets, comments and arbitrary metadata are omitted before persistence.
+
+Dependency findings use `dependency_alert` subjects containing the alert number
+and case-preserving encoded manifest path. Secret findings use `secret_location`:
+organization secret names or exact alert/commit/path/start-coordinate instances.
+An acceptance names the instance; it does not accept future locations. Dependabot
+critical maps to high and receives no automatic production/public adjustment;
+the finding title preserves “high or critical” as the provider severity range.
+Dependency caveats describe deployed versions, exploitability and alert coverage,
+without unrelated secret-scan caveats.
+Recognized observed public repository visibility raises a provider-secret finding
+from high to critical; `repository_read` cites the direct repository request
+separately from alert metadata. Public-on-purpose does not lower either secret rule.
+
+Closed dependency alerts say fixed or dismissed as the provider reports; dismissal
+is not proof of a fix. Inactive provider secrets say rotation was not verified.
+Non-revocation resolutions do not prove a credential was revoked. A resolved
+`wont_fix` alert reported active receives a `github_alert_followup` note before the
+summary ranking and again in asset notes. Plain wording says someone chose not to
+fix the closed alert but GitHub still reports the credential active; revocation
+was not verified and the credential owner needs to follow up. This unranked note
+is not a finding and does not affect the exit count. Secret remediation starts
+with revocation or rotation at the provider, before removing reported locations; closing an alert or deleting a commit does not revoke it.
 
 Fixed lines:
 
@@ -520,7 +552,7 @@ one id graded differently.
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
 | `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
-| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
 | `category` | the collector's own grouping |

@@ -72,7 +72,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
-		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected}, j.ID) {
+		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubSecretScanningOpen}, j.ID) {
 			f.Rule.Kind = "multi_fact"
 		}
 		if j.ID == finding.IDWebRestrictedReachable {
@@ -121,6 +121,13 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 					rule = "deploys_to:production"
 					if len(j.Sources) > 0 {
 						source = SourceRef{File: b.in.Path, Key: j.Sources[0] + ".deploys_to"}
+					}
+				}
+				if attr == "observed_public" && j.ID == finding.IDGitHubSecretScanningOpen {
+					rule = "attribute:public_repository"
+					f.WhyHere = []string{"This alert concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."}
+					if observation, ok := j.Details["repository_read"].(string); ok && observation != "" {
+						source = SourceRef{Observation: observation, Excerpt: "Observed repository visibility: public"}
 					}
 				}
 				if rule != "" {

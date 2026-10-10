@@ -384,7 +384,7 @@
       ],
       "reasons": [
         {
-          "detail": "GitHub secrets, provider alerts and repository history are not assessed in this step",
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
           "reason": "no_rule"
         }
       ],
@@ -392,10 +392,10 @@
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
-          "name": "GitHub secrets, provider alerts and repository history are not assessed in this step",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
           "reasons": [
             {
-              "detail": "GitHub secrets, provider alerts and repository history are not assessed in this step",
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
               "reason": "no_rule"
             }
           ]
@@ -403,10 +403,10 @@
         {
           "asset": "repo:github:example-org/production",
           "mark": "not_assessed",
-          "name": "GitHub secrets, provider alerts and repository history are not assessed in this step",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
           "reasons": [
             {
-              "detail": "GitHub secrets, provider alerts and repository history are not assessed in this step",
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
               "reason": "no_rule"
             }
           ]
@@ -463,7 +463,7 @@
       ],
       "reasons": [
         {
-          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
           "reason": "no_rule"
         },
         {
@@ -475,10 +475,10 @@
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
-          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
           "reasons": [
             {
-              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
               "reason": "no_rule"
             }
           ]
@@ -501,10 +501,10 @@
         {
           "asset": "repo:github:example-org/production",
           "mark": "not_assessed",
-          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
           "reasons": [
             {
-              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
               "reason": "no_rule"
             }
           ]

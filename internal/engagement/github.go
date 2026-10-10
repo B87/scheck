@@ -41,7 +41,9 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 		ev = githubc.CollectAccess(ctx, g, org, ev, targets)
 	}
 	ev = githubc.CollectCI(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
+	ev = githubc.CollectAlerts(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
 	ev.Judgments = append(githubc.Judge(ev, r.githubContext(a)), githubc.JudgeCI(ev, r.githubContext(a))...)
+	ev.Judgments = append(ev.Judgments, githubc.JudgeAlerts(ev, r.githubContext(a))...)
 	ra.GitHub = &ev
 	ra.Status = StatusCollected
 	targetRead := false
@@ -184,6 +186,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		}
 	}
 	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev)...)
+	ai.InventoryNotes = append(ai.InventoryNotes, githubAlertNotes(*ev)...)
 	for _, read := range ev.Reads() {
 		ai.Redactions = append(ai.Redactions, read.Redactions...)
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
@@ -199,6 +202,12 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			detail := read.Detail
 			if read.Reason == "insufficient_permission" {
 				switch read.Op {
+				case githubc.OpOrganizationSecrets, githubc.OpSelectedSecretRepositories, githubc.OpRepositorySecrets:
+					detail += ". Ask the owner to authorize Secrets read at the relevant organization or repository level, then resume"
+				case githubc.OpDependabotAlerts:
+					detail += ". Ask the repository owner to authorize Dependabot alerts read for this repository, then resume"
+				case githubc.OpSecretAlerts, githubc.OpSecretLocations:
+					detail += ". Ask the repository owner to authorize Secret scanning alerts read and confirm the account has the required repository role, then resume"
 				case githubc.OpRepositoryWorkflow, githubc.OpOrganizationWorkflow:
 					detail += ". Ask the owner to authorize Administration read at the relevant repository or organization level, then resume"
 				case githubc.OpBranch, githubc.OpWorkflowDirectory, githubc.OpWorkflowFile:

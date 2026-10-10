@@ -50,12 +50,14 @@ gaps, departed access, public intent, production outside admins and writable dep
 keys. CI configuration rules assess organization/repository token defaults,
 default-branch protection presence, dependency pinning and requested privileged
 execution at the default-branch commit. Unsupported syntax and missing evidence
-remain gaps; runtime enforcement, runner access, provider alerts and history are
-not assessed. Recon prints unattributed accounts
+remain gaps. Secret metadata identifies organization sharing policy; Dependabot
+and secret-scanning rules assess provider-reported alerts without testing deployed
+exploitability or credential usability. Values are omitted before persistence.
+Runtime enforcement, runner access and history remain unassessed. Recon prints unattributed accounts
 with empty kinds for the operator to complete. A changed principal on resume is reported;
 unknown principals, including installation tokens, reuse no authenticated results.
 Findings come from compiled-in rules: a host's posture rules, graded through the
-context the engagement declares, the GitHub collector's identity, repository-access and CI configuration
+context the engagement declares, the GitHub collector's identity, repository-access, CI configuration and provider-alert
 rules, and the web collector's DNS, email, TLS and response rules. They judge the
 collected evidence, so a short list of findings and exit 0 mean no rule fired — not
 that anything is secure; the
@@ -220,7 +222,7 @@ elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted capt
 - [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the
   stages), [report](docs/spec/report.md), [runs and state](docs/spec/runs.md) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
   (what a host asset reads and its guarantees), [domain, email and web
-  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 identity, repository access and CI; alerts/history designed), [model path](docs/spec/model.md) and
+  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 identity, repository access, CI and alerts; history designed), [model path](docs/spec/model.md) and
   [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
 - [Engagement report schema](docs/engagement-report-schema.json) and the

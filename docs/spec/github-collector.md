@@ -1,11 +1,12 @@
 # scheck — GitHub collector specification
 
-GitHub organization and repository assessment for 0.0.2 E5. Steps 1–4 build the
+GitHub organization and repository assessment for 0.0.2 E5. Steps 1–5 build the
 gate foundation, principal/organization inventory, identity and repository-access
-rules, and CI configuration rules. The CI definition for step 4 was frozen with the
-`security-consultant` on 2026-10-10. Secret metadata, provider alerts and history
-remain design. Step 4 is verified offline; live acceptance remains pending. The
-step 3 evidence and rule surface was frozen on 2026-10-10.
+rules, CI configuration, secret metadata and provider-alert rules. Steps 4 and 5
+were defined with the `security-consultant` on 2026-10-10. History remains design.
+Step 5 passes offline checks and consultant/client/adversarial reviews; live
+acceptance remains pending. The step 3 evidence and rule surface
+was frozen on 2026-10-10.
 
 The gate owns admission, sending, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)); the engagement owns people attribution, admin
@@ -36,11 +37,11 @@ completeness gate or the acceptance completeness gate.
 ## Reads
 
 Cheapest metadata comes first. Each operation projects only the fields its rules or
-coverage read. The inventory, access and CI surfaces below are compiled; secret metadata and
-alert paths remain proposed until registered and reviewed. The permission table distinguishes classic scopes,
+coverage read. The inventory, access, CI, secret metadata and alert surfaces below
+are compiled. The permission table distinguishes classic scopes,
 fine-grained permissions, organization approval and owner-only visibility.
 
-| Read | Path (inventory/access/CI built; later reads proposed) | Evidence and limits |
+| Read | Path (built reads) | Evidence and limits |
 |---|---|---|
 | Principal | `/user` | Stable user identity for PAT/App user tokens; public identity needs no extra permission. Missing private MFA field says nothing. Installation-token principal is unsupported and stays unknown. |
 | Organization | `/orgs/{org}` | Organization id/settings; owner visibility is required for complete settings. Absent or null `two_factor_requirement_enabled` is unknown. |
@@ -544,6 +545,153 @@ Deferred runner evidence is described by
 [runner access](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/manage-access)
 and [runner REST operations](https://docs.github.com/en/rest/actions/self-hosted-runners).
 
+## Secret metadata and provider alerts: step 5 definition
+
+The `security-consultant` DEFINE on 2026-10-10 freezes this step's read surface,
+subjects, severity and three outcomes. The step is built with offline fixtures for
+all three rule outcomes. Full checks, build and consultant/client/adversarial
+reviews pass. All reported review defects were fixed; none is carried. This is not
+a live acceptance result.
+History, App grants, runner access and the assessment-token reporting decision
+remain outside this step.
+
+### Metadata reads and persistence
+
+Six compiled `GET` operations use `https://api.github.com`, API version
+`2026-03-10`, the existing credential binding and a 1 MiB body cap. Lists request
+`per_page=100` and stop at 100 pages. Actions and secret-scanning lists use `page`;
+Dependabot uses the cursor `after`. No alert state, severity, package, type or
+validity filter narrows the population. The secret-alert query compiles
+`hide_secret=true`. Pagination remains gate-owned and never follows returned URLs.
+
+| Operation | Path | Retained fields |
+|---|---|---|
+| `github.organization_secrets` | `/orgs/{org}/actions/secrets` | Secret `name`, `created_at`, `updated_at`, `visibility` |
+| `github.secret_selected_repositories` | `/orgs/{org}/actions/secrets/{secret_name}/repositories` | Repository `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility` |
+| `github.repository_secrets` | `/repos/{owner}/{repo}/actions/secrets` | Secret `name`, `created_at`, `updated_at` |
+| `github.dependabot_alerts` | `/repos/{owner}/{repo}/dependabot/alerts` | Number, state, manifest, dependency scope, package name/ecosystem, advisory GHSA/severity, vulnerability severity, dismissal reason |
+| `github.secret_scanning_alerts` | `/repos/{owner}/{repo}/secret-scanning/alerts` | Number, state, type, validity, resolution, safe redaction marker |
+| `github.secret_scanning_locations` | `/repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations` | Location type; commit SHA, path and line/column ranges |
+
+Repository child reads require an existing direct object whose identity matched
+its requested locator. A repository-only root does not authorize organization
+secret reads. Selected-secret repository items pass root and exclusion filtering
+before persistence; they authorize no child reads. At most 100 selected-secret
+repository follow-ups run per organization and 100 alert-location follow-ups per
+repository. Reaching a body, structure, page or follow-up cap is `limit_reached`,
+incomplete, exit 2; positive observations remain usable and negative population
+claims do not.
+
+Names and timestamps are metadata, not leaked values or proof of rotation.
+Organization `visibility:all` establishes sharing policy, not production use.
+Selected visibility preserves only the admitted selected repository inventory.
+Missing permission or feature availability, SAML authorization and token repository
+selection remain explicit gaps.
+
+These six operations have a compiled metadata response mode. The gate redacts
+success JSON before exact allowlist projection and discards every error,
+malformed, duplicate-member, unexpected or truncated body. Generic diagnostics
+never contain raw snippets. JSON structure is bounded at 40 levels and 50,000
+nodes. Provider `secret`, arbitrary `metadata`, comments, descriptions, snippets
+and URLs are structurally omitted even for unknown secret formats or values such
+as `true` and `1` that the generic redactor leaves literal. Only a safe redactor
+marker may be retained separately; a discarded secret's marker does not invalidate
+independently recognized alert metadata. Unknown nested location details never
+persist. Nothing prints, audits or persists the raw secret or its hash.
+
+Fine-grained organization secret operations require organization Secrets read;
+repository secrets require repository Secrets read. Classic organization access
+requires `admin:org`, plus `repo` for private repositories; repository secret access
+requires `repo`. Dependabot requires repository Dependabot alerts read; classic
+access uses `security_events`, or `public_repo` for public-only use. Secret alert
+and location operations require repository Secret scanning alerts read, with the
+provider's repository/organization administrator requirements; classic access uses
+`repo` or `security_events`, or `public_repo` for public-only use. Permission
+shortfalls ask for the corresponding authorized read grant and resume, never a
+broader target write grant. These requirements follow the official
+[Actions secrets](https://docs.github.com/en/rest/actions/secrets?apiVersion=2026-03-10),
+[Dependabot alerts](https://docs.github.com/en/rest/dependabot/alerts?apiVersion=2026-03-10)
+and [secret scanning](https://docs.github.com/en/rest/secret-scanning/secret-scanning?apiVersion=2026-03-10)
+references reviewed on 2026-10-10.
+
+### Finding instances and outcomes
+
+Version `github-alerts:2026-10-10` fixes these five rule ids. Every definition sets
+`Exposure:false`; public-on-purpose never lowers them. An acceptance must identify
+one subject, never all future alert locations.
+
+| Finding | Base and area | Subject kind and key |
+|---|---|---|
+| `github.org_secret_all_repositories` | medium, Secrets | `secret_location`, `actions:<lowercase-name>` on the organization |
+| `github.dependabot_high` | high, CI/CD | `dependency_alert`, `dependabot:<number>:<encoded-manifest-path>` on the repository |
+| `github.dependabot_medium` | medium, CI/CD | Same dependency alert instance |
+| `github.dependabot_low` | low, CI/CD | Same dependency alert instance |
+| `github.secret_scanning_open` | high, Secrets | `secret_location`, `secret-scanning:<number>:commit:<sha>:<encoded-path>:<start-line>:<start-column>` on the repository |
+
+Paths preserve case and must be unambiguous normalized relative paths without
+traversal. Path delimiters are encoded with `url.PathEscape`; commit SHAs are full
+40-hex values normalized to lowercase. Commit ranges require positive coordinates,
+ordered lines and ordered columns within the same line. Different supported
+locations yield separate findings. Unsupported location types supply an explicit
+gap and no content read; they do not erase an independent supported location.
+
+| Rule | Fires | Disproves | Abstains |
+|---|---|---|---|
+| Organization all-repository sharing | Explicit `visibility:all` | Recognized `private` or `selected`, or complete empty applicable population | Unknown visibility, denied or marked required fields; incomplete population for a negative |
+| Dependabot high/medium/low | Open alert with identifiable manifest and matching recognized vulnerability severity; provider critical maps to high | Recognized fixed, dismissed or auto-dismissed state, another recognized severity, or complete empty applicable population | Unknown state, severity or manifest; missing reads; incomplete population for a negative |
+| Provider secret | Open alert with nonempty recognized type and supported location; validity active, unknown or unavailable | Provider-reported resolved/revoked state with complete applicable evidence, or complete empty applicable population | Inactive validity, unknown state, missing/unsupported location, non-revocation resolution, denied evidence or incomplete population for a negative |
+
+All negative judgments require recognized complete owning populations and adequate
+visibility. Partial populations can establish affirmative presence. An incomplete
+owning population also retains an abstained family judgment, so positive findings
+cannot make that family's coverage appear complete. A dependency dismissal disproves an open alert, not that the vulnerability was fixed. Provider
+critical severity alone does not prove scheck's critical anchor. Dependency rules
+receive no automatic production or public adjustment and make no runtime
+exploitability, deployed-version or development-dependency safety claim.
+
+For provider secrets, recognized observed public repository visibility raises high
+to critical; private/internal stays high and unknown visibility cannot raise it.
+The observed-public adjustment cites the direct repository request separately in
+`repository_read`, alongside the supporting alert and location requests.
+Existing `data_matters_most` grading applies to Secrets findings. Provider validity
+is reported, never tested. Inactive means the provider marked it inactive; rotation
+was not verified. Resolutions `false_positive`, `used_in_tests`, `wont_fix`,
+`pattern_edited` and `pattern_deleted` do not establish revocation. A resolved
+`wont_fix` alert still marked active gets a `github_alert_followup` note before the
+summary ranking and again in asset notes. It says GitHub closed the alert because
+someone chose not to fix it but still reports the credential active, and revocation
+was not verified. This requires owner follow-up even when scheck could not reach a
+finding. The note is unranked, creates no finding and does not change the exit
+count.
+
+### Coverage, wording and verification
+
+Actions metadata, Dependabot alerts and provider secret alerts have separate
+coverage. Dependency findings say high or critical when either provider severity
+maps to scheck high; their unassessed details describe dependency limits separately
+from secret-scan limits. Provider patterns and alerts are not a complete repository
+secret scan.
+Unsupported locations, unlisted/private repositories, feature availability and
+unread history remain explicit gaps. A 404 is permission/feature uncertainty,
+never an empty population. No new interview question is added; existing secret
+store and important-data declarations are context, not proof of values or use.
+
+Sharing remediation limits the secret to repositories that need it and asks for
+workflow review before changing access. Dependency remediation asks to review the
+manifest, upgrade where a patch exists, confirm the deployed dependency and test;
+it does not claim exploitability was established. Provider-secret remediation
+starts with revocation or rotation at the provider, then reviewing use and removing
+reported locations. Closing an alert or deleting a commit does not revoke a
+credential. Reports say what GitHub reported and what was not verified.
+
+Tests must prove all five rule ids fire, disprove and abstain. Regressions cover
+fixed/dismissed wording, missing/unknown/inactive validity, non-revocation
+resolutions, multiple and unsupported locations, partial populations, excluded
+selected repositories, cursor/page limits and unknown-format secret removal.
+Seeded values must be absent from report, audit, persisted requests, Recon and
+error diagnostics; safe markers remain present. GET traces must show only the six
+compiled operations and no returned-URL or content follow-up.
+
 ## History
 
 The mirror reader and its safety boundary are owned by
@@ -586,7 +734,7 @@ fine-grained/App capability says "write capability not determined", never
 ## Reporting and coverage
 
 Inventory reports observed or “at least” counts, missing reads and
-permission/visibility gaps as asset notes. Steps 3 and 4 report findings and each
+permission/visibility gaps as asset notes. Steps 3–5 report findings and each
 rule's fired, disproved or abstained assessments. Declaration references are
 printed as declarations, never quoted as collected API observations. Identity and repository-access
 coverage is partial where relevant evidence or later controls are missing.
@@ -597,9 +745,11 @@ family is fabricated for an asset that supplied no applicable judgments. The
 CI/CD area includes public-repository, deploy-key and the six CI judgments. Token
 defaults, default-branch protection presence, dependency pinning, privileged mutable
 dependencies and PR-controlled execution requests have separate coverage sub-items.
-Provider alerts, secret metadata and history remain `no_rule`; runner access, App
-grants and runtime enforcement are not inferred from configuration. CI summary
-wording and actionable evidence are governed by [report.md](report.md), "GitHub CI
+Secret metadata sharing, Dependabot alerts and provider-secret alerts have
+separate coverage sub-items. History remains `no_rule`; runner access, App grants
+and runtime enforcement are not inferred from configuration. `github_alerts` notes
+retain metadata inventories, provider validity/resolution caveats and location
+gaps. CI summary wording and actionable evidence are governed by [report.md](report.md), "GitHub CI
 summary". A successful
 API read is not an assessed control.
 Inventory evidence keeps each read's status, observation

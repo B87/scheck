@@ -77,6 +77,10 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 			fmt.Fprint(w, `[]`)
 		case "/orgs/acme/repos":
 			fmt.Fprint(w, `[{"id":3,"name":"shop","full_name":"acme/shop","owner":{"id":2,"login":"acme","type":"Organization"},"visibility":"private"},{"id":4,"name":"excluded","full_name":"acme/excluded","owner":{"id":2,"login":"acme","type":"Organization"}}]`)
+		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets":
+			fmt.Fprint(w, `{"secrets":[]}`)
+		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts":
+			fmt.Fprint(w, `[]`)
 		default:
 			t.Errorf("undeclared path %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -249,9 +253,12 @@ func TestGitHubInventoryExecutionOutcomes(t *testing.T) {
 					if req.URL.Path == "/user" {
 						t.Error("installation principal contacted")
 					}
-					if req.URL.Path == "/orgs/acme" {
+					switch req.URL.Path {
+					case "/orgs/acme":
 						fmt.Fprint(w, `{"id":2,"login":"acme","type":"Organization"}`)
-					} else {
+					case "/orgs/acme/actions/secrets":
+						fmt.Fprint(w, `{"secrets":[]}`)
+					default:
 						fmt.Fprint(w, `[]`)
 					}
 				}
@@ -312,6 +319,10 @@ func TestGitHubInventoryCapsAreIncomplete(t *testing.T) {
 					}
 					w.Header().Set("Link", `<https://api.github.com/orgs/acme/members?per_page=100&page=2&role=all&filter=all>; rel="next"`)
 					fmt.Fprint(w, `[{"id":1,"login":"alice","type":"User"}]`)
+				case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets":
+					fmt.Fprint(w, `{"secrets":[]}`)
+				case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts":
+					fmt.Fprint(w, `[]`)
 				default:
 					fmt.Fprint(w, `[]`)
 				}

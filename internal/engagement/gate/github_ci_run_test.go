@@ -81,6 +81,10 @@ func TestGitHubCIRunPinsGETsAndNeverPersistsEncodedSecrets(t *testing.T) {
 				t.Error("file unpinned")
 			}
 			fmt.Fprintf(w, `{"name":"ci.yml","path":".github/workflows/ci.yml","type":"file","sha":%q,"size":%d,"encoding":"base64","content":%q,"download_url":"https://outside.example/steal"}`, blob, len(workflow), encoded)
+		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets":
+			fmt.Fprint(w, `{"secrets":[]}`)
+		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts":
+			fmt.Fprint(w, `[]`)
 		default:
 			t.Errorf("uncompiled path %s", r.URL.Path)
 			w.WriteHeader(404)
@@ -173,7 +177,7 @@ func TestGitHubCIRunPinsGETsAndNeverPersistsEncodedSecrets(t *testing.T) {
 	if !marked {
 		t.Fatal("persisted marker absent")
 	}
-	if len(hits) != 19 {
+	if len(hits) != 23 {
 		t.Fatalf("request trace count %d %v", len(hits), hits)
 	}
 }
@@ -237,6 +241,10 @@ func TestGitHubCIFakeAPIThreeOutcomes(t *testing.T) {
 						t.Error("unpinned")
 					}
 					fmt.Fprintf(w, `{"name":"ci.yml","path":".github/workflows/ci.yml","sha":%q,"type":"file","size":%d,"encoding":"base64","content":%q}`, blob, len(source), base64.StdEncoding.EncodeToString([]byte(source)))
+				case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets":
+					fmt.Fprint(w, `{"secrets":[]}`)
+				case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts":
+					fmt.Fprint(w, `[]`)
 				default:
 					t.Errorf("unexpected%s", r.URL.Path)
 					w.WriteHeader(404)

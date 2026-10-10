@@ -182,6 +182,8 @@ const (
 	BranchName
 	CommitSHA
 	WorkflowFile
+	SecretName
+	AlertNumber
 )
 
 // Param is one typed parameter. An optional parameter may be left out; it
@@ -223,6 +225,8 @@ type Op struct {
 	MaxBytes int64
 	// WorkflowYAML decodes GitHub contents before redaction and bounded parsing.
 	WorkflowYAML bool
+	// GitHubMetadata retains only projected metadata and discards all error bodies.
+	GitHubMetadata bool
 }
 
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
@@ -361,7 +365,7 @@ func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err err
 // declareParams checks each parameter's name and type.
 func (c *compiled) declareParams(prov provider, wholePath bool) error {
 	for _, p := range c.Params {
-		if p.Name == "" || p.Type < Login || p.Type > WorkflowFile {
+		if p.Name == "" || p.Type < Login || p.Type > AlertNumber {
 			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
@@ -764,6 +768,17 @@ func bindValue(t ParamType, v string) (string, error) {
 	case WorkflowFile:
 		if !ValidWorkflowFile(v) {
 			return "", errors.New("not an immediate workflow filename")
+		}
+		return v, nil
+	case SecretName:
+		if !ValidSecretName(v) {
+			return "", errors.New("not an Actions secret name")
+		}
+		return strings.ToUpper(v), nil
+	case AlertNumber:
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 || strconv.FormatInt(n, 10) != v {
+			return "", errors.New("not an alert number")
 		}
 		return v, nil
 	case DNSName:

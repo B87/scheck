@@ -62,6 +62,9 @@ func TestGoldenReports(t *testing.T) {
 			return in
 		},
 		"root-without-collector":            withGitHubRoot,
+		"github-alerts-fired":               githubAlertsFiredReport,
+		"github-alerts-disproved":           githubAlertsDisprovedReport,
+		"github-alerts-abstained":           githubAlertsAbstainedReport,
 		"github-inventory":                  githubInventoryReport,
 		"github-ci-fired":                   githubCIFiredReport,
 		"github-ci-disproved":               githubCIDisprovedReport,

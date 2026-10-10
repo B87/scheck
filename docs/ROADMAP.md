@@ -635,9 +635,9 @@ successes would have answered (carried from E4 step 4a) and prints the changed p
 in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
 
-**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–4 built and
-verified offline; later alerts/history rules and permissions remain proposals until
-reviewed and frozen):
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–5 built with
+offline checks and consultant/client/adversarial reviews; history rules and
+permissions remain proposals until reviewed and frozen):
 
 0. **Contract preparation.** Split the engagement spec and audit citations; draft the
    operation/permission and rule-outcome tables. Resolve the assessment-token
@@ -698,8 +698,30 @@ reviewed and frozen):
    unsupported runner selection leaves the entire direct job unassessed, including
    reference pinning. All reported review defects were fixed; none is deferred.
    Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
-5. **Secret metadata and provider alerts.** Secret names/visibility and projected
-   Dependabot/secret-scanning alerts, with per-location findings and honest gaps.
+5. **Secret metadata and provider alerts (built; verified offline).**
+   Security-consultant DEFINE on 2026-10-10 fixes six compiled metadata GETs and
+   five rule ids in `spec/github-collector.md`, "Secret metadata and provider
+   alerts: step 5 definition": organization all-repository secret sharing, three
+   Dependabot severities and supported commit-location provider-secret findings.
+   Secret values, arbitrary metadata and error bodies never persist; selected
+   repository items are scope-filtered without authorizing child reads. Page,
+   cursor and follow-up limits preserve affirmative findings but prevent absence
+   claims. Provider severity/validity remain provider reports, not exploitation or
+   credential tests. Public visibility raises provider-secret findings only;
+   Dependabot has no automatic production/public adjustment. History, App grants,
+   runner access and the assessment-token reporting decision remain deferred.
+   Every rule has fired, disproved and abstained offline fixtures; fake API tests
+   cover secret removal, unsupported locations and request pagination. Consultant
+   and client review fixes preserve partial family coverage for incomplete owning
+   populations, direct-request provenance for public severity, provider high/critical
+   wording and dependency-specific caveats. Provider-closed alerts still reported
+   active as `wont_fix` have an unranked follow-up note before the summary ranking,
+   without creating a finding or changing the exit count. Full `make check`
+   (vet, fix, zero lint issues, dependency checks and race tests) and `make build`
+   pass. Consultant REVIEW, Brightcart/Dani client REPORT re-review and final
+   fresh adversarial review pass. All reported review defects were fixed; none is
+   carried. Assessment-token reporting, E3 rest-lab seal and live acceptance remain
+   pending; no live acceptance is claimed.
 6. **Confined history reader.** In-process mirror remote/head checks, bounded object
    and history reads, detector markers and redaction assertions; freeze supported
    formats and caps before implementation.

@@ -477,7 +477,9 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	case len(raw) > 0 && !accepts(op.Accept, resp.Header.Get("Content-Type")):
 		code = codeContentType
 		redacted, _ := red.Redact(raw)
-		out.hash = hash(redacted)
+		if !op.GitHubMetadata {
+			out.hash = hash(redacted)
+		}
 	// 7. JSON is never parsed cut, so JSON over its cap is not kept; its
 	// status and headers still decide the outcome (a 401, a rate limit).
 	case op.json && len(raw) > limit:
@@ -495,6 +497,15 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 		if code == "" {
 			sh := g.shape(r, a, clean, resp.Header)
 			code, out.Body = sh.code, sh.body
+		}
+	case op.GitHubMetadata && ok:
+		clean, hits, transformCode := metadataBody(raw, red, op)
+		out.Redactions = append(out.Redactions, hits...)
+		code = transformCode
+		if code == "" {
+			sh := g.shape(r, a, clean, resp.Header)
+			code, out.Body, out.Population = sh.code, sh.body, sh.pop
+			p.kept, p.next, p.done = sh.pop != nil, sh.next, sh.done
 		}
 	case op.json && ok:
 		redacted, hits, err := red.RedactJSON(raw)
@@ -514,9 +525,13 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	// body that is JSON is first redacted value by value, as a 2xx body
 	// is, so the same body reveals no more as an error.
 	default:
-		if op.WorkflowYAML {
+		if op.WorkflowYAML || op.GitHubMetadata {
 			// Error responses never retain an encoded contents body.
-			out.Body = []byte(`{"error":"workflow read did not succeed"}`)
+			if op.WorkflowYAML {
+				out.Body = []byte(`{"error":"workflow read did not succeed"}`)
+			} else {
+				out.Body = []byte(`{"error":"metadata read did not succeed"}`)
+			}
 			break
 		}
 		if op.json {
@@ -542,7 +557,7 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
 		res.end("unavailable:"+code, codeDetail(code, limit))
-		if (code == codeTooLarge && op.WorkflowYAML) || code == codeWorkflowLimit {
+		if (code == codeTooLarge && (op.WorkflowYAML || op.GitHubMetadata)) || code == codeWorkflowLimit || code == codeMetadataLimit {
 			res.Reason = "limit_reached"
 		}
 	}

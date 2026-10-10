@@ -4,10 +4,10 @@
     {
       "asset": "saas:github:example-org",
       "complete": false,
-      "id": "github.organization_workflow_default_write",
+      "id": "github.org_secret_all_repositories",
       "instances": 0,
       "reads": [
-        "request:organization"
+        "request:organization-secrets"
       ],
       "reason": "unavailable:github_evidence",
       "status": "not_assessed"
@@ -15,24 +15,10 @@
     {
       "asset": "repo:github:example-org/production",
       "complete": false,
-      "id": "github.default_branch_unprotected",
+      "id": "github.dependabot_high",
       "instances": 0,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "abstained",
-          "subject": {
-            "key": "Release/v1",
-            "kind": "branch",
-            "label": "Release/v1"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "reason": "unavailable:github_evidence",
       "status": "not_assessed"
@@ -40,24 +26,10 @@
     {
       "asset": "repo:github:example-org/production",
       "complete": false,
-      "id": "github.mutable_action_reference",
+      "id": "github.dependabot_low",
       "instances": 0,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "abstained",
-          "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "reason": "unavailable:github_evidence",
       "status": "not_assessed"
@@ -65,24 +37,10 @@
     {
       "asset": "repo:github:example-org/production",
       "complete": false,
-      "id": "github.mutable_action_with_write_token",
+      "id": "github.dependabot_medium",
       "instances": 0,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "abstained",
-          "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "reason": "unavailable:github_evidence",
       "status": "not_assessed"
@@ -90,49 +48,27 @@
     {
       "asset": "repo:github:example-org/production",
       "complete": false,
-      "id": "github.pr_target_unsafe_checkout",
+      "id": "github.secret_scanning_open",
       "instances": 0,
       "outcomes": [
         {
           "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "provider_validity": "unknown",
+            "redaction_marker": "[REDACTED:json-secret:31 bytes]",
+            "repository_read": "repository"
           },
           "outcome": "abstained",
           "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
+            "key": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1",
+            "kind": "secret_location",
+            "label": "Secret alert 7 in config/Prod.env:2"
           }
         }
       ],
       "reads": [
-        "request:repository",
-        "request:keys"
-      ],
-      "reason": "unavailable:github_evidence",
-      "status": "not_assessed"
-    },
-    {
-      "asset": "repo:github:example-org/production",
-      "complete": false,
-      "id": "github.repository_workflow_default_write",
-      "instances": 0,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "abstained",
-          "subject": {
-            "key": "example-org/production",
-            "kind": "repository",
-            "label": "example-org/production"
-          }
-        }
-      ],
-      "reads": [
-        "request:repository",
-        "request:keys"
+        "request:secret-alerts",
+        "request:secret-locations",
+        "request:repository"
       ],
       "reason": "unavailable:github_evidence",
       "status": "not_assessed"
@@ -317,11 +253,29 @@
       ],
       "reasons": [
         {
+          "detail": "Actions secret PROD_KEY; Secret alert 7 in config/Prod.env:2",
+          "reason": "unavailable:github_evidence"
+        },
+        {
           "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
           "reason": "no_rule"
         }
       ],
       "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "organization Actions secret sharing",
+          "reasons": [
+            {
+              "detail": "Actions secret PROD_KEY",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.org_secret_all_repositories"
+          ]
+        },
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
@@ -331,6 +285,20 @@
               "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
               "reason": "no_rule"
             }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "provider secret-scanning alerts at commit locations",
+          "reasons": [
+            {
+              "detail": "Secret alert 7 in config/Prod.env:2",
+              "reason": "unavailable:github_evidence"
+            }
+          ],
+          "rules": [
+            "github.secret_scanning_open"
           ]
         },
         {
@@ -396,29 +364,15 @@
       ],
       "reasons": [
         {
-          "detail": "example-org/production; Release/v1; .github/workflows/release.yml",
-          "reason": "unavailable:github_evidence"
-        },
-        {
           "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
           "reason": "no_rule"
+        },
+        {
+          "detail": "Dependabot alert in App/package-lock.json",
+          "reason": "unavailable:github_evidence"
         }
       ],
       "sub_items": [
-        {
-          "asset": "saas:github:example-org",
-          "mark": "not_assessed",
-          "name": "workflow token defaults",
-          "reasons": [
-            {
-              "reason": "unavailable:github_evidence"
-            }
-          ],
-          "rules": [
-            "github.organization_workflow_default_write",
-            "github.repository_workflow_default_write"
-          ]
-        },
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
@@ -433,72 +387,17 @@
         {
           "asset": "repo:github:example-org/production",
           "mark": "not_assessed",
-          "name": "workflow token defaults",
+          "name": "provider dependency alerts",
           "reasons": [
             {
-              "detail": "example-org/production",
+              "detail": "Dependabot alert in App/package-lock.json",
               "reason": "unavailable:github_evidence"
             }
           ],
           "rules": [
-            "github.organization_workflow_default_write",
-            "github.repository_workflow_default_write"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "mark": "not_assessed",
-          "name": "default-branch protection presence",
-          "reasons": [
-            {
-              "detail": "Release/v1",
-              "reason": "unavailable:github_evidence"
-            }
-          ],
-          "rules": [
-            "github.default_branch_unprotected"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "mark": "not_assessed",
-          "name": "workflow dependency references",
-          "reasons": [
-            {
-              "detail": ".github/workflows/release.yml",
-              "reason": "unavailable:github_evidence"
-            }
-          ],
-          "rules": [
-            "github.mutable_action_reference"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "mark": "not_assessed",
-          "name": "mutable dependencies with write permission",
-          "reasons": [
-            {
-              "detail": ".github/workflows/release.yml",
-              "reason": "unavailable:github_evidence"
-            }
-          ],
-          "rules": [
-            "github.mutable_action_with_write_token"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "mark": "not_assessed",
-          "name": "PR-controlled execution requests",
-          "reasons": [
-            {
-              "detail": ".github/workflows/release.yml",
-              "reason": "unavailable:github_evidence"
-            }
-          ],
-          "rules": [
-            "github.pr_target_unsafe_checkout"
+            "github.dependabot_high",
+            "github.dependabot_medium",
+            "github.dependabot_low"
           ]
         },
         {
@@ -630,7 +529,7 @@
       ],
       "plan": "checklist"
     },
-    "name": "GitHub CI configuration review",
+    "name": "GitHub secret metadata and provider alert review",
     "operator": "Alex",
     "source": {
       "path": "engagement.yaml",
@@ -658,8 +557,23 @@
   "incomplete": [],
   "notes": [
     {
-      "detail": "GitHub denied the workflow contents and branch-rule reads. Ask the repository owner to authorize Contents read and Metadata read for the intended repository, then resume.",
-      "kind": "github_ci",
+      "detail": "Provider alerts are not a complete repository scan. Names are metadata; values were not read. Credential usability and deployed dependency exploitability were not tested.",
+      "kind": "github_alerts",
+      "source": "repo:github:example-org/production"
+    },
+    {
+      "detail": "Secret alert 9: provider marked inactive; rotation was not verified.",
+      "kind": "github_alerts",
+      "source": "repo:github:example-org/production"
+    },
+    {
+      "detail": "Review secret alert 10: GitHub marks this alert closed because someone chose not to fix it (wont_fix), but still reports the credential active. Revocation was not verified. Check with the credential owner; this needs follow-up even though scheck could not reach a finding.",
+      "kind": "github_alert_followup",
+      "source": "repo:github:example-org/production"
+    },
+    {
+      "detail": "Ask the repository owner to authorize Secret scanning alerts read and Dependabot alerts read for this repository, then resume. History and unsupported locations remain unassessed.",
+      "kind": "github_alerts",
       "source": "repo:github:example-org/production"
     }
   ],
@@ -702,8 +616,8 @@
     "more": 0,
     "rules": {
       "decided": 0,
-      "selected": 6,
-      "without_evidence": 6
+      "selected": 5,
+      "without_evidence": 5
     }
   }
 }

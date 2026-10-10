@@ -127,10 +127,34 @@ branch does not prove review strength or bypass resistance. PR-target findings
 describe requested configuration, never successful execution or exploitability;
 runtime policies, checkout protection, approvals, runner access/isolation, App
 grants, job container/service images, reusable/composite internals and OIDC trust
-remain unassessed. Provider alerts, secret metadata and history remain `no_rule`. `public: true` on a repository asset declares
+remain unassessed. Actions secret metadata, organization sharing policy,
+Dependabot alerts and provider-secret alerts have separate coverage; history remains
+`no_rule`. Read `github_alerts` notes for observed or lower-bound inventories,
+inactive validity, non-revocation resolutions and unsupported locations. Provider
+alerts are not a complete secret scan. Names and timestamps prove neither leakage
+nor rotation; deployed dependencies and credential usability were not tested.
+A dismissed dependency alert is not proof of a fix. Provider high and critical
+both rate high, with their range preserved in the title. Dependency caveats describe
+dependency evidence, separately from secret-scan limits. Incomplete owning populations
+retain abstained family assessments beside positive findings, so coverage stays partial.
+A resolved `wont_fix` secret still reported active appears as `github_alert_followup`
+before the summary ranking and in asset notes: GitHub closed it because someone chose
+not to fix it but still reports the credential active, and revocation was not verified.
+Ask the credential owner to follow up. This note is unranked, is not a finding and
+does not affect the exit count. Closing an alert or deleting a commit
+does not revoke the credential. Secret remediation starts with provider revocation
+or rotation. Unknown/denied metadata is not an empty population. `public: true` on a repository asset declares
 deliberate public visibility; it never excuses a secret leak. Acceptances for an
-account, invitation, repository, deploy key, branch or workflow must name its
-subject. Branch keys retain exact case; workflow keys are exact
+account, invitation, repository, deploy key, branch, workflow, secret location or
+dependency alert must name its subject. Organization secret subjects use
+`actions:<lowercase-name>`. Dependency subjects use
+`dependabot:<number>:<encoded-manifest-path>` and the `dependency_alert` kind.
+Provider secret subjects identify an alert and exact commit/path/start coordinates;
+accepting one does not accept future locations. Preserve path case and encoded
+delimiters. Dependabot critical maps to high without automatic production/public
+grading. Recognized public visibility raises provider-secret high to critical;
+public intent does not lower it. Its `repository_read` detail names the direct
+repository request supporting the observed-public raise. Branch keys retain exact case; workflow keys are exact
 `.github/workflows/<name>.yml` or `.yaml` paths. Collaborator
 pagination covers only the credential's visible view; missing access never proves
 offboarding. `--stop-after recon` prints unattributed accounts with `kind: ""`
@@ -150,9 +174,10 @@ that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
-GitHub findings come from identity, MFA, access, repository visibility and CI
-configuration rules, with exact account, invitation, repository, deploy-key, branch
-or workflow subjects where applicable.
+GitHub findings come from identity, MFA, access, repository visibility, CI
+configuration, secret sharing and provider-alert rules, with exact account,
+invitation, repository, deploy-key, branch, workflow, secret-location or dependency-alert
+subjects where applicable.
 The web collector's findings come from DNS, email, TLS and response rules, one per
 record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
 through the scope gate as `anonymous`.

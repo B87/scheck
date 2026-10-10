@@ -4,131 +4,67 @@
     {
       "asset": "saas:github:example-org",
       "complete": true,
-      "id": "github.organization_workflow_default_write",
+      "id": "github.org_secret_all_repositories",
       "instances": 1,
       "reads": [
-        "request:organization"
+        "request:organization-secrets"
       ],
       "status": "matched"
     },
     {
       "asset": "repo:github:example-org/production",
       "complete": true,
-      "id": "github.default_branch_unprotected",
+      "id": "github.dependabot_high",
       "instances": 1,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "fired",
-          "subject": {
-            "key": "Release/v1",
-            "kind": "branch",
-            "label": "Release/v1"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "status": "matched"
     },
     {
       "asset": "repo:github:example-org/production",
       "complete": true,
-      "id": "github.mutable_action_reference",
+      "id": "github.dependabot_low",
       "instances": 1,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "superseded_by": "github.mutable_action_with_write_token"
-          },
-          "outcome": "fired",
-          "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "status": "matched"
     },
     {
       "asset": "repo:github:example-org/production",
       "complete": true,
-      "id": "github.mutable_action_with_write_token",
+      "id": "github.dependabot_medium",
       "instances": 1,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "fired",
-          "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
-          }
-        }
-      ],
       "reads": [
-        "request:repository",
-        "request:keys"
+        "request:dependabot-alerts"
       ],
       "status": "matched"
     },
     {
       "asset": "repo:github:example-org/production",
       "complete": true,
-      "id": "github.pr_target_unsafe_checkout",
+      "id": "github.secret_scanning_open",
       "instances": 1,
       "outcomes": [
         {
           "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "provider_validity": "unknown",
+            "redaction_marker": "[REDACTED:json-secret:31 bytes]",
+            "repository_read": "repository"
           },
           "outcome": "fired",
           "subject": {
-            "key": ".github/workflows/release.yml",
-            "kind": "workflow",
-            "label": ".github/workflows/release.yml"
+            "key": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1",
+            "kind": "secret_location",
+            "label": "Secret alert 7 in config/Prod.env:2"
           }
         }
       ],
       "reads": [
-        "request:repository",
-        "request:keys"
-      ],
-      "status": "matched"
-    },
-    {
-      "asset": "repo:github:example-org/production",
-      "complete": true,
-      "id": "github.repository_workflow_default_write",
-      "instances": 1,
-      "outcomes": [
-        {
-          "detail": {
-            "assessed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "outcome": "fired",
-          "subject": {
-            "key": "example-org/production",
-            "kind": "repository",
-            "label": "example-org/production"
-          }
-        }
-      ],
-      "reads": [
-        "request:repository",
-        "request:keys"
+        "request:secret-alerts",
+        "request:secret-locations",
+        "request:repository"
       ],
       "status": "matched"
     }
@@ -286,7 +222,7 @@
         "saas:github:example-org",
         "repo:github:example-org/production"
       ],
-      "mark": "not_assessed",
+      "mark": "partial",
       "population": {
         "in_scope": 2,
         "kind": "assets",
@@ -319,6 +255,18 @@
       "sub_items": [
         {
           "asset": "saas:github:example-org",
+          "judged": [
+            "organization Actions secret sharing"
+          ],
+          "mark": "assessed",
+          "name": "organization Actions secret sharing",
+          "reasons": [],
+          "rules": [
+            "github.org_secret_all_repositories"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
           "mark": "not_assessed",
           "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
           "reasons": [
@@ -326,6 +274,18 @@
               "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
               "reason": "no_rule"
             }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "provider secret-scanning alerts at commit locations"
+          ],
+          "mark": "assessed",
+          "name": "provider secret-scanning alerts at commit locations",
+          "reasons": [],
+          "rules": [
+            "github.secret_scanning_open"
           ]
         },
         {
@@ -398,19 +358,6 @@
       "sub_items": [
         {
           "asset": "saas:github:example-org",
-          "judged": [
-            "workflow token defaults"
-          ],
-          "mark": "assessed",
-          "name": "workflow token defaults",
-          "reasons": [],
-          "rules": [
-            "github.organization_workflow_default_write",
-            "github.repository_workflow_default_write"
-          ]
-        },
-        {
-          "asset": "saas:github:example-org",
           "mark": "not_assessed",
           "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
           "reasons": [
@@ -423,62 +370,15 @@
         {
           "asset": "repo:github:example-org/production",
           "judged": [
-            "workflow token defaults"
+            "provider dependency alerts"
           ],
           "mark": "assessed",
-          "name": "workflow token defaults",
+          "name": "provider dependency alerts",
           "reasons": [],
           "rules": [
-            "github.organization_workflow_default_write",
-            "github.repository_workflow_default_write"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "judged": [
-            "default-branch protection presence"
-          ],
-          "mark": "assessed",
-          "name": "default-branch protection presence",
-          "reasons": [],
-          "rules": [
-            "github.default_branch_unprotected"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "judged": [
-            "workflow dependency references"
-          ],
-          "mark": "assessed",
-          "name": "workflow dependency references",
-          "reasons": [],
-          "rules": [
-            "github.mutable_action_reference"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "judged": [
-            "mutable dependencies with write permission"
-          ],
-          "mark": "assessed",
-          "name": "mutable dependencies with write permission",
-          "reasons": [],
-          "rules": [
-            "github.mutable_action_with_write_token"
-          ]
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "judged": [
-            "PR-controlled execution requests"
-          ],
-          "mark": "assessed",
-          "name": "PR-controlled execution requests",
-          "reasons": [],
-          "rules": [
-            "github.pr_target_unsafe_checkout"
+            "github.dependabot_high",
+            "github.dependabot_medium",
+            "github.dependabot_low"
           ]
         },
         {
@@ -610,7 +510,7 @@
       ],
       "plan": "checklist"
     },
-    "name": "GitHub CI configuration review",
+    "name": "GitHub secret metadata and provider alert review",
     "operator": "Alex",
     "source": {
       "path": "engagement.yaml",
@@ -625,7 +525,7 @@
     "reasons": [
       {
         "code": 1,
-        "why": "5 open findings at or above their asset's threshold"
+        "why": "4 open findings at or above their asset's threshold"
       }
     ],
     "thresholds": {
@@ -652,90 +552,102 @@
         "asset": "production",
         "by_subject": true,
         "expires": "2027-01-07",
-        "id": "github.default_branch_unprotected",
+        "id": "github.secret_scanning_open",
         "needs_people": false,
         "reason": "",
-        "subject": "Release/v1"
+        "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
       },
       "adjustments": [
         {
           "by": "engagement",
           "delta": "+1",
-          "rule": "deploys_to:production",
+          "rule": "attribute:public_repository",
           "source": {
-            "file": "engagement.yaml",
-            "key": "assets.production.deploys_to"
+            "excerpt": "Observed repository visibility: public",
+            "observation": "repository"
           }
         }
       ],
-      "area": "cicd",
+      "area": "secrets",
       "asset_name": "production",
       "bound_id": null,
-      "category": "ci",
+      "category": "secrets",
       "derived": [
         {
-          "name": "assessed_sha",
-          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "name": "provider_validity",
+          "value": "unknown"
+        },
+        {
+          "name": "redaction_marker",
+          "value": "[REDACTED:json-secret:31 bytes]"
+        },
+        {
+          "name": "repository_read",
+          "value": "repository"
         }
       ],
       "evidence": [
         {
-          "excerpt": "Operator declaration at assets.production",
-          "kind": "declared",
-          "source": "engagement.yaml assets.production"
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
+          "kind": "observed",
+          "observation": "secret-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "secret-alerts"
         },
         {
           "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "Default branch Release/v1: protected=false; complete active rules=[]",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
+          "kind": "observed",
+          "observation": "secret-locations",
+          "principal": "alice (user ID 41)",
+          "request": "secret-locations"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Credential usability was not tested.",
           "kind": "observed",
           "observation": "repository",
           "principal": "alice (user ID 41)",
           "request": "repository"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "Default branch Release/v1: protected=false; complete active rules=[]",
-          "kind": "observed",
-          "observation": "keys",
-          "principal": "alice (user ID 41)",
-          "request": "keys"
         }
       ],
       "exposure_finding": false,
-      "id": "github.default_branch_unprotected",
-      "impact": "Changes to this branch lack observed active protection; review strength and bypass access were not assessed.",
+      "id": "github.secret_scanning_open",
+      "impact": "The provider reports a credential in this location. Its authenticity, current usability and use were not independently tested.",
       "key": {
         "asset": "repo:github:example-org/production",
-        "id": "github.default_branch_unprotected",
-        "subject": "Release/v1"
+        "id": "github.secret_scanning_open",
+        "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
       },
       "not_checked": [
-        "PR review strength and bypass access; actual execution and runtime policies; runner access and job container/service images were not assessed"
+        "Provider patterns are not a complete repository secret scan; history and unsupported locations were not scanned; credential usability and rotation were not verified"
       ],
       "remediation": {
-        "summary": "Add active default-branch protection, then review required PR reviews, checks and bypass access."
+        "summary": "Revoke or rotate this credential at its provider first. Review its use, then remove it from the reported locations. Closing an alert or deleting a commit does not revoke a credential."
       },
       "rule": {
         "kind": "multi_fact",
         "reads": [
-          "request:repository",
-          "request:keys",
-          "declared:assets.production"
+          "request:secret-alerts",
+          "request:secret-locations",
+          "request:repository"
         ]
       },
-      "severity": "high",
-      "severity_base": "medium",
+      "severity": "critical",
+      "severity_base": "high",
       "status": "open",
       "subject": {
-        "key": "Release/v1",
-        "kind": "branch",
-        "label": "Release/v1"
+        "key": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1",
+        "kind": "secret_location",
+        "label": "Secret alert 7 in config/Prod.env:2"
       },
-      "title": "Default branch has no observed active protection",
+      "title": "GitHub reports an open secret-scanning alert",
       "why_here": [
-        " This repository is declared to deploy to production, so this rating rises one step."
+        "This alert concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."
       ]
     },
     {
@@ -750,270 +662,58 @@
         "asset": "production",
         "by_subject": true,
         "expires": "2027-01-07",
-        "id": "github.mutable_action_with_write_token",
+        "id": "github.dependabot_high",
         "needs_people": false,
         "reason": "",
-        "subject": ".github/workflows/release.yml"
+        "subject": "dependabot:3:App%2Fpackage-lock.json"
       },
       "adjustments": [],
       "area": "cicd",
       "asset_name": "production",
       "bound_id": null,
       "category": "ci",
-      "derived": [
-        {
-          "name": "assessed_sha",
-          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ],
       "evidence": [
         {
           "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "release: actions/checkout@v4; job contents: write",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
           "kind": "observed",
-          "observation": "repository",
+          "observation": "dependabot-alerts",
           "principal": "alice (user ID 41)",
-          "request": "repository"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "release: actions/checkout@v4; job contents: write",
-          "kind": "observed",
-          "observation": "keys",
-          "principal": "alice (user ID 41)",
-          "request": "keys"
+          "request": "dependabot-alerts"
         }
       ],
       "exposure_finding": false,
-      "id": "github.mutable_action_with_write_token",
-      "impact": "A changed dependency could act with the mutation permission requested by this job; actual execution was not verified.",
+      "id": "github.dependabot_high",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
       "key": {
         "asset": "repo:github:example-org/production",
-        "id": "github.mutable_action_with_write_token",
-        "subject": ".github/workflows/release.yml"
+        "id": "github.dependabot_high",
+        "subject": "dependabot:3:App%2Fpackage-lock.json"
       },
       "not_checked": [
-        "PR review strength and bypass access; actual execution and runtime policies; runner access and job container/service images were not assessed"
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
       ],
       "remediation": {
-        "summary": "Pin remote dependencies and reduce the job's token permissions."
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
       },
       "rule": {
-        "kind": "multi_fact",
+        "kind": "single_fact",
         "reads": [
-          "request:repository",
-          "request:keys"
+          "request:dependabot-alerts"
         ]
       },
       "severity": "high",
       "severity_base": "high",
       "status": "open",
       "subject": {
-        "key": ".github/workflows/release.yml",
-        "kind": "workflow",
-        "label": ".github/workflows/release.yml"
+        "key": "dependabot:3:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
       },
-      "title": "Workflow requests mutable dependencies with write permission",
+      "title": "GitHub reports an open high or critical severity dependency alert",
       "why_here": [
-        "This is the standard rating for the observed access or settings."
-      ]
-    },
-    {
-      "accept_template": {
-        "accepted_by": "",
-        "accepted_by_candidates": [
-          {
-            "handle": "alex",
-            "why": "employee"
-          }
-        ],
-        "asset": "production",
-        "by_subject": true,
-        "expires": "2027-01-07",
-        "id": "github.pr_target_unsafe_checkout",
-        "needs_people": false,
-        "reason": "",
-        "subject": ".github/workflows/release.yml"
-      },
-      "adjustments": [
-        {
-          "by": "engagement",
-          "delta": "+1",
-          "rule": "deploys_to:production",
-          "source": {
-            "file": "engagement.yaml",
-            "key": "assets.production.deploys_to"
-          }
-        }
-      ],
-      "area": "cicd",
-      "asset_name": "production",
-      "bound_id": null,
-      "category": "ci",
-      "derived": [
-        {
-          "name": "assessed_sha",
-          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ],
-      "evidence": [
-        {
-          "excerpt": "Operator declaration at assets.production",
-          "kind": "declared",
-          "source": "engagement.yaml assets.production"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "pull_request_target; checkout ref: github.event.pull_request.head.sha; npm ci; contents: write",
-          "kind": "observed",
-          "observation": "repository",
-          "principal": "alice (user ID 41)",
-          "request": "repository"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "pull_request_target; checkout ref: github.event.pull_request.head.sha; npm ci; contents: write",
-          "kind": "observed",
-          "observation": "keys",
-          "principal": "alice (user ID 41)",
-          "request": "keys"
-        }
-      ],
-      "exposure_finding": false,
-      "id": "github.pr_target_unsafe_checkout",
-      "impact": "This configuration requests execution of PR-controlled code in a privileged context; runtime policies, checkout protection, approvals and actual execution were not verified.",
-      "key": {
-        "asset": "repo:github:example-org/production",
-        "id": "github.pr_target_unsafe_checkout",
-        "subject": ".github/workflows/release.yml"
-      },
-      "not_checked": [
-        "PR review strength and bypass access; actual execution and runtime policies; runner access and job container/service images were not assessed"
-      ],
-      "remediation": {
-        "summary": "Run PR code under pull_request; separate privileged reporting and never execute PR-controlled code in that privileged job."
-      },
-      "rule": {
-        "kind": "multi_fact",
-        "reads": [
-          "request:repository",
-          "request:keys",
-          "declared:assets.production"
-        ]
-      },
-      "severity": "high",
-      "severity_base": "medium",
-      "status": "open",
-      "subject": {
-        "key": ".github/workflows/release.yml",
-        "kind": "workflow",
-        "label": ".github/workflows/release.yml"
-      },
-      "title": "Workflow requests PR-controlled code execution with write permission",
-      "why_here": [
-        "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified. This repository is declared to deploy to production, so this rating rises one step."
-      ]
-    },
-    {
-      "accept_template": {
-        "accepted_by": "",
-        "accepted_by_candidates": [
-          {
-            "handle": "alex",
-            "why": "employee"
-          }
-        ],
-        "asset": "production",
-        "by_subject": true,
-        "expires": "2027-01-07",
-        "id": "github.repository_workflow_default_write",
-        "needs_people": false,
-        "reason": "",
-        "subject": "example-org/production"
-      },
-      "adjustments": [
-        {
-          "by": "engagement",
-          "delta": "+1",
-          "rule": "deploys_to:production",
-          "source": {
-            "file": "engagement.yaml",
-            "key": "assets.production.deploys_to"
-          }
-        }
-      ],
-      "area": "cicd",
-      "asset_name": "production",
-      "bound_id": null,
-      "category": "ci",
-      "derived": [
-        {
-          "name": "assessed_sha",
-          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ],
-      "evidence": [
-        {
-          "excerpt": "Operator declaration at assets.production",
-          "kind": "declared",
-          "source": "engagement.yaml assets.production"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "default_workflow_permissions: write",
-          "kind": "observed",
-          "observation": "repository",
-          "principal": "alice (user ID 41)",
-          "request": "repository"
-        },
-        {
-          "asset": "repo:github:example-org/production",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "default_workflow_permissions: write",
-          "kind": "observed",
-          "observation": "keys",
-          "principal": "alice (user ID 41)",
-          "request": "keys"
-        }
-      ],
-      "exposure_finding": false,
-      "id": "github.repository_workflow_default_write",
-      "impact": "Inherited write defaults widen what a compromised workflow can request.",
-      "key": {
-        "asset": "repo:github:example-org/production",
-        "id": "github.repository_workflow_default_write",
-        "subject": "example-org/production"
-      },
-      "not_checked": [
-        "PR review strength and bypass access; actual execution and runtime policies; runner access and job container/service images were not assessed"
-      ],
-      "remediation": {
-        "summary": "Use read defaults; grant each job only the permissions it needs."
-      },
-      "rule": {
-        "kind": "multi_fact",
-        "reads": [
-          "request:repository",
-          "request:keys",
-          "declared:assets.production"
-        ]
-      },
-      "severity": "high",
-      "severity_base": "medium",
-      "status": "open",
-      "subject": {
-        "key": "example-org/production",
-        "kind": "repository",
-        "label": "example-org/production"
-      },
-      "title": "Repository workflow tokens default to write permission",
-      "why_here": [
-        " This repository is declared to deploy to production, so this rating rises one step."
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
       ]
     },
     {
@@ -1026,61 +726,198 @@
           }
         ],
         "asset": "engineering",
-        "by_subject": false,
+        "by_subject": true,
         "expires": "2027-04-07",
-        "id": "github.organization_workflow_default_write",
+        "id": "github.org_secret_all_repositories",
         "needs_people": false,
-        "reason": ""
+        "reason": "",
+        "subject": "actions:prod_key"
       },
       "adjustments": [],
-      "area": "cicd",
+      "area": "secrets",
       "asset_name": "engineering",
       "bound_id": null,
-      "category": "ci",
+      "category": "secrets",
       "evidence": [
         {
           "asset": "saas:github:example-org",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "default_workflow_permissions: write",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "Actions secret PROD_KEY: provider visibility all; names only, no value read",
           "kind": "observed",
-          "observation": "organization",
+          "observation": "organization-secrets",
           "principal": "alice (user ID 41)",
-          "request": "organization"
+          "request": "organization-secrets"
         }
       ],
       "exposure_finding": false,
-      "id": "github.organization_workflow_default_write",
-      "impact": "Inherited write defaults widen what a compromised workflow can request.",
+      "id": "github.org_secret_all_repositories",
+      "impact": "A compromised repository workflow may reach this organization secret; its name does not establish production use or leakage.",
       "key": {
         "asset": "saas:github:example-org",
-        "id": "github.organization_workflow_default_write",
-        "subject": null
+        "id": "github.org_secret_all_repositories",
+        "subject": "actions:prod_key"
       },
       "not_checked": [],
       "remediation": {
-        "summary": "Use read defaults; grant each job only the permissions it needs."
+        "summary": "Limit this organization secret to the repositories that need it. Review workflows in those repositories before changing access."
       },
       "rule": {
         "kind": "single_fact",
         "reads": [
-          "request:organization"
+          "request:organization-secrets"
         ]
       },
       "severity": "medium",
       "severity_base": "medium",
       "status": "open",
-      "subject": null,
-      "title": "Organization workflow tokens default to write permission",
+      "subject": {
+        "key": "actions:prod_key",
+        "kind": "secret_location",
+        "label": "Actions secret PROD_KEY"
+      },
+      "title": "Organization secret is available to all repositories",
       "why_here": [
         "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.dependabot_medium",
+        "needs_people": false,
+        "reason": "",
+        "subject": "dependabot:4:App%2Fpackage-lock.json"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "ci",
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
+          "kind": "observed",
+          "observation": "dependabot-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "dependabot-alerts"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.dependabot_medium",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.dependabot_medium",
+        "subject": "dependabot:4:App%2Fpackage-lock.json"
+      },
+      "not_checked": [
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
+      ],
+      "remediation": {
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dependabot-alerts"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "dependabot:4:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
+      },
+      "title": "GitHub reports an open medium severity dependency alert",
+      "why_here": [
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "production",
+        "by_subject": true,
+        "expires": "2027-04-07",
+        "id": "github.dependabot_low",
+        "needs_people": false,
+        "reason": "",
+        "subject": "dependabot:5:App%2Fpackage-lock.json"
+      },
+      "adjustments": [],
+      "area": "cicd",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "ci",
+      "evidence": [
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:00Z",
+          "excerpt": "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.",
+          "kind": "observed",
+          "observation": "dependabot-alerts",
+          "principal": "alice (user ID 41)",
+          "request": "dependabot-alerts"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.dependabot_low",
+      "impact": "GitHub reports an affected dependency in this manifest; installed deployed versions and exploitability were not established.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "github.dependabot_low",
+        "subject": "dependabot:5:App%2Fpackage-lock.json"
+      },
+      "not_checked": [
+        "Deployed dependency versions and runtime exploitability were not verified; provider alerts do not cover every vulnerability"
+      ],
+      "remediation": {
+        "summary": "Review the affected manifest and upgrade to a patched version where available. Confirm the deployed dependency and test the change; scheck did not establish exploitability."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:dependabot-alerts"
+        ]
+      },
+      "severity": "low",
+      "severity_base": "low",
+      "status": "open",
+      "subject": {
+        "key": "dependabot:5:App%2Fpackage-lock.json",
+        "kind": "dependency_alert",
+        "label": "Dependabot alert in App/package-lock.json"
+      },
+      "title": "GitHub reports an open low severity dependency alert",
+      "why_here": [
+        "Provider-reported vulnerability severity; runtime exploitability was not verified."
       ]
     }
   ],
   "incomplete": [],
   "notes": [
     {
-      "detail": "Workflow configuration was read at default-branch commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Requests self-hosted runner labels; repository access, availability and isolation were not assessed.",
-      "kind": "github_ci",
+      "detail": "Provider alerts are not a complete repository scan. Names are metadata; values were not read. Credential usability and deployed dependency exploitability were not tested.",
+      "kind": "github_alerts",
       "source": "repo:github:example-org/production"
     }
   ],
@@ -1110,14 +947,14 @@
     "areas": {
       "assessed": 0,
       "not_applicable": 0,
-      "not_assessed": 9,
-      "partial": 1,
+      "not_assessed": 8,
+      "partial": 2,
       "total": 10
     },
     "below": {
       "accepted": 0,
       "info": 0,
-      "low": 0
+      "low": 1
     },
     "items": [
       {
@@ -1125,37 +962,37 @@
           "repo:github:example-org/production"
         ],
         "ids": [
-          "github.default_branch_unprotected"
+          "github.secret_scanning_open"
         ],
         "keys": [
           {
             "asset": "repo:github:example-org/production",
-            "id": "github.default_branch_unprotected",
-            "subject": "Release/v1"
+            "id": "github.secret_scanning_open",
+            "subject": "secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1"
           }
         ],
         "kind": "finding_id",
         "person": null,
         "rank": 1,
         "rank_basis": [
-          "severity:high",
-          "area:cicd"
+          "severity:critical",
+          "area:secrets"
         ],
-        "severity": "high",
-        "title": "Default branch has no observed active protection"
+        "severity": "critical",
+        "title": "GitHub reports an open secret-scanning alert"
       },
       {
         "assets": [
           "repo:github:example-org/production"
         ],
         "ids": [
-          "github.mutable_action_with_write_token"
+          "github.dependabot_high"
         ],
         "keys": [
           {
             "asset": "repo:github:example-org/production",
-            "id": "github.mutable_action_with_write_token",
-            "subject": ".github/workflows/release.yml"
+            "id": "github.dependabot_high",
+            "subject": "dependabot:3:App%2Fpackage-lock.json"
           }
         ],
         "kind": "finding_id",
@@ -1166,85 +1003,61 @@
           "area:cicd"
         ],
         "severity": "high",
-        "title": "Workflow requests mutable dependencies with write permission"
-      },
-      {
-        "assets": [
-          "repo:github:example-org/production"
-        ],
-        "ids": [
-          "github.pr_target_unsafe_checkout"
-        ],
-        "keys": [
-          {
-            "asset": "repo:github:example-org/production",
-            "id": "github.pr_target_unsafe_checkout",
-            "subject": ".github/workflows/release.yml"
-          }
-        ],
-        "kind": "finding_id",
-        "person": null,
-        "rank": 3,
-        "rank_basis": [
-          "severity:high",
-          "area:cicd"
-        ],
-        "severity": "high",
-        "title": "Workflow requests PR-controlled code execution with write permission"
-      },
-      {
-        "assets": [
-          "repo:github:example-org/production"
-        ],
-        "ids": [
-          "github.repository_workflow_default_write"
-        ],
-        "keys": [
-          {
-            "asset": "repo:github:example-org/production",
-            "id": "github.repository_workflow_default_write",
-            "subject": "example-org/production"
-          }
-        ],
-        "kind": "finding_id",
-        "person": null,
-        "rank": 4,
-        "rank_basis": [
-          "severity:high",
-          "area:cicd"
-        ],
-        "severity": "high",
-        "title": "Repository workflow tokens default to write permission"
+        "title": "GitHub reports an open high or critical severity dependency alert"
       },
       {
         "assets": [
           "saas:github:example-org"
         ],
         "ids": [
-          "github.organization_workflow_default_write"
+          "github.org_secret_all_repositories"
         ],
         "keys": [
           {
             "asset": "saas:github:example-org",
-            "id": "github.organization_workflow_default_write",
-            "subject": null
+            "id": "github.org_secret_all_repositories",
+            "subject": "actions:prod_key"
           }
         ],
         "kind": "finding_id",
         "person": null,
-        "rank": 5,
+        "rank": 3,
+        "rank_basis": [
+          "severity:medium",
+          "area:secrets"
+        ],
+        "severity": "medium",
+        "title": "Organization secret is available to all repositories"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.dependabot_medium"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.dependabot_medium",
+            "subject": "dependabot:4:App%2Fpackage-lock.json"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
+        "rank": 4,
         "rank_basis": [
           "severity:medium",
           "area:cicd"
         ],
         "severity": "medium",
-        "title": "Organization workflow tokens default to write permission"
+        "title": "GitHub reports an open medium severity dependency alert"
       }
     ],
     "more": 0,
     "rules": {
-      "decided": 6,
-      "selected": 6,
+      "decided": 5,
+      "selected": 5,
       "without_evidence": 0
     }
   }

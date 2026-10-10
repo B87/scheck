@@ -98,25 +98,28 @@ type Population[T any] struct {
 
 // Evidence is typed inventory only. It does not assert any security rule outcome.
 type Evidence struct {
-	OrganizationWorkflow         DefaultEvidence        `json:"organization_workflow"`
-	RepositoriesCI               []RepositoryCI         `json:"repositories_ci,omitempty"`
-	Judgments                    []Judgment             `json:"judgments,omitempty"`
-	Principal                    PrincipalRead          `json:"principal"`
-	OrganizationRead             Read                   `json:"organization_read"`
-	Organization                 *OrganizationObject    `json:"organization,omitempty"`
-	MembershipRead               Read                   `json:"membership_read"`
-	Membership                   *Membership            `json:"membership,omitempty"`
-	OwnerAuthority               bool                   `json:"owner_authority"`
-	MemberAuthority              bool                   `json:"member_authority"`
-	Members                      Population[Account]    `json:"members"`
-	Owners                       Population[Account]    `json:"owners"`
-	OutsideCollaborators         Population[Account]    `json:"outside_collaborators"`
-	Invitations                  Population[Invitation] `json:"invitations"`
-	Repositories                 Population[Repository] `json:"repositories"`
-	MembersWithoutMFA            Population[Account]    `json:"members_without_mfa"`
-	OwnersWithoutMFA             Population[Account]    `json:"owners_without_mfa"`
-	RepositoriesAccess           []RepositoryAccess     `json:"repositories_access,omitempty"`
-	RepositoryVisibilityComplete bool                   `json:"repository_visibility_complete"`
+	OrganizationSecrets          Population[ActionsSecret] `json:"organization_secrets"`
+	SelectedSecrets              []SelectedSecret          `json:"selected_secrets,omitempty"`
+	RepositoriesAlerts           []RepositoryAlerts        `json:"repositories_alerts,omitempty"`
+	OrganizationWorkflow         DefaultEvidence           `json:"organization_workflow"`
+	RepositoriesCI               []RepositoryCI            `json:"repositories_ci,omitempty"`
+	Judgments                    []Judgment                `json:"judgments,omitempty"`
+	Principal                    PrincipalRead             `json:"principal"`
+	OrganizationRead             Read                      `json:"organization_read"`
+	Organization                 *OrganizationObject       `json:"organization,omitempty"`
+	MembershipRead               Read                      `json:"membership_read"`
+	Membership                   *Membership               `json:"membership,omitempty"`
+	OwnerAuthority               bool                      `json:"owner_authority"`
+	MemberAuthority              bool                      `json:"member_authority"`
+	Members                      Population[Account]       `json:"members"`
+	Owners                       Population[Account]       `json:"owners"`
+	OutsideCollaborators         Population[Account]       `json:"outside_collaborators"`
+	Invitations                  Population[Invitation]    `json:"invitations"`
+	Repositories                 Population[Repository]    `json:"repositories"`
+	MembersWithoutMFA            Population[Account]       `json:"members_without_mfa"`
+	OwnersWithoutMFA             Population[Account]       `json:"owners_without_mfa"`
+	RepositoriesAccess           []RepositoryAccess        `json:"repositories_access,omitempty"`
+	RepositoryVisibilityComplete bool                      `json:"repository_visibility_complete"`
 }
 
 var loginRE = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
@@ -334,6 +337,13 @@ func (e Evidence) Reads() []Read {
 	}
 	for _, ci := range e.RepositoriesCI {
 		out = append(out, ci.Reads()...)
+	}
+	out = append(out, e.OrganizationSecrets.Reads...)
+	for _, selected := range e.SelectedSecrets {
+		out = append(out, selected.Repositories.Reads...)
+	}
+	for _, alerts := range e.RepositoriesAlerts {
+		out = append(out, alerts.Reads()...)
 	}
 	return out
 }

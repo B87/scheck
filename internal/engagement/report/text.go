@@ -419,6 +419,14 @@ func (t *text) summary() {
 	t.field("", "Outside scheck", 17, "Malware on any machine, application logic, processes, lookalike domains.")
 	t.blank()
 
+	// Provider-closed but active alerts need attention without inventing a finding.
+	// docs/spec/github-collector.md, "Coverage, wording and verification".
+	for _, n := range t.r.Notes {
+		if n.Kind == "github_alert_followup" {
+			t.hang("Follow-up needed: ", "  ", clean(n.Source)+": "+clean(n.Detail))
+			t.blank()
+		}
+	}
 	t.line(t.bold("Fix these first: a ranking of what was checked, not of all your risks"))
 	for _, it := range t.r.Summary.Items {
 		var names []string

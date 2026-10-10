@@ -439,7 +439,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }
@@ -451,7 +451,8 @@
     "subject": {
       "type": "object", "required": ["kind", "key", "label"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
+        "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location",
+            "dependency_alert", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
         "key": { "type": "string", "description": "What accepted_risks[].subject takes; a redact_extra marker when the name is redacted." },
         "label": { "type": "string", "description": "Built only from fields rules read." },
         "provider_id": { "type": "string" },
