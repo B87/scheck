@@ -635,9 +635,9 @@ successes would have answered (carried from E4 step 4a) and prints the changed p
 in the report's header (`spec/runs.md`, "Stop and resume", carried from E4 step
 4b).
 
-**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–3 built, later
-steps planned; later rules and permissions in `spec/github-collector.md` remain
-proposals until reviewed and frozen):
+**Build steps** (security-consultant DEFINE, 2026-10-09; steps 1–4 built and
+verified offline; later alerts/history rules and permissions remain proposals until
+reviewed and frozen):
 
 0. **Contract preparation.** Split the engagement spec and audit citations; draft the
    operation/permission and rule-outcome tables. Resolve the assessment-token
@@ -675,10 +675,29 @@ proposals until reviewed and frozen):
    Adversarial-review defects in repository provenance, recon privilege labels, MFA
    readout counts, per-asset offboarding instances and covered-asset inventory were
    fixed with regression tests. None of those review defects is deferred.
-4. **CI controls.** Organization/repository workflow defaults, default-branch
-   protection and active rules, supported workflow parsing, immutable action
-   references and dangerous PR-target combinations. Freeze supported syntax and
-   runner evidence; carried App/runner breadth remains an explicit decision.
+4. **CI controls (built; verified offline).** Security-consultant DEFINE on
+   2026-10-10 freezes six finding ids, bases and three outcomes in
+   `spec/github-collector.md`, "CI controls: step 4 definition": separate
+   organization/repository write defaults, default-branch protection presence,
+   mutable references, mutable step dependencies with mutation permission, and
+   requested PR-controlled execution with write permission. Six GET templates pin
+   workflow reads to the exact default-branch SHA. Bounded sanitized YAML,
+   permission-vector replacement, supported triggers/refs/execution and caps are
+   versioned; unsupported evidence stays unknown. The PR-target rule is medium
+   (high for declared production), never an execution or exploitability claim.
+   Runtime policy and checkout protection remain gaps. Runner access and App
+   findings/operations are deferred; literal runner requests are notes only.
+   Offline fixtures prove all three outcomes, permission replacement, supported
+   command shells, redaction before persistence and GET-only SHA-pinned requests.
+   An end-to-end fake-server run retains secret markers but no seeded secret in
+   report, audit or persisted evidence. Consultant REVIEW clarified shell support,
+   branch-protection remediation and the unassessed job container/service images.
+   Full `make check` and `make build` pass. Consultant REVIEW, Brightcart/Dani
+   client REPORT and the final fresh adversarial review pass. Invalid event, job
+   and step structures abstain in positive and negative regression fixtures;
+   unsupported runner selection leaves the entire direct job unassessed, including
+   reference pinning. All reported review defects were fixed; none is deferred.
+   Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
 5. **Secret metadata and provider alerts.** Secret names/visibility and projected
    Dependabot/secret-scanning alerts, with per-location findings and honest gaps.
 6. **Confined history reader.** In-process mirror remote/head checks, bounded object

@@ -178,6 +178,10 @@ const (
 	// UserKey is a Workspace user's id or primary address. A request that
 	// names one is checked against the excluded-subject set.
 	UserKey
+	// CI resource parameters vary only inside a compiled repository subtree.
+	BranchName
+	CommitSHA
+	WorkflowFile
 )
 
 // Param is one typed parameter. An optional parameter may be left out; it
@@ -217,6 +221,8 @@ type Op struct {
 	Keep []string
 	// MaxBytes caps the response body.
 	MaxBytes int64
+	// WorkflowYAML decodes GitHub contents before redaction and bounded parsing.
+	WorkflowYAML bool
 }
 
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
@@ -355,7 +361,7 @@ func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err err
 // declareParams checks each parameter's name and type.
 func (c *compiled) declareParams(prov provider, wholePath bool) error {
 	for _, p := range c.Params {
-		if p.Name == "" || p.Type < Login || p.Type > UserKey {
+		if p.Name == "" || p.Type < Login || p.Type > WorkflowFile {
 			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
@@ -487,13 +493,13 @@ func (u uses) subject() error {
 		inSubject[m[1]] = true
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(c.scheme+"://"+c.host+c.path, -1) {
-		if !inSubject[m[1]] {
+		if !inSubject[m[1]] && !c.ciResource(m[1]) {
 			return fmt.Errorf("{%s} picks the target but is not in the subject", m[1])
 		}
 	}
 	for _, kv := range c.query {
 		for _, m := range placeholder.FindAllStringSubmatch(kv[1], -1) {
-			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count {
+			if t := c.types[m[1]].Type; !inSubject[m[1]] && t != Cursor && t != Count && !c.ciResource(m[1]) {
 				return fmt.Errorf("{%s} in the query is not a page or a cursor, so it must be in the subject", m[1])
 			}
 		}
@@ -522,6 +528,9 @@ func (c *compiled) checkResponse(prov provider) error {
 	}
 	if !prov.web && c.Method == GET && len(c.Keep) == 0 && c.Class != CredentialExchange {
 		return errors.New("declares no fields it keeps")
+	}
+	if err := c.checkCIResources(); err != nil {
+		return err
 	}
 	return c.validateBody()
 }
@@ -742,6 +751,21 @@ func bindValue(t ParamType, v string) (string, error) {
 			return "", errors.New("not a repository name")
 		}
 		return strings.ToLower(v), nil
+	case BranchName:
+		if !ValidBranchName(v) {
+			return "", errors.New("not a supported branch name")
+		}
+		return v, nil
+	case CommitSHA:
+		if !commitSHARE.MatchString(v) {
+			return "", errors.New("not a full commit SHA")
+		}
+		return strings.ToLower(v), nil
+	case WorkflowFile:
+		if !ValidWorkflowFile(v) {
+			return "", errors.New("not an immediate workflow filename")
+		}
+		return v, nil
 	case DNSName:
 		return dnsName(v)
 	case Host:

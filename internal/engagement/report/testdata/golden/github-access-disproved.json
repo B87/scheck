@@ -441,7 +441,7 @@
       ],
       "reasons": [
         {
-          "detail": "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step",
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
           "reason": "no_rule"
         }
       ],
@@ -449,10 +449,10 @@
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
-          "name": "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
           "reasons": [
             {
-              "detail": "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step",
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
               "reason": "no_rule"
             }
           ]
@@ -473,10 +473,10 @@
         {
           "asset": "repo:github:example-org/production",
           "mark": "not_assessed",
-          "name": "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
           "reasons": [
             {
-              "detail": "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step",
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed",
               "reason": "no_rule"
             }
           ]

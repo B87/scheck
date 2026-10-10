@@ -53,8 +53,9 @@ Secrets                  not checked
   are not assessed in this step).
 CI/CD and supply chain   checked in part
   2 of 2 assets read.
-  This version of scheck has no rule for it (Workflow permissions, branch controls, actions, runners
-  and App grants are not assessed in this step).
+  This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
+  policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are
+  not assessed).
 Not requested            Not part of this run: cloud configuration, data stores and backups,
                          external surface, web application, hosts, email and domain, logging and
                          incident readiness. To include one, list it under roots in the engagement

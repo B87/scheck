@@ -98,6 +98,8 @@ type Population[T any] struct {
 
 // Evidence is typed inventory only. It does not assert any security rule outcome.
 type Evidence struct {
+	OrganizationWorkflow         DefaultEvidence        `json:"organization_workflow"`
+	RepositoriesCI               []RepositoryCI         `json:"repositories_ci,omitempty"`
 	Judgments                    []Judgment             `json:"judgments,omitempty"`
 	Principal                    PrincipalRead          `json:"principal"`
 	OrganizationRead             Read                   `json:"organization_read"`
@@ -326,6 +328,12 @@ func (e Evidence) Reads() []Read {
 	out = append(out, e.OwnersWithoutMFA.Reads...)
 	for _, access := range e.RepositoriesAccess {
 		out = append(out, access.Reads()...)
+	}
+	if e.OrganizationWorkflow.Read.Op != "" {
+		out = append(out, e.OrganizationWorkflow.Read)
+	}
+	for _, ci := range e.RepositoriesCI {
+		out = append(out, ci.Reads()...)
 	}
 	return out
 }

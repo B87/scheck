@@ -1486,7 +1486,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			if in.RulesVersion == "" {
 				in.RulesVersion = r.o.Version
 			}
-			in.RulesVersion += ":github-access:2026-10-10"
+			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion
 			break
 		}
 	}

@@ -138,6 +138,9 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for _, d := range githubDefs {
 		reachable[d.ID] = true
 	}
+	for _, id := range GitHubCIIDs() {
+		reachable[id] = true
+	}
 	for _, d := range Defs() {
 		if !reachable[d.ID] {
 			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)

@@ -40,7 +40,7 @@ const (
 // and custom findings introduce.
 var Categories = []string{
 	CategoryRemoteAccess, CategoryNetwork, "accounts", "privesc", "integrity", "updates",
-	"persistence", "logging", "fs", "disk", "time", CategoryGovernance, CategoryCustom, CategoryDNS, CategoryEmail, "tls", "web",
+	"persistence", "logging", "fs", "disk", "time", CategoryGovernance, CategoryCustom, CategoryDNS, CategoryEmail, "tls", "web", "ci",
 }
 
 func knownCategory(c string) bool {

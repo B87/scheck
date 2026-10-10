@@ -67,6 +67,8 @@ const (
 
 func codeDetail(code string, limit int) string {
 	switch code {
+	case codeWorkflowLimit:
+		return "workflow decoding or YAML structure reached a compiled limit (512 KiB, 20,000 nodes or depth 40)"
 	case codeContentType:
 		return "the response's content type is not one the op accepts, so its body was hashed and not kept"
 	case codeEncoding:

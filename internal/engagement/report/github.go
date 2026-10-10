@@ -35,7 +35,14 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 			{"repository access", []string{finding.IDGitHubBroadDefaultMemberPermission, finding.IDGitHubOutsideAdminOnProduction}},
 		}
 	case finding.AreaCICD:
-		families = []family{{"repository public intent and deploy keys", []string{finding.IDGitHubUndeclaredPublicRepository, finding.IDGitHubWritableDeployKey}}}
+		families = []family{
+			{"repository public intent and deploy keys", []string{finding.IDGitHubUndeclaredPublicRepository, finding.IDGitHubWritableDeployKey}},
+			{"workflow token defaults", []string{finding.IDGitHubOrganizationWorkflowWrite, finding.IDGitHubRepositoryWorkflowWrite}},
+			{"default-branch protection presence", []string{finding.IDGitHubDefaultBranchUnprotected}},
+			{"workflow dependency references", []string{finding.IDGitHubMutableAction}},
+			{"mutable dependencies with write permission", []string{finding.IDGitHubMutableActionWrite}},
+			{"PR-controlled execution requests", []string{finding.IDGitHubPRTargetUnsafe}},
+		}
 	}
 	some := false
 	for _, fam := range families {
@@ -73,7 +80,7 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		unknown = "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed"
 	}
 	if area == finding.AreaCICD {
-		unknown = "Workflow permissions, branch controls, actions, runners and App grants are not assessed in this step"
+		unknown = "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust and App grants are not assessed"
 	}
 	row.SubItems = append(row.SubItems, SubItem{Name: unknown, Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: unknown}}})
 	row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: unknown})

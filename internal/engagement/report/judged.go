@@ -50,7 +50,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 	var out []Finding
 	at := b.in.Started.UTC()
 	for _, j := range a.Judged {
-		if j.Verdict != verdictFired {
+		if j.Verdict != verdictFired || j.Details["superseded_by"] != nil {
 			continue
 		}
 		def, _ := finding.Lookup(j.ID)
@@ -71,6 +71,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Rule:   Rule{Kind: "single_fact", Reads: requestRefs(j.Reads)},
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
+		}
+		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected}, j.ID) {
+			f.Rule.Kind = "multi_fact"
 		}
 		if j.ID == finding.IDWebRestrictedReachable {
 			f.Rule.Kind = "multi_fact"
@@ -114,7 +117,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				if attr == "admin" && j.ID == finding.IDIdentityFormerPersonHasAccess {
 					rule = "attribute:admin"
 				}
-				if attr == "production" && j.ID == finding.IDGitHubWritableDeployKey {
+				if attr == "production" && slices.Contains([]string{finding.IDGitHubWritableDeployKey, finding.IDGitHubRepositoryWorkflowWrite, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}, j.ID) {
 					rule = "deploys_to:production"
 					if len(j.Sources) > 0 {
 						source = SourceRef{File: b.in.Path, Key: j.Sources[0] + ".deploys_to"}

@@ -439,7 +439,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }

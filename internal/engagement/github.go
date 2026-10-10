@@ -40,7 +40,8 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 		}
 		ev = githubc.CollectAccess(ctx, g, org, ev, targets)
 	}
-	ev.Judgments = githubc.Judge(ev, r.githubContext(a))
+	ev = githubc.CollectCI(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
+	ev.Judgments = append(githubc.Judge(ev, r.githubContext(a)), githubc.JudgeCI(ev, r.githubContext(a))...)
 	ra.GitHub = &ev
 	ra.Status = StatusCollected
 	targetRead := false
@@ -71,7 +72,7 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 		}
 	}
 	if ra.Detail == "" {
-		ra.Detail = "GitHub identity and repository-access evidence collected; coverage shows the rules assessed and remaining limits."
+		ra.Detail = "GitHub identity, repository-access and configured CI evidence collected; coverage shows the rules assessed and remaining limits."
 	}
 	if ra.Status == StatusRefused {
 		r.out.Refused = append(r.out.Refused, ereport.Shortfall{Asset: a.ID, AssetName: a.Name, Reason: ra.Reason, Kind: ra.Refusal, Detail: ra.Detail})
@@ -182,6 +183,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			}
 		}
 	}
+	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev)...)
 	for _, read := range ev.Reads() {
 		ai.Redactions = append(ai.Redactions, read.Redactions...)
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
@@ -197,6 +199,12 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			detail := read.Detail
 			if read.Reason == "insufficient_permission" {
 				switch read.Op {
+				case githubc.OpRepositoryWorkflow, githubc.OpOrganizationWorkflow:
+					detail += ". Ask the owner to authorize Administration read at the relevant repository or organization level, then resume"
+				case githubc.OpBranch, githubc.OpWorkflowDirectory, githubc.OpWorkflowFile:
+					detail += ". Ask the repository owner to authorize Contents read for this repository, then resume"
+				case githubc.OpBranchRules:
+					detail += ". Ask the repository owner to authorize Metadata read, then resume"
 				case githubc.OpDeployKeys:
 					detail += ". Ask the repository owner to authorize Administration read permission for this credential, then resume"
 				case githubc.OpCollaborators:

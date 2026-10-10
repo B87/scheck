@@ -55,6 +55,8 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		switch r.URL.Path {
 		case "/user":
 			fmt.Fprintf(w, `{"id":%d,"login":%q,"type":"User","email":%q}`, userID, login, "alice@example.test")
+		case "/orgs/acme/actions/permissions/workflow", "/repos/acme/shop/actions/permissions/workflow":
+			fmt.Fprint(w, `{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}`)
 		case "/orgs/acme":
 			fmt.Fprintf(w, `{"id":2,"login":"acme","type":"Organization","two_factor_requirement_enabled":false,"default_repository_permission":%q}`, token)
 		case "/user/memberships/orgs/acme":
@@ -316,7 +318,7 @@ func TestGitHubInventoryCapsAreIncomplete(t *testing.T) {
 			})
 			ops := append([]gate.Op(nil), githubc.Ops...)
 			for i := range ops {
-				if ops[i].List != nil {
+				if ops[i].List != nil && ops[i].List.Next != nil {
 					cp := *ops[i].List
 					cp.MaxPages = 1
 					if cap == "body" && ops[i].ID == githubc.OpMembers {

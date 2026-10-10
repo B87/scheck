@@ -50,6 +50,8 @@ access:
 		switch r.URL.Path {
 		case "/user":
 			fmt.Fprint(w, `{"id":1,"login":"alice","type":"User"}`)
+		case "/orgs/acme/actions/permissions/workflow", "/repos/acme/shop/actions/permissions/workflow":
+			fmt.Fprint(w, `{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}`)
 		case "/orgs/acme":
 			fmt.Fprint(w, `{"id":2,"login":"acme","type":"Organization","two_factor_requirement_enabled":false,"default_repository_permission":"write"}`)
 		case "/user/memberships/orgs/acme":
@@ -161,6 +163,8 @@ func TestGitHubRepositoryRootCollectsWithoutOrganizationAuthority(t *testing.T) 
 		switch r.URL.Path {
 		case "/user":
 			fmt.Fprint(w, `{"id":1,"login":"alice","type":"User"}`)
+		case "/repos/alice/shop/actions/permissions/workflow":
+			fmt.Fprint(w, `{"default_workflow_permissions":"read"}`)
 		case "/repos/alice/shop":
 			fmt.Fprint(w, `{"id":10,"name":"shop","full_name":"alice/shop","owner":{"id":1,"login":"alice","type":"User"},"visibility":"public"}`)
 		case "/repos/alice/shop/keys", "/repos/alice/shop/collaborators":

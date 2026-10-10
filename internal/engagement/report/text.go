@@ -384,6 +384,22 @@ func (t *text) areas() (checked, part, notChecked, folded, na []string) {
 
 func (t *text) summary() {
 	t.line(t.bold("SUMMARY"))
+	ciSelected, ciDecided := 0, 0
+	for _, a := range t.r.Assessments {
+		if slices.Contains(finding.GitHubCIIDs(), a.ID) {
+			ciSelected++
+			if a.Status != finding.NotAssessed {
+				ciDecided++
+			}
+		}
+	}
+	if ciSelected > 0 {
+		if ciDecided == 0 {
+			t.hang("", "", "No CI configuration rule could decide from the available evidence; see the missing reads and next steps below.")
+		} else {
+			t.field("", "CI configuration", 17, fmt.Sprintf("%d of %d rule assessments decided; runtime execution was not verified.", ciDecided, ciSelected))
+		}
+	}
 	checked, part, notChecked, folded, na := t.areas()
 	if len(checked) > 0 {
 		t.field("", "Checked", 17, strings.Join(checked, ", ")+".")
@@ -418,6 +434,8 @@ func (t *text) summary() {
 	b := t.r.Summary.Below
 	below := fmt.Sprintf("Below: %d low, %d informational, %d accepted.", b.Low, b.Info, b.Accepted)
 	switch {
+	case len(t.r.Summary.Items) == 0 && ciSelected > 0 && t.r.Summary.Rules.Decided == 0:
+		t.hang("  ", "  ", "No security verdict was possible from the collected CI evidence. "+below)
 	case len(t.r.Summary.Items) == 0:
 		t.hang("  ", "  ", "Nothing open ranks at medium or above among what was checked"+t.unanswered()+". "+below)
 	case t.r.Summary.More > 0:

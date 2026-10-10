@@ -1,9 +1,11 @@
 # scheck — GitHub collector specification
 
-GitHub organization and repository assessment for 0.0.2 E5. Steps 1–3 build the
-gate foundation, principal/organization inventory, and identity and repository-access
-rules. CI, secret metadata, provider alerts and history remain design. The step 3
-evidence and rule surface was frozen with the `security-consultant` on 2026-10-10.
+GitHub organization and repository assessment for 0.0.2 E5. Steps 1–4 build the
+gate foundation, principal/organization inventory, identity and repository-access
+rules, and CI configuration rules. The CI definition for step 4 was frozen with the
+`security-consultant` on 2026-10-10. Secret metadata, provider alerts and history
+remain design. Step 4 is verified offline; live acceptance remains pending. The
+step 3 evidence and rule surface was frozen on 2026-10-10.
 
 The gate owns admission, sending, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)); the engagement owns people attribution, admin
@@ -34,11 +36,11 @@ completeness gate or the acceptance completeness gate.
 ## Reads
 
 Cheapest metadata comes first. Each operation projects only the fields its rules or
-coverage read. The inventory and access surfaces below are compiled; later paths remain
-proposed until registered and reviewed. The permission table distinguishes classic scopes,
+coverage read. The inventory, access and CI surfaces below are compiled; secret metadata and
+alert paths remain proposed until registered and reviewed. The permission table distinguishes classic scopes,
 fine-grained permissions, organization approval and owner-only visibility.
 
-| Read | Path (inventory/access built; later reads proposed) | Evidence and limits |
+| Read | Path (inventory/access/CI built; later reads proposed) | Evidence and limits |
 |---|---|---|
 | Principal | `/user` | Stable user identity for PAT/App user tokens; public identity needs no extra permission. Missing private MFA field says nothing. Installation-token principal is unsupported and stays unknown. |
 | Organization | `/orgs/{org}` | Organization id/settings; owner visibility is required for complete settings. Absent or null `two_factor_requirement_enabled` is unknown. |
@@ -50,8 +52,8 @@ fine-grained permissions, organization approval and owner-only visibility.
 | Repository collaborators | `/repos/{owner}/{repo}/collaborators`, compiled `affiliation=all` | Effective permissions and role name for recognized accounts; admin is established by an explicit permission, never guessed from an unfamiliar custom role. |
 | Branch and active rules | `/repos/{owner}/{repo}/branches/{branch}`, `/repos/{owner}/{repo}/rules/branches/{branch}` | Default-branch metadata and active rules, including organization rules; evaluate/disabled rules are not active protection. Active-rule reads need Metadata read. `protected:true` alone does not prove PR-review requirements. |
 | Workflow defaults | `/orgs/{org}/actions/permissions/workflow`, `/repos/{owner}/{repo}/actions/permissions/workflow` | Organization and repository defaults separately, plus PR-approval setting; fine-grained Administration read at the relevant level. |
-| Workflow files | Compiled contents-directory/file operations under `.github/workflows` at the assessed default-branch commit | Gate decodes base64 before secret redaction, so encoded secrets never persist. Never follow `download_url` or `git_url`. Supported syntax is frozen before rules. |
-| Deploy keys | `/repos/{owner}/{repo}/keys` | Id, title and `read_only`; full public keys need not be retained. |
+| Workflow files | Compiled contents-directory/file operations under `.github/workflows` at the assessed default-branch commit | Gate decodes base64 before secret redaction, so encoded secrets never persist. Never follow `download_url` or `git_url`. Bounded supported syntax is defined under "Supported workflow syntax". |
+| Deploy keys | `/repos/{owner}/{repo}/keys` | Id and `read_only`; neither title nor public-key value is retained. |
 | Secret metadata | Organization/repository Actions secret list and selected-repository operations | Names, timestamps, organization visibility and selected repositories; never values. Names are inventory, not evidence of a leak. |
 | Dependabot alerts | Per-repository alert operations | Identity, state, affected manifest and severity needed by the rule. An organization-filtered view does not prove repository completeness. |
 | Secret-scanning alerts | Per-repository alert and location operations | Id, state, type, validity and location. The provider's `secret` member is dropped before persistence even when no local detector recognizes its format; arbitrary raw metadata is not retained. |
@@ -132,8 +134,8 @@ Organization-wide repository visibility remains unknown separately.
 
 App installation permissions and repository selection, and repository runners and
 applicable runner groups, are carried candidate reads. Their exact scope and
-operations remain to be frozen. An organization runner's presence alone does not
-prove access to a public repository.
+operations remain deferred for a later DEFINE; step 4 adds neither. An organization
+runner's presence alone does not prove access to a public repository.
 
 Fine-grained repository access reads require Metadata read for collaborator lists
 and Administration read for deploy-key lists. Classic collaborator reads require
@@ -261,11 +263,7 @@ built in E5 step 3.
 | Undeclared public repository | Explicit public visibility without `public:true` | Private/internal or declared public | Unknown visibility |
 | Broad default member permission | Verified owner-visible explicit write/admin | Verified owner-visible explicit none/read | Non-owner, missing or unrecognized setting |
 | Outside collaborator administers production | Outside identity, effective admin and production all observed/declared | Known lower privilege or nonproduction | Any join missing |
-| Writable workflow default | Explicit write | Explicit read | Unavailable or unrecognized setting |
-| Unprotected default branch | Existing branch, no classic protection and successful complete empty active rules | Affirmative active protection | Empty repository, race, denied read or partial rules |
-| Mutable third-party action | External action/reusable workflow tag or branch instead of full SHA; container without digest | Complete supported references immutable | Expression, unsupported syntax, redaction or truncation |
-| Dangerous PR-target execution | Recognized `pull_request_target` job executes untrusted PR code with proved privilege | Complete supported workflow lacks the combination | Effective permissions, ref or execution flow unknown |
-| Public self-hosted runner | Public repository and supported self-hosted job with applicable access | Supported hosted-only workflow | Dynamic labels, groups or access unknown |
+| Step 4 CI rules | Frozen in "CI controls: step 4 definition" below | Frozen there | Frozen there |
 | Write deploy key | Explicit `read_only:false` | Explicit `read_only:true` | Missing or unrecognized field |
 | App can write all repositories | Explicit all-repository selection and relevant write permission | Selected scope or entirely read-only permissions | Permission or selection unavailable |
 | Open dependency alert | Recognized open alert with supported severity | Fixed/dismissed alert or complete supported empty population | Denied read, unknown state/severity or partial population |
@@ -279,20 +277,272 @@ Organization MFA non-enforcement, owner/admin MFA gaps, unattributed admins and
 former people with remaining access are high; former-admin access gains the existing
 `attribute:admin` step. A nonadmin member's MFA gap is medium. Unexpected
 named owners, contractor/shared owners and excessive owner counts are medium.
-Actions not pinned alone are low. Write-all workflow defaults alone are medium;
-write-all defaults joined with unpinned actions are high. The join must have both
-observations and does not raise an action finding without the writable-token fact.
-
-The remaining DEFINE proposals are high for public self-hosted runners; medium for
-branch protection, all-repository App writes and a credential in a mirror remote. Exact
-alert-severity mapping and relevant write-permission lists remain to be reviewed and
-frozen with the finding definitions. These later-step bases remain proposals, not built rules.
+The six step 4 bases and their narrowly supported predicates are frozen below.
+All-repository App writes and a credential in a mirror remote remain proposed
+medium bases. Exact alert-severity mapping and App write-permission lists remain
+for their later DEFINE reviews. Runner-access findings are deferred.
 
 A credential leak is high for private repositories and critical for public
-repositories under the existing anchors. Critical PR-target grading requires public
-PR submission, proved untrusted checkout/execution and a write token together; not
-every PR-target workflow is critical. Secret authenticity or usability is never
+repositories under the existing anchors. Secret authenticity or usability is never
 tested. A secret name alone proves neither a production credential nor exfiltration.
+
+## CI controls: step 4 definition
+
+This definition was frozen on 2026-10-10 and is implemented and verified offline.
+Consultant REVIEW, client REPORT, `make check`, `make build` and fresh adversarial
+review pass. E5's later steps and live acceptance remain pending. It adds no interview question and uses existing production deployment
+context. Every finding has area `cicd` and `Exposure: false`.
+
+### Findings and outcomes
+
+| Finding id | Base | Subject | Fires | Disproves | Abstains |
+|---|---|---|---|---|---|
+| `github.organization_workflow_default_write` | medium | none | Explicit organization default `write` | Explicit `read` | Missing or unrecognized setting |
+| `github.repository_workflow_default_write` | medium | repository | Explicit repository default `write` | Explicit `read` | Missing or unrecognized setting |
+| `github.default_branch_unprotected` | medium | branch | Exact existing default branch has `protected:false` and complete empty active rules | `protected:true` or a recognized active control | Unknown flag or rules, denied read, branch race or partial rules |
+| `github.mutable_action_reference` | low | workflow | A supported remote action, reusable workflow or Docker reference is mutable | Complete supported references are immutable, or contain no external dependency | Unresolved references, unsupported or partial evidence |
+| `github.mutable_action_with_write_token` | high | workflow | Mutable step action or Docker dependency and mutation permission in the same direct job, with at least one eligible literal trigger | Complete supported jobs have no mutable dependency, or every direct job containing one has no mutation permission | Permission/event uncertainty, opaque reusable jobs or incomplete job evidence |
+| `github.pr_target_unsafe_checkout` | medium | workflow | Literal `pull_request_target`, supported PR-controlled checkout, later recognized local execution and syntactic mutation permission in the same direct job | Complete supported evidence excludes at least one component | Unknown ref, permission, condition or execution flow |
+
+Repository default, branch and PR-target findings gain the existing production
+adjustment once. Organization defaults, mutable references and the high joined
+finding do not. When the joined finding fires, suppress the duplicate open mutable
+reference finding, but retain both assessments. The join requires both observations;
+an organization default does not establish an unknown repository default.
+
+Repository subject keys are lowercase `owner/name`. Branch keys retain the exact
+case-sensitive branch name; workflow keys are exact `.github/workflows/<name>`
+paths. The assessed commit SHA is evidence, not part of the subject key. Acceptances
+for these instances must name their subject.
+
+Branch disproof establishes only the presence of protection. It does not prove
+required reviews, review strength, bypass resistance or protection of other branches.
+Evaluate and disabled rules do not count as active controls.
+
+The PR-target finding says **“Workflow requests PR-controlled code execution with
+write permission.”** It establishes requested execution in configuration, never a
+successful run or exploitability. It is not critical in step 4. The general critical
+anchor is unchanged: a future rule would need evidence of public triggering,
+applicable enforcement or bypass and actual execution, beyond this predicate.
+
+### Compiled read plan
+
+Six new GET operations use the existing GitHub origin, credential binding and API
+version `2026-03-10`. The registered operation ids, six templates and permission requirements are
+frozen here.
+
+| Operation | Compiled path | Fine-grained permission |
+|---|---|---|
+| `github.organization_workflow_default` | `/orgs/{org}/actions/permissions/workflow` | Organization Administration read |
+| `github.repository_workflow_default` | `/repos/{owner}/{repo}/actions/permissions/workflow` | Repository Administration read |
+| `github.default_branch` | `/repos/{owner}/{repo}/branches/{branch}` | Contents read |
+| `github.active_branch_rules` | `/repos/{owner}/{repo}/rules/branches/{branch}` | Metadata read |
+| `github.workflow_directory` | `/repos/{owner}/{repo}/contents/.github/workflows?ref={sha}` | Contents read |
+| `github.workflow_file` | Exact validated immediate regular `.yml` or `.yaml` child of that directory, with compiled `ref={sha}` | Contents read |
+
+Classic private reads require `repo`; organization workflow defaults require
+`admin:org`. A denied read is a coverage gap, not advice to grant target write
+permission. Defaults retain typed permission and PR-approval booleans; the approval
+setting is an explanatory note only. Branch evidence retains name, commit SHA and
+`protected`; rules retain recognized types; directory/file evidence retains identity.
+
+Read the exact default branch first, then pin every directory and file read to its
+SHA. Changed default branches, inconsistent identity or commit evidence produce a
+gap. Never follow `download_url`, `git_url`, returned redirects to other locators or
+external action URLs. No referenced action, reusable workflow or container is fetched.
+A missing-directory 404 is unknown. Symlinks, submodules and nested entries are gaps.
+
+`branch`, `sha` and `file` are typed resources inside the same compiled repository
+subject, not URLs or arbitrary API paths. Branch names use 1–255 ASCII letters,
+digits, `_`, `.`, `/` or `-`, starting with a letter, digit or `_`; traversal, double
+slashes, trailing slashes and components ending in `.` or `.lock` are rejected.
+Workflow file names are immediate ASCII children starting with a letter, digit or
+`_`, followed by letters, digits, `_`, `.` or `-`, ending in `.yml` or `.yaml`,
+with no `..` and at most 200 bytes. Unsupported names remain gaps without follow-up.
+
+The existing 1 MiB response cap, 100-item request size and 100-page ceiling remain.
+At most 100 workflow files, 512 KiB decoded per file and 8 MiB decoded per repository
+are read. YAML has at most 20,000 nodes and depth 40. Hitting a cap is `limit_reached`,
+incomplete and exit 2, and prevents a population absence claim. Hitting GitHub's
+own directory listing limit also prevents absence.
+
+### Supported workflow syntax
+
+Version `github-workflow-syntax:2026-10-10` describes the supported grammar. The
+gate decodes base64, redacts the decoded bytes, then uses the existing `yaml.v3`
+parser to produce a bounded neutral sanitized structure. The collector interprets
+that structure; no dependency exception is added and no pre-redaction content is
+persisted. Encoded API bodies are discarded on unsuccessful reads. A separate
+redaction-marker field preserves markers even when sanitization makes YAML
+unparseable; rejected source text is not retained. Parse errors retain only generic
+reasons, never raw error text, locations or snippets. A failed parse supplies no file facts.
+
+Support one mapping-root YAML document with string keys, block and flow mappings
+and sequences, plain/quoted/block strings, expected booleans and null event
+configurations. `on` accepts a literal string, list or mapping. Supported fields are
+`permissions`, `jobs`, direct `steps`, `uses`, `run`, `with`, literal `runs-on`, `if`,
+`shell`, `defaults.run` and literal working directories. A reusable job's `uses`
+is inspected for pinning only; its execution and privilege remain opaque.
+
+Event mapping configurations are null or mappings of supported fields, except
+`schedule`, which requires a nonempty list of mappings with nonempty literal
+`cron` strings. Cron semantics are not evaluated. Branch and path include/ignore
+filters for `push`, `pull_request` and `pull_request_target`,
+and tag include/ignore filters for `push`, require nonempty lists of literal
+strings. Each include filter is mutually exclusive with its ignore filter.
+PR `types` require a nonempty literal list from this frozen activity set:
+`assigned`, `unassigned`, `labeled`, `unlabeled`, `opened`, `edited`, `closed`,
+`reopened`, `synchronize`, `converted_to_draft`, `locked`, `unlocked`, `enqueued`,
+`dequeued`, `milestoned`, `demilestoned`, `ready_for_review`, `review_requested`,
+`review_request_removed`, `auto_merge_enabled`, `auto_merge_disabled`.
+Nonempty `workflow_dispatch` configurations and other event fields are unsupported;
+invalid event types cannot establish a privileged-trigger or PR-target finding.
+
+A direct job requires literal `runs-on`: a nonempty string, nonempty label list,
+or a mapping containing only literal `group` and/or literal string/list `labels`.
+It also requires nonempty `steps`, each with exactly one string `uses` or `run`.
+`uses` steps cannot contain `shell` or `working-directory`; `run` steps cannot
+contain `with`. A present `with` must be a mapping. Reusable job references must
+name an immediate `.yml` or `.yaml` child of `.github/workflows`, locally or in a
+supported remote reference; reusable/direct job fields cannot be mixed. Unsupported
+job or step structure blocks findings from that job and prevents negative claims.
+Missing or unsupported runner selection leaves the entire direct job structurally
+unassessed, including reference pinning. Independent supported sibling jobs may
+still supply affirmative evidence.
+
+Reject duplicate keys, anchors, aliases, merge keys, nonstandard tags, multiple
+documents and invalid types. There is no general expression, shell, matrix,
+reusable-workflow or composite-action interpreter. An unsupported or redacted field
+makes predicates needing it unknown; it does not erase an independent affirmative
+observation. Opaque execution cannot prove workflow-wide absence.
+
+Remote actions and reusable workflows are immutable only at an exact 40-hex commit
+SHA. Docker references require `@sha256:` followed by 64 hex digits. Tags, branches,
+short SHAs and bare images are mutable, including GitHub-owned and same-organization
+references. `./` references are local, not external; their internals remain unassessed.
+
+### Permission interpretation
+
+Interpret permissions as a vector. A job map replaces the workflow map, which
+replaces the repository default; omitted map entries are `none`, not inherited.
+Support `read-all`, `write-all`, `{}` and explicit maps with names and allowed values
+from the GitHub syntax reference reviewed on 2026-10-10. The mutation keys below
+accept `read`, `write` or `none`. `id-token` accepts `write` or `none`;
+`vulnerability-alerts` accepts `read` or `none`. Unknown names or values cannot
+supply a negative judgment.
+
+Mutation permissions are explicit `write` on `actions`, `artifact-metadata`,
+`attestations`, `checks`, `code-quality`, `contents`, `deployments`, `discussions`,
+`issues`, `packages`, `pages`, `pull-requests`, `security-events` or `statuses`.
+`id-token: write` alone is not token mutation; OIDC trust remains unassessed.
+Reusable caller permissions are only an upper bound on opaque callee execution.
+
+For the mutable/write join, eligible literal triggers are `push`,
+`workflow_dispatch`, `schedule` and `pull_request_target`. At least one eligible
+trigger is enough for an affirmative configuration judgment; additional unsupported
+or fork-related triggers do not erase it. A workflow triggered only in ordinary
+PR or Dependabot contexts abstains when syntactic permissions include mutation,
+because effective fork permissions are unverified. Other event types are
+unsupported for privilege inference and cannot supply a negative. PR-target
+permission interpretation does not apply the ordinary fork downgrade.
+
+### PR-controlled execution recognition
+
+Relevant `if` conditions must be absent or literal true. Literal false excludes
+that path; expressions are unknown. Recognize `actions/checkout` only with one of
+these exact refs, allowing whitespace inside `${{ ... }}`:
+
+- `${{ github.event.pull_request.head.sha }}`;
+- `${{ github.event.pull_request.head.ref }}`;
+- `refs/pull/${{ github.event.pull_request.number }}/merge`.
+
+An optional `repository` must be exactly
+`${{ github.event.pull_request.head.repo.full_name }}`, with the same internal
+whitespace allowance. Variables, compound expressions, other refs or concatenation
+are unknown. Checkout must use the default workspace or literal `.`. Later
+recognized execution must use that workspace. Custom paths, dynamic working
+directories, intervening checkouts and ambiguous or opaque flow are unknown.
+Checkout alone is not execution.
+
+Execution recognition requires an absent shell or literal `bash` or `sh` at every
+applicable workflow, job and step level. Other shells, including `python`, custom
+shell templates and expressions, are unknown; command text is not interpreted
+under them.
+
+Version `github-workflow-execution:2026-10-10` recognizes at most 16 KiB, 100 lines
+and 4 KiB per line of each `run`. A cap is an explicit limit gap and precludes an
+execution-based disproof. Commands use simple whitespace-separated tokens containing
+only letters, digits and `_./:@=+-`. Recognized execution is:
+
+- `make`, or `make <literal-target>`;
+- `npm ci`, `npm install`, `npm test`, `npm run <literal-script>`;
+- `pnpm` and `yarn` install, test, build and run forms;
+- `./<literal-local-script>`;
+- `sh`, `bash`, `python` or `python3` followed by `./<literal-local-file>`;
+- a later `uses: ./<literal-local-action>` step.
+
+Reject local path traversal. Environment assignments, command prefixes, quoting,
+substitutions, expressions, pipes, redirects, shell control operators, continuations
+and control flow are unsupported. Preceding lines and relevant checkout/control flow
+must also be supported; unfamiliar lines cannot be skipped to construct a firing
+chain. Missing a recognized command is not a negative while unsupported commands
+or opaque steps remain.
+
+### Runtime policy and runner limits
+
+GitHub documentation reviewed on 2026-10-10 describes public repositories without
+an already applicable PR-target event policy as using an `evaluate` default, with
+enforcement scheduled for affected repositories on 2026-11-02. It also describes
+checkout protection with an `allow-unsafe-pr-checkout` opt-out. These are time-specific policy
+facts, not permanent assumptions. Retain an explicit true opt-out as evidence;
+absence is not proof of protection. The Actions policies GET requires Administration
+write and is not added; scheck never recommends that write grant. Applicable runtime
+policy, checkout protection, approvals and actual execution always remain gaps.
+
+Runner access and App findings are deferred entirely. Literal self-hosted labels
+or groups may be reported only as requested runner configuration; dynamic requests
+are unknown. A hosted-only syntax observation does not establish safety. A later
+runner DEFINE must freeze exact repository/group access, public-repository permission,
+selected workflows and enterprise constraints; organization runner presence alone
+proves none of those. No runner or App operation is added in step 4.
+
+### Coverage and tests
+
+Report defaults, branch-protection presence, reference pinning, privileged mutable
+combinations and PR-controlled execution requests separately. Preserve gaps for
+review strength, bypass, runtime policies, reusable/composite execution, runner
+access, OIDC trust, transitive dependencies and unsupported syntax. Job container
+and service images are outside `uses` reference coverage and remain unassessed.
+Partial evidence may fire but cannot prove absence. Provenance includes the exact repository,
+workflow path, assessed SHA, supporting reads and original observation times.
+
+Each of the six ids has firing, disproved and abstained fixtures. Regressions cover
+permission replacement, `id-token` alone, unknown repository defaults, evaluate or
+disabled rules, `protected:true`, short SHAs, reusable privilege uncertainty,
+duplicates, aliases, caps, redaction, conditions, required runners, exclusive
+step forms, typed event filters, checkout without execution,
+unavailable policies, denied contents, branch races and partial populations.
+A seeded base64 secret is absent from report, audit and persisted run; its marker
+is present. Request traces prove GET-only SHA-pinned reads and no returned-URL use.
+Consultant REVIEW and Brightcart/Dani client REPORT passed; final fresh adversarial
+review found no confirmed findings after the reported defects were fixed. This
+is offline implementation verification, not the live acceptance gate.
+
+The frozen interpretation follows GitHub's official
+[workflow permissions](https://docs.github.com/en/rest/actions/permissions),
+[branches](https://docs.github.com/en/rest/branches/branches),
+[active rules](https://docs.github.com/en/rest/repos/rules),
+[contents](https://docs.github.com/en/rest/repos/contents),
+[workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax),
+[PR-target events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target),
+[reusable workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)
+and [secure use](https://docs.github.com/en/actions/reference/security/secure-use)
+references. The dated runtime-policy limits follow
+[PR-target security](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target)
+and [Actions policies](https://docs.github.com/en/rest/actions/policies).
+Deferred runner evidence is described by
+[runner access](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/manage-access)
+and [runner REST operations](https://docs.github.com/en/rest/actions/self-hosted-runners).
 
 ## History
 
@@ -336,7 +586,7 @@ fine-grained/App capability says "write capability not determined", never
 ## Reporting and coverage
 
 Inventory reports observed or “at least” counts, missing reads and
-permission/visibility gaps as asset notes. Step 3 also reports findings and each
+permission/visibility gaps as asset notes. Steps 3 and 4 report findings and each
 rule's fired, disproved or abstained assessments. Declaration references are
 printed as declarations, never quoted as collected API observations. Identity and repository-access
 coverage is partial where relevant evidence or later controls are missing.
@@ -344,8 +594,14 @@ Repository-specific judgments and their request provenance are placed on the
 repository asset, which reports its assessed controls rather than an inventory-only
 label. Repository-specific identity judgments contribute to the identity area; no rule
 family is fabricated for an asset that supplied no applicable judgments. The
-CI/CD area includes public-repository and deploy-key judgments; workflows, alerts
-and secret values remain `no_rule`. A successful API read is not an assessed control.
+CI/CD area includes public-repository, deploy-key and the six CI judgments. Token
+defaults, default-branch protection presence, dependency pinning, privileged mutable
+dependencies and PR-controlled execution requests have separate coverage sub-items.
+Provider alerts, secret metadata and history remain `no_rule`; runner access, App
+grants and runtime enforcement are not inferred from configuration. CI summary
+wording and actionable evidence are governed by [report.md](report.md), "GitHub CI
+summary". A successful
+API read is not an assessed control.
 Inventory evidence keeps each read's status, observation
 time and reuse decision; asset principals and request traces identify the account
 and execution decisions without a credential value. A changed known identity is

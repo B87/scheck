@@ -984,7 +984,13 @@ A response goes through these steps in order, and nothing is stored before the l
    one text, a span could start in one string and end in a later one, and the result
    could still parse with every item between them gone, an excluded user among them.
    Value by value, no span crosses a string, and an escape (`\n` before a token, `\/`
-   inside one) cannot hide a secret. Under a key that looks secret (`json-secret`),
+   inside one) cannot hide a secret.
+   E5's compiled workflow-file operation is the sole encoded-content exception:
+   the gate decodes its base64 source, redacts the decoded bytes, then builds the
+   bounded neutral YAML structure described in [github-collector.md](github-collector.md#supported-workflow-syntax).
+   Neither encoded nor pre-redaction source is retained. Non-success workflow
+   response bodies are discarded; sanitized parse failures keep generic gaps and
+   any redaction marker, never source snippets. Under a key that looks secret (`json-secret`),
    every scalar is redacted whole, in an array too; a narrower rule's marker stands
    only when one hit covered the whole value. Under such a key, only these stay as they
    are: the literals `true`, `false` and `null`, the empty string `""`, and `0` or `1`,

@@ -114,10 +114,24 @@ MFA evidence; unknown authority or missing/partial populations are not passes.
 GitHub account 2FA is independent of identity-provider MFA; SAML enforcement alone
 does not settle the GitHub 2FA rules.
 Read partial coverage and permission gaps before conclusions. Public-repository
-and deploy-key rules assess part of CI/CD; workflow controls, provider alerts and
-history remain `no_rule`. `public: true` on a repository asset declares
+and deploy-key rules and six CI configuration rules assess part of CI/CD. Read
+separate coverage for token defaults, default-branch protection presence, dependency
+pinning, mutable dependencies with write permission and PR-controlled execution
+requests. The summary counts selected CI rule assessments and those that decided.
+With zero CI decisions, read the missing reads and next steps; no security verdict
+was possible when all security assessments remained unknown. Permission next steps
+name the required read grant and authorization, never broader target write access.
+Workflow evidence is pinned to the assessed default-branch commit;
+unsupported syntax, unknown permissions and partial populations abstain. A protected
+branch does not prove review strength or bypass resistance. PR-target findings
+describe requested configuration, never successful execution or exploitability;
+runtime policies, checkout protection, approvals, runner access/isolation, App
+grants, job container/service images, reusable/composite internals and OIDC trust
+remain unassessed. Provider alerts, secret metadata and history remain `no_rule`. `public: true` on a repository asset declares
 deliberate public visibility; it never excuses a secret leak. Acceptances for an
-account, invitation, repository or deploy key must name its subject. Collaborator
+account, invitation, repository, deploy key, branch or workflow must name its
+subject. Branch keys retain exact case; workflow keys are exact
+`.github/workflows/<name>.yml` or `.yaml` paths. Collaborator
 pagination covers only the credential's visible view; missing access never proves
 offboarding. `--stop-after recon` prints unattributed accounts with `kind: ""`
 and invitation comments. Let the operator classify each account; never fill kinds
@@ -136,8 +150,9 @@ that it is fine.
 
 Findings come from **posture rules**: a compiled-in table where one unambiguous fact
 becomes one finding, graded through the context the engagement declares for that host.
-GitHub findings come from identity, MFA, access and repository visibility rules,
-with exact account, invitation, repository or deploy-key subjects where applicable.
+GitHub findings come from identity, MFA, access, repository visibility and CI
+configuration rules, with exact account, invitation, repository, deploy-key, branch
+or workflow subjects where applicable.
 The web collector's findings come from DNS, email, TLS and response rules, one per
 record, name, mail domain, include, selector, origin or URL (its `subject`), with evidence read
 through the scope gate as `anonymous`.

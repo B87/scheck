@@ -55,10 +55,30 @@ and warns that visibility depends on the credential in the normal header. Resume
 wording qualifies retained evidence by whether reuse was allowed; inventory notes
 identify reused observations by their original time and say current access was not
 validated. GitHub shortfalls refer to those notes instead of claiming nothing was
-read. GitHub step 3 groups identity and repository-access judgments into coverage
-sub-items and keeps delegated roles, workflow controls, alerts and history visible
-as unassessed. Repository identity judgments count in Identity and access.
-Declaration references are labeled separately from observed evidence. Fixed lines:
+read. GitHub steps 3 and 4 group identity, repository-access and CI configuration
+judgments into coverage sub-items and keep delegated roles, runtime enforcement,
+runner access, alerts and history visible as unassessed. Repository identity
+judgments count in Identity and access.
+Declaration references are labeled separately from observed evidence.
+
+**GitHub CI summary.** When CI assessments are selected, the summary names how many
+rule assessments decided out of how many selected and says runtime execution was
+not verified. With zero CI decisions it says no CI configuration rule could decide
+and directs the reader to missing reads and next steps. When no security rule
+could decide and nothing ranks, the empty ranking says no security verdict was
+possible from the collected CI evidence. Successful requests or zero findings
+never substitute for decided rules.
+
+CI findings cite recognizable configuration: observed default permissions or
+branch-protection evidence, and the workflow's requested permission, mutable
+reference or recognized execution chain. Workflow evidence names its exact path
+and assessed commit; derived configuration details remain separate from raw API
+observations. `github_ci` readout notes preserve configuration and runtime gaps.
+Permission shortfalls name the required read permission, such as Contents or
+Metadata read, and authorization/resume next steps without recommending a target
+write grant. CI-only reports do not fabricate identity evidence or notes.
+
+Fixed lines:
 
 - Method, in 0.0.2: `rules only: a fixed checklist per asset type, no model, no
   hypotheses. Reading only: nothing was probed, scanned, exploited or changed. Not a

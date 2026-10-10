@@ -33,7 +33,7 @@ func TestAccessOpsAreFixedGetReads(t *testing.T) {
 		if op.Method != gate.GET || op.Auth != gate.GitHubToken || op.APIVersion != "2026-03-10" || op.MaxBytes != 1<<20 {
 			t.Fatalf("op widened: %+v", op)
 		}
-		if op.List != nil && op.List.MaxPages != 100 {
+		if op.List != nil && op.List.Next != nil && op.List.MaxPages != 100 {
 			t.Fatal("uncapped list")
 		}
 		if op.ID == OpDeployKeys && strings.Join(op.Keep, ",") != "id,read_only" {

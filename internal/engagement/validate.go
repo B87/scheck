@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -972,6 +973,19 @@ func (v *validator) intent() {
 				// Nothing could ever match it, and a reader would believe
 				// one instance was accepted.
 				v.fail(key+".subject", "%s is about the asset as a whole, not one instance of it; remove subject", a.ID)
+			}
+		}
+		if kind := v.opts.FindingSubject(a.ID); a.Subject != "" {
+			switch kind {
+			case "workflow":
+				name, ok := strings.CutPrefix(a.Subject, ".github/workflows/")
+				if !ok || !gate.ValidWorkflowFile(name) {
+					v.fail(key+".subject", "must name an immediate .github/workflows/*.yml or *.yaml file")
+				}
+			case "branch":
+				if !gate.ValidBranchName(a.Subject) {
+					v.fail(key+".subject", "must name a supported case-sensitive branch")
+				}
 			}
 		}
 		v.acceptedAsset(key+".asset", a.Asset)

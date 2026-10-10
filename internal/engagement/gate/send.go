@@ -488,6 +488,14 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	case op.json && ok && len(raw) == 0 && op.List == nil:
 	// 3–6. A 2xx JSON body is redacted value by value, parsed from the
 	// redacted bytes, filtered and projected.
+	case op.WorkflowYAML && ok:
+		clean, hits, transformCode := workflowBody(raw, red)
+		out.Redactions = append(out.Redactions, hits...)
+		code = transformCode
+		if code == "" {
+			sh := g.shape(r, a, clean, resp.Header)
+			code, out.Body = sh.code, sh.body
+		}
 	case op.json && ok:
 		redacted, hits, err := red.RedactJSON(raw)
 		if err != nil {
@@ -506,6 +514,11 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	// body that is JSON is first redacted value by value, as a 2xx body
 	// is, so the same body reveals no more as an error.
 	default:
+		if op.WorkflowYAML {
+			// Error responses never retain an encoded contents body.
+			out.Body = []byte(`{"error":"workflow read did not succeed"}`)
+			break
+		}
 		if op.json {
 			redacted, hits, err := red.RedactJSON(raw)
 			if err != nil {
@@ -529,6 +542,9 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
 		res.end("unavailable:"+code, codeDetail(code, limit))
+		if (code == codeTooLarge && op.WorkflowYAML) || code == codeWorkflowLimit {
+			res.Reason = "limit_reached"
+		}
 	}
 	return p, rt
 }
