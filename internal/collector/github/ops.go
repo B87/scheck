@@ -22,7 +22,7 @@ const (
 
 // Ops is the compiled, GET-only inventory surface. Pagination accepts only a
 // gate-owned NextOf; role/filter values are literals, never caller parameters.
-var Ops = append(append(inventoryOps(), ciOps()...), alertOps()...)
+var Ops = append(append(append(inventoryOps(), ciOps()...), alertOps()...), historyOps()...)
 
 func inventoryOps() []gate.Op {
 	object := func(id, endpoint string, fields []string) gate.Op {

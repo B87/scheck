@@ -265,7 +265,7 @@ host locator other than `local`. A `network` is written with its host bits zero.
 `url` is a prefix: no query, fragment or credentials. A `repo` is `github:owner/name`; a local
 checkout is not a locator (`repo: ./` exits 3) but a repository's `checkout` setting,
 an absolute path to the operator's `git clone --mirror` ([scope.md](scope.md#repositories)).
-`checkout` is planned for E5 step 6 and is not accepted in the current build.
+`checkout` is accepted only on repository assets; its mirror is checked when read.
 
 **Names.** `engagement.name`, `assets` names and `people` handles all match
 `^[a-z0-9][a-z0-9-]{0,62}$`. A throttle rate is `N/s` or `N/m`.
@@ -273,8 +273,8 @@ an absolute path to the operator's `git clone --mirror` ([scope.md](scope.md#rep
 **An asset's settings follow its kind.** `jump`, `identity`, `elevate`, `profile`,
 `disable_checks`, `deny_paths` and `context` are host settings; `first_party` is
 taken by a domain, url or host; `deploys_to` (`production | staging | development`)
-`ci` (a tool named under `tools`) by a repository; `checkout` will be a repository
-setting in E5 step 6. A setting on the wrong kind
+`ci` (a tool named under `tools`) and `checkout` (an absolute mirror path) by a
+repository. A setting on the wrong kind
 exits 3, and so do two `assets` entries for the same id and an entry for an asset an
 `exclude` covers, whose settings could never apply.
 

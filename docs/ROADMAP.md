@@ -722,22 +722,50 @@ permissions remain proposals until reviewed and frozen):
    fresh adversarial review pass. All reported review defects were fixed; none is
    carried. Assessment-token reporting, E3 rest-lab seal and live acceptance remain
    pending; no live acceptance is claimed.
-6. **Confined history reader — defined, not built.** The security-consultant DEFINE
-   on 2026-10-10 freezes the planned contract in `spec/github-collector.md`,
-   "History": ordinary SHA-1 bare mirrors; one read-only `os.Root` boundary;
-   conventional matching mirror config; loose objects, PACK/index v2 and deltas;
-   all-ref/all-parent tree traversal; fixed resource budgets and fresh branch/pull
-   ref comparison through two GETs. No Git invocation, transport or mirror write.
-   `checkout` remains unavailable until this step lands. Planned rules are
-   `github.history_credential` (high) and `github.remote_credential` (medium), both
-   per `secret_location`, with safe markers and complete/partial coverage kept
-   distinct. Resume rescans and obtains fresh refs. Missing API evidence, unsupported
-   formats, mutation and caps never support an absence verdict. Stream packs, cap the
-   decoded-object cache at 64 MiB and resident reader buffers at 128 MiB; prove both
-   rules' three outcomes and all-output redaction before reviews. The definition
-   has no blocking operator/security decisions; implementation, tests and reviews
-   remain pending. Assessment-token reporting, E3 rest-lab seal and live acceptance
-   remain pending.
+6. **Confined history reader — built and verified offline.**
+   The security-consultant DEFINE on 2026-10-10 freezes the contract in
+   `spec/github-collector.md`, "History": ordinary SHA-1 bare mirrors; one
+   read-only `os.Root` boundary in the gate; conventional matching mirror config;
+   loose objects, PACK/index v2 and cross-storage deltas; all-ref/all-parent tree
+   traversal; fixed budgets and fresh branch/pull ref comparison through two GETs.
+   Repository assets accept an absolute `checkout`. No Git invocation, transport,
+   mirror write or new dependency. The rules are `github.history_credential`
+   (high) and `github.remote_credential` (medium), both per `secret_location`.
+   Only safe markers and locations survive; compiled existing redactor detectors
+   and the exact run credential detect, without entropy heuristics. Resume rescans
+   and obtains fresh refs. Missing API evidence, unsupported formats, mutation and
+   caps never support an absence verdict. Consultant-approved partial continuation
+   ignores unsupported on-disk mechanisms while reading independently validated
+   ordinary confined objects; strict config admission still applies. No alternate
+   or replacement is followed, no object fetched and no absence claim permitted.
+   Packs stream with no decoded-object cache
+   and 128 MiB resident-buffer reservations, including retained findings/redactions
+   and traversal bookkeeping. Full tree paths are capped at 4,096 bytes before
+   join allocation, as approved by the consultant. Local audit records contain execution
+   status and numeric counts, with no content hash. Local observations retain their
+   own actor/time; partial mirror counts and actionable gaps remain visible.
+   Unit and fake-API tests cover all three rule outcomes, packed/loose/delta reads,
+   confinement, limits, fresh resume and seeded all-output secrecy. Three history
+   report outcomes are pinned by goldens. Consultant REVIEW re-review passes after
+   its two wording should-fixes; final client REPORT re-review passes without
+   blockers. Full `make check` and `make build` pass. The first adversarial pass
+   confirmed three must-fix defects: root acquisition races, index allocation/accounting and silent detector
+   candidate exhaustion. Fixes anchor root acquisition and verify directory identity,
+   reserve conservative index accounting before allocation, and make raw candidate
+   exhaustion incomplete while retaining positives. Detector transient buffers
+   reserve 32 MiB inside the existing 128 MiB budget. A second review confirmed
+   uncharged directory-list allocation as a fourth must-fix. Lists reserve 1 KiB per entry before `ReadDir`,
+   including overflow, bounded by the available resident budget; recursive parent
+   and pack lists retain their charge until no longer used. Regression tests cover
+   list limits. Pending parent identities copy only their 40-byte SHA, and header
+   iteration avoids a split-line array. A subsequent fresh review found a fifth
+   must-fix: quoted `core` or `extensions` subsections could be mistaken for ordinary admission settings.
+   The fix rejects every such subsection, including empty quotes; full collector
+   regressions prove no history or origin disproof for all four forms. All five
+   confirmed defects are fixed and re-reviewed. Full checks and build pass after
+   the final config-admission and inflation-buffer fixes. The fresh final
+   adversarial review passes with no must-fix, should-fix or nit; no reviewed
+   defect is deferred. Assessment-token reporting, E3 rest-lab seal and live acceptance remain pending.
 7. **Closing review.** Consultant REVIEW, client REPORT, spec sync/audit,
    `make check` and a fresh whole-slice adversarial code review. Every built rule has
    firing, disproved and abstained fixtures. Missing live lab measurements remain
@@ -749,6 +777,14 @@ empty ranking in an inventory-only report as “No security rules ran” rather 
 the ranking adds little when no control was assessed. E5 step 7 owns reconsidering
 this optional wording after security rules exist, when its remaining relevance can
 be judged. It is not a change to coverage or exit semantics.
+
+**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
+readout wording improvements, with no blocking issue: put the stale-mirror update
+and resume action nearer the summary; ask the operator to identify the credential
+owner while stating authenticity/usability were not tested; assign origin/helper
+cleanup to the mirror maintainer. Production notes already explain “mirror” and
+“origin” in plain language; synthetic report fixtures can use the same explanation.
+These are wording changes, not new findings or changes to coverage or exit counts.
 
 **Carried from E4's reviews:** before E5's first op, unless E6 did it first, the provider
 table carries what is now hard-coded per provider (a display name, page keys, rate-limit
@@ -808,6 +844,14 @@ slice against what the read scopes return.
 
 **Done when:** as E5, against a fake Admin SDK server; an opt-in live test (`make live`)
 reads the lab tenant; broader-than-read scopes are reported as a finding.
+
+**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
+readout wording improvements, with no blocking issue: put the stale-mirror update
+and resume action nearer the summary; ask the operator to identify the credential
+owner while stating authenticity/usability were not tested; assign origin/helper
+cleanup to the mirror maintainer. Production notes already explain “mirror” and
+“origin” in plain language; synthetic report fixtures can use the same explanation.
+These are wording changes, not new findings or changes to coverage or exit counts.
 
 **Carried from E4's reviews:** before E6's first op, unless E5 did it first, the provider
 table and a list's item subject as a template, as under E5; and org-unit matching moves
@@ -1030,6 +1074,14 @@ asset's entry points and its one redirect hop, and no `robots.txt` path
 requested; a resume with a different vantage reads a web asset's names and entry
 points again; a resume after a changed `mail` or `intent` URL reads again only the DNS names
 and entry points it affects (carried from E4 step 4b).
+
+**Carried from the step 6 client review** (2026-10-10): E5 step 7 owns optional
+readout wording improvements, with no blocking issue: put the stale-mirror update
+and resume action nearer the summary; ask the operator to identify the credential
+owner while stating authenticity/usability were not tested; assign origin/helper
+cleanup to the mirror maintainer. Production notes already explain “mirror” and
+“origin” in plain language; synthetic report fixtures can use the same explanation.
+These are wording changes, not new findings or changes to coverage or exit counts.
 
 **Carried from E4's reviews:**
 

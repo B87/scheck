@@ -4,7 +4,9 @@ GitHub organization and repository assessment for 0.0.2 E5. Steps 1–5 build th
 gate foundation, principal/organization inventory, identity and repository-access
 rules, CI configuration, secret metadata and provider-alert rules. Steps 4 and 5
 were defined with the `security-consultant` on 2026-10-10. Step 6's history
-contract was frozen on 2026-10-10; the reader and `checkout` setting are not built.
+contract was frozen on 2026-10-10; the reader and repository `checkout` setting
+are implemented; final checks, build and consultant/client/adversarial reviews pass. Step 6 is
+verified offline; all five confirmed review defects are fixed and re-reviewed.
 Step 5 passes offline checks and consultant/client/adversarial reviews; live
 acceptance remains pending. The step 3 evidence and rule surface
 was frozen on 2026-10-10.
@@ -695,26 +697,45 @@ compiled operations and no returned-URL or content follow-up.
 
 ## History
 
-**Step 6 definition, frozen with the security-consultant on 2026-10-10; not built.**
-The planned mirror reader and its safety boundary are owned by
-[scope.md](scope.md#repositories). `checkout` remains unavailable until step 6
-lands. The following defines that implementation, not coverage already delivered.
+**Step 6 implemented from the definition frozen with the security-consultant on
+2026-10-10; built and verified offline.** Final checks, build and consultant,
+client and fresh adversarial reviews pass; all five confirmed review defects are
+fixed and re-reviewed. The mirror reader and its safety
+boundary are owned by [scope.md](scope.md#repositories). Repository assets accept
+`checkout: /absolute/path` to the operator's mirror; missing mirrors leave history
+unassessed. Unit and fake-API report tests pass; no live acceptance is claimed.
 
 ### Mirror admission and confinement
 
 The input is an ordinary SHA-1 bare mirror made by the operator. One read-only
 boundary uses `os.Root` for all local opens and rejects filesystem symlinks and
 nonregular files. Hard links are rejected where reliable standard platform metadata
-can identify them; platforms without that check are unsupported. No pathname check
-followed by an unconstrained open is permitted. Nothing executes Git, fetches,
+can identify them; platforms without that check are unsupported. The gate owns
+this local boundary. Root acquisition starts from an anchored filesystem `/`
+descriptor and walks directories relative to the admitted parent. Directory identity
+must agree at `Lstat`, descriptor open and child-root binding; no mirror content is
+read until the exact admitted root is acquired. Final opens are read-only with
+`O_NOFOLLOW` and `O_NONBLOCK`; directory reads also use `O_DIRECTORY`, and open
+files must have `syscall.Stat_t.Nlink == 1`. No pathname check followed by an
+unconstrained open is permitted. Nothing executes Git, fetches,
 checks out files, loads hooks or writes the mirror.
 
 Parse conventional Git config sections, quoted values and comments. Require
 `core.bare=true`, repository format 0 or 1 using SHA-1, one unambiguous matching
-`remote "origin"`, `mirror=true` and `fetch=+refs/*:refs/*`. Reject includes,
-alternates, promisor repositories, replacement refs, grafts, reftable, worktrees,
-URL rewrites and extensions that change object or reference interpretation. Inert
-settings are ignored. Ambiguous or duplicate admission settings are unsupported.
+`remote "origin"`, `mirror=true` and `fetch=+refs/*:refs/*`. `core` and
+`extensions` cannot have quoted subsections, including empty quoted subsections;
+those sections never supply ordinary admission settings. Includes, URL
+rewrites, promisor configuration, reftable, worktree configuration and extensions
+that change object or reference interpretation prevent supported config admission.
+Inert settings are ignored. Ambiguous or duplicate admission settings are
+unsupported.
+
+On-disk shallow boundaries, alternates, grafts, replacement refs and promisor
+metadata are never interpreted or followed. Their presence makes coverage partial;
+independently validated ordinary objects inside the confined mirror may still be
+read. Observed credential patterns may fire, but no negative history verdict is
+allowed. Nothing fetches a missing object. This partial-read behavior was explicitly
+approved by the security-consultant on 2026-10-10.
 
 Origin must name the exact declared GitHub repository in HTTPS, SSH or scp form.
 Compare after removing userinfo; reject ports, queries, fragments and ambiguous
@@ -742,9 +763,25 @@ mirror's refs, remain gaps.
 
 Budgets are compiled limits, never settings that widen collection. Each repository
 also obeys the engagement deadline. Stream packs rather than loading all pack
-bytes into memory. The decoded-object cache is at most 64 MiB; eviction is not a
-coverage gap. Aggregate resident reader buffers are at most 128 MiB; exceeding
-that processing budget stops incomplete with `limit_reached`.
+bytes into memory. The implementation retains no decoded-object cache (the ceiling
+is 64 MiB).
+Aggregate resident reader buffer reservations are at most 128 MiB, including
+32 MiB for each before/after metadata snapshot and 32 MiB for transient detector
+work, pending and visited bookkeeping, tree-name maps and retained
+finding/redaction records. Index input is reserved before allocation with a
+conservative twelve-times-byte charge covering input, decoded and transient
+maps/strings and slice capacity. Directory-list allocation is reserved before
+`ReadDir` at a conservative 1 KiB per entry, including the overflow entry. The
+available resident budget bounds the requested entry count. Retain the charge
+through each list's lifetime, including parent lists alive during recursion, and
+release it only after the list is no longer used. Pending parent identities retain
+only copied 40-byte SHA strings; commit/tag headers are iterated without allocating
+an array of split lines. Loose-object inflation reserves 32 MiB before reading to
+cover buffer growth, then shrinks the charge to twice actual buffer capacity.
+Packed-object inflation allocates fixed capacity for the declared size plus one
+byte and uses `ReadFull`, preserving EOF and checksum validation without growth.
+A full tree path is bounded before allocating the joined path. Exceeding a
+processing budget stops incomplete with `limit_reached`.
 
 | Resource | Maximum |
 |---|---|
@@ -758,11 +795,16 @@ that processing budget stops incomplete with `limit_reached`.
 | One expanded object / total expanded bytes | 8 MiB / 512 MiB |
 | Delta depth / symbolic-ref or tag depth | 64 / 16 |
 | Tree depth / tree visits | 128 / 250,000 |
+| Full tree path | 4,096 bytes |
 | Finding locations | 10,000 |
+| Raw regex candidates per compiled detector | 10,001 (reaching it is incomplete) |
 | Time | 60 seconds |
 
 A cap yields incomplete coverage and exit 2. Retain observed positive matches;
-never turn a bounded partial traversal into an absence claim.
+never turn a bounded partial traversal into an absence claim. Reaching 10,001 raw
+regex candidates for any compiled detector yields `limit_reached`, even when
+harmless-match filtering removes every candidate. Keep recognized positive
+matches; filtered candidate exhaustion never supports a negative verdict.
 
 ### Fresh reference comparison and resume
 
@@ -787,7 +829,7 @@ mirror and reads fresh refs; it never reuses a local history result.
 
 ### Rules and subjects
 
-Both planned definitions set `Subject: "secret_location"`, Secrets area and
+Both definitions set `Subject: "secret_location"`, Secrets area and
 non-exposure findings. Acceptances must name the exact location.
 
 | Finding | Base | Fires | Disproves | Abstains |
@@ -863,7 +905,7 @@ fine-grained/App capability says "write capability not determined", never
 ## Reporting and coverage
 
 Inventory reports observed or “at least” counts, missing reads and
-permission/visibility gaps as asset notes. Steps 3–5 report findings and each
+permission/visibility gaps as asset notes. Steps 3–6 report findings and each
 rule's fired, disproved or abstained assessments. Declaration references are
 printed as declarations, never quoted as collected API observations. Identity and repository-access
 coverage is partial where relevant evidence or later controls are missing.
@@ -875,7 +917,11 @@ CI/CD area includes public-repository, deploy-key and the six CI judgments. Toke
 defaults, default-branch protection presence, dependency pinning, privileged mutable
 dependencies and PR-controlled execution requests have separate coverage sub-items.
 Secret metadata sharing, Dependabot alerts and provider-secret alerts have
-separate coverage sub-items. History remains `no_rule`; runner access, App grants
+separate coverage sub-items. Supported mirror history and mirror-origin credential
+detection have separate coverage sub-items. Missing or partial mirrors preserve
+abstentions and lower-bound counts; local observations name the local mirror
+reader and its observation time separately from the GitHub principal. Runner
+access, App grants
 and runtime enforcement are not inferred from configuration. `github_alerts` notes
 retain metadata inventories, provider validity/resolution caveats and location
 gaps. CI summary wording and actionable evidence are governed by [report.md](report.md), "GitHub CI

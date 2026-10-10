@@ -414,7 +414,7 @@
         "reason": { "$ref": "#/$defs/reason" },
         "detail": { "type": "string", "description": "Escaped, post-redaction." },
         "echo": { "type": "string", "description": "A canary mismatch's echo, redacted and cut. Attacker-influenced: JSON only, never printed in text." },
-        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "excluded", "jump_excluded", "access", "canary"], "description": "For a refusal: which one, so the text can say what to do." },
+        "kind": { "enum": ["host_key_unknown", "host_key_changed", "jump_host_key_unknown", "jump_host_key_changed", "excluded", "jump_excluded", "access", "canary", "mirror"], "description": "For a refusal: which one, so the text can say what to do." },
         "effect": {
           "type": "object", "additionalProperties": false,
           "properties": {

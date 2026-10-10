@@ -36,6 +36,8 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		}
 	case finding.AreaSecrets:
 		families = []family{
+			{"supported mirror history credential detection", []string{finding.IDGitHubHistoryCredential}},
+			{"mirror origin credential detection", []string{finding.IDGitHubRemoteCredential}},
 			{"organization Actions secret sharing", []string{finding.IDGitHubOrgSecretAll}},
 			{"provider secret-scanning alerts at commit locations", []string{finding.IDGitHubSecretScanningOpen}},
 		}
@@ -81,7 +83,7 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		}
 		row.SubItems = append(row.SubItems, si)
 	}
-	unknown := "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed"
+	unknown := "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed"
 	if area == finding.AreaIdentity {
 		unknown = "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed"
 	}

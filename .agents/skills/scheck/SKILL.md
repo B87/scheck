@@ -128,8 +128,18 @@ describe requested configuration, never successful execution or exploitability;
 runtime policies, checkout protection, approvals, runner access/isolation, App
 grants, job container/service images, reusable/composite internals and OIDC trust
 remain unassessed. Actions secret metadata, organization sharing policy,
-Dependabot alerts and provider-secret alerts have separate coverage; history remains
-`no_rule`. Read `github_alerts` notes for observed or lower-bound inventories,
+Dependabot alerts, provider-secret alerts, supported mirror history and mirror-origin
+credential detection have separate coverage. An absolute `checkout` on a repository
+asset selects an operator-provided SHA-1 bare mirror. scheck reads it in process,
+never invokes Git, fetches or modifies the mirror, and retains only safe credential
+markers and locations. Fresh branch/pull reference reads are compared on every run
+and resume; unavailable API evidence permits the local read but no absence verdict.
+Read the mirror notes and lower-bound commit/blob counts before interpreting
+findings. Missing mirrors, differing refs, unsupported/corrupt objects, mutation and
+compiled caps leave history unassessed or partial. Local evidence has a separate
+local-reader label and observation time. Origin configuration findings concern the
+operator's mirror, not hosted exposure.
+Read `github_alerts` notes for observed or lower-bound inventories,
 inactive validity, non-revocation resolutions and unsupported locations. Provider
 alerts are not a complete secret scan. Names and timestamps prove neither leakage
 nor rotation; deployed dependencies and credential usability were not tested.

@@ -1314,6 +1314,15 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 	}
 	in.Vantage = r.o.Vantage
+	for _, ra := range r.recon.Assets {
+		if ra.GitHub != nil {
+			for _, history := range ra.GitHub.RepositoriesHistory {
+				if history.Read.Op != "" {
+					in.Observations[history.Read.RequestID] = ereport.Observation{CollectedAt: history.Read.ObservedAt, Principal: "local mirror reader"}
+				}
+			}
+		}
+	}
 	in.Rerun = "scheck run " + file
 	if r.o.Vantage != "" {
 		in.Rerun += " --vantage " + r.o.Vantage
@@ -1486,7 +1495,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			if in.RulesVersion == "" {
 				in.RulesVersion = r.o.Version
 			}
-			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion + ":" + githubc.AlertRulesVersion
+			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion + ":" + githubc.AlertRulesVersion + ":" + githubc.HistoryVersion
 			break
 		}
 	}

@@ -55,9 +55,14 @@ and warns that visibility depends on the credential in the normal header. Resume
 wording qualifies retained evidence by whether reuse was allowed; inventory notes
 identify reused observations by their original time and say current access was not
 validated. GitHub shortfalls refer to those notes instead of claiming nothing was
-read. GitHub steps 3–5 group identity, repository-access, CI configuration, secret sharing
+read. GitHub steps 3–6 group identity, repository-access, CI configuration, secret sharing
 and provider-alert judgments into coverage sub-items. Delegated roles, runtime
-enforcement, runner access and history remain visibly unassessed. Repository identity
+enforcement and runner access remain visibly unassessed. Supported mirror history
+and mirror-origin credential detection have separate Secrets coverage sub-items.
+Missing or partial mirrors abstain, with read counts and actionable gaps in asset
+notes. Local mirror observations have their own actor and time, separate from the
+GitHub principal. History findings retain only detector markers and commit/path/line
+locations, never blob snippets or origin URLs. Repository identity
 judgments count in Identity and access.
 Declaration references are labeled separately from observed evidence.
 

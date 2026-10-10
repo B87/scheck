@@ -228,7 +228,8 @@ type Asset struct {
 	CI        string `yaml:"ci,omitempty" json:"ci,omitempty"`
 	// Public records deliberate public repository visibility; absence is not
 	// a declaration (docs/spec/github-collector.md, "Context and subjects").
-	Public *bool `yaml:"public,omitempty" json:"public,omitempty"`
+	Public   *bool  `yaml:"public,omitempty" json:"public,omitempty"`
+	Checkout string `yaml:"checkout,omitempty" json:"checkout,omitempty"`
 }
 
 // HostContext is the host collector's structured context, these four fields

@@ -42,8 +42,25 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 	}
 	ev = githubc.CollectCI(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
 	ev = githubc.CollectAlerts(ctx, g, ev, githubc.Organization{Asset: a.ID, Name: strings.TrimPrefix(a.ID, "saas:github:"), Stage: "recon"})
+	checkouts := map[string]string{}
+	for _, asset := range r.res.Assets {
+		if asset.Kind == KindRepo {
+			checkouts[asset.ID] = asset.Checkout
+		}
+	}
+	ev = githubc.CollectHistory(ctx, g, ev, checkouts)
+	for _, h := range ev.RepositoriesHistory {
+		if h.Read.Op != "" {
+			if err := g.RecordMirrorAttempt(h.Asset, h.Read.RequestID, h.Read.Decision, h.Read.Gap, h.Objects, h.Commits, h.Blobs, h.Read.ObservedAt); err != nil {
+				ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, "mirror audit could not be written"
+				r.incomplete(a, ra)
+				return ra
+			}
+		}
+	}
 	ev.Judgments = append(githubc.Judge(ev, r.githubContext(a)), githubc.JudgeCI(ev, r.githubContext(a))...)
 	ev.Judgments = append(ev.Judgments, githubc.JudgeAlerts(ev, r.githubContext(a))...)
+	ev.Judgments = append(ev.Judgments, githubc.JudgeHistory(ev)...)
 	ra.GitHub = &ev
 	ra.Status = StatusCollected
 	targetRead := false
@@ -51,8 +68,8 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
 			targetRead = true
 		}
-		if read.Reason == "refused" && read.Kind == "access" {
-			ra.Status, ra.Reason, ra.Refusal, ra.Detail = StatusRefused, ReasonRefused, "access", read.Detail
+		if read.Reason == "refused" && (read.Kind == "access" || read.Kind == "mirror") {
+			ra.Status, ra.Reason, ra.Refusal, ra.Detail = StatusRefused, ReasonRefused, read.Kind, read.Detail
 			break
 		}
 		if read.Reason == "limit_reached" || read.Decision == "unavailable:response_too_large" || read.Truncated || (read.Population != nil && slices.Contains(read.Population.Incomplete, "page_limit")) || ctx.Err() != nil {
@@ -187,6 +204,25 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 	}
 	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev)...)
 	ai.InventoryNotes = append(ai.InventoryNotes, githubAlertNotes(*ev)...)
+	readHistory, completeHistory := 0, 0
+	for _, h := range ev.RepositoriesHistory {
+		detail := "Mirror history was not read. " + githubc.HistoryGapText(h.Gaps)
+		if h.RemoteKnown && (h.Objects > 0 || h.Complete) {
+			readHistory++
+			qualifier := "at least "
+			if h.Complete {
+				qualifier = ""
+				completeHistory++
+			}
+			detail = fmt.Sprintf("Supported mirror history: %s%d commits and %d blob visits read. Traversal gaps: %s.", qualifier, h.Commits, h.Blobs, githubc.HistoryGapText(h.Gaps))
+		}
+		detail += " Detector misses, deleted/unadvertised refs, reflogs, submodule/LFS payloads and credential usability remain unassessed."
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: h.Asset, Detail: detail})
+	}
+	if len(ev.RepositoriesHistory) > 0 {
+		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: fmt.Sprintf("A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read for %d of %d selected repositories; %d complete supported traversals with matching observed refs. Hidden repositories and history outside the supported traversal remain unassessed.", readHistory, len(ev.RepositoriesHistory), completeHistory)})
+	}
+
 	for _, read := range ev.Reads() {
 		ai.Redactions = append(ai.Redactions, read.Redactions...)
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
@@ -357,8 +393,8 @@ func (r *run) reconcileGitHubRepositories(doc *ReconDoc) {
 						doc.Assets[i].Detail = "repository metadata was unavailable or could not be recognized"
 					}
 				}
-				if read.Reason == "refused" && read.Kind == "access" {
-					doc.Assets[i].Status, doc.Assets[i].Reason, doc.Assets[i].Refusal = StatusRefused, ReasonRefused, "access"
+				if read.Reason == "refused" && (read.Kind == "access" || read.Kind == "mirror") {
+					doc.Assets[i].Status, doc.Assets[i].Reason, doc.Assets[i].Refusal = StatusRefused, ReasonRefused, read.Kind
 				}
 				if read.Reason == "limit_reached" || read.Truncated || read.Decision == "unavailable:response_too_large" {
 					doc.Assets[i].Status, doc.Assets[i].Reason = StatusIncomplete, ReasonLimitReached

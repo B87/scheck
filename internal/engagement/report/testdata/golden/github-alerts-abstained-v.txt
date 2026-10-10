@@ -47,7 +47,7 @@ Secrets                  not checked
   Required GitHub authority, visibility, context or recognized evidence was missing (Actions secret
   PROD_KEY; Secret alert 7 in config/Prod.env:2); this version of scheck has no rule for it (Actions
   secret values, credential usability/rotation, unsupported secret locations, unreported patterns
-  and repository history are not assessed).
+  and history outside the supported mirror traversal are not assessed).
 CI/CD and supply chain   not checked
   2 of 2 assets read.
   This version of scheck has no rule for it (PR review strength and bypass, Actions runtime

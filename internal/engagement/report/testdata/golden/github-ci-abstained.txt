@@ -42,7 +42,8 @@ Identity and access      not checked
 Secrets                  not checked
   2 of 2 assets read.
   This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
-  unsupported secret locations, unreported patterns and repository history are not assessed).
+  unsupported secret locations, unreported patterns and history outside the supported mirror
+  traversal are not assessed).
 CI/CD and supply chain   not checked
   2 of 2 assets read.
   Required GitHub authority, visibility, context or recognized evidence was missing; this version of

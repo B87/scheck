@@ -371,8 +371,9 @@ Secrets are searched in history as well as the current tree, and are redacted in
 output: the report shows where a secret is and what kind it is, never its value. Where
 the code host has its own secret scanning, its alerts are read as well.
 
-**Planned E5 step 6: history comes from the operator's mirror checkout, read
-in-process (decided in 0.0.2 E4; definition frozen on 2026-10-10, not built).**
+**E5 step 6 implements history from the operator's mirror checkout, read
+in-process (decided in 0.0.2 E4; definition frozen on 2026-10-10; built and verified
+offline, with checks, build and consultant/client/adversarial reviews passed).**
 scheck has no git transport. Running `git` would send requests the gate never sees. Cloning through the gate would need a `POST` to `git-upload-pack` and would leave
 plaintext secrets in a temporary directory on the operator's laptop, with a cleanup
 that a crash skips. The operator already holds the clone:
@@ -393,7 +394,9 @@ that a crash skips. The operator already holds the clone:
   the observed GitHub refs", not "behind origin". Missing or changed advertised
   refs and unavailable API evidence make coverage *partial*.
 - **The reader.** It is in-process: loose objects and packs read with the standard
-  library's zlib and one read-only `os.Root` confinement boundary. Filesystem
+  library's zlib and one read-only `os.Root` confinement boundary. Root acquisition
+  is descriptor-relative from filesystem `/`, with directory identity checked at
+  admission, open and binding before reading any mirror content. Filesystem
   symlinks and nonregular files are rejected; hard links are rejected where reliable
   standard platform metadata permits that check, and other platforms are unsupported.
   Nothing is executed. Each attempt has one audit line with execution status/reason,
@@ -408,9 +411,10 @@ that a crash skips. The operator already holds the clone:
   host's own secret-scanning alerts are read through the API where the token can see
   them. Commits GitHub still serves by SHA after their branch was deleted without a
   pull request are not in a mirror, and coverage says they are *not assessed*.
-- **When.** `checkout` is not accepted in the current build. E5 step 6 will accept an
-  absolute path and check the mirror config, remote and refs when reading it. Resume
-  will rescan locally and compare fresh API refs, never reuse a local scan result.
+- **When.** `checkout` accepts an absolute path on a repository asset and checks
+  the mirror config, remote and refs when reading it. Resume rescans locally and
+  compares fresh API refs, never reusing a local scan result. Missing advertised-ref
+  access still permits the confined local read, but never a negative history verdict.
 
 A gate-mediated fetch is reconsidered in 0.0.3 if operators find mirroring a burden.
 

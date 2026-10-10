@@ -184,6 +184,7 @@ type ExposureInput struct{ URL, Reason, Source string }
 
 // Observation is the original collection metadata, including reused evidence.
 type Observation struct {
+	Principal   string // Optional collector-specific actor for local evidence.
 	CollectedAt time.Time
 	Vantage     string
 }

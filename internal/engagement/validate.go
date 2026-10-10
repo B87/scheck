@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"regexp/syntax"
 	"slices"
@@ -642,6 +643,10 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	only("deploys_to", a.DeploysTo != "", KindRepo)
 	only("ci", a.CI != "", KindRepo)
 	only("public", a.Public != nil, KindRepo)
+	only("checkout", a.Checkout != "", KindRepo)
+	if a.Checkout != "" && !filepath.IsAbs(a.Checkout) {
+		v.fail(key+".checkout", "must be an absolute mirror path")
+	}
 
 	if r.Kind == KindHost {
 		v.hostSettings(key, r, a)

@@ -26,7 +26,7 @@ Outside scheck   Malware on any machine, application logic, processes, lookalike
 
 Fix these first: a ranking of what was checked, not of all your risks
   1  critical   GitHub reports an open secret-scanning alert (production)
-             base high, raised: this alert concerns a secret in an observed public repository, so
+             base high, raised: this finding concerns a secret in an observed public repository, so
              the rating rises to critical. Credential usability was not tested
   2  high      GitHub reports an open high or critical severity dependency alert (production)
   3  medium    Organization secret is available to all repositories (engineering)
@@ -48,7 +48,8 @@ Identity and access      not checked
 Secrets                  checked in part
   2 of 2 assets read.
   This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
-  unsupported secret locations, unreported patterns and repository history are not assessed).
+  unsupported secret locations, unreported patterns and history outside the supported mirror
+  traversal are not assessed).
 CI/CD and supply chain   checked in part
   2 of 2 assets read.
   This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
@@ -88,8 +89,8 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Concluded from request:secret-alerts, request:secret-locations, request:repository
    Severity      critical: base high, +1 attribute public repository (repository: Observed
                  repository visibility: public)
-   Why here      This alert concerns a secret in an observed public repository, so the rating rises
-                 to critical. Credential usability was not tested.
+   Why here      This finding concerns a secret in an observed public repository, so the rating
+                 rises to critical. Credential usability was not tested.
    Not checked   Provider patterns are not a complete repository secret scan; history and
                  unsupported locations were not scanned; credential usability and rotation were not
                  verified

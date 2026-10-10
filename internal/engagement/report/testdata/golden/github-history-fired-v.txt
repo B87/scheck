@@ -1,0 +1,159 @@
+scheck engagement report: GitHub mirror history review
+For Alex. Read 2026-10-09 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+GitHub account saas:github:example-org: alice (user ID 41). Inventory visibility depends on this
+               credential.
+GitHub account repo:github:example-org/production: alice (user ID 41). Inventory visibility depends
+               on this credential.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: engineering, production (checked only in part: secrets). See Coverage for what was not
+checked.
+
+SUMMARY
+Checked in part  Secrets.
+Not checked      Identity and access, CI/CD and supply chain: see Coverage.
+Not requested    Not part of this run: cloud configuration, data stores and backups, external
+                 surface, web application, hosts, email and domain, logging and incident readiness.
+                 To include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  critical   Credential pattern found in repository history (production)
+             base high, raised: this finding concerns a secret in an observed public repository, so
+             the rating rises to critical. Credential usability was not tested
+  2  medium    Credential found in mirror origin configuration (production)
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: secrets. Not checked: identity and access, CI/CD and supply chain, cloud configuration,
+data stores and backups, external surface, web application, hosts, email and domain, logging and
+incident readiness. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      not checked
+  1 of 1 asset read.
+  This version of scheck has no rule for it (engineering: inventory only; no GitHub security control
+  was assessed).
+Secrets                  checked in part
+  2 of 2 assets read.
+  This version of scheck has no rule for it (engineering: inventory only; no GitHub security control
+  was assessed; Actions secret values, credential usability/rotation, unsupported secret locations,
+  unreported patterns and history outside the supported mirror traversal are not assessed).
+CI/CD and supply chain   not checked
+  2 of 2 assets read.
+  This version of scheck has no rule for it (engineering: inventory only; no GitHub security control
+  was assessed; PR review strength and bypass, Actions runtime policies, execution,
+  reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime
+  exploitability are not assessed).
+Not requested            Not part of this run: cloud configuration, data stores and backups,
+                         external surface, web application, hosts, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 2 open (1 critical, 1 medium), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  critical  Credential pattern found in repository history (production) [github.history_credential]
+   Subject       config/Prod.env:2 at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (secret_location
+                 history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret)
+   Observed      mirror-history (12:00, as local mirror reader): config/Prod.env:2 at commit
+                 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: [REDACTED:kv-secret:31 bytes]. Observed
+                 repository visibility: public.
+   Observed      heads (12:00, as alice (user ID 41)): Advertised reference metadata was compared
+                 with the local mirror; credential matches came from local blob reads
+   Observed      pull (12:00, as alice (user ID 41)): Advertised reference metadata was compared
+                 with the local mirror; credential matches came from local blob reads
+   Concluded from request:mirror-history, request:heads, request:pull
+   Severity      critical: base high, +1 attribute public repository (repository: Observed
+                 repository visibility: public)
+   Why here      This finding concerns a secret in an observed public repository, so the rating
+                 rises to critical. Credential usability was not tested.
+   Not checked   Credential usability and revocation were not tested; Unadvertised/deleted refs,
+                 objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads
+                 and detector misses remain unassessed
+   Fix           Treat this credential as exposed. Revoke or rotate it with its provider, review its
+                 use, then remove it from repository history and other copies.
+
+2  medium  Credential found in mirror origin configuration (production) [github.remote_credential]
+   Subject       mirror origin configuration (secret_location remote:origin)
+   Observed      mirror-history (12:00, as local mirror reader): Recognized credential-bearing
+                 mirror origin userinfo: [REDACTED:url-credentials:31 bytes]. No remote URL
+                 retained.
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Not checked   Credential usability and revocation were not tested; Unadvertised/deleted refs,
+                 objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads
+                 and detector misses remain unassessed
+   Fix           Remove the credential from origin configuration and revoke or rotate it; use the
+                 provider's credential helper.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
+intent.accepted_risks in engagement.yaml and write the reason.
+
+  # Credential pattern found in repository history (production)
+  # critical: accept only with whoever owns the business, never to quiet the report
+    - id: github.history_credential
+      asset: production
+      subject: history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # Credential found in mirror origin configuration (production)
+    - id: github.remote_credential
+      asset: production
+      subject: remote:origin       # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      expires: 2027-04-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 2 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    api.github.com: example-org, using the credential in GITHUB_TOKEN (the variable's name; its
+      value appears nowhere); 13 requests.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read, including people's names and email addresses from saas:github:example-org, is
+    stored only on this machine, in /state/engagements/github-inventory/2026-10-09T12:00:00Z;
+    deleting that directory removes it.
+
+NOTES FOR THE READOUT
+  repo:github:example-org/production: Supported mirror history read at the local observation time;
+    advertised branch and pull refs read separately. Hidden/deleted history and detector misses
+    remain unassessed.
+
+FOR AUTOMATION
+Exit 1: 2 open findings at or above their asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+Files  /state/engagements/github-inventory/2026-10-09T12:00:00Z/: report.txt, report.json,
+       audit.jsonl (every command and request, in order), evidence/

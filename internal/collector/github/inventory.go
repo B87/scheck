@@ -98,6 +98,7 @@ type Population[T any] struct {
 
 // Evidence is typed inventory only. It does not assert any security rule outcome.
 type Evidence struct {
+	RepositoriesHistory          []RepositoryHistory       `json:"repositories_history,omitempty"`
 	OrganizationSecrets          Population[ActionsSecret] `json:"organization_secrets"`
 	SelectedSecrets              []SelectedSecret          `json:"selected_secrets,omitempty"`
 	RepositoriesAlerts           []RepositoryAlerts        `json:"repositories_alerts,omitempty"`
@@ -317,6 +318,12 @@ func itemID[T any](item T) int64 {
 // Reads returns execution metadata for every request, in collection order.
 func (e Evidence) Reads() []Read {
 	out := []Read{}
+	for _, h := range e.RepositoriesHistory {
+		if h.Read.Op != "" {
+			out = append(out, h.Read)
+		}
+		out = append(out, h.References...)
+	}
 	for _, read := range []Read{e.Principal.Read, e.OrganizationRead, e.MembershipRead} {
 		if read.Op != "" {
 			out = append(out, read)

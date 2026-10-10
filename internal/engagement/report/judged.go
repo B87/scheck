@@ -72,7 +72,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
-		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubSecretScanningOpen}, j.ID) {
+		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubSecretScanningOpen, finding.IDGitHubHistoryCredential}, j.ID) {
 			f.Rule.Kind = "multi_fact"
 		}
 		if j.ID == finding.IDWebRestrictedReachable {
@@ -123,9 +123,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 						source = SourceRef{File: b.in.Path, Key: j.Sources[0] + ".deploys_to"}
 					}
 				}
-				if attr == "observed_public" && j.ID == finding.IDGitHubSecretScanningOpen {
+				if attr == "observed_public" && (j.ID == finding.IDGitHubSecretScanningOpen || j.ID == finding.IDGitHubHistoryCredential) {
 					rule = "attribute:public_repository"
-					f.WhyHere = []string{"This alert concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."}
+					f.WhyHere = []string{"This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."}
 					if observation, ok := j.Details["repository_read"].(string); ok && observation != "" {
 						source = SourceRef{Observation: observation, Excerpt: "Observed repository visibility: public"}
 					}
@@ -181,15 +181,28 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		f.Severity = string(sev)
 		for _, r := range j.Reads {
 			observed := at
+			principal := observedPrincipal(a)
+			excerpt := j.Excerpt
+			if j.ID == finding.IDGitHubHistoryCredential || j.ID == finding.IDGitHubRemoteCredential {
+				if r != firstRead(j.Reads) {
+					excerpt = "Advertised reference metadata was compared with the local mirror; credential matches came from local blob reads"
+				}
+				if source, ok := j.Details["repository_read"].(string); ok && r == source {
+					excerpt = "Observed repository visibility: public"
+				}
+			}
 			vantage := b.in.Vantage
 			if meta, ok := b.in.Observations[r]; ok {
 				if !meta.CollectedAt.IsZero() {
 					observed = meta.CollectedAt
 				}
 				vantage = meta.Vantage
+				if meta.Principal != "" {
+					principal = meta.Principal
+				}
 			}
 			f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Request: r, Observation: r,
-				CollectedAt: &observed, Vantage: vantage, Principal: observedPrincipal(a), Excerpt: j.Excerpt})
+				CollectedAt: &observed, Vantage: vantage, Principal: principal, Excerpt: excerpt})
 		}
 		if acc, ok := b.effective(owner.ID, j.ID, key); ok && !b.expired(acc.Expires, owner.ID) {
 			f.Status = finding.StatusAccepted

@@ -257,7 +257,7 @@
           "reason": "unavailable:github_evidence"
         },
         {
-          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
           "reason": "no_rule"
         }
       ],
@@ -279,10 +279,10 @@
         {
           "asset": "saas:github:example-org",
           "mark": "not_assessed",
-          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
           "reasons": [
             {
-              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
               "reason": "no_rule"
             }
           ]
@@ -304,10 +304,10 @@
         {
           "asset": "repo:github:example-org/production",
           "mark": "not_assessed",
-          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
           "reasons": [
             {
-              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and repository history are not assessed",
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
               "reason": "no_rule"
             }
           ]
