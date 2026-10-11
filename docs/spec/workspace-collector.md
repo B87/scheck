@@ -6,8 +6,8 @@ binding and inventory through engagement Recon and report integration. Step 3
 implements identity and administrator rules, with offline checks and reviews
 completed on 2026-10-10. Step 4 implements observed 2-step verification offline on
 2026-10-11. Step 5 implements optional OAuth grant metadata offline on 2026-10-11.
-Optional Gmail forwarding reads remain planned (step 6). No live measurement or
-release gate is claimed here.
+Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. No live
+measurement or release gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -19,8 +19,8 @@ thresholds and severity adjustments ([engagement.md](engagement.md), "People",
 
 Every target operation is a compiled `GET` through the gate. The only `POST`s are the
 separately declared, budgeted credential exchanges, the baseline one and one per
-compiled optional surface, at the literal endpoint
-`https://oauth2.googleapis.com/token`. Its secret body and response never enter
+compiled optional surface or, for a per-mailbox surface (Gmail forwarding), one per
+admitted mailbox, at the literal endpoint `https://oauth2.googleapis.com/token`. Its secret body and response never enter
 evidence, audit output or persisted state. Assertions are signed in process with a
 fixed audience and a 300-second lifetime. The gate signs `RS256` assertions with
 `iss`, delegated `sub`, literal token-endpoint `aud`, compiled `scope`, `iat` and
@@ -36,8 +36,10 @@ fixed messages; returned error descriptions are discarded.
 
 No SDK, subprocess, `gcloud`, metadata server, token introspection, interactive
 consent, arbitrary token endpoint, external-account federation, executable credential
-provider or impersonation ADC is supported. No target writes, mailbox or message
-reads, backup verification code reads, or automatic delegation setup are admitted.
+provider or impersonation ADC is supported. No target writes, message reads, backup
+verification code reads, or automatic delegation setup are admitted. The only Gmail
+requests are the two pinned settings reads of "Reads and projections"; nothing else
+reaches `gmail.googleapis.com`.
 The gate continues to refuse decoded `verificationCodes` paths.
 
 ### Credential files and profiles
@@ -88,7 +90,7 @@ requires a fresh ordered bootstrap before a later tenant read.
 |---|---|
 | `directory` (default) | Baseline Directory inventory and identity |
 | `directory_oauth` | Directory plus per-user OAuth grant metadata (step 5) |
-| `directory_mail` | Directory plus per-user Gmail forwarding settings (planned, step 6) |
+| `directory_mail` | Directory plus per-mailbox Gmail forwarding settings (step 6) |
 | `directory_oauth_mail` | All three selected surfaces |
 
 The nonsecret profile is recorded for coverage and invalidation. A profile narrows
@@ -104,32 +106,93 @@ the baseline either. Selecting optional checks does not add security or Gmail sc
 the bootstrap and does not make baseline checks depend on those grants.
 
 **Optional surface token.** An operation compiled with an optional surface
-(`Op.Surface`; step 5's `oauth_grants`) never uses the baseline token. The gate maps the
-surface to exactly one scope, `admin.directory.user.security` for OAuth grants; a
-collector never names a scope. The gate refuses such an operation with
-`unavailable:profile_not_selected` when the profile does not select the surface
-(`directory_oauth` and `directory_oauth_mail` select OAuth grants), and, for a service
-account, with `unavailable:principal_unknown` until the delegated subject is verified
-("Principal and resume"). After baseline admission it makes one exchange under the
-surface's own audited operation, `workspace.credential_exchange_oauth_grants`, never
-retried. A service account asserts exactly that one scope, with the same issuer and
+(`Op.Surface`) never uses the baseline token. The gate keeps a table of surfaces, each
+with exactly one scope, its own audited exchange operation, the profiles that select it
+and its pinned reads; a collector never names a scope.
+
+| Surface | Scope | Exchange operation | Profiles |
+|---|---|---|---|
+| `oauth_grants` | `admin.directory.user.security` | `workspace.credential_exchange_oauth_grants` | `directory_oauth`, `directory_oauth_mail` |
+| `gmail_forwarding` | `gmail.readonly`, no other scope, no fallback | `workspace.credential_exchange_gmail_forwarding` | `directory_mail`, `directory_oauth_mail` |
+
+The gate refuses such an operation with `unavailable:profile_not_selected` when the
+profile does not select the surface, and, for a service account, with
+`unavailable:principal_unknown` until the delegated subject is verified ("Principal and
+resume"). After baseline admission it makes the surface's exchange, never retried. A
+service account asserts exactly the surface's one scope, with the same issuer and
 subject. An `authorized_user` refresh sends `scope=` that one scope; that Google then
 downscopes the token, and answers `invalid_scope` for a scope the grant lacks, is
 assumed and not yet measured live. The optional token's expiry is capped at the baseline
 token's. The token, and a remembered failure, are cleared with the tenant binding: on a
-bootstrap operation, an HTTP 401, baseline expiry and `credential_changed`.
+bootstrap operation, an HTTP 401, baseline expiry, `credential_changed` and a changed
+profile.
 
 A failed optional exchange is remembered for the session: later reads of the surface
 send nothing and carry the same classification. It is never a refusal of the asset and
 never exits 3. `invalid_scope`, `unauthorized_client` and `access_denied` are
-`insufficient_permission:admin.directory.user.security`, a coverage gap; a rate limit
-is `limit_reached`, exit 2; any other failure is `unavailable:credential_exchange`. A
-per-account 403 on an optional-surface read is
-`insufficient_permission:admin.directory.user.security` too, the scope named by the
-gate; a 404 names no scope. A Workspace 403 whose error reason is `rateLimitExceeded`
-or `userRateLimitExceeded` is a rate limit on every Workspace read, retried and then
+`insufficient_permission:<the surface's scope>` (`admin.directory.user.security` or
+`gmail.readonly`), a coverage gap; a rate limit is `limit_reached`, exit 2; any other
+failure is `unavailable:credential_exchange`. A per-account 403 on an optional-surface
+read is `insufficient_permission:<scope>` too, the scope named by the gate; a 404 names
+no scope. A Workspace 403 whose error reason is `rateLimitExceeded` or
+`userRateLimitExceeded` is a rate limit on every Workspace read, retried and then
 `limit_reached` ([scope.md](scope.md), "Status codes that mislead"); its retained
-error body stays fixed text. Step 6 adds Gmail forwarding as a further surface.
+error body stays fixed text.
+
+**Mailbox tokens (step 6).** Gmail forwarding is a per-mailbox surface: the gate asks
+for one token per admitted mailbox, a service-account assertion whose `sub` is that
+account. It needs a service account with domain-wide delegation for `gmail.readonly`.
+With an `authorized_user` credential every Gmail operation is refused before any
+exchange, remembered as `unavailable:needs_service_account`; a refresh token never
+impersonates a mailbox.
+
+Before each exchange the gate admits the mailbox: the profile selects the surface; the
+credential is a service account; the delegated principal is verified; the tenant is
+bound; the users population is complete; the `{user}` parameter is an admitted current
+id of the bound customer, outside every exclusion, known active (not suspended, not
+archived) and not reported `isMailboxSetup:false`; and the admitted primary address is
+in a verified domain or verified alias of the tenant. The assertion's `sub` is the
+primary address of the gate's own inventory record, never an address a collector or a
+response supplied. An account that is inactive or has no mailbox is refused
+`unavailable:mailbox_inactive`, without being remembered against the surface. The
+exchange is audited under the surface's one operation with the admitted user id as its
+only parameter, never an address, assertion or body, so each Gmail read's audit line
+names the user whose token it used.
+
+Tokens are cached by bound customer and admitted user id, never reused for another
+user, cleared with the binding as above and capped at the baseline token's expiry. The
+exchange count is at most one per admitted user per binding and at most 1,000 per
+session, not reset by a new binding; the 1,001st is a remembered `limit_reached`.
+
+Failures are the surface's or one mailbox's:
+
+| Failure | Scope | Classification |
+|---|---|---|
+| `invalid_scope`, `unauthorized_client`, `access_denied` at the token endpoint | surface, remembered | `insufficient_permission:gmail.readonly`, gap |
+| Token endpoint rate limit | surface, remembered, never retried | `limit_reached`, exit 2 |
+| Circuit breaker | surface, remembered | `unavailable:credential_exchange`, gap |
+| Refused before the request left this machine (deadline, rate limit, canceled, a stopped provider) | surface, remembered, not counted toward the cap or the breaker | its own decision and reason; `limit_reached` is exit 2 |
+| Request sent and no answer (dropped connection, timeout), or a Google 5xx at the token endpoint | that mailbox, not remembered; counted toward the cap and the breaker | its own reason (`unavailable:server_error`, a connection code), never `mailbox_credential` |
+| `invalid_grant` or any other exchange error Google answered | that mailbox | `unavailable:mailbox_credential` |
+| `admin_policy_enforced` at the token endpoint | that mailbox | `insufficient_permission:gmail.readonly` |
+| Gmail API not enabled in the credential's project (403 `accessNotConfigured` or `SERVICE_DISABLED`) | surface, remembered | `unavailable:api_disabled`, gap; fixed body; the collector says to enable the Gmail API under APIs & Services → Library |
+| Gmail 403 on a read | that mailbox | `insufficient_permission:gmail.readonly` |
+| Gmail 400 on a read | that mailbox | `unavailable:mailbox_unavailable` (no Gmail service for it) |
+| Google 403 rate limit | every read | retried, then `limit_reached` |
+
+The breaker trips when a binding's first five mailbox exchanges all fail, or after 20
+consecutive mailbox failures (an `admin_policy_enforced` refusal and an unanswered or
+5xx exchange count). A revoked key, a wrong clock or Google failing looks like one
+mailbox failing after another, so the surface then stops, remaining mailboxes are not
+attempted and each reads the breaker's classification; it is a coverage gap, not exit 2.
+The breaker's wording is neutral: Google did not sign scheck in as one mailbox after
+another and may have been failing, so run again later, and if it repeats check the key
+and the delegation. An exchange counts as one scheck asked Google to act as the mailbox
+when it left this machine, answered or not; the gate keeps that set for the session and
+every mail read's result carries it (`ActedAsMailbox`). A refused permission,
+`needs_service_account`, a disabled Gmail API and a tripped breaker are gaps only; the
+open question whether a surface with no usable read should exit 2 is not decided for OAuth or mail
+([ROADMAP.md](../ROADMAP.md), E6, "Carried from step 5" and "Carried from step 6").
 
 All baseline scope names below have the prefix
 `https://www.googleapis.com/auth/`:
@@ -172,7 +235,9 @@ foreign names and ids, response headers and body hashes remain private; its audi
 identifies the declared root and compiled path, not unbound tenant selectors. The
 audit URL is sanitized during request binding, before any later refusal can record it. Only
 the successfully bound customer id, declared root, selected profile, the optional
-surfaces that profile selects (`surfaces`; profile names stay in the gate), usable
+surfaces that profile selects (`surfaces`; profile names stay in the gate), for each
+surface it does not select the profile that would add it to the current one (`offers`,
+which the collector's advice names instead of hard-coding profile names), usable
 returned scope evidence and, for an `authorized_user` credential, its client id as
 `assessment_client` leave the private bootstrap. A successful client-authenticated
 refresh proves that client id, never whose sign-in the refresh token holds. The
@@ -218,6 +283,10 @@ persistence and follow-ups. Unrecognized user identities or conflicting current
 ids, primary addresses or aliases prevent per-user admission. An unknown exclusion
 set blocks dependent reads. Excluded people are never persisted; only dropped counts
 remain. Per-user parameters refer only to admitted current inventory identities.
+The gate parses no posture field except three list flags (`suspended`, `archived`,
+`isMailboxSetup`), which it keeps in its own admitted record so that a mailbox surface
+can refuse to act as an inactive account or one without a mailbox; every other posture
+field is parsed only by the collector.
 An external address or group member address never grants permission to read a user.
 A provider-complete current inventory with only known exclusion drops may still admit
 nonexcluded user details; retained coverage stays incomplete. Actual cuts, unknown
@@ -250,10 +319,10 @@ unknown; neither local account metadata nor a refresh proves the caller.
 No Workspace response is eligible for authenticated ledger reuse, even after a
 delegated user is verified or an earlier ledger row names a principal. Resume repeats
 ordered tenant binding, unit and user admission and delegated verification. Changes
-to issuer, subject, customer or profile require fresh evidence. Future Gmail per-user
-token caches are keyed by bound customer and admitted user id. Current primary
-address, customer and exclusions must be checked before impersonation, never inferred
-from an arbitrary target-returned address.
+to issuer, subject, customer or profile require fresh evidence. The Gmail
+per-mailbox token cache is keyed by bound customer and admitted user id ("Credential
+files and profiles"). Current primary address, customer and exclusions are checked
+before impersonation, never inferred from an arbitrary target-returned address.
 
 ## Reads and projections
 
@@ -275,15 +344,13 @@ secondary domains and aliases.
 | Privilege tree | `/admin/directory/v1/customer/{customer}/roles/ALL/privileges` | `kind`, `serviceId`, `privilegeName`, recursive `childPrivileges` and `isOuScopable` |
 | Per-user role assignments | `/admin/directory/v1/customer/{customer}/roleassignments`, fixed `userKey={user}` and `includeIndirectRoleAssignments=true` | Assignment/assignee/role ids, assignee type, CUSTOMER/OU scope, condition presence and `expirationDetails.expireTime` |
 | OAuth grants | `/admin/directory/v1/users/{user}/tokens`, no query, with the `oauth_grants` token | `clientId`, `scopes`, `userKey`, `displayText`, `anonymous` and `nativeApp`; no token value |
-| Auto-forwarding | `/gmail/v1/users/{user}/settings/autoForwarding` | Enabled state and destination |
-| Forwarding filters | `/gmail/v1/users/{user}/settings/filters` | Filter id and `action.forward` only |
+| Auto-forwarding | `/gmail/v1/users/me/settings/autoForwarding`, with the mailbox's own token | `enabled`, `emailAddress`, `disposition` |
+| Forwarding filters | `/gmail/v1/users/me/settings/filters`, with the mailbox's own token | `id`, `action.forward`, `action.addLabelIds`, `action.removeLabelIds` |
 
-Directory operations use `admin.googleapis.com`; Gmail operations use the reviewed
-planned source host `gmail.googleapis.com`. Credential exchange uses
-`oauth2.googleapis.com`. API bodies are never retained wholesale. User recovery data,
-custom schemas, notes, home addresses, passwords, SSH keys and photos are omitted.
-Filter criteria, queries, subjects, labels and unrelated actions are discarded before
-generic redaction and persistence. Secrets in retained fields are redacted before
+Directory operations use `admin.googleapis.com`; Gmail operations use
+`gmail.googleapis.com`. Credential exchange uses `oauth2.googleapis.com`. API bodies
+are never retained wholesale. User recovery data, custom schemas, notes, home
+addresses, passwords, SSH keys and photos are omitted. Secrets in retained fields are redacted before
 parsing and persistence. API response headers, error bodies and unprojected hashes
 are discarded. Account ids and name labels are redacted before persistence, as are
 other retained fields.
@@ -327,6 +394,23 @@ unknown. A redaction marker confined to `displayText` keeps the read usable: an 
 chooses its own name and must not hide its grants behind it. A marker in any other
 field leaves the account's read unusable.
 
+Step 6 reads Gmail forwarding for each readable mailbox after every other read, OAuth
+grants included, in the same order and with the same `Repeats` stop. Only a known-active
+account with a mailbox is read ("Forwarding interpretation"). Each path names
+`users/me`, so a read can only reach the mailbox the gate signed in as; `{user}`
+selects the token, not the path. The gate pins both registrations in its surface table:
+the exact URL, the kept fields in the table above and nothing else, and for filters an
+exact `filter` array of at most 1,000 items with no paging. Filter `id` and
+`action.addLabelIds` / `action.removeLabelIds` are kept so that the collector can tell
+that a forwarding filter also hides the message (`hides_mail`); filter criteria,
+queries, subjects and every other action are discarded. `forwardingAddresses`,
+delegates, send-as, POP and IMAP paths, and anything else under `/gmail/`, are not
+declared and the gate refuses them. These two operations are projected before
+redaction: fields outside the kept list never reach redaction, the audit log or
+persistence. They have no envelope: automatic forwarding is one object, `{}` is an
+empty answer, and an empty filter list arrives as `{}`. A body that is not the expected
+shape is a fixed diagnostic and is discarded.
+
 ### Population bounds
 
 Pages continue through an empty list with a nonempty next token. The gate rebuilds
@@ -350,7 +434,7 @@ the refresh fails. An earlier page cannot restore current-user admission.
 | Per-user assignments | 1,000 per user | 10 pages of 100 |
 | Assignment observations | 10,000 per tenant | Across assignment reads |
 | OAuth grants | 1,000 per user | Single array; over the cap the whole read is `limit_reached` |
-| Gmail filters | 1,000 per user | Single array |
+| Gmail filters | 1,000 per mailbox | Single `filter` array; over the cap the whole read is `limit_reached` |
 
 The privilege-tree depth counts node levels. A level-32 node with an empty child
 array is within the bound; a further child is not.
@@ -358,8 +442,8 @@ array is within the bound; a further child is not.
 Additional data or a next token beyond a cap marks incomplete execution, exit 2,
 without discarding positive findings from earlier pages. A single array over its cap is
 not kept at all: the read is `limit_reached`, exit 2, and positive findings in it are
-lost. For OAuth grants that loses every grant of that account, and the account counts
-as not read. Reaching exactly a cap with no further data is
+lost. For OAuth grants that loses every grant of that account, and for Gmail filters
+every filter of that mailbox; the account or mailbox counts as not read. Reaching exactly a cap with no further data is
 not itself proof of a cut. The global gate budget still takes precedence. Partial
 populations prove presence, never absence; counts say "at least".
 
@@ -425,14 +509,15 @@ reads are unavailable. The exact service/name table above remains version
 Every rule returns shared `finding.Judgment` evidence with a declared subject and
 `fired`, `disproved` or `abstained`. Account subjects are current primary addresses;
 unit subjects are canonical paths including `/`; OAuth app subjects are exact client
-ids. Subject-specific acceptances name that exact instance. Missing, null, unfamiliar,
+ids; forwarding subjects are `<account primary> -> <destination address>`, both
+lowercased. Subject-specific acceptances name that exact instance. Missing, null, unfamiliar,
 denied, redacted or truncated evidence is unknown.
 
 Shared identity definitions use provider-neutral prose. Workspace-specific definitions
 are registered from the collector beside `Judge` through `finding.Register`;
 `finding.Lookup` remains the report and explain read path. Step 3 evaluates the first
-nine rules below, step 4 the two 2-step-verification rules and step 5 the OAuth rule;
-the forwarding rule remains planned (step 6).
+nine rules below, step 4 the two 2-step-verification rules, step 5 the OAuth rule and
+step 6 the forwarding rule.
 
 | Rule | Base severity / subject | Fires | Disproves | Abstains |
 |---|---|---|---|---|
@@ -448,7 +533,7 @@ the forwarding rule remains planned (step 6).
 | `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |
 | `workspace.admin_without_two_step` | high / account | Known-active super admin or supported privileged delegate explicitly has `isEnrolledIn2Sv:false`, enforced or not | Explicit enrollment `true`, known inactive, or admin status known false | Unknown admin status, enrollment, activity, or a conflict |
 | `workspace.oauth_broad_scope` | medium / oauth_app, `+1 attribute:admin_grantor` when a known-active super admin's or declared break-glass account's own grant is broad | A known-active grantor's grant to the app holds a supported broad scope | On a complete grant population, the app holds only recognized sign-in scopes, or access beyond sign-in only through suspended or archived accounts | Broad only through accounts of unknown status, only unclassified scopes, or a partial population; asset-level outcomes in "OAuth grants" |
-| `workspace.external_forwarding` | medium / account | Active mailbox has enabled auto-forwarding or filter forwarding outside complete verified tenant domains | Both settings reads are known complete with no external destination | Missing delegation/scope/read/domain/destination evidence or malformed data |
+| `workspace.external_forwarding` | medium / mail_forward, `+1 attribute:admin` when the mailbox is a known-active super admin's | A read mailbox has enabled auto-forwarding, or a filter that forwards, to an address outside the verified domains | Per mailbox, both reads usable and whole, and every forward goes to a verified domain or none exists; outcomes in "Forwarding interpretation" | A read that failed, was cut or was not recognized; an unplaceable destination; unknown mailbox activity; a subdomain of a verified domain |
 
 Admin counts follow [engagement.md](engagement.md), "Admins": exclude declared service
 accounts and at most two break-glass accounts from the numerator; shared and
@@ -691,12 +776,117 @@ guessed assessment identities.
 
 ### Forwarding interpretation
 
-A saved but disabled auto-forwarding address does not fire. Filter configuration
-shows a forwarding rule, not that any message was forwarded. Absence needs both
-complete settings reads. Destinations use exact domain comparison against complete
-verified tenant domains; suffix matching, trusted subdomains or arbitrary engagement
-domain roots cannot establish an internal destination. Remove unintended forwarding;
-do not claim message disclosure was observed.
+The rule is `workspace.external_forwarding`: email area, category `email`, not an
+exposure, subject `mail_forward`, base medium. The subject key is `<account primary> ->
+<destination address>`, both lowercased, one instance per outside destination of one
+mailbox with automatic forwarding and filters merged; the full address is printed
+everywhere. A mailbox with no outside destination has its outcome under the key
+`<account primary> -> none`, labeled "<account> (mailbox)". The finding is not raised
+by `data.matters_most`: that declaration reaches no email-area finding in 0.0.2
+([engagement.md](engagement.md), "Severity in context"). Filter configuration shows a
+forwarding rule, not that any message was forwarded; scheck says "read the setting, not
+whether any message was forwarded".
+
+**Read set.** A mailbox is read only when its account is known active (not suspended,
+not archived, no conflicting fresh detail) and not reported `isMailboxSetup:false`; a
+delegated administrator is read. Suspended, archived and mailbox-less accounts are not
+read, get no judgment, and are counted in the readout. An account whose activity is
+unknown or conflicting is not read and abstains under its mailbox key with
+`unavailable:workspace_evidence`.
+
+**Internal set.** A destination is internal when its domain equals, exactly, a
+verified domain or a verified domain alias of the tenant. The set is complete only when
+both lists were read whole. Suffix matching, trusted subdomains and the engagement's
+domain roots never make a destination internal; when the destination's domain is a
+declared root, the excerpt says it is declared in this engagement but is not a domain of
+this Workspace. When the set is incomplete, a destination inside the known set is
+internal and any other abstains with `unavailable:workspace_inventory`. A destination
+under a verified domain that is not itself verified abstains with
+`unavailable:forwarding_subdomain` and a readout note asking whoever runs mail for that
+name where it goes: Google's own "internal addresses only" setting may count such names
+internal, which is not measured.
+
+**Parse.** An address has one `@`, a nonempty local part with no control or space
+character, and a DNS-valid domain (at least two labels of letters, digits and hyphens,
+at most 253 bytes; a trailing dot is removed and the domain lowercased). An empty,
+malformed, non-string or redaction-marked address is unknown. In a filter, an absent
+`action.forward` is a filter that does not forward; a present but empty or non-string
+one makes that filter malformed, and the mailbox's filters incomplete. For automatic
+forwarding, an absent `enabled` is unknown (Google is not yet measured to omit it for
+off), a non-boolean or null one is malformed, and `enabled:true` with an unparseable
+address is a gap.
+
+| Outcome | When |
+|---|---|
+| Fires, per mailbox and outside destination | `enabled:true` to an outside address, or a filter that forwards to one. Fire wins even when the other read failed or was cut |
+| Disproved, under `-> none` | both reads usable and within the cap, no malformed item, automatic forwarding off or every destination internal, every forwarding filter internal. A mailbox with an internal destination needs the complete domain set; one with forwarding off and no forwarding filter is disproved even when the domain list was cut, since the list only places destinations. Only an explicit `enabled:false` disproves |
+| Abstains, per mailbox | a read that failed, was cut, held an unrecognized shape, or a destination scheck cannot place |
+| Abstains, per destination | a subdomain of a verified domain, or a destination while the domain set is incomplete |
+
+A saved but disabled automatic-forwarding address does not fire. When it is outside the
+domains, or unplaceable, the disproved outcome records it as `saved_external` and the
+readout says one switch turns it back on.
+
+**Asset-level outcome.** When the surface is selected, one judgment without a subject
+speaks for it: no current account evidence abstains; so does having no active mailbox, saying so; when no
+mailbox's settings could be read whole it abstains with the reason of the read that
+stopped collection, else the first failed read; when some were not read whole it
+abstains with "Forwarding settings were read for N of M active mailboxes." or, when every
+listed mailbox was read, "…for every active mailbox listed, but the account list was
+incomplete." With every readable mailbox read whole on a complete list, the mailbox
+outcomes speak alone. When the surface was refused before any settings read was usable,
+only this judgment is emitted and no mailbox is named. Its details are `mailboxes_read`,
+`mailboxes` and `population_complete`. When the profile does not select the surface
+there is no judgment, and coverage says `not_on_plan:profile=<profile>` ("Reporting and
+coverage").
+
+**Details.** A fired instance carries `mechanisms` (`auto`, `filter`),
+`filters_forwarding`, `filters_read` (only when the filters were read), `auto_forward`,
+`destination_domain`, `domains_complete`, `population_complete`, `disposition` (only for
+automatic forwarding), `hides_mail`, `delegated_admin` when the account is a delegated
+administrator, `admin_mailbox_read` on a raise and `filter_ids` (JSON only). `hides_mail`
+is true when automatic forwarding is set to move the original to Trash, or a forwarding
+filter adds the Trash label or removes the Inbox label; the excerpt then says it is "a
+pattern used to hide forwarded mail from the person, though some tools are set up this
+way". Whether `hides_mail` raises or ranks is not decided (E9).
+
+**Raise.** `+1 attribute:admin` applies only to a known-active super administrator's
+mailbox (`isAdmin:true`, no conflict), citing that mailbox's own read, with "Why here":
+mail sent to administrators, such as security alerts and password-reset links from other
+services, goes to that mailbox. A delegated administrator never raises and is marked in
+the details. An account belonging to a declared leaver whose date has passed gets an
+excerpt cross-reference to that person and no further raise.
+
+**Readout notes** come from the same view as the rule:
+
+- not selected: what the check finds, that it needs a service account with domain-wide
+  delegation for `gmail.readonly`, which can read every message and which most small
+  companies lack (whoever manages the Google setup creates it), that scheck signs in as
+  each active mailbox and reads only forwarding settings and filters, that the owner or
+  whoever approves access to staff mailboxes should approve first, then
+  `SCHECK_WORKSPACE_PROFILE=` the profile `offers` names;
+- the surface refused (`needs_service_account`, the permission not granted, every mailbox
+  refused by administrator policy, the Gmail API not enabled, the breaker): one sentence of what happened, a next
+  step, and that nothing is wrong with the mail settings and nothing else in the run was
+  affected. Policy refusals are worded as API controls or per-unit policy, never as a
+  missing scope. The breaker note says scheck stopped after N mailboxes; one `refusal`
+  decides the coverage gap and the note alike;
+- whenever scheck asked Google to act as a mailbox, a `workspace_credential_warning`:
+  "No message was opened or read.", "scheck asked Google to sign it in as each of N
+  mailboxes" (N counts mailboxes asked, by the reads' `ActedAsMailbox`, not reads that
+  were sent or reused), that the permission could read
+  every message and Google's logs may show the service account acting as each person,
+  that it stays until an administrator removes it, and where;
+- the limits note: read whole for N of M active mailboxes (lower bound on an incomplete
+  list), the unread ones with a reason (permission denied, limit, redacted, unreadable,
+  status unknown, Google did not sign in as or serve the mailbox; super administrators
+  marked) and to check them by hand, those not attempted (suspended, archived, without a
+  mailbox), the list's own incompleteness, and what was not checked: any message
+  forwarded, what each filter matches, the Admin console's forwarding setting, routing
+  and compliance rules, mail delegates, POP/IMAP, send-as addresses, where mail goes
+  next, and suspended or archived mailboxes;
+- a note per saved-but-off address;
+- one note listing subdomain destinations not judged.
 
 ## Reporting and coverage
 
@@ -714,13 +904,15 @@ or their administrative interpretation is unknown, even if observed false user
 flags settled individual rules. Collector-owned `InterpretationGaps` notes identify
 unknown roles, privileges, conditions or expiry. Step 4 adds `Context.MFA` and
 `Context.MFASource`, two 2-step rule outcomes and the 2-step readout notes. Step 5
-adds `OAuthEvidence`, the OAuth rule outcomes and readout notes. Forwarding
-remains unassessed. The collector words the asset's outcome: `Evidence.Outcome()` says
+adds `OAuthEvidence`, the OAuth rule outcomes and readout notes. Step 6 adds
+`MailEvidence`, the forwarding rule outcomes and readout notes. The collector words the asset's outcome: `Evidence.Outcome()` says
 whether collection completed, with the status sentence (naming OAuth when selected),
 and the engagement records it as `collected` or `incomplete` with the outcome's
-reason, `failed` when it names none. Any `limit_reached` read, an OAuth grants read or
-the optional exchange's rate limit included, makes the Workspace asset incomplete,
-exit 2; a refused optional permission is a coverage gap only. A mixed
+reason, `failed` when it names none. Any `limit_reached` read, an OAuth grants or Gmail read or an optional exchange's rate
+limit included, makes the Workspace asset incomplete, exit 2; a refused optional
+permission, `needs_service_account`, a disabled Gmail API and a tripped breaker are
+coverage gaps only; a mailbox exchange refused before it left this machine for a limit is
+`limit_reached`. A mixed
 GitHub/Workspace identity row cannot claim complete assessment from GitHub judgments
 alone. Inventory notes show lower bounds,
 permission failures, credential uncertainty and fresh delegated verification.
@@ -737,8 +929,8 @@ over both 2-step ids, the "Workspace OAuth grants (third-party app access)" sub-
 over `workspace.oauth_broad_scope`, and a "Workspace domain-wide delegation" sub-item
 that is always *not assessed* with `no_rule`, its detail saying nothing was read
 because Google offers no Directory read for it, the Admin console path below, and that
-with a service-account credential scheck's own delegation is listed there. Forwarding
-remains unassessed in email coverage. The collector words these sub-items as one
+with a service-account credential scheck's own delegation is listed there. The
+forwarding sub-item is in email coverage (below). The collector words these sub-items as one
 identity-area coverage plan, `Evidence.Coverage()`: each group's name and rule ids,
 limits, empty, gap, not-on-plan and collapse wording, the delegation sub-item and the
 row's closing words. The engagement report marks the plan by the rules in
@@ -773,6 +965,24 @@ reason names the groups nothing decided: "Workspace OAuth grants and domain-wide
 delegation remain unassessed" or "Workspace domain-wide delegation remains
 unassessed", then the 2-step limits; a group not on the plan is not called unassessed.
 
+**Email coverage.** `Evidence.Coverage()` returns a second plan, for the email area,
+with one group, "Workspace mail forwarding", over `workspace.external_forwarding`, always
+carrying the limits detail of the limits note as a `no_rule` reason. With the profile not
+selecting the surface the group is not on the plan:
+`not_on_plan:profile=<profile>`, with the detail "The default Workspace profile,
+directory, does not read mail forwarding; it needs SCHECK_WORKSPACE_PROFILE=<profile
+offered> and a service account whose domain-wide delegation includes gmail.readonly,
+which can read every message" (another profile is named "The selected Workspace profile,
+<p>,"). When selected, the plan's closing words are "the Admin console's forwarding
+setting, mail delegates and POP/IMAP were not assessed". The surface's refusal is the
+group's gap, decided once for the gap and the readout note: `needs_service_account` and
+`insufficient_permission:gmail.readonly` name what is missing, and a tripped breaker is
+`unavailable:credential_exchange`. The group is *partial* when some mailboxes abstained.
+With neither an outcome nor a gap it is *not assessed* with
+`unavailable:workspace_evidence`, "No mail forwarding outcome was recorded for this
+tenant". How the report marks the row, and what a Workspace-only engagement's email row
+says beside it, is in [report.md](report.md), "Coverage".
+
 Readouts include supported roles and scope limits, alias-matched recon candidates,
 declared expected admins not observed, shared-account leaver rotation, and break-glass
 recovery/sign-in notes under the existing engagement contract. Remediations identify
@@ -785,7 +995,9 @@ read. The report points to **Security → Access and data control → API contro
 Manage Domain Wide Delegation** in the Admin console. One successful delegated read
 proves only that operation. Organizational-unit 2-step policy, grace periods and
 authentication strength remain unassessed. Missing optional OAuth/Gmail evidence names the selection or permission
-gap, never a clean result. OAuth grants never cover domain-wide delegation, Marketplace
+gap, never a clean result. Gmail coverage never covers the Admin console's automatic
+forwarding setting, mail delegation, POP/IMAP, send-as addresses, routing and compliance
+rules, or the Cloud Identity Policy API read of those settings (a 0.0.3 priority). OAuth grants never cover domain-wide delegation, Marketplace
 installs for the whole domain, app access control settings, app passwords, token age
 or last use, service-account keys, or what an app did with its access.
 
@@ -806,10 +1018,14 @@ needed, and remove it if not." It does not imply that suspension left normal sig
 usable. Optional OAuth wording explains that baseline Directory checks work without
 the security permission, what that permission also allows, and that an administrator
 can approve a dedicated credential if the organization wants the app check ("OAuth
-grants", readout notes). Optional forwarding wording says
-no approved Gmail credential was selected for those accounts and, if wanted, asks the
-operator to arrange approved access. These checks inspect settings and filter
-forwarding destinations, never messages.
+grants", readout notes). Optional forwarding wording
+(the finding, its remediation and the notes in "Forwarding interpretation") says what
+scheck read, that it read settings and filter forwarding destinations and never a
+message, that nothing is wrong with the settings when the check could not run, and, for
+a fired instance, the owner-facing next step: ask the person in person or by phone,
+accept an address that is set up on purpose, contain a mailbox nobody set up forwarding
+for before removing it. A refused or unavailable check asks for approved access, never
+more.
 
 Execution diagnostics use plain words: the selected credential file could not be
 read, the Workspace customer could not be verified, or authentication expired. They
@@ -893,6 +1109,20 @@ shape; one run through the gate to the report with pinned `workspace-oauth` gold
 and `policy.CutLabel`. Collector tests hold every rule id in exactly one coverage
 group, the plan's gap, collapse and limits wording, and what `Evidence.Outcome()`
 names when collection was cut.
+The step-6 forwarding DEFINE contract is recorded in
+[e6-forwarding-definition-2026-10-11.md](../eval/e6-forwarding-definition-2026-10-11.md),
+and its implementation and reviews in
+[e6-forwarding-verification-2026-10-11.md](../eval/e6-forwarding-verification-2026-10-11.md).
+Its tests cover every destination class and outcome, the read set, merge of automatic
+forwarding and filters, the parse, `hides_mail`, the raise and its exclusions, asset-level
+outcomes and the notes; through a fake server, the mailbox surface's admission (profile,
+service account, principal, inventory, exclusions, verified domain, inactive account),
+its token cache and expiry, the breaker, the 1,000 cap, each failure's scope, the pinned
+registrations and the widening test (no other path under `/gmail/`), projection before
+redaction and that no address, assertion or body reaches the audit log; and the
+coverage plan. Pinned goldens: `workspace-mail`, `workspace-mail-refused`,
+`workspace-mail-service-account`, `workspace-mail-breaker` and `workspace-mail-with-domain`
+(a mixed engagement with a domain root, whose email row reads both).
 No live measurement or independent acceptance is claimed.
 
 ## Provider references

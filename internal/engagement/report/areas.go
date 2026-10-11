@@ -12,9 +12,16 @@ import (
 // feeds says whether an asset's kind is read for an area once its
 // collector exists: Workspace and GitHub tenants for identity, a GitHub
 // organization and repositories for secrets and CI/CD, cloud projects for
-// cloud and data, domains and URLs for the external surface, web and email
+// cloud and data, domains and URLs for the external surface, web and email,
+// and any asset whose collector gave a coverage plan for the area
 // (docs/spec/report.md, "Coverage").
 func feeds(area finding.Area, a AssetInput) bool {
+	// A collector that words a coverage plan for an area reads it.
+	return planOf(a, area) != nil || declaredFeeds(area, a)
+}
+
+// declaredFeeds says an asset's kind is read for an area, plan or not.
+func declaredFeeds(area finding.Area, a AssetInput) bool {
 	github := strings.HasPrefix(a.ID, "saas:github:")
 	switch area {
 	case finding.AreaIdentity:

@@ -63,7 +63,11 @@ func TestCoverageGapsCollapseAndLimits(t *testing.T) {
 func TestOutcomeNamesWhatCutCollection(t *testing.T) {
 	e, _ := oauthFixture(oauthUser("amy"))
 	e.InventoryComplete, e.Access.Complete = true, true
-	if o := e.Outcome(); o.Status != OutcomeComplete || !strings.Contains(o.Detail, "OAuth grant checks collected") {
+	if o := e.Outcome(); o.Status != OutcomeComplete || !strings.Contains(o.Detail, "2-step verification, OAuth grant and mail forwarding checks collected") {
+		t.Fatal(o)
+	}
+	e.Mail.Selected = false
+	if o := e.Outcome(); o.Status != OutcomeComplete || !strings.Contains(o.Detail, "2-step verification and OAuth grant checks collected") {
 		t.Fatal(o)
 	}
 	e.OAuth.Selected = false

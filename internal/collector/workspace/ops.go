@@ -101,3 +101,24 @@ func init() {
 	tokens.List = &gate.List{Items: "items", Kind: gate.KindOther, Envelope: "admin#directory#tokenList", MaxItems: 1000, SelfRef: "userKey"}
 	Ops = append(Ops, tokens)
 }
+
+// The forwarding reads of one admitted mailbox, with that mailbox's own
+// token: the path names users/me, so a read can only ever reach the mailbox
+// the gate signed in as, and {user} only selects it
+// (docs/spec/workspace-collector.md, "Reads and projections").
+const (
+	OpMailAutoForwarding = "workspace.mail_auto_forwarding"
+	OpMailFilters        = "workspace.mail_filters"
+)
+
+func init() {
+	mailOp := func(id, path string, keep []string) gate.Op {
+		return gate.Op{ID: id, Provider: "google", Method: gate.GET, URL: "https://gmail.googleapis.com/gmail/v1/users/me/settings/" + path,
+			Subject: "saas:google-workspace:{domain}/users/{user}", Params: []gate.Param{{Name: "domain", Type: gate.DNSName}, {Name: "user", Type: gate.UserKey}},
+			Level: gate.Observe, Auth: gate.WorkspaceADC, Surface: gate.WorkspaceGmailForwarding, Accept: []string{"application/json"}, Keep: keep, MaxBytes: 1 << 20}
+	}
+	auto := mailOp(OpMailAutoForwarding, "autoForwarding", []string{"enabled", "emailAddress", "disposition"})
+	filters := mailOp(OpMailFilters, "filters", []string{"id", "action.forward", "action.addLabelIds", "action.removeLabelIds"})
+	filters.List = &gate.List{Items: "filter", Kind: gate.KindOther, MaxItems: 1000}
+	Ops = append(Ops, auto, filters)
+}

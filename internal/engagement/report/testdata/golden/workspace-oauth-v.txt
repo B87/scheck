@@ -21,10 +21,10 @@ Read: Workspace (checked only in part: identity and access). See Coverage for wh
 
 SUMMARY
 Checked in part  Identity and access.
-Not checked      Logging and incident readiness: see Coverage.
+Not checked      Email and domain, Logging and incident readiness: see Coverage.
 Not requested    Not part of this run: secrets, cloud configuration, data stores and backups, CI/CD
-                 and supply chain, external surface, web application, hosts, email and domain. To
-                 include one, list it under roots in the engagement file.
+                 and supply chain, external surface, web application, hosts. To include one, list it
+                 under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
@@ -36,23 +36,29 @@ Nothing else open ranks at medium or above among what was checked. Below: 0 low,
 accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
-in part: identity and access. Not checked: logging and incident readiness, secrets, cloud
-configuration, data stores and backups, CI/CD and supply chain, external surface, web application,
-hosts, email and domain. Anything not checked is unknown, not fine.
+in part: identity and access. Not checked: email and domain, logging and incident readiness,
+secrets, cloud configuration, data stores and backups, CI/CD and supply chain, external surface, web
+application, hosts. Anything not checked is unknown, not fine.
 
 COVERAGE
 Identity and access      checked in part
   1 of 1 asset read.
-  This version of scheck has no rule for it (Workspace domain-wide delegation remains unassessed;
-  2-step verification policy, grace periods and other sign-in services were not assessed).
+  Some apps hold scopes this version of scheck does not classify, and none it classifies as broad
+  (Workspace OAuth grants (third-party app access)); this version of scheck has no rule for it
+  (Workspace domain-wide delegation remains unassessed; 2-step verification policy, grace periods
+  and other sign-in services were not assessed).
+Email and domain         not checked
+  0 of 1 asset read.
+  Workspace mail forwarding: not in the checks you chose (profile directory_oauth); Domain email
+  settings (SPF, DKIM and DMARC): not part of this engagement; to include it, list it under roots in
+  engagement.yaml.
 Logging and incident readiness not checked
   1 of 1 asset read.
   This version of scheck has no rule for it (Workspace: no logging or incident-readiness control was
   assessed).
 Not requested            Not part of this run: secrets, cloud configuration, data stores and
-                         backups, CI/CD and supply chain, external surface, web application, hosts,
-                         email and domain. To include one, list it under roots in the engagement
-                         file.
+                         backups, CI/CD and supply chain, external surface, web application, hosts.
+                         To include one, list it under roots in the engagement file.
 Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
                          list; it does not look for malware, infostealers or signs of compromise on
                          any of them, and laptops you did not list were not looked at.
@@ -161,6 +167,14 @@ NOTES FOR THE READOUT
     (77185425430.apps.googleusercontent.com). Its name is chosen by whoever registered it. Check
     under Security → Access and data control → API controls → Manage Third-Party App Access in the
     Admin console that someone chose it.
+  saas:google-workspace:example.com: Mail forwarding was not checked. It finds mailboxes that send
+    copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after
+    the password is changed. It needs a Google service account with domain-wide delegation for
+    gmail.readonly, which can read every message; most small companies do not have one, and whoever
+    manages your Google setup (often your IT provider) would create it. scheck signs in as each
+    active mailbox and reads only its forwarding settings and filters, never a message. Get approval
+    from whoever must approve access to staff mailboxes (often the owner) before turning it on, then
+    run with that service account's key file and SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.
 
 FOR AUTOMATION
 Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not

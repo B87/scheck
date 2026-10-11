@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -27,6 +28,7 @@ type workspaceSession struct {
 	scopesKnown            bool
 	customer               string
 	domains                map[string]bool
+	aliases                map[string]bool // verified domain aliases
 	domainRoot             bool
 	bound                  bool
 	units                  map[string]bool
@@ -39,15 +41,35 @@ type workspaceSession struct {
 	inventoryBad           bool
 	cursors                map[string]bool
 	principal              string
-	// optional holds each optional surface's own token, or the failure of
-	// its one exchange, for as long as the baseline authentication lasts.
+	// optional holds each optional surface's own tokens, or the failure of
+	// its exchange, for as long as the baseline authentication lasts.
 	optional map[WorkspaceSurface]*workspaceOptional
+	// exchanges counts each per-mailbox surface's exchanges for the whole
+	// session: a rebinding does not reset it.
+	exchanges map[WorkspaceSurface]int
+	// actedAs are the admitted ids a mailbox token was issued for in this
+	// session: the mailboxes scheck signed in as, whatever their reads did.
+	actedAs map[string]bool
 }
 
-type workspaceOptional struct {
+// workspaceToken is one optional token, or the failure of the exchange that
+// asked for it.
+type workspaceToken struct {
 	credential *Credential
 	expires    time.Time
 	failure    *halt
+}
+
+// workspaceOptional is one surface's state under the current binding: its
+// one tenant-wide token, or a per-mailbox surface's tokens by admitted user
+// id, and a failure every later read of the surface repeats.
+type workspaceOptional struct {
+	token   *workspaceToken
+	tokens  map[string]*workspaceToken
+	failure *halt
+	// attempts, succeeded and failedInARow drive the per-mailbox breaker.
+	attempts, failedInARow int
+	succeeded              bool
 }
 
 // unbind forgets the tenant binding and every optional token or remembered
@@ -60,14 +82,51 @@ func (s *workspaceSession) dropAuth() {
 	s.credential = nil
 }
 
-// workspaceSurfaces maps each optional surface to its one scope, its own
-// audited exchange and the profiles that select it
+// surfaceRead is one pinned read of an optional surface: its exact URL
+// template, the fields it may keep and its exact list shape (nil for one
+// object).
+type surfaceRead struct {
+	url  string
+	keep []string
+	list *List
+}
+
+// workspaceSurface is an optional surface: its one scope, its own audited
+// exchange, the profiles that select it and its pinned reads. A mailbox
+// surface asks for one token per admitted mailbox, acting as that account
 // (docs/spec/workspace-collector.md, "Credential files and profiles").
-var workspaceSurfaces = map[WorkspaceSurface]struct {
+type workspaceSurface struct {
 	scope, exchange string
 	profiles        []string
-}{
-	WorkspaceOAuthGrants: {googleScopePrefix + "admin.directory.user.security", "workspace.credential_exchange_oauth_grants", []string{"directory_oauth", "directory_oauth_mail"}},
+	mailbox         bool
+	// badRequest is the decision for a read Google answers 400, ""
+	// when 400 means nothing particular for the surface.
+	badRequest string
+	// projectFirst discards everything outside Keep before redaction, so
+	// filter criteria never reach redaction, audit or persistence.
+	projectFirst bool
+	reads        []surfaceRead
+}
+
+// Mailbox surface limits (docs/spec/workspace-collector.md, "Credential files and profiles").
+const (
+	mailboxExchangeCap = 1000 // per session
+	breakerFirst       = 5    // every one of a binding's first exchanges failing
+	breakerInARow      = 20   // consecutive per-mailbox failures
+)
+
+var workspaceSurfaces = map[WorkspaceSurface]workspaceSurface{
+	WorkspaceOAuthGrants: {scope: googleScopePrefix + "admin.directory.user.security", exchange: "workspace.credential_exchange_oauth_grants", profiles: []string{"directory_oauth", "directory_oauth_mail"},
+		reads: []surfaceRead{{url: "https://admin.googleapis.com/admin/directory/v1/users/{user}/tokens", keep: []string{"clientId", "scopes", "userKey", "displayText", "anonymous", "nativeApp"},
+			list: &List{Items: "items", Kind: KindOther, Envelope: "admin#directory#tokenList", MaxItems: 1000, SelfRef: "userKey"}}}},
+	WorkspaceGmailForwarding: {scope: googleScopePrefix + "gmail.readonly", exchange: "workspace.credential_exchange_gmail_forwarding", profiles: []string{"directory_mail", "directory_oauth_mail"}, mailbox: true, projectFirst: true,
+		// Google answers 400 for a mailbox it does not serve (no Gmail service).
+		badRequest: "unavailable:mailbox_unavailable",
+		reads: []surfaceRead{
+			{url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/autoForwarding", keep: []string{"enabled", "emailAddress", "disposition"}},
+			{url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/filters", keep: []string{"id", "action.forward", "action.addLabelIds", "action.removeLabelIds"},
+				list: &List{Items: "filter", Kind: KindOther, MaxItems: 1000}},
+		}},
 }
 
 func workspaceSurfaceScope(s WorkspaceSurface) string { return workspaceSurfaces[s].scope }
@@ -101,6 +160,78 @@ func workspaceSelected(profile string) []WorkspaceSurface {
 	}
 	return out
 }
+
+// workspaceOffers names, for each surface a profile does not select, the
+// profile that selects it as well: a collector's advice never guesses which
+// profile combines which surfaces.
+func workspaceOffers(profile string) map[WorkspaceSurface]string {
+	profiles := []string{"directory"}
+	for _, s := range slices.Sorted(maps.Keys(workspaceSurfaces)) {
+		for _, p := range workspaceSurfaces[s].profiles {
+			if !slices.Contains(profiles, p) {
+				profiles = append(profiles, p)
+			}
+		}
+	}
+	current := workspaceSelected(profile)
+	out := map[WorkspaceSurface]string{}
+	for _, s := range slices.Sorted(maps.Keys(workspaceSurfaces)) {
+		if slices.Contains(current, s) {
+			continue
+		}
+		want := append(slices.Clone(current), s)
+		slices.Sort(want)
+		for _, p := range profiles {
+			if slices.Equal(workspaceSelected(p), want) {
+				out[s] = p
+			}
+		}
+	}
+	return out
+}
+
+// pinnedRead is the surface whose table pins a read to host+path, and that
+// read; ok is false for a path no surface pins.
+func pinnedRead(hostPath string) (WorkspaceSurface, surfaceRead, bool) {
+	for _, s := range slices.Sorted(maps.Keys(workspaceSurfaces)) {
+		for _, r := range workspaceSurfaces[s].reads {
+			if u, err := url.Parse(r.url); err == nil && u.Host+u.Path == hostPath {
+				return s, r, true
+			}
+		}
+	}
+	return "", surfaceRead{}, false
+}
+
+// checkSurfaceRead holds an optional surface's read to its table row: one
+// admitted user's exact read, keeping only the row's fields, in the row's
+// exact list shape (docs/spec/workspace-collector.md, "Reads and projections").
+func (c *compiled) checkSurfaceRead() error {
+	def, ok := workspaceSurfaces[c.Surface]
+	if !ok {
+		return errors.New("an optional credential surface needs a compiled Workspace read")
+	}
+	i := slices.IndexFunc(def.reads, func(r surfaceRead) bool { return r.url == c.URL })
+	if i < 0 {
+		return errors.New("an optional surface reads only its pinned paths")
+	}
+	r := def.reads[i]
+	if len(c.Params) != 2 || c.types["domain"].Type != DNSName || c.types["domain"].Optional || c.types["user"].Type != UserKey || c.types["user"].Optional ||
+		c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity != nil || c.PreserveMalformed {
+		return errors.New("an optional surface read names one admitted user and nothing else")
+	}
+	for _, field := range c.Keep {
+		if !slices.Contains(r.keep, field) {
+			return errors.New("an optional surface read keeps only its pinned fields")
+		}
+	}
+	if (c.List == nil) != (r.list == nil) || c.List != nil && !reflect.DeepEqual(*c.List, *r.list) {
+		return errors.New("an optional surface read has its pinned list shape")
+	}
+	c.projectFirst = def.projectFirst
+	return nil
+}
+
 func (c *compiled) workspaceResource(name string) bool {
 	return c.Auth == WorkspaceADC && name == "customer" && c.types[name].Type == CustomerID
 }
@@ -115,6 +246,15 @@ func (c *compiled) checkWorkspaceOp() error {
 	if c.Surface != WorkspaceBaseline && (c.Auth != WorkspaceADC || workspaceSurfaceScope(c.Surface) == "") {
 		return errors.New("an optional credential surface needs a compiled Workspace read")
 	}
+	// Nothing reaches the Gmail host but a pinned Workspace read, and a
+	// pinned read belongs to its surface alone.
+	pinnedSurface, _, pinned := WorkspaceBaseline, surfaceRead{}, false
+	if u, err := url.Parse(c.URL); err == nil {
+		pinnedSurface, _, pinned = pinnedRead(u.Host + u.Path)
+		if u.Host == "gmail.googleapis.com" && (!pinned || c.Auth != WorkspaceADC) {
+			return errors.New("only a pinned Workspace read reaches the Gmail host")
+		}
+	}
 	for _, p := range c.Params {
 		if p.Type == CustomerID && !c.workspaceResource(p.Name) {
 			return errors.New("customer parameters require a compiled Workspace read")
@@ -126,8 +266,14 @@ func (c *compiled) checkWorkspaceOp() error {
 		}
 		return nil
 	}
+	if pinned && pinnedSurface != c.Surface {
+		return errors.New("Workspace optional reads use their own compiled surface and path")
+	}
 	if c.Provider != "google" || c.Method != GET || c.Class != Read || (c.Subject != workspacePrefix+"{domain}" && c.Subject != workspacePrefix+"{domain}/users/{user}") || c.types["domain"].Type != DNSName || c.WorkflowYAML || c.GitHubMetadata || len(c.Accept) != 1 || c.Accept[0] != "application/json" || c.MaxBytes != 1<<20 {
 		return errors.New("invalid compiled Workspace foundation read")
+	}
+	if c.Surface != WorkspaceBaseline {
+		return c.checkSurfaceRead()
 	}
 	u, err := url.Parse(c.URL)
 	if err != nil || u.Scheme != "https" || u.Host != "admin.googleapis.com" || u.User != nil || u.Fragment != "" || strings.Contains(c.URL, "%") || path.Clean(u.Path) != strings.TrimSuffix(u.Path, "/") {
@@ -156,27 +302,13 @@ func (c *compiled) checkWorkspaceOp() error {
 	}
 	perUser := c.types["user"].Type == UserKey
 	assignment := c.List != nil && c.List.Assignment != nil
-	tokens := c.Surface == WorkspaceOAuthGrants
 	if perUser && c.types["user"].Optional {
 		return errors.New("Workspace user selector is required")
 	}
-	if tokens != (u.Path == "/admin/directory/v1/users/{user}/tokens") || c.List != nil && c.List.SelfRef != "" && !tokens {
-		return errors.New("Workspace OAuth grant reads use their own compiled surface and path")
+	if c.List != nil && c.List.SelfRef != "" {
+		return errors.New("only an optional surface read lists items naming its user")
 	}
-	if tokens {
-		// One admitted user's grants, a single bounded array, every item
-		// naming that user (docs/spec/workspace-collector.md, "Reads and projections").
-		l := c.List
-		if !perUser || len(c.Params) != 2 || u.RawQuery != "" || c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity != nil || c.PreserveMalformed ||
-			l == nil || l.Kind != KindOther || l.Items != "items" || l.Envelope != "admin#directory#tokenList" || l.SelfRef != "userKey" || l.Next != nil || l.Tree != nil || l.Assignment != nil || l.UserRef != "" || l.Children != "" {
-			return errors.New("invalid Workspace OAuth grant read")
-		}
-		for _, field := range c.Keep {
-			if !slices.Contains([]string{"clientId", "scopes", "userKey", "displayText", "anonymous", "nativeApp"}, field) {
-				return errors.New("Workspace OAuth grant reads keep only grant metadata")
-			}
-		}
-	} else if perUser && !assignment {
+	if perUser && !assignment {
 		if c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity == nil || c.List != nil || u.Path != "/admin/directory/v1/users/{user}" {
 			return errors.New("Workspace user read requires admitted stable identity")
 		}
@@ -314,7 +446,7 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		g.clearWorkspacePages(p.r.Asset)
 		session.assignmentObservations = 0
 		session.unitIDs = nil
-		session.customer, session.domains, session.bound, session.domainRoot = "", nil, false, false
+		session.customer, session.domains, session.aliases, session.bound, session.domainRoot = "", nil, nil, false, false
 		session.units, session.inventory, session.fingerprints, session.owners = nil, nil, nil, nil
 		session.usersComplete, session.inventoryBad, session.principal = false, false, ""
 		session.unbind()
@@ -329,7 +461,7 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		g.clearWorkspacePages(p.r.Asset)
 		session.usersComplete, session.principal = false, ""
 		session.unbind()
-		session.domains = nil
+		session.domains, session.aliases = nil, nil
 		session.domainRoot = false
 	case "workspace.bootstrap_aliases":
 		g.clearWorkspacePages(p.r.Asset)
@@ -409,52 +541,167 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 
 // workspaceOptionalCredential is an optional surface's own token, asked for
 // with exactly its one scope after baseline admission, never the baseline
-// token. A failed exchange is remembered, so later reads send nothing and
-// carry its classification: a refused scope is an optional permission gap
+// token. A mailbox surface has one token per admitted mailbox, acting as the
+// gate's own record of that account. A failed exchange is remembered, for
+// the surface or for that mailbox, so later reads send nothing and carry its
+// classification: a refused scope is an optional permission gap
 // (docs/spec/workspace-collector.md, "Credential files and profiles").
 func (g *Gate) workspaceOptionalCredential(ctx context.Context, p *pending, session *workspaceSession, source *googleSource) (*Credential, *halt) {
 	surface := workspaceSurfaces[p.op.Surface]
 	if !slices.Contains(surface.profiles, source.profile) {
 		return nil, &halt{decision: "unavailable:profile_not_selected", detail: "The selected Workspace profile does not include this optional read", sticky: true}
 	}
+	if surface.mailbox && source.kind != "service_account" {
+		return nil, &halt{decision: "unavailable:needs_service_account", detail: "Mail settings are read only through a service account with domain-wide delegation", sticky: true}
+	}
 	if source.kind == "service_account" && session.principal == "" {
 		return nil, &halt{decision: "unavailable:principal_unknown", detail: "The delegated account must be verified before an optional permission is requested", sticky: true}
-	}
-	opt := session.optional[p.op.Surface]
-	if opt != nil && opt.failure != nil {
-		h := *opt.failure
-		return nil, &h
-	}
-	if opt != nil && opt.credential != nil && g.now().Before(opt.expires) {
-		return opt.credential, nil
-	}
-	exchange, err := source.exchange(g.now(), p.op.Surface)
-	if err != nil {
-		return nil, &halt{decision: "unavailable:credential_exchange", detail: err.Error(), sticky: true}
 	}
 	if session.optional == nil {
 		session.optional = map[WorkspaceSurface]*workspaceOptional{}
 	}
-	opt = &workspaceOptional{}
-	session.optional[p.op.Surface] = opt
-	result := g.Send(ctx, Request{Op: surface.exchange, Asset: p.r.Asset, Stage: p.r.Stage, exchange: exchange})
-	switch {
-	case !result.OK():
-		opt.failure = &halt{decision: result.Decision, detail: result.Detail, until: result.Until, reason: result.Reason, sticky: true}
-	case exchange.token == "" || !g.now().Before(exchange.expires):
-		opt.failure = &halt{decision: "unavailable:credential_exchange", detail: "the credential response did not establish a usable token", sticky: true}
+	opt := session.optional[p.op.Surface]
+	if opt == nil {
+		opt = &workspaceOptional{tokens: map[string]*workspaceToken{}}
+		session.optional[p.op.Surface] = opt
 	}
 	if opt.failure != nil {
 		h := *opt.failure
 		return nil, &h
 	}
-	// The optional token never outlives the authentication it extends.
-	opt.expires = exchange.expires
-	if session.expires.Before(opt.expires) {
-		opt.expires = session.expires
+	actAs, user := "", ""
+	slot := &opt.token
+	if surface.mailbox {
+		user = p.b.params["user"]
+		var h *halt
+		if actAs, h = session.mailboxSubject(user); h != nil {
+			return nil, h
+		}
+		t := opt.tokens[user]
+		slot = &t
+		defer func() { opt.tokens[user] = *slot }()
 	}
-	opt.credential = &Credential{Env: source.env, header: "Authorization", value: "Bearer " + exchange.token, secret: exchange.token, secrets: exchange.credential.secrets, Scopes: exchange.scopes}
-	return opt.credential, nil
+	if t := *slot; t != nil && t.failure != nil {
+		h := *t.failure
+		return nil, &h
+	}
+	if t := *slot; t != nil && t.credential != nil && g.now().Before(t.expires) {
+		return t.credential, nil
+	}
+	if surface.mailbox {
+		if session.exchanges == nil {
+			session.exchanges = map[WorkspaceSurface]int{}
+		}
+		if session.exchanges[p.op.Surface] >= mailboxExchangeCap {
+			opt.failure = &halt{decision: "unavailable:limit_reached", reason: "limit_reached", detail: "The session's mailbox sign-in budget was reached", sticky: true}
+			h := *opt.failure
+			return nil, &h
+		}
+		session.exchanges[p.op.Surface]++
+	}
+	var exchange *googleExchange
+	var err error
+	if surface.mailbox {
+		exchange, err = source.mailboxExchange(g.now(), p.op.Surface, actAs, user)
+	} else {
+		exchange, err = source.exchange(g.now(), p.op.Surface)
+	}
+	if err != nil {
+		return nil, &halt{decision: "unavailable:credential_exchange", detail: err.Error(), sticky: true}
+	}
+	t := &workspaceToken{}
+	*slot = t
+	result := g.Send(ctx, Request{Op: surface.exchange, Asset: p.r.Asset, Stage: p.r.Stage, exchange: exchange})
+	switch {
+	case !result.OK():
+		t.failure = &halt{decision: result.Decision, detail: result.Detail, until: result.Until, reason: result.Reason, sticky: true}
+	case exchange.token == "" || !g.now().Before(exchange.expires):
+		t.failure = &halt{decision: "unavailable:credential_exchange", detail: "the credential response did not establish a usable token", sticky: true}
+	}
+	dialled := !strings.HasPrefix(result.Decision, "refused:")
+	switch {
+	case surface.mailbox && t.failure != nil && !dialled:
+		// Refused before it left this machine (a deadline, a stopped
+		// provider): the surface's, uncounted, with its reason.
+		session.exchanges[p.op.Surface]--
+		*slot = nil
+		opt.failure = t.failure
+	case surface.mailbox:
+		// Google was asked to act as this mailbox, answered or not.
+		if session.actedAs == nil {
+			session.actedAs = map[string]bool{}
+		}
+		session.actedAs[user] = true
+		scope := exchange.failure
+		if t.failure != nil && !exchange.answered {
+			scope = failTransient
+		}
+		opt.attempts++
+		mailboxOutcome(opt, t, scope)
+	case t.failure != nil:
+		opt.failure = t.failure
+	}
+	if opt.failure != nil {
+		h := *opt.failure
+		return nil, &h
+	}
+	if t.failure != nil {
+		h := *t.failure
+		return nil, &h
+	}
+	// The optional token never outlives the authentication it extends.
+	t.expires = exchange.expires
+	if session.expires.Before(t.expires) {
+		t.expires = session.expires
+	}
+	t.credential = &Credential{Env: source.env, header: "Authorization", value: "Bearer " + exchange.token, secret: exchange.token, secrets: exchange.credential.secrets, Scopes: exchange.scopes}
+	return t.credential, nil
+}
+
+// mailboxOutcome decides whether a per-mailbox exchange failure belongs to
+// that mailbox or to the surface. A refused scope or a rate limit is the
+// surface's; so is a breaker trip, when a binding's first exchanges all
+// fail or many fail in a row, since a revoked key or a broken clock looks
+// like one mailbox failing after another
+// (docs/spec/workspace-collector.md, "Credential files and profiles").
+func mailboxOutcome(opt *workspaceOptional, t *workspaceToken, scope failureScope) {
+	if t.failure == nil {
+		opt.succeeded, opt.failedInARow = true, 0
+		return
+	}
+	if scope == failSurface {
+		opt.failure = t.failure
+		return
+	}
+	// A failure of this mailbox's own sign-in repeats for it alone.
+	t.failure.sticky = false
+	if scope != failTransient && !strings.HasPrefix(t.failure.reason, "insufficient_permission") {
+		t.failure.decision, t.failure.reason = "unavailable:mailbox_credential", ""
+		t.failure.detail = "Google did not issue a token for this mailbox"
+	}
+	opt.failedInARow++
+	if !opt.succeeded && opt.attempts >= breakerFirst || opt.failedInARow >= breakerInARow {
+		opt.failure = &halt{decision: "unavailable:credential_exchange", detail: "Google did not sign scheck in as one mailbox after another, so scheck stopped asking", sticky: true}
+	}
+}
+
+// mailboxSubject is the address a per-mailbox token acts as: the gate's own
+// record of an admitted current account, whose primary address is in a
+// verified domain of the bound tenant, never an address a collector or a
+// response supplied.
+func (s *workspaceSession) mailboxSubject(id string) (string, *halt) {
+	user, ok := s.inventory[id]
+	if !s.usersComplete || !ok || user.id != id {
+		return "", refused("tenant_binding", "the account was not admitted from current Workspace inventory")
+	}
+	_, domain, _ := strings.Cut(user.primary, "@")
+	if !s.domains[domain] && !s.aliases[domain] {
+		return "", refused("tenant_binding", "the account's address is not in a verified domain of this Workspace")
+	}
+	if !user.mailbox {
+		return "", &halt{decision: "unavailable:mailbox_inactive", detail: "The account list did not report this account active with a mailbox"}
+	}
+	return user.primary, nil
 }
 
 // workspaceResponse is a private response pipeline, sharing Send, TLS, address
@@ -477,6 +724,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 		code = codeContentType
 	}
 	if s.r.exchange != nil {
+		s.r.exchange.answered = true
 		if resp.StatusCode != http.StatusOK || code != "" || !readGoogleToken(raw, s.r.exchange, s.start) {
 			s.res.end("unavailable:credential_exchange", "Google authentication did not return a usable access token. Check the selected credential setup, then retry")
 			if resp.StatusCode != http.StatusOK && code == "" {
@@ -486,11 +734,24 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 				if scope := workspaceSurfaceScope(s.r.exchange.surface); scope != "" && googleScopeDenied(raw) {
 					s.res.Reason = "insufficient_permission:" + strings.TrimPrefix(scope, googleScopePrefix)
 					s.res.Detail = "Google did not authorize this credential for the optional read permission"
+					s.r.exchange.failure = failSurface
 				}
+				// An administrator's policy can refuse one mailbox; it is that
+				// mailbox's gap, not the surface's.
+				if scope := workspaceSurfaceScope(s.r.exchange.surface); workspaceSurfaces[s.r.exchange.surface].mailbox && googleErrorCode(raw) == "admin_policy_enforced" {
+					s.res.Reason = "insufficient_permission:" + strings.TrimPrefix(scope, googleScopePrefix)
+					s.res.Detail = "Google's administrator policy did not let this credential act for this mailbox"
+				}
+			}
+			if resp.StatusCode >= 500 && workspaceSurfaces[s.r.exchange.surface].mailbox {
+				// Google failing is not Google refusing one mailbox.
+				s.res.end("unavailable:server_error", "Google's token endpoint answered with a server error")
+				s.r.exchange.failure = failTransient
 			}
 			if resp.StatusCode == 429 {
 				s.res.end("unavailable:credential_rate_limit", "Google credential exchange was rate limited")
 				s.res.Reason = "limit_reached"
+				s.r.exchange.failure = failSurface
 			}
 		}
 		return s.finish(nil, nil)
@@ -553,7 +814,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 		return s.finish(out, nil)
 	}
 	if session.bound {
-		summary := map[string]any{"id": session.customer, "domain": s.a.b.params["domain"], "profile": s.g.workspaceSource.profile, "surfaces": workspaceSelected(s.g.workspaceSource.profile), "scopes": session.credential.Scopes, "scopes_known": session.scopesKnown}
+		summary := map[string]any{"id": session.customer, "domain": s.a.b.params["domain"], "profile": s.g.workspaceSource.profile, "surfaces": workspaceSelected(s.g.workspaceSource.profile), "offers": workspaceOffers(s.g.workspaceSource.profile), "scopes": session.credential.Scopes, "scopes_known": session.scopesKnown}
 		// A successful client-authenticated refresh proves the client id,
 		// never whose sign-in the refresh token holds
 		// (docs/spec/workspace-collector.md, "OAuth scope interpretation").
@@ -684,6 +945,10 @@ func (s *workspaceSession) consume(id string, raw []byte, root string) bool {
 			if name == root && *row.Verified {
 				matched = true
 			}
+		}
+		s.aliases = map[string]bool{}
+		for name, entry := range seen {
+			s.aliases[name] = entry.verified
 		}
 		s.bound = matched
 		return matched

@@ -769,6 +769,14 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"dkim_key":                 "the DKIM key could not be parsed or was absent or revoked",
 			"dkim_multiple_keys":       "multiple DKIM keys leave the selector ambiguous",
 			"oauth_unclassified":       "some apps hold scopes this version of scheck does not classify, and none it classifies as broad",
+			"workspace_evidence":       "the Workspace evidence it needs was missing or not recognized",
+			"needs_service_account":    "it needs a service account with domain-wide delegation, and the credential used holds one person's sign-in",
+			"credential_exchange":      "Google did not issue the token this read needs",
+			"mailbox_credential":       "Google did not sign scheck in as some mailboxes",
+			"mailbox_unavailable":      "Google did not serve some mailboxes' settings",
+			"mailbox_inactive":         "the account list did not report the account active with a mailbox",
+			"forwarding_subdomain":     "forwarding to a subdomain that is not itself a domain of this Workspace was not judged",
+			"api_disabled":             "Google has not enabled the API this read needs in the credential's project",
 		}[arg]; ok {
 			return detail
 		}
@@ -782,11 +790,29 @@ func (t *text) reasonText(rd ReasonDetail) string {
 	return clean(rd.Reason)
 }
 
+// planReason says a reason comes from a collector's coverage plan, whose
+// detail names the group it left undecided.
+func planReason(reason string) bool {
+	code, arg, _ := strings.Cut(reason, ":")
+	switch code {
+	case "insufficient_permission":
+		return strings.Contains(arg, ".")
+	case "unavailable":
+		return slices.Contains([]string{"workspace_evidence", "needs_service_account", "credential_exchange", "mailbox_credential", "mailbox_unavailable", "mailbox_inactive", "forwarding_subdomain", "oauth_unclassified", "api_disabled"}, arg)
+	}
+	return false
+}
+
 func (t *text) reasonsText(rs []ReasonDetail) string {
 	var out []string
 	for _, rd := range rs {
 		s := t.reasonText(rd)
-		if rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule" || rd.Reason == "unavailable:dkim_selector" || rd.Reason == "unavailable:mail_senders") {
+		switch {
+		case rd.Detail != "" && (strings.HasPrefix(rd.Reason, "not_on_plan:") || rd.Reason == "not_declared"):
+			// What the plan left out leads: "Workspace mail forwarding: not in
+			// the checks you chose".
+			s = clean(rd.Detail) + ": " + s
+		case rd.Detail != "" && (t.opt.Verbose > 0 || rd.Reason == "no_rule" || rd.Reason == "unavailable:dkim_selector" || rd.Reason == "unavailable:mail_senders" || planReason(rd.Reason)):
 			s += " (" + clean(rd.Detail) + ")"
 		}
 		out = append(out, s)

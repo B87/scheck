@@ -412,6 +412,11 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 		if r.exchange == nil || op.ID != workspaceExchangeID(r.exchange.surface) {
 			return refused("method", "a credential exchange is not a collector's request")
 		}
+		// A per-mailbox exchange names the admitted account id it acts for,
+		// never its address (docs/spec/workspace-collector.md, "Boundary").
+		if r.exchange.user != "" {
+			p.e.Params = map[string]string{"user": r.exchange.user}
+		}
 	}
 	return nil
 }

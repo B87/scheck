@@ -8,10 +8,17 @@ import (
 type workspaceUser struct {
 	id, primary, customer, unit string
 	aliases                     []string
+	// mailbox says the list reported the account explicitly not suspended
+	// and not archived, and not without a mailbox: the only accounts a
+	// mailbox surface may act as (docs/spec/workspace-collector.md,
+	// "Boundary").
+	mailbox bool
 }
 
 // Identity recognition protects admission; posture fields are parsed only by
-// the collector (docs/spec/workspace-collector.md, "Tenant binding and scope").
+// the collector, but for the three flags that decide whether the gate may
+// act as an account's mailbox (docs/spec/workspace-collector.md, "Tenant
+// binding and scope").
 func structuralUser(doc any, f *UserIdentity) (workspaceUser, bool) {
 	u := workspaceUser{id: scalarAt(doc, f.ID), primary: scalarAt(doc, f.Primary), customer: scalarAt(doc, f.Customer), unit: scalarAt(doc, f.Unit)}
 	primary, err := userKey(u.primary)
@@ -59,6 +66,15 @@ func (g *Gate) workspaceUserItem(asset string, op *compiled, item any, rule stri
 		s.inventoryBad = true
 		return "unattributable"
 	}
+	flag := func(field string) (value, known bool) {
+		v, ok := fieldAt(item, field)
+		b, isBool := v.(bool)
+		return b, ok && isBool
+	}
+	suspended, suspendedKnown := flag("suspended")
+	archived, archivedKnown := flag("archived")
+	mailbox, mailboxKnown := flag("isMailboxSetup")
+	u.mailbox = suspendedKnown && !suspended && archivedKnown && !archived && (!mailboxKnown || mailbox)
 	fingerprint := string(marshal(project(item, op.keep)))
 	if prior, exists := s.fingerprints[u.id]; exists {
 		if prior != fingerprint {

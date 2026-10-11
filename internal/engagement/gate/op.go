@@ -80,8 +80,9 @@ type WorkspaceSurface string
 
 // The Workspace credential surfaces.
 const (
-	WorkspaceBaseline    WorkspaceSurface = ""
-	WorkspaceOAuthGrants WorkspaceSurface = "oauth_grants"
+	WorkspaceBaseline        WorkspaceSurface = ""
+	WorkspaceOAuthGrants     WorkspaceSurface = "oauth_grants"
+	WorkspaceGmailForwarding WorkspaceSurface = "gmail_forwarding"
 )
 
 // Kind is what a list op's items are. The excludable kinds need an
@@ -297,6 +298,9 @@ type compiled struct {
 	// users says a request for the op names or lists users, so the
 	// excluded-subject set must be known before it is sent.
 	users bool
+	// projectFirst discards every field outside Keep before redaction: the
+	// gate's surface table sets it, never a collector.
+	projectFirst bool
 }
 
 // neverRead are URL path segments no op may read, lowercased.

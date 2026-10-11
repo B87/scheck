@@ -1,0 +1,205 @@
+scheck engagement report: Workspace inventory review
+For Dani. Read 2026-10-10 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+Credential     saas:google-workspace:example.com: Returned credential permissions are unknown;
+               effective permissions were not tested.
+Warning        saas:google-workspace:example.com: No message was opened or read. To read forwarding
+               settings, scheck asked Google to sign it in as each of 1 mailbox with Google's
+               gmail.readonly permission and sent only the declared reads of forwarding settings and
+               filters. That permission could read every message in those mailboxes, and Google's
+               logs may show scheck's service account acting as each of those people. The permission
+               stays on the service account until an administrator removes it: if you will not run
+               this check again, a super administrator can remove
+               https://www.googleapis.com/auth/gmail.readonly from the service account's entry under
+               Security → Access and data control → API controls → Manage Domain Wide Delegation,
+               and delete the key file if it was created for this check.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record only for probes and scans.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: Workspace (checked only in part: identity and access; email and domain). See Coverage for what
+was not checked.
+
+SUMMARY
+Checked in part  Identity and access, Email and domain.
+Not checked      Logging and incident readiness: see Coverage.
+Not requested    Not part of this run: secrets, cloud configuration, data stores and backups, CI/CD
+                 and supply chain, external surface, web application, hosts. To include one, list it
+                 under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      A mailbox forwards mail outside your organization (Workspace)
+             base medium, raised: admin@example.com is a super administrator: mail sent to
+             administrators, such as security alerts and password-reset links from other services,
+             goes to this mailbox
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
+in part: identity and access, email and domain. Not checked: logging and incident readiness,
+secrets, cloud configuration, data stores and backups, CI/CD and supply chain, external surface, web
+application, hosts. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      checked in part
+  1 of 1 asset read.
+  The Workspace evidence it needs was missing or not recognized (Workspace administrator identity;
+  Workspace account sign-in); this version of scheck has no rule for it (Workspace domain-wide
+  delegation remains unassessed; 2-step verification policy, grace periods and other sign-in
+  services were not assessed).
+Email and domain         checked in part
+  1 of 1 asset read.
+  Google did not issue the token this read needs (Workspace mail forwarding); this version of scheck
+  has no rule for it (the Admin console's forwarding setting, mail delegates and POP/IMAP were not
+  assessed); Domain email settings (SPF, DKIM and DMARC): not part of this engagement; to include
+  it, list it under roots in engagement.yaml.
+Logging and incident readiness not checked
+  1 of 1 asset read.
+  This version of scheck has no rule for it (Workspace: no logging or incident-readiness control was
+  assessed).
+Not requested            Not part of this run: secrets, cloud configuration, data stores and
+                         backups, CI/CD and supply chain, external surface, web application, hosts.
+                         To include one, list it under roots in the engagement file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response and vendor reviews are
+                         done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 1 open (1 high), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  A mailbox forwards mail outside your organization (Workspace)
+   [workspace.external_forwarding]
+   Subject       admin@example.com -> admin.home@gmail.com (mail_forward admin@example.com ->
+                 admin.home@gmail.com)
+   Observed      g000008 (12:00, as unknown): admin@example.com forwards all incoming mail except
+                 spam to admin.home@gmail.com (automatic forwarding is on; after forwarding, Gmail
+                 moves the original to Trash, a pattern used to hide forwarded mail from the
+                 person). gmail.com is not a domain of this Workspace. scheck read the setting, not
+                 whether any message was forwarded.
+   Observed      g000020 (12:00, as unknown): admin@example.com forwards all incoming mail except
+                 spam to admin.home@gmail.com (automatic forwarding is on; after forwarding, Gmail
+                 moves the original to Trash, a pattern used to hide forwarded mail from the
+                 person). gmail.com is not a domain of this Workspace. scheck read the setting, not
+                 whether any message was forwarded.
+   Severity      high: base medium, +1 attribute admin (g000020: admin@example.com is a super
+                 administrator: mail sent to administrators, such as security alerts and
+                 password-reset links from other services, goes to this mailbox.)
+   Why here      admin@example.com is a super administrator: mail sent to administrators, such as
+                 security alerts and password-reset links from other services, goes to this mailbox.
+   Not checked   Whether any message was forwarded, and what each filter matches, were not checked.
+   Fix           Ask the person, in person or by phone rather than by email, whether they set this
+                 up and still need it. If they did and still need it, note why and accept it for
+                 this address; forwarding to any other address stays open. If not, remove it in the
+                 person's Gmail: Settings → See all settings → Forwarding and POP/IMAP (forwarding)
+                 and Filters and Blocked Addresses (filters). If nobody set it up, treat the account
+                 as possibly taken over and contain it before removing anything, so a live session
+                 cannot add it back: sign the account out everywhere, reset its password, revoke its
+                 app access and check its 2-step verification; then remove the forwarding, and use
+                 Email Log Search in the Admin console to see what was forwarded. To stop forwarding
+                 outside the organization for everyone, an administrator can allow automatic
+                 forwarding to internal addresses only, or turn it off: Admin console → Apps →
+                 Google Workspace → Gmail → End User Access → Automatic forwarding. Afterwards,
+                 check that existing forwarding stopped; scheck did not test this.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # A mailbox forwards mail outside your organization (Workspace)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: workspace.external_forwarding
+      asset: Workspace
+      subject: admin@example.com -> admin.home@gmail.com # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      expires: 2027-01-08          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    admin.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 13 requests.
+    gmail.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 10 requests.
+    oauth2.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 6 requests.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  saas:google-workspace:example.com: Returned credential permissions are unknown; effective
+    permissions were not tested.
+  saas:google-workspace:example.com: Administrative checks cover current super-administrator flags
+    and supported direct or indirect role assignments. Group membership paths and effective
+    permissions were not tested.
+  saas:google-workspace:example.com: Domain-wide delegation inventory is not assessed. Review
+    Security → Access and data control → API controls → Manage Domain Wide Delegation in the Admin
+    console.
+  saas:google-workspace:example.com: 2-step verification checks read Google's current per-account
+    enforcement and enrollment flags. Organizational-unit policy, grace periods, configuration
+    groups, sign-in through another identity provider, verification methods, backup codes and
+    phishing resistance were not assessed.
+  saas:google-workspace:example.com: Google reports that every active account in this Workspace (5
+    active accounts) is currently required to use 2-step verification. You did not say who must use
+    it; declare it under access.mfa in the engagement file.
+  saas:google-workspace:example.com: Third-party app access was not checked: the selected Workspace
+    profile does not read it. The check lists apps people allowed into their mail, Drive or
+    calendar, a common way an attacker keeps access after a phishing email. It needs the Workspace
+    permission admin.directory.user.security, which Google offers only together with the ability to
+    revoke app access, sign people out and turn off 2-step verification; the checks above do not
+    need it. If your organization wants this check, an administrator can approve a dedicated
+    credential for it, so the everyday one keeps read-only permissions; then run again with
+    SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.
+  saas:google-workspace:example.com: Google did not sign scheck in as one mailbox after another, so
+    scheck stopped after 2 mailboxes. Google may have been failing for a while: run again later. If
+    it repeats, check that the service account's key is current and that its client ID under
+    Security → Access and data control → API controls → Manage Domain Wide Delegation lists
+    gmail.readonly.
+  saas:google-workspace:example.com: No message was opened or read. To read forwarding settings,
+    scheck asked Google to sign it in as each of 1 mailbox with Google's gmail.readonly permission
+    and sent only the declared reads of forwarding settings and filters. That permission could read
+    every message in those mailboxes, and Google's logs may show scheck's service account acting as
+    each of those people. The permission stays on the service account until an administrator removes
+    it: if you will not run this check again, a super administrator can remove
+    https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security →
+    Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file
+    if it was created for this check.
+  saas:google-workspace:example.com: Mail forwarding settings were read whole for 1 of 5 active
+    mailboxes; not read whole: carol@example.com (not attempted), dan@example.com (not attempted),
+    erin@example.com (not attempted), eve@example.com (not attempted). Check those mailboxes'
+    forwarding and filters by hand in each person's Gmail settings. Not attempted, because not
+    active or without a mailbox: 1 suspended. Checked: automatic forwarding and forwarding filters
+    of each active mailbox, by destination domain. Not checked: whether any message was forwarded,
+    what each filter matches, the Admin console's forwarding setting, routing and compliance rules,
+    mail delegates, POP/IMAP and other mail apps, send-as addresses, where mail forwarded to a group
+    or another address in your domains goes next, and suspended or archived mailboxes. To see what
+    was actually forwarded, use Email Log Search in the Admin console.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

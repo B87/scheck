@@ -235,3 +235,9 @@ func (h *Harness) GoogleTokenHandler(handler http.HandlerFunc) {
 	cert := h.w.leaf([]string{"oauth2.googleapis.com"}, time.Now().Add(time.Hour), false)
 	h.w.serve("oauth2.googleapis.com", "142.250.0.11", 443, &cert, handler)
 }
+
+// GmailHandler serves the fixed Gmail API host through offline transport.
+func (h *Harness) GmailHandler(handler http.HandlerFunc) {
+	cert := h.w.leaf([]string{"gmail.googleapis.com"}, time.Now().Add(time.Hour), false)
+	h.w.serve("gmail.googleapis.com", "142.250.0.12", 443, &cert, handler)
+}

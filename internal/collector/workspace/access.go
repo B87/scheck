@@ -125,6 +125,42 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 	}
 }
 
+// readAccounts calls read for each account in optional-surface read order:
+// passed leavers, super administrators, contractors, then the rest, active
+// before inactive within each, then by id. It stops after the first account
+// whose result the gate says every later one would repeat (read returns
+// true), and reports whether it reached the end.
+func readAccounts(views []accountView, c Context, read func(accountView) (repeats bool)) bool {
+	ordered := slices.Clone(views)
+	rank := func(v accountView) int {
+		r := personPriority(v.user, v.person, c) * 2
+		if !active(v.user) {
+			r++
+		}
+		return r
+	}
+	slices.SortFunc(ordered, func(a, b accountView) int {
+		if x := rank(a) - rank(b); x != 0 {
+			return x
+		}
+		return strings.Compare(a.user.ID, b.user.ID)
+	})
+	return !slices.ContainsFunc(ordered, read)
+}
+
+// personPriority is readPriority for an account whose person is known.
+func personPriority(u User, p *Person, c Context) int {
+	switch {
+	case p != nil && leftPassed(p.Left, c):
+		return 0
+	case yes(u.IsAdmin):
+		return 1
+	case p != nil && p.Kind == "contractor":
+		return 2
+	}
+	return 3
+}
+
 // readPriority orders per-account reads so a budget cut loses the least:
 // passed leavers, super administrators, contractors, then everyone else.
 func readPriority(u User, attributions []Attribution, view Context) int {

@@ -21,6 +21,9 @@ func ruleFixture() (Evidence, Context) {
 	e.Units = Population[Unit]{Complete: true, Items: []Unit{{ID: "root", Path: "/"}}}
 	e.Binding.Profile = "directory_oauth"
 	e.OAuth = OAuthEvidence{Selected: true, Complete: true, Accounts: []AccountGrants{{ID: "1", Read: Read{Op: OpUserTokens, RequestID: "t1", Decision: "sent", Status: 200}, Grants: []Grant{}, Usable: true, Complete: true}}}
+	e.Domains = Population[Domain]{Complete: true, Items: []Domain{{Name: "example.com", Verified: new(true)}}}
+	e.Aliases = Population[Alias]{Complete: true, Items: []Alias{}}
+	e.Mail = MailEvidence{Selected: true, Complete: true, Accounts: []MailboxForwarding{readMailbox("1")}}
 	return e, c
 }
 func getRule(t *testing.T, out []finding.Judgment, id string) finding.Judgment {
@@ -66,6 +69,9 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 			e.OAuth.Accounts[0].Read = Read{Op: OpUserTokens, RequestID: "t1", Decision: "sent", Status: 403, Reason: "insufficient_permission:admin.directory.user.security"}
 			e.OAuth.Accounts[0].Usable, e.OAuth.Accounts[0].Complete, e.OAuth.Complete = false, false, false
 		}},
+		IDExternalForwarding: {func(e *Evidence, _ *Context) {
+			e.Mail.Accounts[0].Enabled, e.Mail.Accounts[0].Address = new(true), "copy@gmail.com"
+		}, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) { e.Mail.Accounts[0].Enabled = nil }},
 		IDAdminWithoutTwoStep: {func(e *Evidence, _ *Context) {
 			e.Users.Items[0].IsAdmin = new(true)
 			e.Users.Items[0].Enrolled = new(false)
@@ -91,11 +97,17 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 					t.Fatalf("want %s got %+v", variant.want, j)
 				}
 				def, ok := finding.Lookup(id)
-				if !ok || def.Area != finding.AreaIdentity {
+				area := finding.AreaIdentity
+				if id == IDExternalForwarding {
+					area = finding.AreaEmail
+				}
+				if !ok || def.Area != area {
 					t.Fatal("missing definition", id)
 				}
 				want := finding.SubjectKind("account")
 				switch id {
+				case IDExternalForwarding:
+					want = "mail_forward"
 				case IDTwoStepNotEnforced:
 					want = "org_unit"
 				case IDOAuthBroadScope:

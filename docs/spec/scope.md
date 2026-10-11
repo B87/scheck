@@ -816,7 +816,7 @@ Each source is a family of ops with its own literal host:
 | Certificate transparency | `crt.sh` | each declared domain root, once |
 | DNS resolver | the system's, recorded by address | every name queried |
 | GitHub | `api.github.com` | the organization name, repository names, the token |
-| Google | `admin.googleapis.com`, `oauth2.googleapis.com`; planned E6 `gmail.googleapis.com` | declared domain and customer selector; private token exchange sends credential material only to the token endpoint; planned user reads send admitted user ids |
+| Google | `admin.googleapis.com`, `oauth2.googleapis.com`, `gmail.googleapis.com` (the two pinned forwarding-settings reads, E6 step 6) | declared domain and customer selector; private token exchange sends credential material only to the token endpoint; per-user reads send admitted user ids; Gmail reads go to `users/me` with that mailbox's own token and name the user id in the audit line |
 
 A query to a source names only an in-scope root or asset. Following a CNAME chain is
 part of resolving the in-scope name; a standalone lookup of a name outside every root
@@ -956,8 +956,9 @@ body or directly sequence the exchange.
 admission; a collector never holds one. A request to a web asset never carries an
 `Authorization` header. A Workspace op compiled with an optional surface gets that
 surface's own token, minted with exactly its one scope by its own audited exchange,
-never the baseline token; the gate refuses it when the profile does not select the
-surface ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
+never the baseline token (a per-mailbox surface, one token per admitted mailbox, acting
+as that account and admitted from current inventory before each exchange); the gate
+refuses it when the profile does not select the surface ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 
 **Where credentials come from:**
 
@@ -965,8 +966,8 @@ surface ([workspace-collector.md](workspace-collector.md#credential-files-and-pr
   process outside every enforcement point, so scheck prints it as a hint instead.
 - **Google Workspace:** an application default credentials file or a service-account
   JSON named by the environment. E6 implements restricted ADC-file support, not full
-  ADC. Directory reads and the optional OAuth grant read are built; the optional Gmail
-  read remains planned
+  ADC. Directory reads, the optional OAuth grant read and the optional Gmail forwarding
+  read (a service account only, one token per admitted mailbox) are built
   ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 - **Never a fragment of a token.** A value shorter than 20 characters is refused as
   `no_credentials`: no GitHub token is that short, and redacting it by value would
@@ -1062,6 +1063,10 @@ A response goes through these steps in order, and nothing is stored before the l
 6. **Project** to the op's declared fields, dotted paths through objects and arrays.
    A field the response lacks stays absent, which a rule reads as unknown; `null` is
    kept. A list's body is the array of its kept items.
+   The Gmail forwarding settings reads project before step 3 instead: every field
+   outside their declared fields is discarded before redaction, so a filter's criteria
+   never reach redaction, the audit log or the store, and a body that is not the
+   expected shape is a fixed diagnostic, discarded.
 7. **Cut text** with `[TRUNCATED:<n bytes>]`, `<n>+` when the read stopped before the
    end, never inside a redaction marker, by the same code as the host runner. JSON over
    its cap is never parsed cut and not kept; its status and headers still decide the

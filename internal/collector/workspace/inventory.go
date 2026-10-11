@@ -29,6 +29,9 @@ type Context struct {
 	// MFA is the tenant's access.mfa[i].enforced and MFASource its key;
 	// both are empty when the operator declared nothing for this tenant.
 	MFA, MFASource string
+	// DeclaredDomains are the engagement's domain roots: never a reason to
+	// call a destination internal, only to say it was declared.
+	DeclaredDomains []string
 }
 type Attribution struct {
 	Tenant     string `json:"tenant"`
@@ -87,6 +90,7 @@ type Population[T any] struct {
 type Evidence struct {
 	Access            AccessEvidence     `json:"access"`
 	OAuth             OAuthEvidence      `json:"oauth"`
+	Mail              MailEvidence       `json:"mail"`
 	InventoryComplete bool               `json:"inventory_complete"`
 	Binding           Binding            `json:"binding"`
 	Domains           Population[Domain] `json:"domains"`
@@ -104,7 +108,7 @@ func usable(r gate.Result) bool {
 	return r.OK() && r.Response != nil && r.Response.Status == 200 && !r.Response.Truncated
 }
 func readOf(op string, r gate.Result) Read {
-	out := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Detail: r.Detail}
+	out := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Detail: r.Detail, Repeats: r.Repeats, ActedAs: r.ActedAsMailbox}
 	if r.Response != nil {
 		out.Status = r.Response.Status
 		out.Population = r.Response.Population
@@ -149,7 +153,9 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 		}
 	}
 	e.collectAccess(ctx, sender, target, view)
-	e.collectGrants(ctx, sender, target, view)
+	views := accountViews(e, view, attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete))
+	e.collectGrants(ctx, sender, target, view, views)
+	e.collectMail(ctx, sender, target, view, views)
 	e.finish(target.Asset, view)
 	e.Judgments = Judge(e, target.Asset, view)
 	return e
@@ -252,6 +258,13 @@ func (e Evidence) Reads() []Read {
 	}
 	for _, account := range e.OAuth.Accounts {
 		out = append(out, account.Read)
+	}
+	for _, account := range e.Mail.Accounts {
+		for _, read := range []Read{account.AutoRead, account.FiltersRead} {
+			if read.Op != "" {
+				out = append(out, read)
+			}
+		}
 	}
 	return out
 }

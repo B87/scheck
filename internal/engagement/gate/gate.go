@@ -334,6 +334,10 @@ type Result struct {
 	// Identity is what a resume finds the success under, "" when it is
 	// never reused (docs/spec/scope.md, "Resume").
 	Identity string
+	// ActedAsMailbox says the gate asked Google, in this session, to act as
+	// this request's mailbox, whatever that exchange or this request then
+	// did (docs/spec/workspace-collector.md, "Credential files and profiles").
+	ActedAsMailbox bool
 	// Repeats says the gate would end every later request of this kind in
 	// the session the same way, sending nothing: an optional token that was
 	// refused, authentication or tenant binding gone. A collector reading
@@ -355,10 +359,22 @@ const maxRetryAfter = 300 * time.Second
 // 429, 502, 503, 504 or a reset before the response. Every attempt is
 // admitted again from the first check.
 func (g *Gate) Send(ctx context.Context, r Request) Result {
-	if op := g.reg.ops[r.Op]; op != nil && op.Auth == WorkspaceADC {
+	op := g.reg.ops[r.Op]
+	if op != nil && op.Auth == WorkspaceADC {
 		g.workspaceMu.Lock()
 		defer g.workspaceMu.Unlock()
 	}
+	res := g.sendRetrying(ctx, r)
+	if op != nil && workspaceSurfaces[op.Surface].mailbox {
+		if s := g.workspace[r.Asset]; s != nil && s.actedAs[r.Params["user"]] {
+			res.ActedAsMailbox = true
+		}
+	}
+	return res
+}
+
+// sendRetrying sends a request and its retries.
+func (g *Gate) sendRetrying(ctx context.Context, r Request) Result {
 	first := g.nextID()
 	res, rt := g.attempt(ctx, r, first, "", 1)
 	if r.exchange != nil {

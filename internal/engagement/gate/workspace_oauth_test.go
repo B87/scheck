@@ -200,7 +200,7 @@ func TestWorkspaceOAuthTokenLivesNoLongerThanTheSession(t *testing.T) {
 		t.Fatal("first read")
 	}
 	s := g.workspace[wsAsset]
-	if s.optional[WorkspaceOAuthGrants].expires.After(s.expires) {
+	if s.optional[WorkspaceOAuthGrants].token.expires.After(s.expires) {
 		t.Fatal("the optional token outlives the baseline authentication")
 	}
 	// A rebinding forgets the optional token; the next read asks again,
@@ -310,7 +310,7 @@ func TestWorkspaceOAuthPerAccountDenialNamesTheScope(t *testing.T) {
 		t.Fatal(res)
 	}
 	s := g.workspace[wsAsset]
-	if !s.bound || s.optional[WorkspaceOAuthGrants].credential == nil {
+	if !s.bound || s.optional[WorkspaceOAuthGrants].token.credential == nil {
 		t.Fatal("a per-account denial dropped the session")
 	}
 }

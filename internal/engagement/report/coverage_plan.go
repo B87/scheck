@@ -79,13 +79,23 @@ func (b *builder) planCoverage(row *Row, a AssetInput, plan CoveragePlan) bool {
 		if group.Limit != "" {
 			si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: "no_rule", Detail: group.Limit})
 		}
+		// What left a group undecided reaches the row, named by the group:
+		// a refused read is never "no rule".
+		if group.Gap != nil {
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: group.Gap.Reason, Detail: group.Name})
+		}
+		for _, j := range a.Judged {
+			if slices.Contains(group.Rules, j.ID) && !j.Decided() {
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: j.Reason, Detail: group.Name})
+			}
+		}
 		if a.PopulationIncomplete {
 			si.Reasons = appendReason(si.Reasons, ReasonDetail(plan.Incomplete))
 		}
 		if decided > 0 {
 			si.Judged = []string{group.Name}
 			some = true
-		} else if group.Unassessed != "" {
+		} else if group.Unassessed != "" && unknown == 0 && group.Gap == nil {
 			unassessed = append(unassessed, group.Unassessed)
 		}
 		row.SubItems = append(row.SubItems, si)
@@ -94,6 +104,12 @@ func (b *builder) planCoverage(row *Row, a AssetInput, plan CoveragePlan) bool {
 		row.SubItems = append(row.SubItems, SubItem{Name: u.Name, Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: u.Detail}}})
 		if u.Unassessed != "" {
 			unassessed = append(unassessed, u.Unassessed)
+		}
+	}
+	// A plan with nothing on it gives the row the reason it read nothing.
+	if !plan.OnPlan() {
+		for _, group := range plan.Groups {
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: group.NotOnPlan.Reason, Detail: group.Name})
 		}
 	}
 	var parts []string

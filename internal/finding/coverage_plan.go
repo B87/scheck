@@ -25,6 +25,16 @@ type CoveragePlan struct {
 	RowAlso string
 }
 
+// OnPlan says some group of the plan is read: not every one is not on plan.
+func (p CoveragePlan) OnPlan() bool {
+	for _, g := range p.Groups {
+		if g.NotOnPlan == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // CoverageGroup is one coverage sub-item over the rule ids it names.
 type CoverageGroup struct {
 	Name  string

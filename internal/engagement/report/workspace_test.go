@@ -228,7 +228,7 @@ func workspaceOAuthReport(t *testing.T) Input {
 		return workspace.User{ID: id, Primary: id + "@example.com", Customer: "C123", Unit: "/", Suspended: new(false), Archived: new(false), IsAdmin: new(admin), Enforced: new(true), Enrolled: new(true)}
 	}
 	users := []workspace.User{user("admin", true), user("carol", false), user("dan", false)}
-	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Domain: "example.com", Profile: "directory_oauth", Surfaces: []gate.WorkspaceSurface{gate.WorkspaceOAuthGrants}}, Users: workspace.Population[workspace.User]{Items: users, Complete: true, Reads: []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}}, Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}}}}
+	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Domain: "example.com", Profile: "directory_oauth", Surfaces: []gate.WorkspaceSurface{gate.WorkspaceOAuthGrants}, Offers: map[gate.WorkspaceSurface]string{gate.WorkspaceGmailForwarding: "directory_oauth_mail"}}, Users: workspace.Population[workspace.User]{Items: users, Complete: true, Reads: []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}}, Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}}}}
 	e.Access.Roles.Complete, e.Access.Privileges.Complete = true, true
 	e.OAuth = workspace.OAuthEvidence{Selected: true, Complete: true}
 	const p = "https://www.googleapis.com/auth/"
@@ -300,5 +300,145 @@ func TestWorkspaceOAuthRaiseCoverageAndAcceptance(t *testing.T) {
 	in.Acceptances[0].Subject = app.Subject.Key
 	if f := Build(in).Findings[0]; f.Status != finding.StatusAccepted || f.Acceptance == nil || f.Acceptance.CoversEveryInstance {
 		t.Fatal("the app's own acceptance did not apply", f)
+	}
+}
+
+// workspaceMailReport renders the optional forwarding surface: a super
+// administrator forwarding everything to a personal address, a filter
+// forwarding to an outside service and hiding the message, a clean mailbox,
+// a subdomain destination, a filter destination carrying a terminal escape,
+// and a suspended account that is not read.
+func workspaceMailReport(t *testing.T) Input { return workspaceMailInput(t, nil) }
+
+// workspaceMailRefusal renders the forwarding surface refused before any
+// settings were read, or stopped by the breaker after one mailbox: the
+// email row names why, never "no rule".
+func workspaceMailRefusal(read workspace.Read, after int) func(*testing.T) Input {
+	return func(t *testing.T) Input {
+		return workspaceMailInput(t, func(e *workspace.Evidence) {
+			e.Mail.Accounts, e.Mail.Complete = e.Mail.Accounts[:after], false
+			read.Op, read.RequestID = workspace.OpMailAutoForwarding, "g000040"
+			e.Mail.Accounts = append(e.Mail.Accounts, workspace.MailboxForwarding{ID: "zed", AutoRead: read})
+		})
+	}
+}
+
+func workspaceMailInput(t *testing.T, change func(*workspace.Evidence)) Input {
+	in := workspaceInventoryReport(t)
+	a := &in.Assets[0]
+	a.Detail = "Workspace inventory, identity/administrator, 2-step verification and mail forwarding checks collected; notes and coverage show any unresolved evidence."
+	user := func(id string, admin, suspended bool) workspace.User {
+		return workspace.User{ID: id, Primary: id + "@example.com", Customer: "C123", Unit: "/", Suspended: new(suspended), Archived: new(false), IsAdmin: new(admin), Enforced: new(true), Enrolled: new(true)}
+	}
+	users := []workspace.User{user("admin", true, false), user("carol", false, false), user("dan", false, false), user("erin", false, false), user("eve", false, false), user("gone", false, true)}
+	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Domain: "example.com", Profile: "directory_mail", Surfaces: []gate.WorkspaceSurface{gate.WorkspaceGmailForwarding}, Offers: map[gate.WorkspaceSurface]string{gate.WorkspaceOAuthGrants: "directory_oauth_mail"}},
+		Users:   workspace.Population[workspace.User]{Items: users, Complete: true, Reads: []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}},
+		Units:   workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}}},
+		Domains: workspace.Population[workspace.Domain]{Complete: true, Items: []workspace.Domain{{Name: "example.com", Verified: new(true)}}},
+		Aliases: workspace.Population[workspace.Alias]{Complete: true, Items: []workspace.Alias{}}}
+	e.Access.Roles.Complete, e.Access.Privileges.Complete = true, true
+	e.Mail = workspace.MailEvidence{Selected: true, Complete: true}
+	for i, u := range users {
+		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
+		if u.ID == "gone" {
+			continue
+		}
+		m := workspace.MailboxForwarding{ID: u.ID, AutoRead: workspace.Read{Op: workspace.OpMailAutoForwarding, RequestID: fmt.Sprintf("g%06d", 20+2*i), Decision: "sent", Status: 200, ActedAs: true},
+			FiltersRead: workspace.Read{Op: workspace.OpMailFilters, RequestID: fmt.Sprintf("g%06d", 21+2*i), Decision: "sent", Status: 200, ActedAs: true, Population: &gate.Population{Page: 1}},
+			AutoUsable:  true, Enabled: new(false), FiltersUsable: true, FiltersComplete: true, Filters: []workspace.FilterForward{}}
+		switch u.ID {
+		case "admin":
+			m.Enabled, m.Address, m.Disposition = new(true), "admin.home@gmail.com", "trash"
+		case "carol":
+			m.FiltersSeen = 3
+			m.Filters = []workspace.FilterForward{{ID: "ANe1Bmj", Address: "invoices@books.example.net", Hides: true}}
+		case "dan":
+			m.FiltersSeen, m.Address = 2, "old.dan@gmail.com"
+		case "erin":
+			m.FiltersSeen, m.Filters = 1, []workspace.FilterForward{{ID: "ANe1Bmk", Address: "erin@mail.example.com"}}
+		case "eve":
+			m.FiltersSeen, m.Filters = 1, []workspace.FilterForward{{ID: "ANe1Bml", Address: "eve\x1b[31m@evil.example"}}
+		}
+		e.Mail.Accounts = append(e.Mail.Accounts, m)
+	}
+	if change != nil {
+		change(&e)
+	}
+	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC}
+	a.Judged = workspace.Judge(e, a.ID, c)
+	a.InventoryNotes = a.InventoryNotes[:1]
+	for _, n := range workspace.Readout(e, a.ID, c) {
+		a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
+	}
+	workspacePlan(a, func(w *workspace.Evidence) { w.Binding, w.Mail = e.Binding, e.Mail })
+	// Five mailbox sign-ins and ten settings reads left this machine.
+	in.Egress.Sources = []SourceInput{{Source: "google", Operator: "Google", Host: "admin.googleapis.com", Requests: 7 + len(users), Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
+		{Source: "google", Operator: "Google", Host: "gmail.googleapis.com", Requests: 10, Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
+		{Source: "google", Operator: "Google", Host: "oauth2.googleapis.com", Requests: 6, Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}}}
+	return in
+}
+
+func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {
+	r := Build(workspaceMailReport(t))
+	sev := map[string]string{}
+	var admin *Finding
+	for i, f := range r.Findings {
+		if f.ID == "workspace.external_forwarding" && f.Subject != nil {
+			sev[f.Subject.Key] = f.Severity
+			if f.Subject.Key == "admin@example.com -> admin.home@gmail.com" {
+				admin = &r.Findings[i]
+			}
+		}
+	}
+	if len(sev) != 2 || sev["carol@example.com -> invoices@books.example.net"] != "medium" || admin == nil || admin.Severity != "high" ||
+		len(admin.Adjustments) != 1 || admin.Adjustments[0].Rule != "attribute:admin" || admin.Subject.Kind != "mail_forward" || admin.AcceptTemplate == nil || !admin.AcceptTemplate.BySubject {
+		t.Fatalf("%v %+v", sev, admin)
+	}
+	if len(admin.WhyHere) != 1 || !strings.HasPrefix(admin.WhyHere[0], "admin@example.com is a super administrator: mail sent to administrators") {
+		t.Fatal(admin.WhyHere)
+	}
+	email := row(t, r, "email")
+	var forwarding *SubItem
+	for _, si := range email.SubItems {
+		if strings.HasPrefix(si.Name, "Workspace mail forwarding") {
+			forwarding = &si
+		}
+	}
+	if forwarding == nil || forwarding.Mark != "partial" || email.Mark != "partial" || email.Population == nil || email.Population.Read != 1 ||
+		!slices.ContainsFunc(forwarding.Reasons, func(d ReasonDetail) bool { return d.Reason == "unavailable:forwarding_subdomain" }) {
+		t.Fatal(email, forwarding)
+	}
+	var b bytes.Buffer
+	if err := WriteText(&b, r, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "\x1b") {
+		t.Fatal("a destination's terminal escape reached the text report")
+	}
+	// An acceptance pins the destination: accepting carol's forward to her
+	// accounting service accepts nothing else from her mailbox.
+	in := workspaceMailReport(t)
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: "workspace.external_forwarding", Asset: "Workspace", AssetID: in.Assets[0].ID, Subject: "carol@example.com -> other@books.example.net", Reason: "r", AcceptedBy: "dani", Expires: "2027-01-01"}}
+	for _, f := range Build(in).Findings {
+		if f.Status == finding.StatusAccepted {
+			t.Fatal("another destination's acceptance accepted this one", f)
+		}
+	}
+	in.Acceptances[0].Subject = "carol@example.com -> invoices@books.example.net"
+	accepted := 0
+	for _, f := range Build(in).Findings {
+		if f.Status == finding.StatusAccepted {
+			accepted++
+		}
+	}
+	if accepted != 1 {
+		t.Fatal("the destination's own acceptance did not apply")
+	}
+	// The default profile names forwarding not on plan in the email row,
+	// which reads nothing for it.
+	r = Build(workspaceIdentityReport(t))
+	email = row(t, r, "email")
+	if email.Mark != "not_assessed" || email.Population == nil || email.Population.Read != 0 || len(email.Reasons) != 2 || email.Reasons[0].Reason != "not_on_plan:profile=directory" || email.Reasons[1].Reason != "not_declared" {
+		t.Fatal(email)
 	}
 }

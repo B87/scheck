@@ -539,6 +539,25 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 			code, out.Body, out.Population = sh.code, sh.body, sh.pop
 			p.kept, p.next, p.done = sh.pop != nil, sh.next, sh.done
 		}
+	// A surface the gate projects first discards every field outside Keep
+	// before redaction, so nothing else reaches redaction, audit or
+	// persistence (docs/spec/workspace-collector.md, "Reads and projections").
+	case op.projectFirst && ok:
+		projected, projectCode := projectRaw(raw, op)
+		if code = projectCode; code != "" {
+			break
+		}
+		redacted, hits, err := red.RedactJSON(projected)
+		if err != nil {
+			code = codeMalformed
+			break
+		}
+		out.Redactions = append(out.Redactions, hits...)
+		sh := g.shape(r, a, redacted, resp.Header)
+		if code = sh.code; code == "" {
+			out.Body, out.Population = sh.body, sh.pop
+			p.kept, p.next, p.done = sh.pop != nil, sh.next, sh.done
+		}
 	case op.json && ok:
 		redacted, hits, err := red.RedactJSON(raw)
 		if err != nil {
@@ -571,6 +590,8 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 			if op.Auth == WorkspaceADC && resp.StatusCode == http.StatusForbidden {
 				if redacted, _, err := red.RedactJSON(raw); err == nil && googleRateLimited(redacted) {
 					out.Body = []byte(`{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}`)
+				} else if err == nil && googleServiceDisabled(redacted) {
+					out.Body = []byte(`{"error":{"errors":[{"reason":"accessNotConfigured"}]}}`)
 				}
 			}
 			break
@@ -690,6 +711,16 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 	case s == 403 && h.Get("X-GitHub-SSO") != "":
 		res.Reason = "insufficient_permission:sso_authorization"
 		res.Detail = "authorize the token for SAML single sign-on"
+	case s == 400 && workspaceSurfaces[a.b.op.Surface].badRequest != "":
+		res.end(workspaceSurfaces[a.b.op.Surface].badRequest, "Google did not serve this read for this account")
+	case s == 403 && workspaceSurfaces[a.b.op.Surface].mailbox && googleServiceDisabled(out.Body):
+		// The API is off in the credential's project: every mailbox would
+		// answer alike, so the surface stops here.
+		res.end("unavailable:api_disabled", "Google has not enabled this API in the credential's Google Cloud project")
+		res.Repeats = true
+		if opt := g.workspace[r.Asset].optional[a.b.op.Surface]; opt != nil {
+			opt.failure = &halt{decision: res.Decision, detail: res.Detail, sticky: true}
+		}
 	case s == 403, s == 404 && r.Exists:
 		res.Reason = "insufficient_permission"
 		// An optional Workspace surface names the one scope it needs; a
@@ -737,6 +768,31 @@ func parseRetryAfter(v string, now time.Time) (time.Duration, bool) {
 		return max(t.Sub(now), 0), true
 	}
 	return 0, false
+}
+
+// googleServiceDisabled says a Google API error is the API being off in the
+// credential's project.
+func googleServiceDisabled(body []byte) bool {
+	var e struct {
+		Error struct {
+			Errors  []struct{ Reason string } `json:"errors"`
+			Details []struct{ Reason string } `json:"details"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &e) != nil {
+		return false
+	}
+	for _, x := range e.Error.Errors {
+		if x.Reason == "accessNotConfigured" {
+			return true
+		}
+	}
+	for _, x := range e.Error.Details {
+		if x.Reason == "SERVICE_DISABLED" {
+			return true
+		}
+	}
+	return false
 }
 
 // googleRateLimited reads the reason of a Google API error from the

@@ -884,8 +884,8 @@ no answer exiting 2.
 tenant binding and inventory through engagement Recon and report integration.
 Step 3 implements identity/admin rules, verified offline. Step 4 implements observed
 2-step verification, verified offline. Step 5 implements optional OAuth grant
-metadata, verified offline. Step 6 is next.
-Optional Gmail forwarding reads remain planned. The design is
+metadata, verified offline. Step 6 implements optional Gmail forwarding metadata,
+verified offline; step 7 is next. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -993,6 +993,39 @@ Unknown grants remain unknown; a successful read does not prove write capability
    is claimed.
 6. Optional Gmail forwarding metadata through an existing approved delegated
    credential; no messages, mail content or automatic delegation setup.
+   **Done offline 2026-10-11:** under `directory_mail` or `directory_oauth_mail`, a
+   service account only, the gate mints one `gmail.readonly` token per admitted
+   mailbox, admitted from current inventory (active, with a mailbox, in a verified
+   domain) before each exchange, cached by customer and user id, audited under one
+   exchange operation with the user id as its only parameter. A circuit breaker (first
+   five exchanges all failing, or 20 in a row) and a 1,000-exchange session cap stop the
+   surface; failures are the surface's or one mailbox's, a coverage gap and never exit
+   3; an `authorized_user` credential is `unavailable:needs_service_account`. Two
+   pinned reads of `users/me/settings` (`autoForwarding`, `filters`) are projected
+   before redaction, and the registry refuses every other path under `/gmail/`.
+   `workspace.external_forwarding` (medium, subject `mail_forward` per mailbox and
+   outside destination, `+1 attribute:admin` on a known-active super admin's mailbox)
+   has firing, disproved and abstained fixtures, a read set, exact verified-domain
+   comparison, subdomain abstention, asset-level outcomes and `hides_mail`. Coverage
+   adds the email-area "Workspace mail forwarding" group; the report's plan marking now
+   lifts an undecided group's gap and abstentions to the row and counts an asset whose
+   plan is wholly off plan as not read for that area. Consultant, client and
+   modularity reviews passed after their must-fixes were applied (an undecided group
+   whose read was refused showed "no rule"; a tripped breaker reported as one mailbox's
+   failure; the refusal decided four ways, now one `refusal` and one wording); green
+   `make check` is recorded in
+   [eval/e6-forwarding-verification-2026-10-11.md](eval/e6-forwarding-verification-2026-10-11.md),
+   the definition in
+   [eval/e6-forwarding-definition-2026-10-11.md](eval/e6-forwarding-definition-2026-10-11.md).
+   The adversarial review confirmed one must-fix, a mailbox exchange refused before it
+   left the machine (a deadline) reported as Google refusing the mailbox and never
+   `limit_reached` (now the surface's, with its own reason, exit 2), and two should-fix
+   (the warning now counts the mailboxes scheck asked Google to act as; a disabled Gmail
+   API is `unavailable:api_disabled`), with nits, all corrected; a fresh follow-up review
+   found no must-fix and three should-fix (an unanswered or 5xx exchange is that
+   mailbox's own failure; the breaker's wording is neutral), all fixed with tests and
+   not reviewed again. No live tenant was contacted and no independent acceptance is
+   claimed.
 7. Whole-slice offline tests and consultant/client/adversarial reviews, coverage and
    report review, spec audit, and separately attributed live measurements.
 
@@ -1126,6 +1159,72 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
   activity (Reports API); Cloud Identity app-access policy reads.
 - *Client profile gap, before step 7's client review:* Brightcart's profile says
   nothing of its Marketplace installs or of who set up the credential.
+
+**Carried from step 6** (consultant DEFINE and REVIEW, client REPORT and modularity
+assess, 2026-10-11; [eval/e6-forwarding-verification-2026-10-11.md](eval/e6-forwarding-verification-2026-10-11.md)):
+
+- *Release blocker, owner's decision (E8/E9):* the environment variable alone gates
+  signing in as every active mailbox (D3). Before 0.0.2 is released, an explicit
+  authorization entry in the engagement file, recorded in the audit log, must gate the
+  surface; until then the not-selected note carries the approval sentence and the
+  warning and the audit carry the mailbox count.
+- *Owner's decision, still open (S7):* whether a surface selected and refused with no
+  usable read (a refused permission, `needs_service_account`, a tripped breaker) exits 2,
+  for OAuth and for mail; both are coverage gaps only today (D4). Step 6 also
+  relaxes DEFINE's disproof rule once: a mailbox with forwarding off and no forwarding
+  filter is disproved even when the alias list was cut, and when no settings read was
+  usable only the asset-level judgment is emitted; the consultant's review accepted
+  both.
+- *E8:* no "do you forward mail on purpose?" question; `scheck init` explains
+  `directory_mail`, the service account it needs and who approves reading mailbox
+  settings.
+- *E9:* `data.matters_most` for email-area Workspace findings (none applies in 0.0.2,
+  D5); collapse many forwarding instances in "Fix these first"; whether `hides_mail`
+  raises or ranks; lab-rank forward-and-hide filters against helpdesk and accounting
+  forwards as false-positive traps; `Observed` lines that cite reads that did not
+  observe the evidence (report-wide). From the client REPORT: "as unknown" on `Observed`
+  lines, duplicated `Observed` lines, the "+1 attribute admin" arithmetic, an
+  acceptance how-to (what `accepted_by` takes and where the file is), "not in the checks
+  you chose" for a profile the operator never chose and how to set an environment
+  variable, a Summary pointer to skipped forwarding, ranking two stacked permission
+  warnings, naming skipped mailboxes, and "1 of 1 asset read" beside "no rule".
+- *0.0.3 candidates:* the Cloud Identity Policy API read (`gmail.auto_forwarding`,
+  `mail_delegation`, POP/IMAP, per-user outbound gateway), a priority (D7);
+  `forwardingAddresses`, delegates, send-as and POP/IMAP per mailbox; a table of
+  receiving services (wording only); a multi-fact rule joining subdomain destinations
+  with the web collector's MX reads; "new forwarding since the last run".
+- *Deferred from the adversarial reviews:* a failed binding still shows mail forwarding
+  on plan in the email row (the profile is unknown before binding; OAuth's group in
+  identity is the same); the refusal wording follows the first failed read when failures
+  differ; a deadline or cancel during the token body read is reported
+  `unavailable:response_read_failed` (a surface gap) rather than `limit_reached`;
+  per-mailbox Gmail 403s other than the API being disabled do not feed the breaker.
+- *Modularity remainder, owner to confirm:* S3 profile names live in several places (the
+  gate's `profileScopes` and surface table, the collector's `knownProfile` and `offer`
+  fallbacks, "directory" literals); recommended: a gate `workspaceProfiles()` and one
+  `notOnPlan` helper, with step 7 or before a 0.0.3 surface. S6 the report maps
+  attributes by rule id and named `Details` keys (`admin_mailbox_read`,
+  `admin_grant_read`, `repository_read`); recommended: `Judgment.AttributeRead` and a
+  report `raises` table, in E9 or when the next raise lands. L7 shared asset-level
+  outcome and unread wording between OAuth and mail; when the first 0.0.3 per-mailbox
+  read lands.
+- *Unmeasured assumptions, measured live in step 7:* (1) `getAutoForwarding` returns
+  `enabled:false` or omits it, and `filters.list` returns `{}` when there are none;
+  (2) the exchange errors for suspended, archived, deleted, unlicensed and
+  Gmail-disabled subjects (only "user doesn't exist" as `invalid_grant` is sourced);
+  (3) reads of a Gmail-disabled mailbox answer 400 `failedPrecondition`; (4) a
+  suspended mailbox bounces or stops forwarding; (5) an archived mailbox receives no new
+  mail; (6) turning off automatic forwarding stops existing forwards; (7) a filter to a
+  later-deleted address still lists; (8) the token endpoint limits at 100 to 1,000
+  sequential JWT exchanges; (9) Google's audit logs record per-user impersonation; (10)
+  the Admin console paths (Email Log Search, End User Access, Manage Domain Wide
+  Delegation); (11) `admin_policy_enforced` varies by organizational unit and whether it
+  appears for domain-wide-delegated service accounts at all; (12) Gmail's per-user
+  filter limit against scheck's cap of 1,000; and, added by the review, whether Google's
+  "internal addresses only" counts subdomains internal (bears on D6) and whether
+  `disposition` values match `trash`, `archive` and `markRead`.
+- *Client profile gap, before step 7's client review:* Brightcart's profile says nothing
+  of a service account or of who would approve reading staff mailbox settings.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
@@ -1432,6 +1531,12 @@ from step 4").
 in use; `scheck init` explains how to enable `directory_oauth` and warns what
 `admin.directory.user.security` also allows (E6, "Carried from step 5").
 
+**Carried from E6 step 6** (2026-10-11, release blocker, owner's decision): signing in
+as every active mailbox needs an explicit authorization entry in the engagement file,
+recorded in the audit log, instead of the environment variable alone; no "do you
+forward mail on purpose?" question; `scheck init` explains `directory_mail`, the service
+account it needs and who must approve (E6, "Carried from step 6").
+
 ### E9 — Plan, Analyze and multi-fact rules
 
 **Delivers:** a rules-only plan per asset type, narrowed and ordered by structured
@@ -1498,6 +1603,10 @@ asset unchanged; a loop fixture terminates.
   `data.matters_most` with `attribute:admin_grantor` may reach critical, lab ranking of
   Drive for desktop and Apple Mail on admins, collapsed per-read `Observed` lines, and
   the OAuth wording and coverage items listed in E6, "Carried from step 5".
+- *From E6 step 6* (2026-10-11): `data.matters_most` for email-area Workspace findings,
+  collapsed forwarding instances in "Fix these first", whether `hides_mail` raises or
+  ranks, lab ranking of forward-and-hide filters against helpdesk and accounting
+  forwards, and the client REPORT items listed in E6, "Carried from step 6".
 
 ### Release gates
 
@@ -1529,6 +1638,10 @@ asset unchanged; a loop fixture terminates.
     give the same report and command trace, and the host's facts match the host asset's
     in the full engagement run, and its findings do for the same context; no run reads a
     config file.
+11. **Mailbox authorization** (owner's decision, 2026-10-11): an explicit authorization
+    entry in the engagement file, recorded in the audit log, gates signing in as each
+    active mailbox for Gmail forwarding reads; the environment variable alone does not
+    (E6, "Carried from step 6"). Until it exists the surface does not ship in a release.
 
 **Sequence:** E1a → E1b → E2 → E4 → {E5, E6, E7, E8} → E9, with E1c at any point after
 E1b, E5a before E5 and E6 (alongside E7), and E3 built alongside and sealed in parts,

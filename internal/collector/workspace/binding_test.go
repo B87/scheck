@@ -28,13 +28,22 @@ func TestFoundationSurface(t *testing.T) {
 	if _, err := gate.NewRegistry(Ops...); err != nil {
 		t.Fatal(err)
 	}
-	if len(Ops) != 14 {
+	if len(Ops) != 16 {
 		t.Fatal("unexpected read surface")
 	}
+	mail := []string{}
 	for _, op := range Ops {
 		if op.Method != gate.GET || op.Auth != gate.WorkspaceADC {
 			t.Fatal("collector holds non-read operation")
 		}
+		if strings.Contains(op.URL, "gmail") {
+			mail = append(mail, op.URL)
+		}
+	}
+	// Mail settings only, of the signed-in mailbox: never a message, thread,
+	// label, draft, history or another setting.
+	if strings.Join(mail, " ") != "https://gmail.googleapis.com/gmail/v1/users/me/settings/autoForwarding https://gmail.googleapis.com/gmail/v1/users/me/settings/filters" {
+		t.Fatal("unexpected mail read surface", mail)
 	}
 }
 

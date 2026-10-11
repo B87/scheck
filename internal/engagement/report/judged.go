@@ -100,6 +100,12 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				if attr == "admin" && j.ID == finding.IDIdentityFormerPersonHasAccess {
 					rule = "attribute:admin"
 				}
+				if attr == "admin" && j.ID == "workspace.external_forwarding" {
+					rule = "attribute:admin"
+					if read, ok := j.Details["admin_mailbox_read"].(string); ok && read != "" {
+						source = SourceRef{Observation: read, Excerpt: j.Context}
+					}
+				}
 				if attr == "admin_grantor" && j.ID == "workspace.oauth_broad_scope" {
 					rule = "attribute:admin_grantor"
 					if read, ok := j.Details["admin_grant_read"].(string); ok && read != "" {
@@ -532,6 +538,10 @@ var judgedFamilies = map[finding.Area][]struct {
 	},
 }
 
+// declaredOnly names what only a declared asset of the area's own kind
+// brings, for a row a collector's plan read without one.
+var declaredOnly = map[finding.Area]string{finding.AreaEmail: "Domain email settings (SPF, DKIM and DMARC)"}
+
 // notJudged lists, per area, what the domain collector reads or would read
 // that no rule judges in this build.
 var notJudged = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
@@ -549,11 +559,13 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 		}
 		fed++
 		if a.Collector == "workspace" {
-			if a.InventoryRead {
+			plan := planOf(a, area)
+			// An asset whose plan reads nothing in this area was not read for it.
+			if a.InventoryRead && (plan == nil || plan.OnPlan()) {
 				read++
 				row.AssetsCovered = append(row.AssetsCovered, a.ID)
 			}
-			if plan := planOf(a, area); plan != nil && len(a.Judged) > 0 {
+			if plan != nil && len(a.Judged) > 0 {
 				some = b.planCoverage(&row, a, *plan) || some
 			} else {
 				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"}}})
@@ -645,6 +657,11 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			row.SubItems = append(row.SubItems, SubItem{Name: strings.Join(nj, ", "), Asset: a.ID, Mark: "not_assessed",
 				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "not judged in this version"}}, ReadNotJudged: nj})
 		}
+	}
+	// A row read only through a collector's plan still says what declaring
+	// its own kind of asset would add (domains for email).
+	if !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
+		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: declaredOnly[area]})
 	}
 	if nj := notJudged[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: strings.Join(nj, ", ")})

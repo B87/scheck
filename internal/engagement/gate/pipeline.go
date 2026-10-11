@@ -936,3 +936,39 @@ func (g *Gate) redactFor(a admitted) *policy.Redactor {
 	}
 	return g.redactor
 }
+
+// projectRaw discards every field outside an op's Keep before redaction,
+// for a surface the gate projects first (docs/spec/workspace-collector.md,
+// "Reads and projections"). Its only output is the projection: the body is
+// parsed here and nowhere else. A member that is not an object, or a kept
+// field of an undeclared shape, stays visible as null rather than
+// disappearing, so a reader cannot take a malformed filter for no filter.
+func projectRaw(raw []byte, op *compiled) ([]byte, string) {
+	if _, err := strictGoogleObject(raw); err != nil {
+		return nil, codeMalformed
+	}
+	doc, code := parseRedacted(raw)
+	if code != "" {
+		return nil, codeMalformed
+	}
+	if op.List == nil {
+		return marshal(projectFields(doc, op.keep, true)), ""
+	}
+	obj := doc.(map[string]any)
+	value, present := obj[op.List.Items]
+	if !present {
+		return marshal(map[string]any{}), ""
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil, codeMalformed
+	}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		if _, isObject := item.(map[string]any); !isObject {
+			return nil, codeMalformed
+		}
+		out = append(out, projectFields(item, op.keep, true))
+	}
+	return marshal(map[string]any{op.List.Items: out}), ""
+}

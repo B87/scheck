@@ -623,7 +623,7 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `data_matters_most` | the declaration, `data.matters_most[i]` | findings on that asset in the identity and access, secrets, data stores and external surface areas | +1 |
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience) | the finding for the weakness declared absent | +1 |
-| `attribute:<name>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute of its subject or of who it affects (`attribute:admin` on a left person's account, `attribute:admin_grantor` on an OAuth app to which a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it) | +1 |
+| `attribute:<name>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute of its subject or of who it affects (`attribute:admin` on a left person's account and on a forwarding finding from a known-active super admin's mailbox, `attribute:admin_grantor` on an OAuth app to which a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it) | +1 |
 
 - **Exposed on purpose** applies only to exposure findings: those whose whole claim is
   that a URL answers or names its software (reachable, version or technology

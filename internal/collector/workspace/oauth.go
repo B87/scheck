@@ -78,37 +78,20 @@ type OAuthEvidence struct {
 // highest-stakes and active accounts first. A result the gate says every
 // later account would repeat (the optional token refused, binding gone)
 // stops the sequence after it is recorded once.
-func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, view Context) {
+func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, view Context, views []accountView) {
 	e.OAuth.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceOAuthGrants)
 	if !e.OAuth.Selected {
 		return
 	}
-	users := slices.Clone(e.Users.Items)
-	attributions := attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete)
-	rank := func(u User) int {
-		r := readPriority(u, attributions, view) * 2
-		if !active(u) {
-			r++
-		}
-		return r
-	}
-	slices.SortFunc(users, func(a, b User) int {
-		if x := rank(a) - rank(b); x != 0 {
-			return x
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
 	complete := e.Users.Complete
-	for _, u := range users {
-		r := sender.Send(ctx, gate.Request{Op: OpUserTokens, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": u.ID}})
-		account := grantsOf(u.ID, r)
+	all := readAccounts(views, view, func(v accountView) bool {
+		r := sender.Send(ctx, gate.Request{Op: OpUserTokens, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": v.user.ID}})
+		account := grantsOf(v.user.ID, r)
 		e.OAuth.Accounts = append(e.OAuth.Accounts, account)
 		complete = complete && account.Complete
-		if r.Repeats {
-			complete = false
-			break
-		}
-	}
+		return r.Repeats
+	})
+	complete = complete && all
 	e.OAuth.Complete = complete && len(e.OAuth.Accounts) == len(e.Users.Items)
 }
 
@@ -338,7 +321,7 @@ func oauthView(e Evidence, views []accountView) oauthState {
 	byID := map[string]AccountGrants{}
 	for _, a := range e.OAuth.Accounts {
 		byID[a.ID] = a
-		s.tokenIssued = s.tokenIssued || a.Read.Decision == "sent" || a.Read.Decision == "reused"
+		s.tokenIssued = s.tokenIssued || sent(a.Read)
 		if !a.Usable && s.failure == nil {
 			read := a.Read
 			s.failure = &read
@@ -407,18 +390,6 @@ func oauthView(e Evidence, views []accountView) oauthState {
 	return s
 }
 
-func unreadWhy(r Read) string {
-	switch {
-	case strings.HasPrefix(r.Reason, "insufficient_permission"):
-		return "permission denied"
-	case r.Reason == "limit_reached":
-		return "limit"
-	case len(r.Redactions) > 0:
-		return "redacted"
-	}
-	return "unreadable"
-}
-
 func adminRank(v accountView) int {
 	if yes(v.user.IsAdmin) {
 		return 0
@@ -448,15 +419,15 @@ func oauthJudgments(e Evidence, asset string, views []accountView) []finding.Jud
 	case s.accounts == 0:
 		j.NotChecked = []string{"No current account evidence was available for this rule."}
 	case s.read == 0:
-		j.Reason = oauthReason(s.failure)
+		j.Reason = surfaceReason(s.failure)
 		j.Excerpt = "No account's app grants could be read."
 		j.NotChecked = []string{"No account's app grants could be read" + failureDetail(s.failure)}
 	case !s.complete && gaps == 0:
-		j.Reason = oauthReason(s.failure)
+		j.Reason = surfaceReason(s.failure)
 		j.Excerpt = "App grants were read for every account listed, but the account list was incomplete."
 		j.NotChecked = []string{"Accounts missing from the account list (excluded or not returned) were not read, so an app with broad access may not have been seen."}
 	case !s.complete:
-		j.Reason = oauthReason(s.failure)
+		j.Reason = surfaceReason(s.failure)
 		j.Excerpt = fmt.Sprintf("App grants were read for %d of %d accounts.", s.read, s.accounts)
 		j.NotChecked = []string{fmt.Sprintf("The grants of %s were not read or not fully recognized, so an app with broad access may not have been seen.", plural(gaps, "account"))}
 		if !e.Users.Complete {
@@ -473,15 +444,6 @@ func oauthJudgments(e Evidence, asset string, views []accountView) []finding.Jud
 	}
 	j.Details = map[string]any{"accounts_read": s.read, "accounts": s.accounts, "population_complete": s.complete, "table_version": OAuthTableVersion}
 	return append(out, j)
-}
-
-// oauthReason is why grants are missing, as the gate classified it: a
-// refused optional permission names its scope there.
-func oauthReason(r *Read) string {
-	if r == nil || r.Reason == "" || r.Reason == "insufficient_evidence" {
-		return "unavailable:workspace_evidence"
-	}
-	return r.Reason
 }
 
 func failureDetail(r *Read) string {
@@ -669,7 +631,7 @@ func oauthNotes(e Evidence, asset string, views []accountView) []Note {
 	}
 	s := oauthView(e, views)
 	if !s.selected {
-		note("workspace_inventory", "Third-party app access was not checked: the selected Workspace profile does not read it. The check lists apps people allowed into their mail, Drive or calendar, a common way an attacker keeps access after a phishing email. It needs the Workspace permission admin.directory.user.security, which Google offers only together with the ability to revoke app access, sign people out and turn off 2-step verification; the checks above do not need it. If your organization wants this check, an administrator can approve a dedicated credential for it, so the everyday one keeps read-only permissions; then run again with SCHECK_WORKSPACE_PROFILE=directory_oauth.")
+		note("workspace_inventory", "Third-party app access was not checked: the selected Workspace profile does not read it. The check lists apps people allowed into their mail, Drive or calendar, a common way an attacker keeps access after a phishing email. It needs the Workspace permission admin.directory.user.security, which Google offers only together with the ability to revoke app access, sign people out and turn off 2-step verification; the checks above do not need it. If your organization wants this check, an administrator can approve a dedicated credential for it, so the everyday one keeps read-only permissions; then run again with SCHECK_WORKSPACE_PROFILE="+e.Binding.offer(gate.WorkspaceOAuthGrants, "directory_oauth")+".")
 		return out
 	}
 	if s.failure != nil && s.read == 0 && strings.HasPrefix(s.failure.Reason, "insufficient_permission") {

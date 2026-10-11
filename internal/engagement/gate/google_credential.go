@@ -40,7 +40,16 @@ type googleSource struct {
 type googleExchange struct {
 	// surface is the optional read surface this exchange asks for, or the
 	// baseline; it selects the audited exchange op.
-	surface     WorkspaceSurface
+	surface WorkspaceSurface
+	// user is the admitted id a per-mailbox exchange acts for, recorded in
+	// its audit line in place of the address; "" otherwise.
+	user string
+	// failure says whose a failed exchange is: the surface's or, for a
+	// per-mailbox surface, that one mailbox's.
+	failure failureScope
+	// answered says Google answered the exchange; one refused or failed
+	// before it reached Google is never a mailbox's failure.
+	answered    bool
 	form        url.Values
 	credential  *Credential
 	token       string
@@ -299,8 +308,35 @@ func headerSafe(s string) bool {
 // no scope; an optional surface asks for exactly its one scope with either
 // credential kind (docs/spec/workspace-collector.md, "Credential files and
 // profiles").
+// failureScope is whose a failed exchange is.
+type failureScope int
+
+const (
+	failMailbox   failureScope = iota // one mailbox's sign-in, remembered for it alone
+	failSurface                       // every later read of the surface would fail alike
+	failTransient                     // that mailbox's, keeping its own reason (a server error, a dropped connection)
+)
+
 func (s *googleSource) exchange(now time.Time, surface WorkspaceSurface) (*googleExchange, error) {
-	e := &googleExchange{surface: surface, credential: &Credential{Env: s.env, secrets: []string{s.clientSecret, s.refreshToken, s.privatePEM}}}
+	return s.exchangeAs(now, surface, "", "")
+}
+
+// mailboxExchange asks for a per-mailbox surface's token acting as actAs,
+// the gate's admitted primary address of the account whose id is user. Only
+// a service account impersonates (docs/spec/workspace-collector.md,
+// "Boundary").
+func (s *googleSource) mailboxExchange(now time.Time, surface WorkspaceSurface, actAs, user string) (*googleExchange, error) {
+	if s.kind != "service_account" || !workspaceSurfaces[surface].mailbox || actAs == "" || user == "" {
+		return nil, errors.New("a mailbox token is asked for only by a service account, acting as an admitted account")
+	}
+	return s.exchangeAs(now, surface, actAs, user)
+}
+
+func (s *googleSource) exchangeAs(now time.Time, surface WorkspaceSurface, actAs, user string) (*googleExchange, error) {
+	if workspaceSurfaces[surface].mailbox && actAs == "" {
+		return nil, errors.New("a mailbox surface's token acts as one admitted account")
+	}
+	e := &googleExchange{surface: surface, user: user, credential: &Credential{Env: s.env, secrets: []string{s.clientSecret, s.refreshToken, s.privatePEM}}}
 	scope := strings.Join(s.scopes, " ")
 	if surface != WorkspaceBaseline {
 		scope = workspaceSurfaceScope(surface)
@@ -316,7 +352,11 @@ func (s *googleSource) exchange(now time.Time, surface WorkspaceSurface) (*googl
 		return e, nil
 	}
 	header := marshal(map[string]any{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
-	claims := marshal(map[string]any{"iss": s.issuer, "sub": s.subject, "aud": workspaceTokenURL, "scope": scope, "iat": now.Unix(), "exp": now.Unix() + 300})
+	subject := s.subject
+	if actAs != "" {
+		subject = actAs
+	}
+	claims := marshal(map[string]any{"iss": s.issuer, "sub": subject, "aud": workspaceTokenURL, "scope": scope, "iat": now.Unix(), "exp": now.Unix() + 300})
 	enc := base64.RawURLEncoding
 	unsigned := enc.EncodeToString(header) + "." + enc.EncodeToString(claims)
 	sum := sha256.Sum256([]byte(unsigned))

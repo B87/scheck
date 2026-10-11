@@ -12,6 +12,7 @@ import (
 
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
+	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/runner"
@@ -61,19 +62,30 @@ func TestGoldenReports(t *testing.T) {
 			in.Egress = &EgressInput{SSHResolved: []string{"macos"}}
 			return in
 		},
-		"root-without-collector":            withGitHubRoot,
-		"github-history-fired":              githubHistoryFiredReport,
-		"github-history-disproved":          githubHistoryDisprovedReport,
-		"github-history-abstained":          githubHistoryAbstainedReport,
-		"github-alerts-fired":               githubAlertsFiredReport,
-		"github-alerts-disproved":           githubAlertsDisprovedReport,
-		"github-alerts-abstained":           githubAlertsAbstainedReport,
-		"github-inventory":                  githubInventoryReport,
-		"workspace-identity":                workspaceIdentityReport,
-		"workspace-inventory":               workspaceInventoryReport,
-		"workspace-inventory-partial":       workspacePartialInventoryReport,
-		"workspace-two-step":                workspaceTwoStepReport,
-		"workspace-oauth":                   workspaceOAuthReport,
+		"root-without-collector":         withGitHubRoot,
+		"github-history-fired":           githubHistoryFiredReport,
+		"github-history-disproved":       githubHistoryDisprovedReport,
+		"github-history-abstained":       githubHistoryAbstainedReport,
+		"github-alerts-fired":            githubAlertsFiredReport,
+		"github-alerts-disproved":        githubAlertsDisprovedReport,
+		"github-alerts-abstained":        githubAlertsAbstainedReport,
+		"github-inventory":               githubInventoryReport,
+		"workspace-identity":             workspaceIdentityReport,
+		"workspace-inventory":            workspaceInventoryReport,
+		"workspace-inventory-partial":    workspacePartialInventoryReport,
+		"workspace-two-step":             workspaceTwoStepReport,
+		"workspace-oauth":                workspaceOAuthReport,
+		"workspace-mail":                 workspaceMailReport,
+		"workspace-mail-refused":         workspaceMailRefusal(workspace.Read{Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:gmail.readonly", Repeats: true}, 0),
+		"workspace-mail-service-account": workspaceMailRefusal(workspace.Read{Decision: "unavailable:needs_service_account", Reason: "unavailable:needs_service_account", Repeats: true}, 0),
+		"workspace-mail-breaker":         workspaceMailRefusal(workspace.Read{Decision: "unavailable:credential_exchange", Reason: "unavailable:credential_exchange", Repeats: true}, 1),
+		"workspace-mail-with-domain": func(t *testing.T) Input {
+			// A domain root beside a Workspace tenant on the default profile:
+			// email is checked only in part while forwarding is not on plan.
+			in := withEmailRoot(t)
+			in.Assets = append(in.Assets, workspaceIdentityReport(t).Assets...)
+			return in
+		},
 		"github-ci-fired":                   githubCIFiredReport,
 		"github-ci-disproved":               githubCIDisprovedReport,
 		"github-ci-abstained":               githubCIAbstainedReport,

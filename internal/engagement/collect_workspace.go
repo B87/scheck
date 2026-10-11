@@ -21,6 +21,11 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
 	view.ExpectedAdmins, view.AdminsDeclared = r.res.AdminsFor(a.ID)
 	view.MFA, view.MFASource = r.res.MFAFor(a.ID)
+	for _, b := range r.res.Assets {
+		if b.Kind == KindDomain {
+			view.DeclaredDomains = append(view.DeclaredDomains, strings.TrimPrefix(b.ID, "domain:"))
+		}
+	}
 	for _, handle := range sortedKeys(r.res.People) {
 		p := r.res.People[handle]
 		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace, Kind: p.Kind, Left: p.Left, UsedBy: p.UsedBy})

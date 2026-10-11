@@ -231,7 +231,23 @@ limit on a grants read exits 2; `unavailable:oauth_unclassified` apps were not j
 That permission can also revoke app access, sign people out and turn off 2-step
 verification: relay the selection note (a dedicated credential), never suggest adding
 it to the everyday one, and relay the separate token's `workspace_credential_warning`.
-Forwarding, domain-wide delegation (its own sub-item, always not assessed), group
+Mail forwarding is read only under `SCHECK_WORKSPACE_PROFILE=directory_mail` (or
+`directory_oauth_mail`) with a service account whose domain-wide delegation includes
+`gmail.readonly`: scheck signs in as each active mailbox and reads its automatic
+forwarding setting and filters, never a message. `workspace.external_forwarding` is one
+finding per mailbox and outside destination (subject `mail_forward`, key `<account> ->
+<address>`), `+1 attribute:admin` on a super administrator's mailbox; disproval is
+per mailbox under `<account> -> none`. It sits in the email row, "Workspace mail
+forwarding": under the default profile `not_on_plan:profile=<p>`; with a personal
+sign-in `unavailable:needs_service_account`; a refused permission is
+`insufficient_permission:gmail.readonly`; a breaker stop is
+`unavailable:credential_exchange`; all are coverage gaps, not exit 3, and a limit exits
+2. A subdomain destination (`unavailable:forwarding_subdomain`) was not judged. Never
+read a missing or disproved forwarding outcome as no forwarding: suspended, archived and
+mailbox-less accounts, the Admin console setting, delegates and POP/IMAP are not read.
+Relay the `workspace_credential_warning` (`gmail.readonly` could read every message) and
+never suggest adding it to the everyday credential. Domain-wide delegation (its own
+sub-item, always not assessed), group
 membership paths and effective permissions remain unassessed. Read `workspace_inventory`,
 `workspace_people` and `workspace_credential` notes; a
 `workspace_credential_warning` is an unranked permission warning. Partial or excluded

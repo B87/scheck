@@ -36,7 +36,7 @@ type provider struct {
 // dnsRate.
 var providers = map[string]provider{
 	"github": {display: "GitHub", primaryExhausted: githubExhausted, source: "api.github.com", hosts: []string{"api.github.com"}, concurrency: 1, rate: 10, floor: true},
-	"google": {display: "Google", pages: pageMetadata{cursor: "pageToken", size: "maxResults"}, rateLimited: googleRateLimited, source: "google", hosts: []string{"admin.googleapis.com", "oauth2.googleapis.com"}, concurrency: 2, rate: 5},
+	"google": {display: "Google", pages: pageMetadata{cursor: "pageToken", size: "maxResults"}, rateLimited: googleRateLimited, source: "google", hosts: []string{"admin.googleapis.com", "gmail.googleapis.com", "oauth2.googleapis.com"}, concurrency: 2, rate: 5},
 	"crt.sh": {source: "crt.sh", operator: "Sectigo", hosts: []string{"crt.sh"}, concurrency: 1, rate: 1, timeout: 60 * time.Second},
 	"web":    {web: true},
 }

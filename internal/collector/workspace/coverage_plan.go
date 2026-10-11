@@ -3,7 +3,9 @@ package workspace
 import (
 	"fmt"
 	"slices"
+	"strings"
 
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -38,7 +40,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 			which = "The selected Workspace profile, " + e.Binding.Profile + ","
 		}
 		oauth.NotOnPlan = &finding.CoverageReason{Reason: "not_on_plan:profile=" + e.Binding.Profile,
-			Detail: which + " does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission"}
+			Detail: which + " does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=" + e.Binding.offer(gate.WorkspaceOAuthGrants, "directory_oauth") + " and the admin.directory.user.security permission"}
 	}
 	// Most tenants hold many unclassified apps: one line, the JSON and the
 	// readout list each.
@@ -49,7 +51,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 		}
 		oauth.Collapse = &finding.CoverageReason{Reason: reasonUnclassified, Detail: fmt.Sprintf("%d %s scopes scheck does not classify and none it classifies as broad; listed in the JSON report and the readout", n, holds)}
 	}
-	return []finding.CoveragePlan{{
+	identity := finding.CoveragePlan{
 		Area:  finding.AreaIdentity,
 		Label: "Workspace",
 		Groups: []finding.CoverageGroup{
@@ -64,7 +66,48 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 		Unread: []finding.CoverageUnread{{Name: "Workspace domain-wide delegation", Unassessed: "domain-wide delegation",
 			Detail: "Nothing was read: Google offers no Directory read for it. Review it in the Admin console at Security → Access and data control → API controls → Manage Domain Wide Delegation. With a service-account credential, scheck's own delegation is listed there"}},
 		RowAlso: "2-step verification policy, grace periods and other sign-in services were not assessed",
-	}}
+	}
+	return []finding.CoveragePlan{identity, e.mailCoverage()}
+}
+
+// mailCoverage is the forwarding surface's coverage in the email area
+// (docs/spec/workspace-collector.md, "Reporting and coverage").
+func (e Evidence) mailCoverage() finding.CoveragePlan {
+	forwarding := finding.CoverageGroup{Name: "Workspace mail forwarding", Rules: []string{IDExternalForwarding}, Always: true, Limit: mailLimit, Unassessed: "mail forwarding"}
+	forwarding.Empty = finding.CoverageReason{Reason: "unavailable:workspace_evidence", Detail: "No mail forwarding outcome was recorded for this tenant"}
+	if e.Binding.CustomerID != "" && !e.Mail.Selected {
+		which := "The default Workspace profile, directory,"
+		if e.Binding.Profile != "directory" {
+			which = "The selected Workspace profile, " + e.Binding.Profile + ","
+		}
+		forwarding.NotOnPlan = &finding.CoverageReason{Reason: "not_on_plan:profile=" + e.Binding.Profile,
+			Detail: which + " does not read mail forwarding; it needs SCHECK_WORKSPACE_PROFILE=" + e.Binding.offer(gate.WorkspaceGmailForwarding, "directory_mail") + " and a service account whose domain-wide delegation includes gmail.readonly, which can read every message"}
+	}
+	// The surface's own refusal is the group's gap, never a result.
+	if r := e.Mail.refusal(); r != nil {
+		gap, _ := refusalWording(*r, len(e.Mail.Accounts))
+		forwarding.Gap = &gap
+	}
+	plan := finding.CoveragePlan{Area: finding.AreaEmail, Label: "Workspace", Groups: []finding.CoverageGroup{forwarding},
+		Incomplete: finding.CoverageReason{Reason: "unavailable:workspace_inventory", Detail: "Current population is incomplete"}}
+	if e.Mail.Selected {
+		plan.RowAlso = "the Admin console's forwarding setting, mail delegates and POP/IMAP were not assessed"
+	}
+	return plan
+}
+
+// checksCollected lists the baseline checks and each selected surface's.
+func (e Evidence) checksCollected() string {
+	checks := []string{"inventory", "identity/administrator", "2-step verification"}
+	for _, s := range []struct {
+		selected bool
+		name     string
+	}{{e.OAuth.Selected, "OAuth grant"}, {e.Mail.Selected, "mail forwarding"}} {
+		if s.selected {
+			checks = append(checks, s.name)
+		}
+	}
+	return strings.Join(checks[:len(checks)-1], ", ") + " and " + checks[len(checks)-1]
 }
 
 // OutcomeStatus is how collection ended, before the engagement names it.
@@ -92,11 +135,7 @@ func (e Evidence) Outcome() Outcome {
 	reads := e.Reads()
 	limited := slices.ContainsFunc(reads, func(read Read) bool { return read.Reason == "limit_reached" })
 	if e.InventoryComplete && e.Access.Complete && !limited {
-		detail := "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence."
-		if e.OAuth.Selected {
-			detail = "Workspace inventory, identity/administrator, 2-step verification and OAuth grant checks collected; notes and coverage show any unresolved evidence."
-		}
-		return Outcome{Status: OutcomeComplete, Detail: detail}
+		return Outcome{Status: OutcomeComplete, Detail: "Workspace " + e.checksCollected() + " checks collected; notes and coverage show any unresolved evidence."}
 	}
 	o := Outcome{Status: OutcomeIncomplete, Detail: "Workspace evidence is incomplete; notes show what was read and what remains unknown."}
 	for _, read := range reads {

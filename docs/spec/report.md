@@ -395,6 +395,14 @@ the target:
 | `unavailable:blocked` | a firewall or bot protection in front of the site (`<vendor>`) answered instead of the site, so this page was not judged; to have it checked, let scheck through for the run (it identifies itself as "`<user agent>`"), or run from another network |
 | `unavailable:address_not_public` | the name points at a private or reserved address, which scheck does not contact from outside a declared network |
 | `unavailable:oauth_unclassified` | some apps hold scopes this version of scheck does not classify, and none it classifies as broad |
+| `unavailable:workspace_evidence` | the Workspace evidence it needs was missing or not recognized |
+| `unavailable:needs_service_account` | it needs a service account with domain-wide delegation, and the credential used holds one person's sign-in |
+| `unavailable:credential_exchange` | Google did not issue the token this read needs |
+| `unavailable:mailbox_credential` | Google did not sign scheck in as some mailboxes |
+| `unavailable:mailbox_unavailable` | Google did not serve some mailboxes' settings |
+| `unavailable:api_disabled` | Google has not enabled the API this read needs in the credential's project |
+| `unavailable:mailbox_inactive` | the account list did not report the account active with a mailbox |
+| `unavailable:forwarding_subdomain` | forwarding to a subdomain that is not itself a domain of this Workspace was not judged |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
 
@@ -469,20 +477,30 @@ and rule ids, and the sub-items nothing reads. The collector words every sub-ite
 detail; the report marks them and composes the row's reason, the same way for every
 plan. A judgment decided when it fired or was disproved with no reason left open
 (`Judgment.Decided`). A group the selected profile does not read is *not assessed* with
-only its `not_on_plan` reason. Otherwise a group is *assessed* when some judgment
+only its `not_on_plan` reason, rendered "<group>: not in the checks you chose (profile
+<p>)". An asset feeds an area when its collector gave a plan for it; when every group
+of that plan is off plan, the row takes those not-on-plan reasons and the asset is not
+counted as read for the area. Otherwise a group is *assessed* when some judgment
 decided, none is undecided and the asset's population is complete; *partial* when some
 decided otherwise; `not_applicable` when nothing was judged on a complete population;
 and *not assessed* when none decided. A group judged for every read subject is never
 `not_applicable`: with no judgment it is *not assessed* with the collector's reason.
 Each undecided judgment adds its reason with its subject and first "Not checked" line,
 except those the plan collapses into one line. A gap in required evidence makes a group
-with decisions *partial* and one without *not assessed*. A limits detail is a `no_rule`
+with decisions *partial* and one without *not assessed*. What left a group undecided
+reaches the row named by the group: the group's gap and each abstention's reason are
+lifted to the row with the group name as detail, and a group is `no_rule` *unassessed*
+only when it has neither an outcome nor a gap, so a refused read is never reported as
+"no rule". The detail of a collector-plan reason prints without `-v`. A limits detail is a `no_rule`
 reason whatever the mark, and an incomplete population adds the plan's wording to every
 group. A sub-item nothing reads is *not assessed* with `no_rule`. The row's `no_rule`
 reason names the groups and unread sub-items nothing decided ("Workspace OAuth grants
 and domain-wide delegation remain unassessed"), then the plan's closing words.
-Workspace is the one collector with a plan in this build; GitHub and web families are
-marked in the report.
+Workspace is the one collector with a plan in this build, in the identity area and, for
+its optional mail forwarding, in the email area; GitHub and web families are marked in
+the report. A row read only through a plan, with no declared `domain` asset, keeps a
+`not_declared` reason whose detail names what a domain would add (for email, "Domain
+email settings (SPF, DKIM and DMARC)"), beside the plan's reasons.
 
 **The external, email and web rows, in this build.** A domain root the web
 collector read feeds these rows; a URL root feeds external, web and secrets coverage.
@@ -606,7 +624,7 @@ one id graded differently.
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
 | `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
-| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `mail_forward`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
 | `category` | the collector's own grouping |

@@ -452,7 +452,7 @@
       "type": "object", "required": ["kind", "key", "label"], "additionalProperties": false,
       "properties": {
         "kind": { "enum": ["account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service", "repository", "workflow", "branch", "webhook", "invitation", "secret_location",
-            "dependency_alert", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism"] },
+            "dependency_alert", "dns_name", "url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism", "mail_forward"] },
         "key": { "type": "string", "description": "What accepted_risks[].subject takes; a redact_extra marker when the name is redacted." },
         "label": { "type": "string", "description": "Built only from fields rules read." },
         "provider_id": { "type": "string" },

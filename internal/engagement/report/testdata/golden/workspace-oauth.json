@@ -107,6 +107,10 @@
       ],
       "reasons": [
         {
+          "detail": "Workspace OAuth grants (third-party app access)",
+          "reason": "unavailable:oauth_unclassified"
+        },
+        {
           "detail": "Workspace domain-wide delegation remains unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
           "reason": "no_rule"
         }
@@ -272,9 +276,41 @@
     {
       "area": "email",
       "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 0
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
       "reasons": [
         {
+          "detail": "Workspace mail forwarding",
+          "reason": "not_on_plan:profile=directory_oauth"
+        },
+        {
+          "detail": "Domain email settings (SPF, DKIM and DMARC)",
           "reason": "not_declared"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace mail forwarding",
+          "reasons": [
+            {
+              "detail": "The selected Workspace profile, directory_oauth, does not read mail forwarding; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth_mail and a service account whose domain-wide delegation includes gmail.readonly, which can read every message",
+              "reason": "not_on_plan:profile=directory_oauth"
+            }
+          ],
+          "rules": [
+            "workspace.external_forwarding"
+          ]
         }
       ]
     },
@@ -585,6 +621,11 @@
     },
     {
       "detail": "1 app holds scopes scheck does not classify and none it classifies as broad, so it was not judged: \"Google Chrome\" (77185425430.apps.googleusercontent.com). Its name is chosen by whoever registered it. Check under Security → Access and data control → API controls → Manage Third-Party App Access in the Admin console that someone chose it.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "Mail forwarding was not checked. It finds mailboxes that send copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after the password is changed. It needs a Google service account with domain-wide delegation for gmail.readonly, which can read every message; most small companies do not have one, and whoever manages your Google setup (often your IT provider) would create it. scheck signs in as each active mailbox and reads only its forwarding settings and filters, never a message. Get approval from whoever must approve access to staff mailboxes (often the owner) before turning it on, then run with that service account's key file and SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.",
       "kind": "workspace_inventory",
       "source": "saas:google-workspace:example.com"
     }

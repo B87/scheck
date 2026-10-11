@@ -114,6 +114,10 @@
       ],
       "reasons": [
         {
+          "detail": "Workspace 2-step verification (Google's enforcement and enrollment flags)",
+          "reason": "unavailable:workspace_evidence"
+        },
+        {
           "detail": "Workspace domain-wide delegation remains unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
           "reason": "no_rule"
         }
@@ -275,9 +279,41 @@
     {
       "area": "email",
       "mark": "not_assessed",
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 0
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
       "reasons": [
         {
+          "detail": "Workspace mail forwarding",
+          "reason": "not_on_plan:profile=directory"
+        },
+        {
+          "detail": "Domain email settings (SPF, DKIM and DMARC)",
           "reason": "not_declared"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace mail forwarding",
+          "reasons": [
+            {
+              "detail": "The default Workspace profile, directory, does not read mail forwarding; it needs SCHECK_WORKSPACE_PROFILE=directory_mail and a service account whose domain-wide delegation includes gmail.readonly, which can read every message",
+              "reason": "not_on_plan:profile=directory"
+            }
+          ],
+          "rules": [
+            "workspace.external_forwarding"
+          ]
         }
       ]
     },
@@ -615,7 +651,7 @@
       "source": "saas:google-workspace:example.com"
     },
     {
-      "detail": "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. Gmail forwarding is not assessed in this build.",
+      "detail": "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested.",
       "kind": "workspace_inventory",
       "source": "saas:google-workspace:example.com"
     },

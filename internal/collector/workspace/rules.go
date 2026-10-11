@@ -34,9 +34,15 @@ func init() {
 func workspaceDef(id, title string, severity finding.Severity, subject finding.SubjectKind, impact, fix string) finding.Def {
 	return finding.Def{ID: id, Title: title, Category: "accounts", Area: finding.AreaIdentity, Exposure: finding.NotExposure, Subject: subject, Judges: title, BaseSeverity: severity, Impact: impact, Remediation: finding.Remediation{Summary: fix}}
 }
-func RuleIDs() []string {
-	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment, IDTwoStepNotEnforced, IDAdminWithoutTwoStep, IDOAuthBroadScope}
+
+// baselineRuleIDs are the rules every profile judges; each optional
+// surface's rule speaks for itself, and only when selected.
+func baselineRuleIDs() []string {
+	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment, IDTwoStepNotEnforced, IDAdminWithoutTwoStep}
 }
+
+// RuleIDs are every rule the collector judges.
+func RuleIDs() []string    { return append(baselineRuleIDs(), IDOAuthBroadScope, IDExternalForwarding) }
 func yes(v *bool) bool     { return v != nil && *v }
 func no(v *bool) bool      { return v != nil && !*v }
 func inactive(u User) bool { return yes(u.Suspended) || yes(u.Archived) }
@@ -194,10 +200,10 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	out = append(out, adminCount(e, asset, c, attrs))
 	out = append(out, twoStepJudgments(e, asset, c)...)
 	out = append(out, oauthJudgments(e, asset, views)...)
+	out = append(out, mailJudgments(e, asset, views, c)...)
 	if len(e.Users.Items) == 0 {
-		for _, id := range RuleIDs() {
-			// The OAuth rule speaks for itself, and only when selected.
-			if id == IDTooManySuperAdmins || id == IDOAuthBroadScope {
+		for _, id := range baselineRuleIDs() {
+			if id == IDTooManySuperAdmins {
 				continue
 			}
 			j := newJudgment(id, asset, finding.Subject{}, reads(e.Users.Reads))
