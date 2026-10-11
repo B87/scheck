@@ -11,7 +11,7 @@ Warning        saas:github:example-org: GitHub assessment credential: observed O
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
 Authorization  none recorded. This run only read, with access you already hold; scheck requires a
-               record only for probes and scans.
+               record for probes, scans and signing in as staff mailboxes.
 Handle with care: this report names people, accounts, internal hosts and services, and says where
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.

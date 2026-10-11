@@ -27,6 +27,7 @@ contracts now live in `docs/spec/` (`host-collector.md`, `model.md`, `bounded.md
 | `e6-oauth-verification-2026-10-11.md` | E6 step-5 implementation, DEFINE differences, AI consultant/client/modularity reviews, adversarial corrections, green offline checks and fresh follow-up review; no live or independent acceptance |
 | `e6-forwarding-definition-2026-10-11.md` | Targeted E6 step-6 AI DEFINE contract for optional Gmail forwarding metadata and the owner's decisions; no software tests, measurements or acceptance |
 | `e6-forwarding-verification-2026-10-11.md` | E6 step-6 implementation, DEFINE differences, AI consultant/client/modularity reviews, green offline checks; adversarial review pending; no live or independent acceptance |
+| `e6-mailbox-authorization-2026-10-11.md` | E6 mailbox-authorization gate, offline only: fake servers and unit tests, green `make check`; release gate 11 not accepted; no live tenant and no independent acceptance |
 
 New releases add `acceptance-<version>.md` (see `../RELEASING.md`), and any model
 feature that becomes a default adds its frozen criteria and results here first.

@@ -93,11 +93,32 @@ type Method struct {
 
 // Authorization is the operator's declaration, never verified.
 type Authorization struct {
-	By      string   `json:"by"`
-	Date    string   `json:"date"`
-	Windows []Span   `json:"windows,omitempty"`
-	Source  []string `json:"source,omitempty"`
-	Note    string   `json:"note,omitempty"`
+	By        string          `json:"by"`
+	Date      string          `json:"date"`
+	Windows   []Span          `json:"windows,omitempty"`
+	Source    []string        `json:"source,omitempty"`
+	Note      string          `json:"note,omitempty"`
+	Mailboxes []MailboxReport `json:"mailboxes,omitempty"`
+}
+
+// MailboxReport is one authorization.mailboxes entry as the header prints it.
+// Used says the profile selected mail and the entry was current or mailboxes
+// were signed in as. Unused says the profile is known and did not select mail.
+type MailboxReport struct {
+	Asset   string `json:"asset"`
+	By      string `json:"by"`
+	Date    string `json:"date"`
+	Expires string `json:"expires"`
+	Used    bool   `json:"used"`
+	Unused  bool   `json:"unused"`
+	// Ended and NotYet say the entry is not current and no mailbox was
+	// signed in as. They are omitted when false.
+	Ended  bool `json:"ended,omitempty"`
+	NotYet bool `json:"not_yet,omitempty"`
+	// Unobserved says the entry is current and this session never learned
+	// whether the profile selected mail.
+	Unobserved bool `json:"unobserved,omitempty"`
+	SignedIn   int  `json:"signed_in"`
 }
 
 // Notice is the handling notice: the report names people and topology and

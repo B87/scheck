@@ -12,11 +12,14 @@ Warning        saas:google-workspace:example.com: No message was opened or read.
                this check again, a super administrator can remove
                https://www.googleapis.com/auth/gmail.readonly from the service account's entry under
                Security → Access and data control → API controls → Manage Domain Wide Delegation,
-               and delete the key file if it was created for this check.
+               and delete the key file if it was created for this check. This was under the approval
+               recorded by "CEO, Example Ltd" on 2026-10-06. scheck did not verify that approval.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
-Authorization  none recorded. This run only read, with access you already hold; scheck requires a
-               record only for probes and scans.
+Authorization  Mailbox settings: approved by "CEO, Example Ltd" on 2026-10-06, until 2027-01-04
+               (UTC), for saas:google-workspace:example.com. scheck signed in as 1 mailbox to read
+               forwarding settings and filters only. This is your declaration; scheck did not verify
+               it.
 Handle with care: this report names people, accounts, internal hosts and services, and says where
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
@@ -186,7 +189,8 @@ NOTES FOR THE READOUT
     it: if you will not run this check again, a super administrator can remove
     https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security →
     Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file
-    if it was created for this check.
+    if it was created for this check. This was under the approval recorded by "CEO, Example Ltd" on
+    2026-10-06. scheck did not verify that approval.
   saas:google-workspace:example.com: Mail forwarding settings were read whole for 1 of 5 active
     mailboxes; not read whole: carol@example.com (not attempted), dan@example.com (not attempted),
     erin@example.com (not attempted), eve@example.com (not attempted). Check those mailboxes'

@@ -97,6 +97,8 @@ func (m MailEvidence) refusal() *Read {
 func refusalWording(r Read, attempted int) (gap finding.CoverageReason, note string) {
 	gap.Reason = r.Reason
 	switch {
+	case r.Auth != nil:
+		return mailboxAuthWording(r)
 	case r.Reason == "unavailable:needs_service_account":
 		gap.Detail = "Mail forwarding needs a service account with domain-wide delegation; the credential used holds one person's sign-in"
 		note = "Mail forwarding was not read: it needs a Google service account with domain-wide delegation, and the credential file this run used (the one GOOGLE_APPLICATION_CREDENTIALS names, or your own gcloud sign-in) holds one person's sign-in, which scheck does not use to read mail settings. To turn the check on, ask whoever manages your Google setup (often your IT provider) to create a service account with domain-wide delegation for gmail.readonly, or leave the check off. Nothing else in this run was affected."
@@ -116,6 +118,32 @@ func refusalWording(r Read, attempted int) (gap finding.CoverageReason, note str
 		gap.Detail = "Mail forwarding was not read: " + strings.TrimSuffix(cmpOr(r.Detail, "the read did not give a usable answer"), ".")
 	}
 	return gap, note
+}
+
+// mailboxAuthWording is the named gap when the profile asks scheck to sign
+// in as mailboxes and the engagement file does not currently approve it.
+func mailboxAuthWording(r Read) (gap finding.CoverageReason, note string) {
+	a := r.Auth
+	gap.Reason = r.Reason
+	switch a.State {
+	case "expired":
+		gap.Detail = "The approval to sign in as mailboxes ended on " + a.Expires
+		note = fmt.Sprintf("Mail forwarding not checked: the approval by %q ended on %s. No mailbox was signed in as. Renew the approval and update expires to check it.", a.By, a.Expires)
+	case "not_yet_current":
+		gap.Detail = "The approval to sign in as mailboxes starts on " + a.Date
+		note = fmt.Sprintf("Mail forwarding not checked: the approval by %q starts on %s. No mailbox was signed in as. Wait until that date, or update the approval, and run again.", a.By, a.Date)
+	default:
+		gap.Detail = "No approval recorded for signing in as mailboxes"
+		note = fmt.Sprintf("Mail forwarding not checked: SCHECK_WORKSPACE_PROFILE (set in your environment) asks scheck to sign in as each mailbox, but the engagement file records no approval for %s. No mailbox was signed in as. Have whoever approves access to staff mailboxes approve it, add authorization.mailboxes (asset, by, date, expires), and run again.", a.Asset)
+	}
+	return gap, note
+}
+
+// mailboxAuthDuringRun is the note when some mailboxes were signed in as
+// before the approval ended.
+func mailboxAuthDuringRun(a *gate.MailboxRefusal, signedIn, active int) string {
+	rest := max(active-signedIn, 0)
+	return fmt.Sprintf("Mail forwarding checked for %d of %d active mailboxes: the approval ended on %s during the run, so scheck stopped signing in as mailboxes. Check the other %d by hand or renew the approval and run again.", signedIn, active, a.Expires, rest)
 }
 
 func cmpOr(a, b string) string {
@@ -786,7 +814,19 @@ func firstRead(rs []string, m *MailboxForwarding) string {
 
 // mailNotes is the readout for the forwarding surface, from the same view as
 // the rule.
-func mailNotes(e Evidence, asset string, views []accountView) []Note {
+func forwardingNotSelected(offer string, approval *MailApproval) string {
+	base := "Mail forwarding was not checked. It finds mailboxes that send copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after the password is changed. It needs a Google service account with domain-wide delegation for gmail.readonly, which can read every message; most small companies do not have one, and whoever manages your Google setup (often your IT provider) would create it. scheck signs in as each active mailbox and reads only its forwarding settings and filters, never a message. "
+	switch {
+	case approval != nil && approval.Current:
+		return base + "The engagement file already records a current approval to sign in as mailboxes. Run with that service account's key file and SCHECK_WORKSPACE_PROFILE=" + offer + "."
+	case approval != nil:
+		return base + "The approval in the engagement file is not current, so scheck will not sign in as mailboxes until it is renewed or its date arrives. Then run with that service account's key file and SCHECK_WORKSPACE_PROFILE=" + offer + "."
+	default:
+		return base + "Whoever approves access to staff mailboxes must approve it and add authorization.mailboxes (asset, by, date, expires) to the engagement file first, then run with that service account's key file and SCHECK_WORKSPACE_PROFILE=" + offer + "."
+	}
+}
+
+func mailNotes(e Evidence, asset string, views []accountView, approval *MailApproval) []Note {
 	out := []Note{}
 	note := func(kind, text string) { out = append(out, Note{Kind: kind, Source: asset, Detail: text}) }
 	if e.Binding.CustomerID == "" {
@@ -794,16 +834,24 @@ func mailNotes(e Evidence, asset string, views []accountView) []Note {
 	}
 	s := mailView(e, views)
 	if !s.selected {
-		note("workspace_inventory", "Mail forwarding was not checked. It finds mailboxes that send copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after the password is changed. It needs a Google service account with domain-wide delegation for gmail.readonly, which can read every message; most small companies do not have one, and whoever manages your Google setup (often your IT provider) would create it. scheck signs in as each active mailbox and reads only its forwarding settings and filters, never a message. Get approval from whoever must approve access to staff mailboxes (often the owner) before turning it on, then run with that service account's key file and SCHECK_WORKSPACE_PROFILE="+e.Binding.offer(gate.WorkspaceGmailForwarding, "directory_mail")+".")
+		note("workspace_inventory", forwardingNotSelected(e.Binding.offer(gate.WorkspaceGmailForwarding, "directory_mail"), approval))
 		return out
 	}
 	if s.refused != nil {
-		if _, text := refusalWording(*s.refused, s.attemptedAll); text != "" {
+		_, text := refusalWording(*s.refused, s.attemptedAll)
+		if s.refused.Auth != nil && s.refused.Auth.State == "expired" && s.tokens > 0 {
+			text = mailboxAuthDuringRun(s.refused.Auth, s.tokens, s.counts[mailboxRead])
+		}
+		if text != "" {
 			note("workspace_inventory", text)
 		}
 	}
 	if s.tokens > 0 {
-		note("workspace_credential_warning", fmt.Sprintf("No message was opened or read. To read forwarding settings, scheck asked Google to sign it in as each of %s with Google's gmail.readonly permission and sent only the declared reads of forwarding settings and filters. That permission could read every message in those mailboxes, and Google's logs may show scheck's service account acting as each of those people. The permission stays on the service account until an administrator removes it: if you will not run this check again, a super administrator can remove https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security → Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file if it was created for this check.", mailboxes(s.tokens, "")))
+		warning := fmt.Sprintf("No message was opened or read. To read forwarding settings, scheck asked Google to sign it in as each of %s with Google's gmail.readonly permission and sent only the declared reads of forwarding settings and filters. That permission could read every message in those mailboxes, and Google's logs may show scheck's service account acting as each of those people. The permission stays on the service account until an administrator removes it: if you will not run this check again, a super administrator can remove https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security → Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file if it was created for this check.", mailboxes(s.tokens, ""))
+		if approval != nil {
+			warning += fmt.Sprintf(" This was under the approval recorded by %q on %s. scheck did not verify that approval.", approval.By, approval.Date)
+		}
+		note("workspace_credential_warning", warning)
 	}
 	eligible := s.counts[mailboxRead] + s.counts[mailboxUnknown]
 	qualifier := ""

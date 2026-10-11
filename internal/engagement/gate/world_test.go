@@ -49,18 +49,19 @@ type world struct {
 	sleeps  []time.Duration
 	// block, when set, runs inside every sleep: a test that needs a
 	// request to wait for real holds it there.
-	block    func(context.Context, time.Duration) error
-	env      map[string]string
-	scope    *fakeScope
-	real     Scope // the engagement's own, when a gate_test test sets one
-	zone     zone  // what the gate's DNS client is answered (dns_test.go)
-	audit    *lockedBuffer
-	deadline time.Time
-	windows  []Window
-	prior    map[string]*Response
-	ops      []Op
-	extra    []string // redact_extra
-	mu       sync.Mutex
+	block     func(context.Context, time.Duration) error
+	env       map[string]string
+	scope     *fakeScope
+	real      Scope // the engagement's own, when a gate_test test sets one
+	zone      zone  // what the gate's DNS client is answered (dns_test.go)
+	audit     *lockedBuffer
+	deadline  time.Time
+	windows   []Window
+	approvals []MailboxApproval
+	prior     map[string]*Response
+	ops       []Op
+	extra     []string // redact_extra
+	mu        sync.Mutex
 }
 
 type lockedBuffer struct {
@@ -263,7 +264,7 @@ func (w *world) gate() *Gate {
 	}
 	g, err := New(Config{
 		Registry: reg, Scope: scope, RedactExtra: w.extra,
-		Audit: policy.NewAudit(w.audit), Deadline: w.deadline, Windows: w.windows, Prior: w.prior, Version: "test",
+		Audit: policy.NewAudit(w.audit), Deadline: w.deadline, Windows: w.windows, MailboxApprovals: w.approvals, Prior: w.prior, Version: "test",
 		Getenv: func(k string) string { return w.env[k] },
 		Net:    w.net(),
 	})

@@ -531,6 +531,12 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 			to, _ := time.Parse(time.RFC3339, w.To)
 			cfg.Windows = append(cfg.Windows, gate.Window{From: from, To: to})
 		}
+		for _, m := range a.Mailboxes {
+			from, until := mailboxSpan(m.Date, m.Expires, r.res.loc)
+			cfg.MailboxApprovals = append(cfg.MailboxApprovals, gate.MailboxApproval{
+				Asset: m.ID(), By: m.By, Date: m.Date, Expires: m.Expires, From: from, Until: until,
+			})
+		}
 	}
 	newGate := r.o.NewGate
 	if newGate == nil {
@@ -967,6 +973,27 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			from, _ := time.Parse(time.RFC3339, w.From)
 			to, _ := time.Parse(time.RFC3339, w.To)
 			auth.Windows = append(auth.Windows, ereport.Span{From: from, To: to})
+		}
+		now := time.Now()
+		for _, m := range a.Mailboxes {
+			from, until := mailboxSpan(m.Date, m.Expires, r.res.loc)
+			current := !now.Before(from) && now.Before(until)
+			line := ereport.MailboxReport{Asset: m.ID(), By: m.By, Date: m.Date, Expires: m.Expires}
+			selected, known, signedIn := r.mailSignedIn(m.ID())
+			line.SignedIn = signedIn
+			line.Used = selected && (current || signedIn > 0)
+			line.Unused = known && !selected && current
+			// A current entry whose profile was never observed is not ended.
+			switch {
+			case line.Used || line.Unused:
+			case now.Before(from):
+				line.NotYet = true
+			case !current:
+				line.Ended = true
+			default:
+				line.Unobserved = true
+			}
+			auth.Mailboxes = append(auth.Mailboxes, line)
 		}
 		in.Authorization = auth
 	}

@@ -55,6 +55,7 @@ func newMailWorld(t *testing.T, profile string) *mailWorld {
 	m.w.scope.orgUnits = map[string][]OrgUnit{wsAsset: {{Path: "/Board", ExcludedBy: "board"}}}
 	m.w.env["SCHECK_WORKSPACE_PROFILE"] = profile
 	m.w.env["SCHECK_WORKSPACE_SUBJECT"] = "admin@example.com"
+	m.w.approvals = []MailboxApproval{openMailboxApproval(wsAsset)}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +136,15 @@ func (m *mailWorld) admitted() *Gate {
 	g.Send(context.Background(), wsInventoryRequest("workspace.users"))
 	g.Send(context.Background(), wsInventoryRequest("workspace.delegated_user"))
 	return g
+}
+
+// openMailboxApproval is current for the days around the test, inside the
+// 90-day cap, and names no address.
+func openMailboxApproval(asset string) MailboxApproval {
+	now := time.Now().UTC()
+	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	exp := from.AddDate(0, 0, 30)
+	return MailboxApproval{Asset: asset, By: "CTO", Date: from.Format("2006-01-02"), Expires: exp.Format("2006-01-02"), From: from, Until: exp.AddDate(0, 0, 1)}
 }
 
 func mailRequest(op, user string) Request {
@@ -591,5 +601,87 @@ func TestWorkspaceMailUnansweredSignInIsThatMailboxs(t *testing.T) {
 				t.Fatal("one mailbox's unanswered sign-in stopped the surface", next)
 			}
 		})
+	}
+}
+
+func TestWorkspaceMailRefusesWithoutACurrentApproval(t *testing.T) {
+	m := newMailWorld(t, "directory_mail")
+	m.w.approvals = nil
+	g := m.admitted()
+	res := g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "1"))
+	if res.Decision != "refused:mailbox_authorization" || res.Detail != "missing" || res.Reason != "unavailable:mailbox_authorization_missing" || !res.Repeats || res.ActedAsMailbox || res.MailboxRefusal == nil || res.MailboxRefusal.State != "missing" {
+		t.Fatalf("%+v", res)
+	}
+	if len(m.mailExchanges()) != 0 || len(m.gmailPaths()) != 0 {
+		t.Fatal("a mailbox was signed in as without an approval", m.mailExchanges(), m.gmailPaths())
+	}
+	if next := g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "2")); next.Detail != "missing" || len(m.mailExchanges()) != 0 {
+		t.Fatal("the refusal was not remembered", next)
+	}
+	// Directory reads are not mailbox sign-ins.
+	if units := g.Send(context.Background(), wsInventoryRequest("workspace.units")); !units.OK() || units.ActedAsMailbox {
+		t.Fatal(units)
+	}
+
+	m = newMailWorld(t, "directory_mail")
+	m.w.approvals = []MailboxApproval{{Asset: wsAsset, By: "CEO", Date: "2020-01-01", Expires: "2020-03-01",
+		From: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Until: time.Date(2020, 3, 2, 0, 0, 0, 0, time.UTC)}}
+	g = m.admitted()
+	res = g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "1"))
+	if res.Detail != "expired" || res.Reason != "unavailable:mailbox_authorization_expired" || !res.Repeats || len(m.mailExchanges()) != 0 {
+		t.Fatalf("%+v", res)
+	}
+	var stamped bool
+	for _, e := range g.Entries() {
+		if e.Op != "workspace.mail_auto_forwarding" || e.MailboxAuthorization == nil {
+			continue
+		}
+		stamped = true
+		if e.MailboxAuthorization.State != "expired" || e.MailboxAuthorization.By != "CEO" || e.MailboxAuthorization.Expires != "2020-03-01" || strings.Contains(e.MailboxAuthorization.By, "@") {
+			t.Fatalf("%+v", e.MailboxAuthorization)
+		}
+	}
+	if !stamped {
+		t.Fatal("the refusal audit line does not record the approval")
+	}
+
+	m = newMailWorld(t, "directory_mail")
+	m.w.approvals = []MailboxApproval{openMailboxApproval("saas:google-workspace:other.example")}
+	g = m.admitted()
+	if res = g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "1")); res.Detail != "other_asset" || res.Reason != "unavailable:mailbox_authorization_missing" || len(m.mailExchanges()) != 0 {
+		t.Fatalf("%+v", res)
+	}
+}
+
+func TestWorkspaceMailExpiryMidRunDropsTokens(t *testing.T) {
+	m := newMailWorld(t, "directory_mail")
+	g := m.admitted()
+	if !g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "1")).OK() {
+		t.Fatal("first mailbox")
+	}
+	var saw bool
+	for _, e := range g.Entries() {
+		if e.Event != "send" || e.Op != "workspace.credential_exchange_gmail_forwarding" || e.MailboxAuthorization == nil {
+			continue
+		}
+		saw = true
+		if e.MailboxAuthorization.State != "" || e.MailboxAuthorization.By != "CTO" || e.MailboxAuthorization.Asset != wsAsset || strings.Contains(m.w.audit.String(), "alice@example.com") {
+			t.Fatalf("audit %+v", e.MailboxAuthorization)
+		}
+	}
+	if !saw {
+		t.Fatal("the exchange send line does not name the approval")
+	}
+	// End the approval without moving the clock past the baseline token.
+	g.mailboxApprovals[0].Until = g.now().Add(-time.Second)
+	res := g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "2"))
+	if res.Detail != "expired" || res.Reason != "unavailable:mailbox_authorization_expired" || !res.Repeats || res.ActedAsMailbox {
+		t.Fatalf("%+v", res)
+	}
+	if got := m.mailExchanges(); len(got) != 1 || got[0] != "alice@example.com" {
+		t.Fatal("signed in after the approval ended", got)
+	}
+	if tok := g.workspace[wsAsset].optional[WorkspaceGmailForwarding].tokens["1"]; tok != nil && tok.credential != nil {
+		t.Fatal("a mailbox token survived the approval ending")
 	}
 }

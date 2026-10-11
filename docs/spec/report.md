@@ -128,11 +128,27 @@ Fixed lines:
   penetration test.` A questionnaire asks for the date of the last penetration test,
   and this report's date must not be written there.
 - Authorization absent: `none recorded. This run only read, with access you already
-  hold; scheck requires a record only for probes and scans.` Holding access is not
-  authorization, and the line must not teach that it is. Present: `by`, `date`, each
-  window, `source` and `note`, and the levels used (`levels used: passive, observe.
-  probe off, scan off.`). The block is the operator's declaration, never presented as
-  verified ([scope.md](scope.md#authorization)).
+  hold; scheck requires a record for probes, scans and signing in as staff mailboxes.`
+  Holding access is not authorization, and the line must not teach that it is. Present:
+  `by`, `date`, each window, `source` and `note`, and the levels used (`levels used:
+  passive, observe. probe off, scan off.`). The block is the operator's declaration,
+  never presented as verified ([scope.md](scope.md#authorization)).
+- Mailbox authorization, per Workspace asset, in the header after the authorization
+  block. Entry used and at least one mailbox signed in as: `Mailbox settings: approved by "<by>" on <date>, until <expires>
+  (<zone>), for <asset>. scheck signed in as <N> mailboxes to read forwarding settings
+  and filters only (`1 mailbox` when N is 1). This is your declaration; scheck did not verify it.`
+  Entry used and none signed in as (the profile selected mail, the entry is current, N is 0): the same sentence through `for <asset>`, then
+  `No mailbox was signed in as.` Entry unused, when the profile is known and did not select mail:
+  `Mailbox settings: approved by "<by>" on <date>, until <expires>; not used: the Workspace profile did not select mail
+  forwarding.` Entry ended, and none signed in as: `Mailbox settings: the approval by "<by>" ended on <expires>, for <asset>. No mailbox was signed in as.`
+  Entry not yet current: `Mailbox settings: the approval by "<by>" starts on <date>, for <asset>. No mailbox was signed in as.`
+  Entry current and the Workspace profile was not observed (binding did not finish): `Mailbox settings: approved by "<by>" on <date>, until <expires> (<zone>), for <asset>. Workspace was not read, so scheck did not sign in as mailboxes.` That line is not the ended line.
+  Each of those lines ends with `This is your declaration; scheck did not verify it.`
+  No mailbox entry at all: no mailbox line is printed (the authorization-absent line
+  covers a block that does not exist). An entry that exists is never printed as
+  `none recorded`. `by` is the operator's free text; it is never verified. Whether the
+  entry is current, ended or not yet current is taken from the clock when the report
+  is built, in `engagement.timezone`.
 - Handling notice: `Handle with care: this report names people, accounts, internal
   hosts and services, and says where weaknesses are. Keep it as private as a
   list of passwords. It is written for you, not for your customers.`
@@ -402,6 +418,8 @@ the target:
 | `unavailable:mailbox_unavailable` | Google did not serve some mailboxes' settings |
 | `unavailable:api_disabled` | Google has not enabled the API this read needs in the credential's project |
 | `unavailable:mailbox_inactive` | the account list did not report the account active with a mailbox |
+| `unavailable:mailbox_authorization_missing` | the engagement file records no approval for signing in as mailboxes for this asset; to check forwarding, have whoever approves access to staff mailboxes approve it, add `authorization.mailboxes`, and run again |
+| `unavailable:mailbox_authorization_expired` | the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update `expires`, or wait until `date`, and run again |
 | `unavailable:forwarding_subdomain` | forwarding to a subdomain that is not itself a domain of this Workspace was not judged |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |

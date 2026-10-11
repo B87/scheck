@@ -240,7 +240,7 @@ func (v *validator) resolve(assets map[string]Ref) *Resolved {
 	}
 	slices.SortFunc(under, func(a, b ResolvedAsset) int { return cmp.Compare(a.Name, b.Name) })
 	res.Assets = append(res.Assets, under...)
-	res.Warnings = redactExtraNames(f, res)
+	res.Warnings = append(redactExtraNames(f, res), mailboxWarnings(f.Authorization, v.loc)...)
 	return res
 }
 

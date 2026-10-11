@@ -226,6 +226,11 @@ func TestValidationErrors(t *testing.T) {
 		{"timestamp without seconds", minimal + "authorization:\n  by: CTO\n  date: 2026-10-06\n  windows:\n    - {from: 2026-10-07T09:00+02:00, to: 2026-10-07T18:00:00+02:00}\n", 14, "authorization.windows[0].from", "RFC 3339", false},
 		{"timestamp without offset", minimal + "authorization:\n  by: CTO\n  date: 2026-10-06\n  windows:\n    - {from: 2026-10-07T09:00:00, to: 2026-10-07T18:00:00+02:00}\n", 14, "authorization.windows[0].from", "RFC 3339", false},
 		{"window backwards", minimal + "authorization:\n  by: CTO\n  date: 2026-10-06\n  windows:\n    - {from: 2026-10-07T18:00:00+02:00, to: 2026-10-07T09:00:00+02:00}\n", 14, "authorization.windows[0].to", "after from", false},
+		{"mailbox unknown key", minimal + "  - saas: google-workspace:example.com\nauthorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2026-10-06, expires: 2026-12-01, subject: alice@example.com}\n", 13, "authorization.mailboxes[0].subject", "unknown key", false},
+		{"mailbox expires too far", minimal + "  - saas: google-workspace:example.com\nauthorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2026-10-06, expires: 2027-01-05}\n", 13, "authorization.mailboxes[0].expires", "at most 90 days after date", false},
+		{"mailbox expires before date", minimal + "  - saas: google-workspace:example.com\nauthorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2026-10-06, expires: 2026-10-05}\n", 13, "authorization.mailboxes[0].expires", "on or after date", false},
+		{"mailbox not workspace", minimal + "authorization:\n  mailboxes:\n    - {asset: github:example-org, by: CEO, date: 2026-10-06, expires: 2026-12-01}\n", 12, "authorization.mailboxes[0].asset", "not a Google Workspace tenant", false},
+		{"mailbox missing by", minimal + "  - saas: google-workspace:example.com\nauthorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, date: 2026-10-06, expires: 2026-12-01}\n", 13, "authorization.mailboxes[0].by", "is required", false},
 		{"bad date", minimal + "people:\n  carol: {kind: employee, left: 15/09/2026}\n", 11, "people.carol.left", "YYYY-MM-DD", false},
 		{"unknown handle", minimal + "access:\n  admins:\n    github:example-org: [alice]\n", 12, "access.admins.github:example-org[0]", "not a handle", false},
 		{"admins of a non-tenant", minimal + "people:\n  alice: {kind: employee}\naccess:\n  admins:\n    example.com: [alice]\n", 14, "access.admins.example.com", "not a SaaS tenant", false},
@@ -591,5 +596,48 @@ intent:
 	_, err := Parse("e.yaml", []byte(file), testOpts)
 	if err == nil || !strings.Contains(err.Error(), "same URL is also declared exposed_on_purpose") {
 		t.Fatal(err)
+	}
+}
+
+func TestMailboxApprovalValidatesAndDoesNotChangeScope(t *testing.T) {
+	root := minimal + "  - saas: google-workspace:example.com\n"
+	only := root + "authorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2026-10-06, expires: 2026-12-01, note: lab}\n"
+	res, err := Parse("e.yaml", []byte(only), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Authorization == nil || len(res.Authorization.Mailboxes) != 1 || res.Authorization.Mailboxes[0].ID() != "saas:google-workspace:example.com" {
+		t.Fatalf("%+v", res.Authorization)
+	}
+	if len(res.Warnings) != 0 {
+		t.Fatal(res.Warnings)
+	}
+	bare, err := Parse("e.yaml", []byte(root), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	if scopeInputs(bare, "v", at) != scopeInputs(res, "v", at) {
+		t.Fatal("a mailbox approval changed the scope fingerprint")
+	}
+	withProbe := root + "authorization:\n  by: CTO\n  date: 2026-10-06\n"
+	probe, err := Parse("e.yaml", []byte(withProbe), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	both, err := Parse("e.yaml", []byte(withProbe+"  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2026-10-06, expires: 2026-12-01}\n"), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeInputs(probe, "v", at) != scopeInputs(both, "v", at) {
+		t.Fatal("adding mailboxes changed the scope fingerprint of a probe authorization")
+	}
+	expired, err := Parse("e.yaml", []byte(root+"authorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2020-01-01, expires: 2020-03-01}\n"), testOpts)
+	if err != nil || len(expired.Warnings) != 1 || !strings.Contains(expired.Warnings[0], "ended on 2020-03-01") {
+		t.Fatalf("%v %v", err, expired.Warnings)
+	}
+	later, err := Parse("e.yaml", []byte(root+"authorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: CEO, date: 2027-01-01, expires: 2027-03-01}\n"), testOpts)
+	if err != nil || len(later.Warnings) != 1 || !strings.Contains(later.Warnings[0], "starts on 2027-01-01") {
+		t.Fatalf("%v %v", err, later.Warnings)
 	}
 }

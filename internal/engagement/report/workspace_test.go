@@ -364,18 +364,52 @@ func workspaceMailInput(t *testing.T, change func(*workspace.Evidence)) Input {
 	if change != nil {
 		change(&e)
 	}
-	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC}
+	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC, MailApproval: &workspace.MailApproval{By: "CEO, Example Ltd", Date: "2026-10-06", Expires: "2027-01-04", Current: true}}
 	a.Judged = workspace.Judge(e, a.ID, c)
 	a.InventoryNotes = a.InventoryNotes[:1]
 	for _, n := range workspace.Readout(e, a.ID, c) {
 		a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
 	}
 	workspacePlan(a, func(w *workspace.Evidence) { w.Binding, w.Mail = e.Binding, e.Mail })
+	signedIn := 0
+	for _, m := range e.Mail.Accounts {
+		if m.AutoRead.ActedAs || m.FiltersRead.ActedAs {
+			signedIn++
+		}
+	}
+	in.Authorization = &Authorization{Mailboxes: []MailboxReport{{
+		Asset: a.ID, By: "CEO, Example Ltd", Date: "2026-10-06", Expires: "2027-01-04",
+		Used: true, SignedIn: signedIn,
+	}}}
 	// Five mailbox sign-ins and ten settings reads left this machine.
 	in.Egress.Sources = []SourceInput{{Source: "google", Operator: "Google", Host: "admin.googleapis.com", Requests: 7 + len(users), Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
 		{Source: "google", Operator: "Google", Host: "gmail.googleapis.com", Requests: 10, Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
 		{Source: "google", Operator: "Google", Host: "oauth2.googleapis.com", Requests: 6, Sent: []string{a.ID}, Credentials: []string{"GOOGLE_APPLICATION_CREDENTIALS"}}}
 	return in
+}
+
+func TestMailboxHeaderNamesAnEndedApproval(t *testing.T) {
+	in := workspaceInventoryReport(t)
+	in.Authorization = &Authorization{Mailboxes: []MailboxReport{{
+		Asset: "saas:google-workspace:example.com", By: "CEO", Date: "2020-01-01", Expires: "2020-03-01", Ended: true,
+	}}}
+	var b bytes.Buffer
+	if err := WriteText(&b, Build(in), Options{}); err != nil {
+		t.Fatal(err)
+	}
+	s := b.String()
+	if !strings.Contains(s, `the approval by "CEO" ended on 2020-03-01`) || strings.Contains(s, "none recorded") || !strings.Contains(s, "scheck did not verify it") {
+		t.Fatal(s)
+	}
+	in.Authorization.Mailboxes[0] = MailboxReport{Asset: "saas:google-workspace:example.com", By: "CEO", Date: "2026-10-06", Expires: "2027-01-04", Unobserved: true}
+	b.Reset()
+	if err := WriteText(&b, Build(in), Options{}); err != nil {
+		t.Fatal(err)
+	}
+	flat := strings.Join(strings.Fields(b.String()), " ")
+	if !strings.Contains(flat, "Workspace was not read, so scheck did not sign in as mailboxes") || strings.Contains(flat, `the approval by "CEO" ended on`) {
+		t.Fatal(flat)
+	}
 }
 
 func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {

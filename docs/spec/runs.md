@@ -162,19 +162,32 @@ the first session's: the directory's name, the stage documents' headers, the rep
 `run.json` holds the run's start, the source `{path, sha256}`, `file` (the engagement
 file's absolute path, written by the first session and never by a resume, so a relative
 path is resolved against the first session's working directory; empty for `--host`),
-`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions` (each `{started, version, vantage, egress, ended}`), `files` (each file a stage wrote,
-relative to the directory, with the sha256 of the bytes written) and `scope_inputs`. It
-is written when a session starts, after each file a stage writes, and after each stage
-with what the session has sent so far as its `egress`; `ended` is set when the session
-ends.
+`host` (true for a run `--host` built; a file named `--host` is a file run), `sessions`
+(each `{started, version, vantage, egress, ended, mailbox_approvals}`), `files` (each
+file a stage wrote, relative to the directory, with the sha256 of the bytes written)
+and `scope_inputs`. It is written when a session starts, after each file a stage
+writes, and after each stage with what the session has sent so far as its `egress`;
+`ended` is set when the session ends. `mailbox_approvals` records, for each Workspace
+asset this session signed in as mailboxes for, the `authorization.mailboxes` entry the
+session acted under: its `asset`, `by`, `date` and `expires`, never a staff address.
+When no mailbox was signed in as for a given asset in this session, no entry appears.
+Workspace authenticated responses are never eligible for ledger reuse, whatever the
+`mailbox_approvals` record says.
 
 - **Scope** is kept, its `scope.json` used as written and nothing sent, when
   `scope_inputs` is unchanged (a hash of the build version, the resolved roots,
-  exclude, defaults, assets, `redact_extra`, `authorization` and the invocation's
-  vantage, and each asset's first-party evidence evaluated at the session's start, so a confirmation
-  that expired or became current since runs Scope again) and the earlier Scope found no
-  gap: every domain root's certificate transparency answer read, and no name
-  `insufficient_evidence` or `not_checked`. Otherwise Scope runs again.
+  exclude, defaults, assets, `redact_extra`, `authorization` without its `mailboxes`
+  list, and the invocation's vantage, and each asset's first-party evidence evaluated
+  at the session's start, so a confirmation that expired or became current since runs
+  Scope again) and the earlier Scope found no gap: `authorization.mailboxes` is not
+  part of this fingerprint. Scope does not read it, and changing or removing an entry
+  does not invalidate the run and does not by itself re-run Scope. A new session reads
+  the file and loads the entries into the gate. During that session the gate checks
+  the loaded copy and the clock on every mailbox read and again on the exchange. It
+  does not re-read the file in the middle of the running process.
+  The earlier Scope must also have found no gap: every domain root's certificate
+  transparency answer read, and no name `insufficient_evidence` or `not_checked`.
+  Otherwise Scope runs again.
 - **A host** is kept, never contacted, from one record alone:
   `evidence/<asset>.collection.json`, which Recon writes after the envelope
   `evidence/<asset>.json` for each host it collected, completely or not, as `{inputs,

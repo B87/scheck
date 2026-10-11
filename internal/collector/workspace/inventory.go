@@ -32,6 +32,19 @@ type Context struct {
 	// DeclaredDomains are the engagement's domain roots: never a reason to
 	// call a destination internal, only to say it was declared.
 	DeclaredDomains []string
+	// MailApproval words forwarding notes when the file records an entry
+	// for this asset. Nil when it does not. The gate, not this field,
+	// decides whether a mailbox is signed in as.
+	MailApproval *MailApproval
+}
+
+// MailApproval is the engagement's mailbox entry, for wording only.
+type MailApproval struct {
+	By, Date, Expires string
+	// Current says the entry covers this moment. A file entry that has
+	// ended or has not started is not current; the gate still decides
+	// admission.
+	Current bool
 }
 type Attribution struct {
 	Tenant     string `json:"tenant"`
@@ -108,7 +121,7 @@ func usable(r gate.Result) bool {
 	return r.OK() && r.Response != nil && r.Response.Status == 200 && !r.Response.Truncated
 }
 func readOf(op string, r gate.Result) Read {
-	out := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Detail: r.Detail, Repeats: r.Repeats, ActedAs: r.ActedAsMailbox}
+	out := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Detail: r.Detail, Repeats: r.Repeats, ActedAs: r.ActedAsMailbox, Auth: r.MailboxRefusal}
 	if r.Response != nil {
 		out.Status = r.Response.Status
 		out.Population = r.Response.Population

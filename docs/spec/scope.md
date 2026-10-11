@@ -42,10 +42,15 @@ authorization:
 ```
 
 Passive checks and reading (the observe level: SSH to the operator's hosts, read-only
-cloud and SaaS APIs, a site's entry points) need no authorization block. Probes and
-scans (below) do, and they run only inside a window. `source`, when given, is printed
-for the abuse desk; it is not a run condition, since scheck cannot verify its own
-egress address without asking a third party. The end
+cloud and SaaS APIs, a site's entry points) need no authorization block, except signing
+in as staff mailboxes for Gmail forwarding reads, which needs `authorization.mailboxes`
+in the engagement file ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles), "Mailbox tokens step 6").
+Probes and scans (below) also need an authorization block with windows and run only
+inside a window. Mailbox authorization is not a window: on every mailbox read and
+again on the exchange, the gate checks the copy loaded for that session, and its
+expiry is never `refused:window`. The running process does not re-read the file.
+`source`, when given, is printed for the abuse desk; it is not a run condition, since
+scheck cannot verify its own egress address without asking a third party. The end
 of a window stops probes and scans even when the run's timeout is off. Timestamps are
 RFC 3339 with seconds and an explicit offset (`engagement.md`, "Identity, references
 and validation").

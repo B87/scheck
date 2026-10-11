@@ -75,10 +75,13 @@ enrollment flags, never from unit policy, grace periods or another identity prov
 With `SCHECK_WORKSPACE_PROFILE=directory_oauth` and an approved
 `admin.directory.user.security` permission, a separate one-scope token reads each
 account's OAuth grants and reports apps holding broad scopes; the default profile does
-not read them. With `SCHECK_WORKSPACE_PROFILE=directory_mail` (or `directory_oauth_mail`) and
-a service account whose domain-wide delegation includes `gmail.readonly`, scheck signs in as
+not read them. With `SCHECK_WORKSPACE_PROFILE=directory_mail` (or `directory_oauth_mail`), a service
+account whose domain-wide delegation includes `gmail.readonly`, and a current
+`authorization.mailboxes` entry in the engagement file for that tenant, scheck signs in as
 each active mailbox in turn and reads only its automatic forwarding setting and forwarding
 filters, never a message, and reports forwarding to addresses outside the verified domains.
+The entry records who approved it and when it expires; it holds no credential. Without a
+current entry, no mailbox is signed in as and the report says so.
 A personal sign-in cannot do this. Domain-wide delegation and the Admin console's forwarding
 setting remain unassessed. Unknown callers and verified
 delegated callers reuse no authenticated Workspace reads on resume.

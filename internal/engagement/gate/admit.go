@@ -189,6 +189,9 @@ type pending struct {
 	key string
 	// cleanup runs when the attempt ends, in reverse.
 	cleanup []func()
+	// approved is the mailbox approval this attempt may be sent under.
+	// It is copied onto the send line, not onto a refusal for another reason.
+	approved *MailboxApproval
 }
 
 // halt ends a request before it is sent: decision is refused:<rule> or
@@ -203,6 +206,8 @@ type halt struct {
 	sticky bool
 	// until is when a stopped provider's rate limit resets.
 	until time.Time
+	// mailbox is the approval stamp a mailbox-authorization refusal records.
+	mailbox *MailboxAuth
 }
 
 func refused(rule, detail string) *halt { return &halt{decision: "refused:" + rule, detail: detail} }
@@ -248,6 +253,9 @@ func (g *Gate) attempt(ctx context.Context, r Request, id, retryOf string, n int
 	if h := g.waitThrottle(ctx, p); h != nil { // 13
 		return g.halted(p, h), nil
 	}
+	if p.approved != nil {
+		p.e.MailboxAuthorization = &MailboxAuth{Asset: p.approved.Asset, By: p.approved.By, Date: p.approved.Date, Expires: p.approved.Expires}
+	}
 	// 14. The audit line is written, then the request is sent.
 	res, rt := g.send(ctx, p.e, admitted{b: p.b, prov: p.prov, cred: p.cred, addrs: p.addrs, depth: p.hopDepth, prev: p.prev,
 		firstParty: p.site.FirstParty, windowEnd: p.windowEnd}, r)
@@ -277,10 +285,16 @@ func (g *Gate) halted(p *pending, h *halt) Result {
 		}
 	}
 	p.e.Event = "refused"
+	if h.mailbox != nil {
+		p.e.MailboxAuthorization = h.mailbox
+	}
 	res := Result{RequestID: p.e.RequestID, Until: h.until}
 	res.end(decision, g.redact(h.detail))
 	if h.reason != "" && decision == h.decision {
 		res.Reason = h.reason
+	}
+	if h.mailbox != nil && h.mailbox.State != "" {
+		res.MailboxRefusal = &MailboxRefusal{State: h.mailbox.State, Asset: h.mailbox.Asset, By: h.mailbox.By, Date: h.mailbox.Date, Expires: h.mailbox.Expires}
 	}
 	res.Repeats = h.sticky
 	p.e.Decision, p.e.Detail = res.Decision, res.Detail
@@ -416,6 +430,14 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 		// never its address (docs/spec/workspace-collector.md, "Boundary").
 		if r.exchange.user != "" {
 			p.e.Params = map[string]string{"user": r.exchange.user}
+			// A mailbox exchange is itself a sign-in. The read that asked
+			// for it checked the approval; this checks again so no path
+			// mints a token without a current entry.
+			ap, h := g.mailboxDecision(p.r.Asset)
+			if h != nil {
+				return h
+			}
+			p.approved = ap
 		}
 	}
 	return nil

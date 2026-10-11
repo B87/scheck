@@ -996,7 +996,9 @@ Unknown grants remain unknown; a successful read does not prove write capability
    **Done offline 2026-10-11:** under `directory_mail` or `directory_oauth_mail`, a
    service account only, the gate mints one `gmail.readonly` token per admitted
    mailbox, admitted from current inventory (active, with a mailbox, in a verified
-   domain) before each exchange, cached by customer and user id, audited under one
+   domain) before each exchange, and only when a current `authorization.mailboxes`
+   entry for that asset is loaded for the gate session. The environment variable alone
+   does not admit the sign-in. Tokens are cached by customer and user id, audited under one
    exchange operation with the user id as its only parameter. A circuit breaker (first
    five exchanges all failing, or 20 in a row) and a 1,000-exchange session cap stop the
    surface; failures are the surface's or one mailbox's, a coverage gap and never exit
@@ -1161,13 +1163,41 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
   nothing of its Marketplace installs or of who set up the credential.
 
 **Carried from step 6** (consultant DEFINE and REVIEW, client REPORT and modularity
-assess, 2026-10-11; [eval/e6-forwarding-verification-2026-10-11.md](eval/e6-forwarding-verification-2026-10-11.md)):
+assess, 2026-10-11; forwarding in
+[eval/e6-forwarding-verification-2026-10-11.md](eval/e6-forwarding-verification-2026-10-11.md);
+mailbox authorization in
+[eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md)):
 
-- *Release blocker, owner's decision (E8/E9):* the environment variable alone gates
-  signing in as every active mailbox (D3). Before 0.0.2 is released, an explicit
-  authorization entry in the engagement file, recorded in the audit log, must gate the
-  surface; until then the not-selected note carries the approval sentence and the
-  warning and the audit carry the mailbox count.
+- *Done offline 2026-10-11, not acceptance and not a live measurement (D3):* a current
+  `authorization.mailboxes` entry for the Workspace asset gates signing in as
+  mailboxes, with the profile. The environment variable alone does not admit a
+  mailbox sign-in. The gate checks the copy loaded for the session. Recorded in
+  [eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md).
+- *Candidate, not built:* a later `authorization.mailboxes[].skip` list that would
+  narrow which mailboxes are signed in as, because `exclude:` also removes those
+  accounts from Directory rules. Not added in this slice.
+- *Owner's decision, still open:* whether `directory_oauth` needs an
+  `authorization.mailboxes` entry. The consultant recommends no entry, because OAuth
+  does not sign in as staff. No owner decision.
+- *Deferred, client REPORT, not changed beyond the verification sentence:* the header
+  "approved by" can be read as approval of the forwarding itself. The warning now also
+  says scheck did not verify the approval. A later wording pass can say "permission to
+  read mailbox settings, typed into the engagement file" if the owner wants it.
+- *Consultant should-fix, not applied:* grade the header's currency from the run's
+  collection time rather than the clock when the report is built; if user inventory is
+  incomplete, the report may name that gap and not the missing mailbox approval (no
+  mailbox is signed in as either way); a non-empty `note` does not say it does not
+  limit who is signed in as.
+- *Not built:* re-reading the engagement file in the middle of a running process. The
+  gate checks the session's loaded entry and the clock on every mailbox read and again
+  on the exchange, and reads the file again on the next session.
+- *Code review should-fix, not applied:* the header's "signed in as N" counts every
+  mailbox the gate asked Google to act as, including an exchange Google then refused;
+  recommend saying "asked Google to sign in as" or counting only a usable token. The
+  email coverage detail for a profile that does not select mail still names only the
+  environment variable; the readout note names the approval, and the gate still
+  refuses. A resumed report's header counts this session's sign-ins; an earlier
+  session's `mailbox_approvals` stay in `run.json` and are not merged into that line.
 - *Owner's decision, still open (S7):* whether a surface selected and refused with no
   usable read (a refused permission, `needs_service_account`, a tripped breaker) exits 2,
   for OAuth and for mail; both are coverage gaps only today (D4). Step 6 also
@@ -1531,11 +1561,13 @@ from step 4").
 in use; `scheck init` explains how to enable `directory_oauth` and warns what
 `admin.directory.user.security` also allows (E6, "Carried from step 5").
 
-**Carried from E6 step 6** (2026-10-11, release blocker, owner's decision): signing in
-as every active mailbox needs an explicit authorization entry in the engagement file,
-recorded in the audit log, instead of the environment variable alone; no "do you
-forward mail on purpose?" question; `scheck init` explains `directory_mail`, the service
-account it needs and who must approve (E6, "Carried from step 6").
+**Carried from E6 step 6** (2026-10-11): the mailbox-authorization release blocker is
+done offline, not as acceptance and not as a live measurement. The environment
+variable alone does not admit mailbox sign-in
+([eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md);
+E6, "Carried from step 6"). No "do you forward mail on purpose?" question; `scheck
+init` explains `directory_mail`, the service account it needs and who must approve,
+and does not write `authorization.mailboxes`.
 
 ### E9 — Plan, Analyze and multi-fact rules
 
@@ -1606,7 +1638,9 @@ asset unchanged; a loop fixture terminates.
 - *From E6 step 6* (2026-10-11): `data.matters_most` for email-area Workspace findings,
   collapsed forwarding instances in "Fix these first", whether `hides_mail` raises or
   ranks, lab ranking of forward-and-hide filters against helpdesk and accounting
-  forwards, and the client REPORT items listed in E6, "Carried from step 6".
+  forwards, the client REPORT items listed in E6, "Carried from step 6", and the
+  mailbox-authorization wording left open there (header currency, an incomplete user
+  list, and a `note` that does not say it limits who is signed in as).
 
 ### Release gates
 
@@ -1641,7 +1675,11 @@ asset unchanged; a loop fixture terminates.
 11. **Mailbox authorization** (owner's decision, 2026-10-11): an explicit authorization
     entry in the engagement file, recorded in the audit log, gates signing in as each
     active mailbox for Gmail forwarding reads; the environment variable alone does not
-    (E6, "Carried from step 6"). Until it exists the surface does not ship in a release.
+    (E6, "Carried from step 6"). **Done offline 2026-10-11**, not acceptance and not a
+    live measurement: fake servers (`httptest`) and unit tests, with `make check`
+    green, recorded in
+    [eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md).
+    No independent acceptance is claimed.
 
 **Sequence:** E1a → E1b → E2 → E4 → {E5, E6, E7, E8} → E9, with E1c at any point after
 E1b, E5a before E5 and E6 (alongside E7), and E3 built alongside and sealed in parts,

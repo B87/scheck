@@ -647,7 +647,21 @@
     "user_agent": "scheck/test (security self-assessment)"
   },
   "engagement": {
-    "authorization": null,
+    "authorization": {
+      "by": "",
+      "date": "",
+      "mailboxes": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "by": "CEO, Example Ltd",
+          "date": "2026-10-06",
+          "expires": "2027-01-04",
+          "signed_in": 5,
+          "unused": false,
+          "used": true
+        }
+      ]
+    },
     "built_from": "file",
     "collected": {
       "from": "2026-10-10T12:00:00Z",
@@ -955,7 +969,7 @@
       "source": "saas:google-workspace:example.com"
     },
     {
-      "detail": "No message was opened or read. To read forwarding settings, scheck asked Google to sign it in as each of 5 mailboxes with Google's gmail.readonly permission and sent only the declared reads of forwarding settings and filters. That permission could read every message in those mailboxes, and Google's logs may show scheck's service account acting as each of those people. The permission stays on the service account until an administrator removes it: if you will not run this check again, a super administrator can remove https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security → Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file if it was created for this check.",
+      "detail": "No message was opened or read. To read forwarding settings, scheck asked Google to sign it in as each of 5 mailboxes with Google's gmail.readonly permission and sent only the declared reads of forwarding settings and filters. That permission could read every message in those mailboxes, and Google's logs may show scheck's service account acting as each of those people. The permission stays on the service account until an administrator removes it: if you will not run this check again, a super administrator can remove https://www.googleapis.com/auth/gmail.readonly from the service account's entry under Security → Access and data control → API controls → Manage Domain Wide Delegation, and delete the key file if it was created for this check. This was under the approval recorded by \"CEO, Example Ltd\" on 2026-10-06. scheck did not verify that approval.",
       "kind": "workspace_credential_warning",
       "source": "saas:google-workspace:example.com"
     },

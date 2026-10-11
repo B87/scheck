@@ -35,19 +35,48 @@ people:
 type mailRun struct {
 	out       *engagement.Outcome
 	dir       string
+	file      string
 	impersona []string
 	paths     []string
+	h         *gate.Harness
+}
+
+func mailboxAuthYAML(date, expires, by string) string {
+	if by == "" {
+		return ""
+	}
+	return fmt.Sprintf("authorization:\n  mailboxes:\n    - {asset: google-workspace:example.com, by: %s, date: %s, expires: %s}\n", by, date, expires)
+}
+
+func currentMailboxAuth() string {
+	now := time.Now().UTC()
+	return mailboxAuthYAML(now.AddDate(0, 0, -1).Format("2006-01-02"), now.AddDate(0, 0, 30).Format("2006-01-02"), "CTO")
 }
 
 // runMail runs the mail profile end to end against fake Google servers.
-func runMail(t *testing.T, exclude bool) mailRun {
+func runMail(t *testing.T, exclude bool) *mailRun {
+	t.Helper()
+	return runMailAuth(t, exclude, currentMailboxAuth())
+}
+
+func runMailAuth(t *testing.T, exclude bool, auth string) *mailRun {
+	t.Helper()
+	return runMailNamed(t, "engagement.yaml", exclude, auth)
+}
+
+func runMailNamed(t *testing.T, name string, exclude bool, auth string) *mailRun {
 	t.Helper()
 	excludes := ""
 	if exclude {
 		excludes = "exclude:\n  - {saas: google-workspace:example.com, org_unit: /board}"
 	}
-	raw := []byte(fmt.Sprintf(workspaceMailFile, excludes))
-	res, err := engagement.Parse("engagement.yaml", raw, inventoryOptions())
+	raw := []byte(fmt.Sprintf(workspaceMailFile, excludes) + auth)
+	if filepath.IsAbs(name) {
+		if err := os.WriteFile(name, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := engagement.Parse(name, raw, inventoryOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +97,7 @@ func runMail(t *testing.T, exclude bool) mailRun {
 	const base = "opaque-access-seeded-mail-1234567890"
 	const seeded = "ghp_0123456789abcdefABCDEF0123456789abcd"
 	var mu sync.Mutex
-	run := mailRun{}
+	run := &mailRun{}
 	h.GoogleTokenHandler(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		claims := map[string]any{}
@@ -165,7 +194,7 @@ func runMail(t *testing.T, exclude bool) mailRun {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run.out, run.dir = out, dir.Path
+	run.out, run.dir, run.file, run.h = out, dir.Path, name, h
 	// Nothing in the run directory holds a token, a seeded secret, filter
 	// criteria or an excluded account; the redacted destination is marked.
 	marked := false
@@ -192,7 +221,7 @@ func runMail(t *testing.T, exclude bool) mailRun {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !marked {
+	if len(run.impersona) > 0 && !marked {
 		t.Fatal("the seeded destination's redaction marker is not in the run directory")
 	}
 	return run
@@ -259,6 +288,40 @@ func TestWorkspaceMailThroughGateAndReport(t *testing.T) {
 	if exchanges < 3 {
 		t.Fatalf("%d mailbox exchanges audited with their account id", exchanges)
 	}
+	if !strings.Contains(string(audit), `"mailbox_authorization"`) || !strings.Contains(string(audit), `"by":"CTO"`) {
+		t.Fatal("the audit does not record who approved mailbox sign-in")
+	}
+}
+
+func TestWorkspaceMailRunWithoutApprovalSignsInAsNobody(t *testing.T) {
+	run := runMailAuth(t, false, "")
+	if len(run.impersona) != 0 || len(run.paths) != 0 {
+		t.Fatal("signed in without an approval", run.impersona, run.paths)
+	}
+	body, err := json.Marshal(run.out.Report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "unavailable:mailbox_authorization_missing") || !strings.Contains(string(body), "records no approval") {
+		t.Fatal("the report does not name the missing approval")
+	}
+}
+
+func TestWorkspaceMailRunWithExpiredApprovalSignsInAsNobody(t *testing.T) {
+	run := runMailAuth(t, false, mailboxAuthYAML("2020-01-01", "2020-03-01", "CEO"))
+	if len(run.impersona) != 0 {
+		t.Fatal("signed in under an expired approval", run.impersona)
+	}
+	if len(run.out.Report.Engagement.Authorization.Mailboxes) != 1 || run.out.Report.Engagement.Authorization.Mailboxes[0].Used {
+		t.Fatalf("header %+v", run.out.Report.Engagement.Authorization)
+	}
+	body, err := json.Marshal(run.out.Report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "unavailable:mailbox_authorization_expired") || !strings.Contains(string(body), `ended on 2020-03-01`) {
+		t.Fatal("the report does not name the expired approval")
+	}
 }
 
 func TestWorkspaceMailCompleteRunExitsOnFindings(t *testing.T) {
@@ -268,5 +331,46 @@ func TestWorkspaceMailCompleteRunExitsOnFindings(t *testing.T) {
 	}
 	if !slices.Contains(run.impersona, "board@example.com") {
 		t.Fatal("an included administrator mailbox was not read")
+	}
+}
+
+func TestWorkspaceMailResumeStopsWhenTheApprovalIsRemoved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "engagement.yaml")
+	run := runMailNamed(t, path, false, currentMailboxAuth())
+	if len(run.impersona) == 0 {
+		t.Fatal("the first session did not sign in")
+	}
+	manifest, err := os.ReadFile(filepath.Join(run.dir, "run.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), `"mailbox_approvals"`) || !strings.Contains(string(manifest), `"by": "CTO"`) {
+		t.Fatal("the session did not record the approval it acted under")
+	}
+	before := len(run.impersona)
+	if err := os.WriteFile(path, []byte(fmt.Sprintf(workspaceMailFile, "")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := engagement.OpenRun(run.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	prior, err := engagement.LoadPrior(reopened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, raw, err := prior.LoadEngagement(inventoryOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engagement.Run(context.Background(), again, engagement.RunOptions{
+		Raw: raw, Dir: reopened, Resume: prior, Started: prior.Manifest.Started,
+		Session: time.Now(), Version: "e6-step6", NewGate: run.h.Build,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(run.impersona) != before {
+		t.Fatalf("resume signed in as %v", run.impersona[before:])
 	}
 }

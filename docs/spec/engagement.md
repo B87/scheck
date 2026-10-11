@@ -94,6 +94,10 @@ Not asked, and why:
 - **Accepted risks.** Nobody can name a finding id before seeing a report. The report
   prints a ready-to-paste `accepted_risks` entry under each finding; risks are accepted
   at the readout, as in practice, and the next run reads them.
+- **Mailbox authorization.** `scheck init` does not ask for, write, renew or extend
+  `authorization.mailboxes`. The human operator who approves signing in as staff
+  mailboxes writes the entry by hand; the not-selected readout note explains what to
+  add and who must approve it.
 - **Framework.** Comparing a declared framework with the observed one is not a risk.
   The question returns with probes (0.0.3 G3), where it selects which ones apply.
 - **Hosting.** The roots and tools already say it.
@@ -199,13 +203,18 @@ intent:
       accepted_by: alice
       expires: 2026-12-31
 
-authorization:                        # optional while every probe and scan mode is off
-  by: "CTO, Example Ltd"
-  date: 2026-10-06
+authorization:                        # optional when no probe or scan runs and no mailbox surface is selected
+  by: "CTO, Example Ltd"             # required when the block also has windows, source, note, by or date
+  date: 2026-10-06                   # required when the block also has windows, source, note, by or date
   windows:
     - {from: 2026-10-07T09:00:00+02:00, to: 2026-10-07T18:00:00+02:00}
   source: [203.0.113.10/32]
   note: "Annual self-assessment; contact on-call before any scan."
+  mailboxes:                          # one entry per Workspace asset; both this entry and SCHECK_WORKSPACE_PROFILE gate the surface
+    - asset: google-workspace:example.com  # assets name or root value resolving to saas:google-workspace:*
+      by: "CEO, Example Ltd"         # free text; not a people handle; redacted in the audit log
+      date: 2026-10-06
+      expires: 2027-01-04            # at most 90 days after date; current from start of date through 24:00 on expires
 
 assets:                               # per-asset settings; the key is the name the report uses
   deploy:
@@ -279,9 +288,10 @@ exits 3, and so do two `assets` entries for the same id and an entry for an asse
 `exclude` covers, whose settings could never apply.
 
 In the file, an asset reference (`secrets[].asset`, `data.matters_most[].asset`,
-`accepted_risks[].asset`, the keys of `access.admins`, `access.mfa[].where`) is an
-`assets` name or a root's value exactly as written under `roots`. A reference that
-resolves to neither exits 3. `accepted_risks[].asset` may also be a canonical id that
+`accepted_risks[].asset`, `authorization.mailboxes[].asset`, the keys of `access.admins`,
+`access.mfa[].where`) is an `assets` name or a root's value exactly as written under
+`roots`. A reference that resolves to neither exits 3. `authorization.mailboxes[].asset`
+must additionally resolve to `saas:google-workspace:*` and must not be excluded. `accepted_risks[].asset` may also be a canonical id that
 falls under a declared root and no `exclude`, checked as an intent URL is, since a
 finding on an asset found by discovery (a repository under an organization root) is
 named by its canonical id and must be acceptable as the report prints it. `data.backups[].account` is a declaration, not a
@@ -492,7 +502,10 @@ until the end of that day (24:00) in `engagement.timezone`, which is required. B
 decoded as strings and parsed explicitly (`time.RFC3339`; `2006-01-02` in that zone),
 never through YAML's own time type, which reads a date as UTC start of day and silently
 returns a zero time for some forms. `authorization.windows` is a list; `source` is a list
-of CIDRs.
+of CIDRs. For `authorization.mailboxes[]`, the approval is current from the start of
+`date` through 24:00 on `expires`, both in `engagement.timezone`: `date` may be in the
+future and is accepted at intake, but is not yet current until that day. A `date` in the
+past with an `expires` that has not yet elapsed is current.
 
 **Exposure vocabulary.** One enum, `internet | vpn | lan | localhost | airgapped`. A
 host's `exposure` takes four of them (`internet | vpn | lan | airgapped`,
@@ -588,6 +601,23 @@ it to that list, with none of the target's documented artefacts.
   counts as missing. It needs `subject` when the finding's definition declares a
   subject kind, and may not have one on a non-host id whose definition declares none
   ("Accepted risks" above).
+- `authorization.mailboxes`, when present, is a list. Each entry requires `asset`,
+  `by` and `date` and `expires`; `note` is optional; any other key exits 3. `asset`
+  must resolve to a Workspace root that is not excluded, and at most one entry per asset
+  is allowed. `by` must be non-empty free text; it is not a people handle. `date` is
+  YYYY-MM-DD. `expires` is YYYY-MM-DD, on or after `date` and at most 90 days after it.
+  A missing required field, a bad date, an `expires` before `date` or more than 90 days
+  after it, an asset that resolves to nothing or to a non-Workspace root, an excluded
+  asset, a duplicate asset, or an unknown key exits 3 at intake, before any contact.
+  The block is valid with only `mailboxes` and no `windows`, `source`, `note`, `by` or
+  `date`; in that case `by` and `date` at the top level of `authorization` are not
+  required. When `windows`, `source`, `note`, or top-level `by` or `date` are present,
+  the existing rules for top-level `by`, `date`, `windows` and `source` still apply.
+  `note` on a mailbox entry is optional free text; it does not narrow which mailboxes
+  are signed in as, and there is no skip list. `authorization.mailboxes`
+  holds no credential key, no path to a credential, and no staff address. `scheck init`
+  and `--write-engagement` never emit this key; only the human operator writes, renews
+  or extends it.
 - The operator-facing wording of the people and MFA errors is fixed here, since the
   recon stanza sends operators straight to them: `kind: ""` says "is empty. Say whose
   account this is: employee, contractor, shared, service or break_glass. If you cannot
@@ -709,7 +739,8 @@ meaning, the host collector's run timeout (`host-collector.md §4.4`); `limits.t
 bounds the whole engagement. Context,
 accepted risks and narrowing are not flags: a host that needs them is written into a
 file, and `--write-engagement FILE` writes the in-memory engagement as a starting point,
-contacts nothing and never overwrites a file.
+contacts nothing and never overwrites a file. `--write-engagement` does not emit
+`authorization.mailboxes`; only the human operator writes it.
 So every setting a run used exists as a file the operator can read, diff and resume
 from. The reach flags are accepted only with `--host`.
 

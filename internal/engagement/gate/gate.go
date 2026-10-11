@@ -126,6 +126,10 @@ type Config struct {
 	// Windows are the engagement's authorization windows, which bound
 	// probe and above (docs/spec/scope.md, "Authorization windows").
 	Windows []Window
+	// MailboxApprovals gate signing in as staff mailboxes. The profile
+	// still selects the surface; an entry never adds one
+	// (docs/spec/workspace-collector.md, "Mailbox authorization").
+	MailboxApprovals []MailboxApproval
 	// Prior are the successes of the run being resumed, by identity
 	// (Result.Identity). A request with the same identity is admitted
 	// again through the credential step and answered from it, never sent
@@ -144,14 +148,15 @@ type Config struct {
 
 // Gate sends admitted requests. It is safe for concurrent use.
 type Gate struct {
-	reg      *Registry
-	scope    Scope
-	audit    *policy.Audit
-	redactor *policy.Redactor
-	deadline time.Time
-	windows  []Window
-	prior    map[string]*Response
-	session  int
+	reg              *Registry
+	scope            Scope
+	audit            *policy.Audit
+	redactor         *policy.Redactor
+	deadline         time.Time
+	windows          []Window
+	mailboxApprovals []MailboxApproval
+	prior            map[string]*Response
+	session          int
 	// kept are this session's successes a later resume may reuse, by
 	// identity; reused the identities it answered from Prior.
 	kept   map[string]*Response
@@ -232,7 +237,7 @@ func New(cfg Config) (*Gate, error) {
 		reg: cfg.Registry, scope: cfg.Scope, audit: cfg.Audit, redactor: red,
 		vantage: cfg.Vantage, dnsInputs: cfg.DNSInputs, webInputs: cfg.WebInputs,
 		deadline: cfg.Deadline, getenv: cfg.Getenv,
-		windows: cfg.Windows, prior: cfg.Prior, rules: rulesFingerprint(cfg.Version, cfg.RedactExtra),
+		windows: cfg.Windows, mailboxApprovals: cfg.MailboxApprovals, prior: cfg.Prior, rules: rulesFingerprint(cfg.Version, cfg.RedactExtra),
 		session: cfg.Session, kept: map[string]*Response{}, observations: map[string]Observation{}, reused: map[string]bool{},
 		ua:         UserAgent(cfg.Version),
 		dial:       (&net.Dialer{}).DialContext,
@@ -343,6 +348,10 @@ type Result struct {
 	// refused, authentication or tenant binding gone. A collector reading
 	// one account after another may stop.
 	Repeats bool
+	// MailboxRefusal is set when this read was refused because mailbox
+	// sign-in was not authorized. The collector words it and does not
+	// decide admission.
+	MailboxRefusal *MailboxRefusal
 }
 
 // OK reports whether the read succeeded.

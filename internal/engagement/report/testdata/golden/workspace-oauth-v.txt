@@ -12,7 +12,7 @@ Warning        saas:google-workspace:example.com: The separate token scheck used
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
 Authorization  none recorded. This run only read, with access you already hold; scheck requires a
-               record only for probes and scans.
+               record for probes, scans and signing in as staff mailboxes.
 Handle with care: this report names people, accounts, internal hosts and services, and says where
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
@@ -172,9 +172,10 @@ NOTES FOR THE READOUT
     the password is changed. It needs a Google service account with domain-wide delegation for
     gmail.readonly, which can read every message; most small companies do not have one, and whoever
     manages your Google setup (often your IT provider) would create it. scheck signs in as each
-    active mailbox and reads only its forwarding settings and filters, never a message. Get approval
-    from whoever must approve access to staff mailboxes (often the owner) before turning it on, then
-    run with that service account's key file and SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.
+    active mailbox and reads only its forwarding settings and filters, never a message. Whoever
+    approves access to staff mailboxes must approve it and add authorization.mailboxes (asset, by,
+    date, expires) to the engagement file first, then run with that service account's key file and
+    SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.
 
 FOR AUTOMATION
 Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not

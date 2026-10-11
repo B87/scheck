@@ -6,8 +6,11 @@ binding and inventory through engagement Recon and report integration. Step 3
 implements identity and administrator rules, with offline checks and reviews
 completed on 2026-10-10. Step 4 implements observed 2-step verification offline on
 2026-10-11. Step 5 implements optional OAuth grant metadata offline on 2026-10-11.
-Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. No live
-measurement or release gate is claimed here.
+Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. Step 6 D3
+implements the mailbox-authorization gate offline on 2026-10-11 (owner's decision): the
+profile alone does not admit a mailbox sign-in. The record is
+[eval/e6-mailbox-authorization-2026-10-11.md](../eval/e6-mailbox-authorization-2026-10-11.md).
+No live tenant was contacted, and release gate 11 is not accepted.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -146,18 +149,58 @@ With an `authorized_user` credential every Gmail operation is refused before any
 exchange, remembered as `unavailable:needs_service_account`; a refresh token never
 impersonates a mailbox.
 
-Before each exchange the gate admits the mailbox: the profile selects the surface; the
-credential is a service account; the delegated principal is verified; the tenant is
-bound; the users population is complete; the `{user}` parameter is an admitted current
-id of the bound customer, outside every exclusion, known active (not suspended, not
-archived) and not reported `isMailboxSetup:false`; and the admitted primary address is
-in a verified domain or verified alias of the tenant. The assertion's `sub` is the
-primary address of the gate's own inventory record, never an address a collector or a
-response supplied. An account that is inactive or has no mailbox is refused
-`unavailable:mailbox_inactive`, without being remembered against the surface. The
-exchange is audited under the surface's one operation with the admitted user id as its
-only parameter, never an address, assertion or body, so each Gmail read's audit line
-names the user whose token it used.
+Before each exchange the gate admits the mailbox in this order: the profile selects
+`gmail_forwarding`; a current `authorization.mailboxes` entry for this Workspace asset
+is in the copy loaded for this gate session; the credential is a service account; the
+delegated principal is verified; the tenant is bound; the users population is complete;
+the `{user}` parameter is an admitted current id of the bound customer, outside every
+exclusion, known active (not suspended, not archived) and not reported
+`isMailboxSetup:false`; and the admitted primary address is in a verified domain or
+verified alias of the tenant. The approval is checked on every mailbox read, including
+one that would reuse a cached token, and again when the exchange itself is admitted.
+Both checks use that loaded copy and the gate's clock. They do not re-read the
+engagement file. A missing or not-current entry (`missing`, `expired`,
+`not_yet_current`, `other_asset`) is `refused:mailbox_authorization` with that detail,
+remembered for the surface (`Repeats`), so no subsequent exchange is attempted and no
+mailbox is signed in as. `expired` and `not_yet_current` use the coverage reason
+`unavailable:mailbox_authorization_expired`. `missing` and `other_asset` use
+`unavailable:mailbox_authorization_missing`: an entry for a different Workspace asset
+is not an approval for this one. The loaded entry's `asset` is the canonical id from
+intake (`saas:google-workspace:*`), compared with the request's asset. An admitted exchange and each Gmail read
+sent under it carry `asset`, `by`, `date` and `expires` on the audit line; a refusal
+carries `state` as well. `by` is redacted like any other free-text parameter. The line
+never carries a staff address. The collector words the refusal from those fields.
+
+The assertion's `sub` is the primary address of the gate's own inventory record, never
+an address a collector or a response supplied. An account that is inactive or has no
+mailbox is refused `unavailable:mailbox_inactive`, without being remembered against the
+surface. The exchange is audited under the surface's one operation with the admitted
+user id as its only parameter, never an address, assertion or body, so each Gmail
+read's audit line names the user whose token it used.
+
+**Mailbox authorization.** A gate session loads `authorization.mailboxes` when the
+session starts. A new session, including a resume, reads the engagement file again and
+loads that copy. The running process does not re-read the file. On every mailbox read
+and again on the exchange, the gate checks the loaded entry and the clock. The entry
+is current on `[start of date, 24:00 on expires)` in `engagement.timezone`. A `date`
+in the future is accepted at intake but is not yet current until that day. When the
+approval ends mid-run, the gate drops the surface's cached mailbox tokens and issues
+`refused:mailbox_authorization` with detail `expired`, remembered as `Repeats`. A read
+already holding a credential finishes. Remaining mailboxes are not attempted. This
+mid-run expiry is a coverage gap, not `limit_reached`, and does not exit 2.
+
+A missing or not-current entry produces a named coverage gap:
+`unavailable:mailbox_authorization_missing` (`missing` or `other_asset`) or
+`unavailable:mailbox_authorization_expired` (`expired` or `not_yet_current`; each keeps
+its own detail). A malformed entry exits 3 at intake, before any contact. An entry
+that is expired or not yet current warns before contact, the same kind of warning as
+`no_credentials`, and does not exit 3; Directory reads continue and the mailbox
+surface does not. A missing entry does not warn at intake, because whether the profile
+selects mail is an environment variable, not a fact in the file.
+
+`directory_oauth` does not receive a `mailboxes` entry. Whether it needs one is an
+open owner decision. The consultant recommends no entry, because OAuth does not sign
+in as staff. No owner decision was made. There is no skip list.
 
 Tokens are cached by bound customer and admitted user id, never reused for another
 user, cleared with the binding as above and capped at the baseline token's expiry. The
@@ -168,6 +211,7 @@ Failures are the surface's or one mailbox's:
 
 | Failure | Scope | Classification |
 |---|---|---|
+| Missing, expired, not-yet-current, or other-asset `authorization.mailboxes` entry | surface, remembered | `refused:mailbox_authorization` with detail `missing`, `expired`, `not_yet_current` or `other_asset`; `other_asset` and `missing` use `unavailable:mailbox_authorization_missing`; `expired` and `not_yet_current` use `unavailable:mailbox_authorization_expired` |
 | `invalid_scope`, `unauthorized_client`, `access_denied` at the token endpoint | surface, remembered | `insufficient_permission:gmail.readonly`, gap |
 | Token endpoint rate limit | surface, remembered, never retried | `limit_reached`, exit 2 |
 | Circuit breaker | surface, remembered | `unavailable:credential_exchange`, gap |
@@ -861,10 +905,34 @@ excerpt cross-reference to that person and no further raise.
 
 - not selected: what the check finds, that it needs a service account with domain-wide
   delegation for `gmail.readonly`, which can read every message and which most small
-  companies lack (whoever manages the Google setup creates it), that scheck signs in as
-  each active mailbox and reads only forwarding settings and filters, that the owner or
-  whoever approves access to staff mailboxes should approve first, then
-  `SCHECK_WORKSPACE_PROFILE=` the profile `offers` names;
+  companies lack (whoever manages the Google setup creates it), and that scheck signs
+  in as each active mailbox and reads only forwarding settings and filters. The ending
+  depends on the entry. No entry: whoever approves access to staff mailboxes must
+  approve it and add `authorization.mailboxes` (asset, by, date, expires) to the
+  engagement file first, then run with that service account's key and
+  `SCHECK_WORKSPACE_PROFILE=` the profile `offers` names. A current entry: the file
+  already records a current approval to sign in as mailboxes, then the same run-with
+  sentence, and it does not say to approve first. An entry that exists and is not
+  current: the approval is not current, so scheck will not sign in as mailboxes until
+  it is renewed or its date arrives, then the same run-with sentence. That sentence
+  does not say the approval is already recorded;
+- authorization missing (profile selects the surface; no entry for this asset, or only
+  an entry for another asset): "Mail forwarding not checked: SCHECK_WORKSPACE_PROFILE
+  (set in your environment) asks scheck to sign in as each mailbox, but the engagement
+  file records no approval for <asset>. No mailbox was signed in as. Have whoever
+  approves access to staff mailboxes approve it, add `authorization.mailboxes` (asset,
+  by, date, expires), and run again."
+- authorization expired (profile selects, entry exists but `expires` has passed):
+  "Mail forwarding not checked: the approval by \"<by>\" ended on <expires>. No mailbox
+  was signed in as. Renew the approval and update expires to check it."
+- authorization not yet current: "Mail forwarding not checked: the approval by \"<by>\"
+  starts on <date>. No mailbox was signed in as. Wait until that date, or update the
+  approval, and run again."
+- authorization expired during the run (some mailboxes were signed in as before
+  `expires` was reached in the current session): "Mail forwarding checked for <N> of
+  <M> active mailboxes: the approval ended on <expires> during the run, so scheck
+  stopped signing in as mailboxes. Check the other <M−N> by hand or renew the approval
+  and run again."
 - the surface refused (`needs_service_account`, the permission not granted, every mailbox
   refused by administrator policy, the Gmail API not enabled, the breaker): one sentence of what happened, a next
   step, and that nothing is wrong with the mail settings and nothing else in the run was
@@ -874,9 +942,11 @@ excerpt cross-reference to that person and no further raise.
 - whenever scheck asked Google to act as a mailbox, a `workspace_credential_warning`:
   "No message was opened or read.", "scheck asked Google to sign it in as each of N
   mailboxes" (N counts mailboxes asked, by the reads' `ActedAsMailbox`, not reads that
-  were sent or reused), that the permission could read
-  every message and Google's logs may show the service account acting as each person,
-  that it stays until an administrator removes it, and where;
+  were sent or reused), that the permission could read every message and Google's logs
+  may show the service account acting as each person, that it stays until an
+  administrator removes it, and where. When an entry for the asset is on the
+  collector's context, the warning adds that this was under the approval recorded by
+  "<by>" on <date>, and that scheck did not verify that approval;
 - the limits note: read whole for N of M active mailboxes (lower bound on an incomplete
   list), the unread ones with a reason (permission denied, limit, redacted, unreadable,
   status unknown, Google did not sign in as or serve the mailbox; super administrators

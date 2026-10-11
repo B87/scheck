@@ -625,7 +625,7 @@
       "source": "saas:google-workspace:example.com"
     },
     {
-      "detail": "Mail forwarding was not checked. It finds mailboxes that send copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after the password is changed. It needs a Google service account with domain-wide delegation for gmail.readonly, which can read every message; most small companies do not have one, and whoever manages your Google setup (often your IT provider) would create it. scheck signs in as each active mailbox and reads only its forwarding settings and filters, never a message. Get approval from whoever must approve access to staff mailboxes (often the owner) before turning it on, then run with that service account's key file and SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.",
+      "detail": "Mail forwarding was not checked. It finds mailboxes that send copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after the password is changed. It needs a Google service account with domain-wide delegation for gmail.readonly, which can read every message; most small companies do not have one, and whoever manages your Google setup (often your IT provider) would create it. scheck signs in as each active mailbox and reads only its forwarding settings and filters, never a message. Whoever approves access to staff mailboxes must approve it and add authorization.mailboxes (asset, by, date, expires) to the engagement file first, then run with that service account's key file and SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.",
       "kind": "workspace_inventory",
       "source": "saas:google-workspace:example.com"
     }

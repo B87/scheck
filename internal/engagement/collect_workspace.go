@@ -3,9 +3,12 @@ package engagement
 import (
 	"cmp"
 	"context"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/engagement/gate"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 )
 
@@ -19,6 +22,16 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 		return ra
 	}
 	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
+	if auth := r.res.Authorization; auth != nil {
+		for _, m := range auth.Mailboxes {
+			if m.ID() == a.ID {
+				from, until := mailboxSpan(m.Date, m.Expires, r.res.loc)
+				now := time.Now()
+				view.MailApproval = &workspace.MailApproval{By: m.By, Date: m.Date, Expires: m.Expires, Current: !now.Before(from) && now.Before(until)}
+				break
+			}
+		}
+	}
 	view.ExpectedAdmins, view.AdminsDeclared = r.res.AdminsFor(a.ID)
 	view.MFA, view.MFASource = r.res.MFAFor(a.ID)
 	for _, b := range r.res.Assets {
@@ -75,6 +88,29 @@ func (r *run) workspaceReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			}
 		}
 	}
+}
+
+// mailSignedIn reports whether the Workspace profile selected mail forwarding
+// for asset, whether that profile is known, and how many mailboxes this run
+// asked Google to act as.
+func (r *run) mailSignedIn(asset string) (selected, known bool, n int) {
+	if r.recon == nil {
+		return false, false, 0
+	}
+	for _, ra := range r.recon.Assets {
+		if ra.ID != asset || ra.Workspace == nil {
+			continue
+		}
+		ev := ra.Workspace
+		known = ev.Binding.Profile != ""
+		selected = slices.Contains(ev.Binding.Surfaces, gate.WorkspaceGmailForwarding)
+		for _, m := range ev.Mail.Accounts {
+			if m.AutoRead.ActedAs || m.FiltersRead.ActedAs {
+				n++
+			}
+		}
+	}
+	return selected, known, n
 }
 
 // Attribution is copied as identity evidence, without guessing a person's kind.

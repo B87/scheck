@@ -551,12 +551,6 @@ func (g *Gate) workspaceOptionalCredential(ctx context.Context, p *pending, sess
 	if !slices.Contains(surface.profiles, source.profile) {
 		return nil, &halt{decision: "unavailable:profile_not_selected", detail: "The selected Workspace profile does not include this optional read", sticky: true}
 	}
-	if surface.mailbox && source.kind != "service_account" {
-		return nil, &halt{decision: "unavailable:needs_service_account", detail: "Mail settings are read only through a service account with domain-wide delegation", sticky: true}
-	}
-	if source.kind == "service_account" && session.principal == "" {
-		return nil, &halt{decision: "unavailable:principal_unknown", detail: "The delegated account must be verified before an optional permission is requested", sticky: true}
-	}
 	if session.optional == nil {
 		session.optional = map[WorkspaceSurface]*workspaceOptional{}
 	}
@@ -564,6 +558,26 @@ func (g *Gate) workspaceOptionalCredential(ctx context.Context, p *pending, sess
 	if opt == nil {
 		opt = &workspaceOptional{tokens: map[string]*workspaceToken{}}
 		session.optional[p.op.Surface] = opt
+	}
+	// Profile, then the approval, then the existing mailbox admission.
+	// Checked on every read, including one that would reuse a cached token
+	// (docs/spec/workspace-collector.md, "Mailbox authorization").
+	if surface.mailbox {
+		ap, h := g.mailboxDecision(p.r.Asset)
+		if h != nil {
+			opt.failure = h
+			return nil, h
+		}
+		if opt.failure != nil && opt.failure.decision == "refused:mailbox_authorization" {
+			opt.failure = nil
+		}
+		p.approved = ap
+	}
+	if surface.mailbox && source.kind != "service_account" {
+		return nil, &halt{decision: "unavailable:needs_service_account", detail: "Mail settings are read only through a service account with domain-wide delegation", sticky: true}
+	}
+	if source.kind == "service_account" && session.principal == "" {
+		return nil, &halt{decision: "unavailable:principal_unknown", detail: "The delegated account must be verified before an optional permission is requested", sticky: true}
 	}
 	if opt.failure != nil {
 		h := *opt.failure

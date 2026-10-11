@@ -62,6 +62,10 @@ type Session struct {
 	// it ended; Ended says it lived to record the last of it.
 	Egress *ereport.EgressInput `json:"egress,omitempty"`
 	Ended  bool                 `json:"ended"`
+	// MailboxApprovals is the approval each Workspace asset's mailbox
+	// sign-in was sent under, or absent when this session signed in as none
+	// (docs/spec/runs.md, "Stop and resume").
+	MailboxApprovals []gate.MailboxAuth `json:"mailbox_approvals,omitempty"`
 }
 
 // Prior is what earlier sessions of a run left that a resume may keep.
@@ -267,7 +271,26 @@ func scopeInputs(res *Resolved, version string, at time.Time, vantage ...string)
 		RedactExtra   []string
 		Authorization *Authorization
 		FirstParty    []any
-	}{version, vantage, res.Roots, res.Exclude, res.Defaults, res.Assets, res.RedactExtra(), res.Authorization, evidence})
+	}{version, vantage, res.Roots, res.Exclude, res.Defaults, res.Assets, res.RedactExtra(), scopeAuthorization(res.Authorization), evidence})
+}
+
+// scopeAuthorization is the authorization block Scope's fingerprint reads.
+// Mailbox approvals are not part of it: Scope does not read them, and
+// changing one must not re-run Scope. The gate re-reads the current entry
+// on every session (docs/spec/runs.md, "Stop and resume").
+func scopeAuthorization(a *Authorization) *Authorization {
+	if a == nil {
+		return nil
+	}
+	if len(a.Mailboxes) == 0 {
+		return a
+	}
+	copy := *a
+	copy.Mailboxes = nil
+	if copy.By == "" && copy.Date == "" && len(copy.Windows) == 0 && len(copy.Source) == 0 && copy.Note == "" {
+		return nil
+	}
+	return &copy
 }
 
 // complete says Scope found no gap a resume should try to close: every
@@ -403,6 +426,9 @@ func (r *run) saveManifest() error {
 func (r *run) closeSession() {
 	s := &r.manifest.Sessions[len(r.manifest.Sessions)-1]
 	s.Egress, s.Ended = r.sessionEgress(), true
+	if r.gate != nil {
+		s.MailboxApprovals = r.gate.MailboxApprovalsUsed()
+	}
 	if err := r.saveManifest(); err != nil {
 		r.o.Log("run directory: %s: %v", manifestFile, err)
 	}

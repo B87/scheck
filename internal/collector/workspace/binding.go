@@ -64,6 +64,9 @@ type Read struct {
 	Repeats bool `json:"repeats,omitempty"`
 	// ActedAs says the gate signed in as this read's mailbox for it.
 	ActedAs bool `json:"acted_as,omitempty"`
+	// Auth is set when the gate refused the read because mailbox sign-in
+	// was not authorized. It is not persisted: the report words it.
+	Auth *gate.MailboxRefusal `json:"-"`
 }
 
 // Sender is the collector's only access to the gate.

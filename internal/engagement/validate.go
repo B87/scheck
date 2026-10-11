@@ -1005,9 +1005,15 @@ func (v *validator) authorization() {
 	if a == nil {
 		return
 	}
-	v.required("authorization.by", a.By)
-	if v.required("authorization.date", a.Date) {
-		v.date("authorization.date", a.Date)
+	// by and date stay required for the probe declaration. A block that
+	// holds only mailboxes does not need them
+	// (docs/spec/engagement.md, "Validation").
+	probe := len(a.Windows) > 0 || len(a.Source) > 0 || a.Note != "" || a.By != "" || a.Date != ""
+	if len(a.Mailboxes) == 0 || probe {
+		v.required("authorization.by", a.By)
+		if v.required("authorization.date", a.Date) {
+			v.date("authorization.date", a.Date)
+		}
 	}
 	for i, w := range a.Windows {
 		key := fmt.Sprintf("authorization.windows[%d]", i)
@@ -1024,6 +1030,92 @@ func (v *validator) authorization() {
 			v.fail(key, "%q is not a CIDR network such as 203.0.113.10/32", s)
 		}
 	}
+	v.mailboxApprovals()
+}
+
+// mailboxApprovals checks authorization.mailboxes. Each asset is a Workspace
+// root, named once. expires is on or after date and at most 90 days after it.
+func (v *validator) mailboxApprovals() {
+	a := v.f.Authorization
+	if a == nil {
+		return
+	}
+	seen := map[string]string{}
+	for i := range a.Mailboxes {
+		m := &a.Mailboxes[i]
+		key := fmt.Sprintf("authorization.mailboxes[%d]", i)
+		v.required(key+".by", m.By)
+		id, ok := v.tenantRef(key+".asset", m.Asset)
+		if ok && !strings.HasPrefix(id, "saas:google-workspace:") {
+			v.fail(key+".asset", "%s is not a Google Workspace tenant", id)
+			ok = false
+		}
+		if ok {
+			if first, dup := seen[id]; dup {
+				v.fail(key+".asset", "names the same Workspace tenant as %s", first)
+			}
+			seen[id] = key
+			r, parsed := ParseID(id)
+			if parsed {
+				if ex := slices.IndexFunc(v.excludes, func(x Ref) bool { return Excludes(x, r) }); ex >= 0 {
+					v.fail(key+".asset", "%s is excluded by %s, so scheck does not sign in as its mailboxes", r.ID, v.excludes[ex].ID)
+				}
+			}
+			m.id = id
+		}
+		dateOK := v.required(key+".date", m.Date)
+		expOK := v.required(key+".expires", m.Expires)
+		if dateOK {
+			v.date(key+".date", m.Date)
+		}
+		if expOK {
+			v.date(key+".expires", m.Expires)
+		}
+		if !dateOK || !expOK || v.loc == nil {
+			continue
+		}
+		start, errS := time.ParseInLocation("2006-01-02", m.Date, v.loc)
+		exp, errE := time.ParseInLocation("2006-01-02", m.Expires, v.loc)
+		if errS != nil || errE != nil {
+			continue // date() already reported the form
+		}
+		if exp.Before(start) {
+			v.fail(key+".expires", "must be on or after date")
+		} else if exp.After(start.AddDate(0, 0, 90)) {
+			v.fail(key+".expires", "must be at most 90 days after date")
+		}
+	}
+}
+
+// mailboxSpan is the approval's current interval: from the start of date
+// through 24:00 on expires, in the engagement's zone. until is exclusive.
+func mailboxSpan(date, expires string, loc *time.Location) (from, until time.Time) {
+	if loc == nil {
+		loc = time.UTC
+	}
+	from, _ = time.ParseInLocation("2006-01-02", date, loc)
+	exp, _ := time.ParseInLocation("2006-01-02", expires, loc)
+	return from, exp.AddDate(0, 0, 1)
+}
+
+// mailboxWarnings names an approval that is not current, before any contact.
+func mailboxWarnings(a *Authorization, loc *time.Location) []string {
+	if a == nil || loc == nil {
+		return nil
+	}
+	now := time.Now().In(loc)
+	var out []string
+	for _, m := range a.Mailboxes {
+		from, until := mailboxSpan(m.Date, m.Expires, loc)
+		asset := m.ID()
+		switch {
+		case now.Before(from):
+			out = append(out, fmt.Sprintf("Mailbox approval for %s starts on %s; mail forwarding will not be checked until then.", asset, m.Date))
+		case !now.Before(until):
+			out = append(out, fmt.Sprintf("Mailbox approval for %s ended on %s; mail forwarding will not be checked.", asset, m.Expires))
+		}
+	}
+	return out
 }
 
 // words writes a subject kind as an operator reads it ("oauth_app" as

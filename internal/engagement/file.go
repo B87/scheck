@@ -186,13 +186,37 @@ type AcceptedRisk struct {
 }
 
 // Authorization is the operator's declaration of who approved probes and
-// scans, when, and from where (docs/spec/scope.md, "Authorization").
+// scans, when, and from where, and who approved signing in as staff
+// mailboxes (docs/spec/scope.md, "Authorization").
 type Authorization struct {
-	By      string   `yaml:"by,omitempty" json:"by,omitempty"`
-	Date    string   `yaml:"date,omitempty" json:"date,omitempty"`
-	Windows []Window `yaml:"windows,omitempty" json:"windows,omitempty"`
-	Source  []string `yaml:"source,omitempty" json:"source,omitempty"`
-	Note    string   `yaml:"note,omitempty" json:"note,omitempty"`
+	By        string            `yaml:"by,omitempty" json:"by,omitempty"`
+	Date      string            `yaml:"date,omitempty" json:"date,omitempty"`
+	Windows   []Window          `yaml:"windows,omitempty" json:"windows,omitempty"`
+	Source    []string          `yaml:"source,omitempty" json:"source,omitempty"`
+	Note      string            `yaml:"note,omitempty" json:"note,omitempty"`
+	Mailboxes []MailboxApproval `yaml:"mailboxes,omitempty" json:"mailboxes,omitempty"`
+}
+
+// MailboxApproval records who approved signing in as the mailboxes of one
+// Workspace tenant. It holds no credential and no address the gate impersonates
+// (docs/spec/engagement.md, "Validation"). id is the canonical asset, set
+// when the file is validated.
+type MailboxApproval struct {
+	Asset   string `yaml:"asset,omitempty" json:"asset,omitempty"`
+	By      string `yaml:"by,omitempty" json:"by,omitempty"`
+	Date    string `yaml:"date,omitempty" json:"date,omitempty"`
+	Expires string `yaml:"expires,omitempty" json:"expires,omitempty"`
+	Note    string `yaml:"note,omitempty" json:"note,omitempty"`
+	id      string `yaml:"-" json:"-"`
+}
+
+// ID is the canonical Workspace asset this entry approves, empty before
+// validation.
+func (m MailboxApproval) ID() string {
+	if m.id != "" {
+		return m.id
+	}
+	return m.Asset
 }
 
 // Window is one authorization window, RFC 3339 with seconds and an offset.

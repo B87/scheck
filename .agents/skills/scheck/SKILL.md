@@ -233,8 +233,20 @@ verification: relay the selection note (a dedicated credential), never suggest a
 it to the everyday one, and relay the separate token's `workspace_credential_warning`.
 Mail forwarding is read only under `SCHECK_WORKSPACE_PROFILE=directory_mail` (or
 `directory_oauth_mail`) with a service account whose domain-wide delegation includes
-`gmail.readonly`: scheck signs in as each active mailbox and reads its automatic
-forwarding setting and filters, never a message. `workspace.external_forwarding` is one
+`gmail.readonly`, and only when the engagement file has a current
+`authorization.mailboxes` entry for that Workspace asset (`asset`, `by`, `date`,
+`expires` at most 90 days after `date`). The environment variable selects the profile;
+the entry records the approval. Neither alone admits a mailbox sign-in. An agent never
+writes, renews or extends that entry: only the human operator does. scheck signs in as
+each active mailbox and reads its automatic forwarding setting and filters, never a
+message. A missing entry, an entry for a different Workspace asset, an expired entry and a
+not-yet-current entry are coverage gaps (`unavailable:mailbox_authorization_missing`
+for a missing entry and for another asset, `unavailable:mailbox_authorization_expired`
+otherwise), not exit 3. The coverage note says no mailbox was signed in as. A missing
+entry prints no mailbox line in the header. A malformed entry exits 3 at intake,
+before any contact. An expired or not-yet-current entry warns before contact and does
+not exit 3. A missing entry does not warn at intake.
+`workspace.external_forwarding` is one
 finding per mailbox and outside destination (subject `mail_forward`, key `<account> ->
 <address>`), `+1 attribute:admin` on a super administrator's mailbox; disproval is
 per mailbox under `<account> -> none`. It sits in the email row, "Workspace mail

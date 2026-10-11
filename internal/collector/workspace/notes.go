@@ -57,7 +57,7 @@ func ReadNotes(read Read, asset string) []Note {
 // readout: administrative and 2-step verification notes beside the rules.
 func Readout(e Evidence, asset string, c Context) []Note {
 	views := accountViews(e, c, attribute(asset, e.Users.Items, c.People, e.Users.Complete))
-	return slices.Concat(accessNotes(e, asset, c), twoStepNotes(e, asset, c), oauthNotes(e, asset, views), mailNotes(e, asset, views))
+	return slices.Concat(accessNotes(e, asset, c), twoStepNotes(e, asset, c), oauthNotes(e, asset, views), mailNotes(e, asset, views, c.MailApproval))
 }
 
 // accessNotes owns interpretation and readout wording beside the rules.

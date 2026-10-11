@@ -55,7 +55,26 @@
             "date": { "type": "string" },
             "windows": { "type": "array", "items": { "$ref": "#/$defs/span" } },
             "source": { "type": "array", "items": { "type": "string" } },
-            "note": { "type": "string" }
+            "note": { "type": "string" },
+            "mailboxes": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["asset", "by", "date", "expires", "used", "unused", "signed_in"],
+                "properties": {
+                  "asset": { "type": "string" },
+                  "by": { "type": "string" },
+                  "date": { "type": "string" },
+                  "expires": { "type": "string" },
+                  "used": { "type": "boolean" },
+                  "unused": { "type": "boolean" },
+                  "ended": { "type": "boolean" },
+                  "not_yet": { "type": "boolean" },
+                  "unobserved": { "type": "boolean" },
+                  "signed_in": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
           }
         },
         "principal_changes": { "type": "array", "items": { "type": "object", "required": ["asset", "from", "to"], "additionalProperties": false, "properties": { "asset": { "$ref": "#/$defs/asset_id" }, "from": { "type": "string" }, "to": { "type": "string" } } } },

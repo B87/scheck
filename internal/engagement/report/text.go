@@ -190,24 +190,63 @@ func (t *text) header() {
 	}
 	t.field("", "Method", 15, "rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only: "+
 		"nothing was probed, scanned, exploited or changed. Not a penetration test.")
-	auth := "none recorded. This run only read, with access you already hold; scheck requires a record only for probes and scans."
+	auth := "none recorded. This run only read, with access you already hold; scheck requires a record for probes, scans and signing in as staff mailboxes."
 	if a := e.Authorization; a != nil {
-		auth = "by " + clean(a.By) + " on " + clean(a.Date) + "."
-		for _, w := range a.Windows {
-			auth += " Window " + w.From.In(t.zone).Format("2006-01-02 15:04") + " to " + w.To.In(t.zone).Format("2006-01-02 15:04") + "."
+		if a.By != "" || a.Date != "" || len(a.Windows) > 0 || len(a.Source) > 0 || a.Note != "" {
+			auth = "by " + clean(a.By) + " on " + clean(a.Date) + "."
+			for _, w := range a.Windows {
+				auth += " Window " + w.From.In(t.zone).Format("2006-01-02 15:04") + " to " + w.To.In(t.zone).Format("2006-01-02 15:04") + "."
+			}
+			if len(a.Source) > 0 {
+				auth += " From " + clean(strings.Join(a.Source, ", ")) + "."
+			}
+			if a.Note != "" {
+				auth += " " + clean(a.Note)
+			}
+			auth += " Levels used: " + orNone(strings.Join(e.Method.LevelsUsed, ", ")) + ". Probe off, scan off."
+		} else {
+			auth = ""
 		}
-		if len(a.Source) > 0 {
-			auth += " From " + clean(strings.Join(a.Source, ", ")) + "."
+		for _, m := range a.Mailboxes {
+			if line := mailboxHeader(m, e.Timezone); line != "" {
+				if auth != "" {
+					auth += " "
+				}
+				auth += line
+			}
 		}
-		if a.Note != "" {
-			auth += " " + clean(a.Note)
+		if auth == "" {
+			auth = "none recorded. This run only read, with access you already hold; scheck requires a record for probes, scans and signing in as staff mailboxes."
 		}
-		auth += " Levels used: " + orNone(strings.Join(e.Method.LevelsUsed, ", ")) + ". Probe off, scan off."
 	}
 	t.field("", "Authorization", 15, auth)
 	t.hang("", "", "Handle with care: this report names people, accounts, internal hosts and services, and says where "+
 		"weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your customers.")
 	t.blank()
+}
+
+func mailboxHeader(m MailboxReport, zone string) string {
+	decl := " This is your declaration; scheck did not verify it."
+	switch {
+	case m.Used && m.SignedIn == 0:
+		return fmt.Sprintf("Mailbox settings: approved by %q on %s, until %s (%s), for %s. No mailbox was signed in as.%s", m.By, m.Date, m.Expires, zone, m.Asset, decl)
+	case m.Used:
+		n := "mailboxes"
+		if m.SignedIn == 1 {
+			n = "mailbox"
+		}
+		return fmt.Sprintf("Mailbox settings: approved by %q on %s, until %s (%s), for %s. scheck signed in as %d %s to read forwarding settings and filters only.%s", m.By, m.Date, m.Expires, zone, m.Asset, m.SignedIn, n, decl)
+	case m.Unused:
+		return fmt.Sprintf("Mailbox settings: approved by %q on %s, until %s; not used: the Workspace profile did not select mail forwarding.%s", m.By, m.Date, m.Expires, decl)
+	case m.NotYet:
+		return fmt.Sprintf("Mailbox settings: the approval by %q starts on %s, for %s. No mailbox was signed in as.%s", m.By, m.Date, m.Asset, decl)
+	case m.Ended:
+		return fmt.Sprintf("Mailbox settings: the approval by %q ended on %s, for %s. No mailbox was signed in as.%s", m.By, m.Expires, m.Asset, decl)
+	case m.Unobserved:
+		return fmt.Sprintf("Mailbox settings: approved by %q on %s, until %s (%s), for %s. Workspace was not read, so scheck did not sign in as mailboxes.%s", m.By, m.Date, m.Expires, zone, m.Asset, decl)
+	default:
+		return ""
+	}
 }
 
 // --- run status -------------------------------------------------------------
@@ -738,45 +777,47 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			return "Workspace inventory was not completed; see inventory notes for the affected reads"
 		}
 		if detail, ok := map[string]string{
-			"not_read":                 "the required read was not collected",
-			"vantage_unknown":          "restricted pages were not checked for outside reachability: no --vantage given",
-			"vantage_inside":           "restricted pages were not checked for outside reachability: you declared this run came from inside your network",
-			"audience_internet":        "the declared audience is internet, so no restriction contradiction was judged",
-			"login_flow":               "the login flow was not read, so session cookies were not fully checked",
-			"web_evidence":             "some web-response checks could not reach a decision",
-			"github_evidence":          "required GitHub authority, visibility, context or recognized evidence was missing",
-			"tls_interception":         "your network inspects TLS, so certificates were not judged",
-			"certificate_unclassified": "certificate verification failed without a recognized cause",
-			"certificate":              "the HTTPS certificate could not be verified",
-			"tls_handshake":            "the TLS handshake did not give sufficient evidence",
-			"takeover":                 "the takeover candidate subsumes this certificate check",
-			"response_shape":           "the response format or incomplete body prevented this check",
-			"security_txt":             "the contact file had no recognized current expiry or valid retrieval scope",
-			"http_status":              "the HTTP status did not give usable evidence",
-			"blocked":                  "a protection service blocked this read",
-			"redirect_not_entry_point": "the redirect could not be followed within the declared entry points",
-			"dkim_selector":            "DKIM was not checked: no selector given",
-			"mail_senders":             "SPF was not compared with declared senders: none were listed",
-			"mail_use":                 "mail use could not be established from the declaration or DNS evidence",
-			"mail_evidence":            "email evidence was not judged",
-			"dmarc_parent":             "inherited DMARC is unknown: the organizational-domain policy was not read",
-			"dmarc_descendants":        "descendant policies were not assessed for a non-organizational domain",
-			"dmarc_existence":          "inherited np policy is uncertain: whether the domain exists was not established",
-			"dmarc_policy":             "a DMARC policy value was not recognized",
-			"spf_incomplete":           "the relevant SPF include tree was not read completely",
-			"spf_path":                 "earlier SPF denials leave later authorization uncertain",
-			"spf_macro":                "SPF uses macros that require a message sender to evaluate",
-			"dkim_key":                 "the DKIM key could not be parsed or was absent or revoked",
-			"dkim_multiple_keys":       "multiple DKIM keys leave the selector ambiguous",
-			"oauth_unclassified":       "some apps hold scopes this version of scheck does not classify, and none it classifies as broad",
-			"workspace_evidence":       "the Workspace evidence it needs was missing or not recognized",
-			"needs_service_account":    "it needs a service account with domain-wide delegation, and the credential used holds one person's sign-in",
-			"credential_exchange":      "Google did not issue the token this read needs",
-			"mailbox_credential":       "Google did not sign scheck in as some mailboxes",
-			"mailbox_unavailable":      "Google did not serve some mailboxes' settings",
-			"mailbox_inactive":         "the account list did not report the account active with a mailbox",
-			"forwarding_subdomain":     "forwarding to a subdomain that is not itself a domain of this Workspace was not judged",
-			"api_disabled":             "Google has not enabled the API this read needs in the credential's project",
+			"not_read":                      "the required read was not collected",
+			"vantage_unknown":               "restricted pages were not checked for outside reachability: no --vantage given",
+			"vantage_inside":                "restricted pages were not checked for outside reachability: you declared this run came from inside your network",
+			"audience_internet":             "the declared audience is internet, so no restriction contradiction was judged",
+			"login_flow":                    "the login flow was not read, so session cookies were not fully checked",
+			"web_evidence":                  "some web-response checks could not reach a decision",
+			"github_evidence":               "required GitHub authority, visibility, context or recognized evidence was missing",
+			"tls_interception":              "your network inspects TLS, so certificates were not judged",
+			"certificate_unclassified":      "certificate verification failed without a recognized cause",
+			"certificate":                   "the HTTPS certificate could not be verified",
+			"tls_handshake":                 "the TLS handshake did not give sufficient evidence",
+			"takeover":                      "the takeover candidate subsumes this certificate check",
+			"response_shape":                "the response format or incomplete body prevented this check",
+			"security_txt":                  "the contact file had no recognized current expiry or valid retrieval scope",
+			"http_status":                   "the HTTP status did not give usable evidence",
+			"blocked":                       "a protection service blocked this read",
+			"redirect_not_entry_point":      "the redirect could not be followed within the declared entry points",
+			"dkim_selector":                 "DKIM was not checked: no selector given",
+			"mail_senders":                  "SPF was not compared with declared senders: none were listed",
+			"mail_use":                      "mail use could not be established from the declaration or DNS evidence",
+			"mail_evidence":                 "email evidence was not judged",
+			"dmarc_parent":                  "inherited DMARC is unknown: the organizational-domain policy was not read",
+			"dmarc_descendants":             "descendant policies were not assessed for a non-organizational domain",
+			"dmarc_existence":               "inherited np policy is uncertain: whether the domain exists was not established",
+			"dmarc_policy":                  "a DMARC policy value was not recognized",
+			"spf_incomplete":                "the relevant SPF include tree was not read completely",
+			"spf_path":                      "earlier SPF denials leave later authorization uncertain",
+			"spf_macro":                     "SPF uses macros that require a message sender to evaluate",
+			"dkim_key":                      "the DKIM key could not be parsed or was absent or revoked",
+			"dkim_multiple_keys":            "multiple DKIM keys leave the selector ambiguous",
+			"oauth_unclassified":            "some apps hold scopes this version of scheck does not classify, and none it classifies as broad",
+			"workspace_evidence":            "the Workspace evidence it needs was missing or not recognized",
+			"needs_service_account":         "it needs a service account with domain-wide delegation, and the credential used holds one person's sign-in",
+			"credential_exchange":           "Google did not issue the token this read needs",
+			"mailbox_credential":            "Google did not sign scheck in as some mailboxes",
+			"mailbox_unavailable":           "Google did not serve some mailboxes' settings",
+			"mailbox_inactive":              "the account list did not report the account active with a mailbox",
+			"mailbox_authorization_missing": "the engagement file records no approval for signing in as mailboxes for this asset; to check forwarding, have whoever approves access to staff mailboxes approve it, add authorization.mailboxes, and run again",
+			"mailbox_authorization_expired": "the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update expires, or wait until date, and run again",
+			"forwarding_subdomain":          "forwarding to a subdomain that is not itself a domain of this Workspace was not judged",
+			"api_disabled":                  "Google has not enabled the API this read needs in the credential's project",
 		}[arg]; ok {
 			return detail
 		}
@@ -798,7 +839,7 @@ func planReason(reason string) bool {
 	case "insufficient_permission":
 		return strings.Contains(arg, ".")
 	case "unavailable":
-		return slices.Contains([]string{"workspace_evidence", "needs_service_account", "credential_exchange", "mailbox_credential", "mailbox_unavailable", "mailbox_inactive", "forwarding_subdomain", "oauth_unclassified", "api_disabled"}, arg)
+		return slices.Contains([]string{"workspace_evidence", "needs_service_account", "credential_exchange", "mailbox_credential", "mailbox_unavailable", "mailbox_inactive", "mailbox_authorization_missing", "mailbox_authorization_expired", "forwarding_subdomain", "oauth_unclassified", "api_disabled"}, arg)
 	}
 	return false
 }

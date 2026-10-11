@@ -27,25 +27,30 @@ type Entry struct {
 	Principal string            `json:"principal,omitempty"`
 	// Window is the index of the authorization window a probe was
 	// admitted in.
-	Window     *int     `json:"window,omitempty"`
-	Source     string   `json:"source,omitempty"`
-	Decision   string   `json:"decision"`
-	Detail     string   `json:"detail,omitempty"`
-	Status     int      `json:"status,omitempty"`
-	Attempt    int      `json:"attempt,omitempty"`
-	RetryOf    string   `json:"retry_of,omitempty"`
-	RedirectOf string   `json:"redirect_of,omitempty"`
-	NextOf     string   `json:"next_of,omitempty"`
-	Page       int      `json:"page,omitempty"`
-	BytesIn    int64    `json:"bytes_in,omitempty"`
-	Stored     int      `json:"bytes_stored,omitempty"`
-	OutputHash string   `json:"output_sha256,omitempty"`
-	Redactions int      `json:"redactions,omitempty"`
-	Truncated  bool     `json:"truncated,omitempty"`
-	Dropped    []Drop   `json:"dropped,omitempty"`
-	Headers    int      `json:"headers_dropped,omitempty"`
-	Answers    []string `json:"answers,omitempty"`
-	DurationMS int64    `json:"duration_ms,omitempty"`
+	Window *int `json:"window,omitempty"`
+	// MailboxAuthorization is the approval a mailbox sign-in was admitted
+	// under, or the reason it was refused. It names who approved and the
+	// expiry, never a staff address
+	// (docs/spec/workspace-collector.md, "Mailbox authorization").
+	MailboxAuthorization *MailboxAuth `json:"mailbox_authorization,omitempty"`
+	Source               string       `json:"source,omitempty"`
+	Decision             string       `json:"decision"`
+	Detail               string       `json:"detail,omitempty"`
+	Status               int          `json:"status,omitempty"`
+	Attempt              int          `json:"attempt,omitempty"`
+	RetryOf              string       `json:"retry_of,omitempty"`
+	RedirectOf           string       `json:"redirect_of,omitempty"`
+	NextOf               string       `json:"next_of,omitempty"`
+	Page                 int          `json:"page,omitempty"`
+	BytesIn              int64        `json:"bytes_in,omitempty"`
+	Stored               int          `json:"bytes_stored,omitempty"`
+	OutputHash           string       `json:"output_sha256,omitempty"`
+	Redactions           int          `json:"redactions,omitempty"`
+	Truncated            bool         `json:"truncated,omitempty"`
+	Dropped              []Drop       `json:"dropped,omitempty"`
+	Headers              int          `json:"headers_dropped,omitempty"`
+	Answers              []string     `json:"answers,omitempty"`
+	DurationMS           int64        `json:"duration_ms,omitempty"`
 }
 
 // record writes an entry; a send line that cannot be written stops the
@@ -69,6 +74,11 @@ func (g *Gate) record(e Entry) error {
 	// DestIP too: the resolver's address, or one dialled, which the gate
 	// refuses when redact_extra matches it.
 	e.URL, e.Detail, e.DestIP = red(e.URL), red(e.Detail), red(e.DestIP)
+	if e.MailboxAuthorization != nil {
+		a := *e.MailboxAuthorization
+		a.Asset, a.By, a.Date, a.Expires = red(a.Asset), red(a.By), red(a.Date), red(a.Expires)
+		e.MailboxAuthorization = &a
+	}
 	// Answers are not: each is built from parts already redacted one by
 	// one (auditAnswer), and a second pass would redact their markers again.
 	if e.Event == "result" || e.Event == "dns_answer" || e.Event == "mirror" {
