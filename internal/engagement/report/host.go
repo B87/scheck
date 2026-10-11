@@ -77,7 +77,7 @@ func (v *hostView) reason(a finding.Assessment) ReasonDetail {
 	// A reason prefixed "with-" is the rule's second check's: coverage names
 	// that check, not the one that ran.
 	if r, ok := strings.CutPrefix(a.Reason, finding.ReasonWith); ok && a.With != "" {
-		a.Check, a.Observation, a.Reason = a.With, a.WithObservation, r
+		a.Check, a.Reason = a.With, r
 	}
 	code, rc, _ := strings.Cut(a.Reason, ":")
 	fact := v.env.Facts[a.Check]
