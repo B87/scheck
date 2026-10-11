@@ -472,20 +472,27 @@ func (t *text) summary() {
 	var s strings.Builder
 	s.WriteString("A short list is not a clean bill of health. scheck reports only what its rules could decide.")
 	if len(checked) > 0 {
-		s.WriteString(" Checked: " + lowerAll(checked) + ".")
+		s.WriteString(" Checked: ")
+		s.WriteString(lowerAll(checked))
+		s.WriteString(".")
 	}
 	if len(part) > 0 {
-		s.WriteString(" Checked in part: " + lowerAll(part) + ".")
+		s.WriteString(" Checked in part: ")
+		s.WriteString(lowerAll(part))
+		s.WriteString(".")
 	}
 	for _, h := range t.hostAreas() {
-		s.WriteString(" " + h.sentence())
+		s.WriteString(" ")
+		s.WriteString(h.sentence())
 	}
 	switch {
 	case len(notChecked)+len(folded) == 0:
 	case t.r.Engagement.BuiltFrom == "host" && len(notChecked) == 0:
 		s.WriteString(" Nothing but this host was looked at.")
 	default:
-		s.WriteString(" Not checked: " + lowerAll(append(append([]string{}, notChecked...), folded...)) + ".")
+		s.WriteString(" Not checked: ")
+		s.WriteString(lowerAll(append(append([]string{}, notChecked...), folded...)))
+		s.WriteString(".")
 	}
 	if len(na) > 0 {
 		s.WriteString(" Not applicable, as you declared: ")
@@ -1160,15 +1167,25 @@ func (t *text) findingBlock(n int, f Finding) {
 	var sev strings.Builder
 	sev.WriteString(f.Severity)
 	if len(f.Adjustments) > 0 {
-		sev.WriteString(": base " + f.SeverityBase)
+		sev.WriteString(": base ")
+		sev.WriteString(f.SeverityBase)
 	}
 	for _, a := range f.Adjustments {
-		sev.WriteString(", " + a.Delta + " " + strings.NewReplacer(":", " ", "_", " ").Replace(a.Rule))
+		sev.WriteString(", ")
+		sev.WriteString(a.Delta)
+		sev.WriteString(" ")
+		sev.WriteString(strings.NewReplacer(":", " ", "_", " ").Replace(a.Rule))
 		switch {
 		case a.Source.Key != "":
-			sev.WriteString(" (" + clean(a.Source.Key) + ")")
+			sev.WriteString(" (")
+			sev.WriteString(clean(a.Source.Key))
+			sev.WriteString(")")
 		case a.Source.Observation != "":
-			sev.WriteString(" (" + clean(a.Source.Observation) + ": " + clean(a.Source.Excerpt) + ")")
+			sev.WriteString(" (")
+			sev.WriteString(clean(a.Source.Observation))
+			sev.WriteString(": ")
+			sev.WriteString(clean(a.Source.Excerpt))
+			sev.WriteString(")")
 		}
 	}
 	t.field(in, "Severity", col, sev.String())

@@ -23,7 +23,7 @@ import (
 
 func writeMirrorObject(t *testing.T, root, kind string, data []byte) string {
 	t.Helper()
-	raw := append([]byte(fmt.Sprintf("%s %d\x00", kind, len(data))), data...)
+	raw := append(fmt.Appendf(nil, "%s %d\x00", kind, len(data)), data...)
 	sum := sha1.Sum(raw)
 	id := hex.EncodeToString(sum[:])
 	var compressed bytes.Buffer
@@ -73,7 +73,7 @@ func TestGitHubHistoryRunRedactionAuditAndFreshResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	head := writeMirrorCommit(t, root, "ordinary control text")
-	raw := []byte(fmt.Sprintf("schema: 1\nengagement: {name: history, operator: alice, timezone: UTC, trigger: routine}\nroots: [{repo: 'github:acme/shop'}]\nassets:\n  shop: {repo: 'github:acme/shop', public: true, checkout: %q}\npeople:\n  alice: {kind: employee, github: [alice]}\n", root))
+	raw := fmt.Appendf(nil, "schema: 1\nengagement: {name: history, operator: alice, timezone: UTC, trigger: routine}\nroots: [{repo: 'github:acme/shop'}]\nassets:\n  shop: {repo: 'github:acme/shop', public: true, checkout: %q}\npeople:\n  alice: {kind: employee, github: [alice]}\n", root)
 	opts := inventoryOptions()
 	opts.KnownFinding = finding.Known
 	opts.FindingSubject = func(id string) string { return string(finding.SubjectOf(id)) }
