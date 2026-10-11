@@ -1050,10 +1050,11 @@ assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-st
   codes in coverage text; the acceptance template for a unit that covers every
   account; duplicate per-read `Observed` lines; "(as unknown)" principal wording; `-v`
   adds nothing for Workspace; generic `no_rule` phrasing.
-- *Modularity follow-ups, not yet assigned to a slice:* F1 GitHub MFA readout notes live
-  in engagement rather than the GitHub collector; F2 coverage groups and their limits
-  should be registered by collectors; F3 a typed `access.mfa` declaration vocabulary;
-  F4 a collector-supplied asset status sentence.
+- *Modularity follow-ups:* F2 coverage groups and their limits registered by collectors,
+  and F4 a collector-supplied asset status sentence, are done for Workspace on
+  2026-10-11; their GitHub and web remainders are listed in "Carried from step 5".
+  Not yet assigned to a slice: F1 GitHub MFA readout notes live in engagement rather
+  than the GitHub collector; F3 a typed `access.mfa` declaration vocabulary.
 
 **Carried from step 5** (consultant DEFINE and REVIEW, client REPORT and modularity
 assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-verification-2026-10-11.md)):
@@ -1069,6 +1070,32 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
   duplicated in the collector's note and the report's coverage group, and the
   `oauth_unclassified` collapse and its reason phrase live in the report; F4 the asset
   status sentence and the limit scan in `collect_workspace.go` belong to the collector.
+  **Done for Workspace 2026-10-11, offline:** `finding.CoveragePlan` is a collector's
+  coverage for one asset in one area, and `Judgment.Decided` (not abstained, no
+  reason) is the stricter definition GitHub already used. `workspace.Evidence.Coverage()`
+  words every group, limit, gap, not-on-plan entry, collapse and the delegation
+  sub-item; the report's generic `planCoverage` holds the marking rules and composes
+  the row's reason ([spec/report.md](spec/report.md), "Coverage").
+  `AssetInput.Coverage` replaces `JudgmentEvidenceIncomplete` and `NotOnPlan`;
+  `PopulationIncomplete` stays the asset's switch. The OAuth limit sentence is one
+  constant for the readout note and the coverage detail; the
+  `unavailable:oauth_unclassified` phrase stays in the report's reason vocabulary
+  ("Reason wording" owns every phrase). `workspace.Evidence.Outcome()` holds the status
+  sentence and the limit scan; the engagement maps it and keeps the credential-warning
+  log. The modularity design review before code settled that plans carry an area, so
+  GitHub can migrate one area at a time, and that the report, not the collector,
+  composes the row. `make check` is green; every golden is unchanged but the OAuth
+  limits detail in `workspace-oauth.json`, which gained "(they may not appear as a
+  person's grant)" from the shared sentence.
+- *Modularity remainder, not yet assigned to a slice:* F2 for GitHub, whose families
+  per area live in `internal/engagement/report/github.go` (its abstention detail is the
+  subject label alone, where `planCoverage` adds the first "Not checked" line, so a
+  migration changes wording), and for the web collector's `judgedFamilies`; F4 for
+  GitHub, whose status logic lives in `internal/engagement/github.go` (`Outcome` would
+  need `refused` and `not_collected`). The Workspace logging-row sentence and the
+  collector display names in `internal/engagement/report/areas.go`, and the
+  inventory-only fallback in `judgedRow` ("Workspace account controls"), stay in the
+  report. F1 and F3 remain unassigned ("Carried from step 4").
 - *Unmeasured assumptions, measured live in step 7:* Google downscopes an
   `authorized_user` refresh carrying `scope` and answers `invalid_scope` for an
   ungranted scope; domain-wide delegation does not appear in `tokens.list`;

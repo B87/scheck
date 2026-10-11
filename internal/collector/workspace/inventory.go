@@ -127,14 +127,14 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 	req := func(op string) gate.Request {
 		return gate.Request{Op: op, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": domain}}
 	}
-	e.Domains = population[Domain](ctx, sender, req(OpDomains), func(v Domain) string { return v.Name }, func(v Domain) bool { return v.Name != "" && v.Verified != nil })
-	e.Aliases = population[Alias](ctx, sender, req(OpAliases), func(v Alias) string { return v.Name }, func(v Alias) bool { return v.Name != "" && v.Parent != "" && v.Verified != nil })
-	e.Units = population[Unit](ctx, sender, req(OpUnits), func(v Unit) string { return v.ID }, func(v Unit) bool { return v.ID != "" && v.Path != "" })
+	e.Domains = population(ctx, sender, req(OpDomains), func(v Domain) string { return v.Name }, func(v Domain) bool { return v.Name != "" && v.Verified != nil })
+	e.Aliases = population(ctx, sender, req(OpAliases), func(v Alias) string { return v.Name }, func(v Alias) bool { return v.Name != "" && v.Parent != "" && v.Verified != nil })
+	e.Units = population(ctx, sender, req(OpUnits), func(v Unit) string { return v.ID }, func(v Unit) bool { return v.ID != "" && v.Path != "" })
 	// Explicit exclusions make the retained population incomplete but the gate
 	// still has the privately recognized tree needed to admit the users list.
 	unitUsable := len(e.Units.Reads) > 0 && e.Units.Reads[0].Reason == "" && e.Units.Reads[0].Status == 200 && !slices.Contains(e.Units.Gaps, "unrecognized_population") && !slices.Contains(e.Units.Gaps, "unrecognized_item") && !slices.Contains(e.Units.Gaps, "population_unknown")
 	if unitUsable {
-		e.Users = population[User](ctx, sender, req(OpUsers), func(v User) string { return v.ID }, func(v User) bool {
+		e.Users = population(ctx, sender, req(OpUsers), func(v User) string { return v.ID }, func(v User) bool {
 			return v.ID != "" && v.Primary != "" && v.Customer == e.Binding.CustomerID && v.Unit != ""
 		})
 		r := sender.Send(ctx, req(opDelegatedUser))

@@ -714,12 +714,15 @@ or their administrative interpretation is unknown, even if observed false user
 flags settled individual rules. Collector-owned `InterpretationGaps` notes identify
 unknown roles, privileges, conditions or expiry. Step 4 adds `Context.MFA` and
 `Context.MFASource`, two 2-step rule outcomes and the 2-step readout notes. Step 5
-adds `OAuthEvidence`, the OAuth rule outcomes and readout notes, and
-`Evidence.NotOnPlan()`, the rule groups the bound profile does not read. Forwarding
-remains unassessed. Any `limit_reached` read, an OAuth grants read or the optional
-exchange's rate limit included, makes the Workspace asset incomplete, exit 2; a refused
-optional permission is a coverage gap only. A mixed GitHub/Workspace identity row
-cannot claim complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
+adds `OAuthEvidence`, the OAuth rule outcomes and readout notes. Forwarding
+remains unassessed. The collector words the asset's outcome: `Evidence.Outcome()` says
+whether collection completed, with the status sentence (naming OAuth when selected),
+and the engagement records it as `collected` or `incomplete` with the outcome's
+reason, `failed` when it names none. Any `limit_reached` read, an OAuth grants read or
+the optional exchange's rate limit included, makes the Workspace asset incomplete,
+exit 2; a refused optional permission is a coverage gap only. A mixed
+GitHub/Workspace identity row cannot claim complete assessment from GitHub judgments
+alone. Inventory notes show lower bounds,
 permission failures, credential uncertainty and fresh delegated verification.
 Primary-address attribution is usable on observed records; alias-only attribution
 requires a complete population. Each declared address is matched independently, so
@@ -735,8 +738,14 @@ over `workspace.oauth_broad_scope`, and a "Workspace domain-wide delegation" sub
 that is always *not assessed* with `no_rule`, its detail saying nothing was read
 because Google offers no Directory read for it, the Admin console path below, and that
 with a service-account credential scheck's own delegation is listed there. Forwarding
-remains unassessed in email coverage. Every collector rule id belongs to exactly one
-sub-item, which a test enforces.
+remains unassessed in email coverage. The collector words these sub-items as one
+identity-area coverage plan, `Evidence.Coverage()`: each group's name and rule ids,
+limits, empty, gap, not-on-plan and collapse wording, the delegation sub-item and the
+row's closing words. The engagement report marks the plan by the rules in
+[report.md](report.md), "Coverage", and composes the row's reason. Incomplete
+administrative evidence is the assignments group's `unavailable:workspace_evidence`
+gap. Every collector rule id belongs to exactly one sub-item, which a collector test
+enforces.
 
 The 2-step sub-item always carries a `no_rule` detail stating its limits
 (organizational-unit policy, grace periods, another identity provider, methods and
@@ -748,14 +757,15 @@ detail is its subject and first "Not checked" line. E9 owns global coverage; no 
 global area is introduced.
 
 The OAuth sub-item is flagged the same way: on the plan it always carries a `no_rule`
-limits detail, and with neither an OAuth outcome nor a not-on-plan entry (a failed binding,
-for instance) it is *not assessed* with `unavailable:workspace_evidence`, "No OAuth
-grant outcome was recorded for this tenant". When the profile does not select OAuth,
-the engagement passes `Evidence.NotOnPlan()` to the report as `AssetInput.NotOnPlan`,
-and the sub-item is *not assessed* with `not_on_plan:profile=<profile>` and the
-collector's detail ("The default Workspace profile, directory, does not read
-third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the
-admin.directory.user.security permission"; another profile is named as "The selected
+limits detail, the same sentence as the OAuth readout note, and with neither an OAuth
+outcome nor a not-on-plan entry (a failed binding, for instance) it is *not assessed*
+with `unavailable:workspace_evidence`, "No OAuth grant outcome was recorded for this
+tenant". When a bound tenant's profile does not select OAuth, the plan marks the
+group not on plan, and the sub-item is *not assessed* with only
+`not_on_plan:profile=<profile>` and the collector's detail ("The default Workspace
+profile, directory, does not read third-party app access; it needs
+SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security
+permission"; another profile is named as "The selected
 Workspace profile, <p>,"). `unavailable:oauth_unclassified` abstentions collapse to one
 detail line, "N apps hold scopes scheck does not classify and none it classifies as
 broad; listed in the JSON report and the readout"; the JSON keeps one abstention per app. The row's `no_rule`
@@ -880,7 +890,9 @@ asset-level outcomes, malformed and foreign grants, read order and stopping on
 `Repeats`; through a fake server, the optional token's one scope, expiry, remembered
 failure, profile and principal gates, per-account denial and the registry's pinned
 shape; one run through the gate to the report with pinned `workspace-oauth` goldens;
-and `policy.CutLabel`.
+and `policy.CutLabel`. Collector tests hold every rule id in exactly one coverage
+group, the plan's gap, collapse and limits wording, and what `Evidence.Outcome()`
+names when collection was cut.
 No live measurement or independent acceptance is claimed.
 
 ## Provider references

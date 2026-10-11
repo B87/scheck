@@ -553,8 +553,8 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				read++
 				row.AssetsCovered = append(row.AssetsCovered, a.ID)
 			}
-			if len(a.Judged) > 0 {
-				some = b.workspaceCoverage(&row, a) || some
+			if plan := planOf(a, area); plan != nil && len(a.Judged) > 0 {
+				some = b.planCoverage(&row, a, *plan) || some
 			} else {
 				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"}}})
 				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})

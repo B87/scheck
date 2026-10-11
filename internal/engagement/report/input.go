@@ -73,21 +73,20 @@ type Input struct {
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
-	NetworkPrincipal           *Principal
-	InventoryNotes             []Note
-	InventoryRead              bool
-	JudgmentEvidenceIncomplete bool // collector summary of required administrative evidence
-	PopulationIncomplete       bool
-	NetworkTrace               []Trace
-	WebShortfalls              []Shortfall
-	Redactions                 []policy.Hit
-	WebNotes                   []Note
-	MailNotes                  []Note
-	Unfingerprinted            []string
-	Name                       string
-	ID                         string
-	Kind                       string
-	Root                       bool
+	NetworkPrincipal     *Principal
+	InventoryNotes       []Note
+	InventoryRead        bool
+	PopulationIncomplete bool
+	NetworkTrace         []Trace
+	WebShortfalls        []Shortfall
+	Redactions           []policy.Hit
+	WebNotes             []Note
+	MailNotes            []Note
+	Unfingerprinted      []string
+	Name                 string
+	ID                   string
+	Kind                 string
+	Root                 bool
 	// Status and Reason are Recon's (collected, incomplete, failed,
 	// refused, not_collected) and the coverage reason when not collected.
 	Status string
@@ -96,9 +95,9 @@ type AssetInput struct {
 	// Profile is a host asset's profile, which sets its threshold even
 	// when the host was never reached.
 	Profile string
-	// NotOnPlan are a network collector's rule groups the asset's selected
-	// profile does not read: coverage says so, never "not assessed".
-	NotOnPlan []NotOnPlan
+	// Coverage are a network collector's coverage plans for the asset, one
+	// per area, worded by the collector and marked by the report.
+	Coverage []CoveragePlan
 	// Echo is a canary mismatch's echo, redacted and cut; JSON only.
 	Echo string
 	// Refusal is a refused asset's kind: host_key_unknown,
@@ -171,13 +170,6 @@ type Declaration struct {
 }
 
 // AcceptanceInput is one intent.accepted_risks entry as resolved.
-// NotOnPlan names rule ids a profile left out, with the coverage reason
-// (not_on_plan:<feature>) and the detail the collector words.
-type NotOnPlan struct {
-	Rules          []string
-	Reason, Detail string
-}
-
 type AcceptanceInput struct {
 	Entry string // "<file> intent.accepted_risks[i]"
 	ID    string

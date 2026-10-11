@@ -13,11 +13,23 @@ import (
 	"github.com/b87/scheck/internal/finding"
 )
 
+// workspacePlan sets the collector's coverage plan for a fixture's
+// judgments: a bound tenant on the default profile with complete
+// administrative evidence unless change says otherwise.
+func workspacePlan(a *AssetInput, change func(*workspace.Evidence)) {
+	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Profile: "directory"}, Judgments: a.Judged}
+	e.Access.AdministrationComplete = true
+	if change != nil {
+		change(&e)
+	}
+	a.Coverage = e.Coverage()
+}
+
 func workspaceInventoryReport(_ *testing.T) Input {
 	const asset = "saas:google-workspace:example.com"
 	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	return Input{Version: "test", Name: "Workspace inventory review", Operator: "Dani", Trigger: "routine", Zone: time.UTC, Path: "engagement.yaml", SHA256: strings.Repeat("a", 64), Started: at, Finished: at.Add(time.Minute), Rerun: "scheck run engagement.yaml", LevelsUsed: []string{"observe"},
-		Assets: []AssetInput{{Name: "Workspace", ID: asset, Kind: "saas", Root: true, Status: "collected", Collector: "workspace", InventoryRead: true, NotOnPlan: []NotOnPlan{{Rules: []string{"workspace.oauth_broad_scope"}, Reason: "not_on_plan:profile=directory", Detail: "The default Workspace profile, directory, does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission"}}, Detail: "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build.", NetworkPrincipal: &Principal{Identity: "unknown", ScopesSource: "unknown"}, InventoryNotes: []Note{
+		Assets: []AssetInput{{Name: "Workspace", ID: asset, Kind: "saas", Root: true, Status: "collected", Collector: "workspace", InventoryRead: true, Detail: "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build.", NetworkPrincipal: &Principal{Identity: "unknown", ScopesSource: "unknown"}, InventoryNotes: []Note{
 			{Kind: "workspace_credential", Source: asset, Detail: "Returned credential permissions are unknown; effective permissions were not tested."},
 			{Kind: "workspace_inventory", Source: asset, Detail: "domains: observed 2; organizational units: observed 3; accounts: observed 6. Inventory alone does not assess account security or administrator access."},
 			{Kind: "workspace_inventory", Source: asset, Detail: "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report."},
@@ -86,6 +98,7 @@ func workspaceIdentityReport(t *testing.T) Input {
 		{ID: "workspace.suspended_admin_assignment", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "old@example.com", Label: "old@example.com", ProviderID: "456"}, Verdict: "fired", Reads: []string{"g000008", "g000010", "g000012"}, Excerpt: "suspended:true; supported Directory USERS_RESET_PASSWORD (password-reset administrator permission) assignment. The account is suspended, so this assignment does not establish usable access. Review and remove it if no longer needed."},
 		{ID: "identity.unattributed_admin", Asset: a.ID, Subject: finding.Subject{Kind: "account", Key: "unknown@example.com", Label: "unknown@example.com", ProviderID: "789"}, Verdict: "abstained", Reason: "unavailable:workspace_evidence", Reads: []string{"g000008"}, NotChecked: []string{"Assignment read was denied."}},
 	}
+	workspacePlan(a, nil)
 	return in
 }
 func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
@@ -94,7 +107,7 @@ func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
 	if r.Exit.Code != 1 || len(r.Findings) != 3 || row(t, r, "identity").Mark != "partial" {
 		t.Fatal(r.Exit, r.Findings, row(t, r, "identity"))
 	}
-	in.Assets[0].JudgmentEvidenceIncomplete = true
+	workspacePlan(&in.Assets[0], func(e *workspace.Evidence) { e.Access.AdministrationComplete = false })
 	r = Build(in)
 	found := false
 	for _, si := range row(t, r, "identity").SubItems {
@@ -143,6 +156,7 @@ func workspaceTwoStepReport(t *testing.T) Input {
 	for _, n := range workspace.Readout(e, a.ID, c) {
 		a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
 	}
+	workspacePlan(a, nil)
 	return in
 }
 
@@ -184,20 +198,6 @@ func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
 	}
 }
 
-func TestEveryWorkspaceRuleHasOneCoverageGroup(t *testing.T) {
-	for _, id := range workspace.RuleIDs() {
-		n := 0
-		for _, g := range workspaceGroups {
-			if slices.Contains(g.ids, id) {
-				n++
-			}
-		}
-		if n != 1 {
-			t.Fatalf("%s is in %d coverage groups", id, n)
-		}
-	}
-}
-
 func TestWorkspaceTwoStepWithoutOutcomesIsNotAssessed(t *testing.T) {
 	r := Build(workspaceIdentityReport(t))
 	found := false
@@ -223,7 +223,6 @@ func TestWorkspaceTwoStepWithoutOutcomesIsNotAssessed(t *testing.T) {
 func workspaceOAuthReport(t *testing.T) Input {
 	in := workspaceInventoryReport(t)
 	a := &in.Assets[0]
-	a.NotOnPlan = nil
 	a.Detail = "Workspace inventory, identity/administrator, 2-step verification and OAuth grant checks collected; notes and coverage show any unresolved evidence."
 	user := func(id string, admin bool) workspace.User {
 		return workspace.User{ID: id, Primary: id + "@example.com", Customer: "C123", Unit: "/", Suspended: new(false), Archived: new(false), IsAdmin: new(admin), Enforced: new(true), Enrolled: new(true)}
@@ -253,6 +252,7 @@ func workspaceOAuthReport(t *testing.T) Input {
 			a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
 		}
 	}
+	workspacePlan(a, func(w *workspace.Evidence) { w.Binding, w.OAuth.Selected = e.Binding, true })
 	return in
 }
 

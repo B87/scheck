@@ -57,8 +57,8 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 	req := func(op string) gate.Request {
 		return gate.Request{Op: op, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain}}
 	}
-	e.Access.Roles = population[Role](ctx, sender, req(OpRoles), func(v Role) string { return v.ID }, func(v Role) bool { return v.ID != "" })
-	e.Access.Privileges = population[Privilege](ctx, sender, req(OpPrivileges), func(v Privilege) string { return v.Service + ":" + v.Name }, func(v Privilege) bool { return v.Service != "" && v.Name != "" })
+	e.Access.Roles = population(ctx, sender, req(OpRoles), func(v Role) string { return v.ID }, func(v Role) bool { return v.ID != "" })
+	e.Access.Privileges = population(ctx, sender, req(OpPrivileges), func(v Privilege) string { return v.Service + ":" + v.Name }, func(v Privilege) bool { return v.Service != "" && v.Name != "" })
 	valid := func(v Assignment) bool {
 		return v.ID != "" && v.Role != "" && v.Assignee != "" && (v.Type == "USER" || v.Type == "GROUP") && (v.Scope == "CUSTOMER" || v.Scope == "ORG_UNIT" && v.Unit != "")
 	}
@@ -77,7 +77,7 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 		request := req(OpUserAssignments)
 		request.Params["user"] = u.ID
 		if observations < 10000 {
-			account.Assignments = population[Assignment](ctx, sender, request, func(v Assignment) string { return v.ID }, valid)
+			account.Assignments = population(ctx, sender, request, func(v Assignment) string { return v.ID }, valid)
 			observations += len(account.Assignments.Items)
 		} else {
 			account.Assignments.Gaps = []string{"assignment_limit"}

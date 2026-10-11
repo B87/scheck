@@ -161,14 +161,14 @@ func TestPeopleAttributionPreservesMultipleAccountsAndDeduplicatesAliases(t *tes
 
 func TestWorkspaceConflictingPopulationRevokesInterpretation(t *testing.T) {
 	for _, body := range []string{`[{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_ALL"}]},{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_RETRIEVE"}]}]`, `[{"roleId":"r","rolePrivileges":[]},{"roleId":"r","rolePrivileges":[{"serviceId":"00haapch16h1ysv","privilegeName":"USERS_ALL"}]}]`} {
-		p := population[Role](context.Background(), senderFunc(func(_ context.Context, r gate.Request) gate.Result { return inventoryResult(r.Op, body) }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
+		p := population(context.Background(), senderFunc(func(_ context.Context, r gate.Request) gate.Result { return inventoryResult(r.Op, body) }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
 		if p.Complete || len(p.Items) != 0 {
 			t.Fatal("conflicting role survived", p)
 		}
 	}
 	result := inventoryResult(OpRoles, `[]`)
 	result.Response.Redactions = []policy.Hit{{Rule: "fixture"}}
-	p := population[Role](context.Background(), senderFunc(func(context.Context, gate.Request) gate.Result { return result }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
+	p := population(context.Background(), senderFunc(func(context.Context, gate.Request) gate.Result { return result }), gate.Request{Op: OpRoles}, func(r Role) string { return r.ID }, func(r Role) bool { return r.ID != "" })
 	if p.Complete {
 		t.Fatal("redacted absence complete")
 	}

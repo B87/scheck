@@ -185,7 +185,7 @@
               "reason": "unavailable:oauth_unclassified"
             },
             {
-              "detail": "Checked: the apps each account authorized with its Google account and the access Google reports they hold. Not checked: domain-wide delegation, service-account keys, apps an administrator installed for everyone from Marketplace, app passwords, when each app was authorized or last used, and what any app did with its access",
+              "detail": "Checked: the apps each account authorized with its Google account and the access Google reports they hold. Not checked: domain-wide delegation, service-account keys, apps an administrator installed for everyone from Marketplace (they may not appear as a person's grant), app passwords, when each app was authorized or last used, and what any app did with its access",
               "reason": "no_rule"
             }
           ],

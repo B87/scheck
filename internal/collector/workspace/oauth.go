@@ -74,26 +74,6 @@ type OAuthEvidence struct {
 	Complete bool            `json:"complete"`
 }
 
-// NotOnPlan is a rule group the selected profile does not read: coverage
-// says so instead of calling it unassessed.
-type NotOnPlan struct {
-	Rules          []string
-	Reason, Detail string
-}
-
-// NotOnPlan lists the optional rule groups the bound profile left out.
-func (e Evidence) NotOnPlan() []NotOnPlan {
-	if e.Binding.CustomerID == "" || e.OAuth.Selected {
-		return nil
-	}
-	which := "The default Workspace profile, directory,"
-	if e.Binding.Profile != "directory" {
-		which = "The selected Workspace profile, " + e.Binding.Profile + ","
-	}
-	return []NotOnPlan{{Rules: []string{IDOAuthBroadScope}, Reason: "not_on_plan:profile=" + e.Binding.Profile,
-		Detail: which + " does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission"}}
-}
-
 // collectGrants reads every admitted account's grants after the baseline,
 // highest-stakes and active accounts first. A result the gate says every
 // later account would repeat (the optional token refused, binding gone)
@@ -621,7 +601,7 @@ func appJudgment(app oauthApp, s oauthState, e Evidence, asset string) finding.J
 		j.Excerpt = name + " holds broad access only through accounts whose sign-in status is unknown."
 		j.NotChecked = []string{"Whether " + primaries(app.unknownActivity) + " can still sign in was unknown or conflicting."}
 	case appUnclassified:
-		j.Reason = "unavailable:oauth_unclassified"
+		j.Reason = reasonUnclassified
 		j.Excerpt = name + " holds no scope scheck classifies as broad; it holds scopes scheck does not classify: " + strings.Join(shortScopes(app.unknownScopes), ", ") + "."
 		if len(app.unknownScopes) == 0 {
 			j.Excerpt = name + " has a grant Google reported without any scope."
@@ -705,7 +685,7 @@ func oauthNotes(e Evidence, asset string, views []accountView) []Note {
 	if s.read == 0 {
 		return out
 	}
-	note("workspace_inventory", "Checked: the apps each account authorized with its Google account and the access Google reports they hold. Not checked: domain-wide delegation, service-account keys, apps an administrator installed for everyone from Marketplace (they may not appear as a person's grant), app passwords, when each app was authorized or last used, and what any app did with its access.")
+	note("workspace_inventory", oauthLimit+".")
 	if g := s.setAside; g != nil {
 		note("workspace_credential", "The grant from "+g.view.user.Primary+" to client id "+g.grant.ClientID+" ("+strings.Join(shortScopes(g.grant.Scopes), ", ")+") was set aside as the credential this run used: it is the only grant to scheck's client holding admin.directory.user.security in a complete read. It was not judged.")
 	}

@@ -463,6 +463,27 @@ no rule consumes in this version (`expected_services` before E9). With more than
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
+**A collector's coverage plan.** A network collector may word an asset's coverage as
+one plan per area (`finding.CoveragePlan`): its rule groups in order, each with a name
+and rule ids, and the sub-items nothing reads. The collector words every sub-item and
+detail; the report marks them and composes the row's reason, the same way for every
+plan. A judgment decided when it fired or was disproved with no reason left open
+(`Judgment.Decided`). A group the selected profile does not read is *not assessed* with
+only its `not_on_plan` reason. Otherwise a group is *assessed* when some judgment
+decided, none is undecided and the asset's population is complete; *partial* when some
+decided otherwise; `not_applicable` when nothing was judged on a complete population;
+and *not assessed* when none decided. A group judged for every read subject is never
+`not_applicable`: with no judgment it is *not assessed* with the collector's reason.
+Each undecided judgment adds its reason with its subject and first "Not checked" line,
+except those the plan collapses into one line. A gap in required evidence makes a group
+with decisions *partial* and one without *not assessed*. A limits detail is a `no_rule`
+reason whatever the mark, and an incomplete population adds the plan's wording to every
+group. A sub-item nothing reads is *not assessed* with `no_rule`. The row's `no_rule`
+reason names the groups and unread sub-items nothing decided ("Workspace OAuth grants
+and domain-wide delegation remain unassessed"), then the plan's closing words.
+Workspace is the one collector with a plan in this build; GitHub and web families are
+marked in the report.
+
 **The external, email and web rows, in this build.** A domain root the web
 collector read feeds these rows; a URL root feeds external, web and secrets coverage.
 In the external row each such root has *dangling records*

@@ -284,11 +284,11 @@ func TestOAuthNotSelectedHasNoJudgmentAndNamesTheSelection(t *testing.T) {
 	}) {
 		t.Fatal("selection note missing")
 	}
-	if plan := e.NotOnPlan(); len(plan) != 1 || plan[0].Reason != "not_on_plan:profile=directory" || !slices.Equal(plan[0].Rules, []string{IDOAuthBroadScope}) || !strings.HasPrefix(plan[0].Detail, "The default Workspace profile, directory,") {
-		t.Fatal(plan)
+	if g := oauthGroup(t, e); g.NotOnPlan == nil || g.NotOnPlan.Reason != "not_on_plan:profile=directory" || !strings.HasPrefix(g.NotOnPlan.Detail, "The default Workspace profile, directory,") {
+		t.Fatal(g)
 	}
-	if plan := (Evidence{}).NotOnPlan(); plan != nil {
-		t.Fatal("an unbound tenant claimed a plan", plan)
+	if g := oauthGroup(t, Evidence{}); g.NotOnPlan != nil {
+		t.Fatal("an unbound tenant claimed a plan", g)
 	}
 	e.Users.Items = nil
 	for _, j := range Judge(e, "asset", c) {
