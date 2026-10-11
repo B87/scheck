@@ -2,6 +2,7 @@ package engagement
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/b87/scheck/internal/collector/workspace"
@@ -29,12 +30,18 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 	ra.Workspace, ra.Judged = &ev, ev.Judgments
 	ra.Status = StatusCollected
 	ra.Detail = "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence."
+	if ev.OAuth.Selected {
+		ra.Detail = "Workspace inventory, identity/administrator, 2-step verification and OAuth grant checks collected; notes and coverage show any unresolved evidence."
+	}
 	for _, note := range ev.Notes {
 		if note.Kind == "workspace_credential_warning" {
 			r.o.Log("warning: %s", note.Detail)
 		}
 	}
-	if !ev.InventoryComplete || !ev.Access.Complete {
+	// A limit cuts collection wherever it struck; a refused optional
+	// permission is a coverage gap only (docs/spec/scope.md, "Outcomes").
+	limited := slices.ContainsFunc(ev.Reads(), func(read workspace.Read) bool { return read.Reason == "limit_reached" })
+	if !ev.InventoryComplete || !ev.Access.Complete || limited {
 		ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonFailed, "Workspace evidence is incomplete; notes show what was read and what remains unknown."
 		for _, read := range ev.Reads() {
 			if read.Reason == "limit_reached" {
@@ -56,6 +63,9 @@ func (r *run) workspaceReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 	ai.InventoryRead = len(e.Users.Reads) > 0 && e.Users.Reads[0].Status == 200 && e.Users.Reads[0].Reason == ""
 	ai.JudgmentEvidenceIncomplete = !e.Access.AdministrationComplete
 	ai.PopulationIncomplete = !e.Users.Complete || !e.Units.Complete
+	for _, n := range e.NotOnPlan() {
+		ai.NotOnPlan = append(ai.NotOnPlan, ereport.NotOnPlan{Rules: n.Rules, Reason: n.Reason, Detail: n.Detail})
+	}
 	identity, source := "unknown", "unknown"
 	if e.DelegatedUser != nil {
 		identity = "delegated Workspace account " + e.DelegatedUser.Primary + " (id " + e.DelegatedUser.ID + ")"

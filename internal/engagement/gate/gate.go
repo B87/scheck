@@ -334,6 +334,11 @@ type Result struct {
 	// Identity is what a resume finds the success under, "" when it is
 	// never reused (docs/spec/scope.md, "Resume").
 	Identity string
+	// Repeats says the gate would end every later request of this kind in
+	// the session the same way, sending nothing: an optional token that was
+	// refused, authentication or tenant binding gone. A collector reading
+	// one account after another may stop.
+	Repeats bool
 }
 
 // OK reports whether the read succeeded.

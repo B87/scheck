@@ -274,7 +274,7 @@ func TestWorkspaceAssertionClaimsAndSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Unix(1791630000, 0)
-	ex, err := source.exchange(at)
+	ex, err := source.exchange(at, WorkspaceBaseline)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,6 +295,17 @@ func TestWorkspaceAssertionClaimsAndSignature(t *testing.T) {
 	_ = json.Unmarshal(claims, &c)
 	if len(h) != 3 || h["alg"] != "RS256" || h["kid"] != "kid123" || h["typ"] != "JWT" || len(c) != 6 || c["iss"] != source.issuer || c["sub"] != "admin@example.com" || c["aud"] != workspaceTokenURL || c["iat"] != float64(at.Unix()) || c["exp"] != float64(at.Unix()+300) || c["scope"] != strings.Join(scopes, " ") {
 		t.Fatalf("claims/header differ: %s %s", header, claims)
+	}
+	// The optional surface asserts exactly its one scope, same issuer and subject.
+	opt, err := source.exchange(at, WorkspaceOAuthGrants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	optClaims, _ := base64.RawURLEncoding.DecodeString(strings.Split(opt.form.Get("assertion"), ".")[1])
+	c = map[string]any{}
+	_ = json.Unmarshal(optClaims, &c)
+	if c["scope"] != "https://www.googleapis.com/auth/admin.directory.user.security" || c["sub"] != "admin@example.com" || c["iss"] != source.issuer || opt.form.Has("scope") {
+		t.Fatalf("optional claims differ: %s", optClaims)
 	}
 	w := newWorld(t)
 	w.ops = wsFoundationOps()
@@ -471,7 +482,7 @@ func TestWorkspaceFoundationRegistryRejectsWidening(t *testing.T) {
 			t.Fatal("widened op admitted")
 		}
 	}
-	o := workspaceTokenOp()
+	o := workspaceTokenOps()[0]
 	o.URL = "https://oauth2.googleapis.com/other"
 	if _, err := NewRegistry(o); err == nil {
 		t.Fatal("arbitrary POST path")

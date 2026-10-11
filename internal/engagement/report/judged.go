@@ -100,6 +100,12 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				if attr == "admin" && j.ID == finding.IDIdentityFormerPersonHasAccess {
 					rule = "attribute:admin"
 				}
+				if attr == "admin_grantor" && j.ID == "workspace.oauth_broad_scope" {
+					rule = "attribute:admin_grantor"
+					if read, ok := j.Details["admin_grant_read"].(string); ok && read != "" {
+						source = SourceRef{Observation: read, Excerpt: j.Context}
+					}
+				}
 				if attr == "production" && slices.Contains([]string{finding.IDGitHubWritableDeployKey, finding.IDGitHubRepositoryWorkflowWrite, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}, j.ID) {
 					rule = "deploys_to:production"
 					if len(j.Sources) > 0 {
@@ -141,6 +147,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		}
 		if len(j.Listed) > 0 {
 			f.Affected = &Affected{Count: len(j.Listed), Listed: j.Listed, Cap: len(j.Listed)}
+			for _, n := range j.OfNote {
+				f.Affected.OfNote = append(f.Affected.OfNote, OfNote{Key: n.Key, Why: n.Why})
+			}
 		}
 		keys := []string{}
 		for k := range j.Details {

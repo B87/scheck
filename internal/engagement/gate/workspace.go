@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"path"
@@ -38,10 +39,67 @@ type workspaceSession struct {
 	inventoryBad           bool
 	cursors                map[string]bool
 	principal              string
+	// optional holds each optional surface's own token, or the failure of
+	// its one exchange, for as long as the baseline authentication lasts.
+	optional map[WorkspaceSurface]*workspaceOptional
 }
 
-func workspaceTokenOp() Op {
-	return Op{ID: workspaceTokenID, Provider: "google", Method: POST, Class: CredentialExchange, URL: workspaceTokenURL, Level: Observe, Accept: []string{"application/json"}, MaxBytes: googleTokenLimit}
+type workspaceOptional struct {
+	credential *Credential
+	expires    time.Time
+	failure    *halt
+}
+
+// unbind forgets the tenant binding and every optional token or remembered
+// optional failure minted under it: none outlives the binding.
+func (s *workspaceSession) unbind() { s.bound, s.optional = false, nil }
+
+// dropAuth forgets authentication and binding together.
+func (s *workspaceSession) dropAuth() {
+	s.unbind()
+	s.credential = nil
+}
+
+// workspaceSurfaces maps each optional surface to its one scope, its own
+// audited exchange and the profiles that select it
+// (docs/spec/workspace-collector.md, "Credential files and profiles").
+var workspaceSurfaces = map[WorkspaceSurface]struct {
+	scope, exchange string
+	profiles        []string
+}{
+	WorkspaceOAuthGrants: {googleScopePrefix + "admin.directory.user.security", "workspace.credential_exchange_oauth_grants", []string{"directory_oauth", "directory_oauth_mail"}},
+}
+
+func workspaceSurfaceScope(s WorkspaceSurface) string { return workspaceSurfaces[s].scope }
+
+// workspaceExchangeID is the audited op of a surface's token exchange, ""
+// for a surface that is not compiled.
+func workspaceExchangeID(s WorkspaceSurface) string {
+	if s == WorkspaceBaseline {
+		return workspaceTokenID
+	}
+	return workspaceSurfaces[s].exchange
+}
+
+func workspaceTokenOps() []Op {
+	surfaces := append([]WorkspaceSurface{WorkspaceBaseline}, slices.Sorted(maps.Keys(workspaceSurfaces))...)
+	out := []Op{}
+	for _, s := range surfaces {
+		out = append(out, Op{ID: workspaceExchangeID(s), Provider: "google", Method: POST, Class: CredentialExchange, URL: workspaceTokenURL, Level: Observe, Accept: []string{"application/json"}, MaxBytes: googleTokenLimit})
+	}
+	return out
+}
+
+// workspaceSelected lists the optional surfaces a profile selects, for the
+// binding summary: profile names stay in the gate.
+func workspaceSelected(profile string) []WorkspaceSurface {
+	out := []WorkspaceSurface{}
+	for _, s := range slices.Sorted(maps.Keys(workspaceSurfaces)) {
+		if slices.Contains(workspaceSurfaces[s].profiles, profile) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 func (c *compiled) workspaceResource(name string) bool {
 	return c.Auth == WorkspaceADC && name == "customer" && c.types[name].Type == CustomerID
@@ -50,8 +108,12 @@ func (c *compiled) workspaceResource(name string) bool {
 // Bootstrap paths are a deliberately narrow exception, enforced at registration
 // as well as admission. A collector cannot turn customer binding into a new read.
 func (c *compiled) checkWorkspaceOp() error {
-	if strings.HasPrefix(c.ID, "workspace.") && c.ID != workspaceTokenID && c.Auth != WorkspaceADC {
+	exchange := slices.ContainsFunc(workspaceTokenOps(), func(o Op) bool { return o.ID == c.ID })
+	if strings.HasPrefix(c.ID, "workspace.") && !exchange && c.Auth != WorkspaceADC {
 		return errors.New("Workspace reads require the private Workspace credential pipeline")
+	}
+	if c.Surface != WorkspaceBaseline && (c.Auth != WorkspaceADC || workspaceSurfaceScope(c.Surface) == "") {
+		return errors.New("an optional credential surface needs a compiled Workspace read")
 	}
 	for _, p := range c.Params {
 		if p.Type == CustomerID && !c.workspaceResource(p.Name) {
@@ -94,10 +156,27 @@ func (c *compiled) checkWorkspaceOp() error {
 	}
 	perUser := c.types["user"].Type == UserKey
 	assignment := c.List != nil && c.List.Assignment != nil
+	tokens := c.Surface == WorkspaceOAuthGrants
 	if perUser && c.types["user"].Optional {
 		return errors.New("Workspace user selector is required")
 	}
-	if perUser && !assignment {
+	if tokens != (u.Path == "/admin/directory/v1/users/{user}/tokens") || c.List != nil && c.List.SelfRef != "" && !tokens {
+		return errors.New("Workspace OAuth grant reads use their own compiled surface and path")
+	}
+	if tokens {
+		// One admitted user's grants, a single bounded array, every item
+		// naming that user (docs/spec/workspace-collector.md, "Reads and projections").
+		l := c.List
+		if !perUser || len(c.Params) != 2 || u.RawQuery != "" || c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity != nil || c.PreserveMalformed ||
+			l == nil || l.Kind != KindOther || l.Items != "items" || l.Envelope != "admin#directory#tokenList" || l.SelfRef != "userKey" || l.Next != nil || l.Tree != nil || l.Assignment != nil || l.UserRef != "" || l.Children != "" {
+			return errors.New("invalid Workspace OAuth grant read")
+		}
+		for _, field := range c.Keep {
+			if !slices.Contains([]string{"clientId", "scopes", "userKey", "displayText", "anonymous", "nativeApp"}, field) {
+				return errors.New("Workspace OAuth grant reads keep only grant metadata")
+			}
+		}
+	} else if perUser && !assignment {
 		if c.Subject != workspacePrefix+"{domain}/users/{user}" || c.UserIdentity == nil || c.List != nil || u.Path != "/admin/directory/v1/users/{user}" {
 			return errors.New("Workspace user read requires admitted stable identity")
 		}
@@ -202,14 +281,14 @@ func workspaceBootstrapPath(id string) string {
 func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	domain := p.b.params["domain"]
 	if p.r.Asset != workspacePrefix+domain {
-		return refused("out_of_scope", "the Workspace domain must equal the declared asset")
+		return sticky(refused("out_of_scope", "the Workspace domain must equal the declared asset"))
 	}
 	if !g.workspaceLoaded {
 		g.workspaceSource, g.workspaceSourceError = g.loadGoogleSource()
 		g.workspaceLoaded = true
 	}
 	if g.workspaceSource == nil {
-		return refused("no_credentials", g.workspaceSourceError)
+		return sticky(refused("no_credentials", g.workspaceSourceError))
 	}
 	source := g.workspaceSource
 	profile := g.getenv("SCHECK_WORKSPACE_PROFILE")
@@ -218,7 +297,10 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	}
 	currentSubject, _ := userKey(g.getenv("SCHECK_WORKSPACE_SUBJECT"))
 	if profile != source.profile || currentSubject != source.subject && source.kind == "service_account" || source.kind == "authorized_user" && g.getenv("SCHECK_WORKSPACE_SUBJECT") != "" {
-		return &halt{decision: "unavailable:credential_changed", detail: "Workspace credential settings changed during this session. Restart or resume the run with the intended profile and account"}
+		if session := g.workspace[p.r.Asset]; session != nil {
+			session.optional = nil
+		}
+		return &halt{decision: "unavailable:credential_changed", detail: "Workspace credential settings changed during this session. Restart or resume the run with the intended profile and account", sticky: true}
 	}
 	if g.workspace == nil {
 		g.workspace = map[string]*workspaceSession{}
@@ -235,44 +317,45 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		session.customer, session.domains, session.bound, session.domainRoot = "", nil, false, false
 		session.units, session.inventory, session.fingerprints, session.owners = nil, nil, nil, nil
 		session.usersComplete, session.inventoryBad, session.principal = false, false, ""
+		session.unbind()
 	}
 	// Reject foreign selectors before even exchanging a credential.
 	if p.op.ID != "workspace.bootstrap_customer" && (p.op.types["user"].Type != UserKey || p.op.types["customer"].Type == CustomerID) && (session.customer == "" || p.b.params["customer"] != session.customer) {
-		return refused("tenant_binding", "the selector is not this session's bootstrap customer")
+		return sticky(refused("tenant_binding", "the selector is not this session's bootstrap customer"))
 	}
 	switch p.op.ID {
 	case "workspace.bootstrap_customer":
 	case "workspace.bootstrap_domains":
 		g.clearWorkspacePages(p.r.Asset)
 		session.usersComplete, session.principal = false, ""
-		session.bound = false
+		session.unbind()
 		session.domains = nil
 		session.domainRoot = false
 	case "workspace.bootstrap_aliases":
 		g.clearWorkspacePages(p.r.Asset)
 		session.usersComplete, session.principal = false, ""
-		session.bound = false
+		session.unbind()
 		if session.domains == nil {
 			return refused("tenant_binding", "complete recognized domains are required before aliases")
 		}
 	default:
 		if !session.bound {
-			return refused("tenant_binding", "the declared domain has not been bound to this customer")
+			return sticky(refused("tenant_binding", "the declared domain has not been bound to this customer"))
 		}
 	}
 	if session.credential == nil || !g.now().Before(session.expires) {
-		session.bound = false
+		session.dropAuth()
 		// Expiry never preserves a tenant authorization established with an earlier token.
 		if p.op.ID != "workspace.bootstrap_customer" {
-			return &halt{decision: "unavailable:bootstrap_required", detail: "the Workspace access token expired. Restart or resume the run to authenticate and verify the Workspace customer again"}
+			return &halt{decision: "unavailable:bootstrap_required", detail: "the Workspace access token expired. Restart or resume the run to authenticate and verify the Workspace customer again", sticky: true}
 		}
-		exchange, err := source.exchange(g.now())
+		exchange, err := source.exchange(g.now(), WorkspaceBaseline)
 		if err != nil {
 			return &halt{decision: "unavailable:credential_exchange", detail: err.Error()}
 		}
 		result := g.Send(ctx, Request{Op: workspaceTokenID, Asset: p.r.Asset, Stage: p.r.Stage, exchange: exchange})
 		if !result.OK() {
-			return &halt{decision: result.Decision, detail: result.Detail, until: result.Until}
+			return &halt{decision: result.Decision, detail: result.Detail, until: result.Until, reason: result.Reason}
 		}
 		if exchange.token == "" || !g.now().Before(exchange.expires) {
 			return &halt{decision: "unavailable:credential_exchange", detail: "the credential response did not establish a usable token"}
@@ -298,7 +381,7 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	}
 	if p.op.types["user"].Type == UserKey {
 		if !session.usersComplete {
-			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read"}
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read", sticky: true}
 		}
 		if user, ok := session.inventory[p.b.params["user"]]; !ok || user.id != p.b.params["user"] {
 			return refused("tenant_binding", "the account was not admitted from current Workspace inventory")
@@ -306,14 +389,72 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	}
 	if p.op.List != nil && p.op.List.Assignment != nil {
 		if !session.usersComplete || session.unitIDs == nil {
-			return &halt{decision: "unavailable:exclusion_unknown", detail: "Current admitted users and units are required before assignment reads"}
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "Current admitted users and units are required before assignment reads", sticky: true}
 		}
 		if session.assignmentObservations >= 10000 {
-			return &halt{decision: "unavailable:limit_reached", detail: "The tenant assignment observation budget was reached"}
+			return &halt{decision: "unavailable:limit_reached", detail: "The tenant assignment observation budget was reached", sticky: true}
 		}
+	}
+	if p.op.Surface != WorkspaceBaseline {
+		cred, h := g.workspaceOptionalCredential(ctx, p, session, source)
+		if h != nil {
+			return h
+		}
+		p.cred = cred
+		return nil
 	}
 	p.cred = session.credential
 	return nil
+}
+
+// workspaceOptionalCredential is an optional surface's own token, asked for
+// with exactly its one scope after baseline admission, never the baseline
+// token. A failed exchange is remembered, so later reads send nothing and
+// carry its classification: a refused scope is an optional permission gap
+// (docs/spec/workspace-collector.md, "Credential files and profiles").
+func (g *Gate) workspaceOptionalCredential(ctx context.Context, p *pending, session *workspaceSession, source *googleSource) (*Credential, *halt) {
+	surface := workspaceSurfaces[p.op.Surface]
+	if !slices.Contains(surface.profiles, source.profile) {
+		return nil, &halt{decision: "unavailable:profile_not_selected", detail: "The selected Workspace profile does not include this optional read", sticky: true}
+	}
+	if source.kind == "service_account" && session.principal == "" {
+		return nil, &halt{decision: "unavailable:principal_unknown", detail: "The delegated account must be verified before an optional permission is requested", sticky: true}
+	}
+	opt := session.optional[p.op.Surface]
+	if opt != nil && opt.failure != nil {
+		h := *opt.failure
+		return nil, &h
+	}
+	if opt != nil && opt.credential != nil && g.now().Before(opt.expires) {
+		return opt.credential, nil
+	}
+	exchange, err := source.exchange(g.now(), p.op.Surface)
+	if err != nil {
+		return nil, &halt{decision: "unavailable:credential_exchange", detail: err.Error(), sticky: true}
+	}
+	if session.optional == nil {
+		session.optional = map[WorkspaceSurface]*workspaceOptional{}
+	}
+	opt = &workspaceOptional{}
+	session.optional[p.op.Surface] = opt
+	result := g.Send(ctx, Request{Op: surface.exchange, Asset: p.r.Asset, Stage: p.r.Stage, exchange: exchange})
+	switch {
+	case !result.OK():
+		opt.failure = &halt{decision: result.Decision, detail: result.Detail, until: result.Until, reason: result.Reason, sticky: true}
+	case exchange.token == "" || !g.now().Before(exchange.expires):
+		opt.failure = &halt{decision: "unavailable:credential_exchange", detail: "the credential response did not establish a usable token", sticky: true}
+	}
+	if opt.failure != nil {
+		h := *opt.failure
+		return nil, &h
+	}
+	// The optional token never outlives the authentication it extends.
+	opt.expires = exchange.expires
+	if session.expires.Before(opt.expires) {
+		opt.expires = session.expires
+	}
+	opt.credential = &Credential{Env: source.env, header: "Authorization", value: "Bearer " + exchange.token, secret: exchange.token, secrets: exchange.credential.secrets, Scopes: exchange.scopes}
+	return opt.credential, nil
 }
 
 // workspaceResponse is a private response pipeline, sharing Send, TLS, address
@@ -340,6 +481,12 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 			s.res.end("unavailable:credential_exchange", "Google authentication did not return a usable access token. Check the selected credential setup, then retry")
 			if resp.StatusCode != http.StatusOK && code == "" {
 				s.res.Detail = googleExchangeFailure(raw)
+				// The baseline credential was accepted: a refused optional
+				// scope is a coverage gap, never a refusal of the asset.
+				if scope := workspaceSurfaceScope(s.r.exchange.surface); scope != "" && googleScopeDenied(raw) {
+					s.res.Reason = "insufficient_permission:" + strings.TrimPrefix(scope, googleScopePrefix)
+					s.res.Detail = "Google did not authorize this credential for the optional read permission"
+				}
 			}
 			if resp.StatusCode == 429 {
 				s.res.end("unavailable:credential_rate_limit", "Google credential exchange was rate limited")
@@ -355,8 +502,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 		s.res.end("unavailable:workspace_read", "Google Workspace read did not succeed")
 		switch resp.StatusCode {
 		case 401:
-			session.bound = false
-			session.credential = nil
+			session.dropAuth()
 			s.res.Reason, s.res.Kind, s.res.Detail = "refused", "access", "Google did not accept the Workspace credential"
 		case 403, 404:
 			s.res.Reason = "insufficient_permission"
@@ -364,7 +510,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 			s.res.Reason = "limit_reached"
 		}
 		if bootstrap {
-			session.bound = false
+			session.unbind()
 		}
 		retryAfter, hasRetryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), s.g.now())
 		if resp.StatusCode == 429 || resp.StatusCode == 403 && (hasRetryAfter || code == "" && googleRateLimited(raw)) {
@@ -378,7 +524,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 		return s.finish(out, nil)
 	}
 	if code != "" {
-		session.bound = false
+		session.unbind()
 		s.res.end("unavailable:"+code, "the Workspace response was not usable within its declared limits")
 		if code == codeTooLarge || code == codeBomb {
 			s.res.Reason = "limit_reached"
@@ -388,7 +534,7 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 	// Discard everything outside the binding projection before generic redaction.
 	projected, err := workspaceProjection(raw, op.ID)
 	if err != nil {
-		session.bound = false
+		session.unbind()
 		s.res.end("unavailable:tenant_binding", "Google did not return recognized binding evidence")
 		if errors.Is(err, errWorkspacePopulationLimit) {
 			s.res.Reason = "limit_reached"
@@ -397,17 +543,24 @@ func (s *sending) workspaceResponse(resp *http.Response) (Result, *retry) {
 	}
 	clean, hits, err := s.red.RedactJSON(projected)
 	if err != nil || len(hits) > 0 {
-		session.bound = false
+		session.unbind()
 		s.res.end("unavailable:tenant_binding", "Workspace binding evidence was redacted or malformed")
 		return s.finish(out, nil)
 	}
 	if !session.consume(op.ID, clean, s.a.b.params["domain"]) {
-		session.bound = false
+		session.unbind()
 		s.res.end("unavailable:tenant_binding", "scheck could not verify that the declared Workspace domain belongs to the customer selected by these credentials. Check the domain and credential setup")
 		return s.finish(out, nil)
 	}
 	if session.bound {
-		out.Body = marshal(map[string]any{"id": session.customer, "domain": s.a.b.params["domain"], "profile": s.g.workspaceSource.profile, "scopes": session.credential.Scopes, "scopes_known": session.scopesKnown})
+		summary := map[string]any{"id": session.customer, "domain": s.a.b.params["domain"], "profile": s.g.workspaceSource.profile, "surfaces": workspaceSelected(s.g.workspaceSource.profile), "scopes": session.credential.Scopes, "scopes_known": session.scopesKnown}
+		// A successful client-authenticated refresh proves the client id,
+		// never whose sign-in the refresh token holds
+		// (docs/spec/workspace-collector.md, "OAuth scope interpretation").
+		if s.g.workspaceSource.kind == "authorized_user" {
+			summary["assessment_client"] = s.g.workspaceSource.clientID
+		}
+		out.Body = marshal(summary)
 		out.Body, out.Redactions, _ = s.red.RedactJSON(out.Body)
 	}
 	return s.finish(out, nil)

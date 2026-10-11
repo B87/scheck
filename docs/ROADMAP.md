@@ -883,8 +883,9 @@ no answer exiting 2.
 **Status:** DEFINE design frozen on 2026-10-10. Steps 1 and 2 implement credentials,
 tenant binding and inventory through engagement Recon and report integration.
 Step 3 implements identity/admin rules, verified offline. Step 4 implements observed
-2-step verification, verified offline. Step 5 is next. Optional OAuth/Gmail reads
-remain planned. The design is
+2-step verification, verified offline. Step 5 implements optional OAuth grant
+metadata, verified offline. Step 6 is next.
+Optional Gmail forwarding reads remain planned. The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -969,6 +970,27 @@ Unknown grants remain unknown; a successful read does not prove write capability
    No live tenant was contacted and no independent acceptance is claimed.
 5. Optional OAuth grant metadata, using an existing approved credential; no
    automatic request for a broad security grant.
+   **Done offline 2026-10-11:** under `directory_oauth` or `directory_oauth_mail`, the
+   gate mints a separate token with exactly `admin.directory.user.security` through its
+   own audited exchange after baseline admission, remembers a failure for the session
+   and clears both with the binding; a refused scope is a coverage gap, never exit 3.
+   The collector reads every admitted account's grants in priority order, stopping on
+   the gate's `Result.Repeats`; the gate drops items naming another user (`SelfRef`).
+   `workspace.oauth_broad_scope` (medium, per client id, `+1 attribute:admin_grantor`
+   only on a known-active super admin's or declared break-glass account's own broad
+   grant) has firing, disproved and abstained fixtures, asset-level outcomes, scheck's
+   own grant set aside only by elimination, and scope table `2026-10-11`. Coverage
+   splits the OAuth sub-item (`not_on_plan:profile=<p>` when not selected) from an
+   always-unassessed domain-wide delegation sub-item. Consultant, client and modularity
+   reviews passed after their must-fixes were applied; green `make check` is recorded in
+   [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-verification-2026-10-11.md),
+   the definition in
+   [eval/e6-oauth-definition-2026-10-11.md](eval/e6-oauth-definition-2026-10-11.md).
+   The adversarial review confirmed one must-fix, a Google 403 rate limit on any
+   Workspace read classified as a missing permission (now retried and `limit_reached`),
+   one test should-fix and two nits, all corrected; a fresh follow-up review found no
+   must-fix or should-fix. No live tenant was contacted and no independent acceptance
+   is claimed.
 6. Optional Gmail forwarding metadata through an existing approved delegated
    credential; no messages, mail content or automatic delegation setup.
 7. Whole-slice offline tests and consultant/client/adversarial reviews, coverage and
@@ -1032,6 +1054,51 @@ assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-st
   in engagement rather than the GitHub collector; F2 coverage groups and their limits
   should be registered by collectors; F3 a typed `access.mfa` declaration vocabulary;
   F4 a collector-supplied asset status sentence.
+
+**Carried from step 5** (consultant DEFINE and REVIEW, client REPORT and modularity
+assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-verification-2026-10-11.md)):
+
+- *Owner's decisions:* (S5) add further broad scopes in a later table version:
+  `spreadsheets`, `documents`, `presentations`, `calendar`, `admin.directory.group`,
+  and for reading `spreadsheets.readonly`, `documents.readonly`, `calendar.readonly`,
+  `gmail.metadata`; (S7) exit 2 when OAuth is selected and no account's grants were
+  read, which the consultant now recommends against DEFINE's coverage-gap-only ruling;
+  whether the admin raise is skipped for grants to the assessment client that were not
+  set aside (kept today).
+- *Step 6, pulled forward from the modularity assess:* F2 the OAuth limit sentence is
+  duplicated in the collector's note and the report's coverage group, and the
+  `oauth_unclassified` collapse and its reason phrase live in the report; F4 the asset
+  status sentence and the limit scan in `collect_workspace.go` belong to the collector.
+- *Unmeasured assumptions, measured live in step 7:* Google downscopes an
+  `authorized_user` refresh carrying `scope` and answers `invalid_scope` for an
+  ungranted scope; domain-wide delegation does not appear in `tokens.list`;
+  `tokens.list` lists the caller's own grant; it echoes `userKey` as the numeric id
+  requested (otherwise every grant is dropped and the surface abstains); suspended
+  accounts' tokens are blocked and return on restore; a delegated admin gets 403 on
+  super admins' tokens; first-party client ids (Drive for desktop, Cloud SDK, ADC);
+  the Admin console paths (Manage Third-Party App Access; Limited, Specific Google
+  data, Trusted); whether unrelated anonymous apps share a client id.
+- *E8:* no "which apps do you use" question, which would be theatre; `scheck init`
+  explains how to enable `directory_oauth`, with the warning about what
+  `admin.directory.user.security` also allows.
+- *E9:* group app findings in "Fix these first"; decide whether `data.matters_most`
+  with `attribute:admin_grantor` may reach critical (with the pending "may a context
+  raise reach critical?"); lab-rank Drive for desktop and Apple Mail grants on admins;
+  collapse identical per-read `Observed` lines (OAuth is the first rule with high
+  fan-in, so its priority rises); plain-word scope descriptions; the OAuth sub-item
+  `partial` or `not_assessed` when no app was seen and some accounts were refused.
+  From the client REPORT: acceptance template explanations (the handle, the indent,
+  "this app for every account that granted it"), where to see an app's grantors in the
+  console, blocking against per-person removal, one term for app access, grants,
+  scopes and OAuth, a one-line example of setting `SCHECK_WORKSPACE_PROFILE`, `-v`
+  adding nothing for Workspace, the "+1 attribute admin grantor" jargon, the Credential
+  "unknown" line beside the token warning, and the report-wide "not in the checks you
+  chose" phrase for a profile the operator did not choose.
+- *0.0.3 candidates:* a first-party client id table, for wording only; legacy feed
+  scopes; downscoping the baseline `authorized_user` refresh; app passwords; token
+  activity (Reports API); Cloud Identity app-access policy reads.
+- *Client profile gap, before step 7's client review:* Brightcart's profile says
+  nothing of its Marketplace installs or of who set up the credential.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
@@ -1334,6 +1401,10 @@ on whether people sign in to Google Workspace through another identity provider,
 consumer stops the 2-step `contradiction` for non-super-admin accounts (E6, "Carried
 from step 4").
 
+**Carried from E6 step 5** (2026-10-11): no question about which third-party apps are
+in use; `scheck init` explains how to enable `directory_oauth` and warns what
+`admin.directory.user.security` also allows (E6, "Carried from step 5").
+
 ### E9 — Plan, Analyze and multi-fact rules
 
 **Delivers:** a rules-only plan per asset type, narrowed and ordered by structured
@@ -1396,6 +1467,10 @@ asset unchanged; a loop fixture terminates.
 - *From E6 step 4* (2026-10-11): "Fix these first" collapses many unit instances of
   one finding into one line, and the step-4 client REPORT wording items listed in E6,
   "Carried from step 4".
+- *From E6 step 5* (2026-10-11): app findings grouped in "Fix these first", whether
+  `data.matters_most` with `attribute:admin_grantor` may reach critical, lab ranking of
+  Drive for desktop and Apple Mail on admins, collapsed per-read `Observed` lines, and
+  the OAuth wording and coverage items listed in E6, "Carried from step 5".
 
 ### Release gates
 

@@ -72,11 +72,14 @@ accounts retaining assignments. Supported direct and indirect grants are read pe
 admitted user; group membership paths and effective permissions are not tested.
 2-step verification is judged from Google's current per-account enforcement and
 enrollment flags, never from unit policy, grace periods or another identity provider.
-OAuth grants and Gmail forwarding remain unassessed. Unknown callers and verified
+With `SCHECK_WORKSPACE_PROFILE=directory_oauth` and an approved
+`admin.directory.user.security` permission, a separate one-scope token reads each
+account's OAuth grants and reports apps holding broad scopes; the default profile does
+not read them. Gmail forwarding and domain-wide delegation remain unassessed. Unknown callers and verified
 delegated callers reuse no authenticated Workspace reads on resume.
 Findings come from compiled-in rules: a host's posture rules, graded through the
 context the engagement declares, the GitHub collector's identity, repository-access, CI configuration, provider-alert and mirror credential
-rules, the Workspace collector's identity, administrator and 2-step verification rules, and the web
+rules, the Workspace collector's identity, administrator, 2-step verification and OAuth grant rules, and the web
 collector's DNS, email, TLS and response rules. They judge the
 collected evidence, so a short list of findings and exit 0 mean no rule fired — not
 that anything is secure; the

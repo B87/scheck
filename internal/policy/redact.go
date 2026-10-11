@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
+	"unicode/utf8"
 )
 
 // Hit records one redaction for the report's accounting.
@@ -277,4 +279,27 @@ func Truncate(red []byte, sourceTruncated bool, capBytes int) ([]byte, bool) {
 		red = append(append([]byte(nil), red...), "\n[TRUNCATED:unknown bytes]"...)
 	}
 	return red, truncated
+}
+
+// CutLabel cuts one line of already-redacted text, a provider-chosen name,
+// to capBytes on a character boundary, never through a redaction marker,
+// and marks the cut on the same line, as Truncate marks a capture.
+func CutLabel(red string, capBytes int) string {
+	if len(red) <= capBytes {
+		return red
+	}
+	cut := capBytes
+	for cut > 0 && !utf8.RuneStart(red[cut]) {
+		cut--
+	}
+	const open = "[REDACTED:"
+	if i := strings.LastIndex(red[:min(len(red), cut+len(open)-1)], open); i >= 0 && i < cut && strings.IndexByte(red[i:cut], ']') < 0 {
+		if j := strings.IndexByte(red[i:], ']'); j >= 0 {
+			cut = i + j + 1
+		}
+	}
+	if cut >= len(red) {
+		return red
+	}
+	return red[:cut] + fmt.Sprintf("[TRUNCATED:%d bytes]", len(red)-cut)
 }

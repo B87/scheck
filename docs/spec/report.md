@@ -380,7 +380,7 @@ the target:
 |---|---|
 | `no_credentials` | no access was given for it |
 | `insufficient_permission:<scope>` | the access scheck was given cannot read this; it needs `<scope>`, read-only where the provider offers it |
-| `not_on_plan:<feature>` | your plan with the provider does not include `<feature>`; for a host profile, not in the checks you chose (profile `<p>`) |
+| `not_on_plan:<feature>` | your plan with the provider does not include `<feature>`; for a host or Workspace profile (`not_on_plan:profile=<p>`), not in the checks you chose (profile `<p>`) |
 | `collector_not_built` | this version of scheck does not read `<kind>` |
 | `refused` | an asset refused the access scheck was given; its line names the cause by kind ("its host key changed, so it was not contacted", "GitHub did not accept the token") |
 | `not_declared` | not part of this engagement; to include it, list it under `roots` in `<file>` |
@@ -394,6 +394,7 @@ the target:
 | `unavailable:redirect_not_entry_point` | the site redirected to another of its pages, which scheck read only as the redirect (`<path>`) |
 | `unavailable:blocked` | a firewall or bot protection in front of the site (`<vendor>`) answered instead of the site, so this page was not judged; to have it checked, let scheck through for the run (it identifies itself as "`<user agent>`"), or run from another network |
 | `unavailable:address_not_public` | the name points at a private or reserved address, which scheck does not contact from outside a declared network |
+| `unavailable:oauth_unclassified` | some apps hold scopes this version of scheck does not classify, and none it classifies as broad |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
 

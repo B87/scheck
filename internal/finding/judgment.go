@@ -14,20 +14,29 @@ type Subject struct {
 // gate requests; Sources name operator declarations. The engagement report
 // applies severity and coverage policy (docs/spec/report.md, "Findings").
 type Judgment struct {
-	ID         string         `json:"id"`
-	Asset      string         `json:"asset"`
-	Subject    Subject        `json:"subject,omitzero"`
-	Verdict    string         `json:"verdict"`
-	Reason     string         `json:"reason,omitempty"`
-	Reads      []string       `json:"reads"`
-	Excerpt    string         `json:"excerpt,omitempty"`
-	NotChecked []string       `json:"not_checked,omitempty"`
-	Attributes []string       `json:"attributes,omitempty"`
-	Listed     []string       `json:"listed,omitempty"`
-	Sources    []string       `json:"source,omitempty"`
-	Details    map[string]any `json:"details,omitempty"`
-	Context    string         `json:"context,omitempty"`
+	ID         string   `json:"id"`
+	Asset      string   `json:"asset"`
+	Subject    Subject  `json:"subject,omitzero"`
+	Verdict    string   `json:"verdict"`
+	Reason     string   `json:"reason,omitempty"`
+	Reads      []string `json:"reads"`
+	Excerpt    string   `json:"excerpt,omitempty"`
+	NotChecked []string `json:"not_checked,omitempty"`
+	Attributes []string `json:"attributes,omitempty"`
+	Listed     []string `json:"listed,omitempty"`
+	// OfNote are listed subjects that matter more than the rest (an
+	// administrator who granted an OAuth app), with why.
+	OfNote  []OfNote       `json:"of_note,omitempty"`
+	Sources []string       `json:"source,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
+	Context string         `json:"context,omitempty"`
 	// Members retains the names represented by a wildcard judgment for
 	// takeover-confirmation suspension; it is not rendered by the report.
 	Members []string `json:"members,omitempty"`
+}
+
+// OfNote is one listed subject that matters more than the rest.
+type OfNote struct {
+	Key string `json:"key"`
+	Why string `json:"why"`
 }

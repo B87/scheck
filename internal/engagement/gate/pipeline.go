@@ -660,6 +660,9 @@ func (g *Gate) filter(r Request, a admitted, items []any, n int, ous []OrgUnit) 
 			}
 		}
 		rule := g.dropRule(r.Asset, l, it, set, ous)
+		if l.SelfRef != "" && (scalarAt(it, l.SelfRef) == "" || scalarAt(it, l.SelfRef) != a.b.params["user"]) {
+			rule = "unattributable"
+		}
 		if l.Assignment != nil {
 			rule = g.workspaceAssignment(r, a, it, ous)
 		}

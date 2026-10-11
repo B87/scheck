@@ -73,6 +73,17 @@ const (
 	WorkspaceADC Auth = "workspace_adc"
 )
 
+// WorkspaceSurface names an optional Workspace read surface with its own
+// token attempt (docs/spec/workspace-collector.md, "Credential files and
+// profiles"). The zero value is the baseline Directory credential.
+type WorkspaceSurface string
+
+// The Workspace credential surfaces.
+const (
+	WorkspaceBaseline    WorkspaceSurface = ""
+	WorkspaceOAuthGrants WorkspaceSurface = "oauth_grants"
+)
+
 // Kind is what a list op's items are. The excludable kinds need an
 // exclusion key, so an excluded item can be dropped before anything is
 // stored (docs/spec/scope.md, "Exclusion in responses").
@@ -139,6 +150,9 @@ type List struct {
 	// items that reference users: role assignments, group members, tokens.
 	// An item whose user is in the excluded-subject set is dropped.
 	UserRef string
+	// SelfRef is the item field that must equal the request's bound {user}
+	// parameter; an item naming anyone else is dropped as unattributable.
+	SelfRef string
 	// UserKeys are the fields of a user item that may name the user
 	// elsewhere (its id, its addresses, its contact addresses). A users
 	// list that declares them builds the excluded-subject set: every key
@@ -238,11 +252,14 @@ type Op struct {
 	// Subject is the canonical id template of what the op reads, which
 	// must fall under a root and no exclude. Empty for a principal op and
 	// a credential exchange.
-	Subject      string
-	Params       []Param
-	Class        Class
-	Level        Level
-	Auth         Auth
+	Subject string
+	Params  []Param
+	Class   Class
+	Level   Level
+	Auth    Auth
+	// Surface is the compiled Workspace credential an op uses; the gate
+	// maps it to one scope, and a collector never names a scope.
+	Surface      WorkspaceSurface
 	UserIdentity *UserIdentity
 	// Accept lists the response content types the op expects.
 	Accept []string
@@ -709,10 +726,13 @@ func (c *compiled) validateBody() error {
 			return err
 		}
 	}
-	for _, f := range slices.Concat([]string{l.ExcludeKey, l.UserRef}, l.UserKeys, l.UserIDs) {
+	for _, f := range slices.Concat([]string{l.ExcludeKey, l.UserRef, l.SelfRef}, l.UserKeys, l.UserIDs) {
 		if f != "" && !fieldPath.MatchString(f) {
 			return fmt.Errorf("item field %q is not a field path", f)
 		}
+	}
+	if l.SelfRef != "" && (c.types["user"].Type != UserKey || c.types["user"].Optional || !slices.Contains(op.Keep, l.SelfRef)) {
+		return errors.New("a self-referencing list needs a required user parameter and keeps the reference")
 	}
 	if l.Kind == KindRepo || l.Kind == KindProject {
 		want := "repo:github:{key}"
@@ -782,14 +802,16 @@ func NewRegistry(ops ...Op) (*Registry, error) {
 	}
 	for _, c := range r.ops {
 		if c.Auth == WorkspaceADC {
-			token, err := validate(workspaceTokenOp())
-			if err != nil {
-				return nil, err
+			for _, op := range workspaceTokenOps() {
+				token, err := validate(op)
+				if err != nil {
+					return nil, err
+				}
+				if _, exists := r.ops[token.ID]; exists {
+					return nil, errors.New("credential exchange id is reserved")
+				}
+				r.ops[token.ID] = token
 			}
-			if _, exists := r.ops[token.ID]; exists {
-				return nil, errors.New("credential exchange id is reserved")
-			}
-			r.ops[token.ID] = token
 			break
 		}
 	}

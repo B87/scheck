@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -16,7 +17,7 @@ func workspaceInventoryReport(_ *testing.T) Input {
 	const asset = "saas:google-workspace:example.com"
 	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	return Input{Version: "test", Name: "Workspace inventory review", Operator: "Dani", Trigger: "routine", Zone: time.UTC, Path: "engagement.yaml", SHA256: strings.Repeat("a", 64), Started: at, Finished: at.Add(time.Minute), Rerun: "scheck run engagement.yaml", LevelsUsed: []string{"observe"},
-		Assets: []AssetInput{{Name: "Workspace", ID: asset, Kind: "saas", Root: true, Status: "collected", Collector: "workspace", InventoryRead: true, Detail: "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build.", NetworkPrincipal: &Principal{Identity: "unknown", ScopesSource: "unknown"}, InventoryNotes: []Note{
+		Assets: []AssetInput{{Name: "Workspace", ID: asset, Kind: "saas", Root: true, Status: "collected", Collector: "workspace", InventoryRead: true, NotOnPlan: []NotOnPlan{{Rules: []string{"workspace.oauth_broad_scope"}, Reason: "not_on_plan:profile=directory", Detail: "The default Workspace profile, directory, does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission"}}, Detail: "Workspace tenant inventory collected. Account security and administrator-access rules are not implemented in this build.", NetworkPrincipal: &Principal{Identity: "unknown", ScopesSource: "unknown"}, InventoryNotes: []Note{
 			{Kind: "workspace_credential", Source: asset, Detail: "Returned credential permissions are unknown; effective permissions were not tested."},
 			{Kind: "workspace_inventory", Source: asset, Detail: "domains: observed 2; organizational units: observed 3; accounts: observed 6. Inventory alone does not assess account security or administrator access."},
 			{Kind: "workspace_inventory", Source: asset, Detail: "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report."},
@@ -162,17 +163,19 @@ func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
 	if !raised || !admin {
 		t.Fatal(r.Findings)
 	}
-	var twoStep, oauth *SubItem
+	var twoStep, oauth, delegation *SubItem
 	for _, si := range row(t, r, "identity").SubItems {
-		if strings.HasPrefix(si.Name, "Workspace 2-step verification") {
+		switch {
+		case strings.HasPrefix(si.Name, "Workspace 2-step verification"):
 			twoStep = &si
-		}
-		if si.Name == "Workspace OAuth grants and domain-wide delegation" {
+		case si.Name == "Workspace OAuth grants (third-party app access)":
 			oauth = &si
+		case si.Name == "Workspace domain-wide delegation":
+			delegation = &si
 		}
 	}
-	if twoStep == nil || twoStep.Mark != "partial" || oauth == nil || oauth.Mark != "not_assessed" || oauth.Reasons[0].Reason != "no_rule" {
-		t.Fatal(twoStep, oauth)
+	if twoStep == nil || twoStep.Mark != "partial" || oauth == nil || oauth.Mark != "not_assessed" || oauth.Reasons[0].Reason != "not_on_plan:profile=directory" || delegation == nil || delegation.Mark != "not_assessed" || delegation.Reasons[0].Reason != "no_rule" {
+		t.Fatal(twoStep, oauth, delegation)
 	}
 	if !slices.ContainsFunc(twoStep.Reasons, func(d ReasonDetail) bool {
 		return strings.Contains(d.Detail, "Not checked: organizational-unit policy")
@@ -211,5 +214,91 @@ func TestWorkspaceTwoStepWithoutOutcomesIsNotAssessed(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("2-step coverage sub-item missing")
+	}
+}
+
+// workspaceOAuthReport renders the optional OAuth grant surface: a broad app
+// a super administrator granted, an unclassified app, a narrow app and a
+// label carrying a terminal escape.
+func workspaceOAuthReport(t *testing.T) Input {
+	in := workspaceInventoryReport(t)
+	a := &in.Assets[0]
+	a.NotOnPlan = nil
+	a.Detail = "Workspace inventory, identity/administrator, 2-step verification and OAuth grant checks collected; notes and coverage show any unresolved evidence."
+	user := func(id string, admin bool) workspace.User {
+		return workspace.User{ID: id, Primary: id + "@example.com", Customer: "C123", Unit: "/", Suspended: new(false), Archived: new(false), IsAdmin: new(admin), Enforced: new(true), Enrolled: new(true)}
+	}
+	users := []workspace.User{user("admin", true), user("carol", false), user("dan", false)}
+	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Domain: "example.com", Profile: "directory_oauth", Surfaces: []gate.WorkspaceSurface{gate.WorkspaceOAuthGrants}}, Users: workspace.Population[workspace.User]{Items: users, Complete: true, Reads: []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}}, Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}}}}
+	e.Access.Roles.Complete, e.Access.Privileges.Complete = true, true
+	e.OAuth = workspace.OAuthEvidence{Selected: true, Complete: true}
+	const p = "https://www.googleapis.com/auth/"
+	grants := map[string][]workspace.Grant{
+		"admin": {{ClientID: "123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com", Label: "Shiny \x1b[31mDocs", Scopes: []string{p + "drive", "openid"}, ScopesKnown: true}},
+		"carol": {{ClientID: "123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com", Label: "Shiny \x1b[31mDocs", Scopes: []string{p + "drive.readonly"}, ScopesKnown: true}, {ClientID: "77185425430.apps.googleusercontent.com", Label: "Google Chrome", Scopes: []string{"https://www.google.com/accounts/OAuthLogin"}, ScopesKnown: true, NativeApp: new(true)}},
+		"dan":   {{ClientID: "555555555555-sso0login0only0q2w3e4r5t6y7u8i9o0p.apps.googleusercontent.com", Label: "Team Chat", Scopes: []string{"email", "openid", "profile"}, ScopesKnown: true}},
+	}
+	for i, u := range users {
+		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
+		e.OAuth.Accounts = append(e.OAuth.Accounts, workspace.AccountGrants{ID: u.ID, Read: workspace.Read{Op: workspace.OpUserTokens, RequestID: fmt.Sprintf("g%06d", 20+i), Decision: "sent", Status: 200}, Grants: grants[u.ID], Usable: true, Complete: true})
+	}
+	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC}
+	for _, j := range workspace.Judge(e, a.ID, c) {
+		if j.ID == workspace.IDOAuthBroadScope {
+			a.Judged = append(a.Judged, j)
+		}
+	}
+	for _, n := range workspace.Readout(e, a.ID, c) {
+		if strings.Contains(n.Detail, "app") || strings.Contains(n.Detail, "credential") {
+			a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
+		}
+	}
+	return in
+}
+
+func TestWorkspaceOAuthRaiseCoverageAndAcceptance(t *testing.T) {
+	r := Build(workspaceOAuthReport(t))
+	var app *Finding
+	for i, f := range r.Findings {
+		if f.ID == "workspace.oauth_broad_scope" {
+			app = &r.Findings[i]
+		}
+	}
+	if app == nil || app.Severity != "high" || len(app.Adjustments) != 1 || app.Adjustments[0].Rule != "attribute:admin_grantor" || app.Subject == nil || app.Subject.Kind != "oauth_app" ||
+		app.AcceptTemplate == nil || !app.AcceptTemplate.BySubject || app.AcceptTemplate.Subject != "123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com" {
+		t.Fatalf("%+v", app)
+	}
+	if len(app.WhyHere) != 1 || !strings.HasPrefix(app.WhyHere[0], "admin@example.com is a super administrator and granted this app the scope drive") {
+		t.Fatal(app.WhyHere)
+	}
+	var oauth *SubItem
+	for _, si := range row(t, r, "identity").SubItems {
+		if si.Name == "Workspace OAuth grants (third-party app access)" {
+			oauth = &si
+		}
+	}
+	if oauth == nil || oauth.Mark != "partial" || !slices.ContainsFunc(oauth.Reasons, func(d ReasonDetail) bool {
+		return d.Reason == "unavailable:oauth_unclassified" && strings.HasPrefix(d.Detail, "1 app holds scopes scheck does not classify")
+	}) {
+		t.Fatal(oauth)
+	}
+	var b bytes.Buffer
+	if err := WriteText(&b, r, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "\x1b") {
+		t.Fatal("a label's terminal escape reached the text report")
+	}
+	// An acceptance by client id accepts that app only.
+	in := workspaceOAuthReport(t)
+	in.Acceptances = []AcceptanceInput{
+		{Entry: "engagement.yaml intent.accepted_risks[0]", ID: "workspace.oauth_broad_scope", Asset: "Workspace", AssetID: in.Assets[0].ID, Subject: "210987654321-a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.apps.googleusercontent.com", Reason: "r", AcceptedBy: "dani", Expires: "2027-01-01"},
+	}
+	if f := Build(in).Findings[0]; f.Status != finding.StatusOpen {
+		t.Fatal("another app's acceptance accepted this one", f)
+	}
+	in.Acceptances[0].Subject = app.Subject.Key
+	if f := Build(in).Findings[0]; f.Status != finding.StatusAccepted || f.Acceptance == nil || f.Acceptance.CoversEveryInstance {
+		t.Fatal("the app's own acceptance did not apply", f)
 	}
 }

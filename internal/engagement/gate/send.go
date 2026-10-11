@@ -421,8 +421,7 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if a.b.op.Auth == WorkspaceADC && resp.StatusCode == http.StatusUnauthorized {
-		session := g.workspace[s.r.Asset]
-		session.bound, session.credential = false, nil
+		g.workspace[s.r.Asset].dropAuth()
 	}
 	if s.r.exchange != nil || workspaceBootstrapPath(a.b.op.ID) != "" {
 		return s.workspaceResponse(resp)
@@ -567,6 +566,13 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 			} else {
 				out.Body = []byte(`{"error":"metadata read did not succeed"}`)
 			}
+			// A Google 403 that is a rate limit stays one (docs/spec/scope.md,
+			// "Status codes that mislead"): the fixed body keeps only that.
+			if op.Auth == WorkspaceADC && resp.StatusCode == http.StatusForbidden {
+				if redacted, _, err := red.RedactJSON(raw); err == nil && googleRateLimited(redacted) {
+					out.Body = []byte(`{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}`)
+				}
+			}
 			break
 		}
 		if op.json {
@@ -686,6 +692,11 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 		res.Detail = "authorize the token for SAML single sign-on"
 	case s == 403, s == 404 && r.Exists:
 		res.Reason = "insufficient_permission"
+		// An optional Workspace surface names the one scope it needs; a
+		// collector never names a scope.
+		if scope := workspaceSurfaceScope(a.b.op.Surface); scope != "" && s == 403 {
+			res.Reason += ":" + strings.TrimPrefix(scope, googleScopePrefix)
+		}
 	case s >= 500:
 		res.end("unavailable:server_error", res.Detail)
 	}

@@ -761,6 +761,7 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"spf_macro":                "SPF uses macros that require a message sender to evaluate",
 			"dkim_key":                 "the DKIM key could not be parsed or was absent or revoked",
 			"dkim_multiple_keys":       "multiple DKIM keys leave the selector ambiguous",
+			"oauth_unclassified":       "some apps hold scopes this version of scheck does not classify, and none it classifies as broad",
 		}[arg]; ok {
 			return detail
 		}

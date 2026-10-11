@@ -87,3 +87,17 @@ func init() {
 	detail.UserIdentity = userIdentity()
 	Ops = append(Ops, roles, privileges, indirect, detail)
 }
+
+// OpUserTokens reads one admitted account's OAuth grants with the optional
+// surface's own token; no token value is kept (docs/spec/workspace-collector.md,
+// "Reads and projections").
+const OpUserTokens = "workspace.user_tokens"
+
+func init() {
+	tokens := foundationOp(OpUserTokens, "/users/{user}/tokens", []string{"clientId", "scopes", "userKey", "displayText", "anonymous", "nativeApp"}, false)
+	tokens.Subject += "/users/{user}"
+	tokens.Params = append(tokens.Params, gate.Param{Name: "user", Type: gate.UserKey})
+	tokens.Surface = gate.WorkspaceOAuthGrants
+	tokens.List = &gate.List{Items: "items", Kind: gate.KindOther, Envelope: "admin#directory#tokenList", MaxItems: 1000, SelfRef: "userKey"}
+	Ops = append(Ops, tokens)
+}

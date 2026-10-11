@@ -86,6 +86,7 @@ type Population[T any] struct {
 }
 type Evidence struct {
 	Access            AccessEvidence     `json:"access"`
+	OAuth             OAuthEvidence      `json:"oauth"`
 	InventoryComplete bool               `json:"inventory_complete"`
 	Binding           Binding            `json:"binding"`
 	Domains           Population[Domain] `json:"domains"`
@@ -148,6 +149,7 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 		}
 	}
 	e.collectAccess(ctx, sender, target, view)
+	e.collectGrants(ctx, sender, target, view)
 	e.finish(target.Asset, view)
 	e.Judgments = Judge(e, target.Asset, view)
 	return e
@@ -247,6 +249,9 @@ func (e Evidence) Reads() []Read {
 		if account.DetailRead.Op != "" {
 			out = append(out, account.DetailRead)
 		}
+	}
+	for _, account := range e.OAuth.Accounts {
+		out = append(out, account.Read)
 	}
 	return out
 }

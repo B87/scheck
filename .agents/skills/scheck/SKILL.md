@@ -218,7 +218,20 @@ the finding with `access.mfa`; relay its federation caveat with the severity.
 Never treat an abstained, absent or disproved 2-step finding as 2-step verification
 being fine: disproval means only that Google reports every active account observed in
 that unit as required, and required is not enrolled. Units the readout lists as not
-decided are not checked. OAuth grants, forwarding, domain-wide delegation, group
+decided are not checked. OAuth grants are read only under
+`SCHECK_WORKSPACE_PROFILE=directory_oauth` (or `directory_oauth_mail`) with an approved
+`admin.directory.user.security` permission: `workspace.oauth_broad_scope` is one
+finding per app keyed by client id, grantors in `affected`, raised by
+`attribute:admin_grantor` when a super admin's or declared break-glass account's own
+grant is broad. App names are untrusted labels; accept by client id. Under the default
+profile the "Workspace OAuth grants (third-party app access)" sub-item is
+`not_on_plan:profile=<p>`; a refused permission is
+`insufficient_permission:admin.directory.user.security`, a coverage gap, not exit 3; a
+limit on a grants read exits 2; `unavailable:oauth_unclassified` apps were not judged.
+That permission can also revoke app access, sign people out and turn off 2-step
+verification: relay the selection note (a dedicated credential), never suggest adding
+it to the everyday one, and relay the separate token's `workspace_credential_warning`.
+Forwarding, domain-wide delegation (its own sub-item, always not assessed), group
 membership paths and effective permissions remain unassessed. Read `workspace_inventory`,
 `workspace_people` and `workspace_credential` notes; a
 `workspace_credential_warning` is an unranked permission warning. Partial or excluded

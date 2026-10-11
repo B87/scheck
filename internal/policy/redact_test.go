@@ -439,3 +439,16 @@ func TestTruncateNeverSplitsAMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestCutLabelKeepsCharactersAndMarkersWhole(t *testing.T) {
+	if got := CutLabel("short", 10); got != "short" {
+		t.Fatal(got)
+	}
+	if got := CutLabel(strings.Repeat("Ä", 10), 5); got != "ÄÄ[TRUNCATED:16 bytes]" {
+		t.Fatal(got)
+	}
+	label := "App [REDACTED:github-token:40 bytes] tail"
+	if got := CutLabel(label, 8); got != "App [REDACTED:github-token:40 bytes][TRUNCATED:5 bytes]" {
+		t.Fatal(got)
+	}
+}

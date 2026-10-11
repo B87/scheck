@@ -114,7 +114,7 @@
       ],
       "reasons": [
         {
-          "detail": "Workspace OAuth grants and domain-wide delegation remain unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
+          "detail": "Workspace domain-wide delegation remains unassessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
           "reason": "no_rule"
         }
       ],
@@ -185,10 +185,24 @@
         {
           "asset": "saas:google-workspace:example.com",
           "mark": "not_assessed",
-          "name": "Workspace OAuth grants and domain-wide delegation",
+          "name": "Workspace OAuth grants (third-party app access)",
           "reasons": [
             {
-              "detail": "Not assessed in this build; effective permissions and group membership paths were not tested",
+              "detail": "The default Workspace profile, directory, does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission",
+              "reason": "not_on_plan:profile=directory"
+            }
+          ],
+          "rules": [
+            "workspace.oauth_broad_scope"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace domain-wide delegation",
+          "reasons": [
+            {
+              "detail": "Nothing was read: Google offers no Directory read for it. Review it in the Admin console at Security → Access and data control → API controls → Manage Domain Wide Delegation. With a service-account credential, scheck's own delegation is listed there",
               "reason": "no_rule"
             }
           ]
@@ -601,7 +615,7 @@
       "source": "saas:google-workspace:example.com"
     },
     {
-      "detail": "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. OAuth grants and Gmail forwarding are not assessed in this build.",
+      "detail": "Administrative checks cover current super-administrator flags and supported direct or indirect role assignments. Group membership paths and effective permissions were not tested. Gmail forwarding is not assessed in this build.",
       "kind": "workspace_inventory",
       "source": "saas:google-workspace:example.com"
     },

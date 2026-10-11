@@ -65,28 +65,8 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 
 	users := slices.Clone(e.Users.Items)
 	attributions := attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete)
-	priority := func(u User) int {
-		for _, a := range attributions {
-			if a.ProviderID == u.ID {
-				if p := person(view, a.Handle); p != nil && leftPassed(p.Left, view) {
-					return 0
-				}
-			}
-		}
-		if yes(u.IsAdmin) {
-			return 1
-		}
-		for _, a := range attributions {
-			if a.ProviderID == u.ID {
-				if p := person(view, a.Handle); p != nil && p.Kind == "contractor" {
-					return 2
-				}
-			}
-		}
-		return 3
-	}
 	slices.SortFunc(users, func(a, b User) int {
-		if x := priority(a) - priority(b); x != 0 {
+		if x := readPriority(a, attributions, view) - readPriority(b, attributions, view); x != 0 {
 			return x
 		}
 		return strings.Compare(a.ID, b.ID)
@@ -144,6 +124,30 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 		}
 	}
 }
+
+// readPriority orders per-account reads so a budget cut loses the least:
+// passed leavers, super administrators, contractors, then everyone else.
+func readPriority(u User, attributions []Attribution, view Context) int {
+	for _, a := range attributions {
+		if a.ProviderID == u.ID {
+			if p := person(view, a.Handle); p != nil && leftPassed(p.Left, view) {
+				return 0
+			}
+		}
+	}
+	if yes(u.IsAdmin) {
+		return 1
+	}
+	for _, a := range attributions {
+		if a.ProviderID == u.ID {
+			if p := person(view, a.Handle); p != nil && p.Kind == "contractor" {
+				return 2
+			}
+		}
+	}
+	return 3
+}
+
 func securityConflict(a, b User) bool {
 	for _, pair := range [][2]*bool{{a.Suspended, b.Suspended}, {a.Archived, b.Archived}, {a.IsAdmin, b.IsAdmin}, {a.IsDelegatedAdmin, b.IsDelegatedAdmin}} {
 		if pair[0] != nil && pair[1] != nil && *pair[0] != *pair[1] {

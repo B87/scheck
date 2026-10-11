@@ -354,14 +354,25 @@ func plural(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
+// shownNames is how many accounts or apps a text names before pointing at
+// the JSON report, which lists every one.
+const shownNames = 20
+
+// capped names at most shownNames entries, then how many more there are.
+func capped(names []string) string {
+	if len(names) <= shownNames {
+		return strings.Join(names, ", ")
+	}
+	return strings.Join(names[:shownNames], ", ") + fmt.Sprintf(", and %d more listed in the JSON report", len(names)-shownNames)
+}
+
 // listAccounts names affected accounts in the text, capped; the finding's
 // affected list carries every one.
 func listAccounts(groups ...[]string) string {
-	const shown = 20
 	parts, n, total := []string{}, 0, 0
 	for i, group := range groups {
 		total += len(group)
-		take := min(len(group), max(shown-n, 0))
+		take := min(len(group), max(shownNames-n, 0))
 		if take > 0 {
 			parts = append(parts, []string{"Not enrolled: ", "Enrolled: ", "Enrollment unknown: "}[i]+strings.Join(group[:take], ", ")+".")
 			n += take

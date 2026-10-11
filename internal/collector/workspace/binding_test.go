@@ -28,8 +28,8 @@ func TestFoundationSurface(t *testing.T) {
 	if _, err := gate.NewRegistry(Ops...); err != nil {
 		t.Fatal(err)
 	}
-	if len(Ops) != 13 {
-		t.Fatal("unexpected step 1 read surface")
+	if len(Ops) != 14 {
+		t.Fatal("unexpected read surface")
 	}
 	for _, op := range Ops {
 		if op.Method != gate.GET || op.Auth != gate.WorkspaceADC {

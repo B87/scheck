@@ -5,8 +5,9 @@ review froze this design on 2026-10-10. Steps 1 and 2 implement credentials, ten
 binding and inventory through engagement Recon and report integration. Step 3
 implements identity and administrator rules, with offline checks and reviews
 completed on 2026-10-10. Step 4 implements observed 2-step verification offline on
-2026-10-11. Optional OAuth/Gmail reads remain planned. No live measurement or release
-gate is claimed here.
+2026-10-11. Step 5 implements optional OAuth grant metadata offline on 2026-10-11.
+Optional Gmail forwarding reads remain planned (step 6). No live measurement or
+release gate is claimed here.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -16,8 +17,9 @@ thresholds and severity adjustments ([engagement.md](engagement.md), "People",
 
 ## Boundary
 
-Every target operation is a compiled `GET` through the gate. The only `POST` is the
-separately declared, budgeted credential exchange at the literal endpoint
+Every target operation is a compiled `GET` through the gate. The only `POST`s are the
+separately declared, budgeted credential exchanges, the baseline one and one per
+compiled optional surface, at the literal endpoint
 `https://oauth2.googleapis.com/token`. Its secret body and response never enter
 evidence, audit output or persisted state. Assertions are signed in process with a
 fixed audience and a 300-second lifetime. The gate signs `RS256` assertions with
@@ -85,8 +87,8 @@ requires a fresh ordered bootstrap before a later tenant read.
 | Profile | Reads selected |
 |---|---|
 | `directory` (default) | Baseline Directory inventory and identity |
-| `directory_oauth` | Directory plus per-user OAuth grant metadata |
-| `directory_mail` | Directory plus per-user Gmail forwarding settings |
+| `directory_oauth` | Directory plus per-user OAuth grant metadata (step 5) |
+| `directory_mail` | Directory plus per-user Gmail forwarding settings (planned, step 6) |
 | `directory_oauth_mail` | All three selected surfaces |
 
 The nonsecret profile is recorded for coverage and invalidation. A profile narrows
@@ -94,12 +96,40 @@ the operation catalog; it never widens tenant scope or permits a write. Missing
 permissions remain a gap. No automatic broader-scope request or fallback to a
 write-capable Gmail scope fills one.
 
-Every profile authenticates the tenant-binding bootstrap with only the baseline
-Directory scopes below. Selecting optional checks does not add security or Gmail
-scopes to this initial assertion and does not make baseline checks depend on those
-grants. Steps 5 and 6 add separate token attempts for the exact selected optional
-surface after user admission; their denial remains an optional coverage gap. An
-`authorized_user` refresh uses the existing grant, never silently adds scopes.
+Every profile authenticates the tenant-binding bootstrap with the baseline credential
+only. A service-account bootstrap asserts only the baseline Directory scopes below. An
+`authorized_user` baseline refresh sends no `scope` parameter, so Google returns a token
+for everything the existing grant holds: it never adds scopes, and it is not narrowed to
+the baseline either. Selecting optional checks does not add security or Gmail scopes to
+the bootstrap and does not make baseline checks depend on those grants.
+
+**Optional surface token.** An operation compiled with an optional surface
+(`Op.Surface`; step 5's `oauth_grants`) never uses the baseline token. The gate maps the
+surface to exactly one scope, `admin.directory.user.security` for OAuth grants; a
+collector never names a scope. The gate refuses such an operation with
+`unavailable:profile_not_selected` when the profile does not select the surface
+(`directory_oauth` and `directory_oauth_mail` select OAuth grants), and, for a service
+account, with `unavailable:principal_unknown` until the delegated subject is verified
+("Principal and resume"). After baseline admission it makes one exchange under the
+surface's own audited operation, `workspace.credential_exchange_oauth_grants`, never
+retried. A service account asserts exactly that one scope, with the same issuer and
+subject. An `authorized_user` refresh sends `scope=` that one scope; that Google then
+downscopes the token, and answers `invalid_scope` for a scope the grant lacks, is
+assumed and not yet measured live. The optional token's expiry is capped at the baseline
+token's. The token, and a remembered failure, are cleared with the tenant binding: on a
+bootstrap operation, an HTTP 401, baseline expiry and `credential_changed`.
+
+A failed optional exchange is remembered for the session: later reads of the surface
+send nothing and carry the same classification. It is never a refusal of the asset and
+never exits 3. `invalid_scope`, `unauthorized_client` and `access_denied` are
+`insufficient_permission:admin.directory.user.security`, a coverage gap; a rate limit
+is `limit_reached`, exit 2; any other failure is `unavailable:credential_exchange`. A
+per-account 403 on an optional-surface read is
+`insufficient_permission:admin.directory.user.security` too, the scope named by the
+gate; a 404 names no scope. A Workspace 403 whose error reason is `rateLimitExceeded`
+or `userRateLimitExceeded` is a rate limit on every Workspace read, retried and then
+`limit_reached` ([scope.md](scope.md), "Status codes that mislead"); its retained
+error body stays fixed text. Step 6 adds Gmail forwarding as a further surface.
 
 All baseline scope names below have the prefix
 `https://www.googleapis.com/auth/`:
@@ -112,7 +142,8 @@ All baseline scope names below have the prefix
 
 Optional group context uses `admin.directory.group.readonly`. OAuth metadata needs
 `admin.directory.user.security`, which has no read-only variant; the optional
-profile requires an existing approved credential and reports broader observed grants.
+profile requires an existing approved credential, and any token issued for it produces
+the separate credential warning in "OAuth grants".
 Gmail forwarding reads use `gmail.readonly`. An already approved credential carrying
 `gmail.settings.basic` can permit the same compiled reads, but that scope is write
 capable and is never requested as an automatic fallback. Domain-wide delegation must
@@ -140,8 +171,13 @@ Each domain and alias population is limited to 1,000 records; an actual excess i
 foreign names and ids, response headers and body hashes remain private; its audit
 identifies the declared root and compiled path, not unbound tenant selectors. The
 audit URL is sanitized during request binding, before any later refusal can record it. Only
-the successfully bound customer id, declared root, selected profile and usable
-returned scope evidence leave the private bootstrap.
+the successfully bound customer id, declared root, selected profile, the optional
+surfaces that profile selects (`surfaces`; profile names stay in the gate), usable
+returned scope evidence and, for an `authorized_user` credential, its client id as
+`assessment_client` leave the private bootstrap. A successful client-authenticated
+refresh proves that client id, never whose sign-in the refresh token holds. The
+collector keeps `assessment_client` only from an unredacted summary, at most 256 bytes,
+with no control character or whitespace.
 
 `workspace.Bind` owns the three ordered sends through a small `Sender` interface;
 engagement never sequences bootstrap operations. Bootstrap id constants are unexported
@@ -238,7 +274,7 @@ secondary domains and aliases.
 | Roles | `/admin/directory/v1/customer/{customer}/roles` | `kind`, `roleId`, `roleName`, `rolePrivileges.serviceId`, `rolePrivileges.privilegeName` and `isSuperAdminRole` |
 | Privilege tree | `/admin/directory/v1/customer/{customer}/roles/ALL/privileges` | `kind`, `serviceId`, `privilegeName`, recursive `childPrivileges` and `isOuScopable` |
 | Per-user role assignments | `/admin/directory/v1/customer/{customer}/roleassignments`, fixed `userKey={user}` and `includeIndirectRoleAssignments=true` | Assignment/assignee/role ids, assignee type, CUSTOMER/OU scope, condition presence and `expirationDetails.expireTime` |
-| OAuth grants | `/admin/directory/v1/users/{user}/tokens` | Client id, scopes, grantor id and display label; no token value |
+| OAuth grants | `/admin/directory/v1/users/{user}/tokens`, no query, with the `oauth_grants` token | `clientId`, `scopes`, `userKey`, `displayText`, `anonymous` and `nativeApp`; no token value |
 | Auto-forwarding | `/gmail/v1/users/{user}/settings/autoForwarding` | Enabled state and destination |
 | Forwarding filters | `/gmail/v1/users/{user}/settings/filters` | Filter id and `action.forward` only |
 
@@ -272,6 +308,25 @@ for the 2-step rules; fresh detail only fills a flag the list lacks. Conflicting
 list/detail identity or security values cause abstention and a diagnostic note.
 Flag-specific conflicts are in "Observed 2-step verification".
 
+Step 5 reads OAuth grants after every baseline read, for every admitted account,
+suspended and archived included: passed leavers, super admins, contractors, then the
+rest, active before inactive within each. A result the gate marks `Repeats` (every
+later request of the kind would end the same way: a remembered optional failure, the
+profile not selecting the surface, an unverified principal, binding or authentication
+gone) is recorded once and stops the sequence; a per-account refusal does not. The gate
+pins the registration: the path above with no query, subject `users/{user}`, list
+`items` in an exact `admin#directory#tokenList` envelope, at most 1,000 items, no
+paging, `SelfRef: userKey`, and kept fields only from the six above. The gate drops an
+item whose `userKey` is missing or differs from the requested admitted id as
+unattributable ([scope.md](scope.md), "Responses"); that account's grants are then
+incomplete, and a note names it. A grant with a missing or non-string `clientId`,
+`scopes` missing, not an array or holding an empty string, or a wrongly typed
+`displayText`, `anonymous` or `nativeApp` is malformed: the account's grants are
+incomplete and a note names it. An empty `scopes` array is a grant whose access is
+unknown. A redaction marker confined to `displayText` keeps the read usable: an app
+chooses its own name and must not hide its grants behind it. A marker in any other
+field leaves the account's read unusable.
+
 ### Population bounds
 
 Pages continue through an empty list with a nonempty next token. The gate rebuilds
@@ -294,14 +349,17 @@ the refresh fails. An earlier page cannot restore current-user admission.
 | Privilege tree | 1,000 nodes, depth 32, 1 MiB | Single result; exact `admin#directory#privileges` envelope |
 | Per-user assignments | 1,000 per user | 10 pages of 100 |
 | Assignment observations | 10,000 per tenant | Across assignment reads |
-| OAuth grants | 1,000 per user | Single array |
+| OAuth grants | 1,000 per user | Single array; over the cap the whole read is `limit_reached` |
 | Gmail filters | 1,000 per user | Single array |
 
 The privilege-tree depth counts node levels. A level-32 node with an empty child
 array is within the bound; a further child is not.
 
 Additional data or a next token beyond a cap marks incomplete execution, exit 2,
-without discarding positive findings. Reaching exactly a cap with no further data is
+without discarding positive findings from earlier pages. A single array over its cap is
+not kept at all: the read is `limit_reached`, exit 2, and positive findings in it are
+lost. For OAuth grants that loses every grant of that account, and the account counts
+as not read. Reaching exactly a cap with no further data is
 not itself proof of a cut. The global gate budget still takes precedence. Partial
 populations prove presence, never absence; counts say "at least".
 
@@ -373,8 +431,8 @@ denied, redacted or truncated evidence is unknown.
 Shared identity definitions use provider-neutral prose. Workspace-specific definitions
 are registered from the collector beside `Judge` through `finding.Register`;
 `finding.Lookup` remains the report and explain read path. Step 3 evaluates the first
-nine rules below and step 4 the two 2-step-verification rules; the OAuth and
-forwarding rules remain planned.
+nine rules below, step 4 the two 2-step-verification rules and step 5 the OAuth rule;
+the forwarding rule remains planned (step 6).
 
 | Rule | Base severity / subject | Fires | Disproves | Abstains |
 |---|---|---|---|---|
@@ -389,7 +447,7 @@ forwarding rules remain planned.
 | `workspace.suspended_admin_assignment` | medium / account | Suspended account retains super flag or supported privileged direct/indirect assignment | Complete admin metadata proves no assignment | Unknown suspension or partial/uninterpreted roles |
 | `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |
 | `workspace.admin_without_two_step` | high / account | Known-active super admin or supported privileged delegate explicitly has `isEnrolledIn2Sv:false`, enforced or not | Explicit enrollment `true`, known inactive, or admin status known false | Unknown admin status, enrollment, activity, or a conflict |
-| `workspace.oauth_broad_scope` | medium / oauth_app, `+1` super-admin or declared break-glass grantor | An exact supported broad scope is observed | Complete app-grant population contains only recognized narrow scopes | Unknown fields/scopes or partial/unread absence |
+| `workspace.oauth_broad_scope` | medium / oauth_app, `+1 attribute:admin_grantor` when a known-active super admin's or declared break-glass account's own grant is broad | A known-active grantor's grant to the app holds a supported broad scope | On a complete grant population, the app holds only recognized sign-in scopes, or access beyond sign-in only through suspended or archived accounts | Broad only through accounts of unknown status, only unclassified scopes, or a partial population; asset-level outcomes in "OAuth grants" |
 | `workspace.external_forwarding` | medium / account | Active mailbox has enabled auto-forwarding or filter forwarding outside complete verified tenant domains | Both settings reads are known complete with no external destination | Missing delegation/scope/read/domain/destination evidence or malformed data |
 
 Admin counts follow [engagement.md](engagement.md), "Admins": exclude declared service
@@ -500,29 +558,136 @@ Counts in notes say "at least" on a partial population. Remediation reviews curr
 flags and console policy/grace settings, and enrolls admins using hardware keys where
 appropriate.
 
+### OAuth grants
+
+The rule is `workspace.oauth_broad_scope`: identity area, category
+`third-party-apps`, not an exposure, subject `oauth_app` keyed by the exact client id,
+base medium for every broad scope (read or change is said in the excerpt). Grants
+aggregate once per client id across the tenant; the collector classifies each app once
+(`oauthView`) and the rule and readout notes both read that. A grantor is known active,
+known inactive (suspended or archived) or unknown (unknown status or a conflicting
+fresh detail). Per app, the first matching row decides:
+
+| Outcome | When | Judgment |
+|---|---|---|
+| Broad | a known-active grantor's own grant holds a supported broad scope | fires; `affected` lists those grantors, admin grantors first, with each super-admin or break-glass grantor also under `affected.of_note` |
+| Status unknown | broad only through grantors of unknown status | abstains |
+| Unclassified | no broad scope, and some active or unknown-status grant holds a scope outside the table, or Google reported it with none | abstains with `unavailable:oauth_unclassified` |
+| Inactive only | beyond sign-in only through suspended or archived grantors | disproved on a complete population ("see the cleanup note"); abstains otherwise ("in the grants read") |
+| Sign-in only | only recognized sign-in scopes | disproved on a complete population; abstains otherwise |
+
+Suspended and archived grantors never make an app fire; they are listed as
+`inactive_grantors` and in the cleanup note. A fired excerpt counts unknown-status
+grantors that also granted broad access and names unclassified scopes the app also
+holds. No grantor kind is exempt. `nativeApp` and `anonymous` are context in the
+excerpt, never an outcome: an installed app may be Google's or Apple's own (Drive for
+desktop, Mail), "where the risk is the device that holds the grant". Details are
+scalars: `scopes_read`, `scopes_change`, `scopes_unknown` and `scopes_narrow`
+space-separated; `admin_grantors`, `delegated_admin_grantors`, `inactive_grantors` and
+`unknown_status_grantors` comma-separated, left out when empty; `native_app`,
+`anonymous`, `assessment_client`, `population_complete`, `table_version`, `labels` (a
+count, when Google reports more than one name) and, on a raise, `admin_grant_read`.
+
+**Raise.** `+1 attribute:admin_grantor` applies only when a known-active super admin
+(`isAdmin:true`, no conflict) or an account attributed to a declared `break_glass`
+person granted the app a broad scope in its own grant. Delegated administrators never
+raise; they are listed as `delegated_admin_grantors`. The raise cites that
+administrator's own tokens read, and its "Why here" is "<account> is a super
+administrator (or is declared as a break-glass account) and granted this app the
+scope(s) <scopes>[, as did N other administrator accounts]: whoever controls the app
+can use those scopes as <account>, though not that account's other administrator
+rights." When one of those scopes is `admin.directory.*`, the clause ends "including
+the administrator actions those scopes allow." The raise also applies to grants to the
+assessment client that were not set aside.
+
+**Asset-level outcomes.** When OAuth is selected, one judgment without a subject speaks
+for the surface:
+
+- no current account evidence: abstains;
+- no account's grants usable: abstains with the gate's reason for the first failure
+  (`insufficient_permission:admin.directory.user.security`, `limit_reached`) or
+  `unavailable:workspace_evidence`;
+- an incomplete grant population: always one abstention beside the per-app judgments,
+  "App grants were read for N of M accounts." or, when every listed account was read,
+  "App grants were read for every account listed, but the account list was incomplete.";
+- a complete population with no app: disproved, "Google reports no third-party app
+  grants for any of the N accounts read" (adding "other than the grant set aside as
+  scheck's own credential" when one was).
+
+Its details are `accounts_read`, `accounts`, `population_complete` and
+`table_version`. An account whose read Google refused (403) is unread; the others are
+judged, and coverage is partial. When the profile does not select OAuth there is no
+judgment at all, and coverage says `not_on_plan:profile=<profile>` ("Reporting and
+coverage").
+
+**Readout notes** come from the same view:
+
+- not selected: what the check finds (apps people allowed into their mail, Drive or
+  calendar, a common way an attacker keeps access after a phishing email), that
+  `admin.directory.user.security` comes only with the power to revoke app access, sign
+  people out and turn off 2-step verification, that the checks above do not need it,
+  and that a dedicated credential keeps the everyday one read-only; then
+  `SCHECK_WORKSPACE_PROFILE=directory_oauth`;
+- the optional exchange refused: how an administrator grants the permission, its
+  powers, a dedicated credential, and that nothing else in the run was affected; every
+  account's read refused by Google: the administrator role the acting account needs;
+- whenever a tokens read was sent or reused: a `workspace_credential_warning` that the
+  separate token holds `admin.directory.user.security` and what that permission also
+  allows, that scheck sent only declared reads, and where to remove the permission;
+- when any grants were read: the limits note (checked, and not checked: domain-wide
+  delegation, service-account keys, Marketplace installs for everyone, app passwords,
+  when each app was authorized or last used, what any app did);
+- the set-aside credential note;
+- on an incomplete population: counts as lower bounds and the unread accounts, each
+  with its reason (permission denied, limit, redacted, unreadable, not attempted),
+  super admins marked; the delegated-administrator sentence only when an unread super
+  admin was permission-denied;
+- a note per malformed or dropped-item account, naming it;
+- the cleanup note for suspended or archived accounts that still hold grants;
+- the unclassified-apps note listing them with the Admin console path.
+
+An app is always named by its client id. The name Google reports is chosen by whoever
+registered the app: it is redacted, cut at 120 bytes on a character boundary and never
+inside a redaction marker (`policy.CutLabel`, with `[TRUNCATED:<n> bytes]`), escaped
+when printed, quoted beside the client id, and never keys, matches or exempts
+anything. A fired excerpt with a name adds "The name is chosen by whoever registered
+the app; it does not show who made it."
+
 ### OAuth scope interpretation
 
-The exact table version is `2026-10-10`. Supported broad scopes have prefix
+The exact table version is `2026-10-11`. Supported broad scopes have prefix
 `https://www.googleapis.com/auth/`, except the full mail URI:
 
-`drive`, `drive.readonly`, `gmail.readonly`, `gmail.modify`, `admin.directory.user`,
-`admin.directory.user.security`, `admin.directory.rolemanagement`, `cloud-platform`,
-and `https://mail.google.com/`.
+| Access | Scopes |
+|---|---|
+| can read | `drive.readonly`, `gmail.readonly` |
+| can change | `drive`, `gmail.modify`, `admin.directory.user`, `admin.directory.user.security`, `admin.directory.rolemanagement`, `cloud-platform`, `https://mail.google.com/`, `gmail.settings.basic`, `gmail.settings.sharing`, `gmail.send`, `gmail.compose`, `gmail.insert` |
 
-Broad read sensitivity and write capability are distinguished. The only recognized
+The only recognized
 narrow scopes are `openid`, `email`, `profile`,
 `https://www.googleapis.com/auth/userinfo.email` and
 `https://www.googleapis.com/auth/userinfo.profile`. A broad scope plus unknown scopes
 can fire on the known broad scope; unknown-only abstains. Unknown is never narrow.
 Grants aggregate once per client id across the tenant, with scope union and grantor
 ids; partial populations retain lower bounds. Display names prove neither publisher
-identity, declared-tool matching nor approval.
+identity, declared-tool matching nor approval. Changing either table changes its
+version.
 
-The assessment client is exempt from a ranked grant finding only when its exact
-`authorized_user` client id is proven by successful client-authenticated refresh
-pairing. An arbitrary service-account JSON client id is not trusted for exemption;
-its JWT exchange proves the issuer assertion, not that local field. Unknown clients
-remain target OAuth applications rather than guessed assessment identities.
+scheck's own grant is set aside only by elimination. After a successful
+client-authenticated `authorized_user` refresh, the file's `client_id` is the proven
+assessment client (`assessment_client`, "Tenant binding and scope"). A grant to it is a
+candidate when its scopes include `admin.directory.user.security`. When the grant
+population is complete (the users population whole with no drops, every admitted
+account's grants read and recognized) and exactly one candidate exists, that grant is
+set aside: it is not judged, and an unranked credential note names the account, the
+client id and its scopes. Other grants to that client are judged normally. Otherwise
+nothing is set aside: a fired excerpt leads with "scheck authenticated with this
+client id; one of these grants may be the credential this run used.", and "Not
+checked" says "scheck cannot tell whose sign-in its credential file holds, so none of
+these grants was set aside as its own." A service-account client id is never set
+aside: its JWT exchange proves the issuer assertion, not that local field. Display
+names never select it. Unknown clients remain target OAuth applications rather than
+guessed assessment identities.
 
 ### Forwarding interpretation
 
@@ -548,8 +713,12 @@ summary keeps coverage partial when roles or per-user assignments are unavailabl
 or their administrative interpretation is unknown, even if observed false user
 flags settled individual rules. Collector-owned `InterpretationGaps` notes identify
 unknown roles, privileges, conditions or expiry. Step 4 adds `Context.MFA` and
-`Context.MFASource`, two 2-step rule outcomes and the 2-step readout notes. OAuth
-grants and forwarding remain unassessed. A mixed GitHub/Workspace identity row
+`Context.MFASource`, two 2-step rule outcomes and the 2-step readout notes. Step 5
+adds `OAuthEvidence`, the OAuth rule outcomes and readout notes, and
+`Evidence.NotOnPlan()`, the rule groups the bound profile does not read. Forwarding
+remains unassessed. Any `limit_reached` read, an OAuth grants read or the optional
+exchange's rate limit included, makes the Workspace asset incomplete, exit 2; a refused
+optional permission is a coverage gap only. A mixed GitHub/Workspace identity row
 cannot claim complete assessment from GitHub judgments alone. Inventory notes show lower bounds,
 permission failures, credential uncertainty and fresh delegated verification.
 Primary-address attribution is usable on observed records; alias-only attribution
@@ -561,10 +730,15 @@ Workspace-address declaration when their identity supplies the conclusion.
 
 Identity and access coverage contains decided administrative sub-items, the
 "Workspace 2-step verification (Google's enforcement and enrollment flags)" sub-item
-over both 2-step ids, and a "Workspace OAuth grants and domain-wide delegation"
-sub-item that stays *not assessed* with `no_rule`; forwarding remains unassessed in
-email coverage. Every collector rule id belongs to exactly one sub-item, which a test
-enforces. The 2-step sub-item always carries a `no_rule` detail stating its limits
+over both 2-step ids, the "Workspace OAuth grants (third-party app access)" sub-item
+over `workspace.oauth_broad_scope`, and a "Workspace domain-wide delegation" sub-item
+that is always *not assessed* with `no_rule`, its detail saying nothing was read
+because Google offers no Directory read for it, the Admin console path below, and that
+with a service-account credential scheck's own delegation is listed there. Forwarding
+remains unassessed in email coverage. Every collector rule id belongs to exactly one
+sub-item, which a test enforces.
+
+The 2-step sub-item always carries a `no_rule` detail stating its limits
 (organizational-unit policy, grace periods, another identity provider, methods and
 phishing resistance not checked), whatever its mark. With no 2-step outcome it is
 *not assessed* with `unavailable:workspace_evidence`, never `not_applicable`: unlike
@@ -572,6 +746,22 @@ the general `not_applicable` rule in [report.md](report.md), "Coverage", every r
 means none was recorded. An abstained judgment's reason
 detail is its subject and first "Not checked" line. E9 owns global coverage; no new
 global area is introduced.
+
+The OAuth sub-item is flagged the same way: on the plan it always carries a `no_rule`
+limits detail, and with neither an OAuth outcome nor a not-on-plan entry (a failed binding,
+for instance) it is *not assessed* with `unavailable:workspace_evidence`, "No OAuth
+grant outcome was recorded for this tenant". When the profile does not select OAuth,
+the engagement passes `Evidence.NotOnPlan()` to the report as `AssetInput.NotOnPlan`,
+and the sub-item is *not assessed* with `not_on_plan:profile=<profile>` and the
+collector's detail ("The default Workspace profile, directory, does not read
+third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the
+admin.directory.user.security permission"; another profile is named as "The selected
+Workspace profile, <p>,"). `unavailable:oauth_unclassified` abstentions collapse to one
+detail line, "N apps hold scopes scheck does not classify and none it classifies as
+broad; listed in the JSON report and the readout"; the JSON keeps one abstention per app. The row's `no_rule`
+reason names the groups nothing decided: "Workspace OAuth grants and domain-wide
+delegation remain unassessed" or "Workspace domain-wide delegation remains
+unassessed", then the 2-step limits; a group not on the plan is not called unassessed.
 
 Readouts include supported roles and scope limits, alias-matched recon candidates,
 declared expected admins not observed, shared-account leaver rotation, and break-glass
@@ -585,7 +775,9 @@ read. The report points to **Security → Access and data control → API contro
 Manage Domain Wide Delegation** in the Admin console. One successful delegated read
 proves only that operation. Organizational-unit 2-step policy, grace periods and
 authentication strength remain unassessed. Missing optional OAuth/Gmail evidence names the selection or permission
-gap, never a clean result.
+gap, never a clean result. OAuth grants never cover domain-wide delegation, Marketplace
+installs for the whole domain, app access control settings, app passwords, token age
+or last use, service-account keys, or what an app did with its access.
 
 ### Client-facing wording
 
@@ -602,8 +794,9 @@ your Workspace."
 A suspended assignment says: "Ask your administrator whether this assignment is still
 needed, and remove it if not." It does not imply that suspension left normal sign-in
 usable. Optional OAuth wording explains that baseline Directory checks work without
-the security permission; if the organization wants those additional checks, an
-administrator can approve a dedicated credential. Optional forwarding wording says
+the security permission, what that permission also allows, and that an administrator
+can approve a dedicated credential if the organization wants the app check ("OAuth
+grants", readout notes). Optional forwarding wording says
 no approved Gmail credential was selected for those accounts and, if wanted, asks the
 operator to arrange approved access. These checks inspect settings and filter
 forwarding destinations, never messages.
@@ -621,6 +814,27 @@ sent only declared reads, effective access was not tested, and an administrator 
 review a dedicated assessment credential. Unknown capability is explicit. Counts
 say "at least N observed" when incomplete, and no-findings wording never describes
 unassessed surfaces as secure.
+
+The OAuth finding's title is "A third-party app holds broad access to Workspace data".
+Its impact: "Whoever controls this app (its maker, or anyone who breaches the maker)
+can use the access listed as the accounts that granted it, without their password or
+second factor, until the grant is removed." A fired excerpt names the app, says what
+it "can read" and "can change" in shortened scope names, and lists the active
+grantors, marking a super administrator or declared break-glass account, "at least"
+on a partial population; an `admin.directory.*` scope adds "Its admin.directory access
+depends on the granting account's administrative rights." The remediation asks someone
+to confirm the app was chosen and is still needed, names where an administrator blocks
+it (Security → Access and data control → API controls → Manage Third-Party App Access)
+and where each person removes it (`myaccount.google.com/permissions`), and explains
+the console settings: "Trusted widens what the app may reach; it does not limit it,
+and this finding stays open either way." It prefers a version that asks for less and
+says to accept the app by its client id. The raise wording never implies Admin console
+power beyond the granted scopes. The optional-token warning says: "The separate token
+scheck used for the app check holds admin.directory.user.security, which also lets it
+revoke app access and app passwords, read or create backup codes, sign people out and
+turn off 2-step verification. scheck sent only the declared reads; effective access was
+not tested. If you will not run the app check again, remove that permission from the
+credential's domain-wide delegation entry or consent."
 
 ## Verification and evaluation
 
@@ -657,6 +871,16 @@ Its tests cover unit grouping and listed order, partial and unknown evidence,
 abstentions, inactive accounts, admin outcomes, the declaration comparison, notes,
 fresh-detail flag evidence through a fake server, and one run through the gate to the
 report with pinned `workspace-two-step` goldens.
+The step-5 OAuth DEFINE contract is recorded in
+[e6-oauth-definition-2026-10-11.md](../eval/e6-oauth-definition-2026-10-11.md), and its
+implementation and reviews in
+[e6-oauth-verification-2026-10-11.md](../eval/e6-oauth-verification-2026-10-11.md). Its
+tests cover every app outcome, the raise and its exclusions, set-aside by elimination,
+asset-level outcomes, malformed and foreign grants, read order and stopping on
+`Repeats`; through a fake server, the optional token's one scope, expiry, remembered
+failure, profile and principal gates, per-account denial and the registry's pinned
+shape; one run through the gate to the report with pinned `workspace-oauth` goldens;
+and `policy.CutLabel`.
 No live measurement or independent acceptance is claimed.
 
 ## Provider references

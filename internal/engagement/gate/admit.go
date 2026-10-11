@@ -61,6 +61,7 @@ func (g *Gate) exhausted(res Result, r *retry) Result {
 		detail := fmt.Sprintf("%s's rate limit held through %d retries", sourceName(r.provider), len(retryDelays))
 		g.stopProvider(r.provider, detail, time.Time{})
 		res.Reason, res.Detail = "limit_reached", detail
+		res.Repeats = !providers[r.provider].web
 		return res
 	}
 	// The detail is a transport error's text, which names the URL: redacted
@@ -96,7 +97,7 @@ func (g *Gate) cutRetry(r Request, first string, n int, res Result, rt *retry, w
 	e := Entry{Event: "refused", RequestID: g.nextID(), Stage: r.Stage, Asset: r.Asset, Op: r.Op, Attempt: n, RetryOf: first,
 		Decision: "refused:" + rule, Detail: detail}
 	_ = g.record(e)
-	out := Result{RequestID: e.RequestID, Response: res.Response}
+	out := Result{RequestID: e.RequestID, Response: res.Response, Repeats: past || rt.rateLimit && !providers[rt.provider].web}
 	out.end(e.Decision, detail)
 	if asked {
 		out.Until = g.now().Add(wait)
@@ -194,11 +195,23 @@ type pending struct {
 // unavailable:<code>, as the audit line has it.
 type halt struct {
 	decision, detail string
+	// reason overrides the decision's table reason when an earlier
+	// result, such as a failed token exchange, already classified it.
+	reason string
+	// sticky says every later request of the same kind in this session
+	// would halt the same way (Result.Repeats).
+	sticky bool
 	// until is when a stopped provider's rate limit resets.
 	until time.Time
 }
 
 func refused(rule, detail string) *halt { return &halt{decision: "refused:" + rule, detail: detail} }
+
+// sticky marks a halt that every later request of its kind would repeat.
+func sticky(h *halt) *halt {
+	h.sticky = true
+	return h
+}
 
 // attempt admits one attempt in the order of docs/spec/scope.md,
 // "Admission", and sends it. The first failed check ends it with an audit
@@ -266,6 +279,10 @@ func (g *Gate) halted(p *pending, h *halt) Result {
 	p.e.Event = "refused"
 	res := Result{RequestID: p.e.RequestID, Until: h.until}
 	res.end(decision, g.redact(h.detail))
+	if h.reason != "" && decision == h.decision {
+		res.Reason = h.reason
+	}
+	res.Repeats = h.sticky
 	p.e.Decision, p.e.Detail = res.Decision, res.Detail
 	_ = g.record(p.e)
 	return res
@@ -302,7 +319,7 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 			}
 			session := g.workspace[r.Asset]
 			if session == nil || session.customer == "" {
-				return refused("tenant_binding", "this session has no bootstrap customer")
+				return sticky(refused("tenant_binding", "this session has no bootstrap customer"))
 			}
 			params["customer"] = session.customer
 		}
@@ -330,7 +347,7 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	if op.Auth == WorkspaceADC && op.types["user"].Type == UserKey {
 		session := g.workspace[r.Asset]
 		if session == nil || !session.usersComplete {
-			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read"}
+			return &halt{decision: "unavailable:exclusion_unknown", detail: "A complete current user inventory is required before account details can be read", sticky: true}
 		}
 		user, ok := session.inventory[params["user"]]
 		if !ok || user.id != params["user"] {
@@ -392,7 +409,7 @@ func (g *Gate) bindParams(_ context.Context, p *pending) *halt {
 	if op.Class == CredentialExchange {
 		// Sent only by a credential source, which arrives with the
 		// Workspace collector (0.0.2 E6).
-		if r.exchange == nil || op.ID != workspaceTokenID {
+		if r.exchange == nil || op.ID != workspaceExchangeID(r.exchange.surface) {
 			return refused("method", "a credential exchange is not a collector's request")
 		}
 	}
@@ -538,13 +555,13 @@ func (g *Gate) attachCredential(ctx context.Context, p *pending) *halt {
 // provider was not stopped for its rate limit.
 func (g *Gate) admitTime(_ context.Context, p *pending) *halt {
 	if g.pastDeadline(g.now()) {
-		return refused("deadline", "limits.timeout passed")
+		return sticky(refused("deadline", "limits.timeout passed"))
 	}
 	g.mu.Lock()
 	s, stopped := g.stopped[p.op.Provider]
 	g.mu.Unlock()
 	if stopped {
-		h := refused("rate_limit", s.detail)
+		h := sticky(refused("rate_limit", s.detail))
 		h.until = s.until
 		return h
 	}
@@ -608,9 +625,9 @@ func (g *Gate) waitThrottle(ctx context.Context, p *pending) *halt {
 	release, err := g.throttle(ctx, p.r.Asset, p.op, p.prov)
 	if err != nil {
 		if g.pastDeadline(g.now()) {
-			return refused("deadline", "limits.timeout passed while waiting for the throttle")
+			return sticky(refused("deadline", "limits.timeout passed while waiting for the throttle"))
 		}
-		return refused("canceled", "the run was cancelled while waiting for the throttle")
+		return sticky(refused("canceled", "the run was cancelled while waiting for the throttle"))
 	}
 	p.cleanup = append(p.cleanup, release)
 	// The wait for the throttle, and the lookup before it, may have

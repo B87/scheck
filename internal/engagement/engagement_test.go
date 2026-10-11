@@ -540,6 +540,14 @@ func TestAcceptedRiskNeedsSubjectWhenTheFindingHasOne(t *testing.T) {
 	if _, err := Parse("e.yaml", file(", subject: \"1234.apps.googleusercontent.com\""), opts); err != nil {
 		t.Fatalf("an acceptance naming its subject must validate: %v", err)
 	}
+	// Real client ids carry a 32-character suffix; the pasted acceptance
+	// template must not read as a credential.
+	for _, id := range []string{"764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com", "123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com"} {
+		res, err := Parse("e.yaml", file(", subject: \""+id+"\""), opts)
+		if err != nil || len(res.Warnings) != 0 {
+			t.Fatalf("a realistic client id acceptance: %v %v", err, res.Warnings)
+		}
+	}
 }
 
 func TestOptionsNeedFindingSubject(t *testing.T) {

@@ -19,6 +19,8 @@ func ruleFixture() (Evidence, Context) {
 	// which never implies a change.
 	e.Users.Items[0].Enforced, e.Users.Items[0].Enrolled = new(true), new(true)
 	e.Units = Population[Unit]{Complete: true, Items: []Unit{{ID: "root", Path: "/"}}}
+	e.Binding.Profile = "directory_oauth"
+	e.OAuth = OAuthEvidence{Selected: true, Complete: true, Accounts: []AccountGrants{{ID: "1", Read: Read{Op: OpUserTokens, RequestID: "t1", Decision: "sent", Status: 200}, Grants: []Grant{}, Usable: true, Complete: true}}}
 	return e, c
 }
 func getRule(t *testing.T, out []finding.Judgment, id string) finding.Judgment {
@@ -58,6 +60,12 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 			e.Users.Items[0].IsAdmin = new(true)
 		}, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) { e.Users.Items[0].Suspended = nil }},
 		IDTwoStepNotEnforced: {func(e *Evidence, _ *Context) { e.Users.Items[0].Enforced = new(false) }, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) { e.Users.Items[0].Enforced = nil }},
+		IDOAuthBroadScope: {func(e *Evidence, _ *Context) {
+			e.OAuth.Accounts[0].Grants = []Grant{{ClientID: "app.apps.googleusercontent.com", Scopes: []string{scopePrefix + "drive"}, ScopesKnown: true}}
+		}, func(_ *Evidence, _ *Context) {}, func(e *Evidence, _ *Context) {
+			e.OAuth.Accounts[0].Read = Read{Op: OpUserTokens, RequestID: "t1", Decision: "sent", Status: 403, Reason: "insufficient_permission:admin.directory.user.security"}
+			e.OAuth.Accounts[0].Usable, e.OAuth.Accounts[0].Complete, e.OAuth.Complete = false, false, false
+		}},
 		IDAdminWithoutTwoStep: {func(e *Evidence, _ *Context) {
 			e.Users.Items[0].IsAdmin = new(true)
 			e.Users.Items[0].Enrolled = new(false)
@@ -87,8 +95,11 @@ func TestEveryWorkspaceRuleFiresDisprovesAndAbstains(t *testing.T) {
 					t.Fatal("missing definition", id)
 				}
 				want := finding.SubjectKind("account")
-				if id == IDTwoStepNotEnforced {
+				switch id {
+				case IDTwoStepNotEnforced:
 					want = "org_unit"
+				case IDOAuthBroadScope:
+					want = "oauth_app"
 				}
 				if id != IDTooManySuperAdmins && def.Subject != want {
 					t.Fatal("wrong subject", id)

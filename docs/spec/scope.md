@@ -954,7 +954,10 @@ body or directly sequence the exchange.
 
 **How credentials attach.** The gate attaches a credential by the op's binding, after
 admission; a collector never holds one. A request to a web asset never carries an
-`Authorization` header.
+`Authorization` header. A Workspace op compiled with an optional surface gets that
+surface's own token, minted with exactly its one scope by its own audited exchange,
+never the baseline token; the gate refuses it when the profile does not select the
+surface ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 
 **Where credentials come from:**
 
@@ -962,7 +965,8 @@ admission; a collector never holds one. A request to a web asset never carries a
   process outside every enforcement point, so scheck prints it as a hint instead.
 - **Google Workspace:** an application default credentials file or a service-account
   JSON named by the environment. E6 implements restricted ADC-file support, not full
-  ADC. Directory inventory is built; optional metadata reads remain planned
+  ADC. Directory reads and the optional OAuth grant read are built; the optional Gmail
+  read remains planned
   ([workspace-collector.md](workspace-collector.md#credential-files-and-profiles)).
 - **Never a fragment of a token.** A value shorter than 20 characters is refused as
   `no_credentials`: no GitHub token is that short, and redacting it by value would
@@ -1106,8 +1110,10 @@ runner test seeds them in a command's output.
 - For an excluded organizational unit, the gate builds an excluded-subject set (user
   ids and addresses) from the users list; with no unit excluded there is no set, and
   the users list excludes no one. Every later op with a user-reference key
-  drops by that set: role assignments, group members, tokens. A per-user op (a user
-  key in its URL) on a user in the set is `refused:excluded`. A user with no unit
+  drops by that set: role assignments, group members. A per-user op (a user
+  key in its URL) on a user in the set is `refused:excluded`. A per-user list whose
+  items name their user (`SelfRef`; Workspace OAuth grants by `userKey`) drops an
+  item naming anyone but the requested user, or no one, as unattributable. A user with no unit
   joins the set too, since its unit may be excluded. Every key of a dropped user is
   excluded, its contact addresses too. The set also records every user the list
   returned and the tenant's domains: the domain in the tenant's asset id, and those
@@ -1321,6 +1327,15 @@ A refusal carries `effect: {requests_not_sent}`. Its detail names the fix: "set
 `GITHUB_TOKEN` to a fine-grained, read-only token", "needs
 `admin.directory.user.readonly`", "GitHub's rate limit for this token resets at 15:02
 (Europe/Madrid)", the time in `engagement.timezone`.
+
+A result also says whether the gate would end every later request of its kind in the
+session the same way, sending nothing (`Result.Repeats`): missing or changed
+credentials, authentication to redo, a lost tenant binding, an unknown exclusion set,
+a spent assignment budget, a profile that does not select an optional surface, an
+unverified principal, a remembered optional-credential failure, a passed
+`limits.timeout`, a cancelled run, or a provider stopped for its rate limit. A
+collector reading account after account may stop there. A refusal of one account does
+not repeat.
 
 A public name that resolves to a private address is also an informational fact for its
 domain, not only a coverage gap: it tells an outsider about internal addressing.

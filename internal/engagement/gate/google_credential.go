@@ -38,6 +38,9 @@ type googleSource struct {
 }
 
 type googleExchange struct {
+	// surface is the optional read surface this exchange asks for, or the
+	// baseline; it selects the audited exchange op.
+	surface     WorkspaceSurface
 	form        url.Values
 	credential  *Credential
 	token       string
@@ -291,14 +294,29 @@ func headerSafe(s string) bool {
 	return true
 }
 
-func (s *googleSource) exchange(now time.Time) (*googleExchange, error) {
-	e := &googleExchange{credential: &Credential{Env: s.env, secrets: []string{s.clientSecret, s.refreshToken, s.privatePEM}}}
+// exchange builds the private token request. The baseline asserts the
+// compiled Directory scopes, and an authorized_user baseline refresh sends
+// no scope; an optional surface asks for exactly its one scope with either
+// credential kind (docs/spec/workspace-collector.md, "Credential files and
+// profiles").
+func (s *googleSource) exchange(now time.Time, surface WorkspaceSurface) (*googleExchange, error) {
+	e := &googleExchange{surface: surface, credential: &Credential{Env: s.env, secrets: []string{s.clientSecret, s.refreshToken, s.privatePEM}}}
+	scope := strings.Join(s.scopes, " ")
+	if surface != WorkspaceBaseline {
+		scope = workspaceSurfaceScope(surface)
+		if scope == "" {
+			return nil, errors.New("the optional Workspace read surface is not compiled")
+		}
+	}
 	if s.kind == "authorized_user" {
 		e.form = url.Values{"grant_type": {"refresh_token"}, "client_id": {s.clientID}, "client_secret": {s.clientSecret}, "refresh_token": {s.refreshToken}}
+		if surface != WorkspaceBaseline {
+			e.form.Set("scope", scope)
+		}
 		return e, nil
 	}
 	header := marshal(map[string]any{"alg": "RS256", "typ": "JWT", "kid": s.keyID})
-	claims := marshal(map[string]any{"iss": s.issuer, "sub": s.subject, "aud": workspaceTokenURL, "scope": strings.Join(s.scopes, " "), "iat": now.Unix(), "exp": now.Unix() + 300})
+	claims := marshal(map[string]any{"iss": s.issuer, "sub": s.subject, "aud": workspaceTokenURL, "scope": scope, "iat": now.Unix(), "exp": now.Unix() + 300})
 	enc := base64.RawURLEncoding
 	unsigned := enc.EncodeToString(header) + "." + enc.EncodeToString(claims)
 	sum := sha256.Sum256([]byte(unsigned))
@@ -350,19 +368,35 @@ func readGoogleToken(raw []byte, e *googleExchange, start time.Time) bool {
 // Only fixed OAuth codes select diagnostic prose. Descriptions and all unknown
 // provider text remain private even when authentication fails.
 func googleExchangeFailure(raw []byte) string {
-	obj, err := strictGoogleObject(raw)
-	if err == nil {
-		var code string
-		if json.Unmarshal(obj["error"], &code) == nil {
-			switch code {
-			case "invalid_client":
-				return "Google did not accept the OAuth client credentials. Check the selected credential setup, then retry"
-			case "invalid_grant":
-				return "Google rejected the refresh token or delegated assertion. Check credential validity and the delegated account setup"
-			case "invalid_scope", "unauthorized_client", "access_denied":
-				return "Google did not authorize this credential for the compiled reads. Ask your Workspace administrator to review its existing authorization"
-			}
-		}
+	switch googleErrorCode(raw) {
+	case "invalid_client":
+		return "Google did not accept the OAuth client credentials. Check the selected credential setup, then retry"
+	case "invalid_grant":
+		return "Google rejected the refresh token or delegated assertion. Check credential validity and the delegated account setup"
+	case "invalid_scope", "unauthorized_client", "access_denied":
+		return "Google did not authorize this credential for the compiled reads. Ask your Workspace administrator to review its existing authorization"
 	}
 	return "Google authentication failed. Check the selected credential setup, then retry"
+}
+
+// googleScopeDenied says Google refused the requested authorization, the
+// optional-surface permission gap rather than a broken credential.
+func googleScopeDenied(raw []byte) bool {
+	switch googleErrorCode(raw) {
+	case "invalid_scope", "unauthorized_client", "access_denied":
+		return true
+	}
+	return false
+}
+
+func googleErrorCode(raw []byte) string {
+	obj, err := strictGoogleObject(raw)
+	if err != nil {
+		return ""
+	}
+	var code string
+	if json.Unmarshal(obj["error"], &code) != nil {
+		return ""
+	}
+	return code
 }

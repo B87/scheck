@@ -35,7 +35,7 @@ func workspaceDef(id, title string, severity finding.Severity, subject finding.S
 	return finding.Def{ID: id, Title: title, Category: "accounts", Area: finding.AreaIdentity, Exposure: finding.NotExposure, Subject: subject, Judges: title, BaseSeverity: severity, Impact: impact, Remediation: finding.Remediation{Summary: fix}}
 }
 func RuleIDs() []string {
-	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment, IDTwoStepNotEnforced, IDAdminWithoutTwoStep}
+	return []string{finding.IDIdentityUnexpectedAdmin, finding.IDIdentityUnattributedAdmin, finding.IDIdentityExternalAdmin, finding.IDIdentitySharedAdmin, finding.IDIdentityFormerPersonHasAccess, IDTooManySuperAdmins, IDStaleAccount, IDNeverSignedIn, IDSuspendedAdminAssignment, IDTwoStepNotEnforced, IDAdminWithoutTwoStep, IDOAuthBroadScope}
 }
 func yes(v *bool) bool     { return v != nil && *v }
 func no(v *bool) bool      { return v != nil && !*v }
@@ -107,7 +107,8 @@ func decide(j *finding.Judgment, known, fire bool, text string) {
 func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	attrs := attribute(asset, e.Users.Items, c.People, e.Users.Complete)
 	out := []finding.Judgment{}
-	for _, view := range accountViews(e, c, attrs) {
+	views := accountViews(e, c, attrs)
+	for _, view := range views {
 		u, p, a, rs := view.user, view.person, view.access, view.reads
 		admin, adminKnown, adminText, adminReads := view.admin, view.adminKnown, view.adminText, view.adminReads
 		superKnown := u.IsAdmin != nil && !a.Conflict
@@ -192,9 +193,11 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	}
 	out = append(out, adminCount(e, asset, c, attrs))
 	out = append(out, twoStepJudgments(e, asset, c)...)
+	out = append(out, oauthJudgments(e, asset, views)...)
 	if len(e.Users.Items) == 0 {
 		for _, id := range RuleIDs() {
-			if id == IDTooManySuperAdmins {
+			// The OAuth rule speaks for itself, and only when selected.
+			if id == IDTooManySuperAdmins || id == IDOAuthBroadScope {
 				continue
 			}
 			j := newJudgment(id, asset, finding.Subject{}, reads(e.Users.Reads))

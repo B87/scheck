@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/policy"
@@ -18,7 +19,14 @@ type Binding struct {
 	Profile     string   `json:"profile,omitempty"`
 	Scopes      []string `json:"scopes,omitempty"`
 	ScopesKnown bool     `json:"scopes_known"`
-	Reads       []Read   `json:"reads"`
+	// AssessmentClient is the authorized_user client id a successful
+	// client-authenticated refresh proved; it never says whose grant the
+	// credential file holds.
+	AssessmentClient string `json:"assessment_client,omitempty"`
+	// Surfaces are the optional read surfaces the gate says the profile
+	// selects; profile names stay in the gate.
+	Surfaces []gate.WorkspaceSurface `json:"surfaces,omitempty"`
+	Reads    []Read                  `json:"reads"`
 }
 
 type Read struct {
@@ -75,6 +83,8 @@ func (b *Binding) summary(result gate.Result, domain string) bool {
 		Profile     string   `json:"profile"`
 		Scopes      []string `json:"scopes"`
 		ScopesKnown *bool    `json:"scopes_known"`
+		Client      string   `json:"assessment_client"`
+		Surfaces    []string `json:"surfaces"`
 	}
 	if json.Unmarshal(result.Response.Body, &body) != nil || !bindingCustomerID.MatchString(body.ID) || body.ID == "my_customer" || body.Domain != domain || body.ScopesKnown == nil {
 		return false
@@ -88,6 +98,12 @@ func (b *Binding) summary(result gate.Result, domain string) bool {
 		return false
 	}
 	b.CustomerID, b.Domain, b.Profile, b.Scopes = body.ID, body.Domain, body.Profile, body.Scopes
+	for _, surface := range body.Surfaces {
+		b.Surfaces = append(b.Surfaces, gate.WorkspaceSurface(surface))
+	}
 	b.ScopesKnown = *body.ScopesKnown && len(result.Response.Redactions) == 0
+	if len(result.Response.Redactions) == 0 && len(body.Client) <= 256 && !strings.ContainsFunc(body.Client, unicode.IsControl) && !strings.ContainsAny(body.Client, " \t") {
+		b.AssessmentClient = body.Client
+	}
 	return true
 }
