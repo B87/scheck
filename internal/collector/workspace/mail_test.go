@@ -133,6 +133,38 @@ func TestForwardingDomainsAreExact(t *testing.T) {
 	}
 }
 
+// A filters HTTP 204 is the empty list. Forwarding explicitly off is then
+// disproved. A 204 that is not that list, and a refused 204, are not.
+func TestFilter204WithForwardingOffIsDisproved(t *testing.T) {
+	e, c := mailFixture(mailUser("amy"))
+	m := &e.Mail.Accounts[0]
+	m.filtersOf(gate.Result{RequestID: "f-amy", Decision: "sent", ActedAsMailbox: true, Response: &gate.Response{Status: 204, Body: []byte("[]"), Population: &gate.Population{Page: 1}}})
+	if !m.FiltersUsable || !m.FiltersComplete || m.FiltersSeen != 0 || m.FiltersRead.Status != 204 {
+		t.Fatal(m.FiltersUsable, m.FiltersComplete, m.FiltersSeen, m.FiltersRead)
+	}
+	if j := outcome(t, e, c, "amy@example.com -> none"); j.Verdict != Disproved {
+		t.Fatal(j)
+	}
+	bad := MailboxForwarding{}
+	bad.filtersOf(gate.Result{RequestID: "f-bad", Decision: "sent", Response: &gate.Response{Status: 204, Body: []byte(`{"enabled":false}`), Population: &gate.Population{Page: 1}}})
+	if bad.FiltersUsable || bad.FiltersRead.Reason != "insufficient_evidence" {
+		t.Fatal(bad.FiltersUsable, bad.FiltersRead.Reason)
+	}
+	refused := MailboxForwarding{}
+	refused.filtersOf(gate.Result{Decision: "unavailable:malformed_response", Reason: "unavailable:malformed_response", Response: &gate.Response{Status: 204}})
+	if refused.FiltersUsable || refused.FiltersRead.Reason != "unavailable:malformed_response" {
+		t.Fatal(refused.FiltersUsable, refused.FiltersRead.Reason)
+	}
+	// The 204 still counts as a read when the automatic-forwarding read does not.
+	e, c = mailFixture(mailUser("amy"))
+	m = &e.Mail.Accounts[0]
+	m.AutoRead.Redactions = []policy.Hit{{Rule: "email", Bytes: 3}}
+	m.filtersOf(gate.Result{RequestID: "f-amy", Decision: "sent", ActedAsMailbox: true, Response: &gate.Response{Status: 204, Body: []byte("[]"), Population: &gate.Population{Page: 1}}})
+	if j := outcome(t, e, c, "amy@example.com -> none"); j.Verdict != Disproved {
+		t.Fatal(j)
+	}
+}
+
 func TestForwardingDisabledUnknownAndMalformed(t *testing.T) {
 	// Saved but turned off never fires; the readout names it.
 	e, c := mailFixture(mailUser("amy"))

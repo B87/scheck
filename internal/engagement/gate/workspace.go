@@ -89,6 +89,10 @@ type surfaceRead struct {
 	url  string
 	keep []string
 	list *List
+	// emptyNoContent says HTTP 204 with no body is the empty list. Only the
+	// Gmail filters read sets it (docs/spec/workspace-collector.md, "Reads
+	// and projections").
+	emptyNoContent bool
 }
 
 // workspaceSurface is an optional surface: its one scope, its own audited
@@ -125,7 +129,7 @@ var workspaceSurfaces = map[WorkspaceSurface]workspaceSurface{
 		reads: []surfaceRead{
 			{url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/autoForwarding", keep: []string{"enabled", "emailAddress", "disposition"}},
 			{url: "https://gmail.googleapis.com/gmail/v1/users/me/settings/filters", keep: []string{"id", "action.forward", "action.addLabelIds", "action.removeLabelIds"},
-				list: &List{Items: "filter", Kind: KindOther, MaxItems: 1000}},
+				list: &List{Items: "filter", Kind: KindOther, MaxItems: 1000}, emptyNoContent: true},
 		}},
 }
 
@@ -229,6 +233,7 @@ func (c *compiled) checkSurfaceRead() error {
 		return errors.New("an optional surface read has its pinned list shape")
 	}
 	c.projectFirst = def.projectFirst
+	c.emptyNoContent = r.emptyNoContent
 	return nil
 }
 

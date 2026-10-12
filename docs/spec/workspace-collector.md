@@ -457,8 +457,12 @@ delegates, send-as, POP and IMAP paths, and anything else under `/gmail/`, are n
 declared and the gate refuses them. These two operations are projected before
 redaction: fields outside the kept list never reach redaction, the audit log or
 persistence. They have no envelope: automatic forwarding is one object, `{}` is an
-empty answer, and an empty filter list arrives as `{}`. A body that is not the expected
-shape is a fixed diagnostic and is discarded.
+empty answer, and an empty filter list arrives as `{}` or as HTTP 204 with no body.
+A 204 with no body on the filters read is that empty list, and the stored status stays
+204. The collector treats that one read as usable. A 204 that carries a body is not
+that empty list: an object with no `filter` array would otherwise be read as no
+filters. Any other empty body, and a body that is not the expected shape, is a fixed
+diagnostic and is discarded. Automatic forwarding does not accept a 204.
 
 ### Population bounds
 

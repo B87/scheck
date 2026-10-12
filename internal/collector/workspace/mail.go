@@ -237,10 +237,13 @@ func (m *MailboxForwarding) autoOf(r gate.Result) {
 
 func (m *MailboxForwarding) filtersOf(r gate.Result) {
 	m.FiltersRead = readOf(OpMailFilters, r)
-	// The gate hands a list's kept items as one array.
+	// The gate hands a list's kept items as one array. HTTP 204 with no body
+	// is that empty list, and the status stays 204 (docs/spec/workspace-collector.md,
+	// "Reads and projections").
+	ok := usable(r) || filtersNoContent(r)
 	var items []json.RawMessage
-	if !usable(r) || json.Unmarshal(r.Response.Body, &items) != nil || items == nil {
-		if usable(r) {
+	if !ok || json.Unmarshal(r.Response.Body, &items) != nil || items == nil {
+		if ok {
 			m.FiltersRead.Reason = "insufficient_evidence"
 		}
 		return
@@ -258,6 +261,12 @@ func (m *MailboxForwarding) filtersOf(r gate.Result) {
 	}
 	pop := r.Response.Population
 	m.FiltersComplete = m.FiltersMalformed == 0 && pop != nil && len(pop.Incomplete) == 0 && !pop.More
+}
+
+// filtersNoContent is the filters read's HTTP 204 with no body, already
+// projected to an empty list. No other read accepts a 204.
+func filtersNoContent(r gate.Result) bool {
+	return r.OK() && r.Response != nil && r.Response.Status == 204 && !r.Response.Truncated
 }
 
 // filterOf recognizes one projected filter. No action or no forward is a

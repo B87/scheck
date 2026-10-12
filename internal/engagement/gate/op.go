@@ -301,6 +301,9 @@ type compiled struct {
 	// projectFirst discards every field outside Keep before redaction: the
 	// gate's surface table sets it, never a collector.
 	projectFirst bool
+	// emptyNoContent, set only from the surface table, treats HTTP 204 with
+	// no body as {}. A collector cannot turn it on.
+	emptyNoContent bool
 }
 
 // neverRead are URL path segments no op may read, lowercased.

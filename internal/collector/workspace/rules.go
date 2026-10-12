@@ -74,7 +74,10 @@ func leftPassed(left string, c Context) bool {
 	return err == nil && !c.AssessedAt.IsZero() && t.Format("2006-01-02") < c.AssessedAt.In(zone(c)).Format("2006-01-02")
 }
 func readUsable(r Read) bool {
-	return (r.Decision == "sent" || r.Decision == "reused") && r.Status == 200 && r.Reason == "" && !r.Truncated && len(r.Redactions) == 0
+	// The filters read's HTTP 204 with no body is an empty list. The status
+	// stays 204 (docs/spec/workspace-collector.md, "Reads and projections").
+	statusOK := r.Status == 200 || (r.Op == OpMailFilters && r.Status == 204)
+	return (r.Decision == "sent" || r.Decision == "reused") && statusOK && r.Reason == "" && !r.Truncated && len(r.Redactions) == 0
 }
 func reads(sets ...[]Read) []string {
 	out := []string{}

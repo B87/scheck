@@ -516,10 +516,11 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 		code = codeTooLarge
 	// A 2xx with no body (a 204) is kept as its status: for an op that
 	// answers "enabled" with 204 and "disabled" with 404, the status is the
-	// evidence. A list always has a body.
+	// evidence. A projected read does not: an empty body there is malformed
+	// unless the filters read's 204, below.
 	case op.json && ok && len(raw) == 0 && op.UserIdentity != nil:
 		code = codeMalformed
-	case op.json && ok && len(raw) == 0 && op.List == nil:
+	case op.json && ok && len(raw) == 0 && op.List == nil && !op.projectFirst:
 	// 3–6. A 2xx JSON body is redacted value by value, parsed from the
 	// redacted bytes, filtered and projected.
 	case op.WorkflowYAML && ok:
@@ -542,8 +543,14 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 	// A surface the gate projects first discards every field outside Keep
 	// before redaction, so nothing else reaches redaction, audit or
 	// persistence (docs/spec/workspace-collector.md, "Reads and projections").
+	// The filters read's HTTP 204 with no body is the empty list; any other
+	// empty body stays malformed.
 	case op.projectFirst && ok:
-		projected, projectCode := projectRaw(raw, op)
+		body, noContentCode := noContentBody(op.emptyNoContent, resp.StatusCode, raw)
+		if code = noContentCode; code != "" {
+			break
+		}
+		projected, projectCode := projectRaw(body, op)
 		if code = projectCode; code != "" {
 			break
 		}
@@ -624,6 +631,19 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 		}
 	}
 	return p, rt
+}
+
+// noContentBody is the filters read's HTTP 204. No body is the empty list.
+// A body is not: the HTTP/2 client delivers one, and an object with no
+// filter array would otherwise be read as no filters.
+func noContentBody(emptyNoContent bool, status int, raw []byte) ([]byte, string) {
+	if !emptyNoContent || status != http.StatusNoContent {
+		return raw, ""
+	}
+	if len(raw) != 0 {
+		return nil, codeMalformed
+	}
+	return []byte("{}"), ""
 }
 
 func hash(b []byte) string {

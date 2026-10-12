@@ -1246,9 +1246,11 @@ mailbox authorization in
   report `raises` table, in E9 or when the next raise lands. L7 shared asset-level
   outcome and unread wording between OAuth and mail; when the first 0.0.3 per-mailbox
   read lands.
-- *Unmeasured assumptions, measured live in step 7:* (1) `getAutoForwarding` returns
-  `enabled:false` or omits it, and `filters.list` returns `{}` when there are none;
-  (2) the exchange errors for suspended, archived, deleted, unlicensed and
+- *Measured live 2026-10-12, one tenant:* `getAutoForwarding` returned `enabled:false`
+  when forwarding was off. An empty filter list arrived as HTTP 204 with no body, not
+  `{}`; the filters read accepts that 204 as the empty list.
+- *Unmeasured assumptions, measured live in step 7:* (2) the exchange errors for
+  suspended, archived, deleted, unlicensed and
   Gmail-disabled subjects (only "user doesn't exist" as `invalid_grant` is sourced);
   (3) reads of a Gmail-disabled mailbox answer 400 `failedPrecondition`; (4) a
   suspended mailbox bounces or stops forwarding; (5) an archived mailbox receives no new

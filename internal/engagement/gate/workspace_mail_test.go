@@ -387,6 +387,7 @@ func TestWorkspaceMailReadOutcomes(t *testing.T) {
 		ok                 bool
 	}{
 		{"empty filters", `{}`, "", 200, true},
+		{"no filters, 204", "", "", 204, true},
 		{"over the cap", `{"filter":[` + strings.TrimSuffix(strings.Repeat(`{"id":"x"},`, 1001), ",") + `]}`, "limit_reached", 200, false},
 		{"member not an object", `{"filter":["x"]}`, "", 200, false},
 		{"null list", `{"filter":null}`, "", 200, false},
@@ -399,7 +400,26 @@ func TestWorkspaceMailReadOutcomes(t *testing.T) {
 			if res.OK() != tc.ok || tc.reason != "" && res.Reason != tc.reason || res.Repeats {
 				t.Fatalf("%+v", res)
 			}
+			if tc.name == "no filters, 204" && (!res.OK() || string(res.Response.Body) != "[]" || res.Response.Population == nil || res.Response.Population.Items != 0 || len(res.Response.Population.Incomplete) != 0 || res.Response.Population.More) {
+				t.Fatalf("%+v %s", res, res.Response.Body)
+			}
 		})
+	}
+	if body, code := noContentBody(true, 204, []byte(`{"enabled":false}`)); code != codeMalformed || body != nil {
+		t.Fatal(code, body)
+	}
+	if body, code := noContentBody(true, 204, nil); code != "" || string(body) != "{}" {
+		t.Fatal(code, body)
+	}
+	// An empty 200 is not the 204 empty list.
+	m.reply = func(string, string) (int, string) { return 200, "" }
+	if res := g.Send(context.Background(), mailRequest("workspace.mail_filters", "1")); res.OK() || res.Reason != "unavailable:malformed_response" {
+		t.Fatal(res)
+	}
+	// Automatic forwarding does not accept a 204.
+	m.reply = func(string, string) (int, string) { return 204, "" }
+	if res := g.Send(context.Background(), mailRequest("workspace.mail_auto_forwarding", "1")); res.OK() || res.Reason != "unavailable:malformed_response" {
+		t.Fatal(res)
 	}
 	// A malformed kept field stays visible as itself or null, never dropped.
 	m.reply = func(string, string) (int, string) {
