@@ -1,0 +1,178 @@
+# =============================================================================
+#  workspace-mail.yaml: Google Workspace with Gmail forwarding (E6 step 6)
+# =============================================================================
+#
+#  The other surfaces, and all four roots together, are in
+#  docs/examples/README.md. Directory-only Workspace, without mailbox
+#  sign-in, is workspace.yaml.
+#
+#  WHAT THIS CHECKS
+#  ----------------
+#  Besides the usual Workspace checks (inventory, administrators, people who
+#  left, stale accounts, 2-step verification), this run looks at every active
+#  mailbox for mail sent outside your organization:
+#
+#    * automatic forwarding: "send a copy of all incoming mail to ..."
+#    * filters that forward:  "when a message matches X, forward it to ..."
+#
+#  This is one of the first things an attacker sets up after taking over a
+#  mailbox. Once it is in place, they keep reading the mail after the
+#  password has been changed.
+#
+#  What scheck does, and does not, do:
+#    * It signs in as each active mailbox and reads ONLY two settings:
+#        GET gmail.googleapis.com/gmail/v1/users/me/settings/autoForwarding
+#        GET gmail.googleapis.com/gmail/v1/users/me/settings/filters
+#      No message, thread, label, draft or history is ever requested; the
+#      gate refuses any other Gmail path.
+#    * It keeps only: forwarding on/off, the destination, what happens to the
+#      original (trash/archive), and each filter's id, forward address and
+#      whether it moves the message out of the inbox. Filter criteria (what a
+#      filter matches) are discarded before anything else sees them.
+#    * A destination is "inside" only if its domain EXACTLY matches one of
+#      your verified Workspace domains or aliases. Subdomains, look-alikes and
+#      the domain roots in this file never count as inside.
+#    * Accounts that are suspended, archived, have no mailbox, or are excluded
+#      below are never signed in as.
+#
+#  HOW TO READ THE RESULT
+#  ----------------------
+#    finding  workspace.external_forwarding, one per (mailbox -> address):
+#               medium; high on a super administrator's mailbox.
+#    clean    "<account> (mailbox)" disproved: forwarding off and no filter
+#               forwarding outside your domains.
+#    unknown  abstained, with the reason: e.g. a subdomain destination, a
+#               setting Google left out, a read Google refused.
+#    coverage "Email and domain" row -> "Workspace mail forwarding".
+#    exit     1 = findings, 2 = a limit cut the run short. A refused
+#               permission is a coverage gap; it does not change the exit.
+#
+#  To accept a forward you want (invoices to your accounting tool), accept
+#  that one subject, e.g. "carol@yourlab.example -> invoices@books.example";
+#  any other destination from the same mailbox stays open. (See
+#  intent.accepted_risks at the bottom.)
+#
+#  ONE-TIME SETUP (a lab tenant you are authorized to test)
+#  ---------------------------------------------------------
+#  1. In a Google Cloud project, enable the "Admin SDK API" and the
+#     "Gmail API" (APIs & Services -> Library).
+#  2. Create a service account in that project and download its JSON key.
+#  3. Admin console -> Security -> Access and data control -> API controls ->
+#     Manage Domain Wide Delegation -> Add new: the service account's client
+#     ID, with these scopes (comma separated):
+#
+#       https://www.googleapis.com/auth/admin.directory.customer.readonly,
+#       https://www.googleapis.com/auth/admin.directory.domain.readonly,
+#       https://www.googleapis.com/auth/admin.directory.orgunit.readonly,
+#       https://www.googleapis.com/auth/admin.directory.user.readonly,
+#       https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly,
+#       https://www.googleapis.com/auth/gmail.readonly
+#
+#     !! gmail.readonly CAN READ EVERY MESSAGE IN EVERY MAILBOX. scheck never
+#     !! does, but the permission allows it, and Google's logs will show the
+#     !! service account acting as each person. Use a lab tenant if you can.
+#     !! Note: a gcloud "authorized_user" sign-in cannot do this check; it
+#     !! needs this service account (scheck reports it as a named gap).
+#
+#  3b. Whoever approves access to staff mail writes authorization.mailboxes
+#      below. SCHECK_WORKSPACE_PROFILE selects the check; that entry records
+#      the approval. Neither alone signs in as a mailbox. expires is at most
+#      90 days after date. by is the person's name, not a people handle, and
+#      the entry holds no key and no mailbox address.
+#
+#  4. Seed something to find (optional, but it makes the run meaningful):
+#       * mailbox A: Settings -> Forwarding and POP/IMAP -> forward to an
+#         outside address (Gmail sends that address a confirmation link);
+#       * mailbox B: a filter that forwards to an outside address and
+#         deletes the message (the "hide it" pattern);
+#       * mailbox C: forwarding saved but turned OFF (should NOT fire; it
+#         appears as a note);
+#       * mailbox D: leave clean (should be "disproved").
+#
+#  RUN
+#  ---
+#    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
+#    export SCHECK_WORKSPACE_SUBJECT=admin@yourlab.example   # a super admin; Directory reads act as it
+#    export SCHECK_WORKSPACE_PROFILE=directory_mail          # or directory_oauth_mail (adds third-party app grants)
+#    # also required: authorization.mailboxes below, current for this tenant
+#
+#    scheck run docs/examples/workspace-mail.yaml --stop-after intake   # validate; contacts nothing
+#    scheck run docs/examples/workspace-mail.yaml                       # text report
+#    scheck run docs/examples/workspace-mail.yaml -v                    # with notes for the readout
+#    scheck run docs/examples/workspace-mail.yaml --format json         # report.json
+#
+#  WHAT TO LOOK AT AFTERWARDS (this is the step-7 live measurement)
+#  ---------------------------------------------------------------
+#    * The Authorization line names who approved mailbox sign-in, the expiry,
+#      and how many mailboxes scheck signed in as. It says the approval was
+#      not verified.
+#    * The warning at the top says how many mailboxes scheck signed in as.
+#    * The run directory's audit log: Gmail lines only ever show
+#      /users/me/settings/..., and the mailbox sign-in lines name an account
+#      id, never an address.
+#    * Mailbox D disproved? If it abstains instead, Google leaves out
+#      "enabled": false, which is open question 1 in
+#      docs/eval/e6-forwarding-definition-2026-10-11.md (12 + 3 to measure).
+#    * Remove gmail.readonly from the delegation entry and run again: you
+#      should get "has not granted ... gmail.readonly", the Email row naming
+#      it, and the same exit code as before.
+#
+#  CLEAN UP
+#  --------
+#  If you will not run this again, remove gmail.readonly from the delegation
+#  entry and delete the key file if you created it only for this.
+# =============================================================================
+
+schema: 1
+engagement:
+  name: workspace-mail-lab
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  # Your Workspace primary domain (or a verified alias of it).
+  - saas: google-workspace:yourlab.example
+
+# Accounts in these organizational units are never read, never signed in as.
+# exclude:
+#   - {saas: google-workspace:yourlab.example, org_unit: /Board}
+
+# Optional, but it makes the report sharper:
+#   * an admin mailbox that forwards outside ranks high;
+#   * a forward from someone whose `left` date has passed says so;
+#   * break-glass / service accounts are treated as such elsewhere.
+people:
+  you:   {kind: employee, workspace: [admin@yourlab.example]}
+  alice: {kind: employee, workspace: [alice@yourlab.example]}
+  bob:   {kind: employee, workspace: [bob@yourlab.example], left: 2026-09-30}
+
+access:
+  admins:
+    google-workspace:yourlab.example: [you]
+  mfa:
+    - {where: google-workspace:yourlab.example, enforced: everyone}
+
+# Required for directory_mail / directory_oauth_mail. Without a current entry
+# the run still reads the directory and reports mail forwarding as not checked.
+# date and expires are calendar days in engagement.timezone (Europe/Madrid),
+# current from the start of date through 24:00 on expires. 2027-01-10 is 90
+# days after 2026-10-12, the longest this entry may last. by is who approved
+# access to staff mail; change it if that is not you. The note does not limit
+# which mailboxes are signed in as.
+authorization:
+  mailboxes:
+    - asset: google-workspace:yourlab.example
+      by: yourname
+      date: 2026-10-12
+      expires: 2027-01-10
+      note: "Lab tenant. scheck reads forwarding settings only."
+
+# intent:
+#   accepted_risks:
+#     - id: workspace.external_forwarding
+#       asset: google-workspace:yourlab.example
+#       subject: alice@yourlab.example -> invoices@books.example   # this address only
+#       reason: "Invoices go to our bookkeeping tool by design"
+#       accepted_by: you
+#       expires: 2027-01-31

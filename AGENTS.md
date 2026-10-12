@@ -27,6 +27,7 @@ operating manual for a coding agent in this repository.
 | `docs/spec/web-collector.md` | Design of the domain, email and web collector (E7): its reads, rules, takeover table and what the report never claims; contract when E7 lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
+| `docs/examples/` | Engagement files an operator copies. The spec-steward keeps them true to the specs. |
 | `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
 | `docs/RELEASING.md` | Release runbook |
 
@@ -204,14 +205,19 @@ does not decide what is checked, refused, redacted, or how severe a finding is. 
 never edits; the implementing session does.
 
 For the documents, use the `spec-steward` subagent
-([.agents/agents/spec-steward.md](.agents/agents/spec-steward.md)): it keeps `docs/`,
-this file, the README and the `scheck` skill true to the code and to each other, and
-edits nothing else. Use *sync* at each build step of a slice, before `make check` and the
+([.agents/agents/spec-steward.md](.agents/agents/spec-steward.md)): it keeps `docs/`
+(including `docs/examples/`), this file, the README and the `scheck` skill true to the
+code and to each other, and edits nothing else. Use *sync* at each build step of a
+slice, before `make check` and the
 `code-reviewer`, so the spec change lands in the same commit as the code; *audit* before
 the commit that closes a slice, and after renaming or moving a spec heading (code
 comments cite them); *draft* to turn a `security-consultant` define output or a decision
 of the user's into spec text; *record* for `docs/eval/` and a slice's carried and
-deferred items. It never decides what is checked, refused, redacted or how severe it is:
+deferred items. A collector surface an operator runs on its own gets an example under
+`docs/examples/` in that same commit; an example that would fail intake, or that tells
+the operator to grant or send something the gate refuses, is drift.
+`TestExamplesValidate` parses every file there. The steward never decides what is checked,
+refused, redacted or how severe it is:
 it returns those as open decisions, and the implementing session brings them to the
 `security-consultant` or the user. It reports drift in code, goldens and schemas rather
 than fixing it. It reads code, so it is never used for *seed* or *rank*.

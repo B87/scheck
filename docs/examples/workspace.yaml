@@ -1,0 +1,105 @@
+# =============================================================================
+#  workspace.yaml: Google Workspace directory (no mailbox sign-in)
+# =============================================================================
+#
+#  The other surfaces are in docs/examples/README.md. Gmail forwarding, which
+#  signs in as each mailbox, is workspace-mail.yaml. Do not start there.
+#
+#  WHAT THIS CHECKS
+#  ----------------
+#  With the default profile, directory:
+#
+#    * the tenant, its domains and users
+#    * super admins against access.admins, including a contractor, a shared
+#      account, and an admin tied to nobody in people
+#    * a person whose left date has passed and whose account is still active
+#    * stale and never-signed-in accounts (service and break-glass accounts
+#      are exempt from those two)
+#    * 2-step verification as the Directory reports it now, compared with
+#      access.mfa. unknown files nothing and prints what was read
+#
+#  SCHECK_WORKSPACE_PROFILE=directory_oauth adds third-party app grants.
+#  That profile acts as the administrator. It does not sign in as staff, and
+#  it does not use authorization.mailboxes. The finding is
+#  workspace.oauth_broad_scope, one per app, accepted by the app's client id.
+#  Add this scope to the delegation entry; it is separate from the directory
+#  list below:
+#
+#    https://www.googleapis.com/auth/admin.directory.user.security
+#
+#  HOW TO READ THE RESULT
+#  ----------------------
+#    people   identity.unexpected_admin, identity.unattributed_admin,
+#             identity.external_admin, identity.shared_admin,
+#             identity.former_person_has_access,
+#             workspace.too_many_super_admins.
+#    accounts workspace.stale_account, workspace.never_signed_in.
+#             A suspended account is correct offboarding.
+#    2-step   workspace.two_step_not_enforced (by organizational unit),
+#             workspace.admin_without_two_step.
+#    oauth    only under directory_oauth: workspace.oauth_broad_scope.
+#    exit     1 = findings, 2 = a limit cut the run short. A missing
+#             permission is a coverage gap.
+#
+#  ONE-TIME SETUP
+#  --------------
+#  1. In a Google Cloud project, enable the Admin SDK API.
+#  2. Either:
+#       * a service account, domain-wide delegation, and
+#         SCHECK_WORKSPACE_SUBJECT set to a super admin; or
+#       * an authorized_user credentials file for an admin who can already
+#         read the directory. scheck does not run gcloud, and it does not
+#         add scopes to that file. An authorized_user credential cannot run
+#         workspace-mail.yaml.
+#  3. Point at the file (or leave this unset to use the conventional ADC
+#     path):
+#
+#       export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credential.json
+#       export SCHECK_WORKSPACE_SUBJECT=admin@yourlab.example   # service account only
+#
+#     Delegation scopes for directory, comma separated:
+#
+#       https://www.googleapis.com/auth/admin.directory.customer.readonly,
+#       https://www.googleapis.com/auth/admin.directory.domain.readonly,
+#       https://www.googleapis.com/auth/admin.directory.orgunit.readonly,
+#       https://www.googleapis.com/auth/admin.directory.user.readonly,
+#       https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly
+#
+#  RUN
+#  ---
+#    scheck run docs/examples/workspace.yaml --stop-after intake
+#    scheck run docs/examples/workspace.yaml
+#    scheck run docs/examples/workspace.yaml -v
+#    SCHECK_WORKSPACE_PROFILE=directory_oauth scheck run docs/examples/workspace.yaml
+#
+#  `--stop-after recon` prints accounts no handle names, to paste under people.
+# =============================================================================
+
+schema: 1
+engagement:
+  name: workspace-lab
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  - saas: google-workspace:yourlab.example
+
+# exclude:
+#   - {saas: google-workspace:yourlab.example, org_unit: /Board}
+
+people:
+  you:        {kind: employee, workspace: [admin@yourlab.example]}
+  alice:      {kind: employee, workspace: [alice@yourlab.example]}
+  ops-admin:  {kind: shared, workspace: [ops@yourlab.example], used_by: [you, alice]}
+  breakglass: {kind: break_glass, workspace: [breakglass@yourlab.example]}
+  bob:        {kind: employee, workspace: [bob@yourlab.example], left: 2026-09-30}
+
+access:
+  admins:
+    google-workspace:yourlab.example: [you, breakglass]
+  mfa:
+    - {where: google-workspace:yourlab.example, enforced: everyone}
+
+tools:
+  - {category: identity, name: google-workspace}

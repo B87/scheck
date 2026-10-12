@@ -247,6 +247,8 @@ elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted capt
 
 ## Project documentation
 
+- [Engagement examples](docs/examples/README.md): files to copy for a host, a domain,
+  GitHub, Workspace and all four together. Placeholders only; no credential.
 - [Vision](docs/VISION.md): what scheck is becoming and the principles behind it.
 - [Roadmap](docs/ROADMAP.md): 0.0.2, 0.0.3 and 0.0.4.
 - [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the

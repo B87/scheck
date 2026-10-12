@@ -299,6 +299,9 @@ Context and narrowing live in the engagement file, never in flags: a host's `con
 (`role`, `exposure`, `environment`, `expected_services`), `disable_checks`, `deny_paths`,
 `redact_extra`, and `intent.accepted_risks`. `scheck run --host … --write-engagement
 FILE` writes the one-host engagement as a starting point and contacts nothing.
+Placeholder files for a host, a domain, GitHub, Workspace and all four together are in
+`docs/examples/`. Validate one with `--stop-after intake` before a run that contacts
+anything.
 `--context`, `--ignore-context` and `--audit-log` exit 3 on `run` and on the aliases.
 The reach flags (`--identity`, `--known-hosts`, `--jump`, `--sudo`, `--elevate`,
 `--profile`, `--timeout`) are accepted only with `--host`; in a file they are the host

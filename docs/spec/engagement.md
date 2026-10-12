@@ -113,7 +113,10 @@ nothing inferred joins scope on its own.
 One complete file, as `scheck init` writes it for the company in the examples, plus the
 entries written later (a Scope confirmation, an accepted risk). Every top-level key is
 shown; every key maps to a row of the interview table above or to a section of
-[scope.md](scope.md). The file may change freely until 0.0.2 is published.
+[scope.md](scope.md). The file may change freely until 0.0.2 is published. The files
+under [../examples/](../examples/README.md) are the ones to copy and run, one surface
+each and one that names the four roots 0.0.2 reads. They use placeholders, and a
+credential never appears in them. The file below is every key.
 
 ```yaml
 # engagement.yaml — written by `scheck init`; editing by hand is equally valid.

@@ -1,0 +1,134 @@
+# =============================================================================
+#  first-engagement.yaml: domain, Workspace, GitHub and one host
+# =============================================================================
+#
+#  The four roots 0.0.2 reads, in one file. Credential setup, what each
+#  collector refuses, and how to read each area are in the single-surface
+#  files, not repeated here:
+#
+#    host.yaml  domain.yaml  github.yaml  workspace.yaml  workspace-mail.yaml
+#    docs/examples/README.md
+#
+#  CREDENTIALS (never in this file)
+#  --------------------------------
+#    Host       the identity path below. No password. Canary first; a
+#               mismatch exits 3.
+#    Domain     none. DNS, and the front page of names it reads.
+#    GitHub     GITHUB_TOKEN or GH_TOKEN. Read scopes. See github.yaml.
+#    Workspace  GOOGLE_APPLICATION_CREDENTIALS. A service account also needs
+#               SCHECK_WORKSPACE_SUBJECT. The profile defaults to directory,
+#               which does not sign in as a mailbox. Forwarding is
+#               workspace-mail.yaml: profile directory_mail or
+#               directory_oauth_mail, plus authorization.mailboxes.
+#
+#  A tool with no collector (stripe, below) is a coverage row naming it.
+#  A cloud root is not in this file: declaring one makes the run exit 2
+#  until the 0.0.3 collector exists. not_used: [cloud] is how to say you
+#  have no cloud account, which marks that area not applicable.
+#
+#  RUN
+#  ---
+#  Replace every placeholder, then:
+#
+#    scheck run docs/examples/first-engagement.yaml --stop-after intake
+#    scheck run docs/examples/first-engagement.yaml --vantage internet
+#    scheck run docs/examples/first-engagement.yaml --vantage internet -v
+#    scheck run docs/examples/first-engagement.yaml --vantage internet --format json
+#
+#  --vantage is the network this run sits on. intent.not_exposed is compared
+#  with it. Without a vantage the report warns.
+# =============================================================================
+
+schema: 1
+engagement:
+  name: yourlab-2026-q4
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  - domain: yourlab.example
+  - domain: yourlab.net
+  - saas: google-workspace:yourlab.example
+  - saas: github:yourlab
+  - host: deploy@203.0.113.5
+  # - cloud: gcp:yourlab-prod          # 0.0.3; a declared cloud root exits 2
+
+people:
+  you:        {kind: employee, workspace: [admin@yourlab.example], github: [you]}
+  alice:      {kind: employee, workspace: [alice@yourlab.example], github: [alice]}
+  bob:        {kind: contractor, org: "Acme Dev", github: [bob-acme], left: 2026-09-30}
+  ops-admin:  {kind: shared, workspace: [ops@yourlab.example], used_by: [you, alice]}
+  deploy-bot: {kind: service, github: [yourlab-deploy-bot]}
+  breakglass: {kind: break_glass, workspace: [breakglass@yourlab.example]}
+
+access:
+  admins:
+    google-workspace:yourlab.example: [you, breakglass]
+    github:yourlab: [you]
+  mfa:
+    - {where: google-workspace:yourlab.example, enforced: everyone}
+    - {where: github:yourlab, enforced: everyone}
+
+tools:
+  - {category: identity, name: google-workspace}
+  - {category: code, name: github}
+  - {category: ci, name: github-actions}
+  - {category: payments, name: stripe}
+
+mail:
+  senders:
+    - {domain: yourlab.example, service: google-workspace, dkim_selectors: [google]}
+  no_mail: [yourlab.net]
+
+secrets:
+  production:
+    - {store: github-actions-secrets, asset: github:yourlab}
+
+data:
+  matters_most:
+    - {what: "customer records", asset: deploy}
+
+intent:
+  exposed_on_purpose:
+    - {url: https://yourlab.example/status, audience: internet, reason: "the uptime vendor reads it"}
+  not_exposed:
+    - {url: https://yourlab.example/admin, audience: vpn}
+  # accepted_risks are pasted from a report, at the readout. A host finding
+  # has no subject in 0.0.2. A forwarding acceptance names one mailbox and
+  # one destination; see workspace-mail.yaml.
+
+# Mailbox sign-in is off unless you uncomment this and select a mail profile.
+# expires is at most 90 days after date. 2027-01-10 is 90 days after
+# 2026-10-12. by is who approved access to staff mail, not a people handle.
+# authorization:
+#   mailboxes:
+#     - asset: google-workspace:yourlab.example
+#       by: yourname
+#       date: 2026-10-12
+#       expires: 2027-01-10
+#       note: "Lab tenant. scheck reads forwarding settings only."
+
+assets:
+  deploy:
+    host: deploy@203.0.113.5
+    identity: ~/.ssh/deploy
+    known_hosts: ~/.ssh/known_hosts
+    timeout: 10m
+    elevate: sudo
+    profile: baseline
+    context:
+      role: "web and database host"
+      exposure: internet
+      environment: prod
+      expected_services:
+        - {port: 443, proto: tcp, purpose: "public TLS", audience: internet}
+        - {port: 5432, proto: tcp, purpose: "postgres", audience: localhost}
+  site:
+    url: https://yourlab.example/
+  shop:
+    repo: github:yourlab/shop
+    deploys_to: production
+    ci: github-actions
+    # public: true
+    # checkout: /home/you/mirrors/shop.git

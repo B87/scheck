@@ -1,0 +1,113 @@
+# =============================================================================
+#  github.yaml: one GitHub organization
+# =============================================================================
+#
+#  The other surfaces are in docs/examples/README.md.
+#
+#  WHAT THIS CHECKS
+#  ----------------
+#  GET only, through the gate. No git transport and no `gh`. Inventory of the
+#  organization, members, outside collaborators and invitations; who is an
+#  owner, tied to people below; 2-step verification as GitHub reports it;
+#  repository visibility against `public: true` (omitted and false do not
+#  declare a repository public on purpose); on a repository with
+#  deploys_to: production, default-branch protection, workflow token
+#  permissions, pull_request_target, outside collaborators with admin, and
+#  deploy keys that can write; Actions secret metadata (names, never values)
+#  and the provider's Dependabot and secret-scanning alerts.
+#
+#  History is read only from a mirror you already have. Set checkout to the
+#  absolute path of a `git clone --mirror`. scheck does not clone. The
+#  mirror's remote must match the repository, and a credential in that remote
+#  URL is a finding. Without checkout, history is a coverage gap.
+#
+#  The token's view is not the whole organization. A selected-repositories
+#  token cannot prove that no other private repository exists. A partial
+#  member list can fire a rule and cannot disprove one.
+#
+#  HOW TO READ THE RESULT
+#  ----------------------
+#    people   identity.unexpected_admin, identity.unattributed_admin,
+#             identity.external_admin (a contractor who is an owner),
+#             identity.former_person_has_access, github.too_many_owners.
+#    2FA      github.mfa_not_required (the org requirement),
+#             github.owner_without_mfa, github.member_without_mfa.
+#             Owner-only fields need an owner token; otherwise they are
+#             unknown, not "off".
+#    repos    github.undeclared_public_repository. On the production
+#             repository: github.default_branch_unprotected,
+#             github.repository_workflow_default_write,
+#             github.pr_target_unsafe_checkout,
+#             github.outside_admin_on_production, github.writable_deploy_key.
+#    secrets  github.org_secret_all_repositories, github.secret_scanning_open,
+#             github.dependabot_high. A secret's name is not evidence it
+#             leaked. History, when checkout is set: github.history_credential.
+#    token    a header note, not a finding, when the token's scopes include
+#             a recognized write grant. Read-only scopes get a note that
+#             effective permissions were not tested.
+#    exit     1 = findings, 2 = a limit cut the run short. A missing
+#             permission is a coverage gap; it does not by itself exit 2.
+#
+#  ONE-TIME SETUP
+#  --------------
+#  Create a fine-grained personal access token, approved by the organization,
+#  with read access only. scheck never sends a write. A token that also holds
+#  a write scope still runs, and the report warns. Classic private inventory
+#  generally needs `read:org`. The rules and the permission each read needs
+#  are in docs/spec/github-collector.md.
+#
+#  Put the token in the environment, never in this file:
+#
+#    export GITHUB_TOKEN=...        # or GH_TOKEN
+#
+#  Revoke it when you are finished if you created it only for this run.
+#
+#  RUN
+#  ---
+#    scheck run docs/examples/github.yaml --stop-after intake
+#    scheck run docs/examples/github.yaml
+#    scheck run docs/examples/github.yaml -v
+#    scheck run docs/examples/github.yaml --format json
+#
+#  `--stop-after recon` prints the accounts no handle names, to paste under
+#  people. An owner nobody can name is a finding.
+# =============================================================================
+
+schema: 1
+engagement:
+  name: github-lab
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  - saas: github:yourlab
+
+people:
+  you:        {kind: employee, github: [you]}
+  alice:      {kind: employee, github: [alice]}
+  bob:        {kind: contractor, org: "Acme Dev", github: [bob-acme], left: 2026-09-30}
+  deploy-bot: {kind: service, github: [yourlab-deploy-bot]}
+
+access:
+  admins:                          # the owners you expect
+    github:yourlab: [you]
+  mfa:
+    - {where: github:yourlab, enforced: everyone}
+
+tools:
+  - {category: code, name: github}
+  - {category: ci, name: github-actions}
+
+secrets:
+  production:
+    - {store: github-actions-secrets, asset: github:yourlab}
+
+assets:
+  shop:
+    repo: github:yourlab/shop
+    deploys_to: production
+    ci: github-actions              # must be a name under tools
+    # public: true                  # the only value that declares public on purpose
+    # checkout: /home/you/mirrors/shop.git
+    #   git clone --mirror git@github.com:yourlab/shop.git /home/you/mirrors/shop.git
