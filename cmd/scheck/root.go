@@ -119,15 +119,16 @@ func newRootCmd() *cobra.Command {
 		pf.Lookup(name).Usage += " (providers and the evaluation harness only in this build)"
 	}
 	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
-	root.Long = "scheck run takes an engagement file, or --host for one host, and reports what was\n" +
-		"checked, what was not, and what to fix first. It only reads: nothing is probed, scanned\n" +
-		"or changed, and no model assesses anything in this build, so no API key is needed\n" +
-		"(docs/spec/engagement.md). scheck local and scheck ssh are deprecated aliases of\n" +
-		"scheck run --host, removed in 0.0.3.\n" +
+	root.Long = "scheck init interviews the operator and writes an engagement file. scheck run takes\n" +
+		"that file, or --host for one host, and reports what was checked, what was not, and what to\n" +
+		"fix first. It only reads: nothing is probed, scanned or changed, and no model assesses\n" +
+		"anything in this build, so no API key is needed (docs/spec/engagement.md). scheck local and\n" +
+		"scheck ssh are deprecated aliases of scheck run --host, removed in 0.0.3.\n" +
 		"Exit codes: 0 no open finding at or above threshold (not a clean result: read what\n" +
 		"was not checked), 1 findings, 2 incomplete run, 3 usage/policy/canary error.\n" +
-		"The report goes to stdout; diagnostics to stderr."
-	root.Example = "  scheck run --host local\n  scheck run engagement.yaml --format json\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
+		"The report goes to stdout; diagnostics to stderr. scheck init contacts nothing and exits 0\n" +
+		"when it has written the file, or 3 when an answer or the file is refused."
+	root.Example = "  scheck init\n  scheck run --host local\n  scheck run engagement.yaml --format json\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if opts.Format != "text" && opts.Format != "json" {
 			return usageErr("--format must be text|json; sarif is not available in this build")
@@ -153,6 +154,7 @@ func newRootCmd() *cobra.Command {
 		newLocalCmd(opts),
 		newSSHCmd(opts),
 		newRunCmd(opts),
+		newInitCmd(opts),
 		newCatalogCmd(opts),
 		newExplainCmd(opts),
 		newSudoersCmd(opts),

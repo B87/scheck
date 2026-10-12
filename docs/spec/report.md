@@ -450,8 +450,13 @@ as verified. An excluded organizational unit is named and makes the row at most
 *partial* ([scope.md](scope.md)). Per-sub-item marks print in text only when they are
 not *assessed*; JSON carries them all, and every `not_applicable` assessment.
 
-`not_used` takes the area keys `identity`, `secrets`, `cloud`, `data`, `cicd`,
+The coverage table's area keys are `identity`, `secrets`, `cloud`, `data`, `cicd`,
 `external`, `web`, `hosts`, `email` and `logging`, in the order of the table below.
+`not_used` may name `hosts`, `cloud`, `data`, `cicd`, `email`, `web` and `external`
+only when no declared root covers that area. A repository asset covers `cicd`,
+and a host asset covers `hosts`. `identity`, `secrets` and `logging` cannot be marked not
+applicable. There is no `payments` area
+([engagement.md](engagement.md), "Validation").
 
 | Risk area | Sub-items |
 |---|---|
@@ -706,9 +711,10 @@ and read as a to-do. Each entry:
   people: alice (admin of google-workspace)`): a risk is accepted by its owner, and a
   prefilled name lets an edit attribute an acceptance to someone who never saw it.
   Validation rejects it empty.
-- `expires`, the collection date plus 90 days for critical and high and 180 days
-  otherwise, in `engagement.timezone`, with the comment `# after this date the finding
-  counts again until someone re-reviews it`.
+- `date`, the collection day in `engagement.timezone`, the day the acceptance is written.
+- `expires`, that day plus 90 days for critical and high and 180 days otherwise,
+  so it stays inside the one-year cap, with the comment `# after this date the finding
+  counts again` and a following line `# until someone re-reviews it`.
 
 An engagement without `people`, as every `--host` engagement is, is headed instead to
 write the engagement to a file (`--write-engagement FILE`), add yourself under people,

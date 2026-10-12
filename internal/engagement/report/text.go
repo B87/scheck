@@ -1368,6 +1368,7 @@ func (t *text) paste(p *AcceptTemplate) {
 		who = "a handle under people: " + strings.Join(c, ", ")
 	}
 	kv("accepted_by", `""`, who)
+	kv("date", p.Date, "the day this acceptance is written")
 	kv("expires", p.Expires, "after this date the finding counts again")
 	t.line(in + "    " + pad("", 29) + "# until someone re-reviews it")
 }

@@ -1085,13 +1085,11 @@ wording polish never expands what the collector observed.
 **Carried from step 4** (consultant DEFINE and REVIEW, client REPORT and modularity
 assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-step-verification-2026-10-11.md)):
 
-- *Release blocker, owner's decision (E8):* a federated tenant (Okta, Entra) declaring
-  `everyone` gets a raised not-enforced finding that may be a false critical. Before
-  release, bring the owner an E8 question, "Do people sign in to Google Workspace
-  through another identity provider?", whose consumer stops `contradiction` for
-  non-super-admin accounts; it is decided with E9's pending "may a context raise reach
-  critical?". Until then every raised instance carries the federation caveat. A Cloud
-  Identity SSO profile read is a 0.0.3 candidate.
+- *Release blocker, deferred 2026-10-12 (owner, E8):* no federation question. A
+  federated tenant (Okta, Entra) declaring `everyone` still gets a raised not-enforced
+  finding that may be a false critical. `contradiction`, `access.mfa` and the
+  federation caveat are unchanged. A Cloud Identity SSO profile read stays a 0.0.3
+  candidate. E9's "may a context raise reach critical?" is a separate question.
 - *E9:* "Fix these first" collapses many unit instances of one finding into one line.
 - *Deferred limit:* a fresh detail refused because the account's unit changed leaves
   the account unknown in its list unit only, not in both units as the DEFINE asked.
@@ -1157,9 +1155,9 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
   super admins' tokens; first-party client ids (Drive for desktop, Cloud SDK, ADC);
   the Admin console paths (Manage Third-Party App Access; Limited, Specific Google
   data, Trusted); whether unrelated anonymous apps share a client id.
-- *E8:* no "which apps do you use" question, which would be theatre; `scheck init`
-  explains how to enable `directory_oauth`, with the warning about what
-  `admin.directory.user.security` also allows.
+- *E8, decided 2026-10-12:* no "which apps do you use" question. `scheck init`
+  explains `directory_oauth` and what `admin.directory.user.security` also allows.
+  See E8.
 - *E9:* group app findings in "Fix these first"; decide whether `data.matters_most`
   with `attribute:admin_grantor` may reach critical (with the pending "may a context
   raise reach critical?"); lab-rank Drive for desktop and Apple Mail grants on admins;
@@ -1230,9 +1228,10 @@ mailbox authorization in
   forwarding filter is disproved even when the alias list was cut, and when no
   settings read was usable only the asset-level judgment is emitted; the consultant's
   review accepted both.
-- *E8:* no "do you forward mail on purpose?" question; `scheck init` explains
-  `directory_mail`, the service account it needs and who approves reading mailbox
-  settings.
+- *E8, decided 2026-10-12:* no "do you forward mail on purpose?" question.
+  `scheck init` explains `directory_mail`, the service account it needs and who
+  approves reading mailbox settings, and does not write `authorization.mailboxes`.
+  See E8.
 - *E9:* `data.matters_most` for email-area Workspace findings (none applies in 0.0.2,
   D5); collapse many forwarding instances in "Fix these first"; whether `hides_mail`
   raises or ranks; lab-rank forward-and-hide filters against helpdesk and accounting
@@ -1566,11 +1565,12 @@ target's registrable domain, which would tell whether anyone can register it
 
 **Delivers:** `scheck init`, an interview that writes the engagement file E1a defined,
 asking the questions of `spec/engagement.md` ("Intake") and nothing else; each question
-declares its consumers in code by id and owning slice. A file written by
-`scheck run --host … --write-engagement` is a valid starting point: `scheck init FILE`
-asks only what it does not answer. The `client` agent's interview mode is run on the
-wording before it is fixed, and its fixture mode writes the engagement files the
-interview tests use.
+declares its consumers in `internal/engagement/interview.go` by id and owning slice.
+`scheck init FILE` asks only what that file does not answer. A file from
+`scheck run --host … --write-engagement` is a valid start. No code path contacts a
+target. A credential-shaped answer is refused by the same detector as validation.
+Plan, Analyze and multi-fact rules are E9, not this slice. No release gate is marked
+passed.
 
 **Done when:** every question declares its consumers, and a test checks that each
 declaration is well formed and that the consumers owned by merged slices exist; the
@@ -1578,52 +1578,42 @@ file `init` writes for each company profile in `.agents/clients/` validates; an 
 that would put a credential in the file is refused by the same detector as validation;
 no code path in `init` contacts a target.
 
-**Carried from the engagement-spec review** (security-consultant, 2026-10-09). Each
-changes what the interview asks or what the file accepts, so E8 decides it before the
-wording is fixed:
+**Decided 2026-10-12** (owner). The engagement-spec review of 2026-10-09 and the E6
+items carried into this slice are closed by these decisions. `spec/engagement.md`
+("Intake") is the wording.
 
-- *Questions with no 0.0.2 consumer*, by the spec's own rule that "printed" counts
-  only for the trigger, authorization, scope and accepted risks: the backups question
-  only unfolds a row that stays *not assessed* (the consultant recommends deferring it
-  to G1, where inventory reads it); `secrets.production[].store` is free text, so
-  whether scheck read the store cannot be computed (make it a closed list mapped to
-  collectors); and a host's `role` is prose for a model that does not run. Each is cut
-  from the interview or given a real consumer.
-- *`data.matters_most` moves almost nothing*: every finding definition today is in the
-  hosts or external area, so the example `{asset: deploy}` raises no finding and the
-  answer only breaks ranking ties. With E9, it raises along declared links: remote
-  access and account findings on the asset that holds the data, findings on
-  repositories that deploy to it, secrets whose declared store is on it. That needs
-  `deploys_to: {environment: production, targets: [deploy]}`, a schema change made
-  while the file may still change.
-- *`not_used` accepts every area*: `identity`, `secrets` and `logging` are refused,
-  and so is any area a declared root covers (`email` beside a domain root, `cicd`
-  beside a GitHub root).
-- `scheck init` writes a header comment: the file names people, departures and
-  accepted weaknesses, and is kept out of public repositories.
-- `intent.accepted_risks[].expires` becomes required, capped at one year after the
-  date it is written: a risk register without review dates is not one.
-
-**Carried from E6 step 4** (2026-10-11, release blocker, owner's decision): a question
-on whether people sign in to Google Workspace through another identity provider, whose
-consumer stops the 2-step `contradiction` for non-super-admin accounts (E6, "Carried
-from step 4").
-
-**Carried from E6 step 5** (2026-10-11): no question about which third-party apps are
-in use; `scheck init` explains how to enable `directory_oauth` and warns what
-`admin.directory.user.security` also allows (E6, "Carried from step 5").
-
-**Carried from E6 step 6** (2026-10-11): the mailbox-authorization release blocker is
-done offline, not as acceptance and not as a live measurement. The environment
-variable alone does not admit mailbox sign-in
-([eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md);
-E6, "Carried from step 6"). S7 and whether `directory_oauth` needs an
-`authorization.mailboxes` entry, left open beside that work, were decided on
-2026-10-12
-([eval/e6-decisions-2026-10-12.md](eval/e6-decisions-2026-10-12.md)). No "do you
-forward mail on purpose?" question; `scheck init` explains `directory_mail`, the
-service account it needs and who must approve, and does not write
-`authorization.mailboxes`.
+- Cut from the interview. The keys stay valid and unasked: `data.backups`,
+  `secrets.production` (`store` stays free text), `assets.<host>.context.role`,
+  `data.matters_most`. `deploys_to` stays the string `production`, `staging` or
+  `development`.
+- Cut the SaaS tools question and the "from which CI" question. `tools` and
+  `assets.<repo>.ci` stay valid and unasked. `ci` still has to name a tool under
+  `tools`.
+- The interview asks host exposure, environment, expected services, and how to reach
+  the host. Only `internet`, `airgapped` and `dev` move a host finding's severity.
+  `prod` does not raise one (`spec/host-collector.md §5.3`).
+- `not_used` refuses `identity`, `secrets` and `logging` always. It also refuses an
+  area a declared root already covers: `email` beside a domain root; `web` beside a
+  domain or url root; `external` beside a domain, url or network root; `cicd` beside
+  a GitHub root or a repository asset; `hosts` beside a host root; `cloud` or `data`
+  beside a cloud root. `hosts`, `cloud`, `data`, `cicd`, `email`, `web` and
+  `external` stay allowed when no such root exists. There is no `payments` area.
+- `intent.accepted_risks[].date` is required. `expires` is required, on or after
+  `date`, and at most 365 days after `date`. A past `expires` still validates; the
+  report leaves the finding open. `scheck init` does not ask for accepted risks. The
+  paste block writes `date` as the collection day.
+- *Deferred, not implemented (E6 step 4 release blocker):* no federation question.
+  `contradiction`, `access.mfa` and the federation caveat are unchanged. A Cloud
+  Identity SSO read stays a 0.0.3 candidate.
+- No "which apps do you use?" question. No "do you forward mail on purpose?"
+  question. When the file names a Workspace tenant, `scheck init` explains
+  `directory_oauth` (the environment variable, the credential stays out of the file,
+  and `admin.directory.user.security` can also revoke app access, sign people out,
+  and turn off 2-step verification) and `directory_mail` (a service account,
+  `gmail.readonly`, and who must approve). It does not ask for, write, renew or
+  extend `authorization.mailboxes`.
+- `scheck init` writes a header comment: the file names people, people who have
+  left, and accepted weaknesses, and is kept out of public repositories.
 
 ### E9 — Plan, Analyze and multi-fact rules
 
@@ -1669,7 +1659,9 @@ asset unchanged; a loop fixture terminates.
   one is `no_rule` and the row is *partial*; every row prints "not judged in this
   version: …" even when it is marked *assessed*, as the hosts and external rows already
   do.
-- *`data.matters_most` raises along declared links* (see E8).
+- *`data.matters_most` raises along declared links.* E8 cut the interview question
+  and left the key valid. `deploys_to` stays `production`, `staging` or
+  `development`. Whether the raise needs another shape is not decided.
 - *A declared `not_used` area the evidence contradicts* gets a note ("you said no
   cloud; `api.example.com` is a CNAME to `*.run.app`").
 - *Already built, carried here:* a resume keeps Scope and host envelopes of any age,

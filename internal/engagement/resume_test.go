@@ -144,7 +144,7 @@ func TestResumeKeepsACompletedHost(t *testing.T) {
 // it, a redact_extra or a dev build collects it again.
 func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 	base := twoHosts + "assets:\n  ops:\n    host: 203.0.113.6\n"
-	risk := "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, expires: 2026-10-06}\npeople:\n  alice: {kind: employee}\n"
+	risk := "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-10-06}\npeople:\n  alice: {kind: employee}\n"
 	for name, tc := range map[string]struct {
 		start   string // the first session's file; base when empty
 		edit    func(string) string
@@ -154,7 +154,7 @@ func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 		"nothing":   {edit: func(f string) string { return f }, want: 1},
 		"elevation": {edit: func(f string) string { return f + "    elevate: sudo\n" }, want: 2},
 		"accepted risk": {edit: func(f string) string {
-			return f + "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice}\npeople:\n  alice: {kind: employee}\n"
+			return f + "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\npeople:\n  alice: {kind: employee}\n"
 		}, want: 2},
 		"redact_extra": {edit: func(f string) string { return f + "redact_extra: ['tangerine']\n" }, want: 2},
 		"an exclude":   {edit: func(f string) string { return f + "exclude:\n  - network: 198.51.100.0/24\n" }, want: 2},
@@ -359,7 +359,7 @@ func TestResumeKeepsNoHostMixedFromTwoSessions(t *testing.T) {
 // collected it says expired, as the finding it no longer covers is open.
 func TestResumeGradesAcceptancesWhenTheHostWasCollected(t *testing.T) {
 	file := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: fw.app_firewall_disabled, asset: deploy@203.0.113.5, reason: lab, accepted_by: alice, expires: 2026-10-08}\n"
+		"    - {id: fw.app_firewall_disabled, asset: deploy@203.0.113.5, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-10-08}\n"
 	fail, calls := true, map[string]int{}
 	collect := collectFirstFailsFrom(t, "macos", &fail, calls)
 	_, dir, _ := startRun(t, file, collect)

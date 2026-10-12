@@ -117,6 +117,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: history:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:kv-secret # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-01-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -126,6 +127,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: remote:origin       # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
 

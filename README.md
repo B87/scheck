@@ -193,11 +193,19 @@ bin/scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo
 bin/scheck run --host deploy@10.0.4.12 --jump ops@bastion.example.com   # through one SSH hop; nothing runs on it
 bin/scheck run --host local -v                               # plus the host's fact sheet
 bin/scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml   # contacts nothing
+bin/scheck init                                              # interview; writes engagement.yaml; contacts nothing
+bin/scheck init engagement.yaml                              # asks only what that file does not answer
 bin/scheck run engagement.yaml --stop-after intake           # validate and print it resolved
 bin/scheck run engagement.yaml                               # every stage, through the report
 bin/scheck run ~/.local/state/scheck/engagements/<name>/<started>   # resume that run
 bin/scheck catalog --profile hardened                        # every check, without running any
 ```
+
+`scheck init` writes an engagement file from an interview and contacts nothing. It reads no
+flags. With a path, it asks only what the file does not answer, and a file from
+`--write-engagement` is a valid start. End each answer with a line that contains
+only a dot. The file names people, people who have left, and accepted weaknesses,
+and it stays out of public repositories.
 
 An engagement file declares the roots to read, each host's reach (`identity`,
 `elevate`, `profile`, `timeout`), what to leave out (`exclude`, `disable_checks`,

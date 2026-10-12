@@ -596,7 +596,7 @@
         },
         "accept_template": {
           "description": "The ready-to-paste intent.accepted_risks entry, for an open finding. reason and accepted_by are left empty for the owner to write; validation rejects them empty.",
-          "type": "object", "required": ["id", "asset", "by_subject", "reason", "accepted_by", "accepted_by_candidates", "expires", "needs_people"], "additionalProperties": false,
+          "type": "object", "required": ["id", "asset", "by_subject", "reason", "accepted_by", "accepted_by_candidates", "date", "expires", "needs_people"], "additionalProperties": false,
           "properties": {
             "id": { "type": "string" },
             "asset": { "type": "string", "description": "The assets name, else the canonical id." },
@@ -612,6 +612,7 @@
                 "properties": { "handle": { "type": "string" }, "why": { "type": "string" } }
               }
             },
+            "date": { "type": "string", "format": "date", "description": "The collection day, in engagement.timezone. expires is at most 365 days after it." },
             "expires": { "type": "string", "format": "date" },
             "needs_people": { "type": "boolean", "description": "The engagement has no people: write it to a file and add one first." }
           }

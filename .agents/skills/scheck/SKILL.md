@@ -12,6 +12,24 @@ persistence and elevation choices.
 
 ## Choose the operation
 
+- `scheck init` interviews the operator and writes an engagement file. With no path
+  it writes `engagement.yaml`. It reads no flags and contacts nothing. It exits 0
+  when the file is written, and 3 when the file is refused. When stdin is not a
+  terminal, a refused answer exits 3; a terminal re-asks that answer. End each
+  answer with a line that contains only a dot. `scheck init FILE` asks only what
+  that file does not answer.
+  `scheck run --host … --write-engagement FILE` is a valid file to start from. The
+  file names people, people who have left, and accepted weaknesses, and it stays out
+  of public repositories. Do not put a token, a private key, or a password in an
+  answer or in the file: a credential-shaped answer is refused. When the file names
+  a Google Workspace tenant, `scheck init` explains `directory_oauth` (set
+  `SCHECK_WORKSPACE_PROFILE` in the environment; the credential stays out of the
+  file; `admin.directory.user.security` can also revoke app access, sign people out,
+  and turn off 2-step verification) and `directory_mail` (a service account,
+  `gmail.readonly`, and who must approve). It does not ask which apps are in use or
+  whether mail is forwarded on purpose, and it does not ask for, write, renew, or
+  extend `authorization.mailboxes`. That entry is written by hand after the person
+  who can approve it has approved reading mailbox settings.
 - For one host, run `scheck run --host local` or `scheck run --host user@host[:port]`
   with `--format json`. Let it persist by default: the run directory keeps the audit
   record of every command sent to someone's host. Use `--no-persist` only when the user

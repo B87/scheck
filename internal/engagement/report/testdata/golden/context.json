@@ -634,6 +634,7 @@
         ],
         "asset": "macos",
         "by_subject": false,
+        "date": "2026-10-07",
         "expires": "2027-01-05",
         "id": "fw.app_firewall_disabled",
         "needs_people": false,

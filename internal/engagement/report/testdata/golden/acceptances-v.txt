@@ -108,6 +108,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       asset: macos
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alice (employee)
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-04-05          # after this date the finding counts again
                                    # until someone re-reviews it
 

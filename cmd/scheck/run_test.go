@@ -760,7 +760,7 @@ roots: [{domain: example.com}]
 people: {alice: {kind: employee}}
 intent:
  accepted_risks:
-  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31`
 		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "DNS name") {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -781,7 +781,7 @@ roots: [{domain: example.com}]
 people: {alice: {kind: employee}}
 intent:
  accepted_risks:
-  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice`
+  - {id: ` + id + `, asset: domain:example.com, reason: temporary, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31`
 		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -809,7 +809,7 @@ roots: [{url: https://example.com/}]
 people: {alice: {kind: employee}}
 intent:
  accepted_risks:
-  - {id: ` + id + `, asset: 'url:https://example.com/', reason: temporary, accepted_by: alice`
+  - {id: ` + id + `, asset: 'url:https://example.com/', reason: temporary, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31`
 		if _, err := engagement.Parse("e.yaml", []byte(base+"}\n"), engagementOptions); err == nil || !strings.Contains(err.Error(), "subject") {
 			t.Fatalf("%s: %v", id, err)
 		}

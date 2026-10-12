@@ -48,7 +48,7 @@ assets:
 intent:
  exposed_on_purpose: [{url: 'https://www.example.com/app', audience: internet, reason: public version information}]
  accepted_risks:
-  - {id: web.security_txt, asset: website, subject: 'https://www.example.com', reason: contact elsewhere, accepted_by: alice}
+  - {id: web.security_txt, asset: website, subject: 'https://www.example.com', reason: contact elsewhere, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}
 `
 	res, err := engagement.Parse("e.yaml", []byte(file), engagement.Options{KnownFinding: finding.Known, FindingSubject: func(id string) string { return string(finding.SubjectOf(id)) }, KnownCheck: func(string) bool { return false }, HostFinding: func(string) bool { return false }})
 	if err != nil {

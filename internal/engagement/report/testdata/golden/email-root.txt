@@ -108,6 +108,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: google._domainkey.example.com # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alice (listed employee)
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-01-05          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -117,6 +118,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: example.com         # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alice (listed employee)
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-04-05          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -126,6 +128,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: example.com/include:sendgrid.net # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alice (listed employee)
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-04-05          # after this date the finding counts again
                                    # until someone re-reviews it
 

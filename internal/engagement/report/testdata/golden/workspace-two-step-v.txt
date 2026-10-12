@@ -128,6 +128,7 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
       subject: /sales              # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
+      date: 2026-10-10             # the day this acceptance is written
       expires: 2027-01-08          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -138,6 +139,7 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
       subject: admin@example.com   # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
+      date: 2026-10-10             # the day this acceptance is written
       expires: 2027-01-08          # after this date the finding counts again
                                    # until someone re-reviews it
 

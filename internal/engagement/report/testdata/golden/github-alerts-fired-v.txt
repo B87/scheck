@@ -163,6 +163,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: secret-scanning:7:commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:config%2FProd.env:2:1 # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-01-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -173,6 +174,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: dependabot:3:App%2Fpackage-lock.json # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-01-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -182,6 +184,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: actions:prod_key    # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -191,6 +194,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: dependabot:4:App%2Fpackage-lock.json # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -200,6 +204,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
       subject: dependabot:5:App%2Fpackage-lock.json # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
