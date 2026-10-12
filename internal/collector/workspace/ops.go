@@ -11,8 +11,8 @@ const (
 	OpCustomer          = "workspace.customer"
 )
 
-// Ops declares binding and tenant inventory; posture and optional mailbox reads
-// land in later E6 steps.
+// Ops starts with binding. Later init functions append inventory, identity,
+// OAuth grant and Gmail forwarding reads.
 var Ops = []gate.Op{
 	foundationOp(opBootstrapCustomer, "/customers/my_customer", []string{"id"}, false),
 	foundationOp(opBootstrapDomains, "/customer/{customer}/domains", []string{"domains.domainName", "domains.verified"}, true),

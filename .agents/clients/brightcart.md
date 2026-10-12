@@ -40,6 +40,12 @@ Can open: the Google Workspace admin console (super admin), the domain registrar
 - A Google "service account": something Dani heard the MSP mention when they set mail
   up. Dani does not know whether one was created, who holds the key, or what it can
   open, and would not create one.
+- Marketplace apps, and the credential a tool would use to read Google: Dani is not
+  sure which apps from Google's Marketplace are installed, or who created that
+  credential. The MSP set Google up. Dani thinks the MSP "added a few from the app
+  shop", maybe one for invoices, and probably created the credential too, but would
+  not bet on either, did not do it themselves, and could not name the apps. Dani is
+  not a developer and would ask the MSP rather than go looking for a key.
 - Contractors: the web agency (three or four people, names unknown to Dani), the MSP
   (two named engineers), a freelance bookkeeper with a Workspace account.
 - Shared accounts: `orders@`, `info@` and `returns@` are Google groups, Dani thinks;

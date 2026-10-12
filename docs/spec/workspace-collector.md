@@ -10,7 +10,11 @@ Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. Step
 implements the mailbox-authorization gate offline on 2026-10-11 (owner's decision): the
 profile alone does not admit a mailbox sign-in. The record is
 [eval/e6-mailbox-authorization-2026-10-11.md](../eval/e6-mailbox-authorization-2026-10-11.md).
-No live tenant was contacted, and release gate 11 is not accepted.
+Step 7's offline closing review and the attributed measurements of one
+authorized tenant are recorded in
+[eval/e6-closing-review-2026-10-12.md](../eval/e6-closing-review-2026-10-12.md).
+Those measurements are not a sealed lab and not acceptance. Release gate 11
+is not accepted.
 
 The gate owns admission, sending, credentials, redaction and persistence
 ([scope.md](scope.md#the-scope-gate)). Engagement supplies people declarations, admin
@@ -387,7 +391,7 @@ secondary domains and aliases.
 | Domain aliases | `/admin/directory/v1/customer/{customer}/domainaliases` | Alias names and verification/binding fields |
 | Units | `/admin/directory/v1/customer/{customer}/orgunits` | Unit ids, canonical paths and parent relationships |
 | Users | `/admin/directory/v1/users`, fixed `customer={customer}` and full admin projection | Id, current primary email, relevant aliases, name label, customer/unit, suspension/archive/admin flags, creation/login/MFA flags and mailbox status |
-| Optional group context | `/admin/directory/v1/groups`, fixed `customer={customer}` | Group id, email, aliases and label only |
+| Optional group context (not compiled) | `/admin/directory/v1/groups`, fixed `customer={customer}`; planned, no op registered | Group id, email, aliases and label only |
 | User detail | `/admin/directory/v1/users/{user}` | Same relevant fields; fresh login evidence and delegated-subject verification |
 | Roles | `/admin/directory/v1/customer/{customer}/roles` | `kind`, `roleId`, `roleName`, `rolePrivileges.serviceId`, `rolePrivileges.privilegeName` and `isSuperAdminRole` |
 | Privilege tree | `/admin/directory/v1/customer/{customer}/roles/ALL/privileges` | `kind`, `serviceId`, `privilegeName`, recursive `childPrivileges` and `isOuScopable` |
@@ -633,13 +637,14 @@ observed path with "unit not found in the unit list"; a path that matches more t
 one unit when case is ignored may fire, gets a diagnostic note, and is never disproved.
 Any population drop, including exclusion drops the gate accepts for admission,
 prevents disproval anywhere ([scope.md](scope.md), "Responses"). No person kind is
-exempt. Details are `affected`, `not_enrolled`, `enrolled`, `enrollment_unknown`,
-`active_observed`, `state_unknown` (unknown flags or activity) and
-`population_complete`. `affected` lists every affected account, not enrolled first,
-then enrolled, then unknown, alphabetical within each. The excerpt names them, capped
-at 20 with a pointer to the JSON report, because the text renderer does not print
-`affected`; it explains an "at least" count by the unknown accounts or the partial
-population.
+exempt. Detail counts are `affected`, `not_enrolled`, `enrolled`,
+`enrollment_unknown`, `active_observed`, `state_unknown` (unknown flags or activity)
+and `population_complete`. The account names, not enrolled first, then enrolled, then
+unknown, alphabetical within each, are the judgment's listed subjects, which the
+report stores as `affected.listed` ([report.md](report.md), the `affected` field).
+The excerpt names them, capped at 20 with a pointer to the JSON report, because the
+text renderer does not print `affected`; it explains an "at least" count by the
+unknown accounts or the partial population.
 
 **Admins.** The admin rule uses the step-3 administrative interpretation and its
 privilege table. The excerpt names the privilege, or "super administrator (isAdmin:
@@ -769,8 +774,9 @@ coverage").
   calendar, a common way an attacker keeps access after a phishing email), that
   `admin.directory.user.security` comes only with the power to revoke app access, sign
   people out and turn off 2-step verification, that the checks above do not need it,
-  and that a dedicated credential keeps the everyday one read-only; then
-  `SCHECK_WORKSPACE_PROFILE=directory_oauth`;
+  and that a dedicated credential keeps the everyday one read-only; then the
+  profile `offers` names, the one that adds this surface to the current profile,
+  falling back to `directory_oauth`;
 - the optional exchange refused: how an administrator grants the permission, its
   powers, a dedicated credential, and that nothing else in the run was affected; every
   account's read refused by Google: the administrator role the acting account needs;
@@ -1207,7 +1213,11 @@ redaction and that no address, assertion or body reaches the audit log; and the
 coverage plan. Pinned goldens: `workspace-mail`, `workspace-mail-refused`,
 `workspace-mail-service-account`, `workspace-mail-breaker` and `workspace-mail-with-domain`
 (a mixed engagement with a domain root, whose email row reads both).
-No live measurement or independent acceptance is claimed.
+Attributed live measurements of one authorized tenant, and the statement that
+they are not acceptance, are in
+[e6-closing-review-2026-10-12.md](../eval/e6-closing-review-2026-10-12.md).
+The assumptions that record leaves unmeasured stay unmeasured. No independent
+acceptance is claimed.
 
 ## Provider references
 

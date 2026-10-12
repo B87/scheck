@@ -72,7 +72,7 @@ accounts retaining assignments. Supported direct and indirect grants are read pe
 admitted user; group membership paths and effective permissions are not tested.
 2-step verification is judged from Google's current per-account enforcement and
 enrollment flags, never from unit policy, grace periods or another identity provider.
-With `SCHECK_WORKSPACE_PROFILE=directory_oauth` and an approved
+With `SCHECK_WORKSPACE_PROFILE=directory_oauth` or `directory_oauth_mail`, and an approved
 `admin.directory.user.security` permission, a separate one-scope token reads each
 account's OAuth grants and reports apps holding broad scopes; the default profile does
 not read them. With `SCHECK_WORKSPACE_PROFILE=directory_mail` (or `directory_oauth_mail`), a service

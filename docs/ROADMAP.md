@@ -885,7 +885,12 @@ tenant binding and inventory through engagement Recon and report integration.
 Step 3 implements identity/admin rules, verified offline. Step 4 implements observed
 2-step verification, verified offline. Step 5 implements optional OAuth grant
 metadata, verified offline. Step 6 implements optional Gmail forwarding metadata,
-verified offline; step 7 is next. The design is
+verified offline. Step 7, the whole-slice offline reviews and separately
+attributed live measurements on one authorized tenant, is recorded in
+[eval/e6-closing-review-2026-10-12.md](eval/e6-closing-review-2026-10-12.md).
+That record is not acceptance. Recall, false positives and the missed E3
+rest-lab seal were not passed, and the 0.0.2 release gates are not passed.
+The design is
 [spec/workspace-collector.md](spec/workspace-collector.md). Assessment-credential
 grants beyond reads produce an unranked warning, as in E5, not a posture finding.
 Unknown grants remain unknown; a successful read does not prove write capability.
@@ -1030,6 +1035,16 @@ Unknown grants remain unknown; a successful read does not prove write capability
    claimed.
 7. Whole-slice offline tests and consultant/client/adversarial reviews, coverage and
    report review, spec audit, and separately attributed live measurements.
+   **Done 2026-10-12, offline plus attributed live measurements, not acceptance:**
+   consultant, client, spec audit and a fresh adversarial review, with `make check`
+   green, are recorded in
+   [eval/e6-closing-review-2026-10-12.md](eval/e6-closing-review-2026-10-12.md).
+   One authorized tenant (not a sealed lab) was measured there.
+   After the assignee-type fix, administrator evidence was complete, both measured
+   mailboxes were disproved, and the run exited 1 from the 2-step findings. Once
+   the security scope had propagated, OAuth grants were read, eight broad-scope
+   findings fired, and identity stayed partial. Recall, false positives and the
+   missed E3 rest-lab seal were not passed. The 0.0.2 release gates are not passed.
 
 **Done when:** every rule has firing, disproved and abstained fixtures against fake
 Google API servers; scope, exclusions, pagination, unknown fields, permission failures,
@@ -1133,7 +1148,7 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
   collector display names in `internal/engagement/report/areas.go`, and the
   inventory-only fallback in `judgedRow` ("Workspace account controls"), stay in the
   report. F1 and F3 remain unassigned ("Carried from step 4").
-- *Unmeasured assumptions, measured live in step 7:* Google downscopes an
+- *Unmeasured assumptions, left unmeasured in step 7* ([eval/e6-closing-review-2026-10-12.md](eval/e6-closing-review-2026-10-12.md)): Google downscopes an
   `authorized_user` refresh carrying `scope` and answers `invalid_scope` for an
   ungranted scope; domain-wide delegation does not appear in `tokens.list`;
   `tokens.list` lists the caller's own grant; it echoes `userKey` as the numeric id
@@ -1161,8 +1176,10 @@ assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-ver
 - *0.0.3 candidates:* a first-party client id table, for wording only; legacy feed
   scopes; downscoping the baseline `authorized_user` refresh; app passwords; token
   activity (Reports API); Cloud Identity app-access policy reads.
-- *Client profile gap, before step 7's client review:* Brightcart's profile says
-  nothing of its Marketplace installs or of who set up the credential.
+- *Filled 2026-10-12, a belief and not a verified fact:* Brightcart's profile now says
+  Dani is not sure which Google Marketplace apps are installed or who created the
+  Google credential. Dani thinks the MSP, who set Google up, added some apps and
+  probably created the credential, and may be wrong about both.
 
 **Carried from step 6** (consultant DEFINE and REVIEW, client REPORT and modularity
 assess, 2026-10-11; forwarding in
@@ -1240,7 +1257,7 @@ mailbox authorization in
 - *Modularity remainder, owner to confirm:* S3 profile names live in several places (the
   gate's `profileScopes` and surface table, the collector's `knownProfile` and `offer`
   fallbacks, "directory" literals); recommended: a gate `workspaceProfiles()` and one
-  `notOnPlan` helper, with step 7 or before a 0.0.3 surface. S6 the report maps
+  `notOnPlan` helper, before a 0.0.3 surface. Step 7 did not do it. S6 the report maps
   attributes by rule id and named `Details` keys (`admin_mailbox_read`,
   `admin_grant_read`, `repository_read`); recommended: `Judgment.AttributeRead` and a
   report `raises` table, in E9 or when the next raise lands. L7 shared asset-level
@@ -1249,7 +1266,7 @@ mailbox authorization in
 - *Measured live 2026-10-12, one tenant:* `getAutoForwarding` returned `enabled:false`
   when forwarding was off. An empty filter list arrived as HTTP 204 with no body, not
   `{}`; the filters read accepts that 204 as the empty list.
-- *Unmeasured assumptions, measured live in step 7:* (2) the exchange errors for
+- *Unmeasured assumptions, left unmeasured in step 7* ([eval/e6-closing-review-2026-10-12.md](eval/e6-closing-review-2026-10-12.md)): (2) the exchange errors for
   suspended, archived, deleted, unlicensed and
   Gmail-disabled subjects (only "user doesn't exist" as `invalid_grant` is sourced);
   (3) reads of a Gmail-disabled mailbox answer 400 `failedPrecondition`; (4) a
@@ -1271,6 +1288,25 @@ mailbox authorization in
   would ask Sam and the MSP because the MSP set Google up, is not sure "settings"
   leaves the messages unread, and would say no if it sounded like opening people's
   mail.
+
+**Carried from step 7** (consultant REVIEW, client REPORT, spec audit and
+adversarial review, 2026-10-12;
+[eval/e6-closing-review-2026-10-12.md](eval/e6-closing-review-2026-10-12.md)):
+
+- *Should-fix, not applied, next edit of Workspace assignment admission (not E8
+  or E9):* `strings.ToUpper` stores `assigneeType` `uſer` (U+017F) as `USER`.
+  Directory will not send it. The whole-slice review did not treat it as a
+  realistic wrong report. Accept the type only when every byte is an ASCII
+  letter and the uppercased spelling is `user` or `group`.
+- *E9, not applied:* the client heard "none it classifies as broad" as no broad
+  app, an escaped app name as a glitch, and "Google Chrome" as the browser, and
+  would edit the 2-step declaration to clear a critical finding because a shared
+  warehouse PC is believed exempt. The consultant found no judgement defect.
+  Keep control-character escaping. An exception written down does not enroll an
+  unenrolled super admin. The three fixtures were separate reports; do not
+  delete a disproof sentence because another fixture fired.
+- *Before a 0.0.3 surface:* S3, profile names in one place, was not done here.
+  E8 and E9 items carried from steps 4, 5 and 6 stay carried.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
