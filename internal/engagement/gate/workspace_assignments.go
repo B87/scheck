@@ -10,16 +10,16 @@ func (g *Gate) workspaceAssignment(r Request, a admitted, item any, excluded []O
 	if !s.usersComplete || s.unitIDs == nil {
 		return "unattributable"
 	}
-	scope := scalarAt(item, f.Scope)
-	switch scope {
+	// Drop names are fixed tokens. They never include the field value.
+	switch scalarAt(item, f.Scope) {
 	case "CUSTOMER":
 		if v, present := fieldAt(item, f.Unit); present && v != "" {
-			return "unattributable"
+			return "scope_customer_has_unit"
 		}
 	case "ORG_UNIT":
 		unit := s.unitIDs[scalarAt(item, f.Unit)]
 		if unit == "" {
-			return "unattributable"
+			return "scope_unit_unknown"
 		}
 		for _, ou := range excluded {
 			if orgUnitUnder(unit, strings.ToLower(ou.Path)) {
@@ -27,22 +27,26 @@ func (g *Gate) workspaceAssignment(r Request, a admitted, item any, excluded []O
 			}
 		}
 	default:
-		return "unattributable"
+		return "scope_unrecognized"
 	}
 	assignee := scalarAt(item, f.Assignee)
-	switch scalarAt(item, f.Type) {
+	_, typePresent := fieldAt(item, f.Type)
+	switch strings.ToUpper(scalarAt(item, f.Type)) {
 	case "USER":
 		user, ok := s.inventory[assignee]
 		if !ok || user.id != assignee || a.b.params["user"] != "" && a.b.params["user"] != assignee {
-			return "unattributable"
+			return "assignee_mismatch"
 		}
 	case "GROUP":
 		// Only the specific admitted-user query establishes group-derived association.
 		if a.b.params["user"] == "" || !customerIDRE.MatchString(assignee) {
-			return "unattributable"
+			return "assignee_mismatch"
 		}
 	default:
-		return "unattributable"
+		if !typePresent {
+			return "assignee_type_missing"
+		}
+		return "assignee_type_unrecognized"
 	}
 	return ""
 }

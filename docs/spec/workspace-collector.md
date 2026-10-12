@@ -538,7 +538,12 @@ per-user response. The request is selected by an admitted stable user id and fix
 requested user, not a locally inferred membership edge. A tenant-wide direct
 `GROUP` observation proves a group grant only; it never attributes a user. Unknown
 assignee types, including a missing `assigneeType`, and service-account assignees
-remain coverage gaps. No group-member
+remain coverage gaps. A missing `assigneeType` is never read as `USER`. A present
+type is `USER` or `GROUP` only, compared without regard to case, because Directory
+returns `user` and `group`. Any other present value stays unrecognized. The drop
+count names the check and never the field value: `assignee_type_missing`,
+`assignee_type_unrecognized`, `scope_unrecognized`, `scope_customer_has_unit`,
+`scope_unit_unknown` or `assignee_mismatch`. No group-member
 read fills them.
 
 Only current supported assignments establish retained administrative privilege.

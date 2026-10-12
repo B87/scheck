@@ -60,7 +60,9 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 	e.Access.Roles = population(ctx, sender, req(OpRoles), func(v Role) string { return v.ID }, func(v Role) bool { return v.ID != "" })
 	e.Access.Privileges = population(ctx, sender, req(OpPrivileges), func(v Privilege) string { return v.Service + ":" + v.Name }, func(v Privilege) bool { return v.Service != "" && v.Name != "" })
 	valid := func(v Assignment) bool {
-		return v.ID != "" && v.Role != "" && v.Assignee != "" && (v.Type == "USER" || v.Type == "GROUP") && (v.Scope == "CUSTOMER" || v.Scope == "ORG_UNIT" && v.Unit != "")
+		// Directory returns user and group; a missing type never becomes USER.
+		typ := strings.ToUpper(v.Type)
+		return v.ID != "" && v.Role != "" && v.Assignee != "" && (typ == "USER" || typ == "GROUP") && (v.Scope == "CUSTOMER" || v.Scope == "ORG_UNIT" && v.Unit != "")
 	}
 
 	users := slices.Clone(e.Users.Items)
@@ -78,6 +80,9 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 		request.Params["user"] = u.ID
 		if observations < 10000 {
 			account.Assignments = population(ctx, sender, request, func(v Assignment) string { return v.ID }, valid)
+			for i := range account.Assignments.Items {
+				account.Assignments.Items[i].Type = strings.ToUpper(account.Assignments.Items[i].Type)
+			}
 			observations += len(account.Assignments.Items)
 		} else {
 			account.Assignments.Gaps = []string{"assignment_limit"}

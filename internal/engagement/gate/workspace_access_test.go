@@ -28,17 +28,23 @@ func wsAccessOps() []Op {
 }
 func TestWorkspaceAssignmentAdmissionAndScopeProjection(t *testing.T) {
 	for _, tc := range []struct {
-		name, row string
-		kept      bool
+		name, row, drop string
+		kept            bool
 	}{
-		{"malformed expiry", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"CUSTOMER","expirationDetails":true}`, true},
-		{"direct user", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"CUSTOMER"}`, true},
-		{"indirect group", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"group1","assigneeType":"GROUP","scopeType":"CUSTOMER"}`, true},
-		{"foreign user", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"SECRET_UNADMITTED","assigneeType":"USER","scopeType":"CUSTOMER"}`, false},
-		{"unknown type", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"SECRET_UNADMITTED","scopeType":"CUSTOMER"}`, false},
-		{"excluded scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"id:board"}`, false},
-		{"unknown scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"SECRET_UNKNOWN_UNIT"}`, false},
-		{"retained scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"id:room","expirationDetails":{"expireTime":"2026-10-11T00:00:00Z","secret":"OMITTED_EXPIRY"},"extra":"OMITTED_EXTRA"}`, true},
+		{"malformed expiry", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"CUSTOMER","expirationDetails":true}`, "", true},
+		{"direct user", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"CUSTOMER"}`, "", true},
+		{"indirect group", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"group1","assigneeType":"GROUP","scopeType":"CUSTOMER"}`, "", true},
+		{"foreign user", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"SECRET_UNADMITTED","assigneeType":"USER","scopeType":"CUSTOMER"}`, "assignee_mismatch", false},
+		{"unknown type", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"SECRET_UNADMITTED","scopeType":"CUSTOMER"}`, "assignee_type_missing", false},
+		{"lowercase type", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"user","scopeType":"CUSTOMER"}`, "", true},
+		{"lowercase group", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"group1","assigneeType":"group","scopeType":"CUSTOMER"}`, "", true},
+		{"service account type", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"SERVICE_ACCOUNT","scopeType":"CUSTOMER"}`, "assignee_type_unrecognized", false},
+		{"missing scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER"}`, "scope_unrecognized", false},
+		{"other scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"DOMAIN"}`, "scope_unrecognized", false},
+		{"customer with unit", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"CUSTOMER","orgUnitId":"id:room"}`, "scope_customer_has_unit", false},
+		{"excluded scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"id:board"}`, "board", false},
+		{"unknown scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"SECRET_UNKNOWN_UNIT"}`, "scope_unit_unknown", false},
+		{"retained scope", `{"roleAssignmentId":"a","roleId":"r","assignedTo":"123","assigneeType":"USER","scopeType":"ORG_UNIT","orgUnitId":"id:room","expirationDetails":{"expireTime":"2026-10-11T00:00:00Z","secret":"OMITTED_EXPIRY"},"extra":"OMITTED_EXTRA"}`, "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t)
@@ -81,6 +87,15 @@ func TestWorkspaceAssignmentAdmissionAndScopeProjection(t *testing.T) {
 			}
 			if !tc.kept && len(result.Response.Population.Incomplete) == 0 {
 				t.Fatal("dropped reference claimed complete")
+			}
+			if tc.drop != "" {
+				got := ""
+				if len(result.Response.Population.Dropped) == 1 {
+					got = result.Response.Population.Dropped[0].Rule
+				}
+				if got != tc.drop || strings.Contains(got, "SECRET") {
+					t.Fatal(got)
+				}
 			}
 			before := len(api.requests())
 			req.Params["user"] = "unknown@example.com"
