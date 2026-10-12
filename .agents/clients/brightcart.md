@@ -37,6 +37,9 @@ Can open: the Google Workspace admin console (super admin), the domain registrar
 
 - Workspace super admins: Dani, the owner (Sam), and "the MSP has one, I think, for
   setting things up". Dani is not sure whether the MSP's account is still active.
+- A Google "service account": something Dani heard the MSP mention when they set mail
+  up. Dani does not know whether one was created, who holds the key, or what it can
+  open, and would not create one.
 - Contractors: the web agency (three or four people, names unknown to Dani), the MSP
   (two named engineers), a freelance bookkeeper with a Workspace account.
 - Shared accounts: `orders@`, `info@` and `returns@` are Google groups, Dani thinks;
@@ -49,6 +52,10 @@ Can open: the Google Workspace admin console (super admin), the domain registrar
 
 - "We have 2-step on Google for the office staff." The warehouse account does not,
   because the PC is shared.
+- Letting a tool sign in as staff mailboxes to read whether mail is forwarded
+  somewhere else: Dani would not approve that alone. They would ask Sam, and the MSP,
+  because the MSP set Google up. Dani is not sure "settings" leaves the messages
+  unread, and would say no if it sounded like opening people's mail.
 - After the incident the MSP "set up DMARC". Dani does not know what policy it has.
 - The servers are "locked down by the MSP". SSH access is "only the MSP and Leo".
 - Nothing is exposed on purpose apart from the shop. There is a staging copy of the shop

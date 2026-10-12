@@ -198,9 +198,12 @@ that is expired or not yet current warns before contact, the same kind of warnin
 surface does not. A missing entry does not warn at intake, because whether the profile
 selects mail is an environment variable, not a fact in the file.
 
-`directory_oauth` does not receive a `mailboxes` entry. Whether it needs one is an
-open owner decision. The consultant recommends no entry, because OAuth does not sign
-in as staff. No owner decision was made. There is no skip list.
+`directory_oauth` does not receive a `mailboxes` entry, and does not need one
+(decided 2026-10-12): that profile acts with the administrator credential and does
+not sign in as staff. `authorization.mailboxes` stays the gate for profiles that
+select `gmail_forwarding` (`directory_mail` and `directory_oauth_mail`), together
+with `SCHECK_WORKSPACE_PROFILE`. Neither alone admits a mailbox sign-in. There is no
+skip list.
 
 Tokens are cached by bound customer and admitted user id, never reused for another
 user, cleared with the binding as above and capped at the baseline token's expiry. The
@@ -234,9 +237,11 @@ another and may have been failing, so run again later, and if it repeats check t
 and the delegation. An exchange counts as one scheck asked Google to act as the mailbox
 when it left this machine, answered or not; the gate keeps that set for the session and
 every mail read's result carries it (`ActedAsMailbox`). A refused permission,
-`needs_service_account`, a disabled Gmail API and a tripped breaker are gaps only; the
-open question whether a surface with no usable read should exit 2 is not decided for OAuth or mail
-([ROADMAP.md](../ROADMAP.md), E6, "Carried from step 5" and "Carried from step 6").
+`needs_service_account`, a disabled Gmail API and a tripped breaker are coverage gaps
+only. A surface selected and then refused with no usable read does not exit 2, for
+OAuth and for mail (decided 2026-10-12;
+[e6-decisions-2026-10-12.md](../eval/e6-decisions-2026-10-12.md)). A rate limit remains
+`limit_reached` and can still exit 2.
 
 All baseline scope names below have the prefix
 `https://www.googleapis.com/auth/`:

@@ -1094,13 +1094,15 @@ assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-st
 **Carried from step 5** (consultant DEFINE and REVIEW, client REPORT and modularity
 assess, 2026-10-11; [eval/e6-oauth-verification-2026-10-11.md](eval/e6-oauth-verification-2026-10-11.md)):
 
-- *Owner's decisions:* (S5) add further broad scopes in a later table version:
-  `spreadsheets`, `documents`, `presentations`, `calendar`, `admin.directory.group`,
-  and for reading `spreadsheets.readonly`, `documents.readonly`, `calendar.readonly`,
-  `gmail.metadata`; (S7) exit 2 when OAuth is selected and no account's grants were
-  read, which the consultant now recommends against DEFINE's coverage-gap-only ruling;
-  whether the admin raise is skipped for grants to the assessment client that were not
-  set aside (kept today).
+- *Owner's decisions, still open:* (S5) add further broad scopes in a later table
+  version: `spreadsheets`, `documents`, `presentations`, `calendar`,
+  `admin.directory.group`, and for reading `spreadsheets.readonly`,
+  `documents.readonly`, `calendar.readonly`, `gmail.metadata`; whether the admin raise
+  is skipped for grants to the assessment client that were not set aside (kept today).
+- *Decided 2026-10-12 (S7):* a coverage gap, not exit 2, for OAuth and for mail. The
+  consultant's exit-2 recommendation was declined. A rate limit remains
+  `limit_reached` and can still exit 2
+  ([eval/e6-decisions-2026-10-12.md](eval/e6-decisions-2026-10-12.md)).
 - *Step 6, pulled forward from the modularity assess:* F2 the OAuth limit sentence is
   duplicated in the collector's note and the report's coverage group, and the
   `oauth_unclassified` collapse and its reason phrase live in the report; F4 the asset
@@ -1176,9 +1178,12 @@ mailbox authorization in
 - *Candidate, not built:* a later `authorization.mailboxes[].skip` list that would
   narrow which mailboxes are signed in as, because `exclude:` also removes those
   accounts from Directory rules. Not added in this slice.
-- *Owner's decision, still open:* whether `directory_oauth` needs an
-  `authorization.mailboxes` entry. The consultant recommends no entry, because OAuth
-  does not sign in as staff. No owner decision.
+- *Decided 2026-10-12:* `directory_oauth` does not need an `authorization.mailboxes`
+  entry. That profile acts with the administrator credential and does not sign in as
+  staff. The entry stays the gate for profiles that select `gmail_forwarding`
+  (`directory_mail` and `directory_oauth_mail`), together with
+  `SCHECK_WORKSPACE_PROFILE`; neither alone admits a mailbox sign-in
+  ([eval/e6-decisions-2026-10-12.md](eval/e6-decisions-2026-10-12.md)).
 - *Deferred, client REPORT, not changed beyond the verification sentence:* the header
   "approved by" can be read as approval of the forwarding itself. The warning now also
   says scheck did not verify the approval. A later wording pass can say "permission to
@@ -1198,13 +1203,16 @@ mailbox authorization in
   environment variable; the readout note names the approval, and the gate still
   refuses. A resumed report's header counts this session's sign-ins; an earlier
   session's `mailbox_approvals` stay in `run.json` and are not merged into that line.
-- *Owner's decision, still open (S7):* whether a surface selected and refused with no
-  usable read (a refused permission, `needs_service_account`, a tripped breaker) exits 2,
-  for OAuth and for mail; both are coverage gaps only today (D4). Step 6 also
-  relaxes DEFINE's disproof rule once: a mailbox with forwarding off and no forwarding
-  filter is disproved even when the alias list was cut, and when no settings read was
-  usable only the asset-level judgment is emitted; the consultant's review accepted
-  both.
+- *Decided 2026-10-12 (S7):* a surface selected and then refused with no usable read
+  (a refused permission, `needs_service_account`, a tripped breaker) is a coverage
+  gap, not exit 2, for OAuth and for mail. This confirms D4. The consultant's exit-2
+  recommendation was declined. A rate limit remains `limit_reached` and can still
+  exit 2
+  ([eval/e6-decisions-2026-10-12.md](eval/e6-decisions-2026-10-12.md)).
+- Step 6 relaxes DEFINE's disproof rule once: a mailbox with forwarding off and no
+  forwarding filter is disproved even when the alias list was cut, and when no
+  settings read was usable only the asset-level judgment is emitted; the consultant's
+  review accepted both.
 - *E8:* no "do you forward mail on purpose?" question; `scheck init` explains
   `directory_mail`, the service account it needs and who approves reading mailbox
   settings.
@@ -1253,8 +1261,14 @@ mailbox authorization in
   filter limit against scheck's cap of 1,000; and, added by the review, whether Google's
   "internal addresses only" counts subdomains internal (bears on D6) and whether
   `disposition` values match `trash`, `archive` and `markRead`.
-- *Client profile gap, before step 7's client review:* Brightcart's profile says nothing
-  of a service account or of who would approve reading staff mailbox settings.
+- *Filled 2026-10-12, a belief and not a verified fact:* Brightcart's profile now says
+  that a Google "service account" is something Dani heard the MSP mention when they
+  set mail up, that Dani does not know whether one was created, who holds the key or
+  what it can open and would not create one, and that Dani would not alone approve a
+  tool signing in as staff mailboxes to read whether mail is forwarded somewhere else,
+  would ask Sam and the MSP because the MSP set Google up, is not sure "settings"
+  leaves the messages unread, and would say no if it sounded like opening people's
+  mail.
 
 **Never declared:** `verificationCodes.list`, which returns backup sign-in codes.
 The gate's registry refuses any op whose decoded path reads `verificationCodes`, and
@@ -1565,9 +1579,13 @@ in use; `scheck init` explains how to enable `directory_oauth` and warns what
 done offline, not as acceptance and not as a live measurement. The environment
 variable alone does not admit mailbox sign-in
 ([eval/e6-mailbox-authorization-2026-10-11.md](eval/e6-mailbox-authorization-2026-10-11.md);
-E6, "Carried from step 6"). No "do you forward mail on purpose?" question; `scheck
-init` explains `directory_mail`, the service account it needs and who must approve,
-and does not write `authorization.mailboxes`.
+E6, "Carried from step 6"). S7 and whether `directory_oauth` needs an
+`authorization.mailboxes` entry, left open beside that work, were decided on
+2026-10-12
+([eval/e6-decisions-2026-10-12.md](eval/e6-decisions-2026-10-12.md)). No "do you
+forward mail on purpose?" question; `scheck init` explains `directory_mail`, the
+service account it needs and who must approve, and does not write
+`authorization.mailboxes`.
 
 ### E9 — Plan, Analyze and multi-fact rules
 
