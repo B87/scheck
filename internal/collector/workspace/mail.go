@@ -805,9 +805,9 @@ func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersCom
 	// administrators (docs/spec/workspace-collector.md, "Forwarding
 	// interpretation").
 	if yes(b.view.user.IsAdmin) && !b.view.access.Conflict {
-		j.Attributes = []string{"admin"}
 		j.Details["admin_mailbox_read"] = firstRead(j.Reads, b.m)
-		j.Context = who + " is a super administrator: mail sent to administrators, such as security alerts and password-reset links from other services, goes to this mailbox."
+		j.Why = who + " is a super administrator: mail sent to administrators, such as security alerts and password-reset links from other services, goes to this mailbox."
+		j.Attributes = []finding.Attribute{{Name: "admin", Ref: finding.Ref{Observation: firstRead(j.Reads, b.m), Excerpt: j.Why}}}
 	}
 	j.NotChecked = []string{"Whether any message was forwarded, and what each filter matches, were not checked."}
 }

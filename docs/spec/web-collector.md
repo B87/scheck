@@ -333,7 +333,7 @@ separate finding.
 | Rule | Fires | Disproved | Abstains | Base | Area |
 |---|---|---|---|---|---|
 | `tls.certificate_invalid`: "The certificate for *name* is *expired / for another name / not from a trusted issuer / missing its intermediate*" | the gate's typed verification class | verified | no handshake; an unclassified error; an issuer on the TLS-interception list, worded "your network inspects TLS, so certificates were not judged"; the name is a takeover candidate, which subsumes it | low | external |
-| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at collection; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
+| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at the collection time of the TLS read, not the session start; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
 | `tls.legacy_only`: "*name* did not negotiate TLS 1.2 or later" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
 
 A missing intermediate is worded "browsers may recover, but clients that do not fetch

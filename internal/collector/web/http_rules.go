@@ -305,7 +305,7 @@ func (j *judging) plainHTTP(o string, ps []Page, tld string) {
 			if p.Status >= 200 && p.Status < 300 && p.Body != "" {
 				x.Verdict, x.Excerpt = Fired, "HTTP serves a response body without encryption"
 				if passwordForm(p.Body) {
-					x.Attributes = []string{"password_form"}
+					x.Attributes = []finding.Attribute{{Name: "password_form"}}
 					x.Excerpt += "; the page contains a password input; no form was submitted"
 				}
 			}
@@ -561,7 +561,7 @@ func (j *judging) secrets(p Page) {
 			x.Excerpt = fmt.Sprintf("%s%d %s token match(es) were removed from the captured response before reporting", atLeast, n, det)
 			x.Details = map[string]any{"detector": det, "count": n}
 			if det == "slack-webhook" {
-				x.Attributes = []string{"slack_webhook"}
+				x.Attributes = []finding.Attribute{{Name: "slack_webhook"}}
 			}
 		} else if reason == "" && strings.Contains(strings.ToLower(header(p, "Content-Type")), "text/html") && !p.Truncated && !marked(p.Body) && len(p.Redactions) == 0 {
 			x.Verdict = Disproved

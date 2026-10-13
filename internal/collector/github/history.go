@@ -528,7 +528,7 @@ func JudgeHistory(e Evidence) []Judgment {
 			settle(&j, true, true, fmt.Sprintf("%s:%d at commit %s: %s", loc.Path, loc.Line, loc.Commit, loc.Marker))
 			j.Details = map[string]any{"commit": loc.Commit, "path": loc.Path, "line": loc.Line, "detector": loc.Detector, "marker": loc.Marker}
 			if usableRead(r.RepositoryRead) && r.Visibility != nil && *r.Visibility == "public" {
-				j.Attributes = []string{"observed_public"}
+				j.Attributes = []finding.Attribute{{Name: "public_repository", Ref: finding.Ref{Observation: r.RepositoryRead.RequestID, Excerpt: "Observed repository visibility: public"}}}
 				j.Details["repository_read"] = r.RepositoryRead.RequestID
 				j.Details["repository_visibility"] = "public"
 				j.Excerpt += " Observed repository visibility: public."

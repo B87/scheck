@@ -17,7 +17,6 @@ type Input struct {
 	Observations     map[string]Observation
 	LevelsUsed       []string
 	RulesVersion     string
-	Exposures        []ExposureInput
 	Version          string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
@@ -120,7 +119,8 @@ type AssetInput struct {
 	// collected it: this session did not contact it.
 	Kept bool
 	// Collector names the network collector that read the asset ("web"),
-	// and Judged are its rules' verdicts there.
+	// and Judged are its rules' verdicts there, each fired one with the
+	// severity chain Analyze gave it.
 	Collector string
 	Judged    []Judgment
 	// ReadWith is the root a declared domain asset was read with, its
@@ -181,9 +181,6 @@ type AcceptanceInput struct {
 	AcceptedBy string
 	Expires    string
 }
-
-// ExposureInput is an exact declared public URL and its reason.
-type ExposureInput struct{ URL, Reason, Source string }
 
 // Observation is the original collection metadata, including reused evidence.
 type Observation struct {

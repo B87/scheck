@@ -248,7 +248,7 @@ func TestForwardingAdminRaiseAndLeaver(t *testing.T) {
 	c.People = []Person{{Handle: "root", Kind: "employee", Left: "2026-10-01", Addresses: []string{"root@example.com"}}}
 	e.Mail.Accounts[0].Enabled, e.Mail.Accounts[0].Address = new(true), "x@gmail.com"
 	j := outcome(t, e, c, "root@example.com -> x@gmail.com")
-	if !slices.Equal(j.Attributes, []string{"admin"}) || j.Details["admin_mailbox_read"] != "a-root" || !strings.HasPrefix(j.Context, "root@example.com is a super administrator: mail sent to administrators") {
+	if (len(j.Attributes) != 1 || !j.Has("admin")) || j.Details["admin_mailbox_read"] != "a-root" || !strings.HasPrefix(j.Why, "root@example.com is a super administrator: mail sent to administrators") {
 		t.Fatalf("%+v", j)
 	}
 	if !strings.Contains(j.Excerpt, "root@example.com belongs to root, declared as having left on 2026-10-01.") {

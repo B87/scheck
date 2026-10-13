@@ -97,7 +97,7 @@ command, one file").
 | Why not probes? | A probe needs first-party evidence, and in 0.0.2 the only evidence for a discovered site would be the operator's word. Probes arrive in 0.0.3 after the cloud inventory can vouch for an address. |
 | Why GCP and Google Workspace rather than AWS and Microsoft 365? | A market decision, stated as one: the authors' own environment is Google, so the live tests and the lab can exist. AWS has the larger share of small companies and is the next collector on the same shape, before Azure and Microsoft 365. |
 | Third-party tools? | None. DNS, TLS, headers, fingerprinting and both APIs need only the Go standard library. |
-| The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1b and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. |
+| The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1b and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. One exception, decided 2026-10-13 (owner): E9 adds `fw.iptables_backend` (`realpath -e /usr/sbin/iptables`) so that `db.listens_unfiltered` can tell an empty `nft` ruleset from no firewall. |
 | One command? | Yes. From E2, `scheck run` is the only assessment command. `scheck local` and `scheck ssh` are aliases of `scheck run --host` in 0.0.2, with a deprecation line on stderr, and are removed in 0.0.3. Two pipelines would mean two reports, two run histories and two places to declare a host, and only one of them would say what it did not assess. |
 | `scheck.yaml`? | Not read by `scheck run` (E1b), removed with the aliases (E2). Profile, elevation, host context and the narrowing lists move into the engagement file, per asset where they describe a host; the state directory and the evaluation harness's model settings are flags. A restriction a client asked for is part of the rules of engagement and has to travel with the engagement file: kept in a per-machine file, it silently disappears when a colleague or a CI job runs the same engagement elsewhere. A config file where 0.0.1 read one makes `scheck run` exit 3, naming where each of its keys moved and saying to delete or rename the file, so a v0.0.1 `deny_paths` is never dropped silently, whichever release a user upgrades to; the check stays. |
 | A model? | No. Every stage runs on rules, single-fact and multi-fact. Plan is a checklist per asset type, narrowed and ordered by context, and the report says so. |
@@ -1617,78 +1617,230 @@ items carried into this slice are closed by these decisions. `spec/engagement.md
 
 ### E9 — Plan, Analyze and multi-fact rules
 
-**Delivers:** a rules-only plan per asset type, narrowed and ordered by structured
-context; multi-fact rules that declare exactly which facts they read and abstain when
-any is unknown, including the rules that consume intake answers: declared admins
-against each tenant's admins and owners, people who have `left` against active
-accounts, unattributed owners and admins, `deploys_to: production` repositories,
-declared exposure against observed reachability from the recorded vantage; rules that
-name follow-up reads, so the loop iterates; termination when no follow-up is open or a
-limit is reached; no successful check re-run with the same inputs and principal;
-context adjustments as `spec/engagement.md` "Severity in context" fixes them, each
-attributed.
+**Delivers:** the verdicts moved to Analyze; the rules the identity slices left to a
+multi-fact rule; a rules-only Plan that decides which items are read first under a cap;
+follow-up reads from a static table; the context adjustments as one closed table;
+fixed sub-item lists per risk area; and a 7-day maximum age for what a resume keeps.
+`spec/engagement.md` ("Stages", "Severity in context", "Plan selection and follow-ups",
+"Context notes", "The multi-fact rules of 0.0.2") and `spec/report.md` ("Coverage",
+"Ranking") are the wording; each is design until its step lands.
+
+- *Already built, audited here and not re-implemented:* `identity.unexpected_admin`,
+  `identity.unattributed_admin`, `identity.former_person_has_access`,
+  `identity.former_person_invited`, `identity.external_admin` and
+  `identity.shared_admin` (Workspace and GitHub), the `deploys_to:production` raise,
+  `web.restricted_reachable` and the 2-step `contradiction`. Each is audited against
+  firing, disproved and insufficient-evidence fixtures; a missing fixture is added.
+- *New engagement rules:* `db.listens_unfiltered` (R1), `accounts.empty_password_remote`
+  (R2), `svc.listens_beyond_declared` (R3), the `attribute:production_write` raise on
+  `identity.former_person_has_access` (R4) and the person rollup (R5). Each declares its
+  reads and has all three fixtures. R1 and R3 carry a `service` subject and a ceiling of
+  high.
+- *Recon:* inventory only (users, roles, admin assignments; members, owners, outside
+  collaborators, invitations; the repository list with `pushed_at`; DNS; host and web
+  reads).
+- *Plan:* tiers for repositories and users, a `selection` in text and JSON, and the
+  Plan document's list of reads and of rules that will abstain for lack of a declaration.
+  `--stop-after plan` shows what will be read before any of it is.
+- *Check:* every read only rules consume, in Plan's order (per-repository children,
+  workflow files, alerts, the mirror; per-user OAuth grants and Gmail forwarding),
+  breadth first under a request budget; then the follow-up table F1, F1b and F2, depth
+  at most 2, an invariants test.
+- *Analyze:* every collector's `Judge`, the host's grading, the multi-fact rules and then
+  the adjustment table, which is data. The context notes C1 to C3.
+- *Report:* fixed sub-item lists with "not judged in this version: …", the oldest
+  collection date per asset, the person ranking item.
+- *Host collector:* one new catalog check, `fw.iptables_backend` (D3 below).
 
 **Done when:** every multi-fact rule has firing, disproved and insufficient-evidence
 fixtures; `db.listens_unfiltered` fires only when listener and host firewall facts both
-agree and says the cloud firewall was not assessed; the left-person rule fires on the
-lab and abstains when the tenant was not read or the person has no identifier for it;
-"exposed on purpose" moves an exposure finding and leaves a secret finding on the same
-asset unchanged; a loop fixture terminates.
+agree, is not lowered by `exposed_on_purpose` or `expected_services`, and says the cloud
+firewall was not assessed; the left-person rules fire on the lab and abstain when the
+tenant was not read or the person has no identifier for it; "exposed on purpose" moves an
+exposure finding and leaves a secret finding on the same asset unchanged; the adjustment
+table has a stacking test per entry, ceilings included, and `data.matters_most` raises
+a finding that also carries a context; with 150 repositories under a small cap, the
+repositories read are those the tiers name and the selection says so; a loop fixture on
+F1 terminates and the invariants test rejects a cyclic or deeper table; an observation
+older than 7 days is collected again on resume; every risk area's row prints its
+"not judged in this version" line; the command traces change only by the recorded
+`fw.iptables_backend` line.
 
-**Carried from the engagement-spec review** (security-consultant, 2026-10-09):
+**Build steps**, each a commit with `make check` green:
+
+1. Verdicts move to Analyze, in four parts.
+   - *1a (done, offline).* The adjustment table is data: `internal/engagement/severity`
+     (`Declarations`, `Grade`, `GradeAll`), one entry per rule with source, moved
+     findings, step and past-high flag, and a definition's own `Ceiling`, `HostAccess`
+     and `Attributes` (the collector's steps, such as `password_form` +1 and
+     `slack_webhook` -1). `internal/engagement/adjust.go` builds the declarations from the
+     resolved engagement and `reportInput` grades every network-collector judgment after
+     `partitionGitHubJudgments`; the report renders the chain. The `data_matters_most`
+     raise no longer skips a judgment that has a `why`, `exposed_on_purpose` is terminal
+     and applies to any definition marked an exposure finding on the exact URL,
+     `attribute:public_repository` (was `observed_public`) enters the table, and
+     `data.matters_most[i]` is cited by index. `deploys_to:production` is decided by the
+     engagement from `assets.<repo>.deploys_to` on the owner repository; a collector keeps
+     the declaration in a judgment's `source` and emits no production attribute. A
+     stacking test per entry, ceilings included. The graded path that lowers a finding to
+     `info` for a matching `expected_services` entry is not used for R1.
+   - *Decided in 1a:* `finding.Judgment` carries `Attributes` as `{name, ref}` (`ref` a
+     declaration `key` or an `observation` and `excerpt`), a `why` sentence and `chain`
+     (set by Analyze, replaced by `GradeAll`; a collector never sets it), not a separate
+     graded wrapper type as the modularity sketch had it: one type reaches the report,
+     and a judgment that was not graded has no chain.
+   - *1b to 1d (not started).* 1b: each collector's `Judge` call moves to Analyze and
+     verdicts leave the evidence types (`recon.json`, `evidence/`; `findings.json` as
+     output only). 1c: a kept host is graded again, so an edited accepted risk or context
+     no longer collects it again. 1d: observation-time clocks for every time-dependent
+     rule.
+2. The fixed sub-item lists, with "not judged in this version: …" in every row; goldens.
+3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
+   outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style
+   invariants test. The `fw.iptables_backend` check. R1 and R2 on host fixtures; R2 last.
+4. People: R4 and R5.
+5. R3, and the context notes C1 to C3.
+6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,
+   breadth-first GitHub reads under the 4,000-request budget, the `selection` text and
+   JSON, the Plan document's read and abstain lists, `--stop-after plan`. A fake server
+   with 150 repositories under a small budget.
+7. The follow-up table, the loop and its invariants test; F1 with
+   `github.collaborator_permission`, and F2.
+8. The 7-day resume maximum, and the critical definition with its ceilings in
+   `spec/engagement.md`.
+9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
+   `data.matters_most` again, run through the `client` interview mode on the wording.
+
+R3 may move out of E9 if the slice runs long; a deferral is recorded here with its owner.
+
+**Decided 2026-10-13** (owner), on the `security-consultant`'s define of the same day.
+`spec/engagement.md` and `spec/report.md` carry the wording.
+
+- *D1.* A context raise may reach critical. Critical is "anyone on the internet can use
+  it now, with no further step, and gets credentials, code execution or the tenant; or a
+  high that someone with no right to it can use now, or that the company believes is
+  handled". The raises that qualify are `contradiction`, `attribute:admin` and
+  `attribute:production_write` on a person who left, and `attribute:public_repository`.
+  `deploys_to:production` and `data_matters_most` stop at high, and the chain says so
+  in the words of `spec/engagement.md`, "Severity in context", "Ceilings". Past-high is
+  as that table lists it: no other raise passes high.
+- *D2.* A resume keeps no observation older than 7 days: compiled in, no setting. It
+  applies to the Scope document, the host envelopes and the gate ledger's successes,
+  from each observation's collection time to the resuming session's start. An expired
+  one is collected again, never an error; a failed collection again leaves the asset
+  failed or unread, never the old data. The report prints the oldest collection date per
+  asset.
+- *D3.* The host gains `fw.iptables_backend`: literal argv `realpath -e
+  /usr/sbin/iptables`, Linux only, not elevated, `Baseline: true`, `MinProfile:
+  baseline`. A target of `xtables-nft-multi` is `nf_tables`, `xtables-legacy-multi` is
+  `legacy`, exit 1 (absent) means no `iptables` userspace so an empty `nft` ruleset is
+  decisive, and any other target is unrecognized and R1 abstains. `iptables` stays in
+  `deniedBinaries`; there is no exemption. An empty `nft` ruleset means no filtering only
+  on the `nf_tables` backend. This is an exception to the 0.0.2 decision that the host
+  gains no check (Decisions, "The host side?"). The golden command traces change with
+  this reason, recorded under release gate 8. It does not count toward the baseline tier
+  cap of 40, which counts on-demand entries only.
+- *D4.* A finding definition, and an adjustment entry, may carry a severity ceiling; the
+  chain records the cap.
+- *D5.* `scheck init` asks `data.matters_most` again, as a pick from hosts, Workspace
+  tenants, GitHub organizations and repositories, url sites and cloud roots (not domain
+  roots), with a number and a few words per line; the words go to `what` through the
+  credential detector. Wording in `spec/engagement.md`, "Intake". This changes E8's cut of the key above, which stays as written there as
+  history. `secrets.production[].asset` stays unasked; Plan reads it when present.
+- *D6.* GitHub reads under a budget go breadth first by kind, within the tier order.
+  The budget is a compiled request count, 4,000 per organization per run, for the
+  per-repository reads Check sends (inventory and the local mirror not counted).
+  `limits.timeout` and GitHub's rate limit still stop the run as `limit_reached`; the
+  per-repository caps (100 workflow files, 100 alert locations) stay.
+- *D7.* `db.listens_unfiltered` and `svc.listens_beyond_declared` carry a `service`
+  subject (`<port>/<proto>`), so an acceptance names it. They are the first host-side
+  subjects in 0.0.2, as engagement rules rather than host posture rules.
+- *D8.* On a host listed in `data.matters_most`, the host access findings raise +1 by a
+  flag on their definitions, not by area: `sshd.password_auth_enabled`,
+  `sshd.root_login_enabled`, `accounts.empty_password`,
+  `accounts.empty_password_remote` and `db.listens_unfiltered`. Time sync, auditd and
+  updates never move.
+- *D9.* `log.auditd_inactive` stays in the hosts area; the logging row prints "not
+  checked" in 0.0.2.
+
+**Decided 2026-10-13** by the `security-consultant`, on the owner's delegation, on the
+twelve items the first draft left open:
+
+- Per-item reads move to Check, after Plan. Recon reads inventory only; Check runs every
+  read only rules consume, in Plan's order.
+- The GitHub budget is a compiled 4,000 requests per organization per run (D6).
+- The host check is `fw.iptables_backend`, and `iptables` stays denied (D3).
+- A table cap and a definition ceiling each have their chain wording
+  (`spec/engagement.md`, "Ceilings"). The past-high column stands as written.
+- An unbuilt fixed sub-item makes its row *partial*; the "not judged" line also lists
+  limits inside built sub-items.
+- The `data.matters_most` question's offered assets, prompt and help are as in
+  `spec/engagement.md`, "Intake"; its consumers are the raise, Plan's repository tier 4
+  and the ranking tie-break.
+- Within every Workspace user tier: active first, then most recent sign-in, then
+  `primaryEmail`; a suspended leaver dropping is intended.
+- Host acceptance by subject stays unbuilt; only R1 and R3 carry a `service` subject.
+- R2 is moved by no host context step: critical on `dev` and `airgapped` hosts too.
+- Step 1 semantics. `exposed_on_purpose` is terminal: no later table step applies, and
+  each skipped step is recorded "not applied: declared exposed on purpose
+  (`intent.exposed_on_purpose[i]`)". A definition's ceiling binds every step, the host
+  collector's `exposure:internet` step included, with the definition-ceiling wording.
+  The `data_matters_most` adjustment cites `data.matters_most[i]` and the readout prints
+  that entry's `what`. Time-dependent rules judge against the collection time of the
+  observation they read, not the session start (the leaver rule, stale and
+  never-signed-in accounts, certificate expiry and its 14-day window, acceptance
+  expiry); step 1 applies this because it makes a resume re-judge persisted evidence, and
+  step 8 adds only the 7-day cap.
+- Step 1 design, from the `modularity` agent. Verdicts leave the evidence types
+  (`githubc.Evidence.Judgments`, `workspace.Evidence.Judgments`, `ReconAsset.Judged`);
+  Analyze judges; `findings.json` carries every verdict with its severity chain as output
+  only, never read on resume; a kept host is graded again in Analyze, so editing an
+  acceptance or host context no longer collects a kept host again (`spec/runs.md`).
+
+**Cut or deferred by the same decision.** `db.internet_reachable` (0.0.3 G4: needs cloud
+firewall rules); the `pg_hba.conf` read after R1 (0.0.3 G5); `net.unexpected_listener`
+as a rule (never: it would file the absence of an explanation; at most a readout line);
+`fw.no_firewall_active` alone, which stays unfired; a contractor-can-push finding, and the
+enrichment of `github.default_branch_unprotected` with push holders, cut from 0.0.2 and
+carried to 0.0.3 G4 with "at least" framing; per-account keying of
+`accounts.empty_password`, a 0.0.3 G5 candidate; `data.matters_most` along a repository-to-host link (0.0.3 G4).
+
+**Carried from the engagement-spec review** (security-consultant, 2026-10-09), closed
+2026-10-13 (owner) unless marked open:
 
 - *Plan has no job with rules only, and the stage table is wrong about where rules
-  run.* Recon runs every declared read, Plan is "the same checklist whatever its
-  order", and the web collector judges in Recon while the stage table puts rules in
-  Analyze. VISION principle 1 ("decides what it examines and in what order") is then
-  false for 0.0.2, and gate 1's "all seven stages" is theatre for Plan. E9 gives Plan
-  the one decision context makes with rules only, selection under a budget: with
-  many repositories or users under a cap or a rate limit, it reads first the
-  `deploys_to: production` repositories and those holding a declared secret store,
-  and, for per-user reads, people who left, admins and declared contractors. A cap's
-  `selection` then names the context that chose it. Every rule verdict moves to
-  Analyze, or the stage table says collectors judge in Recon.
-- *Recon "fills gaps in the context and flags where it is wrong"* (the stage table):
-  nothing does this in 0.0.2. Reword the stage table or build it, beside the item
-  above.
-- *Termination by construction.* Follow-ups are a static table of depth at most 2,
-  checked by an invariants test, rather than proven by one loop fixture; a follow-up
-  that ended without success is not reopened in the same session.
-- *"Checked" cannot be told from "checked thinly".* Each risk area's sub-items are
-  fixed from the practitioner's list, independent of the rules built, so an unbuilt
-  one is `no_rule` and the row is *partial*; every row prints "not judged in this
-  version: …" even when it is marked *assessed*, as the hosts and external rows already
-  do.
-- *`data.matters_most` raises along declared links.* E8 cut the interview question
-  and left the key valid. `deploys_to` stays `production`, `staging` or
-  `development`. Whether the raise needs another shape is not decided.
-- *A declared `not_used` area the evidence contradicts* gets a note ("you said no
-  cloud; `api.example.com` is a CNAME to `*.run.app`").
-- *Already built, carried here:* a resume keeps Scope and host envelopes of any age,
-  so a run resumed weeks later reports old discovery as current. Keep nothing older
-  than a fixed maximum, compiled in with no setting to widen it (the consultant
-  recommends 7 days; owner's decision pending). The date on `Observed`
-  whenever a run's collection crosses a day is implemented in E7 step 5; the maximum
-  age decision and enforcement remain E9's.
-- *Owner's decision pending:* may a context raise reach critical? Today "a person who
-  left still active" with `attribute:admin` and "2-step verification not enforced" with
-  `contradiction` both reach critical, while critical is defined as usable by anyone on
-  the internet with no further step. The consultant recommends yes, with critical's
-  definition widened to "or a high that someone with no right to it can use now, or
-  that the company believes is handled".
-- *From E6 step 4* (2026-10-11): "Fix these first" collapses many unit instances of
-  one finding into one line, and the step-4 client REPORT wording items listed in E6,
-  "Carried from step 4".
-- *From E6 step 5* (2026-10-11): app findings grouped in "Fix these first", whether
-  `data.matters_most` with `attribute:admin_grantor` may reach critical, lab ranking of
-  Drive for desktop and Apple Mail on admins, collapsed per-read `Observed` lines, and
-  the OAuth wording and coverage items listed in E6, "Carried from step 5".
-- *From E6 step 6* (2026-10-11): `data.matters_most` for email-area Workspace findings,
-  collapsed forwarding instances in "Fix these first", whether `hides_mail` raises or
-  ranks, lab ranking of forward-and-hide filters against helpdesk and accounting
-  forwards, the client REPORT items listed in E6, "Carried from step 6", and the
-  mailbox-authorization wording left open there (header currency, an incomplete user
-  list, and a `note` that does not say it limits who is signed in as).
+  run.* Closed. Plan gets selection under a budget (tiers above); every rule verdict
+  moves to Analyze (step 1).
+- *Recon "fills gaps in the context and flags where it is wrong".* Closed. The stage
+  table says what Recon does list (accounts no handle names, tenant domains that are
+  not roots), and Analyze notes contradictions (C1 to C3).
+- *Termination by construction.* Closed. The follow-ups are a static table of depth at
+  most 2 under an invariants test; a follow-up that ended without success is not
+  reopened in the same session (step 7).
+- *"Checked" cannot be told from "checked thinly".* Closed. The sub-item lists are fixed
+  per area and every row prints "not judged in this version: …" (step 2). An unbuilt item makes
+  its row *partial*, and the line also lists limits inside built sub-items.
+- *`data.matters_most` raises along declared links.* Closed. No new shape: `deploys_to`
+  stays a string, the raise stays on the named asset, a Workspace tenant's identity
+  findings and a host's flagged access findings (D8), and a link from a repository to a
+  host is 0.0.3 G4.
+- *A declared `not_used` area the evidence contradicts.* Closed. C3 (step 5).
+- *Resume maximum age.* Closed. D2, 7 days (step 8). The date on `Observed` across a day
+  is E7 step 5's, already implemented.
+- *May a context raise reach critical?* Closed. D1.
+- *From E6 step 5:* whether `data.matters_most` with `attribute:admin_grantor` may reach
+  critical. Closed: no (D1; `attribute:admin_grantor` stops at high). The rest of the
+  step 5 items stay open: findings grouped in "Fix these first", lab ranking of Drive for
+  desktop and Apple Mail on admins, collapsed per-read `Observed` lines, and the OAuth
+  wording and coverage items in E6, "Carried from step 5".
+- *Still open, from E6 steps 4 and 6:* "Fix these first" collapsing many unit instances
+  of one finding into one line, and the step-4 client REPORT wording items listed in E6,
+  "Carried from step 4"; `data.matters_most` for email-area Workspace findings, collapsed
+  forwarding instances in "Fix these first", whether `hides_mail` raises or ranks, lab
+  ranking of forward-and-hide filters against helpdesk and accounting forwards, the client
+  REPORT items listed in E6, "Carried from step 6", and the mailbox-authorization wording
+  left open there (header currency, an incomplete user list, and a `note` that does not
+  say it limits who is signed in as).
 
 ### Release gates
 
@@ -1713,7 +1865,9 @@ asset unchanged; a loop fixture terminates.
    unchanged, and its facts and findings equal 0.0.1's for the same inputs, except
    where a 0.0.2 slice changed a rule on purpose and records why (E5a: an account
    with no password and no login shell no longer fires, and one with a login shell is
-   high, not critical; the accounts summary counts login shells by the rule's lists).
+   high, not critical; the accounts summary counts login shells by the rule's lists; E9: the golden command
+   traces gain the `fw.iptables_backend` line, the one host check added in 0.0.2, decided
+   2026-10-13 by the owner).
 9. **Consumers:** every consumer declared by an interview question exists, and the
    test that checks it no longer skips anything.
 10. **One command:** `scheck run --host` on the lab host and the `scheck ssh` alias
@@ -1815,7 +1969,9 @@ project without workload identity federation; `deploys_to: production` repositor
 linked to the project they deploy to; declared admins and `people` against the
 project's IAM, with `group:` members expanded through Cloud Identity and
 `user:…@gmail.com` bindings a finding class of their own. `scheck init` asks about GCP
-and checks the credentials' scopes before the first run.
+and checks the credentials' scopes before the first run. Carried from E9 (2026-10-13): a
+finding for a contractor who can push to a production repository, or naming the push
+holders and contractors on `github.default_branch_unprotected`, with "at least" framing.
 
 **Done when:** every rule has its three fixtures, and intake reports missing or
 over-broad credentials before any target contact.
@@ -1829,6 +1985,8 @@ it gains its consumer), `~/.ssh`, `~/.aws`, `~/.config/gcloud` and the docker so
 metadata reachability; a listener-exposure multi-fact rule (listener, host firewall,
 and for a cloud host the firewall rule from G1). Each is a catalog entry under the host
 collector's rules (`spec/host-collector.md`), with the golden trace change explained.
+Carried from E9 (2026-10-13): host acceptance by subject, with `accounts.empty_password`
+keyed per account, as a candidate.
 
 **Done when:** every new rule has its three fixtures; the integration diff is still the
 exact allowlist; the world-readable `.env` seeded on the lab host is found.

@@ -74,7 +74,7 @@ func githubAndWebInventoryReport(t *testing.T) Input {
 }
 
 func TestMixedWebAndGitHubCoverageKeepsInventoryGap(t *testing.T) {
-	r := Build(githubAndWebInventoryReport(t))
+	r := build(githubAndWebInventoryReport(t))
 	v := row(t, r, "secrets")
 	if v.Mark != "partial" {
 		t.Fatalf("mixed secrets coverage: %+v", v)
@@ -97,7 +97,7 @@ func TestMixedWebAndGitHubCoverageKeepsInventoryGap(t *testing.T) {
 
 func TestGitHubInventoryIsNotASecurityAssessment(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{githubInventoryReport, githubPartialInventoryReport, githubChangedPrincipalReport} {
-		r := Build(mk(t))
+		r := build(mk(t))
 		if len(r.Findings) != 0 || len(r.Assessments) != 0 {
 			t.Fatal("inventory fabricated security assessment")
 		}
@@ -122,16 +122,16 @@ func TestGitHubInventoryIsNotASecurityAssessment(t *testing.T) {
 			t.Fatal("inventory warning not rendered")
 		}
 	}
-	if Build(githubInventoryReport(t)).Exit.Code != 0 {
+	if build(githubInventoryReport(t)).Exit.Code != 0 {
 		t.Fatal("successful inventory is not execution success")
 	}
-	if Build(githubPartialInventoryReport(t)).Exit.Code != 2 {
+	if build(githubPartialInventoryReport(t)).Exit.Code != 2 {
 		t.Fatal("partial inventory lost incomplete exit")
 	}
 }
 
 func TestGitHubPrincipalChangeIsInTheHeader(t *testing.T) {
-	r := Build(githubChangedPrincipalReport(t))
+	r := build(githubChangedPrincipalReport(t))
 	if len(r.Engagement.PrincipalChanges) != 1 || r.Assets[0].Principal.Identity != "bob (user ID 72)" {
 		t.Fatal("principal change lost")
 	}
@@ -152,7 +152,7 @@ func TestFailedGitHubInventoryDoesNotCountAsRead(t *testing.T) {
 		if mixed {
 			in.Assets = append(in.Assets, withDomainRoot(t).Assets[1:]...)
 		}
-		r := Build(in)
+		r := build(in)
 		for _, area := range []string{"identity", "secrets", "cicd"} {
 			v := row(t, r, area)
 			want := 0

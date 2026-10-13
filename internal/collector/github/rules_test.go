@@ -159,7 +159,7 @@ func TestGitHubOffboardingDoesNotDuplicateUnexpectedAdmin(t *testing.T) {
 		t.Fatal("departed owner access missing")
 	}
 	for _, j := range out {
-		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired && !slices.Contains(j.Attributes, "admin") {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired && !j.Has("admin") {
 			t.Fatal("departed owner administrative attribute missing")
 		}
 	}
@@ -211,7 +211,7 @@ func TestFormerPersonConflictingRepositoryAdminDoesNotRaiseSeverity(t *testing.T
 		for _, j := range Judge(e, c) {
 			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
 				found = true
-				if slices.Contains(j.Attributes, "admin") {
+				if j.Has("admin") {
 					t.Fatalf("conflicting privilege raised former-person severity: %+v", j)
 				}
 			}
@@ -255,7 +255,7 @@ func TestPartialMFADeclarationDoesNotContradictIndividualGap(t *testing.T) {
 	e.Members.Items = append(e.Members.Items, Account{ID: 2, Login: "bob", Type: "User"})
 	e.MembersWithoutMFA.Items = []Account{e.Members.Items[1]}
 	for _, j := range Judge(e, c) {
-		if (j.ID == finding.IDGitHubOwnerWithoutMFA || j.ID == finding.IDGitHubMemberWithoutMFA) && slices.Contains(j.Attributes, "contradiction") {
+		if (j.ID == finding.IDGitHubOwnerWithoutMFA || j.ID == finding.IDGitHubMemberWithoutMFA) && j.Has("contradiction") {
 			t.Fatal("one disabled account does not contradict partial enforcement")
 		}
 	}
@@ -279,7 +279,7 @@ func TestFormerOwnerPresenceSurvivesUnavailableMembers(t *testing.T) {
 	for _, j := range Judge(e, c) {
 		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
 			found = true
-			if !slices.Contains(j.Attributes, "admin") || !slices.Contains(j.Reads, "owners-proof") {
+			if !j.Has("admin") || !slices.Contains(j.Reads, "owners-proof") {
 				t.Fatalf("owner offboarding lost privilege or evidence: %+v", j)
 			}
 		}
@@ -324,7 +324,7 @@ func TestFormerAccessKeepsRepositoryPrivilegeOnItsAsset(t *testing.T) {
 				found[j.Asset] = j
 			}
 		}
-		if len(found) != 2 || slices.Contains(found[staging.Asset].Attributes, "admin") || !slices.Contains(found[productionRepo.Asset].Attributes, "admin") {
+		if len(found) != 2 || found[staging.Asset].Has("admin") || !found[productionRepo.Asset].Has("admin") {
 			t.Fatalf("misplaced privilege: %+v", found)
 		}
 	}

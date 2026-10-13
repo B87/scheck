@@ -138,7 +138,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		b := *e.Organization.TwoFactorRequirementEnabled
 		settle(&j, !b, e.OwnerAuthority && usableRead(e.OrganizationRead), fmt.Sprintf("two_factor_requirement_enabled: %t", b))
 		if !b && (c.MFA == "everyone" || c.MFA == "some") {
-			j.Attributes = []string{"contradiction"}
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Sources = []string{c.MFASource}
 		}
 	}
@@ -166,7 +166,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		positive := containsIdentity(e.MembersWithoutMFA.Items, a)
 		settle(&j, positive, e.OwnerAuthority && complete(e.Owners) && (positive || complete(e.Members) && complete(e.Owners) && complete(e.MembersWithoutMFA)), describeAccount(a)+" in member inventory; absence/presence in owner-authorized 2FA-disabled filter")
 		if positive && c.MFA == "everyone" {
-			j.Attributes = []string{"contradiction"}
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Sources = []string{c.MFASource}
 		}
 		out = append(out, j)
@@ -218,7 +218,7 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 	positive := containsIdentity(e.OwnersWithoutMFA.Items, a)
 	settle(&m, positive, e.OwnerAuthority && (positive || complete(e.Owners) && complete(e.OwnersWithoutMFA)), describeAccount(a)+" in owner inventory; absence/presence in owner-authorized 2FA-disabled filter")
 	if positive && (c.MFA == "everyone" || c.MFA == "admins") {
-		m.Attributes = []string{"contradiction"}
+		m.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 		m.Sources = []string{c.MFASource}
 	}
 	out := []Judgment{m}
@@ -282,7 +282,7 @@ func ownerCount(e Evidence, c Context) Judgment {
 	j.Listed = affected
 	j.Details = map[string]any{"owners": n, "members": humans, "complete": full}
 	if !full {
-		j.Context = "Counts are lower bounds. No owner-to-member ratio was evaluated."
+		j.Why = "Counts are lower bounds. No owner-to-member ratio was evaluated."
 	}
 	return j
 }
@@ -321,7 +321,7 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				if passed(p.Left, c.Today) {
 					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left)
 					if present && admin {
-						j.Attributes = []string{"admin"}
+						j.Attributes = []finding.Attribute{{Name: "admin"}}
 					}
 				} else {
 					j.Reason = "leaving_date_not_passed"
@@ -406,7 +406,6 @@ func repositoryJudgments(e Evidence, c Context, r RepositoryAccess) []Judgment {
 		if k.ReadOnly != nil {
 			settle(&j, !*k.ReadOnly, !*k.ReadOnly || complete(r.DeployKeys), fmt.Sprintf("read_only: %t", *k.ReadOnly))
 			if !*k.ReadOnly && production(c, r.Asset) {
-				j.Attributes = []string{"production"}
 				j.Sources = []string{c.RepositoryContexts[r.Asset].Source}
 			}
 		}

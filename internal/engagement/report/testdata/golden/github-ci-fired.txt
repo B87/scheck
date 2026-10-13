@@ -31,9 +31,8 @@ Fix these first: a ranking of what was checked, not of all your risks
              rating rises one step
   2  high      Workflow requests mutable dependencies with write permission (production)
   3  high      Workflow requests PR-controlled code execution with write permission (production)
-             base medium, raised: configuration requests only; runtime policy, checkout protection,
-             approvals and actual execution were not verified. This repository is declared to deploy
-             to production, so this rating rises one step
+             base medium, raised: this repository is declared to deploy to production, so this
+             rating rises one step
   4  high      Repository workflow tokens default to write permission (production)
              base medium, raised: this repository is declared to deploy to production, so this
              rating rises one step
@@ -120,9 +119,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  github.event.pull_request.head.sha; npm ci; contents: write
    Concluded from request:repository, request:keys, declared:assets.production
    Severity      high: base medium, +1 deploys to production (assets.production.deploys_to)
-   Why here      Configuration requests only; runtime policy, checkout protection, approvals and
-                 actual execution were not verified. This repository is declared to deploy to
-                 production, so this rating rises one step.
+   Why here      This repository is declared to deploy to production, so this rating rises one step.
+                 Configuration requests only; runtime policy, checkout protection, approvals and
+                 actual execution were not verified.
    Not checked   PR review strength and bypass access; actual execution and runtime policies; runner
                  access and job container/service images were not assessed
    Fix           Run PR code under pull_request; separate privileged reporting and never execute

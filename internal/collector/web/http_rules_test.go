@@ -385,7 +385,7 @@ func TestHTMLSlashDelimitedAttributes(t *testing.T) {
 	}
 	http := goodPage("http://example.com/")
 	http.Body = `<input/type=password>`
-	if x := siteVerdict(t, siteInput("example.com", http), finding.IDWebPlaintextHTTP, Fired); strings.Join(x.Attributes, ",") != "password_form" {
+	if x := siteVerdict(t, siteInput("example.com", http), finding.IDWebPlaintextHTTP, Fired); len(x.Attributes) != 1 || !x.Has("password_form") {
 		t.Fatal(x)
 	}
 	p := goodPage("https://example.com/")

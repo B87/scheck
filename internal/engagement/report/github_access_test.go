@@ -29,16 +29,18 @@ func githubAccessReport(t *testing.T, verdict string) Input {
 	account := func(login, id, person string) Subject {
 		return Subject{Kind: "account", Key: login, Label: login, ProviderID: id, Person: person}
 	}
+	// As internal/collector/github emits them under access.mfa: some (the
+	// organization contradiction; owners raise only under everyone or admins).
 	a.Judged = []Judgment{
-		{ID: finding.IDGitHubMFANotRequired, Asset: githubAccessOrg, Reads: []string{"organization"}, Excerpt: "two_factor_requirement_enabled=false", Details: map[string]any{"required": false}},
+		{ID: finding.IDGitHubMFANotRequired, Asset: githubAccessOrg, Reads: []string{"organization"}, Attributes: []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: "access.mfa[0]"}}}, Sources: []string{"access.mfa[0]"}, Excerpt: "two_factor_requirement_enabled=false", Details: map[string]any{"required": false}},
 		{ID: finding.IDGitHubOwnerWithoutMFA, Asset: githubAccessOrg, Subject: account("alex", "41", "alex"), Reads: []string{"owners-no-mfa"}, Excerpt: "owner alex appears in the provider's 2fa_disabled owner list"},
-		{ID: finding.IDIdentityFormerPersonHasAccess, Asset: githubAccessRepo, Subject: account("former", "42", "pat"), Reads: []string{"collaborators"}, Attributes: []string{"admin"}, Sources: []string{"people.pat.left"}, Context: "Pat left on 2026-09-01 and still administers the production repository.", Excerpt: "former permissions.admin=true", Details: map[string]any{"admin": true}},
-		{ID: finding.IDIdentityUnexpectedAdmin, Asset: githubAccessOrg, Subject: account("unexpected", "43", ""), Reads: []string{"owners"}, Attributes: []string{"contradiction"}, Sources: []string{"identity.expected_owners"}, Context: "The expected owners declaration names Alex; unexpected was also observed as an owner.", Excerpt: "owner unexpected"},
+		{ID: finding.IDIdentityFormerPersonHasAccess, Asset: githubAccessRepo, Subject: account("former", "42", "pat"), Reads: []string{"collaborators"}, Attributes: []finding.Attribute{{Name: "admin"}}, Sources: []string{"people.pat.left"}, Excerpt: "former permissions.admin=true", Details: map[string]any{"admin": true}},
+		{ID: finding.IDIdentityUnexpectedAdmin, Asset: githubAccessOrg, Subject: account("unexpected", "43", "casey"), Reads: []string{"owners"}, Sources: []string{"access.admins", "people.casey"}, Excerpt: "owner unexpected"},
 		{ID: finding.IDGitHubTooManyOwners, Asset: githubAccessOrg, Reads: []string{"owners", "members"}, Excerpt: "observed owners=5 members=6", Listed: []string{"alex", "unexpected", "owner3", "owner4", "owner5"}, Details: map[string]any{"owners": 5, "members": 6}},
 		{ID: finding.IDGitHubBroadDefaultMemberPermission, Asset: githubAccessOrg, Reads: []string{"organization"}, Excerpt: "default_repository_permission=write", Details: map[string]any{"permission": "write"}},
 		{ID: finding.IDGitHubUndeclaredPublicRepository, Asset: githubAccessRepo, Subject: Subject{Kind: "repository", Key: "example-org/production", Label: "example-org/production", ProviderID: "77"}, Reads: []string{"repository"}, Excerpt: "visibility=public", Details: map[string]any{"public": true}},
-		{ID: finding.IDGitHubWritableDeployKey, Asset: githubAccessRepo, Subject: Subject{Kind: "deploy_key", Key: "deploy-key:9", Label: "deploy key 9", ProviderID: "9"}, Reads: []string{"keys"}, Attributes: []string{"production"}, Sources: []string{"assets.production.context"}, Context: "This repository deploys to production.", Excerpt: "deploy key 9 read_only=false"},
-		{ID: finding.IDGitHubOutsideAdminOnProduction, Asset: githubAccessRepo, Subject: account("external", "44", "contractor"), Reads: []string{"outside", "collaborators"}, Sources: []string{"assets.production.context.deploys_to"}, Context: "The repository deploys to production and external has effective administrative permission.", Excerpt: "external permissions.admin=true"},
+		{ID: finding.IDGitHubWritableDeployKey, Asset: githubAccessRepo, Subject: Subject{Kind: "deploy_key", Key: "deploy-key:9", Label: "deploy key 9", ProviderID: "9"}, Reads: []string{"keys"}, Sources: []string{"assets.production"}, Excerpt: "deploy key 9 read_only=false"},
+		{ID: finding.IDGitHubOutsideAdminOnProduction, Asset: githubAccessRepo, Subject: account("external", "44", "contractor"), Reads: []string{"outside", "collaborators"}, Sources: []string{"assets.production"}, Excerpt: "external permissions.admin=true"},
 	}
 	for i := range a.Judged {
 		a.Judged[i].Verdict = verdict
@@ -72,14 +74,14 @@ func githubAccessReport(t *testing.T, verdict string) Input {
 			}
 		}
 	}
-	return in
+	return graded(in, production(githubAccessRepo, "production"))
 }
 func githubAccessFiredReport(t *testing.T) Input     { return githubAccessReport(t, verdictFired) }
 func githubAccessDisprovedReport(t *testing.T) Input { return githubAccessReport(t, verdictDisproved) }
 func githubAccessAbstainedReport(t *testing.T) Input { return githubAccessReport(t, verdictAbstained) }
 func TestGitHubAccessFindingsHaveCanonicalKeysAndObservedMetadata(t *testing.T) {
 	in := githubAccessFiredReport(t)
-	r := Build(in)
+	r := build(in)
 	validate(t, schema(t), r)
 	for _, f := range r.Findings {
 		def, _ := finding.Lookup(f.ID)
@@ -110,14 +112,14 @@ func TestGitHubAccessFindingsHaveCanonicalKeysAndObservedMetadata(t *testing.T) 
 	}
 }
 func TestGitHubAccessContextSeverityRaisesExactlyOnce(t *testing.T) {
-	r := Build(githubAccessFiredReport(t))
+	r := build(githubAccessFiredReport(t))
 	for _, f := range r.Findings {
 		rule, want := "", ""
 		switch f.ID {
 		case finding.IDIdentityFormerPersonHasAccess:
 			rule, want = "attribute:admin", "critical"
-		case finding.IDIdentityUnexpectedAdmin:
-			rule, want = "contradiction", "high"
+		case finding.IDGitHubMFANotRequired:
+			rule, want = "contradiction", "critical"
 		case finding.IDGitHubWritableDeployKey:
 			rule, want = "deploys_to:production", "high"
 		}
@@ -128,7 +130,7 @@ func TestGitHubAccessContextSeverityRaisesExactlyOnce(t *testing.T) {
 }
 func TestGitHubAccessCoverageRetainsUnbuiltChecks(t *testing.T) {
 	for _, verdict := range []string{verdictFired, verdictDisproved, verdictAbstained} {
-		r := Build(githubAccessReport(t, verdict))
+		r := build(githubAccessReport(t, verdict))
 		for _, area := range []string{"identity", "cicd"} {
 			v := row(t, r, area)
 			want := "partial"
@@ -161,7 +163,7 @@ func TestGitHubAccessIncompleteAcceptanceNeverClaimsFixed(t *testing.T) {
 	// A subject that was not observed cannot be declared fixed from a partial
 	// subject population, even when every observed subject was disproved.
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDIdentityUnexpectedAdmin, Asset: "engineering", AssetID: githubAccessOrg, Subject: "unseen", Reason: "migration", AcceptedBy: "alex"}}
-	r := Build(in)
+	r := build(in)
 	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome == "not_matched" || r.Acceptances[0].Outcome == "subject_not_found" {
 		t.Fatalf("incomplete acceptance %+v", r.Acceptances)
 	}
@@ -170,7 +172,7 @@ func TestGitHubAccessMixedWebKeepsIndependentCoverage(t *testing.T) {
 	in := githubAccessDisprovedReport(t)
 	web := withWebRoot(t)
 	in.Assets = append(in.Assets, web.Assets...)
-	r := Build(in)
+	r := build(in)
 	if row(t, r, "identity").Mark != "partial" {
 		t.Fatal("GitHub identity lost")
 	}
@@ -190,7 +192,7 @@ func TestGitHubAccessMixedWebKeepsIndependentCoverage(t *testing.T) {
 func TestGitHubSubjectlessAcceptanceKeepsNullInstanceKey(t *testing.T) {
 	in := githubAccessFiredReport(t)
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubMFANotRequired, Asset: "engineering", AssetID: githubAccessOrg, Reason: "transition", AcceptedBy: "alex"}}
-	r := Build(in)
+	r := build(in)
 	validate(t, schema(t), r)
 	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "applied" || len(r.Acceptances[0].Findings) != 1 || r.Acceptances[0].Findings[0].Subject != nil {
 		t.Fatalf("subjectless acceptance key: %+v", r.Acceptances)

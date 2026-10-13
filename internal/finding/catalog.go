@@ -34,6 +34,16 @@ type Def struct {
 	// every instance the asset gains later (docs/spec/engagement.md,
 	// "Accepted risks").
 	Subject SubjectKind
+	// Ceiling is the highest severity any step may give it, "" for none: a
+	// limit of what was read, part of the definition like its base, never a
+	// setting (docs/spec/engagement.md, "Severity in context", "Ceilings").
+	Ceiling Severity
+	// HostAccess marks a host finding about access to the host, which
+	// data.matters_most raises on a host that holds the data.
+	HostAccess bool
+	// Attributes are the steps the collector owns: each applies when a
+	// judgment carries the attribute (attribute:password_form).
+	Attributes []AttributeRaise
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as
@@ -446,6 +456,9 @@ func Register(d Def) {
 	}
 	if d.ID == "" || d.Title == "" || d.Impact == "" || d.Remediation.Summary == "" || d.Area == "" || d.Exposure == 0 || d.Judges == "" {
 		panic("incomplete finding definition: " + d.ID)
+	}
+	if d.Ceiling != "" && d.Ceiling.Rank() < d.BaseSeverity.Rank() {
+		panic("finding definition ceiling below its base: " + d.ID)
 	}
 	defs[d.ID] = d
 }

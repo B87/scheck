@@ -250,6 +250,22 @@ appears in the failure):
 The exact argv of every entry is the catalog itself (`internal/check/{common,linux,macos}`),
 printed by `scheck catalog`. The table is the intent; the code is the contract.
 
+**`fw.iptables_backend` (0.0.2 E9 step 3; design until it lands).** Linux, literal argv
+`realpath -e /usr/sbin/iptables`, not elevated, no parameter, `Baseline: true`,
+`MinProfile: baseline`. It resolves the `iptables` link and reads nothing else, so
+`iptables` stays on the denied-binary list with no exemption. A target of
+`xtables-nft-multi` means the `nf_tables` backend; `xtables-legacy-multi` means
+`legacy`; exit 1 (the path is absent) means no `iptables` userspace, so an empty
+`nft list ruleset` is decisive; any other target is unrecognized and the rule that reads
+it abstains. Its one consumer is the engagement rule `db.listens_unfiltered`
+(`engagement.md`, "The multi-fact rules of 0.0.2"). No host posture rule reads it, so it
+adds no finding to the host report. This is a deliberate exception to the 0.0.2
+decision that the host gains no check (ROADMAP, "Decisions"): the golden command trace
+of a Linux run gains one line, recorded with its reason under release gate 8. The
+tolerance list of §1 is unchanged. As a `Baseline: true` entry it does not count toward
+the cap of 40 on-demand entries at baseline (`internal/check/invariants.go`,
+`BaselineTierCap`), which counts only `Baseline: false` entries.
+
 **On-demand checks** (`Baseline: false`, callable by the model) are parameterised
 variants: `fs.stat {path}`, `fs.list {path}`, `text.head {path} {lines}`,
 `svc.show {unit}`, `proc.cmdline {pid}`, `net.who_listens {port}`, and so on.

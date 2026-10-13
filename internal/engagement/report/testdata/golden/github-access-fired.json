@@ -772,7 +772,89 @@
       },
       "title": "A departed person or retired account retains access",
       "why_here": [
-        "Pat left on 2026-09-01 and still administers the production repository."
+        "This person left and still holds administrator rights, so this ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": false,
+        "date": "2026-10-09",
+        "expires": "2027-01-07",
+        "id": "github.mfa_not_required",
+        "needs_people": false,
+        "reason": ""
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "contradiction",
+          "source": {
+            "file": "engagement.yaml",
+            "key": "access.mfa[0]"
+          }
+        }
+      ],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "required",
+          "value": false
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at access.mfa[0]",
+          "kind": "declared",
+          "source": "engagement.yaml access.mfa[0]"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "two_factor_requirement_enabled=false",
+          "kind": "observed",
+          "observation": "organization",
+          "principal": "alice (user ID 41)",
+          "request": "organization"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "github.mfa_not_required",
+      "impact": "An account can join or remain without the organization's second-factor requirement.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "github.mfa_not_required",
+        "subject": null
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Enable GitHub's organization two-factor requirement after checking users and automation; SAML or identity-provider MFA does not replace this GitHub control."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:organization",
+          "declared:access.mfa[0]"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": null,
+      "title": "The organization does not require two-factor authentication",
+      "why_here": [
+        "What was observed contradicts what you declared at access.mfa[0], so this ranks one step higher."
       ]
     },
     {
@@ -800,9 +882,9 @@
       "category": "accounts",
       "evidence": [
         {
-          "excerpt": "Operator declaration at assets.production.context.deploys_to",
+          "excerpt": "Operator declaration at assets.production",
           "kind": "declared",
-          "source": "engagement.yaml assets.production.context.deploys_to"
+          "source": "engagement.yaml assets.production"
         },
         {
           "asset": "repo:github:example-org/production",
@@ -840,7 +922,7 @@
         "reads": [
           "request:outside",
           "request:collaborators",
-          "declared:assets.production.context.deploys_to"
+          "declared:assets.production"
         ]
       },
       "severity": "high",
@@ -854,72 +936,6 @@
         "provider_id": "44"
       },
       "title": "An outside collaborator administers a production repository",
-      "why_here": [
-        "The repository deploys to production and external has effective administrative permission."
-      ]
-    },
-    {
-      "accept_template": {
-        "accepted_by": "",
-        "accepted_by_candidates": [
-          {
-            "handle": "alex",
-            "why": "employee"
-          }
-        ],
-        "asset": "engineering",
-        "by_subject": false,
-        "date": "2026-10-09",
-        "expires": "2027-01-07",
-        "id": "github.mfa_not_required",
-        "needs_people": false,
-        "reason": ""
-      },
-      "adjustments": [],
-      "area": "identity",
-      "asset_name": "engineering",
-      "bound_id": null,
-      "category": "accounts",
-      "derived": [
-        {
-          "name": "required",
-          "value": false
-        }
-      ],
-      "evidence": [
-        {
-          "asset": "saas:github:example-org",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "two_factor_requirement_enabled=false",
-          "kind": "observed",
-          "observation": "organization",
-          "principal": "alice (user ID 41)",
-          "request": "organization"
-        }
-      ],
-      "exposure_finding": false,
-      "id": "github.mfa_not_required",
-      "impact": "An account can join or remain without the organization's second-factor requirement.",
-      "key": {
-        "asset": "saas:github:example-org",
-        "id": "github.mfa_not_required",
-        "subject": null
-      },
-      "not_checked": [],
-      "remediation": {
-        "summary": "Enable GitHub's organization two-factor requirement after checking users and automation; SAML or identity-provider MFA does not replace this GitHub control."
-      },
-      "rule": {
-        "kind": "single_fact",
-        "reads": [
-          "request:organization"
-        ]
-      },
-      "severity": "high",
-      "severity_base": "high",
-      "status": "open",
-      "subject": null,
-      "title": "The organization does not require two-factor authentication",
       "why_here": [
         "This is the standard rating for the observed access or settings."
       ]
@@ -989,88 +1005,6 @@
       "title": "An organization owner has no two-factor authentication",
       "why_here": [
         "This is the standard rating for the observed access or settings."
-      ]
-    },
-    {
-      "accept_template": {
-        "accepted_by": "",
-        "accepted_by_candidates": [
-          {
-            "handle": "alex",
-            "why": "employee"
-          }
-        ],
-        "asset": "engineering",
-        "by_subject": true,
-        "date": "2026-10-09",
-        "expires": "2027-01-07",
-        "id": "identity.unexpected_admin",
-        "needs_people": false,
-        "reason": "",
-        "subject": "unexpected"
-      },
-      "adjustments": [
-        {
-          "by": "engagement",
-          "delta": "+1",
-          "rule": "contradiction",
-          "source": {
-            "file": "engagement.yaml",
-            "key": "identity.expected_owners"
-          }
-        }
-      ],
-      "area": "identity",
-      "asset_name": "engineering",
-      "bound_id": null,
-      "category": "accounts",
-      "evidence": [
-        {
-          "excerpt": "Operator declaration at identity.expected_owners",
-          "kind": "declared",
-          "source": "engagement.yaml identity.expected_owners"
-        },
-        {
-          "asset": "saas:github:example-org",
-          "collected_at": "2026-10-09T12:00:17Z",
-          "excerpt": "owner unexpected",
-          "kind": "observed",
-          "observation": "owners",
-          "principal": "alice (user ID 41)",
-          "request": "owners"
-        }
-      ],
-      "exposure_finding": false,
-      "id": "identity.unexpected_admin",
-      "impact": "The observed administrative access exceeds the operator's stated expectations.",
-      "key": {
-        "asset": "saas:github:example-org",
-        "id": "identity.unexpected_admin",
-        "subject": "unexpected"
-      },
-      "not_checked": [],
-      "remediation": {
-        "summary": "Confirm whether the person needs full administrator access; remove it or correct the expected administrator declaration."
-      },
-      "rule": {
-        "kind": "multi_fact",
-        "reads": [
-          "request:owners",
-          "declared:identity.expected_owners"
-        ]
-      },
-      "severity": "high",
-      "severity_base": "medium",
-      "status": "open",
-      "subject": {
-        "key": "unexpected",
-        "kind": "account",
-        "label": "unexpected",
-        "provider_id": "43"
-      },
-      "title": "An administrator is not among the declared expected administrators",
-      "why_here": [
-        "The expected owners declaration names Alex; unexpected was also observed as an owner."
       ]
     },
     {
@@ -1170,7 +1104,7 @@
           "rule": "deploys_to:production",
           "source": {
             "file": "engagement.yaml",
-            "key": "assets.production.context.deploys_to"
+            "key": "assets.production.deploys_to"
           }
         }
       ],
@@ -1180,9 +1114,9 @@
       "category": "accounts",
       "evidence": [
         {
-          "excerpt": "Operator declaration at assets.production.context",
+          "excerpt": "Operator declaration at assets.production",
           "kind": "declared",
-          "source": "engagement.yaml assets.production.context"
+          "source": "engagement.yaml assets.production"
         },
         {
           "asset": "repo:github:example-org/production",
@@ -1210,7 +1144,7 @@
         "kind": "multi_fact",
         "reads": [
           "request:keys",
-          "declared:assets.production.context"
+          "declared:assets.production"
         ]
       },
       "severity": "high",
@@ -1224,7 +1158,7 @@
       },
       "title": "A deploy key can write to the repository",
       "why_here": [
-        "This repository deploys to production."
+        "This repository is declared to deploy to production, so this rating rises one step."
       ]
     },
     {
@@ -1383,6 +1317,85 @@
       "why_here": [
         "This is the standard rating for the observed access or settings."
       ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [
+          {
+            "handle": "alex",
+            "why": "employee"
+          }
+        ],
+        "asset": "engineering",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-04-07",
+        "id": "identity.unexpected_admin",
+        "needs_people": false,
+        "reason": "",
+        "subject": "unexpected"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at access.admins",
+          "kind": "declared",
+          "source": "engagement.yaml access.admins"
+        },
+        {
+          "excerpt": "Operator declaration at people.casey",
+          "kind": "declared",
+          "source": "engagement.yaml people.casey"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "owner unexpected",
+          "kind": "observed",
+          "observation": "owners",
+          "principal": "alice (user ID 41)",
+          "request": "owners"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.unexpected_admin",
+      "impact": "The observed administrative access exceeds the operator's stated expectations.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "identity.unexpected_admin",
+        "subject": "unexpected"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm whether the person needs full administrator access; remove it or correct the expected administrator declaration."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:owners",
+          "declared:access.admins",
+          "declared:people.casey"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "unexpected",
+        "kind": "account",
+        "label": "unexpected",
+        "person": "casey",
+        "provider_id": "43"
+      },
+      "title": "An administrator is not among the declared expected administrators",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
     }
   ],
   "incomplete": [],
@@ -1465,30 +1478,6 @@
       },
       {
         "assets": [
-          "repo:github:example-org/production"
-        ],
-        "ids": [
-          "github.outside_admin_on_production"
-        ],
-        "keys": [
-          {
-            "asset": "repo:github:example-org/production",
-            "id": "github.outside_admin_on_production",
-            "subject": "external"
-          }
-        ],
-        "kind": "finding_id",
-        "person": null,
-        "rank": 2,
-        "rank_basis": [
-          "severity:high",
-          "area:identity"
-        ],
-        "severity": "high",
-        "title": "An outside collaborator administers a production repository"
-      },
-      {
-        "assets": [
           "saas:github:example-org"
         ],
         "ids": [
@@ -1503,13 +1492,37 @@
         ],
         "kind": "finding_id",
         "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:critical",
+          "area:identity"
+        ],
+        "severity": "critical",
+        "title": "The organization does not require two-factor authentication"
+      },
+      {
+        "assets": [
+          "repo:github:example-org/production"
+        ],
+        "ids": [
+          "github.outside_admin_on_production"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "github.outside_admin_on_production",
+            "subject": "external"
+          }
+        ],
+        "kind": "finding_id",
+        "person": null,
         "rank": 3,
         "rank_basis": [
           "severity:high",
           "area:identity"
         ],
         "severity": "high",
-        "title": "The organization does not require two-factor authentication"
+        "title": "An outside collaborator administers a production repository"
       },
       {
         "assets": [
@@ -1537,16 +1550,16 @@
       },
       {
         "assets": [
-          "saas:github:example-org"
+          "repo:github:example-org/production"
         ],
         "ids": [
-          "identity.unexpected_admin"
+          "github.undeclared_public_repository"
         ],
         "keys": [
           {
-            "asset": "saas:github:example-org",
-            "id": "identity.unexpected_admin",
-            "subject": "unexpected"
+            "asset": "repo:github:example-org/production",
+            "id": "github.undeclared_public_repository",
+            "subject": "example-org/production"
           }
         ],
         "kind": "finding_id",
@@ -1554,10 +1567,10 @@
         "rank": 5,
         "rank_basis": [
           "severity:high",
-          "area:identity"
+          "area:cicd"
         ],
         "severity": "high",
-        "title": "An administrator is not among the declared expected administrators"
+        "title": "A repository is public without a public declaration"
       }
     ],
     "more": 4,

@@ -133,7 +133,7 @@ func TestGoldenReports(t *testing.T) {
 			}
 			// What the run passes on from the gate.
 			in.Egress.UserAgent = "scheck/test (security self-assessment)"
-			r := Build(in)
+			r := build(in)
 			validate(t, s, r)
 			for _, v := range []int{0, 1} {
 				var txt bytes.Buffer
@@ -201,7 +201,7 @@ func compareGolden(t *testing.T, name, got string) {
 func TestTextIsWordsAndSafe(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
 		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {
-		r := Build(mk(t))
+		r := build(mk(t))
 		var buf bytes.Buffer
 		if err := WriteText(&buf, r, Options{}); err != nil {
 			t.Fatal(err)

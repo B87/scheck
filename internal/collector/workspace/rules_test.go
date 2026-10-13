@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"encoding/json"
-	"slices"
 	"testing"
 	"time"
 
@@ -231,7 +230,7 @@ func TestWorkspaceAdminCountExemptionsAndRatio(t *testing.T) {
 	e.Users.Items[0].IsAdmin = new(true)
 	c.People[0].Left = "2026-10-09"
 	j = getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess)
-	if j.Verdict != Fired || !slices.Contains(j.Attributes, "admin") {
+	if j.Verdict != Fired || !j.Has("admin") {
 		t.Fatal(j)
 	}
 }

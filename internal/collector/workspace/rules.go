@@ -157,8 +157,8 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			primary := slices.ContainsFunc(p.Addresses, func(s string) bool { return strings.EqualFold(s, u.Primary) })
 			decide(&j, passed && !a.Conflict && (inactive(u) || primary && active(u)), passed && primary && active(u), fmt.Sprintf("declared left: %s; suspended: %v; archived: %v; primary match: %t", p.Left, boolValue(u.Suspended), boolValue(u.Archived), primary))
 			if j.Verdict == Fired && admin {
-				j.Attributes = []string{"admin"}
 				j.Reads = adminReads
+				j.Attributes = []finding.Attribute{{Name: "admin"}}
 			}
 			out = append(out, j)
 		}

@@ -15,15 +15,19 @@ run can resume from a saved output.
 |---|---|---|
 | **1. Intake** | Ask what a consultant would ask (below). | Engagement file |
 | **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
-| **3. Recon** | Every declared read per asset: cloud and SaaS configuration, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Fills gaps in the context and flags where it is wrong. Anything outside the roots is recorded, not contacted. | Asset map |
-| **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. With a model (0.0.4), hypotheses as well. | Plan |
-| **5. Check** | Run the follow-up reads that rules named and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
-| **6. Analyze** | Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. | Findings and follow-ups |
+| **3. Recon** | The inventory read per asset: SaaS tenant inventory, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Lists what the context does not name: the accounts no handle names (the `recon` stanza) and the domains a Workspace tenant holds that are not roots. Reads inventory only (users, roles and admin assignments; members, owners, outside collaborators, invitations; the repository list with `pushed_at`; DNS; host and web reads, which have no selection), persists evidence and gives no verdict. Anything outside the roots is recorded, not contacted. | Asset map |
+| **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. Under a cap, which repositories and users are read first, and the declaration that chose them ("Plan selection and follow-ups"). Names the rules that will abstain for lack of a declaration. With a model (0.0.4), hypotheses as well. | Plan |
+| **5. Check** | Run every read only rules consume, in Plan's order (per-repository reads, workflow files, alerts, the mirror; per-user OAuth grants and Gmail forwarding), then the follow-up reads that rules named ("Plan selection and follow-ups") and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
+| **6. Analyze** | Every verdict is given here: each collector's rules over the evidence Recon and Check persisted, the host's posture rules, the multi-fact rules, then the context adjustments ("Severity in context"). Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. Notes where the evidence contradicts a declaration ("Context notes"). | Findings and follow-ups |
 | **7. Report** | Coverage per risk area, then findings for the people who will fix them: what, why it matters here, evidence, remediation. | Report |
 
-In 0.0.2, which only reads, Recon runs every declared read for every asset and Check
-runs only follow-ups; from 0.0.3 Check is also where probes run. Keeping the split there
-means a collector never decides which stage its requests belong to.
+In 0.0.2, which only reads, Recon runs the inventory and host, DNS and web reads for
+every asset and Check runs the selected per-item reads and the follow-ups (E9 step 6); from 0.0.3 Check is also where probes run. Keeping the split there
+means a collector never decides which stage its requests belong to. A collector's
+choice among its own reads while it collects (the takeover enrichment of a web name, the
+location follow-ups of a secret alert) is read selection: it stays in Recon and emits no
+verdict. Design, becomes contract when E9 lands (E9 step 1): no collector judges in
+Recon, and resume judges again from the persisted evidence.
 
 The Plan → Check → Analyze loop ends when no follow-up is open, the run's timeout
 passes, its model cost limit is reached, or, for probes and scans, the authorization
@@ -94,6 +98,7 @@ stubbed to pass.
 | Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
 | Intent | What is exposed on purpose, and to whom? | Exposure findings on that exact URL or service drop to *info*, attributed ("Severity in context") |
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
+| Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Design, asked again when E9 lands |
 | Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation" |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
@@ -114,10 +119,13 @@ Not asked, and why. The keys below stay valid. The interview does not ask them.
   which CI. `deploys_to` stays the string `production`, `staging` or `development`.
 - **Production secrets.** `secrets.production` stays valid, and `store` stays free
   text. The interview does not ask where production secrets live: a free-text store
-  cannot say whether scheck read it.
-- **Data that matters most.** `data.matters_most` stays valid. The interview does not
-  ask it. The severity rule remains ("Severity in context"). Whether it raises along
-  declared links is E9, and E8 does not reshape `deploys_to` for that.
+  cannot say whether scheck read it. Plan reads `secrets.production[].asset` when the
+  file has it ("Plan selection and follow-ups").
+- **Data that matters most.** E8 did not ask it. E9 asks it again, as a pick from the
+  declared assets (row "Intent" above; wording in E9 step 9), because Plan's selection and the severity rule
+  read it ("Severity in context", "Plan selection and follow-ups"). It does not raise
+  along a link from a repository to a host: `deploys_to` stays the string `production`,
+  `staging` or `development`, and a link between assets is 0.0.3 G4.
 - **Backups.** `data.backups` stays valid. The interview does not ask where backups
   are. A declaration still prints as *declared, not verified*, and the row stays *not
   assessed* until a cloud collector can compare it with inventory (0.0.3).
@@ -539,15 +547,18 @@ Drive-scoped OAuth app among them, so validation exits 3 naming the kind ("repor
 OAuth app, … name the OAuth app, and add one entry per OAuth app to accept"). A
 definition without a subject kind is accepted by id. Either it is about the asset as a
 whole (too many owners of an organization), or its instances are not keyed yet: every
-host finding in 0.0.2, `accounts.empty_password` among them, whose acceptance covers
-every account on the host, including accounts added later. A host acceptance that names
-a subject is listed as not applied (the Recon paragraph under "Runs, state and
+host posture finding in 0.0.2, `accounts.empty_password` among them, whose acceptance
+covers every account on the host, including accounts added later. The two engagement
+rules over a host's listeners, `db.listens_unfiltered` and
+`svc.listens_beyond_declared`, are the first host-side findings to declare a subject
+kind, `service` (`<port>/<proto>`; E9), so an acceptance of either names it. A host
+posture acceptance that names a subject is listed as not applied (the Recon paragraph under "Runs, state and
 configuration"); a `subject` on any other id without a subject kind exits 3 ("… is about
 the organization as a whole; remove subject"), since nothing could ever match it.
 `custom:` ids are never subject-checked. Past `expires`,
 the adjustment stops and the report says so; `expires` is a date in
 `engagement.timezone`, compared with the collection time of the asset it names, never
-the time the report is rendered. The report prints a ready-to-paste entry under each
+the time the report is rendered or a resuming session started. The report prints a ready-to-paste entry under each
 open finding ([report.md](report.md#findings)).
 
 **Time.** A timestamp is RFC 3339 with seconds and an explicit offset. A date lasts
@@ -657,7 +668,8 @@ it to that list, with none of the target's documented artefacts.
   or a repository root; `hosts` beside a host root; `cloud` or `data` beside a cloud
   root. A repository asset covers `cicd` the same way, and a host asset covers
   `hosts`. `hosts`, `cloud`, `data`, `cicd`, `email`, `web` and `external` are
-  accepted when no such root or asset exists. There is no `payments` area. A
+  accepted when no such root or asset exists. Evidence that contradicts a
+  `not_used` area is a note, not an error ("Context notes"). There is no `payments` area. A
   `tools[].category` of `payments` is not one.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
@@ -718,13 +730,27 @@ Context moves severity in code, attributed as `host-collector.md §5.3` and §6.
 describe, never by a model. A severity nobody can explain starts with an adjustment
 nobody listed, so the engagement's adjustments are a closed table:
 
-| Rule | Source | Moves | Step |
-|---|---|---|---|
-| `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` |
-| `data_matters_most` | the declaration, `data.matters_most[i]` | findings on that asset in the identity and access, secrets, data stores and external surface areas | +1 |
-| `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 |
-| `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience) | the finding for the weakness declared absent | +1 |
-| `attribute:<name>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute of its subject or of who it affects (`attribute:admin` on a left person's account and on a forwarding finding from a known-active super admin's mailbox, `attribute:admin_grantor` on an OAuth app to which a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it) | +1 |
+| Rule | Source | Moves | Step | Past high |
+|---|---|---|---|---|
+| `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` | n/a |
+| `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below | +1 | no: stops at high |
+| `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
+| `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
+| `attribute:admin` | a fact, cited by observation and excerpt | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
+| `attribute:admin_grantor` | a fact, cited by observation and excerpt | `workspace.oauth_broad_scope`, when a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it | +1 | no: stops at high |
+| `attribute:public_repository` | the direct repository read, observed public visibility | `github.secret_scanning_open` and `github.history_credential` | +1 | yes |
+| `attribute:production_write` | people `left` passed, and a push, maintain or admin permission on a `deploys_to: production` repository (R4 below) | `identity.former_person_has_access` on GitHub | +1 | yes |
+| `attribute:<other>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute (`attribute:password_form`, web-collector.md) | +1 | no: stops at high |
+
+The table is data in Analyze (`internal/engagement/severity`, built in E9 step 1a): one
+entry per rule, with its source, the definitions or attribute it moves, its step and
+whether it may pass high. `Grade` gives each fired judgment its chain, replacing any a
+collector set; the report renders the chain and decides nothing. A collector's own
+steps are declared on its finding definitions (`Attributes`, for example
+`attribute:password_form` +1, a Slack webhook -1 on `web.secret_in_response`) and apply
+first. `deploys_to:production` is decided here from `assets.<repo>.deploys_to` on the
+repository that owns the finding; a collector emits no production attribute. An entry
+not named here does not exist.
 
 - **Exposed on purpose** applies only to exposure findings: those whose whole claim is
   that a URL answers or names its software (reachable, version or technology
@@ -736,8 +762,11 @@ nobody listed, so the engagement's adjustments are a closed table:
   a host are governed by its `expected_services`, not by intent.
 - **Data that matters most** leaves findings in other areas (headers, email, host
   hardening) where they are. A finding's area is a required field of its definition.
-  Whether a host's remote-access and account findings move on the host that holds the
-  data is decided in E9, with the lab.
+  On a host named in `data.matters_most`, only the host access findings raise, by a flag
+  on their definitions, not by area: `sshd.password_auth_enabled`,
+  `sshd.root_login_enabled`, `accounts.empty_password`,
+  `accounts.empty_password_remote` and `db.listens_unfiltered`. Time sync, auditd and
+  pending updates never move. The raise stacks with any other adjustment on the same finding ("Stacking").
 - **A contradiction** raises because someone believes they are protected, which makes
   the weakness worse than the same one never declared.
 - **An attribute raise or a separate id.** When the fix is the same and only the stakes
@@ -750,8 +779,37 @@ nobody listed, so the engagement's adjustments are a closed table:
 **Stacking.** A collector's own table applies first and is the collector's (`by:
 collector`; the host's in `host-collector.md §5.3`). The engagement's rules follow in
 the table's order (`by: engagement`), each at most once per finding instance and one
-step each. Severity never rises past critical, and a step that cannot move it is
-recorded in the chain but not as an adjustment. The engagement's table only raises,
+step each, and a rule that applies is never skipped because an earlier one did.
+Severity never rises past critical, and a step that cannot move it is
+recorded in the chain but not as an adjustment.
+
+**Exposed on purpose is terminal** (E9 step 1a). Once `exposed_on_purpose` lowers a
+finding to `info`, no later step of the table applies. Each skipped step is recorded in
+the chain: "not applied: declared exposed on purpose (`intent.exposed_on_purpose[i]`)".
+
+**Time.** Every time-dependent rule is judged against the collection time of the
+observation it reads, not the start of the session: the left-person rule (a `left` date
+has passed when that read's collection time is after 24:00 of the date in
+`engagement.timezone`), stale and never-signed-in accounts (the users read), a
+certificate's expiry and its 14-day window (the TLS read), and an acceptance's expiry
+(the collection time of the asset it names). A resume re-judges persisted evidence, so
+this holds from step 1; the 7-day maximum is step 8 ([runs.md](runs.md), "Stop and
+resume").
+
+**Ceilings.** A context raise may reach critical only where the table's last column
+says so: critical means that someone with no right to it can use the weakness now, or
+that the company believes it is handled, and a declaration of stakes alone is neither
+(`deploys_to:production` and `data_matters_most` stop at high). A finding definition may
+also carry a severity ceiling that no engagement rule passes: `db.listens_unfiltered`
+and `svc.listens_beyond_declared` stop at high, since the cloud firewall and the
+database's own authentication were not read. A step stopped by a ceiling is recorded in
+the chain with the cap. For a table entry that stops at high: "capped at high by `<rule>`:
+critical means that anyone, or someone with no right to it, can use this now, or that you
+believe it is handled; `<rule>` says neither." For a definition's ceiling (R1, R3):
+"capped at high: the cloud firewall and the service's own sign-in were not read, so
+scheck cannot say anyone can use this now." A definition's ceiling binds every step, including the host collector's own
+`exposure:internet` step; the capped step is recorded with the definition-ceiling
+wording. A ceiling is part of the definition, like its base, and is never a setting. The engagement's table only raises,
 except `exposed_on_purpose`, which only lowers, and only an exposure finding, and only
 to `info`.
 
@@ -764,15 +822,108 @@ against them:
 
 | Base | Means | Anchors |
 |---|---|---|
-| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant. | a usable empty password: an account with an empty password that sshd accepts empty passwords for (a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
-| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
-| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`) |
-| low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone |
+| critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled (reached only by the raises the table marks, "Severity in context"). | a usable empty password: an account with an empty password that sshd accepts empty passwords for (`accounts.empty_password_remote`, a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
+| high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`, and +1 `attribute:production_write` when they can still push to a production repository); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`, E9; +1 `exposure:internet` by the host collector, +1 `contradiction`; ceiling high) |
+| low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone; a declared service listening beyond its declared audience (`svc.listens_beyond_declared`, E9; +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
 | info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
 
 A declared admin who holds Owner is a note for the readout, not a finding. Of the
 example seeded issues in ROADMAP E3, every one but missing HSTS anchors at medium or
 above, and HSTS is the only low.
+
+## Plan selection and follow-ups
+
+Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). With rules only, the
+one decision context makes in Plan is which part of a large population is read first
+when a cap, a rate limit or the run's deadline stops the reads short. The order is a
+table, not a judgement, and every tier names the declaration or observation that put an
+item there. The capped reads run in Check, after Plan, in this order;
+`--stop-after plan` shows what will be read before any of it is.
+
+**Repositories**, in tier order; within a tier, most recently pushed first (`pushed_at`,
+a retained field of `github.repositories`), then `full_name`:
+
+| Tier | Repositories | Source named in `selection` |
+|---|---|---|
+| 1 | `deploys_to: production` | `assets.<r>.deploys_to` |
+| 2 | named by a `secrets.production[].asset` | `secrets.production` |
+| 3 | observed visibility public | observed |
+| 4 | named by a `data.matters_most[].asset` | `data.matters_most` |
+| 5 | `deploys_to: staging` | `assets.<r>.deploys_to` |
+| 6 | the rest, not archived | |
+| 7 | archived | |
+
+**Users**, for the per-user Workspace reads: 1 a person who left, still active; 2 super
+admins and holders of delegated roles; 3 admin holders no handle names; 4 declared
+`contractor` and `shared` accounts; 5 `break_glass` and `service` accounts; 6 the rest.
+Within every tier: active first, then most recent sign-in, then `primaryEmail`. Gmail forwarding reads leavers still active
+first, then admins, then the rest.
+
+**Breadth first by kind.** The budget is a compiled request count, 4,000 per organization
+per run, for the per-repository reads Check sends (inventory and the local mirror are not
+counted). `limits.timeout` and GitHub's rate limit still stop the run as `limit_reached`,
+and the existing per-repository caps (100 workflow files, 100 alert locations) stay.
+Under the budget, GitHub reads go by kind across every
+selected repository, each kind in tier order: collaborators, deploy keys, branch rules
+and the workflow default; then workflow files; then alerts. A cap therefore leaves every
+selected repository with the cheapest evidence and cuts the dearest kind first.
+
+**What the report says.** A cap's `selection` names what chose the items, in words and
+in JSON ([report.md](report.md), "Coverage"):
+
+```
+40 of 120 repositories: deploys_to production (3, assets.*.deploys_to), declared secret
+store (1, secrets.production), public (2, observed), then most recently pushed (34)
+```
+
+With no declaration naming any item: "no declaration named any repository; most recently
+pushed." Below the caps: "all N read; order did not matter."
+
+The Plan document lists, per asset, the rule families that apply, their order, and the
+rules that will abstain for lack of a declaration (`identity.unexpected_admin:
+insufficient, access.admins names no GitHub tenant`; `DKIM: no selector declared`).
+
+**Follow-up reads.** A follow-up is a row of a static table: a trigger (a rule's
+verdict), a declared gate operation, parameters typed from the judgment's subject, a
+cap and a depth. No model picks a read.
+
+| # | Trigger | Read | Parameters and cap | Depth |
+|---|---|---|---|---|
+| F1 | `identity.former_person_has_access` on GitHub fired, or abstained for lack of repository visibility | `github.collaborator_permission`, `GET /repos/{o}/{r}/collaborators/{login}/permission` | the left person's login, each `deploys_to: production` repository; at most 20 | 1 |
+| F1b | R4 applied ("Multi-fact rules") | the repository's branch and active rules | the same repository | 2; normally answered from the ledger |
+| F2 | `identity.former_person_has_access` on Workspace fired | that user's OAuth grants, only when `directory_oauth` is selected; their Gmail forwarding, only when `authorization.mailboxes` is current | the user's `primaryEmail` | 1 |
+
+An invariants test checks that every follow-up read is a declared gate operation, that
+its parameters are typed from the subject, and that the table is acyclic with depth at
+most 2. The gate's ledger answers a repeated success without sending; a follow-up that
+failed is not reopened in the same session. The loop ends when no follow-up is open or
+a limit is reached, and a limit stop is incomplete ("Stages").
+
+## Context notes
+
+Design; becomes contract when E9 lands (step 5). A context note says that the evidence
+and a declaration disagree, or that a declaration reached nothing. It is not a finding,
+has no severity and never changes the exit code. It prints in the readout and under
+`notes` in JSON ([report.md](report.md), "Findings").
+
+- **C1.** A domain in `workspace.domains` that is not a domain root: "`example.co.uk` is
+  a domain of your Workspace tenant; its SPF, DKIM and DMARC were not read. Add it under
+  `roots`."
+- **C2.** A `deploys_to` repository the organization has no such repository for, one
+  that is archived, or one that was not read: "`shop-repo` is declared to deploy
+  production, but `github:example-org` has no such repository."
+- **C3.** A `not_used` area the evidence contradicts. The row stays *not applicable* and
+  carries the note: "You said no cloud; `api.example.com` is a CNAME to `ghs.run.app`,
+  and the deploy workflow authenticates to Google Cloud." What counts as a contradiction
+  is this table; a name or a secret's name suggests, and the note never says it leaks:
+
+| Area | Contradicted by |
+|---|---|
+| `cloud` | a CNAME to `*.run.app`, `*.appspot.com`, `*.cloudfunctions.net`, `*.amazonaws.com` or `*.cloudfront.net`; a workflow using `google-github-actions/auth` or `aws-actions/configure-aws-credentials`; an Actions secret named like `GCP_SA_KEY` or `AWS_ACCESS_KEY_ID` |
+| `hosts` | an SSH deploy action in a workflow, or an Actions secret named `SSH_PRIVATE_KEY` or `DEPLOY_HOST` |
+| `data` | a database listener on a declared host |
+| `email` | a Workspace tenant root |
 
 ## Reachability and vantage
 
@@ -874,6 +1025,99 @@ unknown. **An incomplete population proves presence, never absence**
 ([scope.md](scope.md#responses)): over a list cut by a cap, a page limit or an
 exclusion drop, a rule may fire on an instance it saw but is never disproved, and a
 count it prints is a lower bound ("at least 4 super admins"). Rules that name follow-ups are what let the loop iterate without a model.
+
+### The multi-fact rules of 0.0.2
+
+Design; becomes contract when E9 lands (steps 3 to 5, `ROADMAP.md`). Already built
+and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
+`identity.unattributed_admin`, `identity.former_person_has_access`,
+`identity.former_person_invited`, `identity.external_admin` and `identity.shared_admin`
+for Workspace and GitHub; the `deploys_to:production` raise; `web.restricted_reachable`;
+the 2-step `contradiction`. E9 adds the rules below. Each declares what it reads, ends as
+*fires*, *disproved* or *insufficient evidence*, never fires on a population it knows to
+be incomplete and never disproves on one, and has a firing, a disproved and an
+insufficient-evidence fixture; an invariants test, like `ValidateRules`, rejects a rule
+that reads nothing it declares.
+
+**R1 `db.listens_unfiltered`.** Area data stores, base medium, ceiling high, subject kind
+`service` (`port/proto`: an acceptance names it). It is an engagement rule over a host's
+facts, not a host posture rule, and no `exposed_on_purpose` or `expected_services` entry
+lowers it. It reads `net.listeners` (with process names), `fw.ufw`, `fw.nft`,
+`fw.firewalld`, `fw.iptables_backend` and the host's `expected_services` and `exposure`.
+A versioned table names the database processes and their ports, matched by process
+first, then by port: `postgres` 5432; `mysqld` and `mariadbd` 3306 and 33060;
+`redis-server` 6379; `mongod` 27017; `memcached` 11211; `clickhouse-server` 8123 and
+9000; `influxd` 8086; `beam.smp` and `couchdb` 5984. A database process on any port
+counts; a table port held by a known other process does not.
+
+| Outcome | When |
+|---|---|
+| fires | a database listener bound to a non-loopback address, its owner a known process and not `docker-proxy`, and the host firewall recognized as not filtering the port: (a) `ufw` active with default incoming allow, or an `ALLOW IN` from Anywhere for the port; or (b) no host firewall: `ufw` inactive or absent, `firewalld` not running or absent, `nft list ruleset` showing zero tables, and the `iptables` backend `nf_tables`, or no `iptables` userspace at all |
+| disproved | for the host, no database listener on a non-loopback address on a complete read with process names; for a subject, `ufw` active with default deny incoming and no `ALLOW` for the port, or only source-restricted ones |
+| insufficient evidence | listeners without process names; a firewall read that did not run or parse; a non-empty `nft` ruleset with `ufw` inactive; `firewalld` running; an owner of `docker-proxy`; an `iptables` backend unrecognized, or `legacy` with an empty `nft` ruleset; a macOS host (`no_rule`) |
+
+Raises: +1 for host `exposure: internet` (the host collector's), +1 `contradiction` when
+`expected_services` declares that port for an audience of `localhost`, `lan` or `vpn`.
+A declared audience of `internet` leaves it at base, with the `why_here` "You declared it
+internet-facing; a database open to every address is still reported. Restrict it to the
+addresses that need it." Text: "*process* on *host* listens on *address:port* and the host
+firewall does not restrict that port. Whether a cloud firewall or security group blocks
+it was not assessed." Remediation: "If only this host uses the database, bind it to
+localhost (postgres `listen_addresses = 'localhost'`, MySQL `bind-address = 127.0.0.1`,
+Redis `bind 127.0.0.1`) and restart it. If other machines need it, allow the port only
+from their addresses (`ufw default deny incoming`, `ufw allow from 10.0.0.5 to any port
+5432 proto tcp`). Check your cloud firewall rules too: scheck did not read them." A
+bind address alone is neither exposure nor this finding.
+
+**R2 `accounts.empty_password_remote`.** Area hosts, base critical, built last in the
+slice. It reads the `accounts.empty_password` join, `sshd.config` (`sshd -T`, elevated)
+and `net.listeners`. It fires for an account U when `accounts.empty_password` fires for
+U; `permitemptypasswords` is `yes`; `passwordauthentication` is `yes`, or
+`kbdinteractiveauthentication` is `yes` with `usepam yes`; sshd listens on a non-loopback
+address; for `root`, `permitrootlogin` is `yes`; and no `AllowUsers`, `DenyUsers`,
+`AllowGroups` or `DenyGroups` is set (when one is, it is insufficient evidence). It is
+disproved when `permitemptypasswords no` is recognized, or `accounts.empty_password` is
+disproved. It is insufficient evidence when `sshd -T` was not read, the configuration has
+`Match` blocks, or the listeners are unknown. No host context step moves it: an account sshd lets in with an empty password is
+usable by anyone who reaches sshd, whatever the environment, so it is critical on `dev`
+and `airgapped` hosts too.
+Remediation: "Lock or set a password for these accounts (`passwd -l <user>`), and set
+`PermitEmptyPasswords no` in sshd_config, then reload sshd."
+
+**R3 `svc.listens_beyond_declared`.** Area external surface, base low, ceiling high,
+subject kind `service`; it reads what R1 reads, for a service that is not a database and
+is listed in `expected_services`. It fires when the audience is `localhost`, the service
+is bound to a non-loopback address and the firewall predicate of R1 holds; or when the
+audience is `lan` or `vpn`, the host's exposure is `internet`, the service is bound to
+all addresses and the firewall predicate holds. It is disproved when the service is
+bound to loopback only, or the firewall filters the port. It is insufficient evidence for
+an audience of `lan` or `vpn` on a host that is not `internet`, an unknown firewall, and
+R1's other cases. Raises: +1 `exposure: internet`, +1 `contradiction`. Remediation: "You
+said this service is only for *audience*. Bind it to 127.0.0.1 (or the private
+interface), or allow the port only from *audience*'s addresses in the host firewall." R3
+may be deferred inside E9 if the slice runs long ("Deferred" in the roadmap entry).
+
+**R4 `attribute:production_write`.** A raise on the GitHub
+`identity.former_person_has_access` finding. It reads `people[].left` (passed, in
+`engagement.timezone`), the collaborator permissions `push`, `maintain` or `admin` of the
+left person on `deploys_to: production` repositories, and the GitHub verdict for that
+person. It applies +1 and may reach critical. When the collaborators read is missing or
+denied it is not applied, with the reason "write access to production repositories was
+not established". It never disproves anything.
+
+**R5 the person rollup.** A ranking item of kind `person` ([report.md](report.md),
+"Ranking") and one line per left person per tenant: "carol (left 2026-09-15): Workspace:
+still active (finding). GitHub: no login declared, not checked." It is not a finding id,
+creates no finding and moves no severity.
+
+Cut, with the owner: `db.internet_reachable` needs cloud firewall rules (0.0.3 G4); the
+read of `pg_hba.conf` after R1 (0.0.3 G5); `net.unexpected_listener` as a rule, since
+absence of an explanation proves nothing, at most a readout line; `fw.no_firewall_active`
+alone, which stays unfired (the firewall row says "judged only for database and
+declared-service listeners"); a finding for a contractor who can push, or naming the push
+holders on a production repository's `github.default_branch_unprotected` (0.0.3 G4, with
+"at least" framing); `data.matters_most` along a link from a repository
+to a host (G4).
 
 Fixed in both modes:
 

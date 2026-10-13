@@ -554,9 +554,9 @@ func appJudgment(app oauthApp, s oauthState, e Evidence, asset string) finding.J
 			if len(scopes) > 1 {
 				noun = "the scopes "
 			}
-			j.Attributes = []string{"admin_grantor"}
 			j.Details["admin_grant_read"] = admin.readID
-			j.Context = fmt.Sprintf("%s %s and granted this app %s%s%s: whoever controls the app can use those scopes as %s, %s.", who, what, noun, strings.Join(scopes, ", "), others, who, reach)
+			j.Why = fmt.Sprintf("%s %s and granted this app %s%s%s: whoever controls the app can use those scopes as %s, %s.", who, what, noun, strings.Join(scopes, ", "), others, who, reach)
+			j.Attributes = []finding.Attribute{{Name: "admin_grantor", Ref: finding.Ref{Observation: admin.readID, Excerpt: j.Why}}}
 		}
 		j.NotChecked = []string{"When each app was authorized or last used, and what it did with its access, were not checked."}
 	case appActivityUnknown:

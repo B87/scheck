@@ -84,7 +84,7 @@ is `full_name`; exclusions are applied before persistence.
 | `github.membership` | `state`, `role`, organization `id`, `login`, optional `type`; user `id`, `login`, `type` |
 | `github.members`, `github.owners`, `github.outside_collaborators` | `id`, `login`, `type` |
 | `github.invitations` | `id`, nullable `login`, `role`, `invitation_source` |
-| `github.repositories` | `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility`, `private`, `archived`, `default_branch` |
+| `github.repositories` | `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility`, `private`, `archived`, `default_branch`, and from E9 step 6 `pushed_at` (metadata only; absent or null is unknown) |
 
 An active own membership establishes member authority only when its user matches
 the freshly read principal, its organization matches the declared organization's
@@ -141,6 +141,32 @@ means all collaborators visible to the credential. Its `VisibilityComplete` rema
 false and the read keeps `repository_collaborator_visibility_unknown`. Affirmative
 access may fire, but absence cannot disprove access, offboarding or privilege rules.
 Organization-wide repository visibility remains unknown separately.
+
+### Selection under a budget and the permission follow-up (E9)
+
+Design; becomes contract when E9 lands (steps 6 and 7). Recon reads the repository list
+(with `pushed_at`) and the organization inventory. Check, after Plan, sends the
+per-repository reads in Plan's order ([engagement.md](engagement.md), "Plan selection and
+follow-ups"): repositories by tier, within a tier by `pushed_at`, then `full_name`. Reads
+go **breadth first by kind** under a compiled budget of 4,000 requests per organization
+per run, counting the per-repository reads Check sends and not the inventory or the local
+mirror: the collaborators, deploy keys, branch rules and workflow default of every
+selected repository first; then workflow files; then alerts. The budget leaves each
+selected repository with the cheapest evidence and cuts the dearest kind first.
+`limits.timeout` and GitHub's rate limit still stop the run as `limit_reached`, and the
+per-repository caps in this document (100 workflow files, 100 alert locations) stay. The
+coverage population names `read` against `in_scope` with the `selection`
+([report.md](report.md), "Coverage").
+
+`github.collaborator_permission` is the follow-up read of F1 and the one new operation:
+`GET /repos/{owner}/{repo}/collaborators/{login}/permission`, with the same origin,
+credential binding, API version and 1 MiB body cap as the other operations. Its parameters are the left person's declared login and one
+`deploys_to: production` repository, at most 20 per run, depth 1. It is read only when
+`identity.former_person_has_access` fired for that person, or abstained for lack of
+repository visibility, and it supplies the `push`, `maintain` or `admin` permission that
+the `attribute:production_write` raise reads ([engagement.md](engagement.md), R4). A
+missing or denied read applies no raise and says why. The retained fields and
+the permission requirements are frozen with the operation in step 7.
 
 App installation permissions and repository selection, and repository runners and
 applicable runner groups, are carried candidate reads. Their exact scope and

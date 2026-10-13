@@ -85,7 +85,7 @@ func judgeDependencies(r RepositoryAlerts) []Judgment {
 			known := knownState && subject != nil && knownSev && (fires || metadataComplete(r.Dependencies))
 			settle(&j, fires, known, fmt.Sprintf("Provider Dependabot alert %d: state=%s; severity=%s; manifest=%s; dependency scope=%s. Dismissal closes the alert; it does not prove the vulnerability was fixed.", d.Number, d.State, sev, d.Dependency.ManifestPath, d.Dependency.Scope))
 			j.Details = map[string]any{"provider_severity": sev, "provider_state": d.State, "dependency_scope": d.Dependency.Scope, "manifest_path": d.Dependency.ManifestPath, "package": d.Dependency.Package.Name, "ecosystem": d.Dependency.Package.Ecosystem, "ghsa_id": d.Advisory.GHSA}
-			j.Context = "GitHub's vulnerability severity is retained as provider evidence; deployed versions and exploitability were not verified. Provider critical is rated high by scheck."
+			j.Why = "GitHub's vulnerability severity is retained as provider evidence; deployed versions and exploitability were not verified. Provider critical is rated high by scheck."
 			out = append(out, j)
 		}
 	}
@@ -128,7 +128,7 @@ func judgeLocatedSecret(r RepositoryAlerts, l LocatedSecret) []Judgment {
 			j.Details["provider_resolution"] = *s.Resolution
 		}
 		if metadataReadOK(r.RepositoryRead) && r.Visibility != nil && *r.Visibility == "public" {
-			j.Attributes = []string{"observed_public"}
+			j.Attributes = []finding.Attribute{{Name: "public_repository", Ref: finding.Ref{Observation: r.RepositoryRead.RequestID, Excerpt: "Observed repository visibility: public"}}}
 			j.Excerpt += " Observed repository visibility: public."
 			j.Details["repository_visibility"] = "public"
 			j.Details["repository_read"] = r.RepositoryRead.RequestID

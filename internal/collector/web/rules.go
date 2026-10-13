@@ -149,7 +149,7 @@ func (j *judging) add(x Judgment) {
 		reason = x.Reason
 	}
 	rank := map[string]int{Disproved: 0, Abstained: 1, Fired: 2}
-	if rank[x.Verdict] > rank[j.out[i].Verdict] || x.Verdict == Fired && slices.Contains(x.Attributes, "password_form") && !slices.Contains(j.out[i].Attributes, "password_form") {
+	if rank[x.Verdict] > rank[j.out[i].Verdict] || x.Verdict == Fired && x.Has("password_form") && !j.out[i].Has("password_form") {
 		prior := reads
 		reads = slices.Clone(x.Reads)
 		for _, r := range prior {

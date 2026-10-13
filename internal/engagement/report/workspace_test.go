@@ -52,7 +52,7 @@ func TestWorkspaceInventoryDoesNotClaimSecurityAssessment(t *testing.T) {
 		if partial {
 			in = workspacePartialInventoryReport(t)
 		}
-		r := Build(in)
+		r := build(in)
 		want := 0
 		if partial {
 			want = 2
@@ -81,7 +81,7 @@ func TestWorkspaceInventoryDoesNotClaimSecurityAssessment(t *testing.T) {
 	}
 	in := githubAccessDisprovedReport(t)
 	in.Assets = append(in.Assets, workspaceInventoryReport(t).Assets...)
-	if row(t, Build(in), "identity").Mark == "assessed" {
+	if row(t, build(in), "identity").Mark == "assessed" {
 		t.Fatal("GitHub controls masked unassessed Workspace")
 	}
 }
@@ -103,12 +103,12 @@ func workspaceIdentityReport(t *testing.T) Input {
 }
 func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
 	in := workspaceIdentityReport(t)
-	r := Build(in)
+	r := build(in)
 	if r.Exit.Code != 1 || len(r.Findings) != 3 || row(t, r, "identity").Mark != "partial" {
 		t.Fatal(r.Exit, r.Findings, row(t, r, "identity"))
 	}
 	workspacePlan(&in.Assets[0], func(e *workspace.Evidence) { e.Access.AdministrationComplete = false })
-	r = Build(in)
+	r = build(in)
 	found := false
 	for _, si := range row(t, r, "identity").SubItems {
 		if si.Name == "Workspace administrator assignments and counts" {
@@ -161,7 +161,7 @@ func workspaceTwoStepReport(t *testing.T) Input {
 }
 
 func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
-	r := Build(workspaceTwoStepReport(t))
+	r := build(workspaceTwoStepReport(t))
 	raised, admin := false, false
 	for _, f := range r.Findings {
 		switch f.ID {
@@ -199,7 +199,7 @@ func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
 }
 
 func TestWorkspaceTwoStepWithoutOutcomesIsNotAssessed(t *testing.T) {
-	r := Build(workspaceIdentityReport(t))
+	r := build(workspaceIdentityReport(t))
 	found := false
 	for _, si := range row(t, r, "identity").SubItems {
 		if !strings.HasPrefix(si.Name, "Workspace 2-step verification") {
@@ -257,7 +257,7 @@ func workspaceOAuthReport(t *testing.T) Input {
 }
 
 func TestWorkspaceOAuthRaiseCoverageAndAcceptance(t *testing.T) {
-	r := Build(workspaceOAuthReport(t))
+	r := build(workspaceOAuthReport(t))
 	var app *Finding
 	for i, f := range r.Findings {
 		if f.ID == "workspace.oauth_broad_scope" {
@@ -294,11 +294,11 @@ func TestWorkspaceOAuthRaiseCoverageAndAcceptance(t *testing.T) {
 	in.Acceptances = []AcceptanceInput{
 		{Entry: "engagement.yaml intent.accepted_risks[0]", ID: "workspace.oauth_broad_scope", Asset: "Workspace", AssetID: in.Assets[0].ID, Subject: "210987654321-a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.apps.googleusercontent.com", Reason: "r", AcceptedBy: "dani", Expires: "2027-01-01"},
 	}
-	if f := Build(in).Findings[0]; f.Status != finding.StatusOpen {
+	if f := build(in).Findings[0]; f.Status != finding.StatusOpen {
 		t.Fatal("another app's acceptance accepted this one", f)
 	}
 	in.Acceptances[0].Subject = app.Subject.Key
-	if f := Build(in).Findings[0]; f.Status != finding.StatusAccepted || f.Acceptance == nil || f.Acceptance.CoversEveryInstance {
+	if f := build(in).Findings[0]; f.Status != finding.StatusAccepted || f.Acceptance == nil || f.Acceptance.CoversEveryInstance {
 		t.Fatal("the app's own acceptance did not apply", f)
 	}
 }
@@ -394,7 +394,7 @@ func TestMailboxHeaderNamesAnEndedApproval(t *testing.T) {
 		Asset: "saas:google-workspace:example.com", By: "CEO", Date: "2020-01-01", Expires: "2020-03-01", Ended: true,
 	}}}
 	var b bytes.Buffer
-	if err := WriteText(&b, Build(in), Options{}); err != nil {
+	if err := WriteText(&b, build(in), Options{}); err != nil {
 		t.Fatal(err)
 	}
 	s := b.String()
@@ -403,7 +403,7 @@ func TestMailboxHeaderNamesAnEndedApproval(t *testing.T) {
 	}
 	in.Authorization.Mailboxes[0] = MailboxReport{Asset: "saas:google-workspace:example.com", By: "CEO", Date: "2026-10-06", Expires: "2027-01-04", Unobserved: true}
 	b.Reset()
-	if err := WriteText(&b, Build(in), Options{}); err != nil {
+	if err := WriteText(&b, build(in), Options{}); err != nil {
 		t.Fatal(err)
 	}
 	flat := strings.Join(strings.Fields(b.String()), " ")
@@ -413,7 +413,7 @@ func TestMailboxHeaderNamesAnEndedApproval(t *testing.T) {
 }
 
 func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {
-	r := Build(workspaceMailReport(t))
+	r := build(workspaceMailReport(t))
 	sev := map[string]string{}
 	var admin *Finding
 	for i, f := range r.Findings {
@@ -453,14 +453,14 @@ func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {
 	// accounting service accepts nothing else from her mailbox.
 	in := workspaceMailReport(t)
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: "workspace.external_forwarding", Asset: "Workspace", AssetID: in.Assets[0].ID, Subject: "carol@example.com -> other@books.example.net", Reason: "r", AcceptedBy: "dani", Expires: "2027-01-01"}}
-	for _, f := range Build(in).Findings {
+	for _, f := range build(in).Findings {
 		if f.Status == finding.StatusAccepted {
 			t.Fatal("another destination's acceptance accepted this one", f)
 		}
 	}
 	in.Acceptances[0].Subject = "carol@example.com -> invoices@books.example.net"
 	accepted := 0
-	for _, f := range Build(in).Findings {
+	for _, f := range build(in).Findings {
 		if f.Status == finding.StatusAccepted {
 			accepted++
 		}
@@ -470,7 +470,7 @@ func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {
 	}
 	// The default profile names forwarding not on plan in the email row,
 	// which reads nothing for it.
-	r = Build(workspaceIdentityReport(t))
+	r = build(workspaceIdentityReport(t))
 	email = row(t, r, "email")
 	if email.Mark != "not_assessed" || email.Population == nil || email.Population.Read != 0 || len(email.Reasons) != 2 || email.Reasons[0].Reason != "not_on_plan:profile=directory" || email.Reasons[1].Reason != "not_declared" {
 		t.Fatal(email)

@@ -25,10 +25,8 @@ const (
 const readBy = "anonymous"
 
 // judgedFindings turns an asset's fired judgments into findings, one per
-// subject, each under the most specific asset holding it. A collector's
-// configuration findings carry no context adjustment but the engagement's
-// own for the data that matters most (docs/spec/engagement.md, "Severity
-// in context").
+// subject, each under the most specific asset holding it, at the severity
+// Analyze graded (docs/spec/engagement.md, "Severity in context").
 func (b *builder) judgedFindings(a AssetInput) []Finding {
 	var out []Finding
 	at := b.in.Started.UTC()
@@ -36,10 +34,15 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		if j.Verdict != verdictFired || j.Details["superseded_by"] != nil {
 			continue
 		}
+		if j.Chain == nil {
+			// Never drop a fired verdict: one Analyze did not grade is
+			// reported at its base.
+			j.Chain = &finding.Chain{Base: def0(j.ID), Severity: def0(j.ID)}
+		}
 		def, _ := finding.Lookup(j.ID)
 		key, subject := j.Subject.Key, j.Subject
 		owner := b.ownerOf(a, j)
-		sev := def.BaseSeverity
+		var sev finding.Severity
 		var subjectPtr *Subject
 		var keyPtr *string
 		if def.Subject != "" {
@@ -60,11 +63,11 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		}
 		if j.ID == finding.IDWebRestrictedReachable {
 			f.Rule.Kind = "multi_fact"
-			f.Rule.Reads = append(f.Rule.Reads, "declared:"+j.Context, "declared:--vantage")
+			declared := firstRead(j.Sources)
+			f.Rule.Reads = append(f.Rule.Reads, "declared:"+declared, "declared:--vantage")
 			audience, _ := j.Details["audience"].(string)
-			f.Evidence = append(f.Evidence, Evidence{Kind: "declared", Source: b.in.Path + " " + j.Context, Excerpt: key + " is reachable only from " + audience}, Evidence{Kind: "declared", Source: "--vantage", Excerpt: b.in.Vantage + " (your declaration; not verified)"})
-		}
-		if len(j.Sources) > 0 {
+			f.Evidence = append(f.Evidence, Evidence{Kind: "declared", Source: b.in.Path + " " + declared, Excerpt: key + " is reachable only from " + audience}, Evidence{Kind: "declared", Source: "--vantage", Excerpt: b.in.Vantage + " (your declaration; not verified)"})
+		} else if len(j.Sources) > 0 {
 			f.Rule.Kind = "multi_fact"
 			for _, source := range j.Sources {
 				if source != "" {
@@ -73,84 +76,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				}
 			}
 		}
-		if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
-			f.WhyHere = []string{"This rating is based on the access and settings observed; unobserved permissions remain unknown."}
-		}
-		if j.Context != "" {
-			f.WhyHere = []string{j.Context}
-		} else if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
-			sev = raise(sev)
-			f.Adjustments = append(f.Adjustments, Adjustment{Rule: "data_matters_most", By: "engagement", Delta: "+1",
-				Source: SourceRef{File: b.in.Path, Key: "data.matters_most"}})
-			f.WhyHere = []string{"You listed " + owner.Name + " under data.matters_most, so this ranks one step higher."}
-		} else {
-			// What is configured is not moved by how the asset is used.
-			f.WhyHere = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
-		}
-		for _, attr := range j.Attributes {
-			if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
-				rule := ""
-				source := SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}
-				if attr == "contradiction" {
-					rule = "contradiction"
-					if len(j.Sources) > 0 {
-						source = SourceRef{File: b.in.Path, Key: j.Sources[0]}
-					}
-				}
-				if attr == "admin" && j.ID == finding.IDIdentityFormerPersonHasAccess {
-					rule = "attribute:admin"
-				}
-				if attr == "admin" && j.ID == "workspace.external_forwarding" {
-					rule = "attribute:admin"
-					if read, ok := j.Details["admin_mailbox_read"].(string); ok && read != "" {
-						source = SourceRef{Observation: read, Excerpt: j.Context}
-					}
-				}
-				if attr == "admin_grantor" && j.ID == "workspace.oauth_broad_scope" {
-					rule = "attribute:admin_grantor"
-					if read, ok := j.Details["admin_grant_read"].(string); ok && read != "" {
-						source = SourceRef{Observation: read, Excerpt: j.Context}
-					}
-				}
-				if attr == "production" && slices.Contains([]string{finding.IDGitHubWritableDeployKey, finding.IDGitHubRepositoryWorkflowWrite, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}, j.ID) {
-					rule = "deploys_to:production"
-					if len(j.Sources) > 0 {
-						source = SourceRef{File: b.in.Path, Key: j.Sources[0] + ".deploys_to"}
-					}
-				}
-				if attr == "observed_public" && (j.ID == finding.IDGitHubSecretScanningOpen || j.ID == finding.IDGitHubHistoryCredential) {
-					rule = "attribute:public_repository"
-					f.WhyHere = []string{"This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."}
-					if observation, ok := j.Details["repository_read"].(string); ok && observation != "" {
-						source = SourceRef{Observation: observation, Excerpt: "Observed repository visibility: public"}
-					}
-				}
-				if rule != "" {
-					sev = raise(sev)
-					f.Adjustments = append(f.Adjustments, Adjustment{Rule: rule, By: "engagement", Delta: "+1", Source: source})
-				}
-			}
-			if attr == "contradiction" && j.ID == finding.IDWebRestrictedReachable {
-				sev = raise(sev)
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "contradiction", By: "engagement", Delta: "+1", Source: SourceRef{File: b.in.Path, Key: j.Context}})
-				f.WhyHere = []string{"You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested."}
-			}
-			if attr == "password_form" && j.ID == finding.IDWebPlaintextHTTP {
-				sev = raise(sev)
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:password_form", By: "collector", Delta: "+1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
-			}
-			if attr == "slack_webhook" && j.ID == finding.IDWebSecretInResponse {
-				sev = finding.SevHigh
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:slack_webhook", By: "collector", Delta: "-1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
-			}
-		}
-		for _, e := range b.in.Exposures {
-			if j.ID == finding.IDWebVersionDisclosed && e.URL == key {
-				sev = finding.SevInfo
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "exposed_on_purpose", By: "engagement", Delta: "-1", Source: SourceRef{File: b.in.Path, Key: e.Source}})
-				f.WhyHere = []string{"You declared this URL exposed on purpose: " + e.Reason}
-			}
-		}
+		sev = b.renderChain(&f, j)
 		if len(j.Listed) > 0 {
 			f.Affected = &Affected{Count: len(j.Listed), Listed: j.Listed, Cap: len(j.Listed)}
 			for _, n := range j.OfNote {
@@ -164,17 +90,6 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		slices.Sort(keys)
 		for _, k := range keys {
 			f.Derived = append(f.Derived, Derived{Name: k, Value: j.Details[k]})
-		}
-		if (strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.")) && j.Context == "" && len(f.Adjustments) == 0 {
-			f.WhyHere = []string{"This is the standard rating for the observed access or settings."}
-		}
-		if strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls.") {
-			if j.Context == "" && len(f.Adjustments) == 0 {
-				f.WhyHere = []string{"This is the standard rating for the response or connection observed."}
-			}
-			if slices.Contains(j.Attributes, "password_form") {
-				f.WhyHere = []string{"The HTTP page contains a password input, so it ranks one step higher."}
-			}
 		}
 		f.Severity = string(sev)
 		for _, r := range j.Reads {
@@ -272,21 +187,6 @@ func (b *builder) heldUnder(asset, id, subject string) string {
 		}
 	}
 	return ""
-}
-
-// mattersMost says data.matters_most moves findings of the area
-// (docs/spec/engagement.md, "Severity in context").
-func mattersMost(area finding.Area) bool {
-	return area == finding.AreaIdentity || area == finding.AreaSecrets || area == finding.AreaData || area == finding.AreaExternal
-}
-
-// raise is one step higher, critical staying critical.
-func raise(s finding.Severity) finding.Severity {
-	order := []finding.Severity{finding.SevInfo, finding.SevLow, finding.SevMedium, finding.SevHigh, finding.SevCritical}
-	if i := slices.Index(order, s); i >= 0 && i < len(order)-1 {
-		return order[i+1]
-	}
-	return s
 }
 
 // ownerOf is the asset a judgment's subject belongs to: the declared asset
@@ -780,4 +680,72 @@ func observedPrincipal(a AssetInput) string {
 		return a.NetworkPrincipal.Identity
 	}
 	return readBy
+}
+
+// renderChain writes the chain Analyze gave a judgment as the finding's
+// adjustments and why-here, and returns its severity. A step that did not
+// move it is not an adjustment; a cap is still said.
+func (b *builder) renderChain(f *Finding, j Judgment) finding.Severity {
+	var why []string
+	add := func(s string) {
+		if s != "" && !slices.Contains(why, s) {
+			why = append(why, s)
+		}
+	}
+	// The reasons of steps that moved it first (the ranking prints the
+	// first), then the collector's, then a cap that still holds: one a
+	// later step went past no longer explains the severity.
+	moved := false
+	for _, m := range j.Chain.Moves {
+		if m.Stopped == "" && m.From != m.To {
+			moved = true
+			add(m.Why)
+		}
+	}
+	add(j.Why)
+	if len(why) == 0 && moved {
+		// Decided before any cap: a cap is never the reason it moved.
+		add("Context moved this rating; see the adjustments.")
+	}
+	for _, m := range j.Chain.Moves {
+		if m.Stopped != "" && j.Chain.Severity.Rank() <= m.To.Rank() {
+			add(m.Why)
+		}
+	}
+	for _, m := range j.Chain.Moves {
+		if m.Stopped != "" {
+			continue
+		}
+		src := SourceRef{Observation: m.Ref.Observation, Excerpt: m.Ref.Excerpt}
+		if m.Ref.Key != "" {
+			src = SourceRef{File: b.in.Path, Key: m.Ref.Key}
+		}
+		f.Adjustments = append(f.Adjustments, Adjustment{Rule: m.Rule, By: m.By, Delta: deltaString(m.To.Rank() - m.From.Rank()), Source: src})
+	}
+	if len(why) == 0 {
+		switch {
+		case strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls."):
+			why = []string{"This is the standard rating for the response or connection observed."}
+		case strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity."):
+			why = []string{"This is the standard rating for the observed access or settings."}
+		default:
+			// What is configured is not moved by how the asset is used.
+			why = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
+		}
+	}
+	f.WhyHere = why
+	return j.Chain.Severity
+}
+
+func deltaString(d int) string {
+	if d > 0 {
+		return fmt.Sprintf("+%d", d)
+	}
+	return fmt.Sprint(d)
+}
+
+// def0 is a finding id's base severity, "" for an unknown id.
+func def0(id string) finding.Severity {
+	def, _ := finding.Lookup(id)
+	return def.BaseSeverity
 }

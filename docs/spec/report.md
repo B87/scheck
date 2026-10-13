@@ -360,6 +360,15 @@ is *partial*, with "2 of 120 repositories". A cap carries its `selection` ("the 
 most recently pushed"), since a sample nobody can name cannot be compared between
 runs.
 
+**A selection names what chose it** (design; contract when E9 lands, step 6;
+[engagement.md](engagement.md), "Plan selection and follow-ups"). In text:
+`40 of 120 repositories: deploys_to production (3, assets.*.deploys_to), declared secret
+store (1, secrets.production), public (2, observed), then most recently pushed (34)`.
+With no declaration naming any item: `no declaration named any repository; most recently
+pushed.` Below the caps: `all N read; order did not matter.` In JSON the population
+carries `selection: {tiers: [{basis, source, count}], fallback: "pushed_at desc", read,
+in_scope}`.
+
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
 `not_on_plan:<feature>`, `collector_not_built`, `refused` (an asset refused the access
 scheck was given, on the positive list of [scope.md](scope.md#outcomes)), `not_declared` (no root of the kind this area reads was
@@ -443,7 +452,9 @@ Each row also carries the assets covered and those excluded by name; the princip
 data was read as (once per asset in text, per row and per piece of evidence in JSON),
 with where its permissions came from (`provider`, `declared` or `unknown`; text prints
 "permissions not readable" for `unknown`, never "read-only"); the collection span (per
-row in text only when it differs from the header's); caps and sampling, with the
+row in text only when it differs from the header's) and, per asset, the oldest
+collection date of any observation the report rests on (E9; a resume keeps nothing older
+than 7 days, [runs.md](runs.md), "Stop and resume"); caps and sampling, with the
 selection; narrowing that removed something; and declared facts scheck did not verify
 ("backups declared in gcp:example-backups, not verified"), the line most often misread
 as verified. An excluded organizational unit is named and makes the row at most
@@ -458,23 +469,31 @@ and a host asset covers `hosts`. `identity`, `secrets` and `logging` cannot be m
 applicable. There is no `payments` area
 ([engagement.md](engagement.md), "Validation").
 
-| Risk area | Sub-items |
-|---|---|
-| Identity and access | MFA and 2-step verification enforcement and enrolment, admins against `access.admins`, people attribution (with the count of unattributed members), stale, suspended and external accounts, OAuth grants |
-| Secrets | secrets in repositories and their history, CI secret names, credential files on hosts. At most *partial* in 0.0.2: CI logs, chat and shared documents are not read |
-| Cloud configuration | public storage and snapshots, broad IAM, service account keys, VPC firewall rules |
-| Data stores and backups | public access to databases, backup existence and location. A declaration alone is *not assessed* |
-| CI/CD and supply chain | branch protection, workflow token permissions, deploy keys, action pinning, dependency alerts |
-| External surface | domains, subdomain takeover, exposed services, TLS. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)), the registrar account among it: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
-| Web application | headers and cookies at the entry points of declared and first-party sites, with a count of names read but not judged; exposed files and debug routes from 0.0.3. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below |
-| Email and domain | SPF, DKIM per declared selector, DMARC, non-sending domains |
-| Logging and incident readiness | audit logging enabled, alerting on administrative changes |
+| Risk area | Judged in this version | Not judged in this version |
+|---|---|---|
+| Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | domain-wide delegation; SSO and federation, and their 2-step verification; app passwords and less-secure apps; the admin recovery email and phone; GitHub App installations; the personal access token policy; members' SSH keys |
+| Secrets | provider secret-scanning alerts; secrets in mirrored history; organization secrets shared with every repository; secrets in public web responses. `secrets.production` is printed as declared, not verified | push protection; credential files on hosts (0.0.3 G5); CI logs; chat and shared documents; long-lived cloud keys (0.0.3) |
+| Cloud configuration | none: no cloud collector (`collector_not_built`) | public storage and snapshots; Owner and Editor roles on people; Owner on service accounts; service account keys; VPC firewall rules; database public addresses and authorized networks; organization policies |
+| Data stores and backups | databases listening unfiltered on a host (E9) | cloud databases reachable from outside; Drive link-sharing defaults; backup existence and location (declared, not verified); whether a restore was tested |
+| CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | production environment protection; self-hosted runners on public repositories; the allowed-actions policy; fork pull request approval; webhooks; OIDC trust to a cloud (0.0.3) |
+| External surface | dangling records; subdomain takeover; private addresses; TLS and certificates; declared services listening beyond their audience (E9). The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services exposed to the outside (probes, 0.0.3); the registrar account: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
+| Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files and debug routes (0.0.3); CORS; third-party scripts |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and a usable empty password over SSH (E9) | the host firewall in general; unexpected listeners; sudo `NOPASSWD`; SUID files; persistence; credential files (0.0.3 G5) |
+| Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | MTA-STS and TLS-RPT; Workspace inbound spoofing settings |
+| Logging and incident readiness | none in 0.0.2: the row prints "not checked" | audit logging enabled and alerting on administrative changes in Workspace; GitHub audit-log streaming; cloud audit logs |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
 | Application logic | *outside scheck*: authenticated testing of access control and business rules |
 | Processes | *outside scheck*: whether offboarding, incident response and vendor reviews are done as written. The accounts themselves are checked under Identity and access; without the row, "Identity: checked" reads as "offboarding is handled" |
 | Lookalike and typo domains | *outside scheck*: registrations of names you do not own are outside every root ([scope.md](scope.md)), and they are the most common small-company email fraud |
 | Other declared SaaS | one row per tool in `tools` without a collector, by name |
+
+**The lists are fixed, whatever rules are built** (design; contract when E9 lands, step 2).
+Each row's sub-items come from the practitioner's list for the area, not from the rules
+that exist, so a reader can tell *checked* from *checked thinly*. An item with no rule
+is `no_rule` (`collector_not_built` in the cloud row), and a row with one is *partial*.
+Every row prints `not judged in this version: …` followed by its right-hand column and
+the limits inside its built sub-items, so an *assessed* row still prints it, as the Hosts
+and External rows already do. An item moves left only when a rule for it lands, and a golden pins each row.
 
 **The Hosts row** is one block per host asset, under a mark that aggregates them (all
 *assessed*: *assessed*; none: *not assessed*; otherwise *partial*). Each block has an
@@ -490,7 +509,7 @@ rule judges reads `not judged: …` with what was read; the rest give their reas
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
-no rule consumes in this version (`expected_services` before E9). With more than three
+no rule consumes in this version (`expected_services` until the listener rules of E9 land). With more than three
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
@@ -603,7 +622,9 @@ than anything here.`
   assets, at the highest severity among them, naming the assets or the count; or, from
   E9, of kind `person`, the findings tied to one `people` handle across tenants ("carol,
   who left on 2026-09-15, is still active in Workspace and GitHub"), since one action
-  fixes them. The findings list groups the instances of one id on one asset into one
+  fixes them. Under it, one line per tenant: "carol (left 2026-09-15): Workspace: still
+  active (finding). GitHub: no login declared, not checked." The item is not a finding id
+  and moves no severity. The findings list groups the instances of one id on one asset into one
   block that lists the subjects; JSON never groups.
 - Order: severity after context, critical first; then risk area in the coverage
   table's order; then an asset named in `data.matters_most` first; then more affected
@@ -623,6 +644,11 @@ severities are calibrated across collectors ("Base severity anchors" in "Severit
 context").
 
 ### Findings
+
+**Context notes** (design; contract when E9 lands, step 5). A note that a declaration
+reached nothing or that the evidence contradicts one ([engagement.md](engagement.md),
+"Context notes") prints under "Notes for the readout" and in `notes` in JSON. It has
+no id, no severity and no effect on the exit code.
 
 Network collectors return the shared `finding.Judgment` and `finding.Subject`
 types; the report aliases these types and remains the author of the final report.
@@ -659,7 +685,7 @@ one id graded differently.
 | `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
 | `impact` | from the definition |
-| `why_here[]` | templated lines from attributed context only, never free prose; empty prints "No context was declared for this asset; this is the catalog's generic assessment." |
+| `why_here[]` | templated lines from attributed context only, never free prose: the reasons of the steps that moved the severity first, then the collector's sentence, then a cap that still holds. A finding no step moved prints the standard-rating line for its collector; one a step moved never prints a cap or the standard-rating line as its first reason |
 | `not_checked[]` | what the rule could not see that would change the conclusion ("whether a cloud firewall in front of deploy restricts port 22") |
 | `remediation` | `{summary, steps[], commands[], caveat, where}`; `where` is a console path for a SaaS finding, which has no command. Steps are in the order a responder takes them: contain first (suspend, revoke sessions and tokens), then remove access, then review what happened, then clean up |
 | `accept_template` | present exactly when the status is `open`: the ready-to-paste entry, structured; text renders it as YAML |
@@ -673,10 +699,12 @@ cannot tell who signed in"), `Severity` with its chain, `Why here`, `Not checked
 and the observation. `Observed` includes the date when the collection span crosses
 a day, so retained evidence is not presented as newly collected.
 
-**Subjects.** Host findings carry no subject in 0.0.2: no rules-only host finding names a
-listener, and the host grader accepts a whole id. A listener's subject, `{kind:
-service, key: "<port>/<proto>"}`, arrives in one slice with the listener rule and with
-host acceptance by subject. A person's account is keyed by the address rules match
+**Subjects.** Host posture findings carry no subject in 0.0.2, and the host grader
+accepts a whole id. The first host-side subject is a listener's, `{kind: service, key:
+"<port>/<proto>"}`, declared by the engagement rules `db.listens_unfiltered` and
+`svc.listens_beyond_declared` (E9; [engagement.md](engagement.md), "The multi-fact rules
+of 0.0.2"); an acceptance of either names it. Host posture acceptance by subject stays
+unbuilt. A person's account is keyed by the address rules match
 people by, with the provider's id beside it. A token is keyed by its credential id and
 labeled with its owner, name, scopes and expiry, never any part of its value; scheck's
 own principal is keyed by the name of the environment variable it came from. An OAuth

@@ -736,7 +736,7 @@
       },
       "title": "Default branch has no observed active protection",
       "why_here": [
-        " This repository is declared to deploy to production, so this rating rises one step."
+        "This repository is declared to deploy to production, so this rating rises one step."
       ]
     },
     {
@@ -918,7 +918,8 @@
       },
       "title": "Workflow requests PR-controlled code execution with write permission",
       "why_here": [
-        "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified. This repository is declared to deploy to production, so this rating rises one step."
+        "This repository is declared to deploy to production, so this rating rises one step.",
+        "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified."
       ]
     },
     {
@@ -1017,7 +1018,7 @@
       },
       "title": "Repository workflow tokens default to write permission",
       "why_here": [
-        " This repository is declared to deploy to production, so this rating rises one step."
+        "This repository is declared to deploy to production, so this rating rises one step."
       ]
     },
     {

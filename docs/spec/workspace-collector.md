@@ -422,6 +422,17 @@ group-context read in the table remains planned; it is not needed to interpret a
 per-user assignment returned by Directory. Fresh user details prioritize passed leavers, administrators
 and contractors before other accounts when a budget prevents reading everyone.
 
+**Per-user read order under caps** (design; contract when E9 lands, step 6). Recon reads
+the users, roles and admin assignments (inventory); Check, after Plan, reads the
+per-user OAuth grants and Gmail forwarding, taking accounts in the order of [engagement.md](engagement.md), "Plan selection and follow-ups": 1 a
+person who left, still active; 2 super admins and holders of delegated roles; 3 admin
+holders no `people` handle names; 4 declared `contractor` and `shared` accounts; 5
+`break_glass` and `service` accounts; 6 the rest. Within every tier: active
+first, then most recent sign-in, then `primaryEmail`. Gmail forwarding reads leavers still active first, then admins, then the
+rest. It orders accounts within each read and replaces the account order named for OAuth
+grants below; the sequence of reads (OAuth grants after every baseline read, forwarding
+after every other read) and the `Repeats` stop are unchanged. A cap's `selection` names the tiers that chose the accounts read.
+
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized 2-step flags in the current list suffice
 for the 2-step rules; fresh detail only fills a flag the list lacks. Conflicting
@@ -430,7 +441,9 @@ Flag-specific conflicts are in "Observed 2-step verification".
 
 Step 5 reads OAuth grants after every baseline read, for every admitted account,
 suspended and archived included: passed leavers, super admins, contractors, then the
-rest, active before inactive within each. A result the gate marks `Repeats` (every
+rest, active before inactive within each (E9 replaces this order, above; a suspended
+leaver no longer ranks first). Per-user OAuth and forwarding reads run in Check, after
+Plan, in that order. A result the gate marks `Repeats` (every
 later request of the kind would end the same way: a remembered optional failure, the
 profile not selecting the surface, an unverified principal, binding or authentication
 gone) is recorded once and stops the sequence; a per-account refusal does not. The gate
@@ -589,7 +602,7 @@ step 6 the forwarding rule.
 | `identity.shared_admin` | medium / account | Declared shared account is a super admin | Individual account or known not-super-admin | Unknown kind or admin status |
 | `identity.former_person_has_access` | high / account, `+1 attribute:admin` | Passed `left` date, exact primary match and active account | Positively suspended/archived, or recognized complete current-address absence with removed-rename caveat | Future date, unknown status, active alias-only match, missing identifier or partial population |
 | `workspace.too_many_super_admins` | medium / none | Count above 3, or at least 3 and above a third of active humans | Complete populations below the threshold | Unknown exemptions or incomplete absence; partial population can fire only on the absolute lower bound above 3 |
-| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days ago | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence |
+| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days before the users read's collection time | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence |
 | `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days ago | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence |
 | `workspace.suspended_admin_assignment` | medium / account | Suspended account retains super flag or supported privileged direct/indirect assignment | Complete admin metadata proves no assignment | Unknown suspension or partial/uninterpreted roles |
 | `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |

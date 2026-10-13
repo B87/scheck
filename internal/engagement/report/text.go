@@ -711,8 +711,10 @@ func (t *text) raisedBy(k Key) string {
 	}
 	why := ""
 	if len(f.WhyHere) > 0 {
-		why = f.WhyHere[0]
-		if i := strings.LastIndex(why, " ("); i > 0 {
+		// A trailing source key, "(assets.deploy.context.exposure)", is
+		// printed with the finding; an operator's parenthesis is kept.
+		why = strings.TrimSuffix(f.WhyHere[0], ".")
+		if i := strings.LastIndex(why, " ("); i > 0 && strings.HasSuffix(why, ")") && !strings.Contains(why[i+2:], " ") {
 			why = why[:i]
 		}
 		why = ": " + lower(strings.TrimSuffix(clean(why), "."))

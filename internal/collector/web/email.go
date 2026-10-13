@@ -75,7 +75,7 @@ func (in Input) mailUse(m MailEvidence) mailUse {
 
 func (j *judging) email(m MailEvidence) {
 	u := j.in.mailUse(m)
-	base := Judgment{Asset: j.in.Asset, Subject: Subject{Kind: "mail_domain", Key: m.Domain, Label: u.label}, Context: u.detail, Reads: []string{}}
+	base := Judgment{Asset: j.in.Asset, Subject: Subject{Kind: "mail_domain", Key: m.Domain, Label: u.label}, Why: u.detail, Reads: []string{}}
 	j.dmarc(m, u, base)
 	j.spfRules(m, u, base)
 	j.dkim(m, u, base)

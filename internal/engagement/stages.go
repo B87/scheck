@@ -997,10 +997,6 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 		in.Authorization = auth
 	}
-	for i, e := range r.res.Intent.ExposedOnPurpose {
-		ref, _ := parseURL(e.URL)
-		in.Exposures = append(in.Exposures, ereport.ExposureInput{URL: strings.TrimPrefix(ref.ID, "url:"), Reason: e.Reason, Source: fmt.Sprintf("intent.exposed_on_purpose[%d]", i)})
-	}
 	for _, ra := range r.recon.Assets {
 		asset, _ := r.asset(ra.Name)
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
@@ -1149,6 +1145,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 		}
 	}
 	partitionGitHubJudgments(in.Assets)
+	r.gradeAssets(in.Assets)
 	return in
 }
 

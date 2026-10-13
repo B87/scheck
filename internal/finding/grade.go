@@ -50,7 +50,7 @@ func (g Grader) Grade(f Finding) (Finding, []Step) {
 	steps := []Step{{Stage: "base", From: "", To: string(f.Severity), Reason: baseReason(f)}}
 	if g.Context != nil {
 		for _, adj := range g.adjustments(f) {
-			next := shift(f.Severity, adj.delta)
+			next := f.Severity.Shift(adj.delta)
 			if f.Custom && next.Rank() > f.Severity.Rank() {
 				// A custom finding is never adjusted upward (docs/spec/host-collector.md §6.1).
 				steps = append(steps, Step{Stage: "adjustment", From: string(f.Severity), To: string(f.Severity),
@@ -174,14 +174,6 @@ func (g Grader) source(key, entrySource string) string {
 		return src + "." + key
 	}
 	return src + "#context." + key
-}
-
-// shift moves a severity by delta steps, clamped to the scale.
-func shift(s Severity, delta int) Severity {
-	scale := []Severity{SevInfo, SevLow, SevMedium, SevHigh, SevCritical}
-	r := s.Rank() + delta
-	r = max(0, min(len(scale)-1, r))
-	return scale[r]
 }
 
 func deltaString(d int) string {
