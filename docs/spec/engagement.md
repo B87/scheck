@@ -49,7 +49,8 @@ The engagement file (`engagement.yaml`) is the source of truth for a run. It is
 reproducible, diffable and reviewable, and it is what a run resumes from.
 
 ```
-$ scheck init                 # interviews the operator, writes engagement.yaml
+$ scheck init                 # interviews the operator, writes engagement.yaml; contacts nothing
+$ scheck init engagement.yaml # asks only what that file does not answer
 $ scheck run engagement.yaml  # scope → recon → plan → check → analyze → report
 $ scheck run --host deploy@203.0.113.5   # one host, no file: an engagement built in memory
 ```
@@ -57,50 +58,91 @@ $ scheck run --host deploy@203.0.113.5   # one host, no file: an engagement buil
 `scheck run` is the only command that assesses anything; a one-host check is an
 engagement with one root ("One command, one file" below).
 
-`scheck init` asks the questions; editing the file by hand is equally valid. The
-interview covers what a consultant draws out, not only the architecture. **Every
+`scheck init` asks the questions below and nothing else. With no path it writes
+`engagement.yaml`. `scheck init FILE` asks only the questions that file does not
+already answer, and a file from `scheck run --host … --write-engagement` is a valid
+start. It reads no flags. No code path in `init` contacts a target. An answer shaped
+like a credential is refused by the same detector as validation. Editing the file by
+hand is equally valid.
+
+The interview covers what a consultant draws out, not only the architecture. **Every
 question has a consumer**: a rule that reads the answer, a coverage reason that cites
 it, or a report field that prints it. "Printed in the report" counts only for what a
 reader needs to interpret the findings: the trigger, authorization, scope and accepted
 risks. A question nothing consumes is removed from the interview, not kept for a later
 release; an operator who answers questions that change nothing stops answering
-carefully. The mapping from question to consumer is code: each question declares its
-consumers by id, with the slice that owns each. Consumers arrive with their slices
-(the host collector's context in E1b, rules in E5 to E9, coverage reasons in E2), so a test proves at every commit that each
-declaration is well formed and that every consumer owned by a slice already merged
-exists, and the release gate proves they all do. A consumer is never stubbed to pass.
+carefully. A question whose consumers belong only to a slice that has not merged is
+cut the same way. E9 has not merged, so a question kept for Plan, Analyze or a
+multi-fact rule is not asked. The mapping from question to consumer is code
+(`internal/engagement/interview.go`): each question declares its consumers by id,
+with the slice that owns each. A test proves at every commit that each declaration
+is well formed and that every consumer owned by a slice already merged exists. The
+release gate that they all exist is not claimed by this slice. A consumer is never
+stubbed to pass.
 
 | Topic | Question | Consumed by |
 |---|---|---|
 | Engagement | What triggered this assessment: a customer questionnaire, an audit, a funding round, an incident, or routine? | Printed in the header. `incident` opens the report with "this is not incident response; evidence read from a possibly compromised system cannot be trusted", worded in [report.md](report.md#the-report) |
+| Engagement | A short name for this assessment; who to print as the operator; the IANA time zone dates in the file are read in. | `engagement.name` names the run directory; `operator` is printed in the header; `timezone` is required ("Time") |
 | Roots | Which domains do you own, including parked and non-sending ones? Which tenants, organizations, cloud projects and hosts? | Roots ([scope.md](scope.md)) |
+| Roots | What is explicitly off limits, as a domain, url, repo or host? | `exclude` ([scope.md](scope.md)). A blank answer leaves it unset |
 | Mail | Which services send mail as each domain, with which DKIM selectors? | DKIM is read per declared selector, since DNS cannot list them; with no selector DKIM is *insufficient evidence*, not missing. SPF includes are compared with the senders. A domain listed under `mail.no_mail` must publish `v=spf1 -all` and DMARC `p=reject`. A domain root with neither a sender nor a `no_mail` entry is judged from the mail use it shows: a non-null MX record, or SPF that authorizes a sender, makes DMARC and SPF judged as for a sending domain; recognized complete MX and SPF evidence showing neither makes it judged as a domain that sends no mail; missing or invalid evidence leaves mail use unknown. The report says the operator did not say which. Comparing SPF with the senders, and DKIM, stay *insufficient evidence* for it. The severity of DMARC `p=none` depends on whether the domain sends |
-| Tools | Which SaaS tools and providers do you use, by category? Which areas do not apply to you at all (no hosts, no cloud)? | A tool is covered when a collector reads it (`github-actions` by the GitHub collector, `google-workspace` by Workspace). Each tool no collector reads becomes an "Other declared SaaS" row naming it. `not_used` marks an area *not applicable* in coverage |
 | People | Who are the admins and contractors, and the shared, service and break-glass accounts, with every Workspace address and GitHub login each uses? Everyone else is named from the stanza `--stop-after recon` prints, one account at a time ("People" below). | Every people rule matches by these identifiers ("People" below); the kind selects which rules apply; a contractor holding an admin role is a finding whether listed or not; a shared account names who uses it, so a leaver among them says to rotate it |
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
 | Access | Who is expected to be a super admin (Workspace) or an owner (GitHub) in each tenant? | A super admin or owner not listed is a finding; a listed person who is not one is a note for the readout, not a finding; one who cannot be tied to a named person is a finding. Too many of them is a finding whatever is listed ("Admins") |
-| Access | Which repositories deploy to production, and from which CI? | `deploys_to: production` raises branch protection, workflow token, deploy key and `pull_request_target` findings on those repositories; from 0.0.3 G4 links them to the cloud project |
+| Access | Which repositories deploy the live production environment, as opposed to a demo or a staging copy? | `deploys_to` is `production`, `staging` or `development`. `production` raises branch protection, workflow token, deploy key and `pull_request_target` findings on those repositories; from 0.0.3 G4 links them to the cloud project. The question does not ask which CI |
 | Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
-| Secrets | Where do production secrets live? | The Secrets coverage row cites each declared store and whether scheck read it |
-| Data | What data matters most, and on which asset? | Severity adjustment on that asset ("Severity in context" below), attributed |
-| Data | Where are the backups, in which account? | The data stores and backups coverage row prints the location as *declared, not verified* and stays *not assessed* until the cloud collector can compare it with inventory (0.0.3) |
 | Intent | What is exposed on purpose, and to whom? | Exposure findings on that exact URL or service drop to *info*, attributed ("Severity in context") |
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
-| Hosts | For each host: its role, exposure, environment and expected services, and how to reach it | The host collector's context (`host-collector.md §5.3`) and its connection |
+| Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one |
+| Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation" |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
 
-Not asked, and why:
+Not asked, and why. The keys below stay valid. The interview does not ask them.
 
 - **Accepted risks.** Nobody can name a finding id before seeing a report. The report
   prints a ready-to-paste `accepted_risks` entry under each finding; risks are accepted
-  at the readout, as in practice, and the next run reads them.
+  at the readout, as in practice, and the next run reads them. `date` and `expires`
+  are required when an entry is written ("Validation"). The paste block writes `date`
+  as the collection day.
+- **SaaS tools.** `tools` stays valid. A tool a collector reads is covered by that
+  collector; a tool none reads is an "Other declared SaaS" row when the key is written
+  by hand. The interview does not ask for the list: the roots already name Workspace
+  and GitHub, and the rest changes no rule in this build.
+- **Which CI.** `assets.<repo>.ci` stays valid, and still has to name a tool under
+  `tools`. The interview asks which repositories deploy to production and does not ask
+  which CI. `deploys_to` stays the string `production`, `staging` or `development`.
+- **Production secrets.** `secrets.production` stays valid, and `store` stays free
+  text. The interview does not ask where production secrets live: a free-text store
+  cannot say whether scheck read it.
+- **Data that matters most.** `data.matters_most` stays valid. The interview does not
+  ask it. The severity rule remains ("Severity in context"). Whether it raises along
+  declared links is E9, and E8 does not reshape `deploys_to` for that.
+- **Backups.** `data.backups` stays valid. The interview does not ask where backups
+  are. A declaration still prints as *declared, not verified*, and the row stays *not
+  assessed* until a cloud collector can compare it with inventory (0.0.3).
+- **Host role.** `assets.<name>.context.role` stays valid. The interview does not ask
+  it. Exposure, environment, expected services and how to reach the host are asked.
+- **Federation.** There is no question on whether people sign in to Google Workspace
+  through another identity provider. `access.mfa`, the contradiction raise and the
+  federation caveat are unchanged. A Cloud Identity SSO read stays a 0.0.3 candidate.
+  The E6 step 4 release blocker is deferred, not implemented (E8 in
+  [ROADMAP.md](../ROADMAP.md)).
+- **Which apps, and forwarding on purpose.** Neither is a question. When the file
+  names a Workspace tenant, `scheck init` explains two optional checks and writes
+  nothing from either. `directory_oauth`: set `SCHECK_WORKSPACE_PROFILE=directory_oauth`
+  in the environment, not in the file; the credential stays out of the file;
+  `admin.directory.user.security` has no read-only form and can also revoke app
+  access, sign people out, and turn off 2-step verification. `directory_mail`: a
+  service account whose domain-wide delegation is `gmail.readonly` and nothing else,
+  and who must approve access to staff mailboxes.
 - **Mailbox authorization.** `scheck init` does not ask for, write, renew or extend
   `authorization.mailboxes`. The human operator who approves signing in as staff
   mailboxes writes the entry by hand; the not-selected readout note explains what to
   add and who must approve it.
 - **Framework.** Comparing a declared framework with the observed one is not a risk.
   The question returns with probes (0.0.3 G3), where it selects which ones apply.
-- **Hosting.** The roots and tools already say it.
+- **Hosting.** The roots already say it.
 - **Compliance goal.** It would select references printed with each finding, and no
   reviewed finding-to-control table exists. It returns with one.
 
@@ -110,16 +152,22 @@ nothing inferred joins scope on its own.
 
 ### The file
 
-One complete file, as `scheck init` writes it for the company in the examples, plus the
-entries written later (a Scope confirmation, an accepted risk). Every top-level key is
-shown; every key maps to a row of the interview table above or to a section of
-[scope.md](scope.md). The file may change freely until 0.0.2 is published. The files
-under [../examples/](../examples/README.md) are the ones to copy and run, one surface
-each and one that names the four roots 0.0.2 reads. They use placeholders, and a
-credential never appears in them. The file below is every key.
+Every file `scheck init` writes starts with these lines, then the keys the answers
+filled:
+
+    # This file names people, people who have left, and accepted weaknesses.
+    # Keep it out of public repositories.
+    # Written by `scheck init`. Editing by hand is equally valid.
+
+The block below is every key, including keys the interview does not ask ("Not
+asked") and entries written later (a Scope confirmation, an accepted risk). It is
+the schema, not a copy of a file `scheck init` emits. The file may change freely
+until 0.0.2 is published. The files under [../examples/](../examples/README.md) are
+the ones to copy and run, one surface each and one that names the four roots 0.0.2
+reads. They use placeholders, and a credential never appears in them.
 
 ```yaml
-# engagement.yaml — written by `scheck init`; editing by hand is equally valid.
+# engagement.yaml — every key. `scheck init` writes its own header, then the keys it asked.
 schema: 1
 engagement:
   name: example-ltd-2026-q4           # names the run directory: ^[a-z0-9][a-z0-9-]{0,62}$
@@ -168,13 +216,13 @@ access:
     - {where: google-workspace:example.com, enforced: everyone}
     - {where: github:example-org, enforced: everyone}
 
-tools:                                # a tool without a collector is a coverage row naming it
+tools:                                # valid, not asked; a name no collector reads is a coverage row
   - {category: identity, name: google-workspace}
   - {category: code, name: github}
   - {category: ci, name: github-actions}
-  - {category: payments, name: stripe}
+  - {category: payments, name: stripe}   # a tool category; there is no payments coverage area
   - {category: chat, name: slack}
-not_used: []                          # coverage areas that do not apply, e.g. [hosts]: printed as *not applicable*
+not_used: []                          # hosts, cloud, data, cicd, email, web, external; only when no root or host/repository asset covers it
 
 mail:
   senders:                            # DKIM is read per selector listed here
@@ -183,14 +231,14 @@ mail:
   no_mail: [example.net]              # must refuse all mail: SPF -all, DMARC reject
 
 secrets:
-  production:                         # where production secrets live
+  production:                         # valid, not asked; store stays free text
     - {store: github-actions-secrets, asset: github:example-org}
     - {store: env-file, asset: deploy}
 
 data:
-  matters_most:
+  matters_most:                       # valid, not asked
     - {what: "customer orders and invoices", asset: deploy}
-  backups:
+  backups:                            # valid, not asked
     - {where: "bucket example-backups", account: gcp:example-backups}
 
 intent:
@@ -204,6 +252,7 @@ intent:
                                       # when the finding declares one; a host finding has none in 0.0.2
       reason: "break-glass path; MFA at the bastion"
       accepted_by: alice
+      date: 2026-10-06              # the day it was written; expires is at most 365 days later
       expires: 2026-12-31
 
 authorization:                        # optional when no probe or scan runs and no mailbox surface is selected
@@ -231,7 +280,7 @@ assets:                               # per-asset settings; the key is the name 
     disable_checks: [fs.suid]         # the client's rules of engagement: only narrow
     deny_paths: [/srv/backups]        # literal absolute prefixes, checked after realpath
     context:                          # host-collector.md §5.2: only these four fields
-      role: "web and database host"
+      role: "web and database host"    # valid, not asked
       exposure: internet
       environment: prod
       expected_services:
@@ -242,8 +291,8 @@ assets:                               # per-asset settings; the key is the name 
     first_party: {confirmed_by: alice, date: 2026-10-07, target: shops.myshopify.com}   # by hand in 0.0.2; the Scope stage asks from 0.0.3
   shop-repo:
     repo: github:example-org/shop
-    deploys_to: production
-    ci: github-actions
+    deploys_to: production            # production | staging | development
+    ci: github-actions                # valid, not asked; must name a tool under tools
     public: false                    # true declares deliberate public visibility
 ```
 
@@ -284,9 +333,10 @@ an absolute path to the operator's `git clone --mirror` ([scope.md](scope.md#rep
 
 **An asset's settings follow its kind.** `jump`, `identity`, `elevate`, `profile`,
 `disable_checks`, `deny_paths` and `context` are host settings; `first_party` is
-taken by a domain, url or host; `deploys_to` (`production | staging | development`)
+taken by a domain, url or host; `deploys_to` (`production | staging | development`),
 `ci` (a tool named under `tools`) and `checkout` (an absolute mirror path) by a
-repository. A setting on the wrong kind
+repository. The interview asks `deploys_to` and does not ask `ci`. `ci` stays valid.
+A setting on the wrong kind
 exits 3, and so do two `assets` entries for the same id and an entry for an asset an
 `exclude` covers, whose settings could never apply.
 
@@ -481,7 +531,7 @@ finding or changes the exit code, and prints nothing from a credential. Run agai
 a paste, it lists only what is still unnamed.
 
 **Accepted risks** follow `host-collector.md §5.2` for `id` (a catalog finding id or
-`custom:`) and add `asset`, `subject`, `accepted_by` and `expires`. `subject` is the
+`custom:`) and add `asset`, `subject`, `accepted_by`, `date` and `expires`. `subject` is the
 finding's instance key (a login, an OAuth app's client id, a DNS name). When the
 finding's definition declares a subject kind, `subject` is required: an acceptance of
 the whole id would also accept every instance the asset gains later, next month's
@@ -518,7 +568,10 @@ as that collector's free-text field. Free-text values the standalone host collec
 accepts, such as `vpc-only`, exit 3 in an engagement.
 
 **Host context.** The host collector's context is `assets.<name>.context` and nothing
-else: `role`, `exposure`, `environment` and `expected_services`. Accepted risks live
+else: `role`, `exposure`, `environment` and `expected_services`. `scheck init` asks
+exposure, environment, expected services and how to reach the host. It does not ask
+`role`. `role` stays a field. Only `internet`, `airgapped` and `dev` move a host
+finding's severity (`host-collector.md §5.3`). `prod` does not raise one. Accepted risks live
 only under `intent.accepted_risks`, and a compliance goal is not read. The host
 collector's other sources (`--context`, `./.scheck/context/**`, `target:`, and the
 `context:` block of 0.0.1's `scheck.yaml`) are not read by `scheck run`: prose context
@@ -560,7 +613,8 @@ it to that list, with none of the target's documented artefacts.
 - `0` is never "no limit"; `none` is.
 - A value shaped like a credential is a usage error. Detection is by shape: known
   prefixes such as `ghp_` and `AKIA`, PEM headers, and high-entropy strings, not
-  keywords.
+  keywords. `scheck init` refuses an answer with the same detector and does not
+  write it. The error names the detector, never the value.
 - Every error names `file:line:key` and, for a credential, the detector that matched;
   it never prints the value.
 - A `redact_extra` pattern that is not valid RE2 exits 3. A pattern shaped like a
@@ -596,12 +650,26 @@ it to that list, with none of the target's documented artefacts.
   A marker scheck printed in place of a hidden value is never accepted as a value.
 - `access.mfa[].enforced` is one of `everyone`, `admins`, `some`, `none` or `unknown`;
   `true` and `false` exit 3 as ambiguous; a tenant appears at most once.
+- `not_used` entries are area keys, each at most once. `identity`, `secrets` and
+  `logging` exit 3: they cannot be marked not applicable. An area a declared root
+  already covers exits 3: `email` beside a domain root; `web` beside a domain or url
+  root; `external` beside a domain, url or network root; `cicd` beside a GitHub root
+  or a repository root; `hosts` beside a host root; `cloud` or `data` beside a cloud
+  root. A repository asset covers `cicd` the same way, and a host asset covers
+  `hosts`. `hosts`, `cloud`, `data`, `cicd`, `email`, `web` and `external` are
+  accepted when no such root or asset exists. There is no `payments` area. A
+  `tools[].category` of `payments` is not one.
 - A mail domain (`mail.senders[].domain`, `mail.no_mail`) falls under a `domain` root,
   and a domain listed both as sending and under `no_mail` exits 3. An intent URL falls
   under a root, and one URL listed under both `intent.exposed_on_purpose` and
   `intent.not_exposed` exits 3.
-- An accepted risk needs `id`, `asset`, `reason` and `accepted_by`; an empty `reason`
-  counts as missing. It needs `subject` when the finding's definition declares a
+- An accepted risk needs `id`, `asset`, `reason`, `accepted_by`, `date` and `expires`;
+  an empty `reason` counts as missing. `date` and `expires` are YYYY-MM-DD in
+  `engagement.timezone`. `expires` is on or after `date` and at most 365 days after
+  it. A date already in the past is still valid: the report leaves the finding open
+  when the acceptance has lapsed, and intake does not fail. `scheck init` does not
+  ask for accepted risks. The paste block writes `date` as the collection day.
+  It needs `subject` when the finding's definition declares a
   subject kind, and may not have one on a non-host id whose definition declares none
   ("Accepted risks" above).
 - `authorization.mailboxes`, when present, is a list. Each entry requires `asset`,

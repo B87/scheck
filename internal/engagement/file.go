@@ -182,7 +182,10 @@ type AcceptedRisk struct {
 	Subject    string `yaml:"subject,omitempty" json:"subject,omitempty"`
 	Reason     string `yaml:"reason,omitempty" json:"reason,omitempty"`
 	AcceptedBy string `yaml:"accepted_by,omitempty" json:"accepted_by,omitempty"`
-	Expires    string `yaml:"expires,omitempty" json:"expires,omitempty"`
+	// Date is the day the acceptance was written, in engagement.timezone.
+	// Expires is at most 365 days after it (docs/spec/engagement.md, "Validation").
+	Date    string `yaml:"date,omitempty" json:"date,omitempty"`
+	Expires string `yaml:"expires,omitempty" json:"expires,omitempty"`
 }
 
 // Authorization is the operator's declaration of who approved probes and

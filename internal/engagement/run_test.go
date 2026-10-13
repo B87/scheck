@@ -419,9 +419,9 @@ people:
   cto: {kind: employee}
 intent:
   accepted_risks:
-    - {id: sshd.password_auth_enabled, asset: web, reason: legacy, accepted_by: cto}
-    - {id: sshd.password_auth_enabled, asset: web, subject: x, reason: narrower, accepted_by: cto}
-    - {id: custom:vendor-vpn, asset: web, reason: vendor, accepted_by: cto}
+    - {id: sshd.password_auth_enabled, asset: web, reason: legacy, accepted_by: cto, date: 2026-10-06, expires: 2026-12-31}
+    - {id: sshd.password_auth_enabled, asset: web, subject: x, reason: narrower, accepted_by: cto, date: 2026-10-06, expires: 2026-12-31}
+    - {id: custom:vendor-vpn, asset: web, reason: vendor, accepted_by: cto, date: 2026-10-06, expires: 2026-12-31}
 `
 	res, err := Parse("engagement.yaml", []byte(file), testOpts)
 	if err != nil {
@@ -541,7 +541,7 @@ func TestHostPasteValidatesAgainstTheWrittenFile(t *testing.T) {
 		t.Fatalf("paste %+v: a --host engagement has no people", tmpl)
 	}
 	file := string(raw) + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: " + tmpl.ID + ", asset: " + tmpl.Asset + ", reason: patch window, accepted_by: alice, expires: " + tmpl.Expires + "}\n"
+		"    - {id: " + tmpl.ID + ", asset: " + tmpl.Asset + ", reason: patch window, accepted_by: alice, date: " + tmpl.Date + ", expires: " + tmpl.Expires + "}\n"
 	written, err := Parse("engagement.yaml", []byte(file), testOpts)
 	if err != nil {
 		t.Fatalf("the pasted entry does not validate:\n%s\n%v", file, err)

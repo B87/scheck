@@ -450,6 +450,7 @@
         "accepted_by_candidates": [],
         "asset": "Workspace",
         "by_subject": true,
+        "date": "2026-10-10",
         "expires": "2027-01-08",
         "id": "workspace.oauth_broad_scope",
         "needs_people": true,

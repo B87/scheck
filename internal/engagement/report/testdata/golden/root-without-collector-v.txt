@@ -122,6 +122,7 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
       asset: macos
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-04-05          # after this date the finding counts again
                                    # until someone re-reviews it
 
@@ -130,6 +131,7 @@ intent.accepted_risks in that file and write the reason, then run `scheck run FI
       asset: macos
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # your handle under people
+      date: 2026-10-07             # the day this acceptance is written
       expires: 2027-04-05          # after this date the finding counts again
                                    # until someone re-reviews it
 

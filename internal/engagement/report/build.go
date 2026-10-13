@@ -344,8 +344,9 @@ func (b *builder) findingAcceptance(asset, id, reason string) *FindingAccept {
 }
 
 // template is the ready-to-paste acceptance for an open finding: reason and
-// accepted_by left for the risk's owner, expires a quarter out for critical
-// and high and half a year otherwise (docs/spec/report.md, "The paste").
+// accepted_by left for the risk's owner, date the collection day, expires a
+// quarter out for critical and high and half a year otherwise, inside the
+// one-year cap (docs/spec/report.md, "The paste").
 func (b *builder) template(a AssetInput, id string, sev finding.Severity) *AcceptTemplate {
 	days := 180
 	if sev.AtLeast(finding.SevHigh) {
@@ -360,8 +361,10 @@ func (b *builder) template(a AssetInput, id string, sev finding.Severity) *Accep
 	if cands == nil {
 		cands = []Candidate{}
 	}
+	written := time.Date(y, m, d, 0, 0, 0, 0, b.zone)
 	return &AcceptTemplate{ID: id, Asset: ref, AcceptedByCandidates: cands,
-		Expires:     time.Date(y, m, d, 0, 0, 0, 0, b.zone).AddDate(0, 0, days).Format("2006-01-02"),
+		Date:        written.Format("2006-01-02"),
+		Expires:     written.AddDate(0, 0, days).Format("2006-01-02"),
 		NeedsPeople: !b.in.People}
 }
 

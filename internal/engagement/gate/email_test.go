@@ -45,8 +45,8 @@ mail:
 redact_extra: [EMAIL_SECRET_[A-Z]+]
 intent:
  accepted_risks:
-  - {id: email.dmarc_partial, asset: domain:example.com, subject: example.com, reason: rollout, accepted_by: alice}
-  - {id: email.spf_undeclared_sender, asset: domain:example.com, subject: 'example.com/include:sendgrid.net', reason: verifying owner, accepted_by: alice}
+  - {id: email.dmarc_partial, asset: domain:example.com, subject: example.com, reason: rollout, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}
+  - {id: email.spf_undeclared_sender, asset: domain:example.com, subject: 'example.com/include:sendgrid.net', reason: verifying owner, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}
 `
 	// YAML flow collections quote a regex containing brackets.
 	file = strings.Replace(file, "[EMAIL_SECRET_[A-Z]+]", "['EMAIL_SECRET_[A-Z]+']", 1)

@@ -863,10 +863,77 @@ func (v *validator) tools() {
 	seen := map[string]bool{}
 	for i, a := range v.f.NotUsed {
 		key := fmt.Sprintf("not_used[%d]", i)
-		if v.enum(key, a, Areas) && seen[a] {
+		if !v.enum(key, a, Areas) {
+			continue
+		}
+		if seen[a] {
 			v.fail(key, "%s is listed twice", a)
 		}
 		seen[a] = true
+		if why := notUsedRefusal(a, v.roots, repoAssets(v.f), hostAssets(v.f)); why != "" {
+			v.fail(key, "%s", why)
+		}
+	}
+}
+
+// notUsedRefusal is why area cannot be marked not applicable, or "".
+// identity, secrets and logging are never optional. An area a declared
+// root already feeds is not optional either (docs/spec/engagement.md, "Intake").
+func notUsedRefusal(area string, roots []Ref, repos, hosts []string) string {
+	switch area {
+	case "identity", "secrets", "logging":
+		return area + " cannot be marked not applicable"
+	}
+	for _, r := range roots {
+		if rootFeeds(area, r) {
+			return area + " is already covered by " + r.ID
+		}
+	}
+	if area == "cicd" && len(repos) > 0 {
+		return "cicd is already covered by " + repos[0]
+	}
+	if area == "hosts" && len(hosts) > 0 {
+		return "hosts is already covered by " + hosts[0]
+	}
+	return ""
+}
+
+func hostAssets(f *File) []string {
+	var out []string
+	for _, name := range sortedKeys(f.Assets) {
+		if f.Assets[name].Host != "" {
+			out = append(out, "assets."+name)
+		}
+	}
+	return out
+}
+
+func repoAssets(f *File) []string {
+	var out []string
+	for _, name := range sortedKeys(f.Assets) {
+		if f.Assets[name].Repo != "" {
+			out = append(out, "assets."+name)
+		}
+	}
+	return out
+}
+
+func rootFeeds(area string, r Ref) bool {
+	switch area {
+	case "email":
+		return r.Kind == KindDomain
+	case "web":
+		return r.Kind == KindDomain || r.Kind == KindURL
+	case "external":
+		return r.Kind == KindDomain || r.Kind == KindURL || r.Kind == KindNetwork
+	case "cicd":
+		return r.Kind == KindRepo || (r.Kind == KindSaaS && r.provider == ProviderGitHub)
+	case "hosts":
+		return r.Kind == KindHost
+	case "cloud", "data":
+		return r.Kind == KindCloud
+	default:
+		return false
 	}
 }
 
@@ -996,7 +1063,34 @@ func (v *validator) intent() {
 		v.acceptedAsset(key+".asset", a.Asset)
 		v.required(key+".reason", a.Reason)
 		v.handle(key+".accepted_by", a.AcceptedBy)
-		v.date(key+".expires", a.Expires)
+		v.acceptanceSpan(key, a.Date, a.Expires)
+	}
+}
+
+// acceptanceSpan requires date and expires. expires is on or after date and
+// at most 365 days after it. A date already in the past is still valid: the
+// report leaves the finding open when the acceptance has lapsed.
+func (v *validator) acceptanceSpan(key, date, expires string) {
+	dateOK := v.required(key+".date", date)
+	expOK := v.required(key+".expires", expires)
+	if dateOK {
+		v.date(key+".date", date)
+	}
+	if expOK {
+		v.date(key+".expires", expires)
+	}
+	if !dateOK || !expOK || v.loc == nil {
+		return
+	}
+	start, errS := time.ParseInLocation("2006-01-02", date, v.loc)
+	exp, errE := time.ParseInLocation("2006-01-02", expires, v.loc)
+	if errS != nil || errE != nil {
+		return
+	}
+	if exp.Before(start) {
+		v.fail(key+".expires", "must be on or after date")
+	} else if exp.After(start.AddDate(0, 0, 365)) {
+		v.fail(key+".expires", "must be at most 365 days after date")
 	}
 }
 

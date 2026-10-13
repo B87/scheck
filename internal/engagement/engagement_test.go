@@ -477,8 +477,8 @@ func TestCredentialInACommentIsReportedOnce(t *testing.T) {
 // (docs/spec/engagement.md, "Identity, references and validation").
 func TestAcceptedRiskByCanonicalID(t *testing.T) {
 	file := minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: sshd.password_auth_enabled, asset: \"repo:github:example-org/shop\", reason: r, accepted_by: alice}\n" +
-		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice}\n"
+		"    - {id: sshd.password_auth_enabled, asset: \"repo:github:example-org/shop\", reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n" +
+		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n"
 	res, err := Parse("e.yaml", []byte(file), testOpts)
 	if err != nil {
 		t.Fatal(err)
@@ -530,8 +530,8 @@ func TestAcceptedRiskNeedsSubjectWhenTheFindingHasOne(t *testing.T) {
 	}
 	file := func(subject string) []byte {
 		return []byte(minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-			"    - {id: workspace.oauth_broad_scope, asset: deploy@203.0.113.5" + subject + ", reason: r, accepted_by: alice, expires: 2026-12-31}\n" +
-			"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice, expires: 2026-12-31}\n")
+			"    - {id: workspace.oauth_broad_scope, asset: deploy@203.0.113.5" + subject + ", reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n" +
+			"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n")
 	}
 	_, err := Parse("e.yaml", file(""), opts)
 	var errs Errors
@@ -575,8 +575,8 @@ func TestSubjectOnAWholeAssetFinding(t *testing.T) {
 	opts := testOpts
 	opts.KnownFinding = func(id string) bool { return id == "github.too_many_owners" || testOpts.KnownFinding(id) }
 	file := minimal + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: github.too_many_owners, asset: github:example-org, subject: alice-ex, reason: r, accepted_by: alice, expires: 2026-12-31}\n" +
-		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, subject: \"22/tcp\", reason: r, accepted_by: alice, expires: 2026-12-31}\n"
+		"    - {id: github.too_many_owners, asset: github:example-org, subject: alice-ex, reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n" +
+		"    - {id: sshd.password_auth_enabled, asset: deploy@203.0.113.5, subject: \"22/tcp\", reason: r, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n"
 	_, err := Parse("e.yaml", []byte(file), opts)
 	var errs Errors
 	if !errors.As(err, &errs) || len(errs) != 1 || errs[0].Key != "intent.accepted_risks[0].subject" ||

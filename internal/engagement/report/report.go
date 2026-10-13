@@ -431,6 +431,7 @@ type AcceptTemplate struct {
 	Reason               string      `json:"reason"`
 	AcceptedBy           string      `json:"accepted_by"`
 	AcceptedByCandidates []Candidate `json:"accepted_by_candidates"`
+	Date                 string      `json:"date"`
 	Expires              string      `json:"expires"`
 	NeedsPeople          bool        `json:"needs_people"`
 }

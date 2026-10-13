@@ -92,7 +92,7 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report, or a run directory, which it resumes; `legacy.go` refuses a 0.0.1 config file), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report, or a run directory, which it resumes; `legacy.go` refuses a 0.0.1 config file), `init` (the interview, `init.go`, E8), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers |
 | `internal/check/{common,linux,macos}` | the catalog itself; `internal/check/all` imports them and runs the invariants test |
@@ -102,7 +102,7 @@ test passes.
 | `internal/report` | the host report envelope and JSON renderer, embedded whole in the engagement report; the fact sheet the engagement report prints per host at `-v` (`text.go`, `text_layout.go`, `domains.go`); golden fact sheets and JSON reports in `testdata/golden`; `docs/report-schema.json` |
 | `internal/finding` | finding id catalog with base severities, posture rules and their evaluator; reads the fact sheet, never executes. `ValidateRules` is its invariants test. Network collector definitions are here (`web.go`, `github.go`, `github_ci.go`, `github_alerts.go`, `github_history.go`), their rules in each collector; shared collector `Judgment` and `Subject` types in `judgment.go`, and the `CoveragePlan` a network collector words its coverage in (`coverage_plan.go`) |
 | `internal/state` | the state directory, under which run directories live |
-| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2); the engagement's scope as the gate checks it, passive discovery in Scope, and resume: `run.json` and what a session keeps (E4); Recon of domain roots through the web collector (`collect_web.go`, E7), GitHub inventory, identity attribution and per-account candidates (E5); stage document types in `stage_docs.go`, sequencing in `stages.go` |
+| `internal/engagement` | the engagement file: schema, locators and canonical ids, validation before any target contact, the resolved view (E1a); `--host` engagements built in memory, the stages and the locked run directory (E1b); the report input and the Report stage (E2); the engagement's scope as the gate checks it, passive discovery in Scope, and resume: `run.json` and what a session keeps (E4); Recon of domain roots through the web collector (`collect_web.go`, E7), GitHub inventory, identity attribution and per-account candidates (E5); the interview's questions and their consumers (`interview.go`, E8); stage document types in `stage_docs.go`, sequencing in `stages.go` |
 | `internal/engagement/gate` | the scope gate (E4): the one place an HTTP request, API call or DNS query is sent; the op registry and its invariants, admission, its own DNS client with records reads and the follow-ups of the names their answers point at (E7), the response pipeline, throttle and retries, authorization windows, the audit lines and the resume ledger; the single local read-only mirror boundary (`mirror.go`); private E6 token exchange and tenant bootstrap (`google_credential.go`, `workspace.go`), and each optional Workspace surface's own one-scope token, profile gate and remembered failure from one surface table, with the Gmail forwarding surface's per-mailbox tokens, admission from current inventory and from a current `authorization.mailboxes` entry loaded for the gate session (`mailbox_auth.go`), breaker and exchange cap, and projection before redaction (`workspace.go`) |
 | `internal/collector/github` | E5 GET-only principal, organization, repository-access, SHA-pinned CI and projected secret/alert reads through the gate; typed evidence, identity/MFA/access, CI, secret-sharing and provider-alert rules, supported syntax, in-process mirror object/ref parsing, credential-location rules and explicit permission/runtime/scan/history gaps |
 | `internal/collector/workspace` | E6 private `Bind`, tenant inventory and admitted per-user administrative reads through the gate, people attribution, identity/admin rules (`rules.go`) and observed 2-step verification rules (`twostep.go`), optional per-account OAuth grant reads, the versioned scope table and the broad-scope rule (`oauth.go`), its coverage plan and collection outcome (`coverage_plan.go`), optional per-mailbox Gmail forwarding reads and the forwarding rule, with its read set, destination classes and notes (`mail.go`), `readAccounts` the shared optional-surface read order (`access.go`), and collector-owned definitions/notes |
@@ -236,6 +236,8 @@ make check      # vet + go fix + golangci-lint + go test -race ./...   (must be 
 make build      # bin/scheck
 make integ      # integration tests; needs Docker or Podman running
 make fixtures   # re-record testdata/fixtures/{ubuntu,fedora} from the containers
+go run ./cmd/scheck init                                  # interview; writes engagement.yaml; contacts nothing
+go run ./cmd/scheck init engagement.yaml                  # asks only what that file does not answer
 go run ./cmd/scheck run engagement.yaml --stop-after intake   # validate, print resolved; contacts nothing
 go run ./cmd/scheck run --host local --no-persist              # one-host engagement; the engagement report
 go run ./cmd/scheck run --host user@host --identity ~/.ssh/k --format json   # report.json; run directory under the state dir
@@ -439,7 +441,7 @@ claim of any kind.
 
 Registered and exiting 3: `--only`, SARIF, `scheck diff`, `--local-only`,
 the `anthropic` and `ollama` providers, and
-`--bounded-source openai|jev`. Tool-call emulation and chunking are not built. `scheck
-init`, the remaining network-collector steps, probes, scans, full scope and
+`--bounded-source openai|jev`. Tool-call emulation and chunking are not built. The
+remaining network-collector steps, probes, scans, full scope and
 `auto` arrive with their slices in `docs/ROADMAP.md`. Do not scaffold empty abstractions
 for any of them ahead of their slice.
