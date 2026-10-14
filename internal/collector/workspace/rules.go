@@ -69,9 +69,67 @@ func zone(c Context) *time.Location {
 	}
 	return time.UTC
 }
-func leftPassed(left string, c Context) bool {
-	t, err := time.Parse("2006-01-02", left)
-	return err == nil && !c.AssessedAt.IsZero() && t.Format("2006-01-02") < c.AssessedAt.In(zone(c)).Format("2006-01-02")
+
+// readTimes are the collection times of the reads that returned a
+// response; one with no recorded time is a zero, which no time-dependent
+// rule judges at another clock.
+func readTimes(rs []Read) []time.Time {
+	var out []time.Time
+	for _, r := range rs {
+		if r.Status != 0 {
+			out = append(out, r.CollectedAt)
+		}
+	}
+	return out
+}
+
+// leftAt is when a declared leaving date passed relative to the users
+// reads, which a leaver judgment rests on whether it found the account or
+// not.
+func leftAt(left string, c Context, users []Read) finding.Leaving {
+	return finding.LeftAt(left, zone(c), readTimes(users))
+}
+
+// leftReason is a leaver judgment's abstention when the date had not
+// passed at the earliest read; with nothing read, reason, the judgment's
+// own for missing evidence, stands.
+func leftReason(l finding.Leaving, reason string) string {
+	switch l {
+	case finding.LeftWithin:
+		return finding.ReasonLeftDuringCollection
+	case finding.LeftUnknown:
+		return finding.ReasonNoCollectionTime
+	case finding.LeftUnread:
+		return reason
+	}
+	return "leaving_date_not_passed"
+}
+
+// leftAmbiguous says a declared leaving date neither passed nor not-passed
+// at the reads: a rule that turns on it abstains rather than judge the
+// account as a current person's.
+func leftAmbiguous(l finding.Leaving) bool {
+	return l == finding.LeftWithin || l == finding.LeftUnknown
+}
+
+// usersAsOf names the earliest users read, in the zone.
+func usersAsOf(c Context, users []Read) string {
+	first, _, ok := finding.Span(readTimes(users))
+	if !ok {
+		return "an unrecorded time"
+	}
+	return finding.ReadDate(first, zone(c))
+}
+
+// assignmentsAt is when an account's role assignments were read: the
+// earliest of their reads, zero when one carries no time, which leaves an
+// expiring assignment's currency unknown.
+func assignmentsAt(a AccountAccess) time.Time {
+	first, _, ok := finding.Span(readTimes(a.Assignments.Reads))
+	if !ok {
+		return time.Time{}
+	}
+	return first
 }
 func readUsable(r Read) bool {
 	// The filters read's HTTP 204 with no body is an empty list. The status
@@ -121,14 +179,23 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 		u, p, a, rs := view.user, view.person, view.access, view.reads
 		admin, adminKnown, adminText, adminReads := view.admin, view.adminKnown, view.adminText, view.adminReads
 		superKnown := u.IsAdmin != nil && !a.Conflict
-		passed := p != nil && leftPassed(p.Left, c)
+		left := finding.LeftNotPassed
+		if p != nil && p.Left != "" {
+			left = leftAt(p.Left, c, e.Users.Reads)
+		}
+		passed := left == finding.LeftPassed
 		j := newJudgment(finding.IDIdentityUnexpectedAdmin, asset, subject(u, p), rs)
 		j.Sources = []string{"access.admins"}
 		if p != nil {
 			j.Sources = append(j.Sources, "people."+p.Handle+".workspace")
 		}
-		known := superKnown && (!yes(u.IsAdmin) || c.AdminsDeclared && p != nil && !passed)
+		// An administrator whose leaving date is ambiguous at the reads is
+		// neither a current person nor offboarding's: it abstains.
+		known := superKnown && (!yes(u.IsAdmin) || c.AdminsDeclared && p != nil && !passed && !leftAmbiguous(left))
 		decide(&j, known, yes(u.IsAdmin) && p != nil && !slices.Contains(c.ExpectedAdmins, p.Handle), fmt.Sprintf("%s; isAdmin: %v; attributed declared person: %s; expected administrator declaration: %t", u.Primary, boolValue(u.IsAdmin), handleOf(p), c.AdminsDeclared))
+		if !known && yes(u.IsAdmin) && leftAmbiguous(left) {
+			j.Reason = leftReason(left, j.Reason)
+		}
 		out = append(out, j)
 		tenantPeople := slices.ContainsFunc(c.People, func(p Person) bool { return len(p.Addresses) > 0 })
 		ambiguous := false
@@ -155,7 +222,10 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			j = newJudgment(finding.IDIdentityFormerPersonHasAccess, asset, subject(u, p), rs)
 			j.Sources = []string{"people." + p.Handle + ".left", "people." + p.Handle + ".workspace"}
 			primary := slices.ContainsFunc(p.Addresses, func(s string) bool { return strings.EqualFold(s, u.Primary) })
-			decide(&j, passed && !a.Conflict && (inactive(u) || primary && active(u)), passed && primary && active(u), fmt.Sprintf("declared left: %s; suspended: %v; archived: %v; primary match: %t", p.Left, boolValue(u.Suspended), boolValue(u.Archived), primary))
+			decide(&j, passed && !a.Conflict && (inactive(u) || primary && active(u)), passed && primary && active(u), fmt.Sprintf("declared left: %s; suspended: %v; archived: %v; primary match: %t; account observed in the users read of %s", p.Left, boolValue(u.Suspended), boolValue(u.Archived), primary, usersAsOf(c, e.Users.Reads)))
+			if !passed {
+				j.Reason = leftReason(left, j.Reason)
+			}
 			if j.Verdict == Fired && admin {
 				j.Reads = adminReads
 				j.Attributes = []finding.Attribute{{Name: "admin"}}
@@ -170,7 +240,13 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 	// Departed declarations still need an explicit unknown outcome when identity
 	// is missing or ambiguous; absence is decided only over a complete population.
 	for _, p := range c.People {
-		if !leftPassed(p.Left, c) {
+		if p.Left == "" {
+			continue
+		}
+		left := leftAt(p.Left, c, e.Users.Reads)
+		// Not passed, or nothing read: no absence to judge, and a missing
+		// population is already the users rule's own abstention.
+		if left == finding.LeftNotPassed || left == finding.LeftUnread {
 			continue
 		}
 		addresses := p.Addresses
@@ -193,7 +269,12 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			}
 			j := newJudgment(finding.IDIdentityFormerPersonHasAccess, asset, finding.Subject{Kind: "account", Key: strings.ToLower(address), Label: address, Person: p.Handle}, reads(e.Users.Reads))
 			j.Sources = []string{"people." + p.Handle + ".left", "people." + p.Handle + ".workspace"}
-			decide(&j, len(p.Addresses) > 0 && !matched && e.Users.Complete, false, "Declared current address was not found. Renamed accounts whose old address was removed cannot be identified by this comparison.")
+			// An absence is as current as the earliest users read: one read
+			// before the date passed says nothing about offboarding.
+			decide(&j, left == finding.LeftPassed && len(p.Addresses) > 0 && !matched && e.Users.Complete, false, "Declared current address was not found as of "+usersAsOf(c, e.Users.Reads)+" (earliest of the users reads). Renamed accounts whose old address was removed cannot be identified by this comparison.")
+			if left != finding.LeftPassed {
+				j.Reason = leftReason(left, j.Reason)
+			}
 			if matched || len(p.Addresses) == 0 {
 				j.NotChecked = []string{"Declared account identity is missing or ambiguous."}
 			}
@@ -239,7 +320,7 @@ func accountViews(e Evidence, c Context, attrs []Attribution) []accountView {
 			}
 		}
 		v := accountView{user: u, access: a, person: personForUser(u, attrs, c), reads: reads(e.Users.Reads)}
-		v.admin, v.adminKnown, v.adminText = administrative(u, a, e, c)
+		v.admin, v.adminKnown, v.adminText = administrative(u, a, e)
 		v.adminReads = reads(e.Users.Reads, e.Access.Roles.Reads, e.Access.Privileges.Reads, a.Assignments.Reads)
 		out = append(out, v)
 	}
@@ -286,37 +367,59 @@ func inactivity(u User, a AccountAccess, p *Person, asset string, c Context, rs 
 			out = append(out, j)
 			continue
 		}
-		if !active(u) || a.Conflict || a.Detail == nil || !readUsable(a.DetailRead) || !active(*a.Detail) || c.AssessedAt.IsZero() {
+		if !active(u) || a.Conflict || a.Detail == nil || !readUsable(a.DetailRead) || !active(*a.Detail) {
 			out = append(out, j)
 			continue
 		}
+		// Judged at the detail read that returned the sign-in and creation
+		// times, never the session's start (docs/spec/engagement.md,
+		// "Severity in context").
+		at := a.DetailRead.CollectedAt
+		if at.IsZero() {
+			j.Reason = finding.ReasonNoCollectionTime
+			out = append(out, j)
+			continue
+		}
+		read := finding.ReadDate(at, zone(c))
 		d := a.Detail
-		created, creationOK := timestamp(d.CreationTime, c.AssessedAt)
+		created, creationOK := timestamp(d.CreationTime, at)
 		if d.LastLoginTime == nil {
 			out = append(out, j)
 			continue
 		}
 		if *d.LastLoginTime == neverLogin {
 			if creationOK {
-				decide(&j, id == IDNeverSignedIn, id == IDNeverSignedIn && created.Before(c.AssessedAt.In(zone(c)).AddDate(0, 0, -30)), "Google reports the exact never-sign-in marker; creation: "+created.Format(time.RFC3339))
+				decide(&j, id == IDNeverSignedIn, id == IDNeverSignedIn && created.Before(at.In(zone(c)).AddDate(0, 0, -30)),
+					fmt.Sprintf("Google reports the exact never-sign-in marker: created %s, no sign-in as of the account read of %s (%d days)", created.Format(time.RFC3339), read, days(created, at)))
 			}
 		} else {
-			login, ok := timestamp(d.LastLoginTime, c.AssessedAt)
+			login, ok := timestamp(d.LastLoginTime, at)
 			if ok && creationOK && !login.Before(created) {
-				decide(&j, true, id == IDStaleAccount && login.Before(c.AssessedAt.In(zone(c)).AddDate(0, 0, -90)), "Google reports no sign-in since "+login.Format(time.RFC3339)+". Sessions and application activity were not reviewed.")
+				decide(&j, true, id == IDStaleAccount && login.Before(at.In(zone(c)).AddDate(0, 0, -90)),
+					fmt.Sprintf("Google reports last sign-in %s, %d days before the account read of %s. Sessions and application activity were not reviewed.", login.Format(time.RFC3339), days(login, at), read))
 			}
 		}
 		out = append(out, j)
 	}
 	return out
 }
-func timestamp(s *string, now time.Time) (time.Time, bool) {
+
+// clockSkew is how far a provider timestamp may run past the read that
+// returned it before it is malformed.
+const clockSkew = 5 * time.Minute
+
+// timestamp parses a provider time; one later than the read that returned
+// it, beyond clockSkew, is malformed.
+func timestamp(s *string, read time.Time) (time.Time, bool) {
 	if s == nil {
 		return time.Time{}, false
 	}
 	t, err := time.Parse(time.RFC3339Nano, *s)
-	return t, err == nil && !t.After(now)
+	return t, err == nil && !t.After(read.Add(clockSkew))
 }
+
+// days is the whole days from t to at.
+func days(t, at time.Time) int { return int(at.Sub(t).Hours() / 24) }
 
 func possibleExemption(u User, c Context) bool {
 	for _, p := range c.People {
@@ -427,7 +530,7 @@ func privilegeInChildren(p Privilege, tree []Privilege) (bool, bool) {
 	}
 	return privilege(p, tree)
 }
-func administrative(u User, a AccountAccess, e Evidence, c Context) (bool, bool, string) {
+func administrative(u User, a AccountAccess, e Evidence) (bool, bool, string) {
 	if a.Conflict {
 		return false, false, "Current account metadata conflicted."
 	}
@@ -437,7 +540,7 @@ func administrative(u User, a AccountAccess, e Evidence, c Context) (bool, bool,
 	known := no(u.IsAdmin) && a.Assignments.Complete && e.Access.Roles.Complete && e.Access.Privileges.Complete
 	texts := []string{}
 	for _, assignment := range a.Assignments.Items {
-		current, ok := currentAssignment(assignment, c.AssessedAt)
+		current, ok := currentAssignment(assignment, assignmentsAt(a))
 		if !ok {
 			known = false
 			continue

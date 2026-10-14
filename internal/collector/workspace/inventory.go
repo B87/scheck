@@ -23,8 +23,11 @@ type Context struct {
 	People         []Person
 	ExpectedAdmins []string
 	AdminsDeclared bool
-	AssessedAt     time.Time
-	Zone           *time.Location
+	// Zone is engagement.timezone, in which a declared date passes at
+	// 24:00. Every time-dependent rule is judged at the collection time of
+	// the read it rests on, never the session's start
+	// (docs/spec/engagement.md, "Severity in context").
+	Zone *time.Location
 	// MFA is the tenant's access.mfa[i].enforced and MFASource its key;
 	// both are empty when the operator declared nothing for this tenant.
 	MFA, MFASource string
@@ -125,6 +128,7 @@ func readOf(op string, r gate.Result) Read {
 		out.Population = r.Response.Population
 		out.Truncated = r.Response.Truncated
 		out.Redactions = r.Response.Redactions
+		out.CollectedAt = r.Response.CollectedAt
 	}
 	return out
 }
@@ -166,8 +170,8 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 	}
 	e.collectAccess(ctx, sender, target, view)
 	views := accountViews(e, view, attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete))
-	e.collectGrants(ctx, sender, target, view, views)
-	e.collectMail(ctx, sender, target, view, views)
+	e.collectGrants(ctx, sender, target, views)
+	e.collectMail(ctx, sender, target, views)
 	e.finish(target.Asset, view)
 	return e
 }

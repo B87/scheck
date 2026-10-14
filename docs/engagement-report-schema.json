@@ -538,14 +538,15 @@
         },
         "status": { "enum": ["open", "accepted"] },
         "acceptance": {
-          "type": "object", "required": ["entry", "reason", "accepted_by", "expires", "expired", "covers_every_instance"], "additionalProperties": false,
+          "type": "object", "required": ["entry", "reason", "accepted_by", "expires", "expired", "covers_every_instance", "judged_at"], "additionalProperties": false,
           "properties": {
             "entry": { "type": "string" },
             "reason": { "type": "string" },
             "accepted_by": { "type": "string" },
             "expires": { "type": ["string", "null"], "format": "date" },
             "expired": { "type": "boolean" },
-            "covers_every_instance": { "type": "boolean" }
+            "covers_every_instance": { "type": "boolean" },
+            "judged_at": { "type": ["string", "null"], "format": "date-time", "description": "The collection time the expiry was read at: the latest read the finding cites, or for a host the start of the session that collected it; never the run's start or the time the report was rendered. Null for a finding no entry covers." }
           }
         },
         "rule": {

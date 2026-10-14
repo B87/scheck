@@ -704,6 +704,7 @@
         "entry": "engagement.yaml intent.accepted_risks[0]",
         "expired": false,
         "expires": null,
+        "judged_at": "2026-10-07T07:12:03Z",
         "reason": "the vendor ships updates monthly"
       },
       "adjustments": [],

@@ -1710,8 +1710,18 @@ older than 7 days is collected again on resume; every risk area's row prints its
      envelope that cannot be read back collects the host again. Acceptances a host
      cannot apply (a subject set) are named from Analyze for every host asset.
      Acceptances on a kept host are still graded at the collecting session's start.
-   - *1d (not started).* Observation-time clocks for every time-dependent rule; judging
-     still uses the session start.
+   - *1d (done, offline).* Observation-time clocks for every time-dependent rule, decided
+     2026-10-14 (below): each rule's clock is the read that carries the value, and the
+     excerpt names it. `internal/finding/clock.go` holds the shared `LeftAt` (passed,
+     within collection, not passed, unknown), reason `unavailable:collection_time` and
+     the `left_date_within_collection` outcome. The web collector's `Input.Now` is gone:
+     certificate expiry and `security.txt` `Expires` use their page's `CollectedAt`. GitHub's
+     `Context.Today` became `Context.Zone`; Workspace's `Context.AssessedAt` is gone and
+     `Read` carries `CollectedAt`. An acceptance's expiry is judged at the latest
+     collection time among the reads its finding cites, a host's at the start of the
+     session that collected it, and the JSON carries it as
+     `findings[].acceptance.judged_at`. Not built: step 8's 7-day maximum and a zero
+     collection time counted as expired on resume.
 2. The fixed sub-item lists, with "not judged in this version: …" in every row; goldens.
 3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
    outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style
@@ -1724,7 +1734,8 @@ older than 7 days is collected again on resume; every risk area's row prints its
    with 150 repositories under a small budget.
 7. The follow-up table, the loop and its invariants test; F1 with
    `github.collaborator_permission`, and F2.
-8. The 7-day resume maximum, and the critical definition with its ceilings in
+8. The 7-day resume maximum (a zero collection time counts as expired, so a kept
+   observation with no recorded time is collected again), and the critical definition with its ceilings in
    `spec/engagement.md`.
 9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
    `data.matters_most` again, run through the `client` interview mode on the wording.
@@ -1809,6 +1820,20 @@ twelve items the first draft left open:
   never-signed-in accounts, certificate expiry and its 14-day window, acceptance
   expiry); step 1d applies this because it makes a resume re-judge persisted evidence, and
   step 8 adds only the 7-day cap.
+- Step 1d clocks, decided 2026-10-14 (owner, on the `security-consultant`). A date
+  condition is judged at the moment scheck saw the thing it is about, named in the
+  excerpt in `engagement.timezone`, never the session start or render time; where
+  unclear, abstain. Population-based conditions (the leaver rule) fire on the read(s)
+  that observed the account and disprove on the earliest read of the population; a date
+  that falls within collection abstains. Stale and never-signed-in accounts use the
+  per-account detail read. An acceptance's expiry uses the latest read its finding
+  cites, and means nothing for a finding that did not fire. A read with no recorded
+  collection time makes the rule abstain, and step 8 treats a zero collection time as
+  expired on resume (not built). Also time-dependent, each against its own read: a
+  Workspace role assignment's `expireTime`, `security.txt` `Expires`, and a timestamp
+  later than its read plus 5 minutes (malformed). The list in `spec/engagement.md`,
+  "Severity in context", "Time" is complete. Readout notes about a departed person
+  share the rule's clock and gating.
 - Step 1 design, from the `modularity` agent (network collectors built in 1b, hosts in 1c). Verdicts leave the evidence types
   (`githubc.Evidence.Judgments`, `workspace.Evidence.Judgments`, `ReconAsset.Judged`);
   Analyze judges; `findings.json` carries every verdict with its severity chain as output

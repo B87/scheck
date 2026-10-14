@@ -679,10 +679,10 @@ one id graded differently.
 | `category` | the collector's own grouping |
 | `exposure_finding` | required on every finding definition: whether "exposed on purpose" may move it ([engagement.md](engagement.md), "Severity in context") |
 | `severity`, `severity_base`, `adjustments[]` | each adjustment `{rule, by, delta, source}`: `rule` from the closed table of [engagement.md](engagement.md), "Severity in context" or the collector's own, `by` `collector` or `engagement`, `source` either `{file, key}` for a declaration or `{observation, excerpt}` for a fact; no non-base severity without its chain |
-| `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance}` |
+| `status`, `acceptance` | `acceptance`, present exactly when the status is `accepted`, is `{entry, reason, accepted_by, expires, expired, covers_every_instance, judged_at}`; `judged_at` is the collection time the expiry was read at (`engagement.md`, "Severity in context", "Time"), a date-time or null |
 | `rule` | `{kind: single_fact \| multi_fact, reads[]}`: the check, request and declaration ids the rule reads, in the vocabulary of `assessments[]`. `single_fact` is one fact per subject, which includes a host rule that joins a second check of the same host per account (`host-collector.md §6.5`, both checks in `reads`); `multi_fact` combines facts across checks or assets ([engagement.md](engagement.md), "Multi-fact rules") |
 | `evidence[]` | at least one observed item. Observed: `{asset, check \| request, observation, collected_at, principal, vantage, excerpt}`; declared: `{source: "engagement.yaml <key path>", excerpt}`. A declaration supports a finding and never makes one alone |
-| `derived[]` | computed values (`days_since_left`, `age_days`), always against collection time; each states what a field shows, never who acted |
+| `derived[]` | computed values (`days_since_left`, `age_days`), each against the collection time of the read it is about, named in the excerpt (`engagement.md`, "Severity in context", "Time"); each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
 | `impact` | from the definition |
 | `why_here[]` | templated lines from attributed context only, never free prose: the reasons of the steps that moved the severity first, then the collector's sentence, then a cap that still holds. A finding no step moved prints the standard-rating line for its collector; one a step moved never prints a cap or the standard-rating line as its first reason |
@@ -755,10 +755,9 @@ unadjusted one prints its severity alone, and its why-here line says scheck was 
 how the machine is used, so this is the standard rating. One
 lowered to `info` by intent is listed under informational with the operator's own
 reason, never dropped. An accepted finding is listed under accepted with the severity
-it would have had, `accepted by <handle> until <date>` (and "expires in N days" at 30
-or fewer) or `accepted by <handle>, no expiry`, the quoted reason, its entry, and
+it would have had, `accepted by <handle> until <date>` (and, at 30 days or fewer, `(<N> days after collection on <date>)` after the date) or `accepted by <handle>, no expiry`, the quoted reason, its entry, and
 "covers every instance of this id on this asset" when the acceptance has no `subject`.
-Past `expires` the finding is open and ranked, with `the acceptance by <handle> expired
+Past `expires` at the collection time ("expired <date>, before collection on <date>") the finding is open and ranked, with `the acceptance by <handle> expired
 on <date> (<entry>); the finding is open again`, and the acceptance's outcome is
 `expired`. Notes and the not-applied list name an acceptance by the finding's title, the
 asset and who accepted it, its entry last. The host collector's own

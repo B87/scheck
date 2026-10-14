@@ -656,9 +656,15 @@ func (j *judging) securityTXT(o string, ps []Page) {
 			x.Reason = "unavailable:security_txt"
 			continue
 		}
-		x.Verdict, x.Reason, x.Excerpt = Disproved, "", "security.txt publishes a contact and future expiry; contact delivery and signature trust were not tested"
-		if contacts == 0 || !expires[0].After(j.in.Now) {
-			x.Verdict, x.Excerpt = Fired, "security.txt lacks a Contact or has expired"
+		if p.CollectedAt.IsZero() {
+			// Its Expires is read at the security.txt read's own time.
+			x.Reason = ReasonNoCollectionTime
+			continue
+		}
+		read := p.CollectedAt.UTC().Format(time.RFC3339)
+		x.Verdict, x.Reason, x.Excerpt = Disproved, "", "security.txt publishes a contact and an expiry after the read of "+read+"; contact delivery and signature trust were not tested"
+		if contacts == 0 || !expires[0].After(p.CollectedAt) {
+			x.Verdict, x.Excerpt = Fired, "security.txt lacks a Contact or had expired at the read of "+read
 		}
 	}
 	j.add(x)

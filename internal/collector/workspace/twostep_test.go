@@ -23,7 +23,7 @@ func stepFixture(users ...User) (Evidence, Context) {
 	e.Users.Items = users
 	e.Access.Accounts = nil
 	for _, u := range users {
-		e.Access.Accounts = append(e.Access.Accounts, AccountAccess{ID: u.ID, Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: "a" + u.ID, Decision: "sent", Status: 200}}}})
+		e.Access.Accounts = append(e.Access.Accounts, AccountAccess{ID: u.ID, Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: "a" + u.ID, Decision: "sent", Status: 200, CollectedAt: e.Users.Reads[0].CollectedAt}}}})
 	}
 	return e, c
 }

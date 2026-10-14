@@ -42,7 +42,7 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 // workspaceView is what the engagement file tells the Workspace collector
 // about a tenant: Recon reads with it and Analyze judges with it.
 func (r *run) workspaceView(a ResolvedAsset) workspace.Context {
-	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
+	view := workspace.Context{Zone: r.zone}
 	if auth := r.res.Authorization; auth != nil {
 		for _, m := range auth.Mailboxes {
 			if m.ID() == a.ID {

@@ -335,7 +335,7 @@ separate finding.
 | Rule | Fires | Disproved | Abstains | Base | Area |
 |---|---|---|---|---|---|
 | `tls.certificate_invalid`: "The certificate for *name* is *expired / for another name / not from a trusted issuer / missing its intermediate*" | the gate's typed verification class | verified | no handshake; an unclassified error; an issuer on the TLS-interception list, worded "your network inspects TLS, so certificates were not judged"; the name is a takeover candidate, which subsumes it | low | external |
-| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at the collection time of the TLS read, not the session start; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
+| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at the collection time of the TLS read, not the session start, and the excerpt dates both ("certificate expires 2026-10-20, 6 days after the TLS read of 2026-10-14"); no recorded collection time is undecided; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
 | `tls.legacy_only`: "*name* did not negotiate TLS 1.2 or later" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
 
 A missing intermediate is worded "browsers may recover, but clients that do not fetch
@@ -383,7 +383,7 @@ tag can supply a generator or password input.
 Secret findings use only detector hits with the gate's trusted redaction provenance,
 never marker-shaped text supplied by a page. A marked body blocks negative secret
 claims. `security.txt` must be HTTPS plain text with a usable Contact URI and a single
-parseable future Expires; Canonical, when present, must include the read URL.
+parseable Expires later than the collection time of the `security.txt` read (a read with no recorded collection time is undecided, never judged at the session start); Canonical, when present, must include the read URL.
 Malformed or unrecognized fields that prevent this judgment leave coverage unknown.
 A cleartext-signed file is parsed for its contact fields; signature trust and contact
 delivery are not checked. Malformed `mailto:` and `tel:` contacts never validate.
@@ -398,7 +398,7 @@ A trusted 404 is absence evidence both when sent and when reused on resume.
 | `web.security_headers`: one item per origin listing which are missing of `X-Content-Type-Options`, frame protection (`X-Frame-Options` or CSP `frame-ancestors`), `Referrer-Policy` and CSP | any missing | all present | as `web.hsts_missing` | info | web | no |
 | `web.version_disclosed`: "*url* reveals software versions (*what*)". Every read name; the subject is the URL | a version number in `server` or `x-powered-by`, in `<meta name="generator">`, or in a JSON body's top-level version, build or commit | none, or a product without a version (`nginx`, `cloudflare`, `AmazonS3`, `Vercel`) | blocked; 5xx; a body cut before `</head>` with no version in the headers | low | web | yes: to info |
 | `web.secret_in_response`: "A secret is published in the page at *url*". Every read name | a redaction hit from `private-key`, `github-token`, `slack-token`, `google-access-token`, `google-refresh-token`, `google-client-secret`, `stripe-key`, `npm-token` or `slack-webhook` | HTML read whole with no hit, for that HTML only | a truncated body fires on what it saw and is never disproved. Never fires on `google-api-key`, `jwt`, `bearer`, `kv-secret` or `json-secret`, an AWS key id alone, or `extra:*` | critical; a Slack webhook high | secrets | no |
-| `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` in the past; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
+| `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` earlier than the collection time of the `security.txt` read; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
 | `web.restricted_reachable`: "*url*, which you said is reachable only from *audience*, answered from the internet" | the vantage is `internet`, the declared audience is not, and the response is a 2xx, a 401, or a 3xx to a login page on the same site or an identity provider | refused or timed out from the `internet` vantage, worded "did not answer from here; scheck cannot tell a firewall from a server that is down" | the vantage is not `internet` or not given; 403, 404 or 429; blocked; 5xx; an invalid or intercepted certificate; policy refusal; unrecognized redirect | medium, +1 `contradiction`: high | external | no; validation also refuses one URL under both `intent` lists |
 
 **Restricted reachability (E7 step 5).** The subject is the exact canonical URL in

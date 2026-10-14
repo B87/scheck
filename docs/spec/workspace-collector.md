@@ -419,7 +419,7 @@ Step 3 declares no tenant-wide direct-assignment, group or group-member reads.
 Per-user assignment reads include direct and indirect grants for current admitted
 users only; there is no claim of a tenant-wide assignment inventory. The optional
 group-context read in the table remains planned; it is not needed to interpret a
-per-user assignment returned by Directory. Fresh user details prioritize passed leavers, administrators
+per-user assignment returned by Directory. Fresh user details prioritize declared leavers, administrators
 and contractors before other accounts when a budget prevents reading everyone.
 
 **Per-user read order under caps** (design; contract when E9 lands, step 6). Recon reads
@@ -440,7 +440,7 @@ list/detail identity or security values cause abstention and a diagnostic note.
 Flag-specific conflicts are in "Observed 2-step verification".
 
 Step 5 reads OAuth grants after every baseline read, for every admitted account,
-suspended and archived included: passed leavers, super admins, contractors, then the
+suspended and archived included: declared leavers, super admins, contractors, then the
 rest, active before inactive within each (E9 replaces this order, above; a suspended
 leaver no longer ranks first). Per-user OAuth and forwarding reads run in Check, after
 Plan, in that order. A result the gate marks `Repeats` (every
@@ -571,9 +571,11 @@ unknown sibling fields are discarded. Null, empty, unknown-only or malformed
 expiration structures remain unknown. Projection
 must preserve that distinction rather than turning an unreadable shape into absence.
 Unknown expiration metadata cannot establish current privilege or absence. A
-recognized expiry at or before the assessment instant is expired and is ignored;
-a future expiry preserves
-the supported assignment. Unknown roles or privileges block absence verdicts, but a
+recognized expiry at or before the collection time of the assignments read that
+carried it is expired and is ignored; a later expiry preserves the supported
+assignment. A read with no recorded collection time leaves the expiry unknown, and
+the session start is never the fallback (`engagement.md`, "Severity in context",
+"Time"). Unknown roles or privileges block absence verdicts, but a
 known supported privilege can still prove presence when an unknown sibling is also
 returned. `isAdmin:true` independently proves super-admin status even when role
 reads are unavailable. The exact service/name table above remains version
@@ -600,10 +602,10 @@ step 6 the forwarding rule.
 | `identity.unattributed_admin` | high / account | Observed super admin or supported privileged delegate, complete alias attribution finds no person, and tenant people context exists | Unambiguous attribution or known not-privileged | No people context, partial aliases or unknown roles |
 | `identity.external_admin` | medium / account | Declared contractor is a super admin | Known not-contractor or not-super-admin | Unknown kind, attribution or admin status |
 | `identity.shared_admin` | medium / account | Declared shared account is a super admin | Individual account or known not-super-admin | Unknown kind or admin status |
-| `identity.former_person_has_access` | high / account, `+1 attribute:admin` | Passed `left` date, exact primary match and active account | Positively suspended/archived, or recognized complete current-address absence with removed-rename caveat | Future date, unknown status, active alias-only match, missing identifier or partial population |
+| `identity.former_person_has_access` | high / account, `+1 attribute:admin` | `left` date passed at the collection time of the read that observed the account, exact primary match and active account | Positively suspended/archived, or recognized complete current-address absence as of the earliest read of the population, with removed-rename caveat | Future date at the observing read (`leaving_date_not_passed`), date within collection ("left date *d* falls within or after collection; re-run after *d*"), no recorded collection time, unknown status, active alias-only match, missing identifier or partial population |
 | `workspace.too_many_super_admins` | medium / none | Count above 3, or at least 3 and above a third of active humans | Complete populations below the threshold | Unknown exemptions or incomplete absence; partial population can fire only on the absolute lower bound above 3 |
-| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days before the users read's collection time | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence |
-| `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days ago | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence |
+| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days before the collection time of the per-account detail read that returned it and the creation time | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence, a sign-in or creation later than the detail read's collection time plus 5 minutes (malformed), no recorded collection time |
+| `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days before the detail read's collection time | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence, a creation or sign-in later than the detail read's collection time plus 5 minutes (malformed), no recorded collection time |
 | `workspace.suspended_admin_assignment` | medium / account | Suspended account retains super flag or supported privileged direct/indirect assignment | Complete admin metadata proves no assignment | Unknown suspension or partial/uninterpreted roles |
 | `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |
 | `workspace.admin_without_two_step` | high / account | Known-active super admin or supported privileged delegate explicitly has `isEnrolledIn2Sv:false`, enforced or not | Explicit enrollment `true`, known inactive, or admin status known false | Unknown admin status, enrollment, activity, or a conflict |
@@ -934,7 +936,7 @@ services, goes to that mailbox. A delegated administrator never raises and is ma
 the details. An account belonging to a declared leaver whose date has passed gets an
 excerpt cross-reference to that person and no further raise.
 
-**Readout notes** come from the same view as the rule:
+**Readout notes** come from the same view as the rule. A note about a departed person still observed uses the rule's clock and gating, is dated by the read that observed them, and is never emitted unless the left date had passed at that read (`engagement.md`, "Severity in context", "Time"):
 
 - not selected: what the check finds, that it needs a service account with domain-wide
   delegation for `gmail.readonly`, which can read every message and which most small

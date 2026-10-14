@@ -102,3 +102,17 @@ func TestGitHubCIReportSeveritySubjectsAndSuppression(t *testing.T) {
 		}
 	}
 }
+
+// An acceptance whose only instance another, worse finding supersedes is
+// neither fixed nor to be removed: it names the finding to accept instead.
+func TestAcceptanceOfASupersededInstanceNamesTheWorseFinding(t *testing.T) {
+	for _, subject := range []string{".github/workflows/release.yml", ""} {
+		in := githubCIFiredReport(t)
+		repo := in.Assets[1]
+		in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubMutableAction, Asset: repo.Name, AssetID: repo.ID, Subject: subject, Reason: "r", AcceptedBy: "alex", Expires: "2099-01-01"}}
+		a := build(in).Acceptances[0]
+		if a.Outcome != "rule_not_decided" || !strings.Contains(a.Why, "reported as "+finding.IDGitHubMutableActionWrite) || len(a.Findings) != 0 {
+			t.Fatalf("subject %q: %+v", subject, a)
+		}
+	}
+}

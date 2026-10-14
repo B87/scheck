@@ -378,7 +378,7 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		}
 		return gate.Result{RequestID: "x", Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:admin.directory.user.security", Repeats: true}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
 	if !slices.Equal(asked, []string{"zed"}) || e.OAuth.Complete || len(e.OAuth.Accounts) != 1 {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}
@@ -390,14 +390,14 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		asked = append(asked, r.Params["user"])
 		return gate.Result{RequestID: "t-" + r.Params["user"], Decision: "sent", Response: &gate.Response{Status: 200, Body: []byte(`[]`), Population: full}}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
 	if !slices.Equal(asked, []string{"zed", "amy", "bob"}) || !e.OAuth.Complete {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}
 
 	asked = nil
 	e.Binding.Profile, e.Binding.Surfaces, e.OAuth = "directory_mail", nil, OAuthEvidence{}
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
 	if len(asked) != 0 || e.OAuth.Selected {
 		t.Fatal("an unselected profile read grants", asked)
 	}

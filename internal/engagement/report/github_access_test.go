@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -196,5 +197,122 @@ func TestGitHubSubjectlessAcceptanceKeepsNullInstanceKey(t *testing.T) {
 	validate(t, schema(t), r)
 	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "applied" || len(r.Acceptances[0].Findings) != 1 || r.Acceptances[0].Findings[0].Subject != nil {
 		t.Fatalf("subjectless acceptance key: %+v", r.Acceptances)
+	}
+}
+
+// A network finding's acceptance is read at the collection time of what
+// the finding rests on, never the run's first start: evidence a later
+// session read, after the acceptance ended, leaves the finding open
+// (docs/spec/engagement.md, "Severity in context").
+func TestNetworkAcceptanceIsJudgedAtTheReadsTime(t *testing.T) {
+	in := githubAccessFiredReport(t)
+	day := in.Started.In(in.Zone).Format(time.DateOnly)
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubMFANotRequired, Asset: "engineering", AssetID: githubAccessOrg, Reason: "transition", AcceptedBy: "alex", Expires: day}}
+	r := build(in)
+	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "applied" {
+		t.Fatalf("read on the day it expires: %+v", r.Acceptances)
+	}
+	for _, f := range r.Findings {
+		if f.ID == finding.IDGitHubMFANotRequired && (f.Acceptance == nil || f.Acceptance.JudgedAt == nil || !f.Acceptance.JudgedAt.Equal(in.Started.Add(17*time.Second))) {
+			t.Fatalf("judged at: %+v", f.Acceptance)
+		}
+	}
+	// A later session read it two days on: past its end.
+	for id, o := range in.Observations {
+		o.CollectedAt = in.Started.Add(48 * time.Hour)
+		in.Observations[id] = o
+	}
+	r = build(in)
+	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "expired" || !strings.Contains(r.Acceptances[0].Why, "before collection on") {
+		t.Fatalf("read after it expired: %+v", r.Acceptances)
+	}
+	for _, f := range r.Findings {
+		if f.ID == finding.IDGitHubMFANotRequired && f.Status != finding.StatusOpen {
+			t.Fatalf("the finding an expired acceptance covered is %s", f.Status)
+		}
+	}
+}
+
+// A finding whose reads carry no recorded time leaves its acceptance
+// undecided and the finding open: no other clock stands in.
+func TestAcceptanceWithNoReadTimeIsUndecided(t *testing.T) {
+	in := githubAccessFiredReport(t)
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubMFANotRequired, Asset: "engineering", AssetID: githubAccessOrg, Reason: "transition", AcceptedBy: "alex", Expires: "2099-01-01"}}
+	for id := range in.Observations {
+		in.Observations[id] = Observation{}
+	}
+	r := Build(in)
+	if len(r.Acceptances) != 1 || r.Acceptances[0].Outcome != "rule_not_decided" {
+		t.Fatalf("acceptances %+v", r.Acceptances)
+	}
+	for _, f := range r.Findings {
+		if f.ID == finding.IDGitHubMFANotRequired && f.Status != finding.StatusOpen {
+			t.Fatalf("finding %s", f.Status)
+		}
+	}
+}
+
+// One acceptance over instances read at different times is decided at one
+// time for its outcome and every instance alike: the latest read, or
+// undecided when any instance's read has no recorded time.
+func TestAcceptanceOverInstancesReadAtDifferentTimes(t *testing.T) {
+	mixed := func(late time.Time) Input {
+		in := githubAccessFiredReport(t)
+		second := in.Assets[0].Judged[1]
+		if second.ID != finding.IDGitHubOwnerWithoutMFA {
+			t.Fatalf("fixture order: %s", second.ID)
+		}
+		second.Subject = Subject{Kind: "account", Key: "second", Label: "second", ProviderID: "45"}
+		second.Reads = []string{"late-read"}
+		in.Assets[0].Judged = append(in.Assets[0].Judged, second)
+		in.Observations["late-read"] = Observation{CollectedAt: late}
+		day := in.Started.In(in.Zone).Format(time.DateOnly)
+		in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubOwnerWithoutMFA, Asset: "engineering", AssetID: githubAccessOrg, Reason: "r", AcceptedBy: "alex", Expires: day}}
+		return in
+	}
+	statuses := func(r *Report) []string {
+		var out []string
+		for _, f := range r.Findings {
+			if f.ID == finding.IDGitHubOwnerWithoutMFA {
+				out = append(out, f.Status)
+			}
+		}
+		return out
+	}
+	// Read again three days on: past the end, for the outcome and both.
+	in := mixed(time.Time{})
+	in.Observations["late-read"] = Observation{CollectedAt: in.Started.Add(72 * time.Hour)}
+	r := Build(in)
+	if r.Acceptances[0].Outcome != "expired" || !slices.Equal(statuses(r), []string{"open", "open"}) {
+		t.Fatalf("expired between reads: %s %v", r.Acceptances[0].Outcome, statuses(r))
+	}
+	// One read with no recorded time: undecided, and both open.
+	in = mixed(time.Time{})
+	r = Build(in)
+	if r.Acceptances[0].Outcome != "rule_not_decided" || !slices.Equal(statuses(r), []string{"open", "open"}) {
+		t.Fatalf("one untimed read: %s %v", r.Acceptances[0].Outcome, statuses(r))
+	}
+}
+
+// An instance another finding supersedes is no finding: it sets no time
+// for the acceptance and is not listed as one of its findings.
+func TestSupersededInstanceSetsNoAcceptanceTime(t *testing.T) {
+	in := githubAccessFiredReport(t)
+	hidden := in.Assets[0].Judged[1]
+	hidden.Subject = Subject{Kind: "account", Key: "hidden", Label: "hidden", ProviderID: "46"}
+	hidden.Reads = []string{"late-read"}
+	hidden.Details = map[string]any{"superseded_by": "another finding"}
+	in.Assets[0].Judged = append(in.Assets[0].Judged, hidden)
+	in.Observations["late-read"] = Observation{CollectedAt: in.Started.Add(72 * time.Hour)}
+	day := in.Started.In(in.Zone).Format(time.DateOnly)
+	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubOwnerWithoutMFA, Asset: "engineering", AssetID: githubAccessOrg, Reason: "r", AcceptedBy: "alex", Expires: day}}
+	r := Build(in)
+	if a := r.Acceptances[0]; a.Outcome != "applied" || len(a.Findings) != 1 {
+		t.Fatalf("acceptance %+v", a)
+	}
+	// Unrecorded, it still decides nothing.
+	delete(in.Observations, "late-read")
+	if a := Build(in).Acceptances[0]; a.Outcome != "applied" {
+		t.Fatalf("acceptance %+v", a)
 	}
 }

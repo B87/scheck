@@ -369,6 +369,10 @@ type FindingAccept struct {
 	Expires             *string `json:"expires"`
 	Expired             bool    `json:"expired"`
 	CoversEveryInstance bool    `json:"covers_every_instance"`
+	// JudgedAt is the collection time its expiry was read at: the latest
+	// read the finding cites, or for a host the start of the session that
+	// collected it (docs/spec/engagement.md, "Severity in context").
+	JudgedAt *time.Time `json:"judged_at"`
 }
 
 // Rule is what produced a finding and every input it read.

@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -45,7 +46,27 @@ func graded(in Input, more ...func(*severity.Declarations)) Input {
 			j.Chain = severity.Grade(*j, owner, d)
 		}
 	}
+	observeReads(&in)
 	return in
+}
+
+// observeReads records, as the run does from the gate, when each read a
+// judgment cites was collected; a fixture that says nothing read it at the
+// run's start.
+func observeReads(in *Input) {
+	in.Observations = maps.Clone(in.Observations)
+	if in.Observations == nil {
+		in.Observations = map[string]Observation{}
+	}
+	for _, a := range in.Assets {
+		for _, j := range a.Judged {
+			for _, r := range j.Reads {
+				if _, ok := in.Observations[r]; !ok {
+					in.Observations[r] = Observation{CollectedAt: in.Started}
+				}
+			}
+		}
+	}
 }
 
 // build is Build over a graded input.

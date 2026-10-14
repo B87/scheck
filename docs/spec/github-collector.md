@@ -270,7 +270,7 @@ Unknown privilege never erases affirmative access. An aggregate absence judgment
 still requires every applicable trusted population complete.
 
 Former-person access compares every declared GitHub login. The declared departure
-date must be strictly before the current date in the engagement timezone. Retired
+date must have passed in the engagement timezone at the collection time of the read that observed the account: the members or collaborators read, or where the page that held an item is not recorded, the earliest read of that population. Absence is disproved as of the earliest read of the population. A date that passed at the latest read but not the earliest abstains ("left date *d* falls within or after collection; re-run after *d*"), and a read with no recorded collection time abstains. The excerpt and any readout note name that read (`engagement.md`, "Severity in context", "Time"). Retired
 service accounts are included. A null invitation login cannot match a person and prevents an offboarding absence
 claim, even after full pagination. An invitation grants possible future access, not
 a current admin role. An observed owner establishes current access even when the
@@ -293,8 +293,8 @@ built in E5 step 3.
 | Unexpected owner | Known owner outside declared expected handles | Owner matches expectation | Tenant absent from `access.admins`, unknown match or role |
 | Unattributed admin | Recognized admin with no declared person match, under the engagement's attribution conditions | Login matches a declared person | No relevant people identifiers or unknown privilege |
 | Contractor or shared admin | Recognized admin attributed to either kind | Known other kind or nonadmin | Role or attribution unavailable |
-| Former person retains access | Passed declared leaving date and membership or collaboration remains | Complete applicable populations establish absence | Future departure, no login or partial population |
-| Former person invited | Passed declared leaving date and matching pending invitation remains | Complete trusted invitation population establishes absence | Future departure, no login, null invitation login or partial population |
+| Former person retains access | Declared leaving date passed at the observing read, and membership or collaboration remains | Complete applicable populations establish absence as of their earliest read | Future departure at the observing read, date within collection, no recorded collection time, no login or partial population |
+| Former person invited | Declared leaving date passed at the observing read, and matching pending invitation remains | Complete trusted invitation population establishes absence as of its earliest read | Future departure at the observing read, date within collection, no recorded collection time, no login, null invitation login or partial population |
 | Too many owners | Engagement threshold reached; partial counts may establish only an absolute lower bound | Complete population below threshold | Partial unresolved population; no incomplete ratio |
 | Undeclared public repository | Explicit public visibility without `public:true` | Private/internal or declared public | Unknown visibility |
 | Broad default member permission | Verified owner-visible explicit write/admin | Verified owner-visible explicit none/read | Non-owner, missing or unrecognized setting |

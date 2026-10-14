@@ -94,9 +94,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                    sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
 
 Accepted (not counted as open)
-   low     Software updates are pending (macos): accepted by alice until 2026-10-19 (expires in 12
-     days): "patch window" (intent.accepted_risks[0]). Covers every instance of this id on this
-     asset.
+   low     Software updates are pending (macos): accepted by alice until 2026-10-19 (12 days after
+     collection on 2026-10-07): "patch window" (intent.accepted_risks[0]). Covers every instance of
+     this id on this asset.
 
 IF YOU DECIDE NOT TO FIX A FINDING
 Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
@@ -140,7 +140,7 @@ WHAT LEFT THIS MACHINE
 
 NOTES FOR THE READOUT
   The acceptance of "Software updates are pending" on macos by alice (intent.accepted_risks[0]): it
-    expires on 2026-10-19, in 12 days.
+    expires on 2026-10-19, 12 days after collection on 2026-10-07.
   The acceptance of "FileVault disk encryption is off" on macos by alice (intent.accepted_risks[1]):
     its rule found no instance in everything it read: likely fixed. Confirm, then remove the entry.
   The acceptance of "sshd accepts password authentication" on macos by alice

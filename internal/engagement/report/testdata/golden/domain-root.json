@@ -1121,6 +1121,7 @@
         "entry": "engagement.yaml intent.accepted_risks[0]",
         "expired": false,
         "expires": "2027-03-01",
+        "judged_at": "2026-10-07T07:12:03Z",
         "reason": "the old mail host is ours until March"
       },
       "adjustments": [],

@@ -29,13 +29,18 @@ type builder struct {
 	// applying maps "<asset id>\x00<finding id>" to the acceptance the host
 	// grader applied: the last entry without a subject.
 	applying map[string]AcceptanceInput
-	r        *Report
+	// acceptedAt is, by entry, the collection time an acceptance whose
+	// finding was matched had its expiry judged at.
+	acceptedAt map[string]time.Time
+	// entryAt memoizes acceptanceAt by entry.
+	entryAt map[string]time.Time
+	r       *Report
 }
 
 // Build assembles the report from a run's collections. It never fails: an
 // asset that was not read is a coverage gap and an exit code, not an error.
 func Build(in Input) *Report {
-	b := &builder{in: in, zone: in.Zone, hosts: map[string]*hostView{}, applying: map[string]AcceptanceInput{}}
+	b := &builder{in: in, zone: in.Zone, hosts: map[string]*hostView{}, applying: map[string]AcceptanceInput{}, acceptedAt: map[string]time.Time{}, entryAt: map[string]time.Time{}}
 	if b.zone == nil {
 		b.zone = time.UTC
 	}
@@ -235,11 +240,14 @@ func (b *builder) acceptances() {
 		if kind != "" {
 			b.note(kind, acc.Entry, out.Why)
 		}
-		switch days := b.daysLeft(acc.Expires, acc.AssetID); {
+		// An acceptance whose finding was not matched has no time its
+		// expiry is judged at; its date is printed and nothing else.
+		at, judged := b.acceptedAt[acc.Entry]
+		switch days := calendarDays(at, acc.Expires, b.zone); {
 		case acc.Expires == "" && out.Outcome != "not_matched":
 			b.note("acceptance_without_expiry", acc.Entry, "it has no expiry date, so nobody is asked to look at it again")
-		case out.Outcome != "expired" && days >= 0 && days <= 30:
-			b.note("acceptance_expiring", acc.Entry, fmt.Sprintf("it expires on %s, in %d days", acc.Expires, days))
+		case judged && out.Outcome != "expired" && days >= 0 && days <= 30:
+			b.note("acceptance_expiring", acc.Entry, fmt.Sprintf("it expires on %s, %s after collection on %s", acc.Expires, count(days, "day", "days"), b.day(at)))
 		}
 	}
 }
@@ -275,8 +283,10 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 		if applied := b.applying[acc.AssetID+"\x00"+acc.ID]; applied.Entry != acc.Entry {
 			return "not_applied", "a later entry for the same id applies: " + applied.Entry
 		}
-		if b.expired(acc.Expires, acc.AssetID) {
-			return "expired", "expired " + acc.Expires + "; the finding is open again"
+		at := b.readAt(acc.AssetID, nil)
+		b.acceptedAt[acc.Entry] = at
+		if b.expired(acc.Expires, at) {
+			return "expired", "expired " + acc.Expires + ", before collection on " + b.day(at) + "; the finding is open again"
 		}
 		return "applied", ""
 	case ea.Status == finding.NotMatched && ea.Complete:
@@ -289,29 +299,45 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 		"whether the problem is still there"
 }
 
-// expired reads an acceptance's date in engagement.timezone against the
-// collection time of the asset it names (docs/spec/engagement.md,
-// "Accepted risks"), as its grader did.
-func (b *builder) expired(date, asset string) bool {
-	return operator.Risk{Expires: date, Zone: b.zone}.Expired(b.gradedAt(asset))
+// expired reads an acceptance's date in engagement.timezone against at,
+// the collection time of what the matched finding rests on
+// (docs/spec/engagement.md, "Accepted risks", "Severity in context").
+func (b *builder) expired(date string, at time.Time) bool {
+	return operator.Risk{Expires: date, Zone: b.zone}.Expired(at)
 }
 
-// daysLeft is how many calendar days remain before date ends, in the
-// engagement's zone, from the asset's collection date; negative once it
-// has passed.
-func (b *builder) daysLeft(date, asset string) int {
-	return calendarDays(b.gradedAt(asset), date, b.zone)
+// readAt is the collection time a finding's acceptance is judged at: the
+// latest of the reads it cites; for a host, the start of the session that
+// collected it. Zero when it cites no read with a recorded time: then no
+// clock decides the acceptance, and the finding stays open.
+func (b *builder) readAt(asset string, reads []string) time.Time {
+	if at := b.gradedAt(asset); !at.IsZero() {
+		return at
+	}
+	var at time.Time
+	for _, r := range reads {
+		if meta, ok := b.in.Observations[r]; ok && meta.CollectedAt.After(at) {
+			at = meta.CollectedAt
+		}
+	}
+	return at
+}
+
+// current says an acceptance holds at at: a collection time is recorded
+// and its date had not ended then.
+func (b *builder) current(date string, at time.Time) bool {
+	return !at.IsZero() && !b.expired(date, at)
 }
 
 // gradedAt is when the host asset was graded, a resumed run's sessions
-// apart; the run's start for anything else.
+// apart; zero for anything else.
 func (b *builder) gradedAt(asset string) time.Time {
 	for _, a := range b.in.Assets {
-		if a.ID == asset && a.Host != nil && !a.Host.Graded.IsZero() {
-			return a.Host.Graded
+		if a.ID == asset && a.Host != nil {
+			return cmp.Or(a.Host.Graded, b.in.Started)
 		}
 	}
-	return b.in.Started
+	return time.Time{}
 }
 
 // calendarDays counts the days from at's date in zone to date, as calendar
@@ -325,6 +351,9 @@ func calendarDays(at time.Time, date string, zone *time.Location) int {
 	return int(d.Sub(time.Date(y, m, day, 0, 0, 0, 0, time.UTC)).Hours() / 24)
 }
 
+// day is a collection time's date in engagement.timezone.
+func (b *builder) day(at time.Time) string { return at.In(b.zone).Format(time.DateOnly) }
+
 func (b *builder) note(kind, source, detail string) {
 	b.r.Notes = append(b.r.Notes, Note{Kind: kind, Source: source, Detail: detail})
 }
@@ -335,7 +364,8 @@ func (b *builder) findingAcceptance(asset, id, reason string) *FindingAccept {
 	if !ok {
 		return &FindingAccept{Reason: reason, Expires: nil, CoversEveryInstance: true}
 	}
-	fa := &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: true}
+	at := b.readAt(asset, nil)
+	fa := &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: true, JudgedAt: &at}
 	if acc.Expires != "" {
 		e := acc.Expires
 		fa.Expires = &e

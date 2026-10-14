@@ -7,6 +7,7 @@ import (
 
 	githubc "github.com/b87/scheck/internal/collector/github"
 	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // Readout notes consume declarations whose correctness cannot be decided by
@@ -16,8 +17,12 @@ func (r *run) githubPeopleNotes(asset string, e githubc.Evidence, judged []githu
 	add := func(kind, source, detail string) {
 		notes = append(notes, ereport.Note{Kind: kind, Source: source, Detail: detail})
 	}
-	today := r.session.In(r.zone).Format("2006-01-02")
-	passed := func(date string) bool { return date != "" && date < today }
+	// A declared date is judged at the reads that observed the account,
+	// as the leaver rule judges it (docs/spec/engagement.md, "Severity in
+	// context").
+	passed := func(date string) bool {
+		return finding.LeftAt(date, r.zone, githubc.ReadTimes(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads)) == finding.LeftPassed
+	}
 	owner := func(login string) bool {
 		return slices.ContainsFunc(e.Owners.Items, func(a githubc.Account) bool { return strings.EqualFold(a.Login, login) })
 	}

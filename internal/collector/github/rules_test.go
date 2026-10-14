@@ -3,18 +3,24 @@ package github
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/b87/scheck/internal/finding"
 )
 
+// ruleRead is when the test populations were read: a declared date before
+// 2026-10-10 has passed at it.
+var ruleRead = time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+
 func rulePop[T any](items ...T) Population[T] {
-	return Population[T]{Items: items, Complete: true, VisibilityComplete: true, Reads: []Read{{RequestID: "read", Status: 200, Decision: "sent"}}}
+	return Population[T]{Items: items, Complete: true, VisibilityComplete: true, Reads: []Read{{RequestID: "read", Status: 200, Decision: "sent", ObservedAt: ruleRead}}}
 }
 func ruleFixture() (Evidence, Context) {
 	a := Account{ID: 1, Login: "alice", Type: "User"}
 	e := Evidence{OwnerAuthority: true, OrganizationRead: Read{Status: 200, Decision: "sent", RequestID: "org"}, Organization: &OrganizationObject{TwoFactorRequirementEnabled: new(true), DefaultRepositoryPermission: new("read")}, Members: rulePop(a), Owners: rulePop(a), OutsideCollaborators: rulePop[Account](), Invitations: rulePop[Invitation](), MembersWithoutMFA: rulePop[Account](), OwnersWithoutMFA: rulePop[Account]()}
-	c := Context{OrganizationAsset: "saas:github:acme", Today: "2026-10-10", People: []Person{{Handle: "alice", Kind: "employee", GitHub: []string{"alice"}}}, OwnersDeclared: true, ExpectedOwners: []string{"alice"}, RepositoryContexts: map[string]RepositoryContext{"repo:github:acme/shop": {DeploysTo: "production", Source: "assets.repo.deploys_to"}}}
+	c := Context{OrganizationAsset: "saas:github:acme", Zone: time.UTC, People: []Person{{Handle: "alice", Kind: "employee", GitHub: []string{"alice"}}}, OwnersDeclared: true, ExpectedOwners: []string{"alice"}, RepositoryContexts: map[string]RepositoryContext{"repo:github:acme/shop": {DeploysTo: "production", Source: "assets.repo.deploys_to"}}}
 	e.RepositoriesAccess = []RepositoryAccess{{Asset: "repo:github:acme/shop", RepositoryRead: Read{Status: 200, Decision: "sent", RequestID: "repo"}, Repository: &Repository{ID: 10, FullName: "acme/shop", Visibility: new("private")}, Collaborators: rulePop(Collaborator{Account: a, RoleName: new("admin"), Permissions: &Permissions{Admin: new(true)}}), DeployKeys: rulePop(DeployKey{ID: 7, ReadOnly: new(true)})}}
 	return e, c
 }
@@ -275,7 +281,7 @@ func TestFormerOwnerPresenceSurvivesUnavailableMembers(t *testing.T) {
 	e.Members.Items = nil
 	e.Members.Complete = false
 	e.RepositoriesAccess = nil
-	e.Owners.Reads = []Read{{Status: 200, Decision: "sent", RequestID: "owners-proof"}}
+	e.Owners.Reads = []Read{{Status: 200, Decision: "sent", RequestID: "owners-proof", ObservedAt: ruleRead}}
 	var found bool
 	for _, j := range JudgeAccess(e, c) {
 		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
@@ -361,5 +367,108 @@ func TestJudgeRunsEveryFamily(t *testing.T) {
 	want := slices.Concat(JudgeAccess(e, c), JudgeCI(e, c), JudgeAlerts(e, c), JudgeHistory(e))
 	if got := Judge(e, c); !reflect.DeepEqual(got, want) {
 		t.Fatalf("%d judgments, want %d", len(got), len(want))
+	}
+}
+
+// A leaving date is judged at the reads a leaver judgment rests on, never
+// the session's start: a presence at the reads that observed the account,
+// an absence at the earliest of the population's; a date that passed
+// between them, or a read with no recorded time, abstains
+// (docs/spec/engagement.md, "Severity in context").
+func TestLeaverIsJudgedAtTheReadsTime(t *testing.T) {
+	leaver := func(e Evidence, c Context, asset string) Judgment {
+		t.Helper()
+		for _, j := range JudgeAccess(e, c) {
+			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Asset == asset {
+				return j
+			}
+		}
+		t.Fatalf("no leaver judgment on %s", asset)
+		return Judgment{}
+	}
+	e, c := ruleFixture()
+	c.People[0].Left = "2026-10-09"
+	j := leaver(e, c, c.OrganizationAsset)
+	if j.Verdict != Fired || !strings.Contains(j.Excerpt, "observed in a read of 2026-10-10") {
+		t.Fatalf("passed at the read: %+v", j)
+	}
+	// Read on the leaving day itself: not yet passed, whatever later
+	// session judges it.
+	c.People[0].Left = "2026-10-10"
+	if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Abstained || j.Reason != "leaving_date_not_passed" {
+		t.Fatalf("not passed at the read: %+v", j)
+	}
+	// One page read before the date passed, one after: within collection.
+	c.People[0].Left = "2026-10-09"
+	e.Members.Reads = append(e.Members.Reads, Read{RequestID: "read-early", Status: 200, Decision: "sent", ObservedAt: ruleRead.Add(-36 * time.Hour)})
+	if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+		t.Fatalf("passed during collection: %+v", j)
+	}
+	// A read with no recorded time is never judged at another clock.
+	e.Members.Reads[1].ObservedAt = time.Time{}
+	if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Abstained || j.Reason != finding.ReasonNoCollectionTime {
+		t.Fatalf("no collection time: %+v", j)
+	}
+	// An absence is as current as the earliest read of the population.
+	e, c = ruleFixture()
+	c.People[0].Left, c.People[0].GitHub = "2026-10-09", []string{"gone"}
+	if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Disproved || !strings.Contains(j.Excerpt, "no access observed as of 2026-10-10 (earliest of the population's reads)") {
+		t.Fatalf("absence: %+v", j)
+	}
+	e.Invitations.Reads[0].ObservedAt = ruleRead.Add(-36 * time.Hour)
+	if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+		t.Fatalf("absence partly read before the date: %+v", j)
+	}
+	// The zone decides when a date ends: 2026-10-10 01:00 UTC is still
+	// 2026-10-09 in New York.
+	if ny, err := time.LoadLocation("America/New_York"); err == nil {
+		e, c = ruleFixture()
+		c.People[0].Left, c.Zone = "2026-10-09", ny
+		for _, pop := range []*Population[Account]{&e.Members, &e.Owners} {
+			pop.Reads[0].ObservedAt = time.Date(2026, 10, 10, 1, 0, 0, 0, time.UTC)
+		}
+		if j := leaver(e, c, c.OrganizationAsset); j.Verdict != Abstained || j.Reason != "leaving_date_not_passed" {
+			t.Fatalf("in New York: %+v", j)
+		}
+	}
+}
+
+// Nothing read keeps the leaver rule's own reason; an owner whose leaving
+// date is ambiguous at the owners reads is not judged as current.
+func TestLeaverWithNothingReadAndAmbiguousOwner(t *testing.T) {
+	e, c := ruleFixture()
+	c.People[0].Left, c.People[0].GitHub = "2026-10-09", []string{"gone"}
+	refused := []Read{{RequestID: "refused", Decision: "refused", Reason: "refused"}}
+	for _, pop := range []*Population[Account]{&e.Members, &e.Owners, &e.OutsideCollaborators} {
+		pop.Items, pop.Reads, pop.Complete = nil, refused, false
+	}
+	e.Invitations.Reads, e.Invitations.Complete = refused, false
+	e.RepositoriesAccess[0].Collaborators.Reads, e.RepositoriesAccess[0].Collaborators.Complete = refused, false
+	seen := map[string]bool{}
+	for _, j := range JudgeAccess(e, c) {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess || j.ID == finding.IDIdentityFormerPersonInvited {
+			seen[j.ID] = true
+			if j.Verdict != Abstained || j.Reason != "insufficient_evidence" {
+				t.Fatalf("nothing read: %+v", j)
+			}
+		}
+	}
+	if !seen[finding.IDIdentityFormerPersonHasAccess] || !seen[finding.IDIdentityFormerPersonInvited] {
+		t.Fatalf("nothing read: judgments %v", seen)
+	}
+	e, c = ruleFixture()
+	c.People[0].Left = "2026-10-09"
+	e.Owners.Reads = append(e.Owners.Reads, Read{RequestID: "owners-early", Status: 200, Decision: "sent", ObservedAt: ruleRead.Add(-36 * time.Hour)})
+	found := false
+	for _, j := range JudgeAccess(e, c) {
+		if j.ID == finding.IDIdentityUnexpectedAdmin {
+			found = true
+			if j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+				t.Fatalf("ambiguous owner: %+v", j)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no unexpected-admin judgment")
 	}
 }

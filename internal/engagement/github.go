@@ -295,7 +295,7 @@ func githubTarget(id string) githubc.RepositoryTarget {
 	return githubc.RepositoryTarget{Asset: id, Owner: owner, Name: name}
 }
 func (r *run) githubContext(a ResolvedAsset) githubc.Context {
-	c := githubc.Context{OrganizationAsset: a.ID, Today: r.session.In(r.zone).Format("2006-01-02"), RepositoryContexts: map[string]githubc.RepositoryContext{}}
+	c := githubc.Context{OrganizationAsset: a.ID, Zone: r.zone, RepositoryContexts: map[string]githubc.RepositoryContext{}}
 	keys := sortedKeys(r.res.People)
 	for _, h := range keys {
 		p := r.res.People[h]

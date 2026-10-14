@@ -42,7 +42,7 @@
       "id": "fw.app_firewall_disabled",
       "outcome": "expired",
       "subject": null,
-      "why": "expired 2026-10-01; the finding is open again"
+      "why": "expired 2026-10-01, before collection on 2026-10-07; the finding is open again"
     },
     {
       "accepted_by": "alice",
@@ -711,6 +711,7 @@
         "entry": "engagement.yaml intent.accepted_risks[0]",
         "expired": false,
         "expires": "2026-10-19",
+        "judged_at": "2026-10-07T07:12:03Z",
         "reason": "patch window"
       },
       "adjustments": [],
@@ -762,7 +763,7 @@
   "incomplete": [],
   "notes": [
     {
-      "detail": "it expires on 2026-10-19, in 12 days",
+      "detail": "it expires on 2026-10-19, 12 days after collection on 2026-10-07",
       "kind": "acceptance_expiring",
       "source": "engagement.yaml intent.accepted_risks[0]"
     },

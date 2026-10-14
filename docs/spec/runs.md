@@ -102,7 +102,7 @@ written. `scheck run <directory>` resumes:
   maximum is compiled in and no setting widens it. It applies to every observation a
   resume would keep: the Scope document, a host's envelope and the gate ledger's
   successes. Age is measured from the observation's own collection time to the start of
-  the resuming session. An expired observation is collected again, never an error. When
+  the resuming session. An observation with no recorded collection time (a zero time) counts as expired. An expired observation is collected again, never an error. When
   collecting it again fails, the asset is *failed* or *unread* for that part and the old
   data is not reported in its place. The report prints the oldest collection date of the
   observations each asset rests on ([report.md](report.md), "Coverage").
@@ -152,16 +152,14 @@ written. `scheck run <directory>` resumes:
   or unknown-to-known transition is not reported as a changed principal. Unknown principals reuse no earlier
   authenticated successes; retained inventory preserves its original observation
   time and is not current access validation.
-  The report prints the collection span from the run's first start, and time-based
-  rules (stale accounts, expiries) are computed against collection time: scope and
-  first-party confirmations are read at the start of the session that reads them, and a
-  host's accepted risks at the start of the session that collected it. From E9 step 1d
-  every time-dependent rule is judged against the collection time of the observation it
-  reads, not the session start: a left date has passed when that read's collection time
-  is after 24:00 of the date in `engagement.timezone`; stale and never-signed-in accounts
-  use the users read; a certificate's expiry and its 14-day window use the TLS read;
-  an acceptance's expiry uses the collection time of the asset it names. Step 8 adds
-  only the 7-day maximum.
+  The report prints the collection span from the run's first start. Scope and
+  first-party confirmations are read at the start of the session that reads them.
+  Every time-dependent rule is judged at the collection time of the read it is about
+  (a host's accepted risks at the start of the session that collected it), never the
+  session start or the render time, and the excerpt names that moment; the rules and their reads are the table in `engagement.md`, "Severity in
+  context", "Time". A read with no recorded collection time makes the rule abstain
+  ("collection time not recorded"). Step 8 adds the 7-day maximum, and a zero
+  collection time counts as expired on resume (planned, not built).
 
 `scheck run <directory>` resolves a path that reaches the directory
 through a link, locks the directory and exits 3 when it is locked; when it holds no
@@ -250,8 +248,9 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
   reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An
-  acceptance's outcome and its "expires in N days" are decided at the time the host it
-  names was graded, the start of the session that collected it. A kept host's asset
+  acceptance's outcome and its dated expiry wording ("until <date> (<N> days after
+  collection on <date>)") are decided at the host's collection, the start of the
+  session that collected it. A kept host's asset
   carries `kept: true`; its captures were never stored, so `--include-evidence` adds no
   `evidence` to its envelope rather than empty captures that would read as a command
   that printed nothing.

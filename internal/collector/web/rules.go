@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
@@ -56,13 +55,17 @@ type Gap struct {
 	Reason, Detail string
 }
 
+// ReasonNoCollectionTime is a time-dependent rule's abstention when the read
+// it judges carries no collection time: it is never judged at the session's
+// time instead (docs/spec/engagement.md, "Severity in context").
+const ReasonNoCollectionTime = finding.ReasonNoCollectionTime
+
 // Input is what the rules judge under one domain root: the names Scope
 // looked up and what it could not list, whether the resolver answers names
 // that do not exist, and what Recon read.
 type Input struct {
 	Vantage      string
 	Restricted   []Restriction
-	Now          time.Time
 	URLAssets    []URLAsset
 	Asset, Root  string
 	MailPolicies []MailEvidence

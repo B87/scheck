@@ -78,13 +78,13 @@ type OAuthEvidence struct {
 // highest-stakes and active accounts first. A result the gate says every
 // later account would repeat (the optional token refused, binding gone)
 // stops the sequence after it is recorded once.
-func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, view Context, views []accountView) {
+func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, views []accountView) {
 	e.OAuth.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceOAuthGrants)
 	if !e.OAuth.Selected {
 		return
 	}
 	complete := e.Users.Complete
-	all := readAccounts(views, view, func(v accountView) bool {
+	all := readAccounts(views, func(v accountView) bool {
 		r := sender.Send(ctx, gate.Request{Op: OpUserTokens, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": v.user.ID}})
 		account := grantsOf(v.user.ID, r)
 		e.OAuth.Accounts = append(e.OAuth.Accounts, account)

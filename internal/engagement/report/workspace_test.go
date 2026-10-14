@@ -147,7 +147,7 @@ func workspaceTwoStepReport(t *testing.T) Input {
 	for i, u := range users {
 		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
 	}
-	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC, MFA: "everyone", MFASource: "access.mfa[0]"}
+	c := workspace.Context{Zone: time.UTC, MFA: "everyone", MFASource: "access.mfa[0]"}
 	for _, j := range workspace.Judge(e, a.ID, c) {
 		if j.ID == workspace.IDTwoStepNotEnforced || j.ID == workspace.IDAdminWithoutTwoStep {
 			a.Judged = append(a.Judged, j)
@@ -241,7 +241,7 @@ func workspaceOAuthReport(t *testing.T) Input {
 		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
 		e.OAuth.Accounts = append(e.OAuth.Accounts, workspace.AccountGrants{ID: u.ID, Read: workspace.Read{Op: workspace.OpUserTokens, RequestID: fmt.Sprintf("g%06d", 20+i), Decision: "sent", Status: 200}, Grants: grants[u.ID], Usable: true, Complete: true})
 	}
-	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC}
+	c := workspace.Context{Zone: time.UTC}
 	for _, j := range workspace.Judge(e, a.ID, c) {
 		if j.ID == workspace.IDOAuthBroadScope {
 			a.Judged = append(a.Judged, j)
@@ -364,7 +364,7 @@ func workspaceMailInput(t *testing.T, change func(*workspace.Evidence)) Input {
 	if change != nil {
 		change(&e)
 	}
-	c := workspace.Context{AssessedAt: in.Started, Zone: time.UTC, MailApproval: &workspace.MailApproval{By: "CEO, Example Ltd", Date: "2026-10-06", Expires: "2027-01-04", Current: true}}
+	c := workspace.Context{Zone: time.UTC, MailApproval: &workspace.MailApproval{By: "CEO, Example Ltd", Date: "2026-10-06", Expires: "2027-01-04", Current: true}}
 	a.Judged = workspace.Judge(e, a.ID, c)
 	a.InventoryNotes = a.InventoryNotes[:1]
 	for _, n := range workspace.Readout(e, a.ID, c) {

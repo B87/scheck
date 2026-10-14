@@ -19,12 +19,17 @@ const (
 // Context carries explicit operator declarations; attribution never guesses from names.
 // docs/spec/github-collector.md, "Context and subjects".
 type Context struct {
-	OrganizationAsset, Today string
-	People                   []Person
-	ExpectedOwners           []string
-	OwnersDeclared           bool
-	MFA, MFASource           string
-	RepositoryContexts       map[string]RepositoryContext
+	OrganizationAsset string
+	// Zone is engagement.timezone, in which a declared date passes at
+	// 24:00; a date is judged at the collection time of the reads a rule
+	// rests on, never the session's start (docs/spec/engagement.md,
+	// "Severity in context").
+	Zone               *time.Location
+	People             []Person
+	ExpectedOwners     []string
+	OwnersDeclared     bool
+	MFA, MFASource     string
+	RepositoryContexts map[string]RepositoryContext
 }
 type Person struct {
 	Handle, Kind, Left string
@@ -112,10 +117,53 @@ func settle(j *Judgment, fires bool, known bool, excerpt string) {
 		j.Verdict = Fired
 	}
 }
-func passed(left, today string) bool {
-	l, e := time.Parse("2006-01-02", left)
-	t, f := time.Parse("2006-01-02", today)
-	return e == nil && f == nil && l.Before(t)
+
+// ReadTimes are the collection times of the reads that returned a
+// response: a time-dependent rule is judged at them. A response with no
+// recorded time is a zero, which finding.LeftAt reads as unknown.
+func ReadTimes(rs ...[]Read) []time.Time {
+	var out []time.Time
+	for _, set := range rs {
+		for _, r := range set {
+			if r.Status != 0 {
+				out = append(out, r.ObservedAt)
+			}
+		}
+	}
+	return out
+}
+
+// leftAt is when a declared leaving date passed relative to the reads.
+func leftAt(left string, c Context, rs ...[]Read) finding.Leaving {
+	return finding.LeftAt(left, c.Zone, ReadTimes(rs...))
+}
+
+// leftReason is a leaver judgment's abstention when the date had not
+// passed at the earliest read it rests on; with nothing read, reason, the
+// judgment's own for missing evidence, stands.
+func leftReason(l finding.Leaving, reason string) string {
+	switch l {
+	case finding.LeftWithin:
+		return finding.ReasonLeftDuringCollection
+	case finding.LeftUnknown:
+		return finding.ReasonNoCollectionTime
+	case finding.LeftUnread:
+		return reason
+	}
+	return "leaving_date_not_passed"
+}
+
+// leftAmbiguous says a declared leaving date neither passed nor not-passed
+// at the reads: a rule that turns on it abstains rather than judge the
+// account as a current person's.
+func leftAmbiguous(l finding.Leaving) bool {
+	return l == finding.LeftWithin || l == finding.LeftUnknown
+}
+
+// asOf names the earliest read a leaver judgment rests on, in the zone.
+func asOf(c Context, rs ...[]Read) string {
+	first, _, _ := finding.Span(ReadTimes(rs...))
+	return finding.ReadDate(first, c.Zone)
 }
 func production(c Context, asset string) bool {
 	return c.RepositoryContexts[asset].DeploysTo == "production"
@@ -231,8 +279,14 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 	}
 	out := []Judgment{m}
 	u := judgment(finding.IDIdentityUnexpectedAdmin, c.OrganizationAsset, accountSubject(a, c), reads)
-	if p != nil && passed(p.Left, c.Today) {
+	left := finding.LeftNotPassed
+	if p != nil && p.Left != "" {
+		left = leftAt(p.Left, c, e.Owners.Reads)
+	}
+	if left == finding.LeftPassed {
 		u.Reason = "departed_owner_reported_by_offboarding"
+	} else if leftAmbiguous(left) {
+		u.Reason = leftReason(left, u.Reason)
 	} else if p != nil && c.OwnersDeclared {
 		expected := slices.Contains(c.ExpectedOwners, p.Handle)
 		settle(&u, !expected, !expected || complete(e.Owners), describeAccount(a)+" is an organization owner")
@@ -309,11 +363,15 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 		for _, login := range p.GitHub {
 			a := Account{Login: strings.ToLower(login)}
 			present := false
-			for _, pop := range [][]Account{e.Members.Items, e.Owners.Items, e.OutsideCollaborators.Items} {
-				for _, v := range pop {
+			// held are the reads of the populations that list the account.
+			var held [][]Read
+			for _, pop := range []Population[Account]{e.Members, e.Owners, e.OutsideCollaborators} {
+				for _, v := range pop.Items {
 					if strings.EqualFold(v.Login, login) {
 						a = v
 						present = true
+						held = append(held, pop.Reads)
+						break
 					}
 				}
 			}
@@ -322,38 +380,46 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			for _, repo := range e.RepositoriesAccess {
 				full = full && complete(repo.Collaborators)
 			}
-			makeAccess := func(asset string, account Account, reads []string, present, admin bool) Judgment {
+			// A presence is judged at the reads that observed the account,
+			// an absence at the earliest of the whole population's: either
+			// needs the leaving date passed at the earliest of them
+			// (docs/spec/engagement.md, "Severity in context").
+			makeAccess := func(asset string, account Account, reads []string, present, admin bool, at ...[]Read) Judgment {
 				j := judgment(finding.IDIdentityFormerPersonHasAccess, asset, accountSubject(account, c), reads)
 				j.Sources = source
 				j.NotChecked = []string{"Accounts renamed after declaration; undeclared logins; credential or session usability"}
-				if passed(p.Left, c.Today) {
-					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left)
+				if l := leftAt(p.Left, c, at...); l == finding.LeftPassed {
+					seen := "; account observed in a read of " + asOf(c, at...)
+					if !present {
+						seen = "; no access observed as of " + asOf(c, at...) + " (earliest of the population's reads)"
+					}
+					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left+seen)
 					if present && admin {
 						j.Attributes = []finding.Attribute{{Name: "admin"}}
 					}
 				} else {
-					j.Reason = "leaving_date_not_passed"
+					j.Reason = leftReason(l, j.Reason)
 				}
 				return j
 			}
 			if present {
-				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, containsAccount(e.Owners.Items, login)))
+				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, containsAccount(e.Owners.Items, login), held...))
 			}
 			for _, repo := range e.RepositoriesAccess {
 				for _, collaborator := range repo.Collaborators.Items {
 					if strings.EqualFold(collaborator.Login, login) {
 						admin, known := EffectiveAdmin(collaborator)
-						out = append(out, makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, production(c, repo.Asset) && known && admin))
+						out = append(out, makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, production(c, repo.Asset) && known && admin, repo.Collaborators.Reads))
 						present = true
 					}
 				}
 			}
 			if !present {
-				reads := readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads)
+				population := [][]Read{e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads}
 				for _, repo := range e.RepositoriesAccess {
-					reads = append(reads, readIDs(repo.Collaborators.Reads)...)
+					population = append(population, repo.Collaborators.Reads)
 				}
-				out = append(out, makeAccess(c.OrganizationAsset, a, reads, false, false))
+				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(population...), false, false, population...))
 			}
 			invitations := []Invitation{}
 			for _, i := range e.Invitations.Items {
@@ -364,10 +430,11 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			if len(invitations) == 0 {
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, nil, readIDs(e.Invitations.Reads))
 				x.Sources = source
-				if passed(p.Left, c.Today) {
-					settle(&x, false, complete(e.Invitations) && identifiableInvitations(e.Invitations), "No matching pending invitation for "+login)
+				if l := leftAt(p.Left, c, e.Invitations.Reads); l == finding.LeftPassed {
+					settle(&x, false, complete(e.Invitations) && identifiableInvitations(e.Invitations),
+						"No matching pending invitation for "+login+" as of "+asOf(c, e.Invitations.Reads)+" (earliest of the invitation reads)")
 				} else {
-					x.Reason = "leaving_date_not_passed"
+					x.Reason = leftReason(l, x.Reason)
 				}
 				out = append(out, x)
 			}
@@ -375,10 +442,10 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				key := "invitation:" + strconv.FormatInt(i.ID, 10)
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, &Subject{Kind: "invitation", Key: key, Label: login + " (" + key + ")", ProviderID: strconv.FormatInt(i.ID, 10), Person: p.Handle}, readIDs(e.Invitations.Reads))
 				x.Sources = source
-				if passed(p.Left, c.Today) {
-					settle(&x, true, true, "Pending invitation for "+login+"; declared leaving date "+p.Left)
+				if l := leftAt(p.Left, c, e.Invitations.Reads); l == finding.LeftPassed {
+					settle(&x, true, true, "Pending invitation for "+login+"; declared leaving date "+p.Left+"; observed in an invitation read of "+asOf(c, e.Invitations.Reads))
 				} else {
-					x.Reason = "leaving_date_not_passed"
+					x.Reason = leftReason(l, x.Reason)
 				}
 				out = append(out, x)
 			}

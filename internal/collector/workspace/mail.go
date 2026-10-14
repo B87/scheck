@@ -183,7 +183,7 @@ func mailboxStateOf(v accountView) mailboxState {
 
 // collectMail reads each readable mailbox's automatic forwarding and its
 // filters, in the optional-surface read order, after every other read.
-func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target, view Context, views []accountView) {
+func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target, views []accountView) {
 	e.Mail.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceGmailForwarding)
 	if !e.Mail.Selected {
 		return
@@ -192,7 +192,7 @@ func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target
 	req := func(op, user string) gate.Request {
 		return gate.Request{Op: op, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": user}}
 	}
-	all := readAccounts(eligible, view, func(v accountView) bool {
+	all := readAccounts(eligible, func(v accountView) bool {
 		u := v.user
 		m := MailboxForwarding{ID: u.ID, Filters: []FilterForward{}}
 		auto := sender.Send(ctx, req(OpMailAutoForwarding, u.ID))
@@ -600,7 +600,7 @@ func mailJudgments(e Evidence, asset string, views []accountView, c Context) []f
 	// asset; otherwise each mailbox has its outcome.
 	if s.usable {
 		for _, b := range s.boxes {
-			out = append(out, b.judgments(asset, base, s.domainsComplete, e.Users.Complete, c)...)
+			out = append(out, b.judgments(asset, base, s.domainsComplete, e.Users.Complete, c, e.Users.Reads)...)
 		}
 	}
 	rs := slices.Clone(base)
@@ -636,7 +636,7 @@ func mailJudgments(e Evidence, asset string, views []accountView, c Context) []f
 // judgments are one mailbox's outcomes: a finding per outside destination,
 // an abstention per destination scheck cannot place, and otherwise one
 // outcome for the mailbox as a whole.
-func (b mailbox) judgments(asset string, base []string, domainsComplete, usersComplete bool, c Context) []finding.Judgment {
+func (b mailbox) judgments(asset string, base []string, domainsComplete, usersComplete bool, c Context, users []Read) []finding.Judgment {
 	v := b.view
 	who := v.user.Primary
 	if b.state == mailboxUnknown {
@@ -683,7 +683,7 @@ func (b mailbox) judgments(asset string, base []string, domainsComplete, usersCo
 			j.NotChecked = []string{j.Excerpt}
 		case destExternal:
 			decided = true
-			b.fire(&j, d, domainsComplete, usersComplete, c)
+			b.fire(&j, d, domainsComplete, usersComplete, c, users)
 		}
 		out = append(out, j)
 	}
@@ -738,7 +738,7 @@ func (b mailbox) details(domainsComplete bool) map[string]any {
 var dispositions = map[string]string{"trash": "moves the original to Trash", "archive": "archives it", "markRead": "marks it read"}
 
 // fire words one outside destination of one mailbox.
-func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersComplete bool, c Context) {
+func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersComplete bool, c Context, users []Read) {
 	who := b.view.user.Primary
 	parts := []string{}
 	mechanisms := []string{}
@@ -772,8 +772,10 @@ func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersCom
 	} else {
 		parts = append(parts, d.domain+" is not a domain of this Workspace.")
 	}
-	if p := b.view.person; p != nil && leftPassed(p.Left, c) {
-		parts = append(parts, who+" belongs to "+p.Handle+", declared as having left on "+p.Left+".")
+	// Said only when the date had passed at the users read that
+	// attributed the mailbox, dated by it.
+	if p := b.view.person; p != nil && leftAt(p.Left, c, users) == finding.LeftPassed {
+		parts = append(parts, who+" belongs to "+p.Handle+", declared as having left on "+p.Left+" (as of the users read of "+usersAsOf(c, users)+").")
 	}
 	parts = append(parts, "scheck read the setting, not whether any message was forwarded.")
 	decide(j, true, true, strings.Join(parts, " "))

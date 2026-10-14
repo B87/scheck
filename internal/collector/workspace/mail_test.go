@@ -251,7 +251,7 @@ func TestForwardingAdminRaiseAndLeaver(t *testing.T) {
 	if (len(j.Attributes) != 1 || !j.Has("admin")) || j.Details["admin_mailbox_read"] != "a-root" || !strings.HasPrefix(j.Why, "root@example.com is a super administrator: mail sent to administrators") {
 		t.Fatalf("%+v", j)
 	}
-	if !strings.Contains(j.Excerpt, "root@example.com belongs to root, declared as having left on 2026-10-01.") {
+	if !strings.Contains(j.Excerpt, "root@example.com belongs to root, declared as having left on 2026-10-01 (as of the users read of 2026-10-10).") {
 		t.Fatal(j.Excerpt)
 	}
 	// A conflicting fresh detail leaves the account unread and unraised.
@@ -328,7 +328,7 @@ func TestCollectMailReadsEligibleMailboxesAndStops(t *testing.T) {
 		}
 		return gate.Result{RequestID: r.Op + r.Params["user"], Decision: "sent", Response: &gate.Response{Status: 200, Body: []byte(body), Population: full}}
 	})
-	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, views)
 	if !slices.Equal(asked, []string{OpMailAutoForwarding + ":root", OpMailFilters + ":root", OpMailAutoForwarding + ":amy", OpMailFilters + ":amy"}) || !e.Mail.Complete {
 		t.Fatalf("asked %v, %+v", asked, e.Mail)
 	}
@@ -342,13 +342,13 @@ func TestCollectMailReadsEligibleMailboxesAndStops(t *testing.T) {
 		asked = append(asked, r.Params["user"])
 		return gate.Result{Decision: "unavailable:needs_service_account", Reason: "unavailable:needs_service_account", Repeats: true}
 	})
-	e.collectMail(context.Background(), stop, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), stop, Target{Asset: "asset", Stage: "recon"}, views)
 	if !slices.Equal(asked, []string{"root"}) || e.Mail.Complete || len(e.Mail.Accounts) != 1 {
 		t.Fatalf("asked %v", asked)
 	}
 	asked = nil
 	e.Mail, e.Binding.Surfaces = MailEvidence{}, nil
-	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, views)
 	if len(asked) != 0 || e.Mail.Selected {
 		t.Fatal("an unselected profile read mail settings")
 	}

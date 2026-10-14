@@ -560,8 +560,14 @@ configuration"); a `subject` on any other id without a subject kind exits 3 ("â€
 the organization as a whole; remove subject"), since nothing could ever match it.
 `custom:` ids are never subject-checked. Past `expires`,
 the adjustment stops and the report says so; `expires` is a date in
-`engagement.timezone`, compared with the collection time of the asset it names, never
-the time the report is rendered or a resuming session started. The report prints a ready-to-paste entry under each
+`engagement.timezone`, compared with the latest collection time among the reads the
+matched finding cites (a host finding: the host's collection), never the run's first
+start, the time the report is rendered or a resuming session started ("Time" under
+"Severity in context"). An acceptance whose finding did not fire has no verdict
+consequence from `expires`. An acceptance whose only matching instance is reported as
+another, worse finding in its place (`superseded_by`) is `rule_not_decided` and names
+that finding to accept instead: the problem is there, so it is never called fixed nor
+the entry removable. The report prints a ready-to-paste entry under each
 open finding ([report.md](report.md#findings)).
 
 **Time.** A timestamp is RFC 3339 with seconds and an explicit offset. A date lasts
@@ -790,14 +796,53 @@ recorded in the chain but not as an adjustment.
 finding to `info`, no later step of the table applies. Each skipped step is recorded in
 the chain: "not applied: declared exposed on purpose (`intent.exposed_on_purpose[i]`)".
 
-**Time.** Every time-dependent rule is judged against the collection time of the
-observation it reads, not the start of the session: the left-person rule (a `left` date
-has passed when that read's collection time is after 24:00 of the date in
-`engagement.timezone`), stale and never-signed-in accounts (the users read), a
-certificate's expiry and its 14-day window (the TLS read), and an acceptance's expiry
-(the collection time of the asset it names). A resume re-judges persisted evidence, so
-this holds from step 1d; the 7-day maximum is step 8 ([runs.md](runs.md), "Stop and
-resume").
+**Time.** A date condition is judged at the moment scheck saw the thing it is about,
+and the excerpt names that moment in `engagement.timezone`. It is never the session
+start or the time the report is rendered, and where the moment is unclear the rule
+abstains. This list is complete; a rule that reads a date and is not here is a defect:
+
+| Rule | Judged at the collection time of |
+|---|---|
+| The left-person rule (a `left` date has passed when that time is after 24:00 of the date in `engagement.timezone`) | The read that observed the account. Firing on presence: the read(s) that observed it; where the page that held an item is not recorded, the earliest read of the population that held it. Disproving on absence: the earliest read of the population |
+| Stale and never-signed-in accounts | The per-account detail read that returned the compared sign-in and creation times, not the users read |
+| A Workspace role assignment's `expireTime` | The assignments read that carried it |
+| A certificate's expiry and its 14-day window | The TLS read |
+| `security.txt` `Expires` | The `security.txt` read |
+| `identity.unexpected_admin` for a person with a `left` date | The reads the left-person rule uses for that account (the owners reads on GitHub, the users reads on Workspace): handed to offboarding once the date has passed; while it falls within collection or a read has no recorded time, the rule abstains with the left-person rule's reason rather than judge the account as a current person's |
+| An acceptance's expiry | One time per acceptance, for its outcome and every instance it covers alike: the latest collection time among the reads its matched findings cite; for a host finding, the host's collection, the start of the session that collected it. Never the run's first start. When any matched finding's reads carry no recorded time, the acceptance is undecided (`rule_not_decided`) and every instance it covers stays open |
+
+An acceptance whose finding did not fire has no verdict consequence from `expires`;
+the report prints the date only.
+
+A population-based condition has two clocks. When the left date has passed at the
+latest of the reads but not at the earliest (it falls within collection), the rule
+abstains (reason `left_date_within_collection`): "left date *d* falls within or after
+collection; re-run after *d*". When no read of the population returned a response,
+nothing was seen at any time: the rule keeps its own reason for missing evidence, and
+no absence is judged for a declared leaver. When
+the left date has not passed at the observing read, there is no verdict (reason
+`leaving_date_not_passed`), and the readout may note "leaves on *d*; observed with
+access on *read date*".
+
+A read with no recorded collection time makes the time-dependent rule abstain, reason
+"collection time not recorded" (`unavailable:collection_time`); the session start is never the fallback. A sign-in or
+creation timestamp later than its own read's collection time plus a fixed 5-minute
+skew allowance is malformed, and the rule abstains. A readout note about a departed
+person still observed uses the rule's clock and gating, is dated by the read that
+observed them, and is never emitted unless the left date had passed at that read.
+
+The excerpt states the comparison in dated words, each against its own read:
+
+| Rule | Excerpt |
+|---|---|
+| Left person | "left 2026-09-01; account observed in the members read of 2026-09-30, 29 days after" |
+| Left person, absence | "no access observed as of 2026-09-28 (earliest of the population's reads)" |
+| Stale account | "last sign-in 2026-06-01, 121 days before the account read of 2026-09-30" |
+| Never signed in | "created 2026-08-20, no sign-in as of the account read of 2026-09-30 (41 days)" |
+| Certificate | "certificate expires 2026-10-20, 6 days after the TLS read of 2026-10-14" |
+
+A resume re-judges persisted evidence, so this holds from step 1d; the 7-day maximum
+is step 8 ([runs.md](runs.md), "Stop and resume").
 
 **Ceilings.** A context raise may reach critical only where the table's last column
 says so: critical means that someone with no right to it can use the weakness now, or

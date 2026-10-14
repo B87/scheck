@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/finding"
 )
@@ -24,6 +25,13 @@ const (
 // as: DNS and public web pages are read as nobody in particular.
 const readBy = "anonymous"
 
+// reported says a judgment is a finding the report shows: fired, and not
+// superseded by another finding. The findings, an acceptance's time and its
+// outcome all read this one set.
+func reported(j Judgment) bool {
+	return j.Verdict == verdictFired && j.Details["superseded_by"] == nil
+}
+
 // judgedFindings turns an asset's fired judgments into findings, one per
 // subject, each under the most specific asset holding it, at the severity
 // Analyze graded (docs/spec/engagement.md, "Severity in context").
@@ -31,7 +39,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 	var out []Finding
 	at := b.in.Started.UTC()
 	for _, j := range a.Judged {
-		if j.Verdict != verdictFired || j.Details["superseded_by"] != nil {
+		if !reported(j) {
 			continue
 		}
 		if j.Chain == nil {
@@ -117,9 +125,10 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Request: r, Observation: r,
 				CollectedAt: &observed, Vantage: vantage, Principal: principal, Excerpt: excerpt})
 		}
-		if acc, ok := b.effective(owner.ID, j.ID, key); ok && !b.expired(acc.Expires, owner.ID) {
+		if acc, ok := b.effective(owner.ID, j.ID, key); ok && b.current(acc.Expires, b.acceptanceAt(acc)) {
+			at := b.acceptanceAt(acc)
 			f.Status = finding.StatusAccepted
-			f.Acceptance = &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: acc.Subject == ""}
+			f.Acceptance = &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: acc.Subject == "", JudgedAt: &at}
 			if acc.Expires != "" {
 				e := acc.Expires
 				f.Acceptance.Expires = &e
@@ -158,10 +167,10 @@ func (b *builder) openUnder(asset, id, subject string) string {
 	for _, a := range b.in.Assets {
 		for _, j := range a.Judged {
 			name, isDomain := strings.CutPrefix(j.Asset, "domain:")
-			if j.Verdict == verdictFired && j.ID == id && isDomain && j.Asset != asset &&
+			if reported(j) && j.ID == id && isDomain && j.Asset != asset &&
 				strings.HasSuffix(name, "."+parent) && (subject == "" || j.Subject.Key == subject) {
 				// One its own entry accepts is not open.
-				if acc, ok := b.effective(j.Asset, id, j.Subject.Key); ok && !b.expired(acc.Expires, j.Asset) {
+				if acc, ok := b.effective(j.Asset, id, j.Subject.Key); ok && b.current(acc.Expires, b.acceptanceAt(acc)) {
 					continue
 				}
 				return name
@@ -220,6 +229,37 @@ func requestRefs(ids []string) []string {
 		out = appendUnique(out, "request:"+id)
 	}
 	return out
+}
+
+// acceptanceAt is the one collection time an acceptance's expiry is read
+// at, for its outcome and every instance it covers alike: the latest of
+// the reads its matched instances cite; zero, so undecided and every
+// instance open, when any of them cites no read with a recorded time
+// (docs/spec/engagement.md, "Severity in context").
+func (b *builder) acceptanceAt(acc AcceptanceInput) time.Time {
+	if at, ok := b.entryAt[acc.Entry]; ok {
+		return at
+	}
+	var at time.Time
+	judged, _ := b.judgedFor(acc.AssetID)
+	for _, j := range judged {
+		if !reported(j) || j.ID != acc.ID || acc.Subject != "" && j.Subject.Key != acc.Subject {
+			continue
+		}
+		if e, _ := b.effective(acc.AssetID, j.ID, j.Subject.Key); e.Entry != acc.Entry {
+			continue
+		}
+		t := b.readAt(acc.AssetID, j.Reads)
+		if t.IsZero() {
+			at = time.Time{}
+			break
+		}
+		if t.After(at) {
+			at = t
+		}
+	}
+	b.entryAt[acc.Entry] = at
+	return at
 }
 
 // effective is the acceptance that applies to one instance: the last entry
@@ -338,8 +378,17 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 		return "rule_not_decided", "no rule decides a custom finding"
 	}
 	var fired, disproved, abstained, applies int
+	// supersededBy names the finding that reports an instance in its place:
+	// that instance is no finding, so it neither counts, lists nor sets a
+	// time (reported).
+	supersededBy := ""
+	at := b.acceptanceAt(acc)
 	for _, j := range judged {
 		if j.ID != acc.ID || acc.Subject != "" && j.Subject.Key != acc.Subject {
+			continue
+		}
+		if j.Verdict == verdictFired && !reported(j) {
+			supersededBy = fmt.Sprint(j.Details["superseded_by"])
 			continue
 		}
 		switch j.Verdict {
@@ -360,6 +409,11 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 			abstained++
 		}
 	}
+	if fired == 0 && supersededBy != "" {
+		// The problem is there, reported as a worse finding: never "fixed"
+		// nor "remove the entry".
+		return "rule_not_decided", "what it names is reported as " + supersededBy + " on this run, a worse finding: accept that one if the risk is still accepted"
+	}
 	if under := b.openUnder(acc.AssetID, acc.ID, acc.Subject); fired == 0 && under != "" {
 		return "rule_not_decided", "an instance is open under it, on " + under + ", which is its own asset: accept it there " +
 			"(asset: domain:" + under + ")"
@@ -367,9 +421,14 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 	switch {
 	case fired > 0 && applies == 0:
 		return "not_applied", "a later entry for the same id applies to every instance it names"
-	case fired > 0 && b.expired(acc.Expires, acc.AssetID):
-		return "expired", "expired " + acc.Expires + "; the finding is open again"
+	case fired > 0 && at.IsZero():
+		return "rule_not_decided", "no collection time was recorded for what the finding rests on, so its expiry cannot be read: " +
+			"the finding stays open"
+	case fired > 0 && b.expired(acc.Expires, at):
+		b.acceptedAt[acc.Entry] = at
+		return "expired", "expired " + acc.Expires + ", before collection on " + b.day(at) + "; the finding is open again"
 	case fired > 0:
+		b.acceptedAt[acc.Entry] = at
 		return "applied", ""
 	case acc.Subject != "" && disproved+abstained == 0:
 		complete, seen := true, false

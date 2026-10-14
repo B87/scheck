@@ -120,7 +120,7 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 	for _, u := range e.Users.Items {
 		for _, a := range e.Access.Accounts {
 			if a.ID == u.ID {
-				_, known, _ := administrative(u, a, *e, view)
+				_, known, _ := administrative(u, a, *e)
 				if !known {
 					e.Access.AdministrationComplete = false
 					e.Access.InterpretationGaps = append(e.Access.InterpretationGaps, "Administrative privilege interpretation remains unknown for "+u.Primary+"; roles, privileges, conditions or expiry were not fully interpretable.")
@@ -135,10 +135,10 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 // before inactive within each, then by id. It stops after the first account
 // whose result the gate says every later one would repeat (read returns
 // true), and reports whether it reached the end.
-func readAccounts(views []accountView, c Context, read func(accountView) (repeats bool)) bool {
+func readAccounts(views []accountView, read func(accountView) (repeats bool)) bool {
 	ordered := slices.Clone(views)
 	rank := func(v accountView) int {
-		r := personPriority(v.user, v.person, c) * 2
+		r := personPriority(v.user, v.person) * 2
 		if !active(v.user) {
 			r++
 		}
@@ -154,9 +154,12 @@ func readAccounts(views []accountView, c Context, read func(accountView) (repeat
 }
 
 // personPriority is readPriority for an account whose person is known.
-func personPriority(u User, p *Person, c Context) int {
+func personPriority(u User, p *Person) int {
 	switch {
-	case p != nil && leftPassed(p.Left, c):
+	case p != nil && p.Left != "":
+		// Read selection, before any read time is known: a declared
+		// leaver's account is read first whether or not the date has
+		// passed; Judge decides that at the read's time.
 		return 0
 	case yes(u.IsAdmin):
 		return 1
@@ -167,11 +170,11 @@ func personPriority(u User, p *Person, c Context) int {
 }
 
 // readPriority orders per-account reads so a budget cut loses the least:
-// passed leavers, super administrators, contractors, then everyone else.
+// declared leavers, super administrators, contractors, then everyone else.
 func readPriority(u User, attributions []Attribution, view Context) int {
 	for _, a := range attributions {
 		if a.ProviderID == u.ID {
-			if p := person(view, a.Handle); p != nil && leftPassed(p.Left, view) {
+			if p := person(view, a.Handle); p != nil && p.Left != "" {
 				return 0
 			}
 		}

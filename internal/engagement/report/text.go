@@ -1182,8 +1182,12 @@ func (t *text) acceptedLine(f Finding) string {
 		s += ": accepted by " + by + ", no expiry"
 	} else {
 		s += ": accepted by " + by + " until " + *a.Expires
-		if days := t.daysUntil(*a.Expires); days >= 0 && days <= 30 {
-			s += fmt.Sprintf(" (expires in %s)", count(days, "day", "days"))
+		// Dated by the collection it was judged at, never the day the
+		// report is read (docs/spec/report.md).
+		if a.JudgedAt != nil {
+			if days := calendarDays(*a.JudgedAt, *a.Expires, t.zone); days >= 0 && days <= 30 {
+				s += fmt.Sprintf(" (%s after collection on %s)", count(days, "day", "days"), a.JudgedAt.In(t.zone).Format(time.DateOnly))
+			}
 		}
 	}
 	s += `: "` + clean(a.Reason) + `"`
@@ -1195,8 +1199,6 @@ func (t *text) acceptedLine(f Finding) string {
 	}
 	return s + "."
 }
-
-func (t *text) daysUntil(date string) int { return calendarDays(t.r.Run.Started, date, t.zone) }
 
 // entryKey drops the file from "<file> intent.accepted_risks[0]".
 func entryKey(entry string) string {

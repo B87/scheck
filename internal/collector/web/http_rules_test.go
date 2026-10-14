@@ -13,10 +13,10 @@ import (
 var webNow = time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 
 func goodPage(raw string) Page {
-	return Page{URL: raw, RequestID: raw, Decision: gate.DecisionSent, Status: 200, Body: "<html><head></head><body>hello</body></html>", Header: map[string][]string{"Content-Type": {"text/html"}, "Strict-Transport-Security": {"max-age=31536000"}, "X-Content-Type-Options": {"nosniff"}, "X-Frame-Options": {"DENY"}, "Content-Security-Policy": {"default-src 'self'; frame-ancestors 'none'"}, "Referrer-Policy": {"strict-origin"}}, TLS: &gate.TLSInfo{Verified: true, Version: "TLS 1.3", Chain: []gate.Cert{{Issuer: "CN=Public CA", NotAfter: webNow.Add(60 * 24 * time.Hour)}}}}
+	return Page{URL: raw, RequestID: raw, Decision: gate.DecisionSent, Status: 200, CollectedAt: webNow, Body: "<html><head></head><body>hello</body></html>", Header: map[string][]string{"Content-Type": {"text/html"}, "Strict-Transport-Security": {"max-age=31536000"}, "X-Content-Type-Options": {"nosniff"}, "X-Frame-Options": {"DENY"}, "Content-Security-Policy": {"default-src 'self'; frame-ancestors 'none'"}, "Referrer-Policy": {"strict-origin"}}, TLS: &gate.TLSInfo{Verified: true, Version: "TLS 1.3", Chain: []gate.Cert{{Issuer: "CN=Public CA", NotAfter: webNow.Add(60 * 24 * time.Hour)}}}}
 }
 func siteInput(host string, ps ...Page) Input {
-	return Input{Asset: "domain:" + host, Root: host, Now: webNow, Evidence: Evidence{Sites: []Site{{Name: host, Declared: true, Pages: ps}}}}
+	return Input{Asset: "domain:" + host, Root: host, Evidence: Evidence{Sites: []Site{{Name: host, Declared: true, Pages: ps}}}}
 }
 func siteVerdict(t *testing.T, in Input, id, want string) Judgment {
 	t.Helper()
@@ -428,5 +428,36 @@ func TestResolverDoubtAppliesOnlyToDNSDerivedRules(t *testing.T) {
 		in = siteInput("example.com", p)
 		in.Doubt = reason
 		siteVerdict(t, in, finding.IDWebSecurityHeaders, Abstained)
+	}
+}
+
+// Expiry is judged at the read's own collection time, never the session's:
+// a response a resume reused keeps the time it was read, and one with no
+// recorded time abstains (docs/spec/engagement.md, "Severity in context").
+func TestExpiriesAreJudgedAtTheReadsTime(t *testing.T) {
+	p := goodPage("https://example.com/")
+	// Read 20 days before the certificate's end: not yet within 14 days,
+	// whenever the session that judges it started.
+	p.TLS.Chain[0].NotAfter = webNow.Add(20 * 24 * time.Hour)
+	x := siteVerdict(t, siteInput("example.com", p), finding.IDTLSCertificateExpiring, Disproved)
+	if !strings.Contains(x.Excerpt, "20.0 days after the TLS read of 2026-10-09T12:00:00Z") {
+		t.Errorf("excerpt %q", x.Excerpt)
+	}
+	p.CollectedAt = webNow.Add(10 * 24 * time.Hour)
+	siteVerdict(t, siteInput("example.com", p), finding.IDTLSCertificateExpiring, Fired)
+	p.CollectedAt = time.Time{}
+	if x := siteVerdict(t, siteInput("example.com", p), finding.IDTLSCertificateExpiring, Abstained); x.Reason != ReasonNoCollectionTime {
+		t.Errorf("reason %q", x.Reason)
+	}
+
+	s := goodPage("https://example.com/.well-known/security.txt")
+	s.Header["Content-Type"] = []string{"text/plain"}
+	s.Body = "Contact: mailto:a@example.com\nExpires: 2026-10-10T00:00:00Z"
+	siteVerdict(t, siteInput("example.com", s), finding.IDWebSecurityTXT, Disproved)
+	s.CollectedAt = webNow.Add(48 * time.Hour)
+	siteVerdict(t, siteInput("example.com", s), finding.IDWebSecurityTXT, Fired)
+	s.CollectedAt = time.Time{}
+	if x := siteVerdict(t, siteInput("example.com", s), finding.IDWebSecurityTXT, Abstained); x.Reason != ReasonNoCollectionTime {
+		t.Errorf("reason %q", x.Reason)
 	}
 }
