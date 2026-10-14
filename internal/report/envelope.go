@@ -3,6 +3,7 @@ package report
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 
@@ -187,14 +188,47 @@ func (m Meta) Grader() finding.Grader {
 
 // Build assembles the envelope from a fact sheet.
 func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
-	prof, _ := check.ParseProfile(meta.Profile)
 	assessed := meta.Result
 	if assessed == nil {
-		store := finding.NewStore(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
-		store.Grader = meta.Grader()
-		r := store.Result()
+		r := assess(sheet, meta)
 		assessed = &r
 	}
+	return build(sheet, meta, assessed)
+}
+
+// Evidence is the envelope of what was read, assessed by nothing: facts,
+// observations, host and run, with no assessment, finding or context. The
+// engagement keeps it and grades it in Analyze (docs/spec/runs.md,
+// "Verdicts are not evidence"). Assess(Evidence(s, m), s, m) is Build(s, m)
+// for a run with no phase 2.
+func Evidence(sheet *baseline.FactSheet, meta Meta) Envelope {
+	meta.Context, meta.Phase2 = nil, nil
+	return build(sheet, meta, &finding.Result{Findings: []finding.Finding{}, Assessments: []finding.Assessment{}})
+}
+
+// Assess is env with the posture rules evaluated over sheet, its facts, and
+// graded through meta's context, whose sources and warnings it records.
+// Every other field of env is kept as it was.
+func Assess(env Envelope, sheet *baseline.FactSheet, meta Meta) Envelope {
+	r := assess(sheet, meta)
+	env.Assessments, env.Findings = r.Assessments, r.Findings
+	env.Run.ContextSources = []operator.Source{}
+	if meta.Context != nil {
+		env.Run.ContextSources = append(env.Run.ContextSources, meta.Context.Sources...)
+		// Context warnings come first, as Build orders them.
+		env.Run.Warnings = append(slices.Clone(meta.Context.Warnings), env.Run.Warnings...)
+	}
+	return env
+}
+
+func assess(sheet *baseline.FactSheet, meta Meta) finding.Result {
+	prof, _ := check.ParseProfile(meta.Profile)
+	store := finding.NewStore(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
+	store.Grader = meta.Grader()
+	return store.Result()
+}
+
+func build(sheet *baseline.FactSheet, meta Meta, assessed *finding.Result) Envelope {
 	env := Envelope{
 		SchemaVersion: SchemaVersion,
 		Facts:         FactsFrom(sheet),

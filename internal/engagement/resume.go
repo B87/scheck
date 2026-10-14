@@ -18,7 +18,6 @@ import (
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
-	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/report"
 )
@@ -470,22 +469,15 @@ func (r *run) used(name string) {
 }
 
 // hostInputs fingerprints what a host collection reads from the file and
-// the build: reach, profile, elevation, narrowing, redaction and context,
-// accepted risks included, and the excludes its dial is checked against. A
-// completed host is kept on resume only while they match, since nothing
-// regrades a kept envelope; an unknown build has none, so it keeps no
-// host.
+// the build: reach, profile, elevation, narrowing and redaction, and the
+// excludes its dial is checked against. A completed host is kept on resume
+// only while they match. Its context, the accepted risks that name it and
+// engagement.timezone are not inputs: Analyze grades a kept host through
+// them as they are now (docs/spec/runs.md, "Verdicts are not evidence").
+// An unknown build has none, so it keeps no host.
 func hostInputs(o hostasset.Options, exclude []Ref, version string) string {
 	if !gate.KnownBuild(version) {
 		return ""
-	}
-	var risks []any
-	if o.Context != nil {
-		// The zone too: an acceptance's expiry is graded in
-		// engagement.timezone, and a Location marshals as {}.
-		for _, k := range o.Context.AcceptedRisks {
-			risks = append(risks, []string{k.ID, k.Reason, k.Expires, k.Source, k.Zone.String()})
-		}
 	}
 	return fingerprint(struct {
 		Version                                            string
@@ -495,12 +487,9 @@ func hostInputs(o hostasset.Options, exclude []Ref, version string) string {
 		Jump                                               *hostasset.Hop
 		DisableChecks, DenyPaths, RedactExtra              []string
 		RunTimeout                                         time.Duration
-		Context                                            *operator.Structured
-		Risks                                              []any
-		ContextSource                                      string
 		Exclude                                            []Ref
 	}{version, o.Local, o.Host, o.User, o.Identity, o.KnownHosts, o.Elevate, o.Profile, o.Port, o.Jump,
-		o.DisableChecks, o.DenyPaths, o.RedactExtra, o.RunTimeout, o.Context, risks, o.ContextSource, exclude})
+		o.DisableChecks, o.DenyPaths, o.RedactExtra, o.RunTimeout, exclude})
 }
 
 // keptHost is a host an earlier session collected completely, under the
@@ -517,39 +506,44 @@ func (r *run) keptHost(a ResolvedAsset, inputs string) (ReconAsset, bool) {
 	var rec hostRecord
 	var env report.Envelope
 	raw, err := os.ReadFile(p.dir.File(envFile))
-	if err != nil || readJSON(p.dir.File(recFile), &rec) != nil || json.Unmarshal(raw, &env) != nil {
+	if err != nil {
 		return ReconAsset{}, false
 	}
-	// The envelope on disk must be the one this record's session wrote and
-	// run.json last recorded: a host's envelope is never used as written,
-	// since one edited, or written by a session cut before it recorded
-	// it, would pair with another session's facts and trace. A host costs
+	recRaw, err := os.ReadFile(p.dir.File(recFile))
+	if err != nil || json.Unmarshal(recRaw, &rec) != nil || json.Unmarshal(raw, &env) != nil {
+		return ReconAsset{}, false
+	}
+	// Neither file is used as written: both must be as scheck wrote them
+	// and run.json last recorded, and the envelope the one the record
+	// names. The record's clock grades the host's acceptances, and an
+	// envelope edited, or written by a session cut before it recorded it,
+	// would pair with another session's facts and trace. A host costs
 	// seconds to collect again.
-	if rec.Inputs != inputs || rec.Recon.Status != StatusCollected || rec.Recon.Name != a.Name || rec.Recon.ID != a.ID ||
-		rec.Envelope == "" || rec.Envelope != p.Manifest.Files[envFile] || rec.Envelope != sha(raw) {
+	if p.Manifest.Files[recFile] == "" || p.Manifest.Files[recFile] != sha(recRaw) ||
+		rec.Inputs != inputs || rec.Recon.Status != StatusCollected || rec.Recon.Name != a.Name || rec.Recon.ID != a.ID ||
+		rec.Recon.Kind != a.Kind || rec.Envelope == "" || rec.Envelope != p.Manifest.Files[envFile] || rec.Envelope != sha(raw) {
 		return ReconAsset{}, false
 	}
 	// The report embeds the envelope as a fresh collection's: without
 	// the path it was written to.
 	env.Run.Persisted = nil
-	c, err := hostasset.Restore(env, rec.Planned)
+	c, err := hostasset.Restore(env, rec.Planned, a.DisableChecks)
 	if err != nil {
 		return ReconAsset{}, false
 	}
 	r.o.Log("recon: %s kept from an earlier session", a.Name)
-	r.used(recFile)
 	r.hosts[a.Name], r.traces[a.Name], r.graded[a.Name], r.kept[a.Name] = c, rec.Trace, rec.Graded, true
 	return rec.Recon, true
 }
 
-// recordHost writes what a resume needs to keep a host: its envelope and
-// its record.
+// recordHost writes what a resume needs to keep a host: its evidence
+// envelope, which holds no verdict, and its record.
 func (r *run) recordHost(a ResolvedAsset, c *hostasset.Collection, inputs string, ra ReconAsset) error {
 	if r.o.Dir == nil {
 		return nil
 	}
 	name := fileName(a.Name)
-	env := c.Envelope()
+	env := c.Evidence()
 	path := r.o.Dir.File("evidence/" + name + ".json")
 	env.Run.Persisted = &path
 	if err := r.write("evidence/"+name+".json", env); err != nil {

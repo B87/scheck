@@ -27,6 +27,7 @@ import (
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/operator"
 	"github.com/b87/scheck/internal/policy"
+	"github.com/b87/scheck/internal/report"
 )
 
 // Stages are the engagement's stages in order (docs/spec/engagement.md,
@@ -193,6 +194,9 @@ type run struct {
 	hosts map[string]*hostasset.Collection
 	// notApplied names the accepted risks the host grader cannot apply.
 	notApplied []string
+	// assessed holds each collected host's graded envelope, by name, from
+	// Analyze.
+	assessed map[string]report.Envelope
 	// traces holds each host asset's audit entries, by name.
 	traces map[string][]policy.AuditEntry
 	zone   *time.Location
@@ -648,7 +652,7 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 				break
 			}
 			r.hosts[a.Name] = c
-			env := c.Envelope()
+			env := c.Evidence()
 			ra.Status = StatusCollected
 			if !c.Complete() {
 				// Say which limit cut it: a lost session, the engagement's
@@ -737,24 +741,33 @@ func readTrace(buf *bytes.Buffer) []policy.AuditEntry {
 }
 
 // hostOptions is everything the host collector receives for an asset: its
-// reach, profile, elevation, narrowing and context, and the engagement's
-// redact_extra. Nothing else reaches it.
+// reach, profile, elevation and narrowing, and the engagement's
+// redact_extra. Nothing else reaches it; its context is read in Analyze
+// (hostGrading).
 func (r *run) hostOptions(a ResolvedAsset, audit *policy.Audit) hostasset.Options {
 	o := hostasset.Options{
 		Local: a.Local(), Host: a.Address(), Port: a.Port, User: a.User, Identity: a.Identity,
 		KnownHosts: a.KnownHosts, Elevate: a.Elevate, Profile: a.Profile,
 		DisableChecks: a.DisableChecks, DenyPaths: a.DenyPaths, RedactExtra: r.res.RedactExtra(),
-		Audit: audit, Version: r.o.Version, Now: r.session, RecordFixtures: r.o.RecordFixtures,
-		ContextSource: r.res.Source.Path + " assets." + a.Name,
-		Log:           func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
+		Audit: audit, Version: r.o.Version, RecordFixtures: r.o.RecordFixtures,
+		Log: func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
 	}
 	o.RunTimeout, _ = time.ParseDuration(a.Timeout) // validated; "" keeps the default
 	o.Allow = r.res.allowAddress
 	if j, ok := jumpOf(a); ok {
 		o.Jump = &j
 	}
-	o.Context = r.hostContext(a)
 	return o
+}
+
+// hostGrading is what a host's posture rules are graded through in
+// Analyze: its context and the accepted risks that name it, attributed to
+// the engagement file, read at the start of the session that collected the
+// host, which a resume may have kept (docs/spec/runs.md, "Verdicts are not
+// evidence").
+func (r *run) hostGrading(a ResolvedAsset) hostasset.Grading {
+	return hostasset.Grading{Context: r.hostContext(a), Source: r.res.Source.Path + " assets." + a.Name,
+		Now: cmp.Or(r.graded[a.Name], r.session)}
 }
 
 // hostContext is the asset's context and the accepted risks that name it,
@@ -817,18 +830,27 @@ func (r *run) check(context.Context) (any, error) {
 	return &CheckDoc{Header: r.header("check"), FollowUps: []string{}}, nil
 }
 
-// analyze reads each host asset's posture rules over its facts, from the
-// host collector's envelope Recon wrote under evidence/
+// analyze assesses each host asset's posture rules over its facts, from the
+// host collector's evidence Recon wrote under evidence/ or kept, graded
+// through the context the engagement file declares now
 // (docs/spec/runs.md, "Runs, state and configuration"), judges what each
 // network collector read, grades every fired verdict, and builds the
 // report from them.
 func (r *run) analyze(context.Context) (any, error) {
 	doc := &FindingsDoc{Header: r.header("analyze")}
 	evidence := map[string]string{}
+	r.assessed = map[string]report.Envelope{}
 	for _, ra := range r.recon.Assets {
 		aa := AssessedAsset{Name: ra.Name, ID: ra.ID, Status: ra.Status, Reason: ra.Reason}
+		var grading hostasset.Grading
+		if a, ok := r.asset(ra.Name); ok && a.Kind == KindHost {
+			// Every host's, collected or not: an acceptance it cannot
+			// apply is named either way.
+			grading = r.hostGrading(a)
+		}
 		if c, ok := r.hosts[ra.Name]; ok {
-			env := c.Envelope()
+			env := c.Grade(grading)
+			r.assessed[ra.Name] = env
 			aa.Threshold = string(c.Threshold())
 			aa.Assessments, aa.Findings = env.Assessments, env.Findings
 			if r.o.Dir != nil {
@@ -1260,7 +1282,7 @@ func (r *run) hostLocator() string {
 // hostInput is a collected host asset as the report reads it.
 func (r *run) hostInput(a ResolvedAsset, c *hostasset.Collection, evidence string) *ereport.HostInput {
 	src := r.res.Source.Path + " assets." + a.Name
-	h := &ereport.HostInput{Envelope: c.Envelope(), User: a.User, Planned: c.Planned(), Lost: c.Lost(),
+	h := &ereport.HostInput{Envelope: r.assessed[a.Name], User: a.User, Planned: c.Planned(), Lost: c.Lost(),
 		Evidence: evidence}
 	if a.Local() {
 		h.User = "the user running scheck"

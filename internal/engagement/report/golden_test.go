@@ -116,7 +116,7 @@ func TestGoldenReports(t *testing.T) {
 			// this session kept the host, and a record it kept was edited
 			// by hand.
 			in := oneHost(t, "ubuntu")
-			in.Resumed, in.EditedByHand = true, []string{"evidence/deploy.collection.json"}
+			in.Resumed, in.EditedByHand = true, []string{"scope.json"}
 			in.Assets[0].Kept = true
 			in.Directory = "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z"
 			in.Egress = &EgressInput{Unrecorded: []time.Time{in.Started},

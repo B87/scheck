@@ -1,6 +1,7 @@
 package engagement
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -140,8 +141,10 @@ func TestResumeKeepsACompletedHost(t *testing.T) {
 }
 
 // A host is kept only under the inputs it was collected with, and only by a
-// build that names one commit: a changed asset, an accepted risk that names
-// it, a redact_extra or a dev build collects it again.
+// build that names one commit: a changed asset, a redact_extra or a dev
+// build collects it again. An accepted risk that names it and the timezone
+// its expiry is read in are graded in Analyze, so a change to either
+// contacts nothing (docs/spec/runs.md, "Verdicts are not evidence").
 func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 	base := twoHosts + "assets:\n  ops:\n    host: 203.0.113.6\n"
 	risk := "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-10-06}\npeople:\n  alice: {kind: employee}\n"
@@ -155,13 +158,13 @@ func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 		"elevation": {edit: func(f string) string { return f + "    elevate: sudo\n" }, want: 2},
 		"accepted risk": {edit: func(f string) string {
 			return f + "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\npeople:\n  alice: {kind: employee}\n"
-		}, want: 2},
+		}, want: 1},
 		"redact_extra": {edit: func(f string) string { return f + "redact_extra: ['tangerine']\n" }, want: 2},
 		"an exclude":   {edit: func(f string) string { return f + "exclude:\n  - network: 198.51.100.0/24\n" }, want: 2},
 		// An acceptance's expiry is graded in the engagement's timezone.
 		"the timezone": {start: base + risk, edit: func(f string) string {
 			return strings.Replace(f, "timezone: Europe/Madrid", "timezone: Pacific/Pago_Pago", 1)
-		}, want: 2},
+		}, want: 1},
 		"a dev build":   {edit: func(f string) string { return f }, version: "dev", want: 2},
 		"a dirty build": {edit: func(f string) string { return f }, version: "v0.0.2-3-gabcdef0-dirty", want: 2},
 	} {
@@ -202,7 +205,7 @@ func TestResumeAnalysisOnlyAndHandEdits(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	edited := "evidence/" + fileName(first.Report.Assets[1].Name) + ".collection.json"
+	edited := "scope.json"
 	appendNewline(edited)
 	if err := os.WriteFile(path, []byte(twoHosts+"people:\n  alice: {kind: employee}\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -215,13 +218,17 @@ func TestResumeAnalysisOnlyAndHandEdits(t *testing.T) {
 		t.Errorf("edited by hand: %v, want %s", out.Report.Engagement.EditedByHand, edited)
 	}
 
+	// A host's envelope and record are never used as written: either
+	// changed collects the host again.
 	appendNewline("evidence/" + fileName(first.Report.Assets[0].Name) + ".json")
+	appendNewline("evidence/" + fileName(first.Report.Assets[1].Name) + ".collection.json")
 	out = resume(t, dir, resumeVersion, collect)
-	if calls["203.0.113.5"] != 2 || calls["203.0.113.6"] != 1 {
-		t.Errorf("collections %v: a host whose envelope changed is collected again", calls)
+	if calls["203.0.113.5"] != 2 || calls["203.0.113.6"] != 2 {
+		t.Errorf("collections %v: a host whose envelope or record changed is collected again", calls)
 	}
-	if !slices.Equal(out.Report.Engagement.EditedByHand, []string{edited}) {
-		t.Errorf("edited by hand: %v, want only the record still in use, %s", out.Report.Engagement.EditedByHand, edited)
+	// Neither is used, so neither is named as edited and used.
+	if slices.ContainsFunc(out.Report.Engagement.EditedByHand, func(f string) bool { return strings.HasPrefix(f, "evidence/") }) {
+		t.Errorf("edited by hand: %v, want no host file", out.Report.Engagement.EditedByHand)
 	}
 }
 
@@ -351,6 +358,130 @@ func TestResumeKeepsNoHostMixedFromTwoSessions(t *testing.T) {
 	resume(t, dir, resumeVersion, collect)
 	if calls["203.0.113.6"] != 2 || calls["203.0.113.5"] != 1 {
 		t.Errorf("collections %v: only the host whose record and envelope agree is kept", calls)
+	}
+}
+
+// A kept host is graded again from its evidence: an acceptance added
+// since covers its finding, nothing contacts the host, and the envelope a
+// resume keeps holds no verdict (docs/spec/runs.md, "Verdicts are not
+// evidence").
+func TestResumeRegradesAKeptHost(t *testing.T) {
+	fail, calls := false, map[string]int{}
+	collect := collectFirstFailsFrom(t, "macos", &fail, calls)
+	path, dir, first := startRun(t, twoHosts, collect)
+	open := func(out *Outcome) (n int, status string) {
+		for _, f := range out.Report.Findings {
+			if f.Key.ID == "fw.app_firewall_disabled" && f.Key.Asset == "host:203.0.113.6:22" {
+				n, status = n+1, f.Status
+			}
+		}
+		return n, status
+	}
+	if n, status := open(first); n != 1 || status != "open" {
+		t.Fatalf("the macos fixture opens fw.app_firewall_disabled on the second host: %d, %s", n, status)
+	}
+	envFile := filepath.Join(dir, "evidence", fileName(first.Report.Assets[1].Name)+".json")
+	before, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env struct {
+		Findings    []any `json:"findings"`
+		Assessments []any `json:"assessments"`
+	}
+	if err := json.Unmarshal(before, &env); err != nil || len(env.Findings) != 0 || len(env.Assessments) != 0 {
+		t.Fatalf("the kept envelope holds a verdict: %d findings, %d assessments, %v", len(env.Findings), len(env.Assessments), err)
+	}
+	accepted := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n"
+	if err := os.WriteFile(path, []byte(accepted), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := resume(t, dir, resumeVersion, collect)
+	if calls["203.0.113.6"] != 1 || calls["203.0.113.5"] != 1 {
+		t.Errorf("collections %v: an acceptance contacts nothing", calls)
+	}
+	if n, status := open(out); n != 1 || status != "accepted" {
+		t.Errorf("the kept host's finding is %s (%d), want accepted", status, n)
+	}
+	if len(out.Report.Acceptances) != 1 || out.Report.Acceptances[0].Outcome != "applied" {
+		t.Errorf("acceptances %+v", out.Report.Acceptances)
+	}
+	if after, _ := os.ReadFile(envFile); !bytes.Equal(before, after) {
+		t.Error("grading rewrote the kept evidence")
+	}
+	// Removing it again opens the finding, still contacting nothing.
+	if err := os.WriteFile(path, []byte(twoHosts), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out = resume(t, dir, resumeVersion, collect)
+	if n, status := open(out); calls["203.0.113.6"] != 1 || n != 1 || status != "open" {
+		t.Errorf("collections %v, finding %s (%d)", calls, status, n)
+	}
+}
+
+// A changed engagement.timezone regrades a kept host's acceptances in the
+// new zone, contacting nothing: collected at 07:12 UTC on 2026-10-07, an
+// acceptance that expires on 2026-10-06 has ended in Madrid and not yet in
+// Pago Pago.
+func TestResumeRegradesAKeptHostInTheNewTimezone(t *testing.T) {
+	fail, calls := false, map[string]int{}
+	collect := collectFirstFailsFrom(t, "macos", &fail, calls)
+	file := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
+		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: 2026-10-01, expires: 2026-10-06}\n"
+	path, dir, first := startRun(t, file, collect)
+	if len(first.Report.Acceptances) != 1 || first.Report.Acceptances[0].Outcome != "expired" {
+		t.Fatalf("in Madrid: %+v", first.Report.Acceptances)
+	}
+	if _, err := time.LoadLocation("Pacific/Pago_Pago"); err != nil {
+		t.Skip(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(file, "timezone: Europe/Madrid", "timezone: Pacific/Pago_Pago", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := resume(t, dir, resumeVersion, collect)
+	if calls["203.0.113.6"] != 1 || len(out.Report.Acceptances) != 1 || out.Report.Acceptances[0].Outcome != "applied" {
+		t.Errorf("collections %v, acceptances %+v", calls, out.Report.Acceptances)
+	}
+	for _, f := range out.Report.Findings {
+		if f.Key.ID == "fw.app_firewall_disabled" && f.Key.Asset == "host:203.0.113.6:22" && f.Status != "accepted" {
+			t.Errorf("the kept host's finding is %s", f.Status)
+		}
+	}
+}
+
+// A kept host's record is bound to run.json like its envelope: one edited
+// by hand (the clock its acceptances are graded at, the asset's kind)
+// collects the host again rather than grade it as written. The clock is
+// caught by the record's hash alone; the kind by the hash and by the kind
+// check too.
+func TestResumeCollectsAgainARecordEditedToGrade(t *testing.T) {
+	for name, edit := range map[string]func(*hostRecord){
+		"clock": func(r *hostRecord) { r.Graded = r.Graded.Add(-21 * 24 * time.Hour) },
+		"kind":  func(r *hostRecord) { r.Recon.Kind = KindURL },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fail, calls := false, map[string]int{}
+			collect := collectFirstFails(t, &fail, calls)
+			_, dir, first := startRun(t, twoHosts, collect)
+			recFile := filepath.Join(dir, "evidence", fileName(first.Report.Assets[1].Name)+".collection.json")
+			var rec hostRecord
+			if err := readJSON(recFile, &rec); err != nil {
+				t.Fatal(err)
+			}
+			edit(&rec)
+			b, err := json.Marshal(rec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(recFile, b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			resume(t, dir, resumeVersion, collect)
+			if calls["203.0.113.6"] != 2 {
+				t.Errorf("collections %v: an edited record keeps its host", calls)
+			}
+		})
 	}
 }
 

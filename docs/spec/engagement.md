@@ -28,8 +28,9 @@ choice among its own reads while it collects (the takeover enrichment of a web n
 location follow-ups of a secret alert) is read selection: it stays in Recon and emits no
 verdict. No network collector judges in Recon (built, E9 step 1b): Analyze judges
 web, GitHub and Workspace assets from the evidence Recon holds, and a resume judges
-again. The host's posture rules still run with its collection; design, becomes
-contract with E9 step 1c: the host is judged in Analyze too.
+again. The host is judged in Analyze too (built, E9 step 1c): Recon
+writes its evidence with no verdict, and Analyze evaluates its posture rules and grades
+them through its context, for a kept host as for a collected one.
 
 The Plan → Check → Analyze loop ends when no follow-up is open, the run's timeout
 passes, its model cost limit is reached, or, for probes and scans, the authorization

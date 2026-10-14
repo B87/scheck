@@ -71,10 +71,6 @@ type Options struct {
 	DisableChecks []string
 	DenyPaths     []string
 	RedactExtra   []string
-	// Context is the asset's context and the accepted risks that name it;
-	// ContextSource names where it was declared, for attribution.
-	Context       *operator.Structured
-	ContextSource string
 	// RunTimeout is the host collector's run timeout
 	// (docs/spec/host-collector.md §4.4); 0 keeps the policy default.
 	RunTimeout time.Duration
@@ -86,10 +82,6 @@ type Options struct {
 	// directory as a fixture manifest (the hidden --record-fixtures flag);
 	// the recorder sees post-redaction bytes only.
 	RecordFixtures string
-	// Now is the time accepted risks are graded at: an engagement's
-	// collection time (docs/spec/engagement.md, "Accepted risks"); zero is
-	// when the envelope is built.
-	Now time.Time
 }
 
 // Hop is a jump host: who to log in as, where.
@@ -146,13 +138,27 @@ func failed(format string, args ...any) error {
 	return &Error{Err: fmt.Errorf(format, args...)}
 }
 
-// Collection is a host's facts, ready for the posture rules.
+// Collection is a host's facts, ready for the posture rules. It holds no
+// verdict: Grade assesses it, in Analyze, through the context the
+// engagement file declares then (docs/spec/runs.md, "Verdicts are not
+// evidence").
 type Collection struct {
 	sheet   *baseline.FactSheet
 	planned []string
 	meta    report.Meta
 	profile check.Profile
 	env     *report.Envelope
+}
+
+// Grading is what the posture rules' grade reads beyond the facts: the
+// asset's context with the accepted risks that name it, where it was
+// declared, and when the acceptances are read
+// (docs/spec/engagement.md, "Accepted risks").
+type Grading struct {
+	Context *operator.Structured
+	Source  string
+	// Now is the time accepted risks are graded at; zero is now.
+	Now time.Time
 }
 
 // Collect reaches the host and runs the baseline plan. The run timeout
@@ -276,8 +282,6 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 		Profile:   profile.String(),
 		Version:   o.Version,
 		Disabled:  o.DisableChecks,
-		Context:   merged(o.Context, o.ContextSource),
-		Now:       o.Now,
 	}}, nil
 }
 
@@ -406,10 +410,13 @@ func DetectPlatform(ctx context.Context, r *runner.Runner, st *ssh.Target) error
 }
 
 // Restore is a collection an earlier session of the run completed, read
-// back from the run directory: a resume keeps a completed host as a unit,
-// never merging two sessions' commands (docs/spec/runs.md, "Stop and
-// resume"). Nothing is regraded; the envelope is as that session wrote it.
-func Restore(env report.Envelope, planned []string) (*Collection, error) {
+// back from the evidence envelope it wrote: a resume keeps a completed host
+// as a unit, never merging two sessions' commands (docs/spec/runs.md, "Stop
+// and resume"). Its facts are read back into their parsers' shapes, so
+// Grade assesses them as it would the session's own; an envelope this
+// build cannot read back is an error, and the host is collected again.
+// disabled is the asset's disable_checks, under which it was collected.
+func Restore(env report.Envelope, planned, disabled []string) (*Collection, error) {
 	profile, ok := check.ParseProfile(env.Run.Profile)
 	if !ok {
 		return nil, fmt.Errorf("profile %q is not baseline or hardened", env.Run.Profile)
@@ -417,19 +424,34 @@ func Restore(env report.Envelope, planned []string) (*Collection, error) {
 	if env.Run.Status != "complete" {
 		return nil, errors.New("only a complete collection is kept")
 	}
-	return &Collection{sheet: &baseline.FactSheet{}, planned: slices.Clone(planned), profile: profile, env: &env}, nil
+	sheet, err := report.SheetFrom(env)
+	if err != nil {
+		return nil, err
+	}
+	// Evidence only, whatever the file held: Grade assesses it.
+	env.Assessments, env.Findings, env.Run.ContextSources = []finding.Assessment{}, []finding.Finding{}, []operator.Source{}
+	return &Collection{sheet: sheet, planned: slices.Clone(planned), profile: profile, env: &env,
+		meta: report.Meta{Profile: profile.String(), Disabled: slices.Clone(disabled)}}, nil
 }
 
-// Envelope is the host collector's report for this asset
-// (docs/spec/host-collector.md §6.4): its facts, and the posture rules
-// assessed over them and graded through the asset's context. It is built
-// once.
-func (c *Collection) Envelope() report.Envelope {
+// Evidence is the host collector's report for this asset with no verdict
+// (docs/spec/host-collector.md §6.4): its facts, observations, host and
+// run, what a resume keeps. It is built once.
+func (c *Collection) Evidence() report.Envelope {
 	if c.env == nil {
-		env := report.Build(c.sheet, c.meta)
+		env := report.Evidence(c.sheet, c.meta)
 		c.env = &env
 	}
 	return *c.env
+}
+
+// Grade is the envelope with the posture rules assessed over the facts and
+// graded through g: Evidence and Grade together are the 0.0.1 host
+// collector's report.
+func (c *Collection) Grade(g Grading) report.Envelope {
+	meta := c.meta
+	meta.Context, meta.Now = merged(g.Context, g.Source), g.Now
+	return report.Assess(c.Evidence(), c.sheet, meta)
 }
 
 // Planned is the plan's check ids, so the report counts the checks a cut
@@ -447,9 +469,6 @@ func (c *Collection) Lost() string { return c.sheet.Lost }
 // asset's profile sets it, as in 0.0.1 (docs/spec/scope.md, "Exit
 // codes").
 func (c *Collection) Threshold() finding.Severity { return finding.Threshold(c.profile) }
-
-// OpenFindings counts the open findings at or above Threshold.
-func (c *Collection) OpenFindings() int { return c.Envelope().OpenFindings(c.profile) }
 
 // merged turns the asset's declared context into the operator context the
 // grader reads, every key attributed to source. It is one source, so no

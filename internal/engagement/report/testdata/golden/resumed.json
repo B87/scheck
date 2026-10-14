@@ -540,7 +540,7 @@
       "to": "2026-10-07T07:19:03Z"
     },
     "edited_by_hand": [
-      "evidence/deploy.collection.json"
+      "scope.json"
     ],
     "method": {
       "assessment": "rules",

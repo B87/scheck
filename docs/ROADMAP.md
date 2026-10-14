@@ -1700,10 +1700,18 @@ older than 7 days is collected again on resume; every risk area's row prints its
      before `Enrich`, as read selection and no verdict. `findings.json` carries every
      verdict after partition and grading as `judged` per asset, output only, never read
      on resume.
-   - *1c to 1d (not started).* 1c: a kept host is graded again, so an edited accepted
-     risk or context no longer collects it again (its inputs still include both). 1d:
-     observation-time clocks for every time-dependent rule; judging still uses the
-     session start.
+   - *1c (done, offline).* A host is graded in Analyze: Recon writes the evidence
+     envelope (`report.Evidence`, no assessment, finding or context) and Analyze rebuilds
+     the fact sheet from it (`report.SheetFrom`, `check.Decode`) and grades it
+     (`report.Assess`, `hostasset.Grade`) through the asset's context and the accepted
+     risks that name it. A kept host is graded again, so an edited context, accepted
+     risk or `engagement.timezone` re-runs only Analyze and Report and contacts no host;
+     the host's collection inputs exclude all three and the context's source. An
+     envelope that cannot be read back collects the host again. Acceptances a host
+     cannot apply (a subject set) are named from Analyze for every host asset.
+     Acceptances on a kept host are still graded at the collecting session's start.
+   - *1d (not started).* Observation-time clocks for every time-dependent rule; judging
+     still uses the session start.
 2. The fixed sub-item lists, with "not judged in this version: …" in every row; goldens.
 3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
    outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style

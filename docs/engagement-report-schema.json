@@ -78,7 +78,7 @@
           }
         },
         "principal_changes": { "type": "array", "items": { "type": "object", "required": ["asset", "from", "to"], "additionalProperties": false, "properties": { "asset": { "$ref": "#/$defs/asset_id" }, "from": { "type": "string" }, "to": { "type": "string" } } } },
-        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a kept host's collection record, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. An edited envelope is never used: the host is collected again." }
+        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. A host's edited envelope or collection record is never used: the host is collected again." }
       }
     },
     "notice": {

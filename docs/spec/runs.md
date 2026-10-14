@@ -109,22 +109,26 @@ written. `scheck run <directory>` resumes:
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
   a better token on resume reads again what the weaker one could not.
-- **Verdicts are not evidence** (built for the network collectors in E9 step 1b; the
-  host part is step 1c). The evidence types carry no verdicts: `recon.json` and
+- **Verdicts are not evidence** (built in E9 steps 1b and 1c). The evidence types carry no verdicts: `recon.json` and
   `evidence/` hold what was read, and Analyze judges every web, GitHub and Workspace
   asset from what this session's Recon holds, on each session including a resume (the
-  gate answers Recon's reads from the ledger). `findings.json` holds every
+  gate answers Recon's reads from the ledger). A host's `evidence/<asset>.json` is the
+  host envelope with its facts, observations, host and run and no assessment, finding
+  or context; Analyze rebuilds the fact sheet from it and evaluates and grades the
+  posture rules, for a host collected this session and for a kept one alike. `findings.json` holds every
   network-collector verdict, after partition to its repository and grading, as `judged`
   per asset with the severity chain of a fired one. It is output only, never read on
-  resume. Design, step 1c: a kept host is graded again in Analyze, so editing an
-  accepted risk that names it or its context no longer collects it again; the host's
-  collection inputs below then exclude both.
+  resume. A kept host is graded again in Analyze, so editing an accepted risk that
+  names it or its context does not collect it again; the host's collection inputs below
+  exclude both. An envelope the sheet cannot be rebuilt from (an unknown platform or
+  status, a check not in this build's catalog, a parsed value not in its parser's
+  shape, a fact whose observation is not its own) is not kept: the host is collected
+  again.
 - **A changed engagement file.** The resume reads the file again at its recorded path,
   and each stage compares what it reads from it. If anything Scope reads changed, Scope
-  runs again. A host is kept only while nothing its collection reads changed, the
-  accepted risks that name it and `engagement.timezone` included. Until E9 step 1c nothing regrades a kept
-  envelope, so a changed accepted risk on a host collects that host again; from step 1c
-  it re-runs only Analyze and Report and contacts nothing. A change to people,
+  runs again. A host is kept only while nothing its collection reads changed. A changed
+  context, accepted risk that names a host, or `engagement.timezone` is not among those
+  reads: it re-runs only Analyze and Report and contacts no host. A change to people,
   access, data, secrets or anything no host or Scope reads contacts no target. Scope is kept when only `mail` or `intent` changes: discovery reads
   neither. Mail declarations are hashed by canonical domain; changed senders, selectors
   or no-mail declarations refresh that domain's records and dependent follow-ups.
@@ -132,7 +136,8 @@ written. `scheck run <directory>` resumes:
   accepted risks only regrade retained evidence. Unaffected successful reads are kept.
   Changed vantage reruns Scope and web/DNS reads; hosts are unaffected.
 - **Hand edits.** A file the resume uses is used as written, and the report names each
-  one edited since scheck wrote it; a host's envelope is never used as written (below).
+  one edited since scheck wrote it; a host's envelope and its record are never used as
+  written (below).
   An edit cannot widen scope: the gate checks every request against the engagement
   file's roots and exclude, not against `scope.json`. `run.json` is trusted as written:
   whoever can write the run directory can change which engagement file it names and the
@@ -219,18 +224,16 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
   `evidence/<asset>.json` for each host it collected, completely or not, as `{inputs,
   graded, envelope_sha256, recon, planned, trace}` (`recon` the asset's whole Recon
   entry, `graded` the start of the session that collected it). The host is kept when the
-  record's inputs match, its `recon` status is `collected` with the same name and id,
-  and the sha256 of `evidence/<asset>.json` as it is on disk equals both the record's
-  `envelope_sha256` and `run.json`'s hash for that file. The record, its trace included,
-  is used as written; the envelope never is: one edited, or written by a session cut
-  before it recorded it, collects the host again, so no kept host mixes two sessions.
+  record's inputs match, its `recon` status is `collected` with the same name, id and
+  kind, the sha256 of the record as it is on disk equals `run.json`'s hash for it, and
+  the sha256 of `evidence/<asset>.json` as it is on disk equals both the record's
+  `envelope_sha256` and `run.json`'s hash for that file. Neither file is used as written,
+  since the record's `graded` is the clock the host's acceptances are graded at: one
+  edited, or written by a session cut before it recorded it, collects the host again, so
+  no kept host mixes two sessions.
   `recon.json` is not read. The inputs are a hash of the build version and everything the collection
   reads (reach, user, identity, known_hosts, jump, elevate, profile, `disable_checks`,
-  `deny_paths`, `redact_extra`, timeout, its context with the accepted risks that name
-  it, `engagement.timezone`, in which their expiry is graded, and the context's source
-  (until E9 step 1c; from step 1c the context, its source, the accepted risks and the
-  timezone are graded in Analyze and are not inputs),
-  and the engagement's `exclude`, which its SSH dial is checked against).
+  `deny_paths`, `redact_extra`, timeout, and the engagement's `exclude`, which its SSH dial is checked against).
 - A build whose version names no commit (`dev`) or carries uncommitted changes
   (`-dirty`) keeps neither Scope nor any host.
 - **The gate's successes** are written after each stage to
@@ -243,8 +246,8 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
   that everything else was read again. It states that kept evidence was not read again
-  and retains its original observation date. A file the resume used (`scope.json` when kept;
-  `evidence/<asset>.collection.json` for a kept host; a success the gate reused) whose bytes differ from its hash in `run.json` is listed in
+  and retains its original observation date. A file the resume used (`scope.json` when kept; a success the gate
+  reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An
   acceptance's outcome and its "expires in N days" are decided at the time the host it
