@@ -10,8 +10,9 @@ import (
 	ereport "github.com/b87/scheck/internal/engagement/report"
 )
 
-// collectGitHub reads and judges GitHub identity and repository access
-// (docs/spec/github-collector.md, "Reporting and coverage").
+// collectGitHub reads GitHub identity, repository access, CI, alerts and
+// history; Analyze judges them (docs/spec/github-collector.md, "Reporting
+// and coverage"; docs/spec/runs.md, "Verdicts are not evidence").
 func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
 	g, err := r.gateFor(ctx)
 	if err != nil {
@@ -60,9 +61,6 @@ func (r *run) collectGitHub(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 			}
 		}
 	}
-	ev.Judgments = append(githubc.Judge(ev, r.githubContext(a)), githubc.JudgeCI(ev, r.githubContext(a))...)
-	ev.Judgments = append(ev.Judgments, githubc.JudgeAlerts(ev, r.githubContext(a))...)
-	ev.Judgments = append(ev.Judgments, githubc.JudgeHistory(ev)...)
 	ra.GitHub = &ev
 	ra.Status = StatusCollected
 	targetRead := false
@@ -155,13 +153,10 @@ func inventoryCount[T any](name string, pop githubc.Population[T]) string {
 	return fmt.Sprintf("%s: %s%d", name, qualifier, len(pop.Items))
 }
 
-func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
+func (r *run) githubReportInput(ra ReconAsset, judged []githubc.Judgment, ai *ereport.AssetInput) {
 	ev := ra.GitHub
 	ai.Collector = "github"
-	for _, j := range ev.Judgments {
-		j.Reason = githubc.CoverageReason(j.Reason)
-		ai.Judged = append(ai.Judged, j)
-	}
+	ai.Judged = append(ai.Judged, judged...)
 	p := ev.Principal
 	note := githubc.AssessmentCredential(p)
 	kind := "github_credential"
@@ -174,7 +169,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 		source = "provider"
 	}
 	ai.PopulationIncomplete = !ev.Members.Complete || !ev.Members.VisibilityComplete || !ev.Owners.Complete || !ev.Owners.VisibilityComplete
-	ai.InventoryNotes = append(ai.InventoryNotes, r.githubPeopleNotes(ra.ID, *ev)...)
+	ai.InventoryNotes = append(ai.InventoryNotes, r.githubPeopleNotes(ra.ID, *ev, judged)...)
 	ai.NetworkPrincipal = &ereport.Principal{Identity: principalLabel(p), Scopes: p.Scopes, ScopesSource: source}
 	ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: strings.Join([]string{
 		inventoryCount("members", ev.Members), inventoryCount("owners", ev.Owners), inventoryCount("outside collaborators", ev.OutsideCollaborators), inventoryCount("pending invitations", ev.Invitations), inventoryCount("repositories visible to this credential", ev.Repositories),
@@ -203,7 +198,7 @@ func (r *run) githubReportInput(ra ReconAsset, ai *ereport.AssetInput) {
 			}
 		}
 	}
-	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev)...)
+	ai.InventoryNotes = append(ai.InventoryNotes, githubCINotes(*ev, judged)...)
 	ai.InventoryNotes = append(ai.InventoryNotes, githubAlertNotes(*ev)...)
 	readHistory, completeHistory := 0, 0
 	for _, h := range ev.RepositoriesHistory {
@@ -276,6 +271,21 @@ func partitionGitHubJudgments(assets []ereport.AssetInput) {
 			}
 		}
 		assets[i].Judged = kept
+	}
+}
+
+// githubCoverageReasons words each GitHub abstention's reason as coverage
+// prints it. It is the report's edge: findings.json keeps the evidence
+// reason (docs/spec/github-collector.md, "Reporting and coverage").
+func githubCoverageReasons(assets []ereport.AssetInput) {
+	for i := range assets {
+		if assets[i].Collector != "github" {
+			continue
+		}
+		assets[i].Judged = slices.Clone(assets[i].Judged)
+		for k := range assets[i].Judged {
+			assets[i].Judged[k].Reason = githubc.CoverageReason(assets[i].Judged[k].Reason)
+		}
 	}
 }
 

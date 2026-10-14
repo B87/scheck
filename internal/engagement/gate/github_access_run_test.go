@@ -139,8 +139,33 @@ access:
 	if err = json.Unmarshal(b, &recon); err != nil {
 		t.Fatal(err)
 	}
-	if len(recon.Attribution) == 0 || len(recon.PeopleCandidates) == 0 || len(recon.Assets[0].GitHub.Judgments) == 0 {
-		t.Fatal("missing persisted attribution/candidates/judgments")
+	if len(recon.Attribution) == 0 || len(recon.PeopleCandidates) == 0 {
+		t.Fatal("missing persisted attribution/candidates")
+	}
+	// Verdicts are not evidence: recon.json holds what was read, and
+	// findings.json every verdict with its chain (docs/spec/runs.md).
+	if strings.Contains(string(b), `"verdict"`) || strings.Contains(string(b), `"judgments"`) || strings.Contains(string(b), `"judged"`) {
+		t.Fatal("recon.json carries a verdict")
+	}
+	fb, err := os.ReadFile(dir.File("findings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var findings engagement.FindingsDoc
+	if err = json.Unmarshal(fb, &findings); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(fb), "discarded-public-key") {
+		t.Fatal("public key in findings.json")
+	}
+	graded := false
+	for _, a := range findings.Assets {
+		for _, j := range a.Judged {
+			graded = graded || j.Verdict == "fired" && j.Chain != nil
+		}
+	}
+	if !graded {
+		t.Fatal("findings.json lacks graded verdicts")
 	}
 	if strings.Contains(string(b), "discarded-public-key") {
 		t.Fatal("public key persisted")

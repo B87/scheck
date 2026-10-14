@@ -11,7 +11,7 @@ import (
 
 // Readout notes consume declarations whose correctness cannot be decided by
 // GitHub reads (docs/spec/engagement.md, "People", "Admins", "2-step verification").
-func (r *run) githubPeopleNotes(asset string, e githubc.Evidence) []ereport.Note {
+func (r *run) githubPeopleNotes(asset string, e githubc.Evidence, judged []githubc.Judgment) []ereport.Note {
 	notes := []ereport.Note{}
 	add := func(kind, source, detail string) {
 		notes = append(notes, ereport.Note{Kind: kind, Source: source, Detail: detail})
@@ -84,7 +84,7 @@ func (r *run) githubPeopleNotes(asset string, e githubc.Evidence) []ereport.Note
 		}
 	}
 	for _, repo := range e.RepositoriesAccess {
-		for _, j := range e.Judgments {
+		for _, j := range judged {
 			if j.Asset == repo.Asset && j.ID == "identity.unattributed_admin" && j.Subject != (githubc.Subject{}) {
 				add("github_inventory", repo.Asset, "Observed production repository administrator: "+j.Subject.Label+". Effective privilege may be inherited; its grant source was not assessed")
 			}

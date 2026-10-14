@@ -38,9 +38,6 @@ type Judgment struct {
 	// Chain is the severity Analyze gave a fired judgment. A collector never
 	// sets it: Analyze replaces whatever it holds.
 	Chain *Chain `json:"chain,omitempty"`
-	// Members retains the names represented by a wildcard judgment for
-	// takeover-confirmation suspension; it is not rendered by the report.
-	Members []string `json:"members,omitempty"`
 }
 
 // OfNote is one listed subject that matters more than the rest.

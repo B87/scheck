@@ -128,6 +128,11 @@ type AssessedAsset struct {
 	Open        int                  `json:"open_at_or_above_threshold"`
 	Assessments []finding.Assessment `json:"assessments,omitempty"`
 	Findings    []finding.Finding    `json:"findings,omitempty"`
+	// Judged are the network collectors' verdicts on the asset, each fired
+	// one with its severity chain. findings.json is output only: a resume
+	// judges again from the evidence (docs/spec/runs.md, "Verdicts are not
+	// evidence").
+	Judged []finding.Judgment `json:"judged,omitempty"`
 }
 
 // Outcome is how a run ended.
@@ -551,10 +556,6 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	return r.gate, nil
 }
 
-// collectDomain reads a domain root through the gate with the web collector
-// (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
-// the names those records point at, and the names Scope chose to read; and
-// judges them with its rules together with Scope's lookups.
 // reconStage runs every declared read per asset: the host collector on
 // host assets and the web collector on domain roots. A root of a kind with
 // no collector yet is recorded as not collected and makes the run
@@ -672,20 +673,6 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			}
 		}
 		doc.Assets = append(doc.Assets, ra)
-	}
-	// Judge again after all roots are read so inherited mail policy can use
-	// already-collected organizational evidence regardless of root order.
-	// No new request is made (docs/spec/web-collector.md, "Email").
-	for i, ra := range doc.Assets {
-		if ra.Web == nil {
-			continue
-		}
-		for _, a := range r.res.Assets {
-			if a.ID == ra.ID {
-				doc.Assets[i].Judged = web.Judge(r.webInput(a, *ra.Web))
-				break
-			}
-		}
 	}
 	// A declared domain under a root the web collector read was read with
 	// it: its names were among the root's.
@@ -832,8 +819,9 @@ func (r *run) check(context.Context) (any, error) {
 
 // analyze reads each host asset's posture rules over its facts, from the
 // host collector's envelope Recon wrote under evidence/
-// (docs/spec/runs.md, "Runs, state and configuration"), and builds
-// the report from them.
+// (docs/spec/runs.md, "Runs, state and configuration"), judges what each
+// network collector read, grades every fired verdict, and builds the
+// report from them.
 func (r *run) analyze(context.Context) (any, error) {
 	doc := &FindingsDoc{Header: r.header("analyze")}
 	evidence := map[string]string{}
@@ -851,7 +839,16 @@ func (r *run) analyze(context.Context) (any, error) {
 		}
 		doc.Assets = append(doc.Assets, aa)
 	}
-	r.out.Report = ereport.Build(r.reportInput(evidence))
+	in := r.reportInput(evidence, r.judge())
+	for i := range doc.Assets {
+		for _, ai := range in.Assets {
+			if ai.ID == doc.Assets[i].ID {
+				doc.Assets[i].Judged = slices.Clone(ai.Judged)
+			}
+		}
+	}
+	githubCoverageReasons(in.Assets)
+	r.out.Report = ereport.Build(in)
 	doc.Refused, doc.Incomplete = r.out.Report.Refused, r.out.Report.Incomplete
 	// The counts are the report's, so findings.json, the report and the
 	// exit code agree per asset and in total.
@@ -897,7 +894,7 @@ func (r *run) reportStage(context.Context) (any, error) {
 
 // reportInput is everything the report reads, in its own terms: the
 // engagement as resolved and what each asset's collection produced.
-func (r *run) reportInput(evidence map[string]string) ereport.Input {
+func (r *run) reportInput(evidence map[string]string, judged map[string][]finding.Judgment) ereport.Input {
 	res := r.res
 	in := ereport.Input{
 		Version: r.o.Version, Name: res.Engagement.Name, Operator: res.Engagement.Operator,
@@ -1026,10 +1023,10 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			}
 		}
 		if ra.GitHub != nil {
-			r.githubReportInput(ra, &ai)
+			r.githubReportInput(ra, judged[ra.ID], &ai)
 		}
 		if ra.Workspace != nil {
-			r.workspaceReportInput(ra, &ai)
+			r.workspaceReportInput(ra, judged[ra.ID], &ai)
 		}
 		if ra.Web != nil {
 			ai.Collector = "web"
@@ -1060,7 +1057,7 @@ func (r *run) reportInput(evidence map[string]string) ereport.Input {
 			for _, n := range web.MailNotes(wi) {
 				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
 			}
-			ai.Judged = append(ai.Judged, ra.Judged...)
+			ai.Judged = append(ai.Judged, judged[ra.ID]...)
 		}
 		in.Assets = append(in.Assets, ai)
 	}

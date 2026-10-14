@@ -19,8 +19,10 @@ const (
 
 // Coverage is the tenant's coverage plan: every rule id in exactly one group
 // (coverage_plan_test.go), worded here and marked by the engagement report
-// (docs/spec/workspace-collector.md, "Reporting and coverage").
-func (e Evidence) Coverage() []finding.CoveragePlan {
+// (docs/spec/workspace-collector.md, "Reporting and coverage"). judged are
+// Judge's verdicts on e, which Analyze gives: the unclassified apps fold
+// into one line.
+func (e Evidence) Coverage(judged []finding.Judgment) []finding.CoveragePlan {
 	evidence := finding.CoverageReason{Reason: "unavailable:workspace_evidence"}
 	assignments := finding.CoverageGroup{Name: "Workspace administrator assignments and counts", Rules: []string{IDTooManySuperAdmins, IDSuspendedAdminAssignment}}
 	if !e.Access.AdministrationComplete {
@@ -44,7 +46,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 	}
 	// Most tenants hold many unclassified apps: one line, the JSON and the
 	// readout list each.
-	if n := len(slices.DeleteFunc(slices.Clone(e.Judgments), func(j finding.Judgment) bool { return j.Reason != reasonUnclassified })); n > 0 {
+	if n := len(slices.DeleteFunc(slices.Clone(judged), func(j finding.Judgment) bool { return j.Reason != reasonUnclassified })); n > 0 {
 		holds := "apps hold"
 		if n == 1 {
 			holds = "app holds"

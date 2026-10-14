@@ -104,7 +104,6 @@ type Evidence struct {
 	RepositoriesAlerts           []RepositoryAlerts        `json:"repositories_alerts,omitempty"`
 	OrganizationWorkflow         DefaultEvidence           `json:"organization_workflow"`
 	RepositoriesCI               []RepositoryCI            `json:"repositories_ci,omitempty"`
-	Judgments                    []Judgment                `json:"judgments,omitempty"`
 	Principal                    PrincipalRead             `json:"principal"`
 	OrganizationRead             Read                      `json:"organization_read"`
 	Organization                 *OrganizationObject       `json:"organization,omitempty"`

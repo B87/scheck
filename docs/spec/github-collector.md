@@ -984,7 +984,7 @@ than reusing an earlier permission conclusion.
 permission guidance, reuse explanations and inventory gaps. Engagement places
 those explanations on the asset; the report renders them. `github.CoverageReason`
 maps `insufficient_evidence` to `unavailable:github_evidence` at the report edge,
-while persisted Recon judgments retain the original evidence reason.
+while the judgments Analyze writes to `findings.json` keep the original evidence reason.
 An unavailable permission read with no provider detail says access or feature
 availability was not established. Dependabot guidance asks the owner to check
 Dependabot alerts read permission, token repository selection and feature

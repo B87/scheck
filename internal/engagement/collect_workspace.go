@@ -10,6 +10,7 @@ import (
 	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/engagement/gate"
 	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // collectWorkspace leaves the protocol and note wording in the collector
@@ -21,6 +22,26 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 		r.incomplete(a, ra)
 		return ra
 	}
+	r.o.Log("recon: %s (%s)", a.Name, a.ID)
+	ev := workspace.Collect(ctx, g, workspace.Target{Asset: a.ID, Stage: "recon"}, r.workspaceView(a))
+	ra.Workspace = &ev
+	for _, note := range ev.Notes {
+		if note.Kind == "workspace_credential_warning" {
+			r.o.Log("warning: %s", note.Detail)
+		}
+	}
+	o := ev.Outcome()
+	ra.Status, ra.Detail = StatusCollected, o.Detail
+	if o.Status != workspace.OutcomeComplete {
+		ra.Status, ra.Reason = StatusIncomplete, cmp.Or(o.Reason, ReasonFailed)
+		r.incomplete(a, ra)
+	}
+	return ra
+}
+
+// workspaceView is what the engagement file tells the Workspace collector
+// about a tenant: Recon reads with it and Analyze judges with it.
+func (r *run) workspaceView(a ResolvedAsset) workspace.Context {
 	view := workspace.Context{AssessedAt: r.session, Zone: r.zone}
 	if auth := r.res.Authorization; auth != nil {
 		for _, m := range auth.Mailboxes {
@@ -43,30 +64,16 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 		p := r.res.People[handle]
 		view.People = append(view.People, workspace.Person{Handle: handle, Addresses: p.Workspace, Kind: p.Kind, Left: p.Left, UsedBy: p.UsedBy})
 	}
-	r.o.Log("recon: %s (%s)", a.Name, a.ID)
-	ev := workspace.Collect(ctx, g, workspace.Target{Asset: a.ID, Stage: "recon"}, view)
-	ra.Workspace, ra.Judged = &ev, ev.Judgments
-	for _, note := range ev.Notes {
-		if note.Kind == "workspace_credential_warning" {
-			r.o.Log("warning: %s", note.Detail)
-		}
-	}
-	o := ev.Outcome()
-	ra.Status, ra.Detail = StatusCollected, o.Detail
-	if o.Status != workspace.OutcomeComplete {
-		ra.Status, ra.Reason = StatusIncomplete, cmp.Or(o.Reason, ReasonFailed)
-		r.incomplete(a, ra)
-	}
-	return ra
+	return view
 }
 
-func (r *run) workspaceReportInput(ra ReconAsset, ai *ereport.AssetInput) {
+func (r *run) workspaceReportInput(ra ReconAsset, judged []finding.Judgment, ai *ereport.AssetInput) {
 	e := ra.Workspace
 	ai.Collector = "workspace"
-	ai.Judged = e.Judgments
+	ai.Judged = judged
 	ai.InventoryRead = len(e.Users.Reads) > 0 && e.Users.Reads[0].Status == 200 && e.Users.Reads[0].Reason == ""
 	ai.PopulationIncomplete = !e.Users.Complete || !e.Units.Complete
-	ai.Coverage = e.Coverage()
+	ai.Coverage = e.Coverage(judged)
 	identity, source := "unknown", "unknown"
 	if e.DelegatedUser != nil {
 		identity = "delegated Workspace account " + e.DelegatedUser.Primary + " (id " + e.DelegatedUser.ID + ")"

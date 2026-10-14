@@ -26,8 +26,9 @@ and locked while a run holds it:
   evidence/            stages 3 and 5: one file per result, redacted and truncated;
                        per host <asset>.json and <asset>.collection.json, and
                        requests/, the gate's successes a resume may reuse
-  findings.json        stage 6: rule outcomes and follow-ups opened and settled; from
-                       E9 step 1, every verdict with its severity chain, as output only
+  findings.json        stage 6: rule outcomes and follow-ups opened and settled; every
+                       network-collector verdict with its severity chain, as output only
+                       (E9 step 1b)
   report.json          stage 7, with report.txt
   audit.jsonl          every request, command and API call, in order
 ```
@@ -56,7 +57,7 @@ target is contacted, a host or jump host without an SSH user. Scope also expands
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
 is collected. `domain` and `url` roots are read through the web collector
-([web-collector.md](web-collector.md#reads)) and judged in Recon by the applicable
+([web-collector.md](web-collector.md#reads)) and judged in Analyze by the applicable
 DNS, email, TLS and response rules, then recorded as `collected`, or
 with `limit_reached` when `limits.timeout` ends the engagement before it is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
@@ -108,19 +109,21 @@ written. `scheck run <directory>` resumes:
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
   a better token on resume reads again what the weaker one could not.
-- **Verdicts are not evidence** (design; contract when E9 lands, step 1). Evidence types
-  carry no verdicts: `githubc.Evidence.Judgments`, `workspace.Evidence.Judgments` and
-  `ReconAsset.Judged` leave them, and Analyze judges every asset from the persisted
-  evidence, on each session including a resume. `recon.json` and `evidence/` hold what
-  was read; `findings.json` holds every verdict with its severity chain and is written
-  as output only, never read on resume. A kept host is graded again in Analyze, so
-  editing an accepted risk that names it or its context no longer collects it again;
-  the host's collection inputs below then exclude both.
+- **Verdicts are not evidence** (built for the network collectors in E9 step 1b; the
+  host part is step 1c). The evidence types carry no verdicts: `recon.json` and
+  `evidence/` hold what was read, and Analyze judges every web, GitHub and Workspace
+  asset from what this session's Recon holds, on each session including a resume (the
+  gate answers Recon's reads from the ledger). `findings.json` holds every
+  network-collector verdict, after partition to its repository and grading, as `judged`
+  per asset with the severity chain of a fired one. It is output only, never read on
+  resume. Design, step 1c: a kept host is graded again in Analyze, so editing an
+  accepted risk that names it or its context no longer collects it again; the host's
+  collection inputs below then exclude both.
 - **A changed engagement file.** The resume reads the file again at its recorded path,
   and each stage compares what it reads from it. If anything Scope reads changed, Scope
   runs again. A host is kept only while nothing its collection reads changed, the
-  accepted risks that name it and `engagement.timezone` included. Until E9 step 1 nothing regrades a kept
-  envelope, so a changed accepted risk on a host collects that host again; from step 1
+  accepted risks that name it and `engagement.timezone` included. Until E9 step 1c nothing regrades a kept
+  envelope, so a changed accepted risk on a host collects that host again; from step 1c
   it re-runs only Analyze and Report and contacts nothing. A change to people,
   access, data, secrets or anything no host or Scope reads contacts no target. Scope is kept when only `mail` or `intent` changes: discovery reads
   neither. Mail declarations are hashed by canonical domain; changed senders, selectors
@@ -147,7 +150,7 @@ written. `scheck run <directory>` resumes:
   The report prints the collection span from the run's first start, and time-based
   rules (stale accounts, expiries) are computed against collection time: scope and
   first-party confirmations are read at the start of the session that reads them, and a
-  host's accepted risks at the start of the session that collected it. From E9 step 1
+  host's accepted risks at the start of the session that collected it. From E9 step 1d
   every time-dependent rule is judged against the collection time of the observation it
   reads, not the session start: a left date has passed when that read's collection time
   is after 24:00 of the date in `engagement.timezone`; stale and never-signed-in accounts
@@ -225,7 +228,7 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
   reads (reach, user, identity, known_hosts, jump, elevate, profile, `disable_checks`,
   `deny_paths`, `redact_extra`, timeout, its context with the accepted risks that name
   it, `engagement.timezone`, in which their expiry is graded, and the context's source
-  (until E9 step 1; from step 1 the context, its source, the accepted risks and the
+  (until E9 step 1c; from step 1c the context, its source, the accepted risks and the
   timezone are graded in Analyze and are not inputs),
   and the engagement's `exclude`, which its SSH dial is checked against).
 - A build whose version names no commit (`dev`) or carries uncommitted changes

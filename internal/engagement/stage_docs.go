@@ -7,7 +7,6 @@ import (
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/collector/workspace"
-	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/report"
 )
 
@@ -155,13 +154,13 @@ type ReconAsset struct {
 	Host         *report.Host                  `json:"host,omitempty"`
 	Facts        map[string]report.Fact        `json:"facts,omitempty"`
 	Observations map[string]report.Observation `json:"observations,omitempty"`
-	// Web is what the web collector read under a domain root, redacted by
-	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
-	// verdicts on it.
+	// Workspace, GitHub and Web are what each network collector read,
+	// redacted by the gate (docs/spec/web-collector.md, "Reads"). They carry
+	// no verdict: Analyze judges them (docs/spec/runs.md, "Verdicts are not
+	// evidence").
 	Workspace *workspace.Evidence `json:"workspace,omitempty"`
 	GitHub    *githubc.Evidence   `json:"github,omitempty"`
 	Web       *web.Evidence       `json:"web,omitempty"`
-	Judged    []finding.Judgment  `json:"judged,omitempty"`
 }
 
 // PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.

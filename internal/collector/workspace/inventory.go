@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
-	"github.com/b87/scheck/internal/finding"
 )
 
 // Target is a declared tenant, never a provider-returned selector.
@@ -114,7 +113,6 @@ type Evidence struct {
 	DelegatedUser     *User              `json:"delegated_user,omitempty"`
 	Attribution       []Attribution      `json:"attribution,omitempty"`
 	Notes             []Note             `json:"notes"`
-	Judgments         []finding.Judgment `json:"judgments,omitempty"`
 }
 
 func usable(r gate.Result) bool {
@@ -133,11 +131,12 @@ func readOf(op string, r gate.Result) Read {
 
 // Collect hides binding order, population reads, recognition, attribution and
 // diagnostic wording (docs/spec/workspace-collector.md, "Reads and projections").
+// It gives no verdict: Analyze calls Judge on what it read
+// (docs/spec/runs.md, "Verdicts are not evidence").
 func Collect(ctx context.Context, sender Sender, target Target, view Context) Evidence {
 	e := Evidence{Binding: Bind(ctx, sender, target.Asset)}
 	if e.Binding.CustomerID == "" {
 		e.finish(target.Asset, view)
-		e.Judgments = Judge(e, target.Asset, view)
 		return e
 	}
 	domain := e.Binding.Domain
@@ -170,7 +169,6 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 	e.collectGrants(ctx, sender, target, view, views)
 	e.collectMail(ctx, sender, target, view, views)
 	e.finish(target.Asset, view)
-	e.Judgments = Judge(e, target.Asset, view)
 	return e
 }
 

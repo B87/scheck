@@ -61,6 +61,31 @@ func NeedsWildcardPage(n Name) bool {
 	return p != nil && !p.NXDomain && n.Status == StatusResolves
 }
 
+// Suspensions are the names a provider fingerprint matched: an operator's
+// confirmation of each no longer stands, so Enrich reads none of them on it
+// (docs/spec/web-collector.md, "Never claim a name"). They are read
+// selection, not verdicts: Analyze judges the same names again. A wildcard
+// match stands for every name that shares the control's answers.
+func Suspensions(in Input) []string {
+	var out []string
+	for _, x := range Judge(in) {
+		if x.Verdict != Fired || (x.ID != finding.IDDNSTakeoverCandidate && x.ID != finding.IDDNSUnclaimedAtProvider) {
+			continue
+		}
+		if !strings.HasPrefix(x.Subject.Key, "*.") {
+			out = append(out, x.Subject.Key)
+			continue
+		}
+		for _, n := range in.Names {
+			if n.Status == StatusWildcard {
+				out = append(out, n.Name)
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 func takeoverID(p *fingerprint) string {
 	if p.Ownership {
 		return finding.IDDNSUnclaimedAtProvider

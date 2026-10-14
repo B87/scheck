@@ -17,12 +17,12 @@ import (
 // judgments: a bound tenant on the default profile with complete
 // administrative evidence unless change says otherwise.
 func workspacePlan(a *AssetInput, change func(*workspace.Evidence)) {
-	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Profile: "directory"}, Judgments: a.Judged}
+	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Profile: "directory"}}
 	e.Access.AdministrationComplete = true
 	if change != nil {
 		change(&e)
 	}
-	a.Coverage = e.Coverage()
+	a.Coverage = e.Coverage(a.Judged)
 }
 
 func workspaceInventoryReport(_ *testing.T) Input {

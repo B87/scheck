@@ -1689,11 +1689,21 @@ older than 7 days is collected again on resume; every risk area's row prints its
      (set by Analyze, replaced by `GradeAll`; a collector never sets it), not a separate
      graded wrapper type as the modularity sketch had it: one type reaches the report,
      and a judgment that was not graded has no chain.
-   - *1b to 1d (not started).* 1b: each collector's `Judge` call moves to Analyze and
-     verdicts leave the evidence types (`recon.json`, `evidence/`; `findings.json` as
-     output only). 1c: a kept host is graded again, so an edited accepted risk or context
-     no longer collects it again. 1d: observation-time clocks for every time-dependent
-     rule.
+   - *1b (done, offline).* The web, GitHub and Workspace `Judge` calls run in Analyze
+     (`internal/engagement/judge.go`), on what this session's Recon holds, keyed by asset;
+     web judges after every root is read, so inherited mail policy sees them all.
+     `githubc.Evidence.Judgments`, `workspace.Evidence.Judgments`, `ReconAsset.Judged` and
+     `finding.Judgment.Members` are gone, so `recon.json` and `evidence/` carry no
+     verdict. `githubc.Judge` runs every family (`JudgeAccess`, `JudgeCI`, `JudgeAlerts`,
+     `JudgeHistory`); `workspace.Evidence.Coverage` takes Judge's verdicts;
+     `web.Suspensions` names the fingerprinted names whose confirmation is suspended
+     before `Enrich`, as read selection and no verdict. `findings.json` carries every
+     verdict after partition and grading as `judged` per asset, output only, never read
+     on resume.
+   - *1c to 1d (not started).* 1c: a kept host is graded again, so an edited accepted
+     risk or context no longer collects it again (its inputs still include both). 1d:
+     observation-time clocks for every time-dependent rule; judging still uses the
+     session start.
 2. The fixed sub-item lists, with "not judged in this version: …" in every row; goldens.
 3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
    outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style
@@ -1789,9 +1799,9 @@ twelve items the first draft left open:
   that entry's `what`. Time-dependent rules judge against the collection time of the
   observation they read, not the session start (the leaver rule, stale and
   never-signed-in accounts, certificate expiry and its 14-day window, acceptance
-  expiry); step 1 applies this because it makes a resume re-judge persisted evidence, and
+  expiry); step 1d applies this because it makes a resume re-judge persisted evidence, and
   step 8 adds only the 7-day cap.
-- Step 1 design, from the `modularity` agent. Verdicts leave the evidence types
+- Step 1 design, from the `modularity` agent (network collectors built in 1b, hosts in 1c). Verdicts leave the evidence types
   (`githubc.Evidence.Judgments`, `workspace.Evidence.Judgments`, `ReconAsset.Judged`);
   Analyze judges; `findings.json` carries every verdict with its severity chain as output
   only, never read on resume; a kept host is graded again in Analyze, so editing an

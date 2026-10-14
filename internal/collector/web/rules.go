@@ -375,7 +375,6 @@ func (j *judging) wildcard() {
 	for _, x := range sub.out {
 		x.Asset = j.in.Asset
 		x.Subject = Subject{Kind: SubjectDNSName, Key: "*." + j.in.Root, Label: "*." + j.in.Root}
-		x.Members = members
 		if len(members) > 0 {
 			x.Excerpt += "; names with matching DNS answers (their pages were not read): " + strings.Join(members, ", ")
 		}

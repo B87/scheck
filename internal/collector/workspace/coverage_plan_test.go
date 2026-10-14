@@ -8,9 +8,9 @@ import (
 	"github.com/b87/scheck/internal/finding"
 )
 
-func oauthGroup(t *testing.T, e Evidence) finding.CoverageGroup {
+func oauthGroup(t *testing.T, e Evidence, judged ...finding.Judgment) finding.CoverageGroup {
 	t.Helper()
-	for _, g := range e.Coverage()[0].Groups {
+	for _, g := range e.Coverage(judged)[0].Groups {
 		if slices.Contains(g.Rules, IDOAuthBroadScope) {
 			return g
 		}
@@ -23,7 +23,7 @@ func oauthGroup(t *testing.T, e Evidence) finding.CoverageGroup {
 // of exactly one plan (docs/spec/workspace-collector.md, "Reporting and
 // coverage").
 func TestEveryWorkspaceRuleHasOneCoverageGroup(t *testing.T) {
-	plans := Evidence{}.Coverage()
+	plans := Evidence{}.Coverage(nil)
 	for _, id := range RuleIDs() {
 		n := 0
 		for _, p := range plans {
@@ -44,12 +44,12 @@ func TestCoverageGapsCollapseAndLimits(t *testing.T) {
 	if g := oauthGroup(t, e); g.NotOnPlan != nil || g.Collapse != nil || g.Limit != oauthLimit || !g.Always {
 		t.Fatal(g)
 	}
-	e.Judgments = []finding.Judgment{{ID: IDOAuthBroadScope, Verdict: Abstained, Reason: reasonUnclassified}, {ID: IDOAuthBroadScope, Verdict: Abstained, Reason: reasonUnclassified}}
-	if g := oauthGroup(t, e); g.Collapse == nil || !strings.HasPrefix(g.Collapse.Detail, "2 apps hold scopes scheck does not classify") {
+	unclassified := []finding.Judgment{{ID: IDOAuthBroadScope, Verdict: Abstained, Reason: reasonUnclassified}, {ID: IDOAuthBroadScope, Verdict: Abstained, Reason: reasonUnclassified}}
+	if g := oauthGroup(t, e, unclassified...); g.Collapse == nil || !strings.HasPrefix(g.Collapse.Detail, "2 apps hold scopes scheck does not classify") {
 		t.Fatal(g)
 	}
 	e.Access.AdministrationComplete = false
-	for _, g := range e.Coverage()[0].Groups {
+	for _, g := range e.Coverage(nil)[0].Groups {
 		if (g.Gap != nil) != slices.Contains(g.Rules, IDSuspendedAdminAssignment) {
 			t.Fatal("assignment gap on the wrong group", g)
 		}

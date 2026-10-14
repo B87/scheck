@@ -95,8 +95,8 @@ specific domain root that holds it, so nested roots never read it twice or give 
 SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
 ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
 has a value but never its address, each DKIM key's tags. What it read is in
-`recon.json`, under the asset's `web`. After all roots have been read, Recon judges it ("Rules", DNS in step 2b and
-email in step 3) and the root is `collected`. It is `limit_reached`
+`recon.json`, under the asset's `web`. The root is `collected`; Analyze judges it after all
+roots have been read ("Rules", DNS in step 2b and email in step 3). It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
@@ -104,8 +104,10 @@ as `Collect` returned (`incomplete`). A declared `domain` asset under a root tha
 is read with it: it is recorded with the root's status and the detail "read with
 *root*", and its findings are those whose subject it holds ("Subjects").
 
-**Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. After
-DNS takeover judgments have suspended stale first-party confirmations, `Enrich`
+**Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. Before
+`Enrich`, `Suspensions` suspends stale first-party confirmations. It is read selection, not
+a verdict: the names a provider fingerprint fired on, a wildcard match standing for every
+name with wildcard status. `Enrich`
 requests declared entries and the two well-known files through the typed `web.entry`
 op. A declared URL asset contained by a URL root contributes its exact entry path
 using the root's first-party evidence; a domain root alone does not grant it. URL
@@ -168,12 +170,12 @@ whether another account could claim its target was not assessed.
 **Built in E7 step 2b:** `dns.dangling_external`, `dns.dangling_internal` and
 `dns.private_address` (2b-i), and `dns.takeover_candidate` and
 `dns.unclaimed_at_provider` (2b-ii). `Judge` in `internal/collector/web` applies them
-to each domain root in Recon, right after `Collect`, over Scope's lookups and what `Collect` read; the
+to each domain root in Analyze (`internal/engagement/judge.go`), over Scope's lookups and what `Collect` read in Recon; the
 session's first `Collect` follows its own control lookup under `invalid.`
 ([scope.md](scope.md#discovery)), counted as a control. Each
 verdict is `fired`, `disproved` or `abstained` on one subject ("Subjects"), with the
-coverage reason of an abstention and the gate request ids it read, and is kept in
-`recon.json` under the asset's `judged`. One subject gets one verdict per rule: fired
+coverage reason of an abstention and the gate request ids it read, and is not part of
+`recon.json`; Analyze gives it, and `findings.json` keeps it as output only under the asset's `judged`. One subject gets one verdict per rule: fired
 stands over abstained, abstained over disproved, and the verdict keeps the reads of every
 verdict merged into it. A name Scope looked up is judged only under the most specific
 domain root holding it, as a mail domain is read, so nested roots never judge it twice.

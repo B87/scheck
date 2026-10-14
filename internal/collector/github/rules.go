@@ -122,9 +122,17 @@ func production(c Context, asset string) bool {
 }
 func describeAccount(a Account) string { return fmt.Sprintf("%s (GitHub account %d)", a.Login, a.ID) }
 
-// Judge reads only collected facts. Unknown and incomplete populations never
-// disprove a rule (docs/spec/github-collector.md, "Boundary", "Rules: evidence outcomes").
+// Judge is every rule family's verdicts over what was read: identity and
+// repository access, CI, provider alerts and history. Analyze calls it;
+// evidence carries no verdict (docs/spec/runs.md, "Verdicts are not
+// evidence").
 func Judge(e Evidence, c Context) []Judgment {
+	return slices.Concat(JudgeAccess(e, c), JudgeCI(e, c), JudgeAlerts(e, c), JudgeHistory(e))
+}
+
+// JudgeAccess reads only collected facts. Unknown and incomplete populations never
+// disprove a rule (docs/spec/github-collector.md, "Boundary", "Rules: evidence outcomes").
+func JudgeAccess(e Evidence, c Context) []Judgment {
 	var out []Judgment
 	// An owner-authorized disabled filter is affirmative membership/role evidence
 	// even when the unfiltered population stopped before reaching that account.

@@ -443,7 +443,7 @@ func TestCollectFreshDetailTwoStepEvidence(t *testing.T) {
 				return inventoryFixture(r.Op)
 			})
 			e := Collect(context.Background(), sender, Target{Asset: "saas:google-workspace:example.com", Stage: "recon"}, Context{})
-			j, ok := unitOutcome(t, e.Judgments, "/")
+			j, ok := unitOutcome(t, Judge(e, "saas:google-workspace:example.com", Context{}), "/")
 			if !ok || j.Verdict != tc.want {
 				t.Fatalf("want %s got %+v", tc.want, j)
 			}

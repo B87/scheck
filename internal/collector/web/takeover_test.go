@@ -165,7 +165,7 @@ func TestTakeoverInsufficientAndWildcard(t *testing.T) {
 	input.Gaps = []Gap{{Reason: "unavailable:ct_source", Detail: "CT failed"}}
 	js := Judge(input)
 	j := judgment(t, js, finding.IDDNSTakeoverCandidate)
-	if j.Verdict != Fired || j.Subject.Key != "*.example.com" || j.Asset != input.Asset || j.Reason != "unavailable:ct_source" || !slices.Equal(j.Members, []string{"a.example.com", "b.example.com"}) {
+	if j.Verdict != Fired || j.Subject.Key != "*.example.com" || j.Asset != input.Asset || j.Reason != "unavailable:ct_source" || !slices.Equal(Suspensions(input), []string{"a.example.com", "b.example.com"}) {
 		t.Fatalf("wildcard %+v", j)
 	}
 	for _, j := range js {
@@ -176,6 +176,30 @@ func TestTakeoverInsufficientAndWildcard(t *testing.T) {
 	input.Wildcard = &Name{Name: "random.example.com", Status: StatusGone, Outcome: "nxdomain"}
 	input.Gaps = nil
 	if got := Judge(input); len(got) != 0 {
+		t.Fatal(got)
+	}
+}
+
+// Suspensions name the names a fingerprint fired on and no other: a name
+// whose verdict abstains keeps its confirmation.
+func TestSuspensionsAreFiredFingerprintsOnly(t *testing.T) {
+	if got := Suspensions(providerInput("x.azurewebsites.net", "nxdomain")); !slices.Equal(got, []string{"old.example.com"}) {
+		t.Fatal(got)
+	}
+	in := providerInput("x.azurewebsites.net", "nxdomain")
+	in.Doubt = "unavailable:resolver_rewrites"
+	if got := Suspensions(in); len(got) != 0 {
+		t.Fatal(got)
+	}
+	if got := Suspensions(providerInput("x.github.io", "timeout")); len(got) != 0 {
+		t.Fatal(got)
+	}
+	// A dangling record with no fingerprint fires, but claims no provider.
+	in = providerInput("gone.unknown-host.example", "nxdomain")
+	if j := judgment(t, Judge(in), finding.IDDNSDanglingExternal); j.Verdict != Fired {
+		t.Fatal(j)
+	}
+	if got := Suspensions(in); len(got) != 0 {
 		t.Fatal(got)
 	}
 }

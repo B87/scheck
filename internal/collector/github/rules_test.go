@@ -1,6 +1,7 @@
 package github
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -78,7 +79,7 @@ func TestEveryGitHubRuleFiresDisprovesAndAbstains(t *testing.T) {
 				if f != nil {
 					f(&e, &c)
 				}
-				out := Judge(e, c)
+				out := JudgeAccess(e, c)
 				if !hasVerdict(out, id, v) {
 					t.Fatalf("missing %s %s: %+v", id, v, out)
 				}
@@ -118,7 +119,7 @@ func TestGitHubPartialPopulationsNeverDisprove(t *testing.T) {
 			case "keys":
 				e.RepositoriesAccess[0].DeployKeys.Complete = false
 			}
-			out := Judge(e, c)
+			out := JudgeAccess(e, c)
 			if field == "members" || field == "outside" || field == "invitations" || field == "collaborators" {
 				if hasVerdict(out, finding.IDIdentityFormerPersonHasAccess, Disproved) {
 					t.Fatal("offboarding disproved over a partial owning population")
@@ -135,15 +136,15 @@ func TestGitHubOwnerThresholdCountsKindsAndPartialLowerBounds(t *testing.T) {
 	e.Owners.Items = []Account{{ID: 1, Login: "alice"}, {ID: 2, Login: "bob"}, {ID: 3, Login: "carol"}, {ID: 4, Login: "dan"}, {ID: 5, Login: "eve"}, {ID: 6, Login: "frank"}}
 	e.Members.Items = e.Owners.Items
 	c.People = append(c.People, Person{Handle: "bob", Kind: "service", GitHub: []string{"bob"}}, Person{Handle: "carol", Kind: "break_glass", GitHub: []string{"carol"}}, Person{Handle: "dan", Kind: "break_glass", GitHub: []string{"dan"}}, Person{Handle: "eve", Kind: "break_glass", GitHub: []string{"eve"}})
-	if !hasVerdict(Judge(e, c), finding.IDGitHubTooManyOwners, Fired) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubTooManyOwners, Fired) {
 		t.Fatal("third break-glass owner must count; complete ratio should fire")
 	}
 	e.Members.Complete = false
-	if !hasVerdict(Judge(e, c), finding.IDGitHubTooManyOwners, Abstained) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubTooManyOwners, Abstained) {
 		t.Fatal("three counted owners cannot use incomplete ratio")
 	}
 	e.Owners.Items = append(e.Owners.Items, Account{ID: 7, Login: "grace"})
-	if !hasVerdict(Judge(e, c), finding.IDGitHubTooManyOwners, Fired) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubTooManyOwners, Fired) {
 		t.Fatal("four observed counted owners establish a lower-bound finding")
 	}
 }
@@ -151,7 +152,7 @@ func TestGitHubOffboardingDoesNotDuplicateUnexpectedAdmin(t *testing.T) {
 	e, c := ruleFixture()
 	c.People[0].Left = "2026-10-09"
 	c.ExpectedOwners = nil
-	out := Judge(e, c)
+	out := JudgeAccess(e, c)
 	if hasVerdict(out, finding.IDIdentityUnexpectedAdmin, Fired) {
 		t.Fatal("unexpected owner duplicates departed owner")
 	}
@@ -174,7 +175,7 @@ func TestGitHubUnknownPermissionsCannotDisproveProductionAdmin(t *testing.T) {
 		a.Account = e.Members.Items[0]
 		e.RepositoriesAccess[0].Collaborators.Items = []Collaborator{a}
 		e.OutsideCollaborators.Items = e.Members.Items
-		if !hasVerdict(Judge(e, c), finding.IDGitHubOutsideAdminOnProduction, Abstained) {
+		if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubOutsideAdminOnProduction, Abstained) {
 			t.Fatal("unknown/custom/contradictory role interpreted as no administrator")
 		}
 	}
@@ -185,13 +186,13 @@ func TestGitHubDisabledFilterPresenceSurvivesPartialMainInventory(t *testing.T) 
 	e.Owners.Items = nil
 	e.Owners.Complete = false
 	e.OwnersWithoutMFA.Items = []Account{{ID: 2, Login: "bob", Type: "User"}}
-	if !hasVerdict(Judge(e, c), finding.IDGitHubOwnerWithoutMFA, Fired) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubOwnerWithoutMFA, Fired) {
 		t.Fatal("affirmative owner-disabled filter account lost when main inventory partial")
 	}
 	e, c = ruleFixture()
 	e.Members.Complete = false
 	e.MembersWithoutMFA.Items = []Account{{ID: 2, Login: "bob", Type: "User"}}
-	if !hasVerdict(Judge(e, c), finding.IDGitHubMemberWithoutMFA, Fired) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDGitHubMemberWithoutMFA, Fired) {
 		t.Fatal("affirmative non-owner disabled member lost when main inventory partial")
 	}
 }
@@ -208,7 +209,7 @@ func TestFormerPersonConflictingRepositoryAdminDoesNotRaiseSeverity(t *testing.T
 		v.Account = Account{ID: 1, Login: "alice", Type: "User"}
 		e.RepositoriesAccess[0].Collaborators.Items = []Collaborator{v}
 		var found bool
-		for _, j := range Judge(e, c) {
+		for _, j := range JudgeAccess(e, c) {
 			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
 				found = true
 				if j.Has("admin") {
@@ -228,7 +229,7 @@ func TestUnknownCollaboratorVisibilityPreventsAbsenceDisproofs(t *testing.T) {
 	e.Owners.Items = nil
 	e.RepositoriesAccess[0].Collaborators.Items = nil
 	e.RepositoriesAccess[0].Collaborators.VisibilityComplete = false
-	out := Judge(e, c)
+	out := JudgeAccess(e, c)
 	for _, id := range []string{finding.IDIdentityFormerPersonHasAccess, finding.IDIdentityUnattributedAdmin} {
 		if hasVerdict(out, id, Disproved) {
 			t.Fatalf("%s disproved with unknown collaborator visibility", id)
@@ -239,7 +240,7 @@ func TestUnknownCollaboratorVisibilityPreventsAbsenceDisproofs(t *testing.T) {
 	e.Owners.Items = nil
 	e.Owners.Complete = false
 	e.OutsideCollaborators.Items = e.Members.Items
-	out = Judge(e, c)
+	out = JudgeAccess(e, c)
 	if !hasVerdict(out, finding.IDGitHubOutsideAdminOnProduction, Fired) {
 		t.Fatal("unknown visibility must preserve affirmative production administrator")
 	}
@@ -254,7 +255,7 @@ func TestPartialMFADeclarationDoesNotContradictIndividualGap(t *testing.T) {
 	e.OwnersWithoutMFA.Items = e.Owners.Items
 	e.Members.Items = append(e.Members.Items, Account{ID: 2, Login: "bob", Type: "User"})
 	e.MembersWithoutMFA.Items = []Account{e.Members.Items[1]}
-	for _, j := range Judge(e, c) {
+	for _, j := range JudgeAccess(e, c) {
 		if (j.ID == finding.IDGitHubOwnerWithoutMFA || j.ID == finding.IDGitHubMemberWithoutMFA) && j.Has("contradiction") {
 			t.Fatal("one disabled account does not contradict partial enforcement")
 		}
@@ -264,7 +265,7 @@ func TestNullLoginInvitationCannotDisproveFormerPersonInvite(t *testing.T) {
 	e, c := ruleFixture()
 	c.People[0].Left = "2026-10-09"
 	e.Invitations.Items = []Invitation{{ID: 9}}
-	if !hasVerdict(Judge(e, c), finding.IDIdentityFormerPersonInvited, Abstained) {
+	if !hasVerdict(JudgeAccess(e, c), finding.IDIdentityFormerPersonInvited, Abstained) {
 		t.Fatal("unidentified invitation cannot establish leaver absence")
 	}
 }
@@ -276,7 +277,7 @@ func TestFormerOwnerPresenceSurvivesUnavailableMembers(t *testing.T) {
 	e.RepositoriesAccess = nil
 	e.Owners.Reads = []Read{{Status: 200, Decision: "sent", RequestID: "owners-proof"}}
 	var found bool
-	for _, j := range Judge(e, c) {
+	for _, j := range JudgeAccess(e, c) {
 		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
 			found = true
 			if !j.Has("admin") || !slices.Contains(j.Reads, "owners-proof") {
@@ -293,7 +294,7 @@ func TestBotMemberMFAAbstainsDespiteCompleteUserFilter(t *testing.T) {
 	e, c := ruleFixture()
 	e.Members.Items = append(e.Members.Items, Account{ID: 99, Login: "automation[bot]", Type: "Bot"})
 	found := false
-	for _, j := range Judge(e, c) {
+	for _, j := range JudgeAccess(e, c) {
 		if j.ID == finding.IDGitHubMemberWithoutMFA && j.Subject != (Subject{}) && j.Subject.Key == "automation[bot]" {
 			found = true
 			if j.Verdict != Abstained {
@@ -319,7 +320,7 @@ func TestFormerAccessKeepsRepositoryPrivilegeOnItsAsset(t *testing.T) {
 	for _, repos := range [][]RepositoryAccess{{staging, productionRepo}, {productionRepo, staging}} {
 		e.RepositoriesAccess = repos
 		found := map[string]Judgment{}
-		for _, j := range Judge(e, c) {
+		for _, j := range JudgeAccess(e, c) {
 			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired {
 				found[j.Asset] = j
 			}
@@ -335,7 +336,7 @@ func TestMarkedCollaboratorRoleNeverEstablishesAdmin(t *testing.T) {
 		e, c := ruleFixture()
 		c.People[0].GitHub = []string{"bob"}
 		e.RepositoriesAccess[0].Collaborators.Items[0].RoleName = new(role)
-		for _, j := range Judge(e, c) {
+		for _, j := range JudgeAccess(e, c) {
 			if j.Asset == e.RepositoriesAccess[0].Asset && j.ID == finding.IDIdentityUnattributedAdmin && j.Verdict == Fired {
 				t.Fatalf("marked role produced admin: %+v", j)
 			}
@@ -344,5 +345,21 @@ func TestMarkedCollaboratorRoleNeverEstablishesAdmin(t *testing.T) {
 		if admin || known {
 			t.Fatalf("marked role recognized: %s", role)
 		}
+	}
+}
+
+// Judge is every family's verdicts, so Analyze cannot leave one out.
+func TestJudgeRunsEveryFamily(t *testing.T) {
+	shop := "repo:github:acme/shop"
+	e := Evidence{RepositoriesCI: []RepositoryCI{{Asset: shop}}, RepositoriesAlerts: []RepositoryAlerts{{Asset: shop}}, RepositoriesHistory: []RepositoryHistory{{Asset: shop}}}
+	c := Context{OrganizationAsset: "saas:github:acme"}
+	for name, family := range map[string][]Judgment{"access": JudgeAccess(e, c), "ci": JudgeCI(e, c), "alerts": JudgeAlerts(e, c), "history": JudgeHistory(e)} {
+		if len(family) == 0 {
+			t.Fatalf("fixture gives no %s verdict", name)
+		}
+	}
+	want := slices.Concat(JudgeAccess(e, c), JudgeCI(e, c), JudgeAlerts(e, c), JudgeHistory(e))
+	if got := Judge(e, c); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%d judgments, want %d", len(got), len(want))
 	}
 }

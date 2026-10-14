@@ -74,7 +74,6 @@ func (r *run) collectURL(ctx context.Context, a ResolvedAsset, ra ReconAsset) Re
 	}
 	ev := web.Collect(ctx, g, web.Domain{Asset: a.ID, Name: a.name, Stage: "recon", URLOnly: true, Sites: r.webPlans(a)})
 	ra.Web = &ev
-	ra.Judged = web.Judge(r.webInput(a, ev))
 	ra.Status = StatusCollected
 	if ctx.Err() != nil || ev.Cut() {
 		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
