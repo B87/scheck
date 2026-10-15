@@ -95,9 +95,10 @@ func Build(in Input) *Report {
 					r.Redaction.Builtin[h.Rule]++
 				}
 			}
-			r.Findings = append(r.Findings, b.judgedFindings(a)...)
-			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 		}
+		// A network collector's verdicts, and the multi-fact rules' on a host.
+		r.Findings = append(r.Findings, b.judgedFindings(a)...)
+		r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 	}
 	r.Findings = uniqueFindings(r.Findings)
 	r.Assessments = uniqueAssessments(r.Assessments)
@@ -253,7 +254,10 @@ func (b *builder) acceptances() {
 }
 
 func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string) {
-	if judged, read := b.judgedFor(acc.AssetID); read {
+	// A host's posture findings are the host grader's to accept, by whole
+	// id; a multi-fact rule's are judged like a network collector's.
+	def, _ := finding.Lookup(acc.ID)
+	if judged, read := b.judgedFor(acc.AssetID); read && (b.hosts[acc.AssetID] == nil || def.MultiFact) {
 		return b.judgedOutcome(acc, out, judged)
 	}
 	v := b.hosts[acc.AssetID]

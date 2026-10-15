@@ -1,9 +1,13 @@
 package engagement
 
 import (
+	"fmt"
+	"strings"
+
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/engagement/rules"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -30,4 +34,28 @@ func (r *run) judge() map[string][]finding.Judgment {
 		}
 	}
 	return out
+}
+
+// hostRules are the multi-fact rules' verdicts over each collected host's
+// facts and its declared expected services, with the coverage they are
+// marked against, by asset id (docs/spec/engagement.md, "Multi-fact
+// rules"). A kept host is judged again from its kept facts.
+func (r *run) hostRules() map[string]rules.Result {
+	var hosts []rules.Host
+	for _, ra := range r.recon.Assets {
+		c, collected := r.hosts[ra.Name]
+		a, ok := r.asset(ra.Name)
+		if !collected || !ok {
+			continue
+		}
+		h := rules.Host{Asset: ra.ID, Name: ra.Name, Facts: c.Facts()}
+		if a.Context != nil {
+			for i, s := range a.Context.ExpectedServices {
+				h.Context.Services = append(h.Context.Services, rules.Service{Port: s.Port, Proto: strings.ToLower(s.Proto),
+					Audience: s.Audience, Key: fmt.Sprintf("assets.%s.context.expected_services[%d]", a.Name, i)})
+			}
+		}
+		hosts = append(hosts, h)
+	}
+	return rules.Judge(hosts)
 }

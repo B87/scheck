@@ -235,7 +235,7 @@ appears in the failure):
 | Disk encryption | `fdesetup status` | `lsblk -o NAME,TYPE,FSTYPE`, `/etc/crypttab` |
 | Integrity / MAC | `csrutil status`, `spctl --status` | `sestatus`, `aa-status` |
 | Firewall | `socketfilterfw --getglobalstate` (+`--getblockall`) | `ufw status`, `firewall-cmd --state`, `nft list ruleset` |
-| Listening sockets | `lsof -nP -iTCP -sTCP:LISTEN` | `ss -tulpnH` |
+| Listening sockets | `lsof -nP -iTCP -sTCP:LISTEN` | `ss -tulpnH` (elevated since E9 step 3a, below) |
 | sshd config | `sshd -T` | `sshd -T` |
 | Accounts | `dscl . -list /Users UniqueID`, admin group | `/etc/passwd`; `/etc/shadow` via metadata-only policy (§4.1); `passwd -S -a` (elevated) |
 | Privilege escalation | `/etc/sudoers`, `grep -rH . /etc/sudoers.d` (elevated) | same |
@@ -250,7 +250,7 @@ appears in the failure):
 The exact argv of every entry is the catalog itself (`internal/check/{common,linux,macos}`),
 printed by `scheck catalog`. The table is the intent; the code is the contract.
 
-**`fw.iptables_backend` (0.0.2 E9 step 3; design until it lands).** Linux, literal argv
+**`fw.iptables_backend` (0.0.2 E9 step 3a, built).** Linux, literal argv
 `realpath -e /usr/sbin/iptables`, not elevated, no parameter, `Baseline: true`,
 `MinProfile: baseline`. It resolves the `iptables` link and reads nothing else, so
 `iptables` stays on the denied-binary list with no exemption. A target of
@@ -259,12 +259,25 @@ printed by `scheck catalog`. The table is the intent; the code is the contract.
 `nft list ruleset` is decisive; any other target is unrecognized and the rule that reads
 it abstains. Its one consumer is the engagement rule `db.listens_unfiltered`
 (`engagement.md`, "The multi-fact rules of 0.0.2"). No host posture rule reads it, so it
-adds no finding to the host report. This is a deliberate exception to the 0.0.2
+adds no finding to the host report. The Ubuntu fixture records `/usr/sbin/xtables-nft-multi`
+and the Fedora fixture exit 1 (no `iptables`), both recorded by hand from the test
+containers. This is a deliberate exception to the 0.0.2
 decision that the host gains no check (ROADMAP, "Decisions"): the golden command trace
 of a Linux run gains one line, recorded with its reason under release gate 8. The
 tolerance list of §1 is unchanged. As a `Baseline: true` entry it does not count toward
 the cap of 40 on-demand entries at baseline (`internal/check/invariants.go`,
 `BaselineTierCap`), which counts only `Baseline: false` entries.
+
+**`net.listeners` on Linux is elevated (0.0.2 E9 step 3a, built).** The argv is `sudo -n --
+ss -tulpnH`. `ss -p` names only the calling user's own sockets, and a database runs as
+its own user, so an unelevated read cannot tell a database from any other listener.
+Without `--sudo` the listeners fact is unavailable (`requires elevation`), and the rules
+that read it abstain (`engagement.md`, "The multi-fact rules of 0.0.2"). `scheck sudoers`
+grants `ss` at both `/usr/bin/ss` (Debian, Ubuntu) and `/usr/sbin/ss` (Fedora), each with
+the fixed flags (§7.1). The golden command traces of a Linux run change by exactly the
+`fw.iptables_backend` line and by `ss` behind `sudo -n --` with its `which ss` probe,
+later `sys.which` observations renumbered; the reason is recorded under release gate 8
+(`ROADMAP.md`, E9 decisions D3 and D3b). The macOS `lsof` check is unchanged.
 
 **On-demand checks** (`Baseline: false`, callable by the model) are parameterised
 variants: `fs.stat {path}`, `fs.list {path}`, `text.head {path} {lines}`,
@@ -1091,7 +1104,9 @@ sudo's wildcard syntax limited to the parameter's charset. `scheck` prints the f
 and never installs it. The fragment is regenerated from the catalog, so it cannot drift
 from what `scheck` actually runs. Binaries are resolved to absolute paths from a
 per-platform table because sudoers requires them; generation fails on an unknown
-binary rather than guessing. Because sudoers cannot express an empty argument, the
+binary rather than guessing; a binary installed at different paths on one platform's
+distributions gets a line for each (`ss`: `/usr/bin/ss` and `/usr/sbin/ss` on Linux).
+Because sudoers cannot express an empty argument, the
 sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also sets
 `Defaults:<user> !requiretty`, since `scheck ssh` allocates no tty.
 

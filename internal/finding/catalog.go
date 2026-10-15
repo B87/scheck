@@ -44,6 +44,10 @@ type Def struct {
 	// Attributes are the steps the collector owns: each applies when a
 	// judgment carries the attribute (attribute:password_form).
 	Attributes []AttributeRaise
+	// MultiFact marks a finding an engagement rule produces from several
+	// facts (docs/spec/engagement.md, "Multi-fact rules"): never a host
+	// posture rule's, and never the model's to report.
+	MultiFact bool
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as

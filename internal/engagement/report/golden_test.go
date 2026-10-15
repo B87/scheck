@@ -55,7 +55,10 @@ func jumpRefused(t *testing.T) Input {
 func TestGoldenReports(t *testing.T) {
 	s := schema(t)
 	cases := map[string]func(*testing.T) Input{
-		"host-ubuntu": func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-ubuntu":             func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-database-fired":     hostDatabaseFiredReport,
+		"host-database-disproved": hostDatabaseDisprovedReport,
+		"host-database-abstained": hostDatabaseAbstainedReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.
 			in := oneHost(t, "macos")

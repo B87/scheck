@@ -744,6 +744,7 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` | n/a |
 | `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below | +1 | no: stops at high |
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
+| `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered` only | +1 | no: stops at high |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
 | `attribute:admin` | a fact, cited by observation and excerpt | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
 | `attribute:admin_grantor` | a fact, cited by observation and excerpt | `workspace.oauth_broad_scope`, when a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it | +1 | no: stops at high |
@@ -872,7 +873,7 @@ against them:
 |---|---|---|
 | critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled (reached only by the raises the table marks, "Severity in context"). | a usable empty password: an account with an empty password that sshd accepts empty passwords for (`accounts.empty_password_remote`, a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
 | high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`, and +1 `attribute:production_write` when they can still push to a production repository); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
-| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`, E9; +1 `exposure:internet` by the host collector, +1 `contradiction`; ceiling high) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`; +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
 | low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone; a declared service listening beyond its declared audience (`svc.listens_beyond_declared`, E9; +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
 | info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
 
@@ -1074,9 +1075,27 @@ unknown. **An incomplete population proves presence, never absence**
 exclusion drop, a rule may fire on an instance it saw but is never disproved, and a
 count it prints is a lower bound ("at least 4 super admins"). Rules that name follow-ups are what let the loop iterate without a model.
 
+*The framework* (built, E9 step 3a: `internal/engagement/rules`). A rule declares its
+reads, each a host check by catalog id or a declaration of the host's context, and
+judges through a view that hands it only those; an undeclared read is recorded and
+fails the invariants test, as does a declared read no judgment uses. Analyze judges
+every collected host, kept ones included, from what a persisted envelope keeps (status,
+reason, observation, parsed): exit codes and stderr are not kept, so a rule reads parsed
+output and reason codes only. A fact known to be partial (a truncated or redacted
+capture, a cap) never supports a disproval: the framework withdraws it with the reason
+`unavailable:incomplete_read`, and the host's coverage is marked partial. A host of a
+platform the rule does not judge gets no verdict, and its coverage plan names the
+sub-item unread. Each judgment cites the facts it read by check, observation and
+excerpt, and is graded by the severity table like a network collector's. A multi-fact
+definition is marked `MultiFact` (report rule kind `multi_fact`); the model's finding
+store refuses it, and an acceptance of its id is applied to the judgment by subject,
+never by the host grader. An invariants test requires that every rule fires, is
+disproved and abstains on a fixture, and that an all-partial read never disproves.
+
 ### The multi-fact rules of 0.0.2
 
-Design; becomes contract when E9 lands (steps 3 to 5, `ROADMAP.md`). Already built
+R1 is contract (E9 step 3a); the rest is design that becomes contract when its step
+lands (R2 step 3b, R4 and R5 step 4, R3 step 5, `ROADMAP.md`). Already built
 and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
 `identity.unattributed_admin`, `identity.former_person_has_access`,
 `identity.former_person_invited`, `identity.external_admin` and `identity.shared_admin`
@@ -1087,35 +1106,129 @@ be incomplete and never disproves on one, and has a firing, a disproved and an
 insufficient-evidence fixture; an invariants test, like `ValidateRules`, rejects a rule
 that reads nothing it declares.
 
-**R1 `db.listens_unfiltered`.** Area data stores, base medium, ceiling high, subject kind
-`service` (`port/proto`: an acceptance names it). It is an engagement rule over a host's
-facts, not a host posture rule, and no `exposed_on_purpose` or `expected_services` entry
-lowers it. It reads `net.listeners` (with process names), `fw.ufw`, `fw.nft`,
-`fw.firewalld`, `fw.iptables_backend` and the host's `expected_services` and `exposure`.
-A versioned table names the database processes and their ports, matched by process
-first, then by port: `postgres` 5432; `mysqld` and `mariadbd` 3306 and 33060;
-`redis-server` 6379; `mongod` 27017; `memcached` 11211; `clickhouse-server` 8123 and
-9000; `influxd` 8086; `beam.smp` and `couchdb` 5984. A database process on any port
-counts; a table port held by a known other process does not.
+**R1 `db.listens_unfiltered`** (built, E9 step 3a). Area data stores, base medium,
+ceiling high, subject kind `service` (`port/proto`: an acceptance names it; the label is
+the process name). It is an engagement rule over a host's facts, not a host posture rule,
+and no `exposed_on_purpose` or `expected_services` entry lowers it. It judges Linux hosts;
+a host of another platform gets no verdict, and its coverage names the sub-item
+"Databases listening beyond localhost" as unread: "this version of scheck has no rule for
+databases on this platform". It reads `net.listeners` (with process names, so elevated:
+host-collector.md §7.1), `fw.ufw`, `fw.nft`, `fw.firewalld`, `fw.iptables_backend`, `os.release` and
+the host's `expected_services`. The host's `exposure` is the severity table's input, not the
+rule's.
+
+*The database table* (`DatabasesVersion` 2026-10-15) names the processes by the kernel's
+command name (15 characters, as `ss` prints it) and the ports they use:
+
+| Process | Ports |
+|---|---|
+| `postgres` | 5432 |
+| `mysqld`, `mariadbd` | 3306, 33060 |
+| `redis-server`, `valkey-server` | 6379 |
+| `mongod` | 27017 |
+| `memcached` | 11211 |
+| `clickhouse-serv`, `clickhouse` | 8123, 9000 |
+| `influxd` | 8086 |
+| `couchdb` | 5984 |
+| `beam.smp` | 5984 only |
+
+A database process counts on any port except `beam.smp`, which is the Erlang VM of many
+programs and counts only on 5984. A table port held by a known other process is no
+subject. An unnamed owner on a table port is insufficient evidence
+(`unavailable:listener_owner`). `docker-proxy` and `conmon` on a table port are
+insufficient evidence (`unavailable:container_port`): "Docker/Podman publishes this port;
+its rules bypass ufw and firewalld, and scheck does not read them in this version";
+`rootlessport`, `pasta`, `pasta.avx2` and `slirp4netns` on a table port abstain the same
+way, since the service behind them is not known.
+
+*Listeners.* A record counts for `tcp` `LISTEN` and `udp` `UNCONN`. Loopback is
+`127.0.0.0/8`, `::1`, a v4-mapped loopback and any address with zone `lo`; `*`,
+`0.0.0.0`, `::` and any specific or link-local address are beyond loopback. `::` takes
+IPv4 too unless a `0.0.0.0` listener holds the same port. A subject is one port/proto
+with its v4 and v6 listeners merged; it fires if any family of a database listener is
+open.
+
+*The firewall* is read from parsed output and reason codes only (exit codes and stderr
+are not persisted). `ufw status verbose` must parse as ufw's `get_status` prints it:
+`Status` active or inactive (any other word is unrecognized); `Default` incoming `deny`
+or `reject` filters and `allow` does not; rule lines `To  ACTION DIR  From
+[(attribute)] [# comment]`, `IN` only, where the attribute is `(log)`, `(log-all)` or
+`(out)` and `(v6)` after To or From names the family. To is `Anywhere`[`/proto`], a port
+spec (a port, a range `a:b`, a list, with `/tcp` or `/udp`), an address with a port spec,
+or an address alone or with `/proto`; an application rule prints its ports followed by
+the profile in brackets (`22/tcp (OpenSSH)`), and the printed ports are what is read.
+From is `Anywhere`[`/proto`], an address or network (with ports or `/proto`), which
+restricts the source, or ports alone, which do not: the source is still every address and
+a sender chooses its own source port; with To `Anywhere`, a protocol ufw prints in From
+only (`53/udp`) is the rule's. An address or network is `/proto`-suffixed as ufw
+prints it (`192.168.1.0/24/tcp`); an application profile's name may hold spaces and
+" on "; an IPv6 source address makes the rule an IPv6 rule. A line in no other shape
+makes the whole read unrecognized, since it may be the first match.
+For each family the first rule that covers the port decides: a rule bound to an
+interface is unknown; a source-restricted rule is passed over; a `DENY` or `REJECT` to
+one destination address, or any rule to a loopback destination, is passed over (traffic
+to the host's other addresses does not match it); an `ALLOW` to one non-loopback
+destination address is unknown (scheck does not compare it with the address the database
+listens on); `ALLOW` or `LIMIT` from Anywhere is open; `ALLOW` or `LIMIT` from source ports alone is
+open too, and the excerpt says "ufw allows this port from any address whose source port is
+*P*; a sender chooses its own source port, so the rule does not restrict who can
+connect"; `DENY` or `REJECT` from source ports alone is passed over; `DENY` or `REJECT`
+from Anywhere is filtered; with no rule, the default decides. Every verdict reached
+through ufw, fired or disproved, carries the not-checked sentence "Only ufw's own rule
+listing was read: rules added outside ufw (by scripts, Docker, kube-proxy or a network
+plugin, in iptables or other nftables tables) and custom lines in /etc/ufw/before.rules
+were not, and they can open or close this port whatever ufw shows". The remediation's
+caveat says to delete a source-port rule (`ufw status numbered`, then `ufw delete N`):
+connection tracking already lets in replies to the host's own DNS queries. IPv6 is judged only when ufw lists at least
+one `(v6)` rule: with `IPV6=no` ufw still prints its default but does not manage
+ip6tables, so with no `(v6)` rule the IPv6 family is unknown. A `ufw` read known to be
+partial never lets the default decide. The module is shared with R3.
+
+*No host firewall* means: `ufw` inactive or not installed; `firewalld` not installed or
+"not running"; `nft list ruleset` exit 0 with only blank or `#` lines (an empty ruleset,
+no tables); and the `iptables` backend `xtables-nft-multi`, or no `/usr/sbin/iptables`
+(`fw.iptables_backend` empty, except on `ID=alpine` in `os.release`, which keeps
+`iptables` in `/sbin`: there the backend is unrecognized and the rule abstains). A known
+limit: an empty backend read cannot tell "no `/usr/sbin/iptables`" from a `realpath`
+without `-e` (busybox), and a host without merged `/usr` that keeps legacy `iptables`
+only in `/sbin` (Ubuntu 18.04, Debian 9) is read as having none; with an empty `nft`
+ruleset R1 then fires though legacy rules may filter the port. `firewalld` running, a non-empty `nft` ruleset with `ufw` inactive, `nft`
+not installed or unreadable, the legacy backend (`xtables-legacy-multi`,
+`xtables-multi`) and any other target abstain, with the reasons
+`unavailable:firewall_ufw`, `firewall_firewalld`, `firewall_nft` and `firewall_backend`.
 
 | Outcome | When |
 |---|---|
-| fires | a database listener bound to a non-loopback address, its owner a known process and not `docker-proxy`, and the host firewall recognized as not filtering the port: (a) `ufw` active with default incoming allow, or an `ALLOW IN` from Anywhere for the port; or (b) no host firewall: `ufw` inactive or absent, `firewalld` not running or absent, `nft list ruleset` showing zero tables, and the `iptables` backend `nf_tables`, or no `iptables` userspace at all |
-| disproved | for the host, no database listener on a non-loopback address on a complete read with process names; for a subject, `ufw` active with default deny incoming and no `ALLOW` for the port, or only source-restricted ones |
-| insufficient evidence | listeners without process names; a firewall read that did not run or parse; a non-empty `nft` ruleset with `ufw` inactive; `firewalld` running; an owner of `docker-proxy`; an `iptables` backend unrecognized, or `legacy` with an empty `nft` ruleset; a macOS host (`no_rule`) |
+| fires | a database listener on a non-loopback address, its owner named and not a container proxy, and the host firewall recognized as not filtering the port in that family: (a) `ufw` active with default incoming allow, or an `ALLOW` or `LIMIT` from Anywhere that covers the port; or (b) no host firewall, as above |
+| disproved | for a subject, `ufw` active and every listening family filtered (default deny or reject with no open rule, or only source-restricted ones). For the host, a complete read (listeners usable and not partial, every non-loopback listener named) with no database listening beyond localhost |
+| insufficient evidence | listeners unavailable (`unavailable:listeners`, which includes no `--sudo`: `net.listeners` is elevated); a non-loopback listener whose owner is not shown (a host-level abstention, `unavailable:listener_owner`, which also keeps the host from being disproved); a firewall read that did not run or parse; the cases above that abstain; a macOS host |
 
-Raises: +1 for host `exposure: internet` (the host collector's), +1 `contradiction` when
-`expected_services` declares that port for an audience of `localhost`, `lan` or `vpn`.
-A declared audience of `internet` leaves it at base, with the `why_here` "You declared it
-internet-facing; a database open to every address is still reported. Restrict it to the
-addresses that need it." Text: "*process* on *host* listens on *address:port* and the host
-firewall does not restrict that port. Whether a cloud firewall or security group blocks
-it was not assessed." Remediation: "If only this host uses the database, bind it to
-localhost (postgres `listen_addresses = 'localhost'`, MySQL `bind-address = 127.0.0.1`,
-Redis `bind 127.0.0.1`) and restart it. If other machines need it, allow the port only
-from their addresses (`ufw default deny incoming`, `ufw allow from 10.0.0.5 to any port
-5432 proto tcp`). Check your cloud firewall rules too: scheck did not read them." A
-bind address alone is neither exposure nor this finding.
+A fact known to be partial never disproves: the framework withdraws a disproval that
+rests on it, with the reason `unavailable:incomplete_read` ("what it read was incomplete,
+so it could show a problem but not rule one out"). The `Match`-block condition that bears
+on sshd belongs to R2, not here.
+
+Raises: +1 `exposure:internet` when the host's `exposure` is `internet` (the severity
+table, below, not the host collector), +1 `contradiction` citing
+`assets.<h>.context.expected_services[i]` when that port and protocol is declared for an
+audience of `localhost`, `lan` or `vpn`. A declared audience of `internet` leaves it at
+base, with the `why_here` "You declared it internet-facing; a database open to every
+address is still reported. Restrict it to the addresses that need it." Text: "*process*
+on *host* listens on *address:port* and the host firewall does not restrict that port."
+Not checked: "Whether a cloud firewall or security group blocks it was not assessed; who
+can sign in to the database (pg_hba.conf, database users and passwords) was not read",
+and, on the `ufw` branch, "Only ufw's own rule listing was read: …", or,
+on the no-firewall branch, "Filters outside nftables (eBPF programs such as Cilium's)
+were not read". Remediation: "If only this host uses the database, bind it to localhost
+(postgres `listen_addresses = 'localhost'`, MySQL `bind-address = 127.0.0.1`, Redis `bind
+127.0.0.1`) and restart it. If other machines need it, allow the port only from their
+addresses (`ufw default deny incoming`, `ufw allow from 10.0.0.5 to any port 5432 proto
+tcp`). Check your cloud firewall rules too: scheck did not read them." A bind address
+alone is neither exposure nor this finding.
+
+Deferred, with owners in `ROADMAP.md`: the base-chain refinement of an `nft` ruleset and
+a parameterized `sshd -T -C user=` read (0.0.3 G5); the note for Docker's userland proxy
+turned off; R1's contradiction evidence line naming the audience (step 3b).
 
 **R2 `accounts.empty_password_remote`.** Area hosts, base critical, built last in the
 slice. It reads the `accounts.empty_password` join, `sshd.config` (`sshd -T`, elevated)

@@ -43,7 +43,10 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"cloud.org_policies", "organization-wide guardrails (organization policies)"},
 	},
 	finding.AreaData: {
-		{"data.host_db_unfiltered", "databases on hosts that listen on every address with no host firewall in front"},
+		{"data.db_signin", "who can sign in to each database (pg_hba.conf, database users and their passwords)"},
+		{"data.db_firewall_rules", "databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet)"},
+		{"data.db_containers", "databases published by Docker or Podman, whose port rules bypass the host firewall"},
+		{"data.other_stores", "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"},
 		{"data.drive_sharing", "Google Drive sharing defaults, and files shared with anyone who has the link"},
 		{"data.backups", "whether backups exist, where they are kept, and who can delete them"},
 	},
@@ -69,7 +72,7 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 	},
 	finding.AreaHosts: {
 		{"hosts.empty_password_ssh", "an empty password that SSH accepts"},
-		{"hosts.firewall_linux", "the firewall on Linux hosts"},
+		{"hosts.firewall_linux", "the firewall on Linux hosts, apart from database ports"},
 		{"hosts.listeners", "listening services you did not declare"},
 		{"hosts.admins_sudo", "who can become root or administrator, and sudo rules that need no password"},
 		{"hosts.ssh_keys", "SSH keys allowed to log in (authorized_keys)"},

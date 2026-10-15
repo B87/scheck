@@ -27,7 +27,7 @@ func moved(c *finding.Chain) []string {
 // id cannot leave a row that silently never applies.
 func TestEveryRowNamesRegisteredDefinitions(t *testing.T) {
 	ids := append([]string{}, productionIDs...)
-	ids = append(ids, finding.IDIdentityFormerPersonHasAccess, workspace.IDExternalForwarding, workspace.IDOAuthBroadScope,
+	ids = append(ids, finding.IDDBListensUnfiltered, finding.IDIdentityFormerPersonHasAccess, workspace.IDExternalForwarding, workspace.IDOAuthBroadScope,
 		finding.IDGitHubSecretScanningOpen, finding.IDGitHubHistoryCredential)
 	for _, id := range ids {
 		if _, ok := finding.Lookup(id); !ok {
@@ -172,6 +172,7 @@ func TestEveryMovingStepHasASentence(t *testing.T) {
 		Exposed:     []Exposed{{URL: url.Key, Reason: "public", Key: "intent.exposed_on_purpose[0]"}},
 		MattersMost: []Matter{{Asset: "a", Name: "a", Key: "data.matters_most[0]"}},
 		Production:  map[string]Production{"a": {Name: "a", Key: "assets.a.deploys_to"}},
+		Internet:    map[string]string{"b": "assets.b.context.exposure"},
 	}
 	cases := []finding.Judgment{
 		fired(finding.IDWebVersionDisclosed),
@@ -181,6 +182,7 @@ func TestEveryMovingStepHasASentence(t *testing.T) {
 		fired(workspace.IDExternalForwarding, finding.Attribute{Name: "admin"}),
 		fired(workspace.IDOAuthBroadScope, finding.Attribute{Name: "admin_grantor"}),
 		fired(finding.IDGitHubSecretScanningOpen, finding.Attribute{Name: "public_repository"}),
+		fired(finding.IDDBListensUnfiltered),
 	}
 	cases[0].Subject = url
 	seen := map[string]bool{}
@@ -206,5 +208,30 @@ func TestEveryMovingStepHasASentence(t *testing.T) {
 		if !found {
 			t.Errorf("row %d (%s) never moved in this test", i, r.name)
 		}
+	}
+}
+
+// A database open on a host rises for the host's declared internet
+// exposure and for a contradicted audience, and stops at its ceiling of
+// high with the ceiling's words (docs/spec/engagement.md, R1, "Ceilings").
+func TestAnOpenDatabaseStopsAtItsCeiling(t *testing.T) {
+	const host = "host:db1:22"
+	d := Declarations{Internet: map[string]string{host: "assets.db1.context.exposure"}}
+	c := Grade(fired(finding.IDDBListensUnfiltered), host, d)
+	if got := strings.Join(moved(c), ","); got != "exposure:internet" || c.Severity != finding.SevHigh || c.Moves[0].Ref.Key != "assets.db1.context.exposure" {
+		t.Fatalf("moves %s, severity %s", got, c.Severity)
+	}
+	j := fired(finding.IDDBListensUnfiltered, finding.Attribute{Name: "contradiction", Ref: finding.Ref{Key: "assets.db1.context.expected_services[0]"}})
+	c = Grade(j, host, d)
+	last := c.Moves[len(c.Moves)-1]
+	if c.Severity != finding.SevHigh || last.Rule != "contradiction" || last.Stopped != finding.StoppedCeiling || last.Why != whyCeiling {
+		t.Fatalf("%+v", c)
+	}
+	if c := Grade(fired(finding.IDDBListensUnfiltered), "host:other:22", d); len(moved(c)) != 0 {
+		t.Fatalf("another host's exposure moved it: %+v", c)
+	}
+	// The exposure row moves nothing but the database finding.
+	if c := Grade(fired(finding.IDGitHubWritableDeployKey), host, d); slices.Contains(moved(c), "exposure:internet") {
+		t.Fatalf("%+v", c)
 	}
 }

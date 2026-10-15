@@ -454,6 +454,10 @@ func (c *Collection) Grade(g Grading) report.Envelope {
 	return report.Assess(c.Evidence(), c.sheet, meta)
 }
 
+// Facts are the host's facts as the engagement's multi-fact rules read
+// them, with the checks the asset disabled unusable.
+func (c *Collection) Facts() finding.Facts { return finding.FactsOf(c.sheet, c.meta.Disabled) }
+
 // Planned is the plan's check ids, so the report counts the checks a cut
 // collection never reached.
 func (c *Collection) Planned() []string { return slices.Clone(c.planned) }

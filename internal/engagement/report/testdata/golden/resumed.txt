@@ -23,7 +23,7 @@ Not requested    A one-host check reads this host only. Your accounts, code, clo
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 33 checks gave no
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 34 checks gave no
   answer). Below: 0 low, 0 informational, 0 accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
@@ -34,20 +34,20 @@ host was looked at. Anything not checked is unknown, not fine.
 
 COVERAGE
 Hosts                    checked in part
-  Not judged in this version: an empty password that SSH accepts; the firewall on Linux hosts;
-  listening services you did not declare; who can become root or administrator, and sudo rules that
-  need no password; SSH keys allowed to log in (authorized_keys); disk encryption on Linux hosts;
-  programs that run with root rights (SUID files); programs started at boot or on a schedule;
-  credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
+  Not judged in this version: an empty password that SSH accepts; the firewall on Linux hosts, apart
+  from database ports; listening services you did not declare; who can become root or administrator,
+  and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); disk
+  encryption on Linux hosts; programs that run with root rights (SUID files); programs started at
+  boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 33: 22 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+  checks 34: 23 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
     Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
                              scheck could not tell (this is not a finding)
-    Firewall                 not judged: this version of scheck has no rule for it (not read:
-                             fw.firewalld, fw.nft, fw.ufw)
+    Firewall                 not judged: this version of scheck has no rule for it (read:
+                             /usr/sbin/xtables-nft-multi; not read: fw.firewalld, fw.nft, fw.ufw)
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
     SSH server               checked (password login, direct root login): nothing found by these

@@ -177,7 +177,7 @@ func TestHostCoverageComesFromRules(t *testing.T) {
 	if r.Exit.Code != 0 || len(r.Findings) != 0 {
 		t.Errorf("Ubuntu fixture: exit %d with %d findings, want 0 and none", r.Exit.Code, len(r.Findings))
 	}
-	if a := r.Assets[0]; a.Checks == nil || a.Checks.Planned != 33 || a.Checks.NotRun != 0 {
+	if a := r.Assets[0]; a.Checks == nil || a.Checks.Planned != 34 || a.Checks.NotRun != 0 {
 		t.Errorf("checks %+v", a.Checks)
 	}
 }

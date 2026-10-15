@@ -1,0 +1,308 @@
+package rules
+
+import (
+	"maps"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/b87/scheck/internal/check"
+	_ "github.com/b87/scheck/internal/check/all"
+	"github.com/b87/scheck/internal/finding"
+)
+
+// fakeFacts is a host's facts by check id; a missing id was not run.
+type fakeFacts struct {
+	platform check.Platform
+	facts    map[string]finding.Fact
+	why      map[string]string
+	partial  bool
+}
+
+func (f fakeFacts) Platform() check.Platform { return f.platform }
+
+func (f fakeFacts) Fact(id string) (finding.Fact, string) {
+	if why, ok := f.why[id]; ok {
+		return finding.Fact{Check: id, Observation: id + "#1"}, why
+	}
+	fact, ok := f.facts[id]
+	if !ok {
+		return finding.Fact{Check: id}, "check-not-run"
+	}
+	fact.Check, fact.Observation = id, id+"#1"
+	fact.Partial = fact.Partial || f.partial
+	return fact, ""
+}
+
+// ss is a net.listeners record set: "proto addr:port process" per line,
+// the process "-" when the owner is not shown.
+func ss(lines ...string) finding.Fact {
+	recs := check.Records{Kind: check.ParseListeners, Items: []check.Record{}}
+	for _, l := range lines {
+		f := strings.Fields(l)
+		i := strings.LastIndex(f[1], ":")
+		state := "LISTEN"
+		if f[0] == "udp" {
+			state = "UNCONN"
+		}
+		rec := check.Record{check.FieldProtocol: f[0], check.FieldState: state,
+			check.FieldAddress: strings.Trim(f[1][:i], "[]"), check.FieldPort: f[1][i+1:]}
+		if f[2] != "-" {
+			rec[check.FieldProcess] = f[2]
+		}
+		recs.Items = append(recs.Items, rec)
+	}
+	return finding.Fact{Parsed: recs}
+}
+
+// noFirewall is a Linux host with no host firewall: ufw and firewalld
+// absent, an empty nftables ruleset, the nf_tables backend.
+func noFirewall(listeners finding.Fact) fakeFacts {
+	return fakeFacts{platform: check.Linux,
+		facts: map[string]finding.Fact{checkListeners: listeners, checkNFT: {Parsed: ""},
+			checkBackend: {Parsed: "/usr/sbin/xtables-nft-multi\n"}, checkOSRelease: {Parsed: map[string]string{"ID": "ubuntu"}}},
+		why: map[string]string{checkUFW: "check-unavailable:command_missing", checkFirewalld: "check-unavailable:command_missing"}}
+}
+
+// withUFW is a Linux host whose ufw prints lines.
+func withUFW(listeners finding.Fact, lines ...string) fakeFacts {
+	f := noFirewall(listeners)
+	delete(f.why, checkUFW)
+	f.facts[checkUFW] = finding.Fact{Parsed: lines}
+	return f
+}
+
+const (
+	pgAll      = "tcp 0.0.0.0:5432 postgres"
+	sshAll     = "tcp 0.0.0.0:22 sshd"
+	ufwActive  = "Status: active"
+	ufwDeny    = "Default: deny (incoming), allow (outgoing), disabled (routed)"
+	ufwAllowIn = "Default: allow (incoming), allow (outgoing), disabled (routed)"
+)
+
+type fixture struct {
+	name    string
+	host    Host
+	subject string // "" for the host
+	verdict string
+	reason  string
+}
+
+func host(f fakeFacts, services ...Service) Host {
+	return Host{Asset: "host:db1:22", Name: "db1", Facts: f, Context: Context{Services: services}}
+}
+
+func with(f fakeFacts, edit func(fakeFacts)) fakeFacts { edit(f); return f }
+
+var dbFixtures = []fixture{
+	{"no host firewall", host(noFirewall(ss(pgAll, sshAll)), Service{Port: 5432, Proto: "tcp", Audience: "lan", Key: "assets.db1.context.expected_services[0]"}),
+		"5432/tcp", Fired, ""},
+	{"ufw allows it from anywhere", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "To Action From", "-- ------ ----", "5432/tcp ALLOW IN Anywhere")),
+		"5432/tcp", Fired, ""},
+	{"ufw allows everything in", host(withUFW(ss(pgAll), ufwActive, ufwAllowIn)), "5432/tcp", Fired, ""},
+	{"ufw rate-limits a range", host(withUFW(ss("tcp [::]:6379 redis-server"), ufwActive, ufwDeny, "6000:7000/tcp (v6) LIMIT IN Anywhere (v6)")),
+		"6379/tcp", Fired, ""},
+	{"ufw allows a udp memcached", host(withUFW(ss("udp 0.0.0.0:11211 memcached"), ufwActive, ufwDeny, "11211 ALLOW IN Anywhere")),
+		"11211/udp", Fired, ""},
+	{"only on localhost", host(noFirewall(ss("tcp 127.0.0.1:5432 postgres", "tcp [::1]:5432 postgres", sshAll))), "", Disproved, ""},
+	{"ufw denies by default", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "22/tcp ALLOW IN Anywhere")), "5432/tcp", Disproved, ""},
+	{"ufw allows only one network", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp ALLOW IN 10.0.0.0/8")), "5432/tcp", Disproved, ""},
+	{"ufw denies before it allows", host(withUFW(ss(pgAll), ufwActive, ufwAllowIn, "5432 DENY IN Anywhere")), "5432/tcp", Disproved, ""},
+	{"another program on a database port", host(noFirewall(ss("tcp 0.0.0.0:9000 php-fpm8.2", sshAll))), "", Disproved, ""},
+	{"listeners not read", host(with(noFirewall(ss()), func(f fakeFacts) { f.why[checkListeners] = "check-denied:sudo_refused" })), "", Abstained, reasonListeners},
+	{"firewalld running", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) {
+		delete(f.why, checkFirewalld)
+		f.facts[checkFirewalld] = finding.Fact{Parsed: "running\n"}
+	})), "5432/tcp", Abstained, "unavailable:firewall_firewalld"},
+	{"nftables holds rules", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) { f.facts[checkNFT] = finding.Fact{Parsed: "table inet filter {\n}\n"} })),
+		"5432/tcp", Abstained, "unavailable:firewall_nft"},
+	{"legacy iptables", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) { f.facts[checkBackend] = finding.Fact{Parsed: "/usr/sbin/xtables-legacy-multi\n"} })),
+		"5432/tcp", Abstained, "unavailable:firewall_backend"},
+	{"iptables in /sbin on Alpine", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) {
+		f.facts[checkBackend] = finding.Fact{Parsed: ""}
+		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"ID": "alpine"}}
+	})), "5432/tcp", Abstained, "unavailable:firewall_backend"},
+	{"Docker publishes it", host(noFirewall(ss("tcp 0.0.0.0:5432 docker-proxy"))), "5432/tcp", Abstained, reasonContainerPort},
+	{"owner not shown on a database port", host(noFirewall(ss("tcp 0.0.0.0:5432 -"))), "5432/tcp", Abstained, reasonListenerOwner},
+	{"owner not shown elsewhere", host(noFirewall(ss("tcp 0.0.0.0:8443 -"))), "", Abstained, reasonListenerOwner},
+	{"a ufw rule bound to an interface", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp on wg0 ALLOW IN Anywhere")),
+		"5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"a ufw line in no shape ufw prints", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "PostgreSQL ALLOW IN Anywhere")), "5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"a logged ufw rule", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp                   ALLOW IN    Anywhere                   (log)")),
+		"5432/tcp", Fired, ""},
+	{"a logged IPv6 ufw rule", host(withUFW(ss("tcp [::]:5432 postgres", "tcp 0.0.0.0:5432 postgres"), ufwActive, ufwDeny,
+		"5432/tcp (v6)              ALLOW IN    Anywhere (v6)              (log-all)")), "5432/tcp", Fired, ""},
+	{"a commented ufw rule", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp ALLOW IN Anywhere # replica sync")), "5432/tcp", Fired, ""},
+	{"an application profile before the port", host(withUFW(ss(pgAll), ufwActive, ufwDeny,
+		"22/tcp (OpenSSH)           ALLOW IN    Anywhere", "22/tcp (OpenSSH (v6))      ALLOW IN    Anywhere (v6)", "5432/tcp ALLOW IN Anywhere")),
+		"5432/tcp", Fired, ""},
+	{"a deny to localhost only", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "127.0.0.1 5432/tcp DENY IN Anywhere", "5432/tcp ALLOW IN Anywhere")),
+		"5432/tcp", Fired, ""},
+	{"a deny to one address under an allow default", host(withUFW(ss(pgAll), ufwActive, ufwAllowIn, "10.0.0.5 5432/tcp DENY IN Anywhere")),
+		"5432/tcp", Fired, ""},
+	{"an allow to one of the host's addresses", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "203.0.113.5 5432/tcp ALLOW IN Anywhere")),
+		"5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"ufw allows by source port alone", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "Anywhere                   ALLOW IN    53")), "5432/tcp", Fired, ""},
+	{"ufw allows the port by source port alone", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp ALLOW IN 53/tcp")), "5432/tcp", Fired, ""},
+	{"ufw allows udp by source port alone", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "Anywhere                   ALLOW IN    53/udp")), "5432/tcp", Disproved, ""},
+	{"ufw denies by source port alone", host(withUFW(ss(pgAll), ufwActive, ufwAllowIn, "5432/tcp DENY IN 53/tcp")), "5432/tcp", Fired, ""},
+	{"a network with a protocol", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "Anywhere ALLOW IN 192.168.1.0/24/tcp", "10.0.0.0/24/tcp DENY IN Anywhere")),
+		"5432/tcp", Disproved, ""},
+	{"another protocol and a profile named with on", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "Anywhere/gre ALLOW IN Anywhere/gre",
+		"32400/tcp (Plex on LAN)    ALLOW IN    Anywhere", "5432/tcp ALLOW IN Anywhere")), "5432/tcp", Fired, ""},
+	{"an IPv6 source makes an IPv6 rule", host(withUFW(ss("tcp [::]:5432 postgres", "tcp 0.0.0.0:5432 postgres"), ufwActive, ufwDeny, "5432/tcp ALLOW IN 2001:db8::/32")),
+		"5432/tcp", Disproved, ""},
+	{"ufw lists no IPv6 rule", host(withUFW(ss("tcp 0.0.0.0:5432 postgres", "tcp [::]:5432 postgres"), ufwActive, ufwDeny, "5432/tcp ALLOW IN 10.0.0.0/8")),
+		"5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"ufw output cut short", host(with(withUFW(ss(pgAll), ufwActive, ufwDeny, "22/tcp ALLOW IN Anywhere"), func(f fakeFacts) {
+		u := f.facts[checkUFW]
+		u.Partial = true
+		f.facts[checkUFW] = u
+	})), "5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"ufw status unrecognized", host(withUFW(ss(pgAll), "Estado: activo")), "5432/tcp", Abstained, "unavailable:firewall_ufw"},
+	{"listeners cut short", host(with(noFirewall(ss(sshAll)), func(f fakeFacts) {
+		fact := f.facts[checkListeners]
+		fact.Partial = true
+		f.facts[checkListeners] = fact
+	})), "", Abstained, ""},
+}
+
+// verdictOn is the rule's judgment on subject ("" for the host).
+func verdictOn(t *testing.T, js []finding.Judgment, subject string) finding.Judgment {
+	t.Helper()
+	for _, j := range js {
+		if j.Subject.Key == subject {
+			return j
+		}
+	}
+	t.Fatalf("no judgment on %q: %+v", subject, js)
+	return finding.Judgment{}
+}
+
+func ruleByID(t *testing.T, id string) Rule {
+	t.Helper()
+	for _, r := range All() {
+		if r.ID == id {
+			return r
+		}
+	}
+	t.Fatalf("no rule %s", id)
+	return Rule{}
+}
+
+// Every rule fires, is disproved and abstains on its fixtures, reads only
+// what it declares, and reads everything it declares in some fixture
+// (docs/spec/engagement.md, "The multi-fact rules of 0.0.2").
+func TestRulesFireDisproveAndAbstain(t *testing.T) {
+	if v := Validate(All()); len(v) > 0 {
+		t.Fatalf("the rule table breaks its invariants: %v", v)
+	}
+	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures}
+	for _, r := range All() {
+		fs := fixtures[r.ID]
+		used := map[Read]bool{}
+		verdicts := map[string]bool{}
+		for _, fx := range fs {
+			v := &View{host: fx.host, rule: r}
+			outcomes := r.Judge(v)
+			if len(v.undeclared) > 0 {
+				t.Errorf("%s/%s reads what it did not declare: %v", r.ID, fx.name, v.undeclared)
+			}
+			for _, u := range v.used {
+				used[u] = true
+			}
+			js, _ := run(r, fx.host)
+			j := verdictOn(t, js, fx.subject)
+			if j.Verdict != fx.verdict || fx.reason != "" && j.Reason != fx.reason {
+				t.Errorf("%s/%s: %s (%s), want %s (%s): %+v", r.ID, fx.name, j.Verdict, j.Reason, fx.verdict, fx.reason, outcomes)
+			}
+			verdicts[j.Verdict] = true
+		}
+		for _, want := range []string{Fired, Disproved, Abstained} {
+			if !verdicts[want] {
+				t.Errorf("%s has no %s fixture", r.ID, want)
+			}
+		}
+		for _, read := range r.Reads {
+			if !used[read] {
+				t.Errorf("%s declares %s:%s, which no fixture reads", r.ID, read.Kind, read.Name)
+			}
+		}
+	}
+}
+
+// A read known to be incomplete proves presence, never absence: with every
+// fact marked partial, no fixture is disproved; with the listeners alone
+// partial, what fired still fires.
+func TestAnIncompleteReadNeverDisproves(t *testing.T) {
+	r := ruleByID(t, finding.IDDBListensUnfiltered)
+	for _, fx := range dbFixtures {
+		f := fx.host.Facts.(fakeFacts)
+		f.partial = true
+		h := fx.host
+		h.Facts = f
+		js, _ := run(r, h)
+		for _, j := range js {
+			if j.Verdict == Disproved {
+				t.Errorf("%s: disproved on an incomplete read: %+v", fx.name, j)
+			}
+		}
+		if fx.verdict != Fired {
+			continue
+		}
+		f = fx.host.Facts.(fakeFacts)
+		f.facts = maps.Clone(f.facts)
+		l := f.facts[checkListeners]
+		l.Partial = true
+		f.facts[checkListeners] = l
+		h.Facts = f
+		js, _ = run(r, h)
+		if verdictOn(t, js, fx.subject).Verdict != Fired {
+			t.Errorf("%s: an incomplete listener read withdrew what fired", fx.name)
+		}
+	}
+}
+
+// A fired judgment cites the listener and each firewall fact it rests on,
+// raises on a contradicted declaration, and names what it did not read.
+func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
+	res := Judge([]Host{dbFixtures[0].host})["host:db1:22"]
+	j := verdictOn(t, res.Judged, "5432/tcp")
+	var checks []string
+	for _, f := range j.Facts {
+		checks = append(checks, f.Check)
+		if f.Observation != f.Check+"#1" || f.Excerpt == "" {
+			t.Errorf("fact %+v has no observation or excerpt", f)
+		}
+	}
+	if want := []string{checkListeners, checkUFW, checkFirewalld, checkNFT, checkBackend}; !slices.Equal(checks, want) {
+		t.Errorf("cites %v, want %v", checks, want)
+	}
+	if !j.Has("contradiction") || !slices.Contains(j.Sources, "assets.db1.context.expected_services[0]") {
+		t.Errorf("no contradiction from the declared audience: %+v", j)
+	}
+	if j.Subject.Label != "postgres" || len(j.NotChecked) < 2 {
+		t.Errorf("subject or not-checked wrong: %+v", j)
+	}
+	if len(res.Coverage) != 1 || res.Coverage[0].Area != finding.AreaData || len(res.Coverage[0].Groups) != 1 {
+		t.Errorf("coverage %+v", res.Coverage)
+	}
+}
+
+// A host the rule is not built for gets no verdict, and its coverage says
+// it was not judged.
+func TestAMacOSHostIsNotJudged(t *testing.T) {
+	res := Judge([]Host{{Asset: "host:mac:22", Name: "mac", Facts: fakeFacts{platform: check.MacOS}}})["host:mac:22"]
+	if len(res.Judged) != 0 || len(res.Coverage) != 1 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[0].Groups) != 0 {
+		t.Errorf("a macOS host was judged: %+v", res)
+	}
+}
+
+// An internet audience keeps the base rating and says why.
+func TestAnInternetAudienceSaysWhy(t *testing.T) {
+	h := host(noFirewall(ss(pgAll)), Service{Port: 5432, Proto: "tcp", Audience: "internet", Key: "k"})
+	j := verdictOn(t, Judge([]Host{h})[h.Asset].Judged, "5432/tcp")
+	if j.Why != whyInternet || j.Has("contradiction") {
+		t.Errorf("%+v", j)
+	}
+}

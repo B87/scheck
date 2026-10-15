@@ -581,6 +581,11 @@ func (t *text) hostAreas() []hostArea {
 		}
 		h := hostArea{name: clean(a.Name)}
 		for _, row := range t.r.Coverage {
+			// A host's areas are the Hosts row's; a rule over its facts in
+			// another area (data stores) is counted there.
+			if row.Area != "hosts" {
+				continue
+			}
 			for _, si := range row.SubItems {
 				if si.Asset != a.ID || si.Mark == "not_applicable" {
 					continue
@@ -821,6 +826,14 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"mailbox_authorization_expired": "the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update expires, or wait until date, and run again",
 			"forwarding_subdomain":          "forwarding to a subdomain that is not itself a domain of this Workspace was not judged",
 			"api_disabled":                  "Google has not enabled the API this read needs in the credential's project",
+			"listeners":                     "the listening sockets could not be read",
+			"listener_owner":                "some listening ports' owners are not shown to a read without sudo",
+			"container_port":                "a container runtime publishes this port, and its rules bypass the host firewall",
+			"firewall_ufw":                  "ufw's rules could not be read in full",
+			"firewall_firewalld":            "firewalld's rules are not read in this version",
+			"firewall_nft":                  "the nftables rules could not be judged",
+			"firewall_backend":              "which iptables backend the host uses was not recognized",
+			"incomplete_read":               "what it read was incomplete, so it could show a problem but not rule one out",
 		}[arg]; ok {
 			return detail
 		}
@@ -1018,7 +1031,7 @@ func (t *text) hosts(row Row) {
 		if c := a.Checks; c != nil {
 			sel, dec, without := 0, 0, 0
 			for _, ea := range t.r.Assessments {
-				if ea.Asset != a.ID {
+				if def, _ := finding.Lookup(ea.ID); ea.Asset != a.ID || def.Area != finding.AreaHosts {
 					continue
 				}
 				sel++

@@ -349,6 +349,17 @@ scheck explain sshd.password_auth_enabled --exposure internet --format json
 scheck sudoers --platform linux --user ops
 ```
 
+Databases on a Linux host: `db.listens_unfiltered` (area data stores, subject
+`port/proto`) fires when a database from scheck's list listens beyond localhost and the
+host firewall (ufw, or none at all) does not restrict the port. It needs `--sudo`:
+`net.listeners` is elevated because `ss` shows only your own sockets' owners otherwise,
+and without it the rule abstains (`unavailable:listeners`, `unavailable:listener_owner`).
+It also abstains when firewalld, other nftables rules or a legacy iptables backend are in
+use (`unavailable:firewall_*`) and for a port Docker or Podman publishes
+(`unavailable:container_port`). A cloud firewall and the database's own sign-in rules
+were not read, and the finding says so; never report a host's databases as safe from a
+disproved or abstained verdict alone. `scheck sudoers` grants the `ss` read.
+
 Capture stdout, stderr and the exit code separately. With `--format json`, stdout is one
 document, the engagement report; stderr carries diagnostics and, on exit 1–3, a short
 line saying why. Without `--no-persist` each run also writes a run directory,
@@ -420,7 +431,7 @@ in this order:
    `not_on_plan:<feature>`, `collector_not_built`, `refused`, `not_declared`,
    `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
    `unavailable:<code>` (a check gave no usable answer) and `no_rule` (read, but no rule
-   in this version judges it, such as a Linux host's firewall and listeners). The Hosts
+   in this version judges it, such as a Linux host's listening services you did not declare). The Hosts
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no

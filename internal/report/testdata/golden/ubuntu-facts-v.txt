@@ -30,6 +30,9 @@ System integrity         skipped  mac.sestatus            exit 127: bash: line 1
 Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
                                                           command not found
                                                           firewalld state
+Firewall                 ran      fw.iptables_backend     /usr/sbin/xtables-nft-multi
+                                                          iptables userspace backend (where
+                                                          /usr/sbin/iptables resolves; exit 1: none)
 Firewall                 skipped  fw.nft                  not found: nft
                                                           nftables ruleset
 Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem running iptables:
@@ -37,7 +40,7 @@ Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem
                                                           fetch rule set generation id: Permission
                                                           denied (you must be root) [elevated]
                                                           ufw status and rules
-Network exposure         ran      net.listeners           2 listening sockets
+Network exposure         ran      net.listeners           2 listening sockets [elevated]
                                                           Listening TCP/UDP sockets with owning
                                                           process
 SSH server               ran      sshd.config             91 settings [elevated]

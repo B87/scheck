@@ -31,7 +31,11 @@ func (r *run) declarations() severity.Declarations {
 		d.MattersMost = append(d.MattersMost, severity.Matter{Asset: id, Name: name, What: m.What,
 			Key: fmt.Sprintf("data.matters_most[%d]", i)})
 	}
+	d.Internet = map[string]string{}
 	for _, a := range r.res.Assets {
+		if a.Context != nil && a.Context.Exposure == "internet" {
+			d.Internet[a.ID] = "assets." + a.Name + ".context.exposure"
+		}
 		if a.DeploysTo == "production" {
 			d.Production[a.ID] = severity.Production{Name: a.Name, Key: "assets." + a.Name + ".deploys_to"}
 		}

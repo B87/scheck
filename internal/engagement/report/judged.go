@@ -66,6 +66,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
+		if def.MultiFact {
+			f.Rule.Kind = "multi_fact"
+		}
 		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubSecretScanningOpen, finding.IDGitHubHistoryCredential}, j.ID) {
 			f.Rule.Kind = "multi_fact"
 		}
@@ -124,6 +127,16 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			}
 			f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Request: r, Observation: r,
 				CollectedAt: &observed, Vantage: vantage, Principal: principal, Excerpt: excerpt})
+		}
+		// A host fact an engagement rule rests on, as the host's own
+		// findings cite theirs.
+		if v := b.hosts[owner.ID]; v != nil {
+			for _, fr := range j.Facts {
+				observed := v.collectedAt(fr.Observation)
+				f.Rule.Reads = appendUnique(f.Rule.Reads, "check:"+fr.Check)
+				f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Check: fr.Check, Observation: fr.Observation,
+					CollectedAt: &observed, Principal: v.principal(fr.Observation), Excerpt: fr.Excerpt})
+			}
 		}
 		if acc, ok := b.effective(owner.ID, j.ID, key); ok && b.current(acc.Expires, b.acceptanceAt(acc)) {
 			at := b.acceptanceAt(acc)
@@ -306,6 +319,9 @@ func judgedAssessments(a AssetInput) []Assessment {
 		for _, r := range requestRefs(j.Reads) {
 			ea.Reads = appendUnique(ea.Reads, r)
 		}
+		for _, fr := range j.Facts {
+			ea.Reads = appendUnique(ea.Reads, "check:"+fr.Check)
+		}
 		if j.Reason != "" {
 			ea.Complete = false
 			if ea.Reason == "" {
@@ -341,10 +357,10 @@ func (b *builder) judgedFor(asset string) ([]Judgment, bool) {
 	var out []Judgment
 	read := false
 	for _, a := range b.in.Assets {
-		if a.Collector == "" {
+		if a.Collector == "" && a.Host == nil {
 			continue
 		}
-		read = read || a.ID == asset
+		read = read || a.ID == asset && (a.Collector != "" || b.hosts[a.ID] != nil)
 		for _, j := range a.Judged {
 			owner := j.Asset
 			if owner == "" {
@@ -459,6 +475,9 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 		if under := b.heldUnder(acc.AssetID, acc.ID, acc.Subject); under != "" {
 			return "subject_not_found", "that subject was read on " + under + ", which is its own asset (asset: domain:" + under + ")"
 		}
+		if finding.SubjectOf(acc.ID) == "service" {
+			return "subject_not_found", "nothing listens on that port on this run: if the service was moved or closed, remove the entry"
+		}
 		return "subject_not_found", "nothing with that subject points anywhere on this run: if the record was removed, remove the entry"
 	case abstained == 0 && disproved > 0:
 		return "not_matched", "its rule found no instance in everything it read: likely fixed. Confirm, then remove the entry"
@@ -517,6 +536,15 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			continue
 		}
 		fed++
+		if plan := planOf(a, area); plan != nil && a.Host != nil {
+			// A host the multi-fact rules judged, by their plan.
+			if b.hosts[a.ID] != nil {
+				read++
+				row.AssetsCovered = append(row.AssetsCovered, a.ID)
+			}
+			some = b.planCoverage(&row, a, *plan) || some
+			continue
+		}
 		if a.Collector == "workspace" {
 			plan := planOf(a, area)
 			// An asset whose plan reads nothing in this area was not read for it.
@@ -624,8 +652,8 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 	}
 	// A row read only through a collector's plan still says what declaring
 	// its own kind of asset would add (domains for email).
-	if !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
-		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: declaredOnly[area]})
+	if only, ok := declaredOnly[area]; ok && !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
+		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: only})
 	}
 	if nj := webLimits[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: strings.Join(nj, ", ")})

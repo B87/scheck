@@ -791,6 +791,11 @@ func (r *run) hostContext(a ResolvedAsset) *operator.Structured {
 		if !ok || id != a.ID || strings.HasPrefix(risk.ID, "custom:") {
 			continue
 		}
+		// A multi-fact rule's finding is accepted as a network collector's
+		// is, by the report, subject and all: never the host grader's.
+		if def, known := finding.Lookup(risk.ID); known && def.MultiFact {
+			continue
+		}
 		key := fmt.Sprintf("intent.accepted_risks[%d]", i)
 		if risk.Subject != "" {
 			r.notApplied = append(r.notApplied, fmt.Sprintf("%s (%s on %s, subject %s) not applied: host findings carry no instance key in this build, and accepting the whole id would widen it",
@@ -1016,6 +1021,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		}
 		in.Authorization = auth
 	}
+	hostRules := r.hostRules()
 	for _, ra := range r.recon.Assets {
 		asset, _ := r.asset(ra.Name)
 		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
@@ -1027,6 +1033,8 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		if c, ok := r.hosts[ra.Name]; ok {
 			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
 			ai.Host.Graded = r.graded[ra.Name]
+			res := hostRules[ra.ID]
+			ai.Judged, ai.Coverage, ai.PopulationIncomplete = res.Judged, res.Coverage, res.PopulationIncomplete
 		}
 		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
 			ai.ReadWith = ra.Root

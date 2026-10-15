@@ -97,7 +97,7 @@ command, one file").
 | Why not probes? | A probe needs first-party evidence, and in 0.0.2 the only evidence for a discovered site would be the operator's word. Probes arrive in 0.0.3 after the cloud inventory can vouch for an address. |
 | Why GCP and Google Workspace rather than AWS and Microsoft 365? | A market decision, stated as one: the authors' own environment is Google, so the live tests and the lab can exist. AWS has the larger share of small companies and is the next collector on the same shape, before Azure and Microsoft 365. |
 | Third-party tools? | None. DNS, TLS, headers, fingerprinting and both APIs need only the Go standard library. |
-| The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1b and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. One exception, decided 2026-10-13 (owner): E9 adds `fw.iptables_backend` (`realpath -e /usr/sbin/iptables`) so that `db.listens_unfiltered` can tell an empty `nft` ruleset from no firewall. |
+| The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1b and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. One exception, decided 2026-10-13 (owner): E9 adds `fw.iptables_backend` (`realpath -e /usr/sbin/iptables`) so that `db.listens_unfiltered` can tell an empty `nft` ruleset from no firewall. A second, decided 2026-10-15 (D3b): `net.listeners` on Linux is elevated. |
 | One command? | Yes. From E2, `scheck run` is the only assessment command. `scheck local` and `scheck ssh` are aliases of `scheck run --host` in 0.0.2, with a deprecation line on stderr, and are removed in 0.0.3. Two pipelines would mean two reports, two run histories and two places to declare a host, and only one of them would say what it did not assess. |
 | `scheck.yaml`? | Not read by `scheck run` (E1b), removed with the aliases (E2). Profile, elevation, host context and the narrowing lists move into the engagement file, per asset where they describe a host; the state directory and the evaluation harness's model settings are flags. A restriction a client asked for is part of the rules of engagement and has to travel with the engagement file: kept in a per-machine file, it silently disappears when a colleague or a CI job runs the same engagement elsewhere. A config file where 0.0.1 read one makes `scheck run` exit 3, naming where each of its keys moved and saying to delete or rename the file, so a v0.0.1 `deny_paths` is never dropped silently, whichever release a user upgrades to; the check stays. |
 | A model? | No. Every stage runs on rules, single-fact and multi-fact. Plan is a checklist per asset type, narrowed and ordered by context, and the report says so. |
@@ -272,7 +272,7 @@ and a clean variant; the false-positive target for the clean variant, fixed now.
 | DMARC published at `p=none` | DNS (E7) |
 | A CNAME to a hosting service that no longer serves the name, built so that nobody outside the team can claim it while the lab is up (a provider-verified domain, or a target under a domain the team holds outside the lab's roots) | DNS and the front-page read (E7); high when the provider's fingerprint matches, medium when the target name does not exist |
 | `PasswordAuthentication yes` on the host | host collector (E1b) |
-| postgres bound to all interfaces with no host firewall rule in front | multi-fact rule (E9) |
+| postgres bound to all interfaces with no host firewall rule in front | multi-fact rule over listeners (elevated) and firewall reads (E9 step 3a) |
 | Missing `Strict-Transport-Security` header, on a site under a TLD that is not preloaded (a declared `url` root or `first_party`) | response headers (E7); low; must rank below every item above |
 
 No seeded issue may be exploitable by anyone outside the team while the lab exists. A
@@ -1664,7 +1664,7 @@ repositories read are those the tiers name and the selection says so; a loop fix
 F1 terminates and the invariants test rejects a cyclic or deeper table; an observation
 older than 7 days is collected again on resume; every risk area's row prints its
 "not judged in this version" line; the command traces change only by the recorded
-`fw.iptables_backend` line.
+`fw.iptables_backend` line and the elevated `ss` read (D3, D3b).
 
 **Build steps**, each a commit with `make check` green:
 
@@ -1742,9 +1742,51 @@ older than 7 days is collected again on resume; every risk area's row prints its
    that overlaps a fixed item is printed twice (Workspace forwarding's Admin console
    setting, GitHub CI/CD's OIDC trust; give such limits a fixed id); the population line
    "1 of 1 asset read." on a row where no sub-item reads anything (logging) may mislead.
-3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
-   outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style
-   invariants test. The `fw.iptables_backend` check. R1 and R2 on host fixtures; R2 last.
+3. The multi-fact rule framework, R1 and R2, in two commits.
+   - *3a (done, offline).* `internal/engagement/rules`: declared reads (a host check or
+     a declaration), a view that hands a rule only those, the three outcomes, a disproval
+     withdrawn on a partial fact (`unavailable:incomplete_read`), `Validate` and tests
+     that every rule fires, is disproved and abstains, reads only what it declares and
+     uses every declared read; `finding.Facts` and `FactsOf` give a persisted host's facts
+     the posture rules' usable decision, so a kept host is judged the same;
+     `finding.Def.MultiFact` and `Judgment.Facts`. Analyze judges every collected host
+     (`internal/engagement/judge.go`), graded by `severity.GradeAll`; an acceptance of a
+     multi-fact id goes through the report's judged path. The `fw.iptables_backend` check
+     (D3) and `net.listeners` elevated (D3b); the golden command traces change by exactly
+     those lines. R1 `db.listens_unfiltered` with `DatabasesVersion` 2026-10-15 and
+     ufw's verbose rule grammar as its `get_status` prints it (no profile table: verbose
+     output prints each application rule's ports), the firewall reading (`rules/firewall.go`, reused
+     by R3), the severity row `exposure:internet`, the Data row read from a host's
+     coverage plan with its four new fixed items, and the goldens
+     `host-database-fired`, `-disproved`, `-abstained`. Fixtures for `fw.iptables_backend`
+     were recorded by hand from the test containers. The code review found four ufw
+     reading defects, each fixed with a fixture before commit: a logged rule's `(log)`
+     attribute made it read as source-restricted, so an open port was disproved; IPv6 was
+     judged filtered by ufw's default when ufw lists no `(v6)` rule (with `IPV6=no` it does
+     not manage ip6tables), now unknown; a rule to one destination address was treated as
+     covering every address; and application rules never matched a profile table that
+     verbose output never prints. A partial ufw read no longer lets the default decide. A second review found
+     that a From of source ports alone (`Anywhere ALLOW IN 53`) was read as restricting the
+     source, so an open port was disproved; on the security-consultant's decision of
+     2026-10-15 such an ALLOW or LIMIT fires with a sentence saying a sender chooses its own
+     source port (the remediation's caveat says to delete the rule), and a DENY or REJECT
+     of that shape is passed over. Every verdict through ufw now says rules added outside
+     ufw and `/etc/ufw/before.rules` were not read. Networks printed with a protocol
+     (`192.168.1.0/24/tcp`), other protocols, profile names holding " on " and IPv6
+     sources are read. A third review found a UDP source-port rule firing a TCP database
+     port (ufw prints the protocol in From only when To is `Anywhere`); fixed.
+     Recorded as a known limit, not fixed: an empty `fw.iptables_backend` cannot tell no
+     `/usr/sbin/iptables` from a busybox `realpath` or a legacy `iptables` kept only in
+     `/sbin` on a host without merged `/usr`.
+   - *3b (open).* R2 `accounts.empty_password_remote` (last); the Hosts row's Firewall
+     sub-row wording ("checked (whether database ports are filtered only; see Data
+     stores)") and its SSH sub-row; `hosts.ssh_match`; the contradiction's generic
+     "You declared … Operator declaration at …" evidence line, with the audience in the
+     excerpt. `areas.go` still says `expected_services` are not compared with listeners;
+     reword it with the Hosts row.
+   - *Deferred from 3a:* the base-chain refinement of an `nft` ruleset and a
+     parameterized `sshd -T -C user=` read (0.0.3 G5); a note for Docker's userland proxy
+     turned off.
 4. People: R4 and R5.
 5. R3, and the context notes C1 to C3.
 6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,
@@ -1788,6 +1830,16 @@ R3 may move out of E9 if the slice runs long; a deferral is recorded here with i
   gains no check (Decisions, "The host side?"). The golden command traces change with
   this reason, recorded under release gate 8. It does not count toward the baseline tier
   cap of 40, which counts on-demand entries only.
+- *D3b* (decided 2026-10-15, `security-consultant`, adopted under the owner's standing
+  delegation). `net.listeners` on Linux is elevated (`sudo -n -- ss -tulpnH`): `ss -p`
+  names only the caller's own sockets, and databases run as their own users. Without
+  `--sudo` the listeners fact is unavailable (requires elevation) and R1 abstains. The
+  `scheck sudoers` fragment gains `ss` at `/usr/bin/ss` and `/usr/sbin/ss`. The golden
+  command traces change by exactly the `fw.iptables_backend` line and by `ss` behind
+  `sudo -n --` with its `which ss` probe (later `sys.which` observations renumbered),
+  recorded with this reason under release gate 8. The eval cases
+  `linux-truncated-listeners`, `linux-context-explains` and `linux-password-auth` keep
+  their recorded output, with the argv in the elevated form.
 - *D4.* A finding definition, and an adjustment entry, may carry a severity ceiling; the
   chain records the cap.
 - *D5.* `scheck init` asks `data.matters_most` again, as a pick from hosts, Workspace
@@ -1929,7 +1981,8 @@ carried to 0.0.3 G4 with "at least" framing; per-account keying of
    with no password and no login shell no longer fires, and one with a login shell is
    high, not critical; the accounts summary counts login shells by the rule's lists; E9: the golden command
    traces gain the `fw.iptables_backend` line, the one host check added in 0.0.2, decided
-   2026-10-13 by the owner).
+   2026-10-13 by the owner, and the elevated `ss` read of `net.listeners`, with its
+   `which ss` probe, decided 2026-10-15, D3b).
 9. **Consumers:** every consumer declared by an interview question exists, and the
    test that checks it no longer skips anything.
 10. **One command:** `scheck run --host` on the lab host and the `scheck ssh` alias

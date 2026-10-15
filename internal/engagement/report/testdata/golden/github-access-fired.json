@@ -548,8 +548,20 @@
       "mark": "not_assessed",
       "not_judged": [
         {
-          "id": "data.host_db_unfiltered",
-          "text": "databases on hosts that listen on every address with no host firewall in front"
+          "id": "data.db_signin",
+          "text": "who can sign in to each database (pg_hba.conf, database users and their passwords)"
+        },
+        {
+          "id": "data.db_firewall_rules",
+          "text": "databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet)"
+        },
+        {
+          "id": "data.db_containers",
+          "text": "databases published by Docker or Podman, whose port rules bypass the host firewall"
+        },
+        {
+          "id": "data.other_stores",
+          "text": "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"
         },
         {
           "id": "data.drive_sharing",
@@ -730,7 +742,7 @@
         },
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts"
+          "text": "the firewall on Linux hosts, apart from database ports"
         },
         {
           "id": "hosts.listeners",

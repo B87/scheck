@@ -23,6 +23,9 @@ type Declarations struct {
 	// Production are the repositories declared deploys_to: production, by
 	// asset id.
 	Production map[string]Production
+	// Internet are the hosts whose context declares exposure: internet, by
+	// asset id, each with its key.
+	Internet map[string]string
 }
 
 // Exposed is one URL declared exposed on purpose.
@@ -105,6 +108,10 @@ var rules = []rule{
 			return finding.Ref{}, "", false
 		}
 		return finding.Ref{Key: p.Key}, "This repository is declared to deploy to production, so this rating rises one step.", true
+	}},
+	{name: "exposure:internet", ids: []string{finding.IDDBListensUnfiltered}, match: func(d Declarations, in instance) (finding.Ref, string, bool) {
+		key, ok := d.Internet[in.owner]
+		return finding.Ref{Key: key}, "You declared this host internet-facing, so this ranks one step higher.", ok
 	}},
 	{name: "contradiction", pastHigh: true, match: func(_ Declarations, in instance) (finding.Ref, string, bool) {
 		// A contradiction rests on the declaration the observation

@@ -38,6 +38,17 @@ type Judgment struct {
 	// Chain is the severity Analyze gave a fired judgment. A collector never
 	// sets it: Analyze replaces whatever it holds.
 	Chain *Chain `json:"chain,omitempty"`
+	// Facts are the host facts an engagement rule rests on, each with what
+	// it shows; Reads stay gate requests (docs/spec/engagement.md,
+	// "Multi-fact rules").
+	Facts []FactRead `json:"facts,omitempty"`
+}
+
+// FactRead is one host check's observation a judgment rests on.
+type FactRead struct {
+	Check       string `json:"check"`
+	Observation string `json:"observation"`
+	Excerpt     string `json:"excerpt"`
 }
 
 // OfNote is one listed subject that matters more than the rest.

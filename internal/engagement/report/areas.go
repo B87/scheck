@@ -96,6 +96,11 @@ func (b *builder) coverage() []Row {
 func (b *builder) judged(area finding.Area) []AssetInput {
 	var out []AssetInput
 	for _, a := range b.in.Assets {
+		if a.Host != nil && planOf(a, area) != nil {
+			// A host's multi-fact rules word their coverage as a plan.
+			out = append(out, a)
+			continue
+		}
 		if (a.Collector == "web" || ((a.Collector == "github" || a.Collector == "workspace") && len(a.Judged) > 0)) && feeds(area, a) && (area == finding.AreaExternal || area == finding.AreaEmail || area == finding.AreaWeb || area == finding.AreaSecrets || area == finding.AreaIdentity || area == finding.AreaCICD) {
 			out = append(out, a)
 		}
@@ -197,7 +202,7 @@ func (b *builder) hostsRow() Row {
 		row.Narrowing = append(row.Narrowing, b.narrowing(v)...)
 		if v.h.ExpectedServices > 0 {
 			row.DeclaredNotVerified = append(row.DeclaredNotVerified, Note{Kind: "declared_not_verified", Source: v.h.ExpectedSource,
-				Detail: "expected_services are not compared with listeners in this version"})
+				Detail: "expected_services are compared only with database listeners in this version, and never lower a finding"})
 		}
 	}
 	switch {
