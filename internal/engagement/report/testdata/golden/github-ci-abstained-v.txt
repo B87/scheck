@@ -43,7 +43,10 @@ Identity and access      not checked
   to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
   Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
   the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
-  members' SSH keys. Also not judged on the assets read: Delegated organization roles, repository
+  members' SSH keys; write to production repositories by a departed person not listed among its
+  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  self-hosted runners a departed person added; what a departed person did after leaving (audit log
+  not read). Also not judged on the assets read: Delegated organization roles, repository
   invitations, sign-in history, selected-repository visibility and unobserved repository
   administrators are not assessed.
 Secrets                  not checked
@@ -80,6 +83,10 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
 FINDINGS: 0 open, 0 informational, 0 accepted
 Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
 problems than anything here.
+
+People who left
+  pat (left 2026-09-30)
+    GitHub: nothing was judged for this person, not checked.
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.

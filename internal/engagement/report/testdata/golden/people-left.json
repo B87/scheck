@@ -1,0 +1,1673 @@
+{
+  "acceptances": [],
+  "assessments": [
+    {
+      "asset": "saas:github:example-org",
+      "complete": false,
+      "id": "identity.former_person_has_access",
+      "instances": 2,
+      "outcomes": [
+        {
+          "detail": {
+            "membership": "member"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "carol-gh",
+            "kind": "account",
+            "label": "carol-gh",
+            "person": "carol"
+          }
+        },
+        {
+          "detail": {
+            "membership": "outside_collaborator"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "frank-gh",
+            "kind": "account",
+            "label": "frank-gh",
+            "person": "frank"
+          }
+        }
+      ],
+      "reads": [
+        "request:members",
+        "request:outside"
+      ],
+      "reason": "leaving_date_not_passed",
+      "status": "matched"
+    },
+    {
+      "asset": "repo:github:example-org/production",
+      "complete": true,
+      "id": "identity.former_person_has_access",
+      "instances": 1,
+      "outcomes": [
+        {
+          "detail": {
+            "membership": "collaborator"
+          },
+          "outcome": "fired",
+          "subject": {
+            "key": "carol-gh",
+            "kind": "account",
+            "label": "carol-gh",
+            "person": "carol"
+          }
+        }
+      ],
+      "reads": [
+        "request:collaborators"
+      ],
+      "status": "matched"
+    },
+    {
+      "asset": "saas:google-workspace:example.com",
+      "complete": false,
+      "id": "identity.former_person_has_access",
+      "instances": 1,
+      "reads": [
+        "request:users"
+      ],
+      "reason": "leaving_date_not_passed",
+      "status": "matched"
+    },
+    {
+      "asset": "saas:google-workspace:example.com",
+      "complete": true,
+      "id": "workspace.stale_account",
+      "instances": 1,
+      "reads": [
+        "request:users"
+      ],
+      "status": "matched"
+    }
+  ],
+  "assets": [
+    {
+      "bound_id": null,
+      "collector": "github",
+      "detail": "GitHub identity and repository-access evidence collected.",
+      "id": "saas:github:example-org",
+      "kind": "saas",
+      "name": "engineering",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": [
+        {
+          "at": "2026-10-09T12:00:00Z",
+          "decision": "sent",
+          "request": "github.principal"
+        },
+        {
+          "at": "2026-10-09T12:00:01Z",
+          "decision": "sent",
+          "request": "github.organization"
+        },
+        {
+          "at": "2026-10-09T12:00:02Z",
+          "decision": "sent",
+          "request": "github.membership"
+        },
+        {
+          "at": "2026-10-09T12:00:03Z",
+          "decision": "sent",
+          "request": "github.members"
+        },
+        {
+          "at": "2026-10-09T12:00:04Z",
+          "decision": "sent",
+          "request": "github.owners"
+        },
+        {
+          "at": "2026-10-09T12:00:05Z",
+          "decision": "sent",
+          "request": "github.outside_collaborators"
+        },
+        {
+          "at": "2026-10-09T12:00:06Z",
+          "decision": "sent",
+          "request": "github.invitations"
+        },
+        {
+          "at": "2026-10-09T12:00:07Z",
+          "decision": "sent",
+          "request": "github.repositories"
+        }
+      ]
+    },
+    {
+      "bound_id": null,
+      "collector": "github",
+      "id": "repo:github:example-org/production",
+      "kind": "repo",
+      "name": "production",
+      "principal": {
+        "identity": "alice (user ID 41)",
+        "scopes": [
+          "read:org",
+          "repo"
+        ],
+        "scopes_source": "provider"
+      },
+      "root": false,
+      "status": "collected",
+      "trace": []
+    },
+    {
+      "bound_id": null,
+      "collector": "workspace",
+      "detail": "Workspace identity checks collected.",
+      "id": "saas:google-workspace:example.com",
+      "kind": "saas",
+      "name": "Workspace",
+      "principal": {
+        "identity": "unknown",
+        "scopes_source": "unknown"
+      },
+      "root": true,
+      "status": "collected",
+      "trace": []
+    }
+  ],
+  "coverage": [
+    {
+      "area": "identity",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production",
+        "saas:google-workspace:example.com"
+      ],
+      "mark": "partial",
+      "not_judged": [
+        {
+          "id": "identity.sso",
+          "text": "sign-in through another identity provider (SSO), and that provider's 2-step verification"
+        },
+        {
+          "id": "identity.twostep_kind",
+          "text": "which kind of 2-step verification people use (security key, app or text message)"
+        },
+        {
+          "id": "identity.app_passwords",
+          "text": "app passwords and other sign-ins that skip 2-step verification"
+        },
+        {
+          "id": "identity.delegation",
+          "text": "service accounts allowed to act as any Workspace user (domain-wide delegation)"
+        },
+        {
+          "id": "identity.app_access_policy",
+          "text": "which third-party apps staff may connect to Workspace (app access control)"
+        },
+        {
+          "id": "identity.recovery",
+          "text": "administrators' recovery email and phone"
+        },
+        {
+          "id": "identity.github_apps",
+          "text": "GitHub Apps installed on the organization and what they can reach"
+        },
+        {
+          "id": "identity.github_tokens",
+          "text": "GitHub's rules for personal access tokens"
+        },
+        {
+          "id": "identity.ssh_keys",
+          "text": "GitHub members' SSH keys"
+        },
+        {
+          "id": "identity.leaver_unlisted_write",
+          "text": "write to production repositories by a departed person not listed among its collaborators (read per login from a later step)"
+        },
+        {
+          "id": "identity.leaver_additions",
+          "text": "deploy keys, GitHub App authorizations and self-hosted runners a departed person added"
+        },
+        {
+          "id": "identity.leaver_activity",
+          "text": "what a departed person did after leaving (audit log not read)"
+        }
+      ],
+      "population": {
+        "in_scope": 3,
+        "kind": "assets",
+        "read": 3
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "erin-gh; Workspace offboarding",
+          "reason": "leaving_date_not_passed"
+        },
+        {
+          "detail": "declared:dana",
+          "reason": "no_declared_github_login"
+        },
+        {
+          "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed; 2-step verification policy, grace periods and other sign-in services were not assessed",
+          "reason": "no_rule"
+        },
+        {
+          "detail": "Workspace offboarding",
+          "reason": "unavailable:workspace_evidence"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "judged": [
+            "departed people"
+          ],
+          "mark": "partial",
+          "name": "departed people",
+          "reasons": [
+            {
+              "detail": "erin-gh",
+              "reason": "leaving_date_not_passed"
+            },
+            {
+              "detail": "declared:dana",
+              "reason": "no_declared_github_login"
+            }
+          ],
+          "rules": [
+            "identity.former_person_has_access",
+            "identity.former_person_invited"
+          ]
+        },
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "judged": [
+            "departed people"
+          ],
+          "mark": "assessed",
+          "name": "departed people",
+          "reasons": [],
+          "rules": [
+            "identity.former_person_has_access",
+            "identity.former_person_invited"
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+          "reasons": [
+            {
+              "detail": "Delegated organization roles, repository invitations, sign-in history, selected-repository visibility and unobserved repository administrators are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace administrator identity",
+          "reasons": [],
+          "rules": [
+            "identity.unexpected_admin",
+            "identity.unattributed_admin",
+            "identity.external_admin",
+            "identity.shared_admin"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "judged": [
+            "Workspace offboarding"
+          ],
+          "mark": "partial",
+          "name": "Workspace offboarding",
+          "reasons": [
+            {
+              "detail": "erin@example.com",
+              "reason": "leaving_date_not_passed"
+            },
+            {
+              "detail": "declared:frank: Declared account identity is missing or ambiguous.",
+              "reason": "unavailable:workspace_evidence"
+            }
+          ],
+          "rules": [
+            "identity.former_person_has_access"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_applicable",
+          "name": "Workspace administrator assignments and counts",
+          "reasons": [],
+          "rules": [
+            "workspace.too_many_super_admins",
+            "workspace.suspended_admin_assignment"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "judged": [
+            "Workspace account sign-in"
+          ],
+          "mark": "assessed",
+          "name": "Workspace account sign-in",
+          "reasons": [],
+          "rules": [
+            "workspace.stale_account",
+            "workspace.never_signed_in"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace 2-step verification (Google's enforcement and enrollment flags)",
+          "reasons": [
+            {
+              "detail": "No 2-step verification outcome was recorded for this tenant",
+              "reason": "unavailable:workspace_evidence"
+            },
+            {
+              "detail": "Checked: each account's 2-step verification enforcement and enrollment as Google reports it. Not checked: organizational-unit policy, grace periods, sign-in through another identity provider, verification methods and phishing resistance",
+              "reason": "no_rule"
+            }
+          ],
+          "rules": [
+            "workspace.two_step_not_enforced",
+            "workspace.admin_without_two_step"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace OAuth grants (third-party app access)",
+          "reasons": [
+            {
+              "detail": "The default Workspace profile, directory, does not read third-party app access; it needs SCHECK_WORKSPACE_PROFILE=directory_oauth and the admin.directory.user.security permission",
+              "reason": "not_on_plan:profile=directory"
+            }
+          ],
+          "rules": [
+            "workspace.oauth_broad_scope"
+          ]
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace domain-wide delegation",
+          "reasons": [
+            {
+              "detail": "Nothing was read: Google offers no Directory read for it. Review it in the Admin console at Security → Access and data control → API controls → Manage Domain Wide Delegation. With a service-account credential, scheck's own delegation is listed there",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "secrets",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "secrets.push_protection",
+          "text": "whether GitHub blocks secrets before they are pushed (push protection)"
+        },
+        {
+          "id": "secrets.ci_logs",
+          "text": "secrets printed in CI logs"
+        },
+        {
+          "id": "secrets.images",
+          "text": "secrets inside container images"
+        },
+        {
+          "id": "secrets.chat_docs",
+          "text": "secrets pasted in chat and shared documents"
+        }
+      ],
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+          "reasons": [
+            {
+              "detail": "Actions secret values, credential usability/rotation, unsupported secret locations, unreported patterns and history outside the supported mirror traversal are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "cloud",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "cloud.public_storage",
+          "text": "storage buckets and disk snapshots anyone can read"
+        },
+        {
+          "id": "cloud.admin_people",
+          "text": "administrator roles (such as Owner or Editor) held by people"
+        },
+        {
+          "id": "cloud.admin_service_accounts",
+          "text": "administrator roles held by service accounts, including the default ones"
+        },
+        {
+          "id": "cloud.keys",
+          "text": "long-lived keys for service accounts and users, and their age"
+        },
+        {
+          "id": "cloud.databases",
+          "text": "databases with a public address or authorized networks open to anyone"
+        },
+        {
+          "id": "cloud.firewall",
+          "text": "network firewall rules open to the whole internet"
+        },
+        {
+          "id": "cloud.org_policies",
+          "text": "organization-wide guardrails (organization policies)"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "data",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "data.db_signin",
+          "text": "who can sign in to each database (pg_hba.conf, database users and their passwords)"
+        },
+        {
+          "id": "data.db_firewall_rules",
+          "text": "databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet)"
+        },
+        {
+          "id": "data.db_containers",
+          "text": "databases published by Docker or Podman, whose port rules bypass the host firewall"
+        },
+        {
+          "id": "data.other_stores",
+          "text": "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"
+        },
+        {
+          "id": "data.drive_sharing",
+          "text": "Google Drive sharing defaults, and files shared with anyone who has the link"
+        },
+        {
+          "id": "data.backups",
+          "text": "whether backups exist, where they are kept, and who can delete them"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "cicd",
+      "assets_covered": [
+        "saas:github:example-org",
+        "repo:github:example-org/production"
+      ],
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "cicd.push_production",
+          "text": "who can push to repositories that deploy to production, contractors included"
+        },
+        {
+          "id": "cicd.environments",
+          "text": "review rules on the production deployment environment"
+        },
+        {
+          "id": "cicd.fork_approval",
+          "text": "approval before workflows run on pull requests from forks"
+        },
+        {
+          "id": "cicd.self_hosted",
+          "text": "self-hosted runners that public repositories can use"
+        },
+        {
+          "id": "cicd.allowed_actions",
+          "text": "which third-party actions the organization allows"
+        },
+        {
+          "id": "cicd.oidc",
+          "text": "trust from workflows to cloud accounts (OIDC)"
+        },
+        {
+          "id": "cicd.webhooks",
+          "text": "webhooks and where they send data"
+        }
+      ],
+      "population": {
+        "in_scope": 2,
+        "kind": "assets",
+        "read": 2
+      },
+      "principals": [
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        },
+        {
+          "identity": "alice (user ID 41)",
+          "scopes": [
+            "read:org",
+            "repo"
+          ],
+          "scopes_source": "provider"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reason": "no_rule"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:github:example-org",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "mark": "not_assessed",
+          "name": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+          "reasons": [
+            {
+              "detail": "PR review strength and bypass, Actions runtime policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and dependency runtime exploitability are not assessed",
+              "reason": "no_rule"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "external",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "external.beyond_declared",
+          "text": "services on hosts reachable beyond the audience you declared for them"
+        },
+        {
+          "id": "external.open_ports",
+          "text": "which ports and services answer from the internet (scheck reads; it does not scan)"
+        },
+        {
+          "id": "external.registrar",
+          "text": "the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires"
+        },
+        {
+          "id": "external.dns_account",
+          "text": "the DNS hosting account and who can change records"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "web",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "web.exposed_files",
+          "text": "exposed files, debug pages and admin panels (such as /.git, /.env or /admin)"
+        },
+        {
+          "id": "web.third_party_scripts",
+          "text": "third-party scripts the site loads"
+        },
+        {
+          "id": "web.cors",
+          "text": "which other sites may read the site's responses (CORS)"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "hosts",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "hosts.firewall_linux",
+          "text": "the firewall on Linux hosts, apart from database ports"
+        },
+        {
+          "id": "hosts.listeners",
+          "text": "listening services you did not declare"
+        },
+        {
+          "id": "hosts.admins_sudo",
+          "text": "who can become root or administrator, and sudo rules that need no password"
+        },
+        {
+          "id": "hosts.ssh_keys",
+          "text": "SSH keys allowed to log in (authorized_keys)"
+        },
+        {
+          "id": "hosts.ssh_match",
+          "text": "SSH settings inside Match blocks, and whether PAM accepts an empty password"
+        },
+        {
+          "id": "hosts.disk_linux",
+          "text": "disk encryption on Linux hosts"
+        },
+        {
+          "id": "hosts.suid",
+          "text": "programs that run with root rights (SUID files)"
+        },
+        {
+          "id": "hosts.persistence",
+          "text": "programs started at boot or on a schedule"
+        },
+        {
+          "id": "hosts.credential_files",
+          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+        }
+      ],
+      "reasons": [
+        {
+          "reason": "not_declared"
+        }
+      ]
+    },
+    {
+      "area": "email",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "email.forwarding_policy",
+          "text": "whether Workspace lets staff forward mail outside the company (the tenant setting)"
+        },
+        {
+          "id": "email.spoofing_protection",
+          "text": "Workspace protection against spoofed and lookalike senders"
+        },
+        {
+          "id": "email.mta_sts",
+          "text": "encryption of mail in transit (MTA-STS and TLS reporting)"
+        }
+      ],
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 0
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": [
+        {
+          "detail": "Workspace mail forwarding",
+          "reason": "not_on_plan:profile=directory"
+        },
+        {
+          "detail": "Domain email settings (SPF, DKIM and DMARC)",
+          "reason": "not_declared"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "mark": "not_assessed",
+          "name": "Workspace mail forwarding",
+          "reasons": [
+            {
+              "detail": "The default Workspace profile, directory, does not read mail forwarding; it needs SCHECK_WORKSPACE_PROFILE=directory_mail and a service account whose domain-wide delegation includes gmail.readonly, which can read every message",
+              "reason": "not_on_plan:profile=directory"
+            }
+          ],
+          "rules": [
+            "workspace.external_forwarding"
+          ]
+        }
+      ]
+    },
+    {
+      "area": "logging",
+      "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "logging.workspace_alerts",
+          "text": "alerts on administrator changes and suspicious sign-ins in Workspace"
+        },
+        {
+          "id": "logging.github_audit",
+          "text": "GitHub audit log retention and streaming"
+        },
+        {
+          "id": "logging.cloud_audit",
+          "text": "cloud audit logs"
+        },
+        {
+          "id": "logging.host_logs_offhost",
+          "text": "whether host logs are kept anywhere off the host"
+        }
+      ],
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "principals": [
+        {
+          "identity": "unknown",
+          "scopes_source": "unknown"
+        }
+      ],
+      "reasons": []
+    },
+    {
+      "area": "endpoints",
+      "detail": "scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "application_logic",
+      "detail": "authenticated testing of access control and business rules",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "processes",
+      "detail": "whether offboarding, incident response, backup restore tests and vendor reviews are done as written",
+      "mark": "outside_scheck",
+      "reasons": []
+    },
+    {
+      "area": "lookalike_domains",
+      "detail": "registrations of names you do not own",
+      "mark": "outside_scheck",
+      "reasons": []
+    }
+  ],
+  "egress": {
+    "assets": [],
+    "host_side_effects": [],
+    "model": "none",
+    "sources": [
+      {
+        "credentials": [
+          "GITHUB_TOKEN"
+        ],
+        "host": "api.github.com",
+        "operator": "GitHub",
+        "requests": 8,
+        "sent": [
+          "example-org"
+        ],
+        "source": "github"
+      },
+      {
+        "credentials": [
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "host": "admin.googleapis.com",
+        "operator": "Google",
+        "requests": 3,
+        "sent": [
+          "google-workspace:example.com"
+        ],
+        "source": "google"
+      }
+    ],
+    "ssh_resolved": [],
+    "ssh_resolved_by_jump": [],
+    "stored": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "telemetry": "none",
+    "tenants_read": [
+      "saas:github:example-org",
+      "saas:google-workspace:example.com"
+    ],
+    "unconfirmed": {
+      "names": [],
+      "requests": 0
+    },
+    "user_agent": "scheck/test (security self-assessment)"
+  },
+  "engagement": {
+    "authorization": null,
+    "built_from": "file",
+    "collected": {
+      "from": "2026-10-09T12:00:00Z",
+      "to": "2026-10-09T12:01:00Z"
+    },
+    "edited_by_hand": [],
+    "method": {
+      "assessment": "rules",
+      "levels_used": [
+        "observe"
+      ],
+      "plan": "checklist"
+    },
+    "name": "Offboarding review",
+    "operator": "Alex",
+    "source": {
+      "path": "engagement.yaml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "timezone": "UTC",
+    "trigger": "routine"
+  },
+  "excluded": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      {
+        "code": 1,
+        "why": "5 open findings at or above their asset's threshold"
+      }
+    ],
+    "thresholds": {
+      "repo:github:example-org/production": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:github:example-org": {
+        "basis": "default",
+        "severity": "medium"
+      },
+      "saas:google-workspace:example.com": {
+        "basis": "default",
+        "severity": "medium"
+      }
+    }
+  },
+  "findings": [
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "production",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-01-07",
+        "id": "identity.former_person_has_access",
+        "needs_people": false,
+        "reason": "",
+        "subject": "carol-gh"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "attribute:production_write",
+          "source": {
+            "excerpt": "role_name: write; admin: false; maintain: false; push: true; pull: true",
+            "observation": "collaborators"
+          }
+        }
+      ],
+      "area": "identity",
+      "asset_name": "production",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "membership",
+          "value": "collaborator"
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at people.carol.left",
+          "kind": "declared",
+          "source": "engagement.yaml people.carol.left"
+        },
+        {
+          "asset": "repo:github:example-org/production",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "carol-gh; declared leaving date passed",
+          "kind": "observed",
+          "observation": "collaborators",
+          "principal": "alice (user ID 41)",
+          "request": "collaborators"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.former_person_has_access",
+      "impact": "An account whose declared leaving date has passed retains observed access.",
+      "key": {
+        "asset": "repo:github:example-org/production",
+        "id": "identity.former_person_has_access",
+        "subject": "carol-gh"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:collaborators",
+          "declared:people.carol.left"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "carol-gh",
+        "kind": "account",
+        "label": "carol-gh",
+        "person": "carol"
+      },
+      "title": "A departed person or retired account retains access",
+      "why_here": [
+        "This person left and can still push to example-org/production, which you declared deploys to production, so this ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "Workspace",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-01-07",
+        "id": "identity.former_person_has_access",
+        "needs_people": false,
+        "reason": "",
+        "subject": "carol@example.com"
+      },
+      "adjustments": [
+        {
+          "by": "engagement",
+          "delta": "+1",
+          "rule": "attribute:admin",
+          "source": {
+            "excerpt": "carol@example.com; declared leaving date passed",
+            "observation": "users"
+          }
+        }
+      ],
+      "area": "identity",
+      "asset_name": "Workspace",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at people.carol.left",
+          "kind": "declared",
+          "source": "engagement.yaml people.carol.left"
+        },
+        {
+          "asset": "saas:google-workspace:example.com",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "carol@example.com; declared leaving date passed",
+          "kind": "observed",
+          "observation": "users",
+          "principal": "unknown",
+          "request": "users"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.former_person_has_access",
+      "impact": "An account whose declared leaving date has passed retains observed access.",
+      "key": {
+        "asset": "saas:google-workspace:example.com",
+        "id": "identity.former_person_has_access",
+        "subject": "carol@example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:users",
+          "declared:people.carol.left"
+        ]
+      },
+      "severity": "critical",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "carol@example.com",
+        "kind": "account",
+        "label": "carol@example.com",
+        "person": "carol"
+      },
+      "title": "A departed person or retired account retains access",
+      "why_here": [
+        "This person left and still holds administrator rights, so this ranks one step higher."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "engineering",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-01-07",
+        "id": "identity.former_person_has_access",
+        "needs_people": false,
+        "reason": "",
+        "subject": "carol-gh"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "membership",
+          "value": "member"
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at people.carol.left",
+          "kind": "declared",
+          "source": "engagement.yaml people.carol.left"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "carol-gh; declared leaving date passed",
+          "kind": "observed",
+          "observation": "members",
+          "principal": "alice (user ID 41)",
+          "request": "members"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.former_person_has_access",
+      "impact": "An account whose declared leaving date has passed retains observed access.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "identity.former_person_has_access",
+        "subject": "carol-gh"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:members",
+          "declared:people.carol.left"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "carol-gh",
+        "kind": "account",
+        "label": "carol-gh",
+        "person": "carol"
+      },
+      "title": "A departed person or retired account retains access",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "engineering",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-01-07",
+        "id": "identity.former_person_has_access",
+        "needs_people": false,
+        "reason": "",
+        "subject": "frank-gh"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "engineering",
+      "bound_id": null,
+      "category": "accounts",
+      "derived": [
+        {
+          "name": "membership",
+          "value": "outside_collaborator"
+        }
+      ],
+      "evidence": [
+        {
+          "excerpt": "Operator declaration at people.frank.left",
+          "kind": "declared",
+          "source": "engagement.yaml people.frank.left"
+        },
+        {
+          "asset": "saas:github:example-org",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "frank-gh; declared leaving date passed",
+          "kind": "observed",
+          "observation": "outside",
+          "principal": "alice (user ID 41)",
+          "request": "outside"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "identity.former_person_has_access",
+      "impact": "An account whose declared leaving date has passed retains observed access.",
+      "key": {
+        "asset": "saas:github:example-org",
+        "id": "identity.former_person_has_access",
+        "subject": "frank-gh"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
+      },
+      "rule": {
+        "kind": "multi_fact",
+        "reads": [
+          "request:outside",
+          "declared:people.frank.left"
+        ]
+      },
+      "severity": "high",
+      "severity_base": "high",
+      "status": "open",
+      "subject": {
+        "key": "frank-gh",
+        "kind": "account",
+        "label": "frank-gh",
+        "person": "frank"
+      },
+      "title": "A departed person or retired account retains access",
+      "why_here": [
+        "not applied: write access to production repositories was not established (frank-gh is not listed among the collaborators of example-org/production, and that list may not show everyone with access)."
+      ]
+    },
+    {
+      "accept_template": {
+        "accepted_by": "",
+        "accepted_by_candidates": [],
+        "asset": "Workspace",
+        "by_subject": true,
+        "date": "2026-10-09",
+        "expires": "2027-04-07",
+        "id": "workspace.stale_account",
+        "needs_people": false,
+        "reason": "",
+        "subject": "carol@example.com"
+      },
+      "adjustments": [],
+      "area": "identity",
+      "asset_name": "Workspace",
+      "bound_id": null,
+      "category": "accounts",
+      "evidence": [
+        {
+          "asset": "saas:google-workspace:example.com",
+          "collected_at": "2026-10-09T12:00:17Z",
+          "excerpt": "Google reports no sign-in since 2026-06-01T00:00:00Z.",
+          "kind": "observed",
+          "observation": "users",
+          "principal": "unknown",
+          "request": "users"
+        }
+      ],
+      "exposure_finding": false,
+      "id": "workspace.stale_account",
+      "impact": "An active account remains available despite no recent reported sign-in; sessions and application activity were not reviewed.",
+      "key": {
+        "asset": "saas:google-workspace:example.com",
+        "id": "workspace.stale_account",
+        "subject": "carol@example.com"
+      },
+      "not_checked": [],
+      "remediation": {
+        "summary": "Confirm whether this account is needed before suspending it; review its sessions and application grants."
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": [
+          "request:users"
+        ]
+      },
+      "severity": "medium",
+      "severity_base": "medium",
+      "status": "open",
+      "subject": {
+        "key": "carol@example.com",
+        "kind": "account",
+        "label": "carol@example.com",
+        "person": "carol"
+      },
+      "title": "Google reports no account sign-in for more than 90 days",
+      "why_here": [
+        "This is the standard rating for the observed access or settings."
+      ]
+    }
+  ],
+  "incomplete": [],
+  "notes": [
+    {
+      "detail": "members: observed 6; owners: observed 2; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. This report contains GitHub inventory only. No GitHub security control was assessed.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "The credential may hide private repositories or concealed memberships. Completing pagination does not establish a complete organization inventory.",
+      "kind": "github_inventory",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "GitHub assessment credential: observed OAuth scopes permit operations beyond reads (repo). scheck sent only read requests. Prefer an organization-approved fine-grained token with the read permissions this assessment needs; revoke a dedicated assessment token when finished. Effective write access to this organization was not tested.",
+      "kind": "github_credential_warning",
+      "source": "saas:github:example-org"
+    },
+    {
+      "detail": "Returned credential permissions are unknown; effective permissions were not tested.",
+      "kind": "workspace_credential",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "domains: observed 2; organizational units: observed 3; accounts: observed 6. Inventory alone does not assess account security or administrator access.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    },
+    {
+      "detail": "scheck could not identify the Google account used for this run. Information from earlier Workspace reads was not used in this report.",
+      "kind": "workspace_inventory",
+      "source": "saas:google-workspace:example.com"
+    }
+  ],
+  "notice": {
+    "audience": "operator",
+    "internal_topology": true,
+    "personal_data": true
+  },
+  "people_left": [
+    {
+      "handle": "carol",
+      "left": "2026-09-15",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [
+                {
+                  "asset": "saas:github:example-org",
+                  "id": "identity.former_person_has_access",
+                  "subject": "carol-gh"
+                },
+                {
+                  "asset": "repo:github:example-org/production",
+                  "id": "identity.former_person_has_access",
+                  "subject": "carol-gh"
+                }
+              ],
+              "key": "carol-gh",
+              "production_write": {
+                "applied": true,
+                "repositories": [
+                  "example-org/production"
+                ]
+              },
+              "state": "finding"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: carol-gh still has access as member (finding); carol-gh can still push to example-org/production, declared production (finding).",
+          "provider": "github",
+          "state": "finding"
+        },
+        {
+          "accounts": [
+            {
+              "finding_keys": [
+                {
+                  "asset": "saas:google-workspace:example.com",
+                  "id": "identity.former_person_has_access",
+                  "subject": "carol@example.com"
+                }
+              ],
+              "key": "carol@example.com",
+              "state": "finding"
+            }
+          ],
+          "asset": "saas:google-workspace:example.com",
+          "line": "Workspace: carol@example.com still active, with administrator rights (finding).",
+          "provider": "workspace",
+          "state": "finding"
+        }
+      ]
+    },
+    {
+      "handle": "dana",
+      "left": "2026-08-01",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "declared:dana",
+              "state": "no_login_declared"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: no login declared, not checked.",
+          "provider": "github",
+          "state": "no_login_declared"
+        },
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "dana@example.com",
+              "state": "no_access_observed"
+            }
+          ],
+          "asset": "saas:google-workspace:example.com",
+          "line": "Workspace: dana@example.com no access observed as of 2026-10-09.",
+          "provider": "workspace",
+          "state": "no_access_observed"
+        }
+      ]
+    },
+    {
+      "handle": "erin",
+      "left": "2099-01-01",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "erin-gh",
+              "state": "not_judged"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: erin-gh leaving date had not passed at the read of 2026-10-09, not judged.",
+          "provider": "github",
+          "state": "not_judged"
+        },
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "erin@example.com",
+              "state": "not_judged"
+            }
+          ],
+          "asset": "saas:google-workspace:example.com",
+          "line": "Workspace: erin@example.com leaving date had not passed at the read of 2026-10-09, not judged.",
+          "provider": "workspace",
+          "state": "not_judged"
+        }
+      ]
+    },
+    {
+      "handle": "frank",
+      "left": "2026-09-01",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [
+                {
+                  "asset": "saas:github:example-org",
+                  "id": "identity.former_person_has_access",
+                  "subject": "frank-gh"
+                }
+              ],
+              "key": "frank-gh",
+              "production_write": {
+                "applied": false,
+                "repositories": []
+              },
+              "state": "finding"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: frank-gh still has access as outside collaborator (finding); write access to production repositories was not established.",
+          "provider": "github",
+          "state": "finding"
+        },
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "declared:frank",
+              "state": "not_checked"
+            }
+          ],
+          "asset": "saas:google-workspace:example.com",
+          "line": "Workspace: no address declared, not checked.",
+          "provider": "workspace",
+          "reason": "unavailable:workspace_evidence",
+          "state": "not_checked"
+        }
+      ]
+    }
+  ],
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "matches": 0,
+      "rules": 0
+    }
+  },
+  "refused": [],
+  "rules_version": "test",
+  "run": {
+    "command": "scheck run engagement.yaml",
+    "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
+    "resumed": false,
+    "started": "2026-10-09T12:00:00Z"
+  },
+  "scheck_version": "test",
+  "schema_version": "1.0",
+  "summary": {
+    "areas": {
+      "assessed": 0,
+      "not_applicable": 0,
+      "not_assessed": 9,
+      "partial": 1,
+      "total": 10
+    },
+    "below": {
+      "accepted": 0,
+      "info": 0,
+      "low": 0
+    },
+    "items": [
+      {
+        "assets": [
+          "repo:github:example-org/production",
+          "saas:google-workspace:example.com",
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "identity.former_person_has_access",
+          "workspace.stale_account"
+        ],
+        "keys": [
+          {
+            "asset": "repo:github:example-org/production",
+            "id": "identity.former_person_has_access",
+            "subject": "carol-gh"
+          },
+          {
+            "asset": "saas:google-workspace:example.com",
+            "id": "identity.former_person_has_access",
+            "subject": "carol@example.com"
+          },
+          {
+            "asset": "saas:github:example-org",
+            "id": "identity.former_person_has_access",
+            "subject": "carol-gh"
+          },
+          {
+            "asset": "saas:google-workspace:example.com",
+            "id": "workspace.stale_account",
+            "subject": "carol@example.com"
+          }
+        ],
+        "kind": "person",
+        "person": "carol",
+        "rank": 1,
+        "rank_basis": [
+          "severity:critical",
+          "area:identity",
+          "person:carol",
+          "attribute:production_write"
+        ],
+        "severity": "critical",
+        "title": "carol, who left on 2026-09-15, still has access to GitHub, and is still active in Workspace"
+      },
+      {
+        "assets": [
+          "saas:github:example-org"
+        ],
+        "ids": [
+          "identity.former_person_has_access"
+        ],
+        "keys": [
+          {
+            "asset": "saas:github:example-org",
+            "id": "identity.former_person_has_access",
+            "subject": "frank-gh"
+          }
+        ],
+        "kind": "finding_id",
+        "other_people": true,
+        "person": null,
+        "rank": 2,
+        "rank_basis": [
+          "severity:high",
+          "area:identity"
+        ],
+        "severity": "high",
+        "title": "A departed person or retired account retains access"
+      }
+    ],
+    "more": 0,
+    "rules": {
+      "decided": 4,
+      "selected": 4,
+      "without_evidence": 0
+    }
+  }
+}

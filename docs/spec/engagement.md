@@ -746,10 +746,10 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
 | `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered` only | +1 | no: stops at high |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
-| `attribute:admin` | a fact, cited by observation and excerpt | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
+| `attribute:admin` | a fact, cited by observation and excerpt; on a GitHub repository, `repository_admin` counts only where the repository is declared production | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
 | `attribute:admin_grantor` | a fact, cited by observation and excerpt | `workspace.oauth_broad_scope`, when a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it | +1 | no: stops at high |
 | `attribute:public_repository` | the direct repository read, observed public visibility | `github.secret_scanning_open` and `github.history_credential` | +1 | yes |
-| `attribute:production_write` | people `left` passed, and a push, maintain or admin permission on a `deploys_to: production` repository (R4 below) | `identity.former_person_has_access` on GitHub | +1 | yes |
+| `attribute:production_write` | people `left` passed, and effective write (push, maintain or admin) on a `deploys_to: production` repository, from the collaborators read (R4 below) | `identity.former_person_has_access` on GitHub | +1 | yes |
 | `attribute:<other>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute (`attribute:password_form`, web-collector.md) | +1 | no: stops at high |
 
 The table is data in Analyze (`internal/engagement/severity`, built in E9 step 1a): one
@@ -1094,8 +1094,8 @@ disproved and abstains on a fixture, and that an all-partial read never disprove
 
 ### The multi-fact rules of 0.0.2
 
-R1 (E9 step 3a) and R2 (step 3b) are contract; the rest is design that becomes contract
-when its step lands (R4 and R5 step 4, R3 step 5, `ROADMAP.md`). Already built
+R1 (E9 step 3a), R2 (step 3b), R4 and R5 (step 4) are contract; the rest is design that
+becomes contract when its step lands (R3 step 5, `ROADMAP.md`). Already built
 and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
 `identity.unattributed_admin`, `identity.former_person_has_access`,
 `identity.former_person_invited`, `identity.external_admin` and `identity.shared_admin`
@@ -1287,18 +1287,101 @@ said this service is only for *audience*. Bind it to 127.0.0.1 (or the private
 interface), or allow the port only from *audience*'s addresses in the host firewall." R3
 may be deferred inside E9 if the slice runs long ("Deferred" in the roadmap entry).
 
-**R4 `attribute:production_write`.** A raise on the GitHub
-`identity.former_person_has_access` finding. It reads `people[].left` (passed, in
-`engagement.timezone`), the collaborator permissions `push`, `maintain` or `admin` of the
-left person on `deploys_to: production` repositories, and the GitHub verdict for that
-person. It applies +1 and may reach critical. When the collaborators read is missing or
-denied it is not applied, with the reason "write access to production repositories was
-not established". It never disproves anything.
+**R4 `attribute:production_write`** (built, E9 step 4). A raise on the GitHub
+`identity.former_person_has_access` finding. The GitHub collector states facts and the
+severity table decides production, from `Declarations.Production[owner]`
+(`assets.<repo>.deploys_to`); the collector never reads `deploys_to`
+([github-collector.md](github-collector.md), "Rules: evidence outcomes"). The facts, on
+a *fired* repository-level judgment: `repository_admin` (effective admin known true) and
+`write` (`EffectiveWrite` below; not set on an archived repository unless the person is
+admin), the latter citing the collaborators read and an excerpt of `role_name` and the
+permission booleans. The organization-level judgment never carries `write`. The raise is
++1 and may reach critical.
 
-**R5 the person rollup.** A ranking item of kind `person` ([report.md](report.md),
-"Ranking") and one line per left person per tenant: "carol (left 2026-09-15): Workspace:
-still active (finding). GitHub: no login declared, not checked." It is not a finding id,
-creates no finding and moves no severity.
+| Case | Chain |
+|---|---|
+| admin on a production repository | `attribute:admin` (matching `admin`, or `repository_admin` on a production repository) high to critical, then `attribute:production_write` recorded as a step that cannot move (the scale's end) |
+| push or maintain, no admin | `attribute:production_write` high to critical |
+
+The chain sentence is: "This person left and can still push to *owner/repo*, which you
+declared deploys to production, so this ranks one step higher." It never disproves
+anything and creates no finding.
+
+*Not applied.* "Not applied" is a chain move said but not taken (`from` equals `to`, not
+an adjustment), as `exposed_on_purpose`'s is. For each login the collector puts two
+attributes on one *carrier* judgment, the organization-level judgment when it fired, else
+the fired repository-level judgment with the lowest canonical asset id, and on none for
+an observed owner (admin everywhere, already critical through `attribute:admin`):
+`write_held` for each repository read where the login's write is established, and
+`write_unsettled` for each where it is not, each with `Asset` (the repository) and, for
+`write_unsettled`, the cause as the reference's excerpt. A repository is unsettled when
+its collaborators read is missing, denied or failed, the login is not listed, the listed
+permissions are unknown, or it is archived and the person is not admin. A repository
+where write is known false is neither. The table keeps the production repositories among
+them and says the move on the carrier only when no production repository is
+`write_held` and at least one is `write_unsettled`. Nothing is emitted when no repository
+is declared production, when every production repository settles false, or when the
+finding did not fire. The sentence is: "not applied: write access to production
+repositories was not established (*cause*)." with *cause* the first unsettled production
+repository in canonical order:
+
+| Cause | Wording |
+|---|---|
+| collaborators read missing, denied or failed | "the collaborators of *owner/repo* could not be read: *reason phrase*" |
+| login not listed | "*login* is not listed among the collaborators of *owner/repo*, and that list may not show everyone with access" |
+| permissions unknown | "the permissions returned for *login* on *owner/repo* were missing or contradictory" |
+| archived | "*owner/repo* is archived" |
+
+When more than one repository is unsettled, the cause ends "; and 1 more production
+repository" or "; and *N* more production repositories". In the chain the move has rule
+`attribute:production_write`, `from` equal to `to`, `stopped` `not_established` and `why`
+the sentence. The report JSON carries no chain; the text report prints the sentence under
+"Why here", and `findings.json` judgments carry the move. The
+`github.collaborator_permission` read (F1, step 7) will settle most "not listed" causes.
+
+*Effective write.* The collector's predicate `EffectiveWrite` returns write, not write or
+unknown, from one collaborator entry:
+
+- `role_name` redacted or truncated: unknown.
+- Effective admin known true: write.
+- `permissions` absent: unknown; a `role_name` alone never establishes write.
+- `push` or `maintain` true is write only when `pull` is not false, `maintain` true does
+  not come with `push` false, and `role_name` is absent, or `write`, `push`, `maintain`
+  or `admin`, or a custom role (anything outside `read`, `pull` and `triage`). A
+  `read`, `pull` or `triage` role with `push` or `maintain` true is a contradiction:
+  unknown.
+- `admin`, `push` and `maintain` all present and false: known not write, unless
+  `role_name` is `write`, `push`, `maintain` or `admin`, a contradiction: unknown.
+- Anything else: unknown.
+
+Known not write on a listed collaborator settles that repository: per-collaborator
+permissions are effective across direct, team and base access. The visibility caveat
+applies only to a login the list does not show.
+
+**R5 the person rollup.** A *person* is a `people` handle with a `left` value. R5
+creates no finding, moves no severity and is not a finding id. It is a readout of two
+kinds: the *People who left* lines and the `person` ranking item ([report.md](report.md),
+"People who left" and "Ranking"). Both read findings and judgments already made.
+
+- *Lines.* Every person with `left` gets lines on every tenant where they have a
+  declared account or the tenant is in scope; the states, the wording and the JSON are
+  in report.md, "People who left". Only a person with an open tied finding ranks. Each
+  line reads an attributed judgment, so every collector judges every left person:
+  Workspace gives one for each declared address (or `declared:<handle>`), abstaining
+  with `leaving_date_not_passed` or the users rule's own reason when the leaving date had
+  not passed or the users were not read; GitHub's carry `details.membership` (`owner`,
+  `member`, `outside_collaborator`, `collaborator`, `none`), and a person with no
+  declared login gets one abstention on the subject `declared:<handle>`, reason
+  `no_declared_github_login`.
+- *Tied findings.* `identity.former_person_has_access`, `identity.former_person_invited`,
+  and any other open identity-area finding whose `subject.person` is the handle on an
+  account where that person's `identity.former_person_has_access` fired on the same
+  tenant. Findings outside the identity area (`workspace.external_forwarding`) stay
+  separate. Without a fired `identity.former_person_has_access` on that tenant, nothing
+  ties.
+- *Item.* A `person` item exists when the person's open tied findings span two or more
+  tenants or two or more finding ids. A single instance stays in its `finding_id` item.
+  The ranking rules are in report.md, "Ranking".
 
 Cut, with the owner: `db.internet_reachable` needs cloud firewall rules (0.0.3 G4); the
 read of `pg_hba.conf` after R1 (0.0.3 G5); `net.unexpected_listener` as a rule, since

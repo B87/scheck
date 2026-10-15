@@ -31,11 +31,12 @@ Templates never use a gendered pronoun: a person is named by handle or address, 
 | 3 | Summary: what was checked and what was not, "Fix these first", the not-a-clean-bill statement | always |
 | 4 | Coverage: the full table, the Hosts row expanded, the fold line, *Other declared SaaS* and *outside scheck* rows | always |
 | 5 | Findings: ranked open findings, then informational, then accepted | always; "0 open findings" is written out |
-| 6 | Not checked, grouped by what would close the gap | when anything was not checked |
-| 7 | Excluded, narrowed and not run | always; probes and scans are one line in 0.0.2 |
-| 8 | What left this machine | always |
-| 9 | Notes for the readout | when any note exists |
-| 10 | Close: the exit code and why, for automation; where the files are | always |
+| 6 | People who left: one block per person with a declared `left` | when any `left` is declared |
+| 7 | Not checked, grouped by what would close the gap | when anything was not checked |
+| 8 | Excluded, narrowed and not run | always; probes and scans are one line in 0.0.2 |
+| 9 | What left this machine | always |
+| 10 | Notes for the readout | when any note exists |
+| 11 | Close: the exit code and why, for automation; where the files are | always |
 
 Coverage is read before any finding: the summary says, in two to five lines of plain
 words, what was checked and what was not, above "Fix these first", and the full table
@@ -434,6 +435,9 @@ the target:
 | `unavailable:mailbox_authorization_expired` | the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update `expires`, or wait until `date`, and run again |
 | `unavailable:forwarding_subdomain` | forwarding to a subdomain that is not itself a domain of this Workspace was not judged |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
+| `leaving_date_not_passed` | the declared leaving date had not passed when it was read |
+| `left_date_within_collection` | the declared leaving date falls within or after collection; run again after that date |
+| `no_declared_github_login` | no GitHub login is declared for this person |
 | `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not. On a risk-area row the limits print inside "Also not judged on the assets read" (below), not as this phrase; it remains on host domain sub-rows |
 
 A token is never wrapped across lines; the detail wraps.
@@ -474,7 +478,7 @@ applicable. There is no `payments` area
 
 | Risk area | Judged in this version | Not judged in this version |
 |---|---|---|
-| Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | sign-in through another identity provider (SSO), and that provider's 2-step verification; which kind of 2-step verification people use (security key, app or text message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on the organization and what they can reach; GitHub's rules for personal access tokens; GitHub members' SSH keys |
+| Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | sign-in through another identity provider (SSO), and that provider's 2-step verification; which kind of 2-step verification people use (security key, app or text message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on the organization and what they can reach; GitHub's rules for personal access tokens; GitHub members' SSH keys; write to production repositories by a departed person not listed among its collaborators (read per login from a later step); deploy keys, GitHub App authorizations and self-hosted runners a departed person added; what a departed person did after leaving (audit log not read) |
 | Secrets | provider secret-scanning alerts; secrets in mirrored history; organization secrets shared with every repository; secrets in public web responses. `secrets.production` is printed as declared, not verified | whether GitHub blocks secrets before they are pushed (push protection); secrets printed in CI logs; secrets inside container images; secrets pasted in chat and shared documents |
 | Cloud configuration | none: no cloud collector (`collector_not_built`) | storage buckets and disk snapshots anyone can read; administrator roles (such as Owner or Editor) held by people; administrator roles held by service accounts, including the default ones; long-lived keys for service accounts and users, and their age; databases with a public address or authorized networks open to anyone; network firewall rules open to the whole internet; organization-wide guardrails (organization policies) |
 | Data stores and backups | databases on Linux hosts listening beyond localhost with no host firewall rule in front (`db.listens_unfiltered`; a host's coverage plan, sub-item "Databases listening beyond localhost") | who can sign in to each database (pg_hba.conf, database users and their passwords); databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the link; whether backups exist, where they are kept, and who can delete them (declared, not verified) |
@@ -664,12 +668,38 @@ than anything here.`
 - Only open findings rank. Accepted findings are listed apart; `info` is listed apart.
 - An item is of kind `finding_id`, every open instance of one id across subjects and
   assets, at the highest severity among them, naming the assets or the count; or, from
-  E9, of kind `person`, the findings tied to one `people` handle across tenants ("carol,
-  who left on 2026-09-15, is still active in Workspace and GitHub"), since one action
-  fixes them. Under it, one line per tenant: "carol (left 2026-09-15): Workspace: still
-  active (finding). GitHub: no login declared, not checked." The item is not a finding id
-  and moves no severity. The findings list groups the instances of one id on one asset into one
+  E9, of kind `person` ("A person item" below), the findings tied to one `people`
+  handle, since one action fixes them. The item is not a finding id and moves no
+  severity. The findings list groups the instances of one id on one asset into one
   block that lists the subjects; JSON never groups.
+**A person item** (E9 step 4, R5 in [engagement.md](engagement.md)). A person gets a
+`person` item when their open tied findings span two or more tenants or two or more
+finding ids; a single instance stays in its `finding_id` item. The tied findings are
+`identity.former_person_has_access`, `identity.former_person_invited` and the other open
+identity-area findings engagement.md names; accepted and `info` findings are not open.
+
+- *Title.* "*handle*, who left on *YYYY-MM-DD*, *phrases*", the phrases in tenant order:
+  "is still active in *Tenant*" (Workspace, `identity.former_person_has_access`), "still
+  has access to *Tenant*" (GitHub, the same id), "has a pending invitation to *Tenant*"
+  (`identity.former_person_invited`). Phrases with the same verb merge ("still has access
+  to GitHub and GitHub acme-labs"); groups join with ", " and the last with ", and ":
+  "carol, who left on 2026-09-15, is still active in Workspace, and still has access to
+  GitHub". *Tenant* is "Workspace" or "GitHub" when the engagement has one asset of that
+  provider, else "Workspace *asset name*" or "GitHub *org*".
+- *Under the title*, the severity phrase below, then that person's lines from "People
+  who left", and only those.
+- *Severity* is the highest among the item's open instances after context. When the
+  `attribute:production_write` raise set it, the text phrase is "raised: can still push
+  to *owner/repo*, declared production". `rank_basis` carries `person:<handle>` and the
+  raises of that instance.
+- *Cap and dedup.* At most two `person` items among the five; further qualifying people
+  stay in `finding_id` items. Instances in a `person` item leave the `finding_id` items
+  for ranking; those items still rank on their remaining instances and say "and other
+  people" in their naming: JSON sets `other_people: true` on the item, and the text
+  prints ", and other people" inside the parenthesis that names the assets. For the departed-people ids, "more affected instances" counts
+  distinct people, not repository-level instances. The findings list is unchanged and
+  JSON never groups.
+
 - Order: severity after context, critical first; then risk area in the coverage
   table's order; then an asset named in `data.matters_most` first; then more affected
   instances; then canonical asset id and finding id. Thresholds do not enter the
@@ -734,7 +764,7 @@ one id graded differently.
 | `derived[]` | computed values (`days_since_left`, `age_days`), each against the collection time of the read it is about, named in the excerpt (`engagement.md`, "Severity in context", "Time"); each states what a field shows, never who acted |
 | `affected` | secondary subjects (the users who granted an OAuth app, the repositories a token reaches): `{count, listed[], cap, of_note[]}`, the cap printed |
 | `impact` | from the definition |
-| `why_here[]` | templated lines from attributed context only, never free prose: the reasons of the steps that moved the severity first, then the collector's sentence, then a cap that still holds. A finding no step moved prints the standard-rating line for its collector; one a step moved never prints a cap or the standard-rating line as its first reason |
+| `why_here[]` | templated lines from attributed context only, never free prose: the reasons of the steps that moved the severity first, then a step said but not taken (`not applied: write access to production repositories was not established (cause)`, E9 step 4), then the collector's sentence, then a cap that still holds. A finding no step moved prints the standard-rating line for its collector; one a step moved never prints a cap or the standard-rating line as its first reason |
 | `not_checked[]` | what the rule could not see that would change the conclusion ("whether a cloud firewall in front of deploy restricts port 22") |
 | `remediation` | `{summary, steps[], commands[], caveat, where}`; `where` is a console path for a SaaS finding, which has no command. Steps are in the order a responder takes them: contain first (suspend, revoke sessions and tokens), then remove access, then review what happened, then clean up |
 | `accept_template` | present exactly when the status is `open`: the ready-to-paste entry, structured; text renders it as YAML |
@@ -831,6 +861,69 @@ embedded collector envelope stays whole as that collector's evidence and grading
 engagement finding's chain starts from the envelope's chain (`by: collector`) and
 appends the engagement's own adjustments (`by: engagement`), and the schema says so on
 the envelope.
+
+### People who left
+
+A block in the text report at default verbosity, after Findings and before what was not
+checked, printed whenever any `left` is declared (E9 step 4, R5 in
+[engagement.md](engagement.md)). It is not part of the Identity coverage row and it
+decides nothing: it restates verdicts already made. It holds the personal data the
+handling notice covers (`notice.personal_data`, "What never appears").
+
+Every person with a `left` value gets a header "*handle* (left *YYYY-MM-DD*)" and one line per tenant in
+coverage-table asset order: every tenant where the person has a declared account or
+the tenant is in scope. A tenant neither in scope nor named in the declaration is left
+out. *Tenant* is named as in "Ranking". Several declared accounts in one tenant: their
+states joined with "; ".
+
+| Workspace state | Line |
+|---|---|
+| fired | "Workspace: *address* still active (finding)." |
+| fired, administrator | "Workspace: *address* still active, with administrator rights (finding)." |
+| accepted | "Workspace: *address* still active (accepted until *expires*)." |
+| disproved | "Workspace: *address* no access observed as of *date*." |
+| `leaving_date_not_passed` | "Workspace: *address* leaving date had not passed at the read of *date*, not judged." |
+| `left_date_within_collection` | "Workspace: *address* leaving date falls within collection, not judged; re-run after *left*." |
+| `unavailable:collection_time` | "Workspace: *address* collection time not recorded, not judged." |
+| users not read or denied | "Workspace: users could not be read (*reason phrase*), not checked." (the asset's recorded reason when there is one, else the judgment's) |
+| absence over an incomplete users list | "Workspace: *address* not seen as of *date*; the users list was incomplete, so no access is not proven." (state `not_proven`) |
+| an abstention with no account read for it (no provider id) and no other row | "Workspace: *address* could not be checked (*reason phrase*)." |
+| account read, status or access evidence not recognized | "Workspace: *address* account observed, but its status or access evidence was not recognized, not checked." (*address* is the account's primary address; applies only to an account that was read) |
+| the tenant was collected and nothing was judged for the person | "Workspace: nothing was judged for this person, not checked." |
+| identity missing or ambiguous | "Workspace: *address* account identity missing or ambiguous, not checked." |
+| no address declared | "Workspace: no address declared, not checked." (whatever the time reason; checked before the leaving-date rows) |
+| address declared, tenant not in scope | "Workspace: not in this engagement's scope, not checked." |
+
+Workspace has no invitation finding, so no Workspace invited line.
+
+GitHub covers `identity.former_person_has_access` and `identity.former_person_invited`.
+The parts for one login join with "; ":
+
+| GitHub state | Line or part |
+|---|---|
+| organization-level fired | "GitHub: *login* still has access as *owner*, *member* or *outside collaborator* (finding)" |
+| repository-level fired, R4 not involved | "*login* is a collaborator on *N* repositories (finding)" |
+| R4 applied | "*login* can still push to *owner/repo*, declared production[ and *N* more] (finding)" |
+| R4 not applied | "write access to production repositories was not established" |
+| invitation fired | "pending invitation for *login* (finding)" |
+| accepted | "(accepted until *expires*)" in place of "(finding)" |
+| disproved over a complete population | "GitHub: *login* no access observed as of *date*." |
+| absence over an incomplete population | "GitHub: *login* not seen as of *date*; access to repositories cannot be fully listed, so no access is not proven." |
+| time reasons | as Workspace, with *login* |
+| no login declared | "GitHub: no login declared, not checked." |
+| login declared, no organization in scope | "GitHub: not in this engagement's scope, not checked." |
+| the organization was not read | "GitHub: the organization could not be read (*reason phrase*), not checked." |
+| the organization was collected and nothing was judged for the person | "GitHub: nothing was judged for this person, not checked." |
+| a login abstained for another reason | "*login* could not be checked (*reason phrase*)" |
+
+JSON carries `people_left[]`: `{handle, left, tenants: [{asset, provider, state, reason?,
+line, accounts: [{key, state, finding_keys[], production_write?: {applied, repositories[]}}]}]}`.
+`line` is the sentence printed; `asset` is null for a provider the person declares an
+account at when no tenant of it is in scope.
+`state` is one of `finding`, `accepted`, `no_access_observed`, `not_proven`,
+`not_judged`, `not_checked`, `not_in_scope`, `no_login_declared`. `reason` is the
+coverage reason where there is one. `finding_keys` are the `{id, asset, subject}` keys of
+the findings the line cites.
 
 ### Incompleteness and refusals
 
@@ -946,6 +1039,7 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
 - `summary` with its items (`kind`, `ids[]`, `person`, member keys, severity,
   `rank_basis`) and disjoint area counts (`assessed`, `partial`, `not_assessed`,
   `not_applicable`, `total`);
+- `people_left[]`, one record per person with a declared `left` ("People who left");
 - `acceptances[]`, every `intent.accepted_risks` entry with its outcome and the
   findings it touched;
 - `redaction` counts;

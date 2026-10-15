@@ -94,6 +94,7 @@ func TestGoldenReports(t *testing.T) {
 		"github-ci-disproved":               githubCIDisprovedReport,
 		"github-ci-abstained":               githubCIAbstainedReport,
 		"github-access-fired":               githubAccessFiredReport,
+		"people-left":                       peopleLeftReport,
 		"github-access-disproved":           githubAccessDisprovedReport,
 		"github-access-abstained":           githubAccessAbstainedReport,
 		"github-inventory-partial":          githubPartialInventoryReport,

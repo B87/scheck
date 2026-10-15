@@ -33,6 +33,7 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Assessments   []Assessment `json:"assessments"`
 	Acceptances   []Acceptance `json:"acceptances"`
+	PeopleLeft    []PersonLeft `json:"people_left"`
 	Excluded      []Excluded   `json:"excluded"`
 	Redaction     Redaction    `json:"redaction"`
 	Egress        Egress       `json:"egress"`
@@ -190,15 +191,18 @@ type Summary struct {
 
 // Item is one ranked entry of "Fix these first".
 type Item struct {
-	Rank      int      `json:"rank"`
-	Kind      string   `json:"kind"` // finding_id | person
-	IDs       []string `json:"ids"`
-	Person    *string  `json:"person"`
-	Title     string   `json:"title"`
-	Severity  string   `json:"severity"`
-	Keys      []Key    `json:"keys"`
-	Assets    []string `json:"assets"`
-	RankBasis []string `json:"rank_basis"`
+	Rank   int      `json:"rank"`
+	Kind   string   `json:"kind"` // finding_id | person
+	IDs    []string `json:"ids"`
+	Person *string  `json:"person"`
+	// OtherPeople says a departed-people item lost instances to a person
+	// item and ranks on the others.
+	OtherPeople bool     `json:"other_people,omitempty"`
+	Title       string   `json:"title"`
+	Severity    string   `json:"severity"`
+	Keys        []Key    `json:"keys"`
+	Assets      []string `json:"assets"`
+	RankBasis   []string `json:"rank_basis"`
 }
 
 // Below counts what "Fix these first" leaves out.

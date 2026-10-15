@@ -1806,7 +1806,36 @@ older than 7 days is collected again on resume; every risk area's row prints its
      slice owns it yet, to be assigned); the base-chain refinement of an
      `nft` ruleset and a parameterized `sshd -T -C user=` read (0.0.3 G5); a note for
      Docker's userland proxy turned off.
-4. People: R4 and R5.
+4. People: R4 and R5. R4: on a fired repository-level
+   `identity.former_person_has_access` judgment the GitHub collector states facts
+   (`repository_admin`, `write` from `EffectiveWrite` with the collaborators read cited),
+   and on one carrier judgment per login `write_held` and `write_unsettled` attributes
+   (`finding.Attribute.Asset` names the repository, the cause is the reference's
+   excerpt); the collector never reads `deploys_to`. The severity table decides
+   production: `attribute:admin` also matches `repository_admin` on a production
+   repository, `attribute:production_write` raises on `write` there, and otherwise says
+   a not-applied move (`StoppedNotEstablished`) with its cause; the report prints it
+   under "Why here". The remediation gains a rotate-and-review sentence. R5: the "People
+   who left" block and `people_left[]` (`line` is the printed sentence), the `person`
+   ranking item (two at most) with `other_people` on the `finding_id` item that lost
+   instances to it (`internal/engagement/report/people.go`). GitHub leaver judgments carry
+   `details.membership`; a person with no declared login is judged on
+   `declared:<handle>`; Workspace now abstains once per declared address for a leaving
+   date not passed or users not read, so every left person has a line. The reasons
+   `leaving_date_not_passed`, `left_date_within_collection` and `no_declared_github_login`
+   are in the schema and worded. The identity row's fixed not-judged list gains three
+   items (`identity.leaver_unlisted_write`, `identity.leaver_additions`,
+   `identity.leaver_activity`). `spec/engagement.md` ("The multi-fact rules of 0.0.2",
+   R4, R5) and `spec/report.md` ("Ranking", "People who left") are the wording.
+   Code review: a first review found an active alias-only or conflicting account printed
+   as "users could not be read" and the `declared:<handle>` key printed as an address
+   (both fixed, with end-to-end tests through `workspace.Judge` and
+   `github.JudgeAccess`; the users-unread line now carries the read's reason); a second
+   found an address missing from an incomplete users list printed as "account observed"
+   (fixed: the `not_proven` line). Step 4 is done.
+   Deferred to step 7 with F1 (per-login write reads): the R4 coverage sub-item "no
+   repository declared `deploys_to: production`; push to production by people who left
+   not judged", which is not built.
 5. R3, and the context notes C1 to C3.
 6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,
    breadth-first GitHub reads under the 4,000-request budget, the `selection` text and

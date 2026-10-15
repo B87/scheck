@@ -243,6 +243,18 @@
         {
           "id": "identity.ssh_keys",
           "text": "GitHub members' SSH keys"
+        },
+        {
+          "id": "identity.leaver_unlisted_write",
+          "text": "write to production repositories by a departed person not listed among its collaborators (read per login from a later step)"
+        },
+        {
+          "id": "identity.leaver_additions",
+          "text": "deploy keys, GitHub App authorizations and self-hosted runners a departed person added"
+        },
+        {
+          "id": "identity.leaver_activity",
+          "text": "what a departed person did after leaving (audit log not read)"
         }
       ],
       "population": {
@@ -891,6 +903,27 @@
     "internal_topology": true,
     "personal_data": true
   },
+  "people_left": [
+    {
+      "handle": "pat",
+      "left": "2026-09-30",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [],
+              "key": "former",
+              "state": "no_access_observed"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: former no access observed as of 2026-10-09.",
+          "provider": "github",
+          "state": "no_access_observed"
+        }
+      ]
+    }
+  ],
   "redaction": {
     "builtin": {},
     "operator": {

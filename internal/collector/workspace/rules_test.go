@@ -418,7 +418,8 @@ func TestWorkspaceRulesAreJudgedAtTheReadsTime(t *testing.T) {
 }
 
 // Nothing read is not an unrecorded time: a refused users read keeps the
-// rule's own reason and judges no leaver absence at all; an administrator
+// rule's own reason and judges no leaver absence, each leaver abstaining
+// under their own name (docs/spec/report.md, "People who left"); an administrator
 // whose leaving date is ambiguous at the reads is not judged as current.
 func TestWorkspaceLeaverWithNothingReadAndAmbiguousAdmin(t *testing.T) {
 	e, c := ruleFixture()
@@ -426,10 +427,17 @@ func TestWorkspaceLeaverWithNothingReadAndAmbiguousAdmin(t *testing.T) {
 		Person{Handle: "carol", Kind: "employee", Left: "2020-05-01", Addresses: []string{"carol@example.com"}})
 	e.Users.Reads = []Read{{Op: OpUsers, RequestID: OpUsers, Decision: "refused", Reason: "refused"}}
 	e.Users.Complete = false
+	attributed := map[string]bool{}
 	for _, j := range Judge(e, "asset", c) {
-		if j.ID == finding.IDIdentityFormerPersonHasAccess && (j.Reason == finding.ReasonNoCollectionTime || j.Subject.Person == "bob" || j.Subject.Person == "carol") {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && (j.Reason == finding.ReasonNoCollectionTime || j.Verdict != Abstained) {
 			t.Fatalf("nothing read: %+v", j)
 		}
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && (j.Subject.Person == "bob" || j.Subject.Person == "carol") {
+			attributed[j.Subject.Person] = true
+		}
+	}
+	if !attributed["bob"] || !attributed["carol"] {
+		t.Fatalf("a leaver lost their line: %v", attributed)
 	}
 	e, c = ruleFixture()
 	e.Users.Items[0].IsAdmin = new(true)

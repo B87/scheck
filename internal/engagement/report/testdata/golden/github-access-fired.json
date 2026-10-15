@@ -133,7 +133,7 @@
       "outcomes": [
         {
           "detail": {
-            "admin": true
+            "membership": "collaborator"
           },
           "outcome": "fired",
           "subject": {
@@ -300,6 +300,18 @@
         {
           "id": "identity.ssh_keys",
           "text": "GitHub members' SSH keys"
+        },
+        {
+          "id": "identity.leaver_unlisted_write",
+          "text": "write to production repositories by a departed person not listed among its collaborators (read per login from a later step)"
+        },
+        {
+          "id": "identity.leaver_additions",
+          "text": "deploy keys, GitHub App authorizations and self-hosted runners a departed person added"
+        },
+        {
+          "id": "identity.leaver_activity",
+          "text": "what a departed person did after leaving (audit log not read)"
         }
       ],
       "population": {
@@ -965,8 +977,8 @@
       "category": "accounts",
       "derived": [
         {
-          "name": "admin",
-          "value": true
+          "name": "membership",
+          "value": "collaborator"
         }
       ],
       "evidence": [
@@ -995,7 +1007,7 @@
       },
       "not_checked": [],
       "remediation": {
-        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions."
+        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
       },
       "rule": {
         "kind": "multi_fact",
@@ -1665,6 +1677,39 @@
     "internal_topology": true,
     "personal_data": true
   },
+  "people_left": [
+    {
+      "handle": "pat",
+      "left": "2026-09-30",
+      "tenants": [
+        {
+          "accounts": [
+            {
+              "finding_keys": [
+                {
+                  "asset": "repo:github:example-org/production",
+                  "id": "identity.former_person_has_access",
+                  "subject": "former"
+                }
+              ],
+              "key": "former",
+              "production_write": {
+                "applied": true,
+                "repositories": [
+                  "example-org/production"
+                ]
+              },
+              "state": "finding"
+            }
+          ],
+          "asset": "saas:github:example-org",
+          "line": "GitHub: former can still push to example-org/production, declared production (finding).",
+          "provider": "github",
+          "state": "finding"
+        }
+      ]
+    }
+  ],
   "redaction": {
     "builtin": {},
     "operator": {

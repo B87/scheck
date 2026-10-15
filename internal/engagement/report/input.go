@@ -63,11 +63,23 @@ type Input struct {
 	// handles an acceptance's owner is suggested from.
 	People     bool
 	Candidates []Candidate
+	// Departed are the people with a declared leaving date, by handle, and
+	// the providers they declare an account at; their accounts are what
+	// the collectors attributed (docs/spec/report.md, "People who left").
+	Departed []Departure
 	// RedactExtra is the number of operator redaction rules.
 	RedactExtra int
 	// Rerun is the command that runs this engagement again ("scheck run
 	// engagement.yaml"), printed where running again closes a gap.
 	Rerun string
+}
+
+// Departure is one person with a declared leaving date: the date as
+// written and the providers ("workspace", "github") the person declares an
+// account at.
+type Departure struct {
+	Handle, Left string
+	Providers    []string
 }
 
 // AssetInput is one asset in scope after Recon.

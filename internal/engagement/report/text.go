@@ -48,6 +48,7 @@ func WriteText(w io.Writer, r *Report, opt Options) error {
 	t.coverage()
 	t.findings()
 	t.pastes()
+	t.peopleLeft()
 	t.notChecked()
 	t.excluded()
 	t.egress()
@@ -487,6 +488,25 @@ func (t *text) summary() {
 			names = append(names, t.name(a))
 		}
 		first := fmt.Sprintf("  %d  %s  ", it.Rank, t.sev(pad(it.Severity, 8)))
+		if it.Person != nil {
+			// A person item: the title, the raise that set it, and the
+			// person's own lines (docs/spec/report.md, "A person item").
+			t.hang(first, "             ", clean(it.Title))
+			if why := t.personRaise(it.Keys[0]); why != "" {
+				t.hang("             ", "             ", why)
+			}
+			for _, p := range t.r.PeopleLeft {
+				if p.Handle == *it.Person {
+					for _, tl := range p.Tenants {
+						t.hang("             ", "               ", clean(tl.Line))
+					}
+				}
+			}
+			continue
+		}
+		if it.OtherPeople {
+			names = append(names, "and other people")
+		}
 		t.hang(first, "             ", clean(it.Title)+"  ("+strings.Join(names, ", ")+")")
 		if why := t.raisedBy(it.Keys[0]); why != "" {
 			t.hang("             ", "             ", why)
@@ -728,6 +748,32 @@ func (t *text) raisedBy(k Key) string {
 	return "base " + f.SeverityBase + ", " + dir + why
 }
 
+// personRaise is a person item's raise phrase: R4's, when it set the
+// item's severity, else the finding's own.
+func (t *text) personRaise(k Key) string {
+	f := t.finding(k)
+	if f != nil && slices.ContainsFunc(f.Adjustments, func(a Adjustment) bool { return a.Rule == "attribute:production_write" }) {
+		return "base " + f.SeverityBase + ", raised: can still push to " + clean(strings.TrimPrefix(f.Key.Asset, "repo:github:")) + ", declared production"
+	}
+	return t.raisedBy(k)
+}
+
+// peopleLeft prints every person with a declared leaving date and one line
+// per tenant (docs/spec/report.md, "People who left").
+func (t *text) peopleLeft() {
+	if len(t.r.PeopleLeft) == 0 {
+		return
+	}
+	t.line(t.bold("People who left"))
+	for _, p := range t.r.PeopleLeft {
+		t.line("  " + clean(p.Handle) + " (left " + clean(p.Left) + ")")
+		for _, tl := range p.Tenants {
+			t.hang("    ", "      ", clean(tl.Line))
+		}
+	}
+	t.blank()
+}
+
 func (t *text) finding(k Key) *Finding {
 	for i := range t.r.Findings {
 		f := &t.r.Findings[i]
@@ -846,6 +892,12 @@ func (t *text) reasonText(rd ReasonDetail) string {
 		return "the command that reads it did not give a usable answer (" + clean(arg) + ")"
 	case "no_rule":
 		return "this version of scheck has no rule for it"
+	case "leaving_date_not_passed":
+		return "the declared leaving date had not passed when it was read"
+	case "left_date_within_collection":
+		return "the declared leaving date falls within or after collection; run again after that date"
+	case "no_declared_github_login":
+		return "no GitHub login is declared for this person"
 	}
 	return clean(rd.Reason)
 }

@@ -91,3 +91,13 @@ func ReadDate(t time.Time, zone *time.Location) string {
 	}
 	return t.In(zone).Format(time.DateOnly)
 }
+
+// The Not checked lines of a left person's abstained Workspace access
+// judgment, which the report's person line reads (docs/spec/report.md,
+// "People who left").
+const (
+	NotCheckedLeaverIdentity     = "Declared account identity is missing or ambiguous."
+	NotCheckedLeaverUnrecognized = "The account was read, but its status or access evidence was not recognized."
+	NotCheckedUsersUnread        = "The users were not read."
+	NotCheckedUsersIncomplete    = "The users list was incomplete, so an address missing from it is not proven gone."
+)

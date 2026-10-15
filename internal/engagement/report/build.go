@@ -58,7 +58,7 @@ func Build(in Input) *Report {
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
-		Findings: []Finding{}, Assessments: []Assessment{}, Acceptances: []Acceptance{},
+		Findings: []Finding{}, Assessments: []Assessment{}, Acceptances: []Acceptance{}, PeopleLeft: []PersonLeft{},
 		Excluded: []Excluded{}, Assets: []Asset{}, Notes: []Note{},
 		Redaction: Redaction{Builtin: map[string]int{}, Operator: OperatorRedaction{Rules: in.RedactExtra}},
 	}
@@ -114,6 +114,7 @@ func Build(in Input) *Report {
 		r.Excluded = append(r.Excluded, x)
 	}
 	r.Egress = b.egress()
+	r.PeopleLeft = b.peopleLeft()
 	r.Summary = b.summary()
 	r.Exit = b.exit()
 	return r
@@ -430,18 +431,11 @@ func (b *builder) rankFindings() {
 }
 
 // summary ranks the open findings at medium or above into at most five
-// items, one per finding id (docs/spec/report.md, "Ranking").
+// items: one per finding id, or one per person who left whose open
+// findings one offboarding closes (docs/spec/report.md, "Ranking").
 func (b *builder) summary() Summary {
 	s := Summary{Items: []Item{}, Areas: AreaCounts{Total: len(finding.Areas)}}
-	type group struct {
-		item  Item
-		rank  int
-		area  int
-		dmm   string // the first asset data.matters_most names
-		count int
-	}
-	groups := map[string]*group{}
-	var order []*group
+	var open []Finding
 	for _, f := range b.r.Findings {
 		switch {
 		case f.Status == finding.StatusAccepted:
@@ -463,24 +457,35 @@ func (b *builder) summary() Summary {
 		}) {
 			continue
 		}
+		open = append(open, f)
+	}
+	people, taken := b.personGroups(open)
+	groups := map[string]*rankGroup{}
+	order := people
+	for i, f := range open {
 		g := groups[f.ID]
 		if g == nil {
-			g = &group{item: Item{Kind: "finding_id", IDs: []string{f.ID}, Title: f.Title, Keys: []Key{}, Assets: []string{}}, rank: -1,
+			g = &rankGroup{item: Item{Kind: "finding_id", IDs: []string{f.ID}, Title: f.Title, Keys: []Key{}, Assets: []string{}}, rank: -1,
 				area: slices.Index(finding.Areas, finding.Area(f.Area))}
 			groups[f.ID] = g
+		}
+		if taken[i] {
+			g.item.OtherPeople = true
+			continue
+		}
+		if len(g.item.Keys) == 0 {
 			order = append(order, g)
 		}
-		if r := finding.Severity(f.Severity).Rank(); r > g.rank {
-			g.rank, g.item.Severity = r, f.Severity
-		}
-		g.item.Keys = append(g.item.Keys, f.Key)
-		g.item.Assets = appendUnique(g.item.Assets, f.Key.Asset)
-		g.count++
-		if g.dmm == "" && slices.Contains(b.in.DataMattersMost, f.Key.Asset) {
-			g.dmm = f.Key.Asset
+		g.add(f, b.in.DataMattersMost)
+	}
+	for _, g := range order {
+		if g.item.Kind == "finding_id" && slices.Contains(leaverIDs, g.item.IDs[0]) {
+			// One person's access across many repositories is one thing
+			// to fix: count people, not instances.
+			g.count = len(g.people)
 		}
 	}
-	slices.SortStableFunc(order, func(x, y *group) int {
+	slices.SortStableFunc(order, func(x, y *rankGroup) int {
 		return cmp.Or(
 			cmp.Compare(y.rank, x.rank),
 			cmp.Compare(x.area, y.area),
@@ -497,8 +502,16 @@ func (b *builder) summary() Summary {
 		}
 		g.item.Rank = i + 1
 		g.item.RankBasis = []string{"severity:" + g.item.Severity, "area:" + string(finding.Areas[max(g.area, 0)])}
+		if g.item.Person != nil {
+			g.item.RankBasis = append(g.item.RankBasis, "person:"+*g.item.Person)
+		}
 		if g.dmm != "" {
 			g.item.RankBasis = append(g.item.RankBasis, "data_matters_most:"+g.dmm)
+		}
+		if g.item.Person != nil {
+			for _, a := range g.top.Adjustments {
+				g.item.RankBasis = appendUnique(g.item.RankBasis, a.Rule)
+			}
 		}
 		s.Items = append(s.Items, g.item)
 	}

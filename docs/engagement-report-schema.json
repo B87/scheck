@@ -4,7 +4,7 @@
   "title": "scheck engagement report",
   "description": "spec/report.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
   "type": "object",
-  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "egress", "assets", "notes"],
+  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "people_left", "excluded", "redaction", "egress", "assets", "notes"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
@@ -129,7 +129,8 @@
               "severity": { "$ref": "#/$defs/severity" },
               "keys": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key" } },
               "assets": { "type": "array", "items": { "$ref": "#/$defs/asset_id" } },
-              "rank_basis": { "type": "array", "items": { "type": "string" } }
+              "rank_basis": { "type": "array", "items": { "type": "string" } },
+              "other_people": { "type": "boolean", "description": "A finding_id item that lost instances to a person item and ranks on the rest: \"and other people\"." }
             }
           }
         },
@@ -256,6 +257,37 @@
           "outcome": { "enum": ["applied", "expired", "not_applied", "not_matched", "rule_not_decided", "subject_not_found"] },
           "why": { "type": "string" },
           "findings": { "type": "array", "items": { "$ref": "#/$defs/key" } }
+        }
+      }
+    },
+    "people_left": {
+      "type": "array",
+      "description": "spec/report.md, \"People who left\": every person with a declared leaving date and one line per tenant. It restates verdicts and decides nothing.",
+      "items": {
+        "type": "object", "required": ["handle", "left", "tenants"], "additionalProperties": false,
+        "properties": {
+          "handle": { "type": "string" },
+          "left": { "type": "string" },
+          "tenants": { "type": "array", "items": {
+            "type": "object", "required": ["asset", "provider", "state", "line", "accounts"], "additionalProperties": false,
+            "properties": {
+              "asset": { "oneOf": [{ "$ref": "#/$defs/asset_id" }, { "type": "null" }], "description": "null when no tenant of that provider is in scope." },
+              "provider": { "enum": ["workspace", "github"] },
+              "state": { "$ref": "#/$defs/person_state" },
+              "reason": { "type": "string" },
+              "line": { "type": "string" },
+              "accounts": { "type": "array", "items": {
+                "type": "object", "required": ["key", "state", "finding_keys"], "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string" },
+                  "state": { "$ref": "#/$defs/person_state" },
+                  "finding_keys": { "type": "array", "items": { "$ref": "#/$defs/key" } },
+                  "production_write": { "type": "object", "required": ["applied", "repositories"], "additionalProperties": false,
+                    "properties": { "applied": { "type": "boolean" }, "repositories": { "type": "array", "items": { "type": "string" } } } }
+                }
+              } }
+            }
+          } }
         }
       }
     },
@@ -401,6 +433,7 @@
     }
   },
   "$defs": {
+    "person_state": { "enum": ["finding", "accepted", "no_access_observed", "not_proven", "not_judged", "not_checked", "not_in_scope", "no_login_declared"] },
     "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
     "asset_id": { "type": "string", "pattern": "^(domain|url|host|network|saas|repo|cloud):.+$" },
     "area": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"] },
@@ -408,7 +441,7 @@
     "mark": { "enum": ["assessed", "partial", "not_assessed", "not_applicable", "outside_scheck"] },
     "reason": {
       "type": "string",
-      "pattern": "^(no_credentials|insufficient_permission:.+|not_on_plan:.+|collector_not_built|refused|not_declared|excluded_by_operator|limit_reached|failed|sampled|unavailable:[a-z_]+|no_rule)$"
+      "pattern": "^(no_credentials|insufficient_permission:.+|not_on_plan:.+|collector_not_built|refused|not_declared|excluded_by_operator|limit_reached|failed|sampled|unavailable:[a-z_]+|no_rule|leaving_date_not_passed|left_date_within_collection|no_declared_github_login)$"
     },
     "reason_detail": {
       "type": "object", "required": ["reason"], "additionalProperties": false,

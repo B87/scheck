@@ -56,7 +56,10 @@ Identity and access      checked in part
   to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
   Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
   the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
-  members' SSH keys. Also not judged on the assets read: Delegated organization roles, repository
+  members' SSH keys; write to production repositories by a departed person not listed among its
+  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  self-hosted runners a departed person added; what a departed person did after leaving (audit log
+  not read). Also not judged on the assets read: Delegated organization roles, repository
   invitations, sign-in history, selected-repository visibility and unobserved repository
   administrators are not assessed.
 Secrets                  not checked
@@ -104,7 +107,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Why here      This person left and still holds administrator rights, so this ranks one step
                  higher.
    Fix           Complete offboarding: suspend or remove the account or its access, and review
-                 credentials and sessions.
+                 credentials and sessions. If they could push to a repository that deploys to
+                 production, also rotate the secrets that repository's workflows can read and its
+                 deploy keys, and review its commits and workflow runs since their leaving date.
 
 2  critical  The organization does not require two-factor authentication (engineering)
    [github.mfa_not_required]
@@ -281,6 +286,10 @@ intent.accepted_risks in engagement.yaml and write the reason.
       date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
+
+People who left
+  pat (left 2026-09-30)
+    GitHub: former can still push to example-org/production, declared production (finding).
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.

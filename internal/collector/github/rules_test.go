@@ -166,7 +166,9 @@ func TestGitHubOffboardingDoesNotDuplicateUnexpectedAdmin(t *testing.T) {
 		t.Fatal("departed owner access missing")
 	}
 	for _, j := range out {
-		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired && !j.Has("admin") {
+		// The organization's judgment says owner; a repository's says
+		// its own admin, which the table reads with production.
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict == Fired && !j.Has("admin") && !j.Has("repository_admin") {
 			t.Fatal("departed owner administrative attribute missing")
 		}
 	}
@@ -331,7 +333,7 @@ func TestFormerAccessKeepsRepositoryPrivilegeOnItsAsset(t *testing.T) {
 				found[j.Asset] = j
 			}
 		}
-		if len(found) != 2 || found[staging.Asset].Has("admin") || !found[productionRepo.Asset].Has("admin") {
+		if len(found) != 2 || found[staging.Asset].Has("repository_admin") || found[staging.Asset].Has("write") || !found[productionRepo.Asset].Has("repository_admin") {
 			t.Fatalf("misplaced privilege: %+v", found)
 		}
 	}

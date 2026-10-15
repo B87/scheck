@@ -179,6 +179,7 @@ func TestEveryMovingStepHasASentence(t *testing.T) {
 		fired(finding.IDIdentityUnexpectedAdmin, finding.Attribute{Name: "contradiction", Ref: finding.Ref{Key: "access.admins"}}),
 		fired(finding.IDGitHubWritableDeployKey),
 		fired(finding.IDIdentityFormerPersonHasAccess, finding.Attribute{Name: "admin"}),
+		fired(finding.IDIdentityFormerPersonHasAccess, finding.Attribute{Name: "write", Ref: finding.Ref{Observation: "r", Excerpt: "push: true"}}),
 		fired(workspace.IDExternalForwarding, finding.Attribute{Name: "admin"}),
 		fired(workspace.IDOAuthBroadScope, finding.Attribute{Name: "admin_grantor"}),
 		fired(finding.IDGitHubSecretScanningOpen, finding.Attribute{Name: "public_repository"}),
@@ -233,5 +234,72 @@ func TestAnOpenDatabaseStopsAtItsCeiling(t *testing.T) {
 	// The exposure row moves nothing but the database finding.
 	if c := Grade(fired(finding.IDGitHubWritableDeployKey), host, d); slices.Contains(moved(c), "exposure:internet") {
 		t.Fatalf("%+v", c)
+	}
+}
+
+// R4: a left person's push on a repository declared production raises
+// their access past high; an admin there is already critical, and the
+// second step meets the scale's end. On a repository not declared
+// production nothing moves (docs/spec/engagement.md, R4).
+func TestProductionWriteRaisesALeftPersonsAccess(t *testing.T) {
+	const shop, api = "repo:github:acme/shop", "repo:github:acme/api"
+	d := Declarations{Production: map[string]Production{shop: {Name: "shop", Key: "assets.shop.deploys_to"}}}
+	write := finding.Attribute{Name: "write", Ref: finding.Ref{Observation: "collab", Excerpt: "role_name: write; push: true"}}
+	c := Grade(fired(finding.IDIdentityFormerPersonHasAccess, write), shop, d)
+	m := c.Moves[len(c.Moves)-1]
+	if c.Severity != finding.SevCritical || m.Rule != "attribute:production_write" || m.Ref.Observation != "collab" ||
+		m.Why != "This person left and can still push to acme/shop, which you declared deploys to production, so this ranks one step higher." {
+		t.Fatalf("%+v", c)
+	}
+	c = Grade(fired(finding.IDIdentityFormerPersonHasAccess, finding.Attribute{Name: "repository_admin"}, write), shop, d)
+	if got := strings.Join(moved(c), ","); got != "attribute:admin" || c.Severity != finding.SevCritical || c.Moves[1].Stopped != finding.StoppedScaleEnd {
+		t.Fatalf("admin then write: %s %+v", got, c)
+	}
+	if c := Grade(fired(finding.IDIdentityFormerPersonHasAccess, finding.Attribute{Name: "repository_admin"}, write), api, d); len(c.Moves) != 0 || c.Severity != finding.SevHigh {
+		t.Fatalf("not production: %+v", c)
+	}
+	// Workspace's leaver judgment carries no write fact.
+	if c := Grade(fired(finding.IDIdentityFormerPersonHasAccess), shop, d); len(c.Moves) != 0 {
+		t.Fatalf("%+v", c)
+	}
+}
+
+// R4 not applied: said, not taken, on the judgment that carries the
+// login's facts, naming the first unsettled production repository in
+// canonical order and counting the rest; never when push is held on one,
+// or when every unsettled repository is not production.
+func TestProductionWriteNotEstablished(t *testing.T) {
+	const org = "saas:github:acme"
+	d := Declarations{Production: map[string]Production{
+		"repo:github:acme/shop": {Name: "shop"}, "repo:github:acme/api": {Name: "api"}, "repo:github:acme/web": {Name: "web"}}}
+	unsettled := func(asset, cause string) finding.Attribute {
+		return finding.Attribute{Name: "write_unsettled", Asset: asset, Ref: finding.Ref{Observation: "r-" + asset, Excerpt: cause}}
+	}
+	j := fired(finding.IDIdentityFormerPersonHasAccess,
+		unsettled("repo:github:acme/web", "web cause"), unsettled("repo:github:acme/api", "api cause"),
+		unsettled("repo:github:acme/staging", "staging cause"), unsettled("repo:github:acme/shop", "shop cause"))
+	c := Grade(j, org, d)
+	if len(c.Moves) != 1 || c.Severity != finding.SevHigh {
+		t.Fatalf("%+v", c)
+	}
+	m := c.Moves[0]
+	if m.Rule != "attribute:production_write" || m.Stopped != finding.StoppedNotEstablished || m.From != m.To || m.Ref.Observation != "r-repo:github:acme/api" ||
+		m.Why != "not applied: write access to production repositories was not established (api cause; and 2 more production repositories)." {
+		t.Fatalf("%+v", m)
+	}
+	j = fired(finding.IDIdentityFormerPersonHasAccess, unsettled("repo:github:acme/shop", "shop cause"))
+	if m := Grade(j, org, d).Moves[0]; m.Why != "not applied: write access to production repositories was not established (shop cause)." {
+		t.Fatalf("%+v", m)
+	}
+	j.Attributes = append(j.Attributes, finding.Attribute{Name: "write_held", Asset: "repo:github:acme/web"})
+	if c := Grade(j, org, d); len(c.Moves) != 0 {
+		t.Fatalf("push held on a production repository: %+v", c)
+	}
+	j = fired(finding.IDIdentityFormerPersonHasAccess, unsettled("repo:github:acme/staging", "staging cause"))
+	if c := Grade(j, org, d); len(c.Moves) != 0 {
+		t.Fatalf("only a repository not declared production: %+v", c)
+	}
+	if c := Grade(j, org, Declarations{}); len(c.Moves) != 0 {
+		t.Fatalf("nothing declared production: %+v", c)
 	}
 }

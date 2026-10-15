@@ -226,6 +226,19 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			if !passed {
 				j.Reason = leftReason(left, j.Reason)
 			}
+			// An account that was read but not decided says why, so the
+			// person line never reads it as an unread users list
+			// (docs/spec/report.md, "People who left").
+			if j.Verdict == Abstained && passed {
+				switch {
+				case a.Conflict:
+					j.NotChecked = []string{finding.NotCheckedLeaverUnrecognized}
+				case !primary && active(u):
+					j.NotChecked = []string{finding.NotCheckedLeaverIdentity}
+				default:
+					j.NotChecked = []string{finding.NotCheckedLeaverUnrecognized}
+				}
+			}
 			if j.Verdict == Fired && admin {
 				j.Reads = adminReads
 				j.Attributes = []finding.Attribute{{Name: "admin"}}
@@ -244,11 +257,10 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			continue
 		}
 		left := leftAt(p.Left, c, e.Users.Reads)
-		// Not passed, or nothing read: no absence to judge, and a missing
-		// population is already the users rule's own abstention.
-		if left == finding.LeftNotPassed || left == finding.LeftUnread {
-			continue
-		}
+		// Not passed, or nothing read: no absence to judge, but the person
+		// still gets an attributed abstention, so every left person's
+		// Workspace line reads a judgment (docs/spec/report.md, "People
+		// who left").
 		addresses := p.Addresses
 		if len(addresses) == 0 {
 			addresses = []string{"declared:" + p.Handle}
@@ -271,12 +283,24 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			j.Sources = []string{"people." + p.Handle + ".left", "people." + p.Handle + ".workspace"}
 			// An absence is as current as the earliest users read: one read
 			// before the date passed says nothing about offboarding.
-			decide(&j, left == finding.LeftPassed && len(p.Addresses) > 0 && !matched && e.Users.Complete, false, "Declared current address was not found as of "+usersAsOf(c, e.Users.Reads)+" (earliest of the users reads). Renamed accounts whose old address was removed cannot be identified by this comparison.")
+			text := "Declared current address was not found as of " + usersAsOf(c, e.Users.Reads) + " (earliest of the users reads). Renamed accounts whose old address was removed cannot be identified by this comparison."
+			switch left {
+			case finding.LeftUnread:
+				text = "The users were not read."
+				j.NotChecked = []string{finding.NotCheckedUsersUnread}
+			case finding.LeftNotPassed:
+				text = "The declared leaving date " + p.Left + " had not passed at the users read of " + usersAsOf(c, e.Users.Reads) + "."
+			}
+			decide(&j, left == finding.LeftPassed && len(p.Addresses) > 0 && !matched && e.Users.Complete, false, text)
 			if left != finding.LeftPassed {
 				j.Reason = leftReason(left, j.Reason)
 			}
-			if matched || len(p.Addresses) == 0 {
-				j.NotChecked = []string{"Declared account identity is missing or ambiguous."}
+			if left != finding.LeftUnread && (matched || len(p.Addresses) == 0) {
+				j.NotChecked = []string{finding.NotCheckedLeaverIdentity}
+			}
+			// Absent from a list known to be partial: not seen, never gone.
+			if left == finding.LeftPassed && len(p.Addresses) > 0 && !matched && !e.Users.Complete {
+				j.NotChecked = []string{finding.NotCheckedUsersIncomplete}
 			}
 			out = append(out, j)
 		}

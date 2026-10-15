@@ -8,6 +8,7 @@ package severity
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/finding"
@@ -50,6 +51,9 @@ type rule struct {
 	// match is whether the row applies, what it rests on, and its
 	// sentence ("" for none).
 	match func(d Declarations, in instance) (finding.Ref, string, bool)
+	// notApplied, when the row does not match, is a step said but not
+	// taken: what it rests on and its sentence.
+	notApplied func(d Declarations, in instance) (finding.Ref, string, bool)
 }
 
 type instance struct {
@@ -123,7 +127,27 @@ var rules = []rule{
 		return a.Ref, ownWords(in.j, "What was observed contradicts what you declared at "+a.Ref.Key+", so this ranks one step higher."), true
 	}},
 	{name: "attribute:admin", ids: []string{finding.IDIdentityFormerPersonHasAccess}, pastHigh: true,
-		match: cites("admin", "This person left and still holds administrator rights, so this ranks one step higher.")},
+		match: func(d Declarations, in instance) (finding.Ref, string, bool) {
+			// An owner holds admin everywhere; a repository's admin counts
+			// where the repository is declared production.
+			if ref, why, ok := cites("admin", "This person left and still holds administrator rights, so this ranks one step higher.")(d, in); ok {
+				return ref, why, true
+			}
+			if _, prod := d.Production[in.owner]; prod {
+				return cites("repository_admin", "This person left and still holds administrator rights, so this ranks one step higher.")(d, in)
+			}
+			return finding.Ref{}, "", false
+		}},
+	{name: "attribute:production_write", ids: []string{finding.IDIdentityFormerPersonHasAccess}, pastHigh: true,
+		match: func(d Declarations, in instance) (finding.Ref, string, bool) {
+			a, ok := attribute(in.j, "write")
+			p, prod := d.Production[in.owner]
+			if !ok || !prod {
+				return finding.Ref{}, "", false
+			}
+			return refOf(in.j, a.Ref), ownWords(in.j, "This person left and can still push to "+repoName(in.owner, p)+", which you declared deploys to production, so this ranks one step higher."), true
+		},
+		notApplied: productionWriteUnsettled},
 	{name: "attribute:admin", ids: []string{workspace.IDExternalForwarding},
 		match: cites("admin", "This mailbox belongs to a super administrator, so this ranks one step higher.")},
 	{name: "attribute:admin_grantor", ids: []string{workspace.IDOAuthBroadScope},
@@ -135,6 +159,46 @@ var rules = []rule{
 			a, ok := attribute(in.j, "public_repository")
 			return refOf(in.j, a.Ref), "This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested.", ok
 		}},
+}
+
+// repoName is a repository as the chain names it, owner/name.
+func repoName(asset string, p Production) string {
+	if name, ok := strings.CutPrefix(asset, "repo:github:"); ok {
+		return name
+	}
+	return p.Name
+}
+
+// productionWriteUnsettled is R4 not applied: a left person's GitHub
+// access fired, no production repository establishes their push access,
+// and one did not settle it as absent. The collector lists, on the one
+// judgment per login that carries them, the repositories it read where
+// push is held or unsettled; production is decided here
+// (docs/spec/engagement.md, R4).
+func productionWriteUnsettled(d Declarations, in instance) (finding.Ref, string, bool) {
+	var causes []finding.Attribute
+	for _, a := range in.j.Attributes {
+		if _, prod := d.Production[a.Asset]; !prod {
+			continue
+		}
+		switch a.Name {
+		case "write_held":
+			return finding.Ref{}, "", false
+		case "write_unsettled":
+			causes = append(causes, a)
+		}
+	}
+	if len(causes) == 0 {
+		return finding.Ref{}, "", false
+	}
+	slices.SortStableFunc(causes, func(x, y finding.Attribute) int { return strings.Compare(x.Asset, y.Asset) })
+	why := "not applied: write access to production repositories was not established (" + causes[0].Ref.Excerpt
+	if n := len(causes) - 1; n == 1 {
+		why += "; and 1 more production repository"
+	} else if n > 1 {
+		why += fmt.Sprintf("; and %d more production repositories", n)
+	}
+	return causes[0].Ref, why + ").", true
 }
 
 // cites matches a judgment carrying the attribute, resting on what the
@@ -206,6 +270,13 @@ func Grade(j finding.Judgment, owner string, d Declarations) *finding.Chain {
 		}
 		ref, why, ok := row.match(d, in)
 		if !ok {
+			if row.notApplied == nil {
+				continue
+			}
+			if ref, why, ok := row.notApplied(d, in); ok && exposed == "" {
+				c.Moves = append(c.Moves, finding.Move{Rule: row.name, By: finding.ByEngagement, Delta: +1, From: c.Severity, To: c.Severity,
+					Ref: ref, Stopped: finding.StoppedNotEstablished, Why: why})
+			}
 			continue
 		}
 		m := finding.Move{Rule: row.name, By: finding.ByEngagement, Delta: +1, Ref: ref, Why: why}

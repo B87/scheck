@@ -26,6 +26,7 @@ func githubAccessReport(t *testing.T, verdict string) Input {
 	in.Egress.Sources[0].Requests = 13
 	a.InventoryNotes[0].Detail = "members: observed 6; owners: observed 5; outside collaborators: observed 1; pending invitations: observed 0; repositories visible to this credential: observed 4. Identity and repository-access rules were evaluated; unobserved permissions remain unknown."
 	in.People = true
+	in.Departed = []Departure{{Handle: "pat", Left: "2026-09-30", Providers: []string{"github"}}}
 	in.Candidates = []Candidate{{Handle: "alex", Why: "employee"}}
 	account := func(login, id, person string) Subject {
 		return Subject{Kind: "account", Key: login, Label: login, ProviderID: id, Person: person}
@@ -35,7 +36,7 @@ func githubAccessReport(t *testing.T, verdict string) Input {
 	a.Judged = []Judgment{
 		{ID: finding.IDGitHubMFANotRequired, Asset: githubAccessOrg, Reads: []string{"organization"}, Attributes: []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: "access.mfa[0]"}}}, Sources: []string{"access.mfa[0]"}, Excerpt: "two_factor_requirement_enabled=false", Details: map[string]any{"required": false}},
 		{ID: finding.IDGitHubOwnerWithoutMFA, Asset: githubAccessOrg, Subject: account("alex", "41", "alex"), Reads: []string{"owners-no-mfa"}, Excerpt: "owner alex appears in the provider's 2fa_disabled owner list"},
-		{ID: finding.IDIdentityFormerPersonHasAccess, Asset: githubAccessRepo, Subject: account("former", "42", "pat"), Reads: []string{"collaborators"}, Attributes: []finding.Attribute{{Name: "admin"}}, Sources: []string{"people.pat.left"}, Excerpt: "former permissions.admin=true", Details: map[string]any{"admin": true}},
+		{ID: finding.IDIdentityFormerPersonHasAccess, Asset: githubAccessRepo, Subject: account("former", "42", "pat"), Reads: []string{"collaborators"}, Attributes: []finding.Attribute{{Name: "repository_admin"}, {Name: "write", Ref: finding.Ref{Observation: "collaborators", Excerpt: "role_name: admin; admin: true"}}}, Sources: []string{"people.pat.left"}, Excerpt: "former permissions.admin=true", Details: map[string]any{"membership": "collaborator"}},
 		{ID: finding.IDIdentityUnexpectedAdmin, Asset: githubAccessOrg, Subject: account("unexpected", "43", "casey"), Reads: []string{"owners"}, Sources: []string{"access.admins", "people.casey"}, Excerpt: "owner unexpected"},
 		{ID: finding.IDGitHubTooManyOwners, Asset: githubAccessOrg, Reads: []string{"owners", "members"}, Excerpt: "observed owners=5 members=6", Listed: []string{"alex", "unexpected", "owner3", "owner4", "owner5"}, Details: map[string]any{"owners": 5, "members": 6}},
 		{ID: finding.IDGitHubBroadDefaultMemberPermission, Asset: githubAccessOrg, Reads: []string{"organization"}, Excerpt: "default_repository_permission=write", Details: map[string]any{"permission": "write"}},

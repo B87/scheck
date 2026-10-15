@@ -14,7 +14,10 @@ type Ref struct {
 // "public_repository", "password_form"), with what establishes it.
 type Attribute struct {
 	Name string `json:"name"`
-	Ref  Ref    `json:"ref,omitzero"`
+	// Asset is the asset the fact is about when it is not the judgment's
+	// own: a left person's write on another repository.
+	Asset string `json:"asset,omitempty"`
+	Ref   Ref    `json:"ref,omitzero"`
 }
 
 // AttributeRaise is a step a collector owns: the definition declares it,
@@ -30,12 +33,15 @@ type AttributeRaise struct {
 // The ways a step can fail to move a severity; each is recorded in the
 // chain and never counted as an adjustment.
 const (
-	StoppedScaleEnd = "scale_end"  // already at critical (or info)
-	StoppedPastHigh = "past_high"  // the step may not pass high
-	StoppedCeiling  = "ceiling"    // the definition's ceiling
-	StoppedExposed  = "exposed"    // an earlier exposed_on_purpose step is terminal
-	ByCollector     = "collector"  // the collector's own table
-	ByEngagement    = "engagement" // the engagement's table
+	StoppedScaleEnd = "scale_end" // already at critical (or info)
+	StoppedPastHigh = "past_high" // the step may not pass high
+	StoppedCeiling  = "ceiling"   // the definition's ceiling
+	StoppedExposed  = "exposed"   // an earlier exposed_on_purpose step is terminal
+	// StoppedNotEstablished is a step whose fact was not established:
+	// said, not taken (attribute:production_write, docs/spec/engagement.md, R4).
+	StoppedNotEstablished = "not_established"
+	ByCollector           = "collector"  // the collector's own table
+	ByEngagement          = "engagement" // the engagement's table
 )
 
 // Move is one step of a severity chain. A step that did not move the

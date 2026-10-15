@@ -60,8 +60,11 @@ Identity and access      checked in part
   to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
   Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
   the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
-  members' SSH keys. Also not judged on the assets read: 2-step verification policy, grace periods
-  and other sign-in services were not assessed.
+  members' SSH keys; write to production repositories by a departed person not listed among its
+  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  self-hosted runners a departed person added; what a departed person did after leaving (audit log
+  not read). Also not judged on the assets read: 2-step verification policy, grace periods and other
+  sign-in services were not assessed.
 Email and domain         checked in part
   1 of 1 asset read.
   Google did not issue the token this read needs (Workspace mail forwarding); Domain email settings

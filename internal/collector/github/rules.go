@@ -355,7 +355,10 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			continue
 		}
 		if len(p.GitHub) == 0 {
-			j := judgment(finding.IDIdentityFormerPersonHasAccess, c.OrganizationAsset, nil, nil)
+			// Attributed in every outcome, so the report's person lines
+			// read it rather than the declaration (docs/spec/report.md,
+			// "People who left").
+			j := judgment(finding.IDIdentityFormerPersonHasAccess, c.OrganizationAsset, &Subject{Kind: "account", Key: "declared:" + p.Handle, Label: p.Handle, Person: p.Handle}, nil)
 			j.Reason = "no_declared_github_login"
 			out = append(out, j)
 			continue
@@ -402,24 +405,65 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				}
 				return j
 			}
+			owner := containsAccount(e.Owners.Items, login)
+			// carrier is the fired judgment that carries the login's R4
+			// facts: the organization's, else the first repository's.
+			carrier := -1
 			if present {
-				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, containsAccount(e.Owners.Items, login), held...))
+				j := makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, owner, held...)
+				// How the login holds access, as the report's person line
+				// says it (docs/spec/report.md, "People who left").
+				j.Details = map[string]any{"membership": "outside_collaborator"}
+				switch {
+				case owner:
+					j.Details["membership"] = "owner"
+				case containsAccount(e.Members.Items, login):
+					j.Details["membership"] = "member"
+				}
+				out = append(out, j)
+				if out[len(out)-1].Verdict == Fired {
+					carrier = len(out) - 1
+				}
 			}
 			for _, repo := range e.RepositoriesAccess {
 				for _, collaborator := range repo.Collaborators.Items {
 					if strings.EqualFold(collaborator.Login, login) {
-						admin, known := EffectiveAdmin(collaborator)
-						out = append(out, makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, production(c, repo.Asset) && known && admin, repo.Collaborators.Reads))
+						j := makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, false, repo.Collaborators.Reads)
+						j.Details = map[string]any{"membership": "collaborator"}
+						if j.Verdict == Fired {
+							// Facts only: whether the repository deploys to
+							// production is the severity table's to decide
+							// (docs/spec/engagement.md, R4).
+							admin, adminKnown := EffectiveAdmin(collaborator)
+							if adminKnown && admin {
+								j.Attributes = append(j.Attributes, finding.Attribute{Name: "repository_admin"})
+							}
+							if write, known := EffectiveWrite(collaborator); known && write && (!archived(repo) || adminKnown && admin) {
+								j.Attributes = append(j.Attributes, finding.Attribute{Name: "write",
+									Ref: finding.Ref{Observation: firstRead(readIDs(repo.Collaborators.Reads)), Excerpt: permissionExcerpt(collaborator)}})
+							}
+						}
+						out = append(out, j)
+						if j.Verdict == Fired && (carrier < 0 || out[carrier].Asset != c.OrganizationAsset && repo.Asset < out[carrier].Asset) {
+							carrier = len(out) - 1
+						}
 						present = true
 					}
 				}
+			}
+			// An owner is admin on every repository: attribute:admin already
+			// says it, and R4 has nothing to establish.
+			if carrier >= 0 && !owner {
+				out[carrier].Attributes = append(out[carrier].Attributes, productionWriteFacts(e, login)...)
 			}
 			if !present {
 				population := [][]Read{e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads}
 				for _, repo := range e.RepositoriesAccess {
 					population = append(population, repo.Collaborators.Reads)
 				}
-				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(population...), false, false, population...))
+				j := makeAccess(c.OrganizationAsset, a, readIDs(population...), false, false, population...)
+				j.Details = map[string]any{"membership": "none"}
+				out = append(out, j)
 			}
 			invitations := []Invitation{}
 			for _, i := range e.Invitations.Items {
@@ -548,6 +592,146 @@ func EffectiveAdmin(a Collaborator) (bool, bool) {
 		return false, *p.Push && *p.Maintain
 	}
 	return false, false
+}
+
+// EffectiveWrite recognizes push access (push, maintain or admin) from
+// consistent provider fields; the booleans are GitHub's effective
+// permission across direct, team and base access, so a custom role with
+// push counts. The second result is false when missing or contradictory
+// evidence prevents a decision; role_name alone never establishes write
+// (docs/spec/github-collector.md, "Rule evidence").
+func EffectiveWrite(a Collaborator) (bool, bool) {
+	if a.RoleName != nil && (strings.Contains(*a.RoleName, "[REDACTED:") || strings.Contains(*a.RoleName, "[TRUNCATED:")) {
+		return false, false
+	}
+	if admin, known := EffectiveAdmin(a); known && admin {
+		return true, true
+	}
+	p := a.Permissions
+	if p == nil {
+		return false, false
+	}
+	isTrue := func(v *bool) bool { return v != nil && *v }
+	isFalse := func(v *bool) bool { return v != nil && !*v }
+	readOnly := a.RoleName != nil && slices.Contains([]string{"read", "pull", "triage"}, *a.RoleName)
+	if isTrue(p.Push) || isTrue(p.Maintain) {
+		if isFalse(p.Pull) || isTrue(p.Maintain) && isFalse(p.Push) || readOnly {
+			return false, false
+		}
+		return true, true
+	}
+	if isFalse(p.Admin) && isFalse(p.Push) && isFalse(p.Maintain) {
+		// A writing role with no write permission is a contradiction.
+		if a.RoleName != nil && slices.Contains([]string{"write", "push", "maintain", "admin"}, *a.RoleName) {
+			return false, false
+		}
+		return false, true
+	}
+	return false, false
+}
+
+// permissionExcerpt is a collaborator's role and permission fields as the
+// write attribute cites them.
+func permissionExcerpt(a Collaborator) string {
+	parts := []string{}
+	if a.RoleName != nil {
+		parts = append(parts, "role_name: "+*a.RoleName)
+	}
+	if p := a.Permissions; p != nil {
+		for _, f := range []struct {
+			name string
+			v    *bool
+		}{{"admin", p.Admin}, {"maintain", p.Maintain}, {"push", p.Push}, {"pull", p.Pull}} {
+			if f.v != nil {
+				parts = append(parts, fmt.Sprintf("%s: %t", f.name, *f.v))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "no permission fields returned"
+	}
+	return strings.Join(parts, "; ")
+}
+
+// repositoryName is a repository as the report names it, owner/name.
+func repositoryName(r RepositoryAccess) string {
+	if r.Repository != nil && r.Repository.FullName != "" && !strings.Contains(r.Repository.FullName, "[") {
+		return r.Repository.FullName
+	}
+	return strings.TrimPrefix(r.Asset, "repo:github:")
+}
+
+// unreadPhrase says why a population could not be read, for a cause.
+func unreadPhrase[T any](p Population[T]) string {
+	for _, r := range p.Reads {
+		if usableRead(r) {
+			continue
+		}
+		switch {
+		case r.Reason == "insufficient_permission":
+			return "the credential was not allowed to list them"
+		case r.Truncated:
+			return "the list was cut short"
+		case len(r.Redactions) > 0:
+			return "part of the list was redacted"
+		case r.Reason != "":
+			return strings.ReplaceAll(strings.TrimPrefix(r.Reason, "unavailable:"), "_", " ")
+		case r.Gap != "":
+			return InventoryGapText([]string{r.Gap})
+		}
+		return "the read did not succeed"
+	}
+	if len(p.Reads) == 0 {
+		return "not read"
+	}
+	return InventoryGapText(p.Gaps)
+}
+
+// productionWriteFacts are what R4 reads on the judgment that carries a
+// left login's "not applied" step: each repository this run read where the
+// login's push access is established (write_held) or not settled
+// (write_unsettled, the cause in its excerpt). The severity table keeps the
+// production repositories among them (docs/spec/engagement.md, R4).
+func productionWriteFacts(e Evidence, login string) []finding.Attribute {
+	var out []finding.Attribute
+	for _, repo := range e.RepositoriesAccess {
+		name := repositoryName(repo)
+		unsettled := func(cause string) {
+			out = append(out, finding.Attribute{Name: "write_unsettled", Asset: repo.Asset, Ref: finding.Ref{Observation: firstRead(readIDs(repo.Collaborators.Reads)), Excerpt: cause}})
+		}
+		idx := slices.IndexFunc(repo.Collaborators.Items, func(c Collaborator) bool { return strings.EqualFold(c.Login, login) })
+		if idx < 0 {
+			if len(repo.Collaborators.Reads) == 0 || slices.ContainsFunc(repo.Collaborators.Reads, func(r Read) bool { return !usableRead(r) }) {
+				unsettled("the collaborators of " + name + " could not be read: " + unreadPhrase(repo.Collaborators))
+			} else {
+				unsettled(login + " is not listed among the collaborators of " + name + ", and that list may not show everyone with access")
+			}
+			continue
+		}
+		c := repo.Collaborators.Items[idx]
+		write, known := EffectiveWrite(c)
+		admin, adminKnown := EffectiveAdmin(c)
+		switch {
+		case !known:
+			unsettled("the permissions returned for " + login + " on " + name + " were missing or contradictory")
+		case write && archived(repo) && (!adminKnown || !admin):
+			unsettled(name + " is archived")
+		case write:
+			out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset})
+		}
+	}
+	return out
+}
+
+func archived(r RepositoryAccess) bool {
+	return r.Repository != nil && r.Repository.Archived != nil && *r.Repository.Archived
+}
+
+func firstRead(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
 }
 
 func withDisabledAccounts(base, disabled Population[Account]) Population[Account] {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os/user"
 	"slices"
 	"sort"
@@ -928,6 +929,20 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		Trigger: res.Engagement.Trigger, Zone: r.zone, FromHost: res.fromHost,
 		Path: res.Source.Path, SHA256: res.Source.SHA256, Started: r.o.Started, Finished: time.Now(),
 		NotUsed: res.NotUsed, People: len(res.People) > 0, RedactExtra: res.RedactPatterns,
+	}
+	for _, h := range slices.Sorted(maps.Keys(res.People)) {
+		p := res.People[h]
+		if p.Left == "" {
+			continue
+		}
+		d := ereport.Departure{Handle: h, Left: p.Left}
+		if len(p.Workspace) > 0 {
+			d.Providers = append(d.Providers, "workspace")
+		}
+		if len(p.GitHub) > 0 {
+			d.Providers = append(d.Providers, "github")
+		}
+		in.Departed = append(in.Departed, d)
 	}
 	// A resume names the file by the absolute path it read: the path the
 	// first session typed is relative to that session's directory. A path

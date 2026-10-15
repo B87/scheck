@@ -440,8 +440,8 @@ in this order:
    `reasons` from a closed list: `no_credentials`, `insufficient_permission:<scope>`,
    `not_on_plan:<feature>`, `collector_not_built`, `refused`, `not_declared`,
    `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
-   `unavailable:<code>` (a check gave no usable answer) and `no_rule` (read, but no rule
-   in this version judges it, such as a Linux host's listening services you did not declare). The Hosts
+   `unavailable:<code>` (a check gave no usable answer), `no_rule` (read, but no rule
+   in this version judges it, such as a Linux host's listening services you did not declare), and, on a departed person's line, `leaving_date_not_passed`, `left_date_within_collection` and `no_declared_github_login`. The Hosts
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no
@@ -449,7 +449,13 @@ in this order:
    root; one there is `not_applicable` when its rules had nothing to judge (no CNAME, no
    MX), since anything scheck could not read makes it `partial` or `not_assessed`.
 4. **`summary`**: up to five `items` to fix first (open, medium or above), `more` past
-   those, and counts of areas and of rules that had no usable evidence.
+   those, and counts of areas and of rules that had no usable evidence. An item is
+   `kind` `finding_id` or `person`. A `person` item (`person` is the handle; at most two)
+   gathers one departed person's open findings across tenants or ids, because removing
+   that person's access fixes them together; its `keys` still name each finding. A
+   `finding_id` item with `other_people: true` ranks on the instances left after a
+   person item took theirs (the text says "and other people"); do not add the two
+   counts. Open the findings by `keys`, not by the item's title.
 5. **`findings`**: one record per instance, keyed `{id, asset, subject}`, already in
    ranking order: open findings by severity in context first, then informational, then
    accepted. Lead with the first. A domain finding's `asset` is the most specific one
@@ -474,7 +480,20 @@ in this order:
    `not_applicable` or `not_assessed`, and whether it decided on `complete` evidence.
    `not_matched` means the evidence disproved that one predicate; `not_assessed` is
    never a pass.
-7. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
+7. **`people_left`**: one record per person with a declared `left` date, whenever any
+   is declared, restating verdicts and deciding nothing. `tenants[]` has one entry per
+   Workspace or GitHub tenant: `asset` (null when no tenant of that provider is in
+   scope), `provider`, `state`, `line` (the sentence the text prints), `reason` where
+   there is one, and `accounts[]` with `finding_keys`. `state` `finding` or `accepted`
+   points at findings; `no_access_observed` means a complete read found none, and
+   `not_proven` means an incomplete read did not see the person, which is not proof of
+   no access. `not_judged` (leaving date not passed or within collection),
+   `not_checked`, `not_in_scope` and `no_login_declared` mean nothing was concluded:
+   report them as gaps, never as a person being clean. `production_write` on an
+   account says whether the raise for push access to a production repository applied
+   (`applied`, with `repositories`) or was not established. Treat names as personal
+   data.
+8. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
    `expired`, `not_applied`, `not_matched` for likely fixed, `rule_not_decided`,
    `subject_not_found` when no instance with that subject was read on this run), and the
    items for a readout. A `rule_not_decided` whose `why` says "an instance is open under
@@ -483,7 +502,7 @@ in this order:
    subject was read on" names the asset the entry belongs on; one that says "nothing
    with that subject points anywhere" means the record is gone: confirm, then remove the
    entry.
-8. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
+9. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
    count, of which `control_lookups` counts root controls and `invalid_queries` counts
    actual queries for reserved-name controls; `control_invalid` says whether any
    such query was sent,
@@ -497,7 +516,7 @@ in this order:
    asked for) and `ssh_resolved_by_jump` (names a jump host resolved),
    `host_side_effects`, and `model` and `telemetry`, always `none`. `stored` is the run
    directory, null under `--no-persist`.
-9. **`assets`**: per asset its status, principal, `trace` (every command sent, with
+10. **`assets`**: per asset its status, principal, `trace` (every command sent, with
    decision and output hash, in order) and, for a host, `checks` counts and its own
    report whole at `envelope`.
 

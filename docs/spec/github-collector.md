@@ -164,8 +164,9 @@ credential binding, API version and 1 MiB body cap as the other operations. Its 
 `deploys_to: production` repository, at most 20 per run, depth 1. It is read only when
 `identity.former_person_has_access` fired for that person, or abstained for lack of
 repository visibility, and it supplies the `push`, `maintain` or `admin` permission that
-the `attribute:production_write` raise reads ([engagement.md](engagement.md), R4). A
-missing or denied read applies no raise and says why. The retained fields and
+the `attribute:production_write` raise reads for a login the collaborators list does not
+show ([engagement.md](engagement.md), R4); until step 7 that case is "not established".
+A missing or denied read applies no raise and says why. The retained fields and
 the permission requirements are frozen with the operation in step 7.
 
 App installation permissions and repository selection, and repository runners and
@@ -264,8 +265,46 @@ exposure; it does not claim a secret was found.
 
 Former-person access is filed once per observed asset and account: organization
 access and each observed repository access remain separate instances. Only observed
-organization ownership raises its organization instance as admin; only recognized
-effective admin on a declared production repository raises that repository instance.
+organization ownership raises its organization instance as admin; recognized effective
+admin on a repository is the fact `repository_admin` on that repository's instance, and
+the severity table raises it only where the repository is declared production.
+A fired repository-level judgment also carries the attribute `write` when the collaborator
+entry shows effective write; the collector cites the collaborators read and an excerpt
+of `role_name` and the permission booleans. One judgment per login, the carrier (the
+organization-level one when it fired, else the fired repository-level one with the lowest
+asset id, none for an observed owner), carries `write_held` and `write_unsettled`
+attributes, each with `Asset` naming the repository and, for `write_unsettled`, the cause
+in the reference's excerpt, so the table can say "not applied" ([engagement.md](engagement.md), R4).
+Every GitHub judgment on a left person carries `details.membership`: `owner`, `member`,
+`outside_collaborator` (organization), `collaborator` (repository), or `none` (absence).
+A person with no declared login is judged once, an abstention with reason
+`no_declared_github_login` on the subject `declared:<handle>`. It never reads `deploys_to`: production is
+decided by the `attribute:production_write` row of the severity table
+([engagement.md](engagement.md), R4). The organization-level judgment carries no `write`.
+`EffectiveWrite` (write, not write, unknown) is:
+
+- `role_name` redacted or truncated: unknown.
+- Effective admin known true: write.
+- `permissions` absent: unknown; a `role_name` alone never establishes write.
+- `push` or `maintain` true: write only when `pull` is not false, `maintain` true does
+  not come with `push` false, and `role_name` is absent, or `write`, `push`, `maintain`
+  or `admin`, or a custom role (anything outside `read`, `pull` and `triage`). A `read`,
+  `pull` or `triage` role with `push` or `maintain` true is a contradiction: unknown.
+- `admin`, `push` and `maintain` all present and false: not write, unless `role_name` is
+  `write`, `push`, `maintain` or `admin`, a contradiction: unknown.
+- Anything else: unknown.
+
+Not write on a listed collaborator settles that repository, since per-collaborator
+permissions are effective across direct, team and base access; the visibility caveat
+applies only to a login the list does not show. An archived repository (`archived: true`
+in the repository read) gets no `write` for a person who is not admin, and the cause
+reads "*owner/repo* is archived".
+
+Remediation of `identity.former_person_has_access` ends with the fixed sentence: "If they
+could push to a repository that deploys to production, also rotate the secrets that
+repository's workflows can read and its deploy keys, and review its commits and workflow
+runs since their leaving date."
+
 Unknown privilege never erases affirmative access. An aggregate absence judgment
 still requires every applicable trusted population complete.
 
