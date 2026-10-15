@@ -89,7 +89,15 @@ and caps provider expiry at one hour from request start before subtracting that
 margin. Returned scope evidence is known only when its explicit field is a usable
 string; absent, `null` or malformed scope is unknown. Requested scopes do not fill
 that gap. Tokens stay in session memory. Expiry or rejected authentication
-requires a fresh ordered bootstrap before a later tenant read.
+requires a fresh ordered bootstrap before a later tenant read. The session's token lives
+about an hour from Recon's bootstrap, so Workspace's Check reads run before GitHub's. A
+read stopped by that expiry (`unavailable:bootstrap_required`) counts as a limit: the
+tenant's outcome is `incomplete` with `limit_reached`, exit 2, and the detail "The
+Workspace session's token expired before every Workspace read was made; resume to read the
+rest."; a cut per-user population gains its selection. Once the token expired every later
+read in the session halts the same way (`unavailable:bootstrap_required`, repeating) until
+a new bootstrap is attempted, never as an unbound tenant. Expiry never preserves an
+authorization.
 
 `SCHECK_WORKSPACE_PROFILE` selects one compiled read profile:
 
@@ -422,22 +430,38 @@ group-context read in the table remains planned; it is not needed to interpret a
 per-user assignment returned by Directory. Fresh user details take accounts in the order of "Per-user read order under caps"
 below when a cap, the timeout or the rate limit prevents reading everyone.
 
-**Per-user read order under caps** (design, step 6b; contract when built, E9). Recon
-reads the users, roles and admin assignments (inventory) and the per-user assignment and
-detail reads; Check, after Plan, reads the per-user OAuth grants. Both take accounts in
+**Per-user read order under caps** (step 6b, built; `UserTiersVersion`,
+`internal/collector/workspace/selection.go`). Recon reads the users, roles and admin
+assignments (inventory) and the per-user assignment and detail reads; Plan orders the
+accounts (`Select`, `plan.json` `workspace[]`); Check, after Plan, reads the per-user
+OAuth grants and then Gmail forwarding (`CollectUsers`). `Collect`, in Recon, reads
+neither: when the profile reads them (`oauth.selected`, `mail.selected` in `recon.json`)
+it writes no grant or forwarding readout and notes "Third-party app grants and mail
+forwarding, which this profile reads, are read in Check, after Plan orders the accounts."
+Check rewrites the notes over everything read; credential warnings its reads raise (the
+OAuth token, `gmail.readonly`) are logged to stderr as Recon's are. Recon's per-user reads and Check's OAuth grants take accounts in
 the order of [engagement.md](engagement.md), "Plan selection and follow-ups": 1 a person
 who left, still active; 2 admin holders no `people` handle names; 3 super admins and
 holders of delegated roles a handle names; 4 declared `contractor` and `shared` accounts;
 5 `break_glass` and `service` accounts; 6 the rest. An admin holder, for ordering, has
 `isAdmin`, `isDelegatedAdmin` or an observed role assignment; the identity rules' own
-reading of an admin is unchanged. Within every tier: active first, then most recent
-sign-in, then `primaryEmail`. Gmail forwarding keeps its own order: leavers still active
-first, then admins, then the rest. The order replaces the one named for OAuth grants
-below; the sequence of reads (OAuth grants after every baseline read, forwarding after
-every other read) and the `Repeats` stop are unchanged. There is no Workspace request
-budget in 0.0.2. A `selection` attaches only to a per-user population a cap, the timeout
-or the rate limit cut: it keeps its reason (`limit_reached`, exit 2) and gains the tiers
-that chose the accounts read. A `Repeats` stop is a failure and has no selection.
+reading of an admin is unchanged. Recon orders before it has read any assignment, so
+its admin holders are those Google's flags name; Plan and Check also count an observed
+assignment. Within every tier: active first, then most recent sign-in, then
+`primaryEmail`, then the account id. Gmail forwarding keeps its own order, from the
+mailboxes Check reads: leavers still active first, then admin holders, then the rest,
+active first within each tier, then `primaryEmail`. The order replaces the one named for
+OAuth grants below; the sequence of reads (OAuth grants after every baseline read,
+forwarding after every other read) and the `Repeats` stop are unchanged. There is no
+Workspace request budget in 0.0.2. `OAuthEvidence.Selection` and `MailEvidence.Selection`
+(`finding.Selection`, unit `users`, kind `oauth_grants` or `mail_forwarding`) are set
+only when a read ended `limit_reached` (a cap, the timeout or the rate limit) before every
+account was read: the reason is kept (exit 2) and the selection gives the tiers of the
+accounts read; the session token's expiry is such a limit. Recon's per-user assignment cap
+carries no selection. A `Repeats` stop that is not a limit is a failure and has no
+selection. In
+the report the plan coverage gives the sub-item that population and marks it at most
+*partial*. A tenant Recon left `collected` becomes `incomplete` when Check's outcome is.
 
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized 2-step flags in the current list suffice
@@ -446,10 +470,9 @@ list/detail identity or security values cause abstention and a diagnostic note.
 Flag-specific conflicts are in "Observed 2-step verification".
 
 Step 5 reads OAuth grants after every baseline read, for every admitted account,
-suspended and archived included: declared leavers, super admins, contractors, then the
-rest, active before inactive within each (E9 replaces this order, above; a suspended
-leaver no longer ranks first). Per-user OAuth and forwarding reads run in Check, after
-Plan, in the order above. A result the gate marks `Repeats` (every
+suspended and archived included, in Plan's order above (a suspended leaver does not rank
+first). Per-user OAuth and forwarding reads run in Check, after Plan; their requests carry
+the audit stage `check`. A result the gate marks `Repeats` (every
 later request of the kind would end the same way: a remembered optional failure, the
 profile not selecting the surface, an unverified principal, binding or authentication
 gone) is recorded once and stops the sequence; a per-account refusal does not. The gate

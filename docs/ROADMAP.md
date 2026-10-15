@@ -1887,8 +1887,11 @@ older than 7 days is collected again on resume; every risk area's row prints its
    Split in two. **6a, GitHub**, done (offline): `pushed_at` retained on the repository
    projections, the eight tiers, the per-repository reads moved from Recon to Check, the
    breadth-first budget, Select, the Plan document, `--stop-after plan` and the selection
-   in the report. **6b, Workspace**, design until built: the per-user order, OAuth grants
-   and forwarding in Check. 6b is not yet done.
+   in the report. **6b, Workspace**, done (offline): the per-user tiers
+   (`UserTiersVersion`), Recon's per-user reads in that order, `Select` and `plan.json`
+   `workspace[]`, OAuth grants and then Gmail forwarding moved from Recon to Check
+   (`CollectUsers`, `check.json` `workspace`), the `users` selection on a cut population,
+   and the tier counts in `--stop-after plan`. Step 6 is done.
    - *Decided 2026-10-15* (`security-consultant` define, adopted under the owner's
      standing delegation; `spec/engagement.md`, "Plan selection and follow-ups", carries
      the wording):
@@ -1913,11 +1916,41 @@ older than 7 days is collected again on resume; every risk area's row prints its
        JSON) and a closed not-judged list (`spec/engagement.md`).
      - The selection line prints every run for GitHub; "all N repositories read; the
        request budget cut nothing."
-     - Workspace (6b): ordering evidence wider than finding evidence (`isAdmin`,
+     - Workspace (6b, built): ordering evidence wider than finding evidence (`isAdmin`,
        `isDelegatedAdmin` or an observed role assignment); the swapped tiers; one order for
        Recon's per-user reads and Check's OAuth grants; no Workspace request budget in
        0.0.2; a selection attaches only to a population a cap, the timeout or the rate
        limit cut.
+   - *Code review of 6b* (`code-reviewer`), five should-fix and three nits, all fixed, with
+     tests (mail order, forwarding selection, expired token, Recon's notes, Check's
+     status); the re-review and a final targeted review are below. Should-fix: Workspace's Check reads run before
+     GitHub's (the session token lives about an hour from Recon's bootstrap), and a read
+     stopped by the token expiring (`unavailable:bootstrap_required`) is a limit, so the
+     tenant is `incomplete` with `limit_reached` (exit 2, was `failed`) and a cut per-user
+     population gains its selection, while expiry still never preserves an authorization;
+     Recon knows from the profile whether grants and forwarding are read, writes no readout
+     for them and notes that Check reads them; the selection words print tiers in tier
+     order and take the fallback words from the unit and kind; credential warnings raised
+     by Check's reads go to stderr as Recon's do. Nits: the plan text said the profile
+     reads no OAuth grants only when it does not; `plan.json` keeps `primary_email` as
+     read (sorting is case-insensitive); `PlanDoc.method` names repositories and
+     Workspace accounts; the `CheckDoc` comment. Only OAuth grants and forwarding carry
+     a Workspace selection; Recon's per-user assignment cap (10,000 observations) carries
+     none.
+   - *Re-review of 6b* (`code-reviewer`), one should-fix and three nits, all fixed, with
+     tests; a final targeted review found it clean. Should-fix: after a Workspace token
+     expiry the gate answered only the first read with `unavailable:bootstrap_required` and
+     every later read as `refused:tenant_binding` (the drop of authentication unbinds the
+     session), so forwarding lost its selection and blamed the binding. The gate now keeps
+     a per-session `expired` state that halts every later non-bootstrap read with the
+     expiry, repeating `unavailable:bootstrap_required`, until `workspace.bootstrap_customer`
+     is attempted; no token or binding is kept. Nits: Recon's note names only the selected
+     surfaces; Recon's outcome detail no longer claims grant or forwarding checks were
+     collected; test assertions.
+   - *Deferred, pre-existing and not 6b, to be assigned:* after a mid-run HTTP 401 on a
+     bound Workspace read, later reads halt as `refused:tenant_binding`, so a revoked
+     credential's later gaps are worded as a binding failure. Wording only; nothing is
+     admitted.
    - *Code review of 6a* (`code-reviewer`), all fixed, with tests. Must-fix: a refusal
      sent in Check was lost where Recon left the root incomplete, and `githubStatus`
      dropped the refusal kind; a kind cut on the access pass did not mark later kinds on

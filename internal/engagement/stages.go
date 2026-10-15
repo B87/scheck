@@ -822,7 +822,7 @@ func (r *run) hostContext(a ResolvedAsset) *operator.Structured {
 // (docs/spec/engagement.md, "Plan selection and follow-ups"). It sends
 // nothing.
 func (r *run) plan(context.Context) (any, error) {
-	doc := &PlanDoc{Header: r.header("plan"), Method: "rules only; repositories in tier order under a request budget", Checklist: []string{}, Hosts: []PlanHost{}}
+	doc := &PlanDoc{Header: r.header("plan"), Method: "rules only; repositories and Workspace accounts in tier order", Checklist: []string{}, Hosts: []PlanHost{}}
 	for _, a := range r.res.Assets {
 		c, ok := r.hosts[a.Name]
 		if !ok {
@@ -835,15 +835,22 @@ func (r *run) plan(context.Context) (any, error) {
 		doc.Hosts = append(doc.Hosts, PlanHost{Name: a.Name, ID: a.ID, Planned: c.Planned(), Disabled: disabled})
 	}
 	doc.GitHub = r.planGitHub()
+	doc.Workspace = r.planWorkspace()
 	doc.NotJudged = r.notJudged()
 	r.planned = doc
 	return doc, r.write("plan.json", doc)
 }
 
-// check reads each GitHub root's repositories in Plan's order. Follow-ups
-// arrive with E9 step 7.
+// check reads each GitHub root's repositories and each Workspace tenant's
+// per-user OAuth grants and forwarding, in Plan's order. Follow-ups arrive
+// with E9 step 7.
 func (r *run) check(ctx context.Context) (any, error) {
 	doc := &CheckDoc{Header: r.header("check"), FollowUps: []string{}, Assets: []CheckAsset{}}
+	// Workspace first: its session's token lives about an hour from
+	// Recon's bootstrap, and GitHub's budgeted reads can take long.
+	if err := r.checkWorkspace(ctx, doc); err != nil {
+		return nil, err
+	}
 	if err := r.checkGitHub(ctx, doc); err != nil {
 		return nil, err
 	}

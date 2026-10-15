@@ -64,6 +64,11 @@ type MailEvidence struct {
 	Selected bool                `json:"selected"`
 	Accounts []MailboxForwarding `json:"accounts,omitempty"`
 	Complete bool                `json:"complete"`
+	// Selection names what chose the mailboxes read when a cap, the
+	// deadline or a rate limit cut the sequence; nil otherwise.
+	Selection *finding.Selection `json:"selection,omitempty"`
+	// order is the order the mailboxes were asked in.
+	order []SelectedUser
 }
 
 // refusal is the read that decides the surface's own outcome: the read
@@ -188,7 +193,9 @@ func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target
 	if !e.Mail.Selected {
 		return
 	}
-	eligible := slices.DeleteFunc(slices.Clone(views), func(v accountView) bool { return mailboxStateOf(v) != mailboxRead })
+	// Only readable mailboxes, in forwarding's own order.
+	eligible, order := mailOrder(slices.DeleteFunc(slices.Clone(views), func(v accountView) bool { return mailboxStateOf(v) != mailboxRead }))
+	e.Mail.order = order
 	req := func(op, user string) gate.Request {
 		return gate.Request{Op: op, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": user}}
 	}

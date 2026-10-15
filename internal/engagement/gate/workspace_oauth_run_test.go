@@ -2,6 +2,7 @@ package gate_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -156,6 +157,37 @@ func TestWorkspaceOAuthThroughGateAndReport(t *testing.T) {
 	}
 	if out.ExitCode() != 2 {
 		t.Fatalf("an exclusion and denied role reads leave the run incomplete, got exit %d", out.ExitCode())
+	}
+	// Recon left the tenant incomplete: Check adds no second shortfall.
+	shortfalls := 0
+	for _, s := range out.Report.Incomplete {
+		if s.Asset == "saas:google-workspace:example.com" {
+			shortfalls++
+		}
+	}
+	if shortfalls != 1 {
+		t.Fatalf("%d shortfalls for the tenant: %+v", shortfalls, out.Report.Incomplete)
+	}
+	// Plan ordered the accounts; Check read the grants in its own stage and
+	// wrote them to check.json (docs/spec/engagement.md, "Plan selection and
+	// follow-ups").
+	var plan engagement.PlanDoc
+	if b, err := os.ReadFile(dir.File("plan.json")); err != nil || json.Unmarshal(b, &plan) != nil || len(plan.Workspace) != 1 || len(plan.Workspace[0].Order) == 0 {
+		t.Fatalf("plan.json: %v %+v", err, plan.Workspace)
+	}
+	var check engagement.CheckDoc
+	if b, err := os.ReadFile(dir.File("check.json")); err != nil || json.Unmarshal(b, &check) != nil || len(check.Assets) != 1 || check.Assets[0].Workspace == nil || len(check.Assets[0].Workspace.OAuth.Accounts) != 3 {
+		t.Fatalf("check.json: %v %+v", err, check.Assets)
+	}
+	audit, err := os.ReadFile(dir.File("audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(audit)), "\n") {
+		var e gate.Entry
+		if json.Unmarshal([]byte(line), &e) == nil && e.Op == "workspace.user_tokens" && e.Stage != "check" {
+			t.Fatalf("grants read in stage %q", e.Stage)
+		}
 	}
 	marked := false
 	err = filepath.WalkDir(dir.Path, func(path string, d os.DirEntry, err error) error {

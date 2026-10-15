@@ -3,7 +3,6 @@ package workspace
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"strings"
 	"time"
 
@@ -65,16 +64,16 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 		return v.ID != "" && v.Role != "" && v.Assignee != "" && (typ == "USER" || typ == "GROUP") && (v.Scope == "CUSTOMER" || v.Scope == "ORG_UNIT" && v.Unit != "")
 	}
 
-	users := slices.Clone(e.Users.Items)
 	attributions := attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete)
-	slices.SortFunc(users, func(a, b User) int {
-		if x := readPriority(a, attributions, view) - readPriority(b, attributions, view); x != 0 {
-			return x
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
+	byID := map[string]User{}
+	for _, u := range e.Users.Items {
+		byID[u.ID] = u
+	}
+	// The one per-user order, before any assignment is read: Google's
+	// admin flags stand in for the assignments it is about to read.
 	observations := 0
-	for _, u := range users {
+	for _, selected := range orderUsers(e.Users.Items, nil, attributions, view) {
+		u := byID[selected.ID]
 		account := AccountAccess{ID: u.ID}
 		request := req(OpUserAssignments)
 		request.Params["user"] = u.ID
@@ -128,68 +127,6 @@ func (e *Evidence) collectAccess(ctx context.Context, sender Sender, target Targ
 			}
 		}
 	}
-}
-
-// readAccounts calls read for each account in optional-surface read order:
-// passed leavers, super administrators, contractors, then the rest, active
-// before inactive within each, then by id. It stops after the first account
-// whose result the gate says every later one would repeat (read returns
-// true), and reports whether it reached the end.
-func readAccounts(views []accountView, read func(accountView) (repeats bool)) bool {
-	ordered := slices.Clone(views)
-	rank := func(v accountView) int {
-		r := personPriority(v.user, v.person) * 2
-		if !active(v.user) {
-			r++
-		}
-		return r
-	}
-	slices.SortFunc(ordered, func(a, b accountView) int {
-		if x := rank(a) - rank(b); x != 0 {
-			return x
-		}
-		return strings.Compare(a.user.ID, b.user.ID)
-	})
-	return !slices.ContainsFunc(ordered, read)
-}
-
-// personPriority is readPriority for an account whose person is known.
-func personPriority(u User, p *Person) int {
-	switch {
-	case p != nil && p.Left != "":
-		// Read selection, before any read time is known: a declared
-		// leaver's account is read first whether or not the date has
-		// passed; Judge decides that at the read's time.
-		return 0
-	case yes(u.IsAdmin):
-		return 1
-	case p != nil && p.Kind == "contractor":
-		return 2
-	}
-	return 3
-}
-
-// readPriority orders per-account reads so a budget cut loses the least:
-// declared leavers, super administrators, contractors, then everyone else.
-func readPriority(u User, attributions []Attribution, view Context) int {
-	for _, a := range attributions {
-		if a.ProviderID == u.ID {
-			if p := person(view, a.Handle); p != nil && p.Left != "" {
-				return 0
-			}
-		}
-	}
-	if yes(u.IsAdmin) {
-		return 1
-	}
-	for _, a := range attributions {
-		if a.ProviderID == u.ID {
-			if p := person(view, a.Handle); p != nil && p.Kind == "contractor" {
-				return 2
-			}
-		}
-	}
-	return 3
 }
 
 func securityConflict(a, b User) bool {

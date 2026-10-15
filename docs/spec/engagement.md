@@ -893,16 +893,17 @@ above, and HSTS is the only low.
 
 Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). Step 6 is built in
 two parts: 6a, GitHub (the tiers, the budget, the selection, the Plan document and
-`--stop-after plan`), built and awaiting its review, and 6b, Workspace (the per-user
-order, OAuth grants and forwarding in Check), which stays design until built. The tier
-table is versioned data (`TiersVersion` in `internal/collector/github/selection.go`);
-changing a tier or the kind order changes the version, and `plan.json` carries it as
-`tiers_version`. With rules only, the one decision context
+`--stop-after plan`), built, and 6b, Workspace (the per-user order, OAuth grants and
+forwarding in Check), built. The tier tables are versioned data
+(`TiersVersion` in `internal/collector/github/selection.go`, `UserTiersVersion` in
+`internal/collector/workspace/selection.go`); changing a tier or the kind order changes
+the version, and `plan.json` carries it as `tiers_version`. With rules only, the one decision context
 makes in Plan is which part of a large population is read first when a budget, a cap, a
 rate limit or the run's deadline stops the reads short. The order is a table, not a
 judgement, and every tier names the declaration or observation that put an item there.
 The capped reads run in Check, after Plan, in this order; `--stop-after plan` shows what
-will be read before any of it is.
+will be read before any of it is. Workspace's Check reads run before GitHub's, because
+the Workspace session's token lives about an hour from Recon's bootstrap.
 
 **Repositories**, in tier order; within a tier, most recently pushed first (`pushed_at`,
 a retained field of `github.repositories` and `github.repository`), a repository with no
@@ -938,18 +939,26 @@ repositories are ordered first but can be cut. A declared repository missing fro
 `in_scope`. A repository root with no declared organization has no budget and is read in
 full.
 
-**Users**, for the per-user Workspace reads (6b, design): 1 a person who left, still
+**Users**, for the per-user Workspace reads (6b): 1 a person who left, still
 active; 2 admin holders no `people` handle names; 3 super admins and holders of delegated
 roles a handle names; 4 declared `contractor` and `shared` accounts; 5 `break_glass` and
 `service` accounts; 6 the rest. An admin holder, for ordering, is an account with
 `isAdmin`, `isDelegatedAdmin` or an observed role assignment; the findings' own rule for
-an admin is unchanged. Within every tier: active first, then most recent sign-in, then
-`primaryEmail`. One order serves every per-user read: Recon's per-user assignment and
-detail reads and Check's OAuth grants. Gmail forwarding keeps its own order, leavers still
-active first, then admins, then the rest. There is no Workspace request budget in 0.0.2:
+an admin is unchanged. Within every tier: active first, then most recent
+sign-in, then `primaryEmail`, then the account id. One order serves the per-user
+reads Plan's order reaches: Recon's per-user assignment and detail reads, which can use
+only what the user list already says (Google's admin flags, since no assignment is read
+yet), and Check's OAuth grants. Gmail forwarding keeps its own order, leavers still
+active first, then admin holders, then the rest, active first within each tier and then
+`primaryEmail`. There is no Workspace request budget in 0.0.2:
 the selection attaches only when a cap, the timeout or the rate limit cuts a per-user
 population, and each keeps its reason (`limit_reached`, exit 2) and gains the selection.
-A `Repeats` stop is a failure and has no selection.
+A read stopped because the session's token expired (`unavailable:bootstrap_required`) is
+such a limit: the tenant is `incomplete` with `limit_reached`, exit 2, and a cut per-user
+population gains its selection; resume reads the rest. Expiry never preserves an
+authorization. A `Repeats` stop that is not a limit is a failure and has no selection.
+Only OAuth grants and forwarding carry a Workspace selection; Recon's per-user assignment
+cap (10,000 observations) carries none, only its own reason.
 
 **Breadth first by kind.** The budget is a compiled request count, 4,000 per organization
 per run, for the per-repository reads Check sends. `limits.timeout` and GitHub's rate
@@ -1019,9 +1028,11 @@ store (1, secrets.production), public (2, observed), then most recently pushed (
 ```
 
 GitHub repository populations print the selection line every run; a Workspace population
-only when a cap, the timeout or the rate limit cut it; the JSON carries `selection` on
-every population Plan ordered, with `kind` (`access`, `ci`, `secret_alerts`,
-`dependabot_alerts` or `secret_locations`) naming the read it counts. "No declaration named
+only when a cap, the timeout or the rate limit cut it (`limit_reached`, never a failure
+every later account would repeat); the JSON carries `selection` on every population Plan
+ordered, with `kind` (`access`, `ci`, `secret_alerts`, `dependabot_alerts`,
+`secret_locations`, and for Workspace `oauth_grants` or `mail_forwarding`) naming the read
+it counts. "No declaration named
 any repository; most recently pushed (N)" prints only when tiers 1, 2, 4, 5 and 6 are all
 empty, and the observed-public count still prints before it; archived repositories read
 follow as "archived (N)". Below the budget: "all N repositories read; the request budget
@@ -1031,6 +1042,21 @@ read for <kind words>: <selection>" (access and branch protection, workflows, se
 alerts, Dependabot alerts, secret alert locations); otherwise one "Repositories: <selection>".
 A repository-root engagement has no budget and no selection line; its population reads
 "1 of 1".
+
+A Workspace selection has `unit` `users`, `kind` `oauth_grants` or `mail_forwarding`, and
+the fallback "active, last sign-in desc, primaryEmail" (forwarding's JSON fallback is
+"active, primaryEmail"). Its tiers are those of the accounts read, printed in tier order,
+each with its basis and source from "Users" above. It
+prints "Users: <selection>", or "Users read for third-party app grants: <selection>" and
+"... for mail forwarding: ..." when a row's kinds reached differently. The sentence
+follows the GitHub one with the unit and the fallback words taken from the unit and kind:
+repositories "most recently pushed", users "the rest, active and most recently signed in
+first", forwarding "the rest, active first". It reads "no declaration named any user; the
+rest, ... (N)" when no tier above the last was read, "then the rest, ... (N)" after
+declared tiers, "no declaration named any user" alone when nothing was read in the
+fallback, and "all N users read" with no budget
+clause, since Workspace has none. The sub-item that carries a cut selection counts that
+population (`users`, read of in scope) and is at most *partial*.
 
 A population's `selection.in_scope_at_least` (JSON) is set when the organization
 repository list was not complete: the text reads "N of at least M repositories: ..." or
@@ -1043,12 +1069,15 @@ tier, basis and source, `pushed_at` date and the flags declared, public, archive
 mirror. The text lists every repository in tiers 1 to 6, then fills to 20 lines in all
 and ends "and N more, most recently pushed first (`plan.json` lists all)". The JSON lists
 all. The text never predicts the cut: "Check sends nothing until you resume this run; the
-budget may not reach the later kinds on every repository." A Workspace tenant prints tier
-counts only in text; the JSON lists the ordered accounts. The not-judged list follows,
+budget may not reach the later kinds on every repository." A Workspace tenant prints
+"<asset>  N accounts in scope; OAuth grants are read in this order" (N "at least N" when
+the users list was not complete) and the tier counts "(plan.json lists the accounts)"; the
+JSON lists the ordered accounts. The not-judged list follows,
 headed "Not judged for lack of a declaration:". `plan.json` holds it as `not_judged`, each
 GitHub root's order as `github[]` (`asset`, `tiers_version`, `budget`, `in_scope`, `order[]`,
-`notes[]`), and each host's checks as `hosts[]`. A Workspace tenant has no `github[]` entry
-until 6b.
+`notes[]`), and each host's checks as `hosts[]`. A Workspace tenant's order is
+`workspace[]` (`asset`, `tiers_version`, `in_scope`, `in_scope_at_least`, `order[]`, each
+account with `id`, `primary_email`, `tier`, `basis`, `handle` and `active`).
 
 **The not-judged list.** Plan prints these lines, a closed list, each only when its
 condition holds on what Recon read. Rules the engagement can read but that will not decide:
@@ -1075,9 +1104,9 @@ Declarations that are absent and change what is raised or ranked:
 R1 and R2 are left off the list on purpose.
 
 The Plan document, `plan.json`, lists each host's planned and disabled checks, each GitHub
-root's repository order above and the not-judged list. Its `checklist` stays empty: a
-rule family's order is the rules' own, and context narrows none of them in 0.0.2. The
-account order is 6b.
+root's repository order and each Workspace tenant's account order above, and the
+not-judged list. Its `checklist` stays empty: a rule family's order is the rules' own, and
+context narrows none of them in 0.0.2.
 
 **Follow-up reads.** A follow-up is a row of a static table: a trigger (a rule's
 verdict), a declared gate operation, parameters typed from the judgment's subject, a

@@ -146,7 +146,7 @@ Organization-wide repository visibility remains unknown separately.
 
 Design; becomes contract when E9 lands (steps 6 and 7). Step 6a builds the selection
 and the budget for GitHub (`internal/collector/github/selection.go`: `Select`,
-`CollectRepositories`, `TiersVersion`, `RepositoryBudget`); Workspace is 6b. Recon reads the repository list (with
+`CollectRepositories`, `TiersVersion`, `RepositoryBudget`); Workspace is 6b (`workspace-collector.md`). Recon reads the repository list (with
 `pushed_at`, retained on the `github.repositories` and `github.repository` projections)
 and the organization inventory, and persists the inventory only. Select, in Plan, orders
 the repositories by the tiers of [engagement.md](engagement.md), "Plan selection and

@@ -607,6 +607,24 @@ func writePlan(w io.Writer, doc *engagement.PlanDoc) {
 			fmt.Fprintln(w, "  Check sends nothing until you resume this run; the budget may not reach the later kinds on every repository.")
 		}
 	}
+	for _, sel := range doc.Workspace {
+		at := ""
+		if sel.InScopeAtLeast {
+			at = "at least "
+		}
+		what := "this profile reads no OAuth grants"
+		if sel.Grants {
+			what = "OAuth grants are read in this order"
+		}
+		fmt.Fprintf(w, "\n%s  %s%d %s in scope; %s\n", sel.Asset, at, sel.InScope, countNoun(sel.InScope, "account", "accounts"), what)
+		var counts []string
+		for _, c := range sel.Counts() {
+			counts = append(counts, fmt.Sprintf("%s %d", c.Basis, c.Count))
+		}
+		if len(counts) > 0 {
+			fmt.Fprintln(w, "  "+strings.Join(counts, ", ")+" (plan.json lists the accounts)")
+		}
+	}
 	if len(doc.NotJudged) > 0 {
 		fmt.Fprintln(w, "\nNot judged for lack of a declaration:")
 		for _, n := range doc.NotJudged {

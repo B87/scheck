@@ -177,6 +177,9 @@ type PlanDoc struct {
 	// GitHub is each GitHub root's selection: its repositories in tier
 	// order, read by Check under the budget.
 	GitHub []githubc.Selection `json:"github"`
+	// Workspace is each Workspace tenant's account order, which Check reads
+	// OAuth grants in.
+	Workspace []workspace.UserSelection `json:"workspace"`
 	// NotJudged is the closed list of sentences naming a rule that will not
 	// decide, or a raise or order that cannot apply, for lack of a
 	// declaration.
@@ -191,7 +194,8 @@ type PlanHost struct {
 	Disabled []string `json:"disabled"`
 }
 
-// CheckDoc is check.json: what Check read of each GitHub root's selection.
+// CheckDoc is check.json: what Check read of each GitHub root's selection
+// and of each Workspace tenant's accounts.
 // Follow-ups arrive with E9 step 7.
 type CheckDoc struct {
 	Header
@@ -209,7 +213,15 @@ type CheckDoc struct {
 
 // CheckAsset is what Check read under one root.
 type CheckAsset struct {
-	Name   string                `json:"name"`
-	ID     string                `json:"id"`
-	GitHub *githubc.Repositories `json:"github,omitempty"`
+	Name      string                `json:"name"`
+	ID        string                `json:"id"`
+	GitHub    *githubc.Repositories `json:"github,omitempty"`
+	Workspace *WorkspaceCheck       `json:"workspace,omitempty"`
+}
+
+// WorkspaceCheck is what Check read of a Workspace tenant: each account's
+// OAuth grants and each readable mailbox's forwarding.
+type WorkspaceCheck struct {
+	OAuth workspace.OAuthEvidence `json:"oauth"`
+	Mail  workspace.MailEvidence  `json:"mail"`
 }

@@ -39,6 +39,71 @@ func (r *run) collectWorkspace(ctx context.Context, a ResolvedAsset, ra ReconAss
 	return ra
 }
 
+// planWorkspace orders each Workspace tenant's accounts for the per-user
+// reads (docs/spec/engagement.md, "Plan selection and follow-ups"). It
+// sends nothing.
+func (r *run) planWorkspace() []workspace.UserSelection {
+	out := []workspace.UserSelection{}
+	for _, ra := range r.recon.Assets {
+		a, ok := r.asset(ra.Name)
+		if !ok || ra.Workspace == nil || ra.Root != ra.ID {
+			continue
+		}
+		out = append(out, workspace.Select(*ra.Workspace, ra.ID, r.workspaceView(a)))
+	}
+	return out
+}
+
+// checkWorkspace reads each tenant's per-user OAuth grants and forwarding
+// in Check, then joins them to Recon's evidence in memory for Analyze;
+// recon.json keeps what Recon read and check.json what Check did.
+func (r *run) checkWorkspace(ctx context.Context, doc *CheckDoc) error {
+	for _, sel := range r.planned.Workspace {
+		i := slices.IndexFunc(r.recon.Assets, func(ra ReconAsset) bool { return ra.ID == sel.Asset })
+		if i < 0 || r.recon.Assets[i].Workspace == nil {
+			continue
+		}
+		ra := &r.recon.Assets[i]
+		a, _ := r.asset(ra.Name)
+		g, err := r.gateFor(ctx)
+		if err != nil {
+			return err
+		}
+		r.o.Log("check: %s (%s), %d accounts in plan order", a.Name, a.ID, len(sel.Order))
+		ev := workspace.CollectUsers(ctx, g, workspace.Target{Asset: a.ID, Stage: "check"}, *ra.Workspace, r.workspaceView(a), sel)
+		// A warning about scheck's own credentials that Check's reads raised
+		// (the OAuth or forwarding token) reaches stderr as Recon's did.
+		for _, note := range ev.Notes {
+			if note.Kind == "workspace_credential_warning" && !slices.Contains(ra.Workspace.Notes, note) {
+				r.o.Log("warning: %s", note.Detail)
+			}
+		}
+		ra.Workspace = &ev
+		doc.Assets = append(doc.Assets, CheckAsset{Name: ra.Name, ID: ra.ID, Workspace: &WorkspaceCheck{OAuth: ev.OAuth, Mail: ev.Mail}})
+		checked, short := checkedWorkspace(*ra, ev.Outcome())
+		*ra = checked
+		if short {
+			r.incomplete(a, *ra)
+		}
+	}
+	return nil
+}
+
+// checkedWorkspace is a tenant's status after Check: Check's reads can only
+// leave a collected tenant incomplete, and short says to record that
+// shortfall; a tenant Recon left short keeps its own, never a second.
+func checkedWorkspace(ra ReconAsset, o workspace.Outcome) (ReconAsset, bool) {
+	if ra.Status != StatusCollected {
+		return ra, false
+	}
+	ra.Detail = o.Detail
+	if o.Status == workspace.OutcomeComplete {
+		return ra, false
+	}
+	ra.Status, ra.Reason = StatusIncomplete, cmp.Or(o.Reason, ReasonFailed)
+	return ra, true
+}
+
 // workspaceView is what the engagement file tells the Workspace collector
 // about a tenant: Recon reads with it and Analyze judges with it.
 func (r *run) workspaceView(a ResolvedAsset) workspace.Context {

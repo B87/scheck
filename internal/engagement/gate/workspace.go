@@ -34,13 +34,17 @@ type workspaceSession struct {
 	units                  map[string]bool
 	unitIDs                map[string]string
 	assignmentObservations int
-	inventory              map[string]workspaceUser
-	fingerprints           map[string]string
-	owners                 map[string]string
-	usersComplete          bool
-	inventoryBad           bool
-	cursors                map[string]bool
-	principal              string
+	// expired is set when the session's token expired and is cleared by the
+	// next bootstrap: every later read halts as the expiry did, never as an
+	// unbound tenant. It keeps no token and no binding.
+	expired       bool
+	inventory     map[string]workspaceUser
+	fingerprints  map[string]string
+	owners        map[string]string
+	usersComplete bool
+	inventoryBad  bool
+	cursors       map[string]bool
+	principal     string
 	// optional holds each optional surface's own tokens, or the failure of
 	// its exchange, for as long as the baseline authentication lasts.
 	optional map[WorkspaceSurface]*workspaceOptional
@@ -75,6 +79,11 @@ type workspaceOptional struct {
 // unbind forgets the tenant binding and every optional token or remembered
 // optional failure minted under it: none outlives the binding.
 func (s *workspaceSession) unbind() { s.bound, s.optional = false, nil }
+
+// expiredHalt is every read's answer once the session's token expired.
+func expiredHalt() *halt {
+	return &halt{decision: "unavailable:bootstrap_required", detail: "the Workspace access token expired. Restart or resume the run to authenticate and verify the Workspace customer again", sticky: true}
+}
 
 // dropAuth forgets authentication and binding together.
 func (s *workspaceSession) dropAuth() {
@@ -460,8 +469,12 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 	if p.op.ID != "workspace.bootstrap_customer" && (p.op.types["user"].Type != UserKey || p.op.types["customer"].Type == CustomerID) && (session.customer == "" || p.b.params["customer"] != session.customer) {
 		return sticky(refused("tenant_binding", "the selector is not this session's bootstrap customer"))
 	}
+	if session.expired && p.op.ID != "workspace.bootstrap_customer" {
+		return expiredHalt()
+	}
 	switch p.op.ID {
 	case "workspace.bootstrap_customer":
+		session.expired = false
 	case "workspace.bootstrap_domains":
 		g.clearWorkspacePages(p.r.Asset)
 		session.usersComplete, session.principal = false, ""
@@ -484,7 +497,8 @@ func (g *Gate) attachWorkspace(ctx context.Context, p *pending) *halt {
 		session.dropAuth()
 		// Expiry never preserves a tenant authorization established with an earlier token.
 		if p.op.ID != "workspace.bootstrap_customer" {
-			return &halt{decision: "unavailable:bootstrap_required", detail: "the Workspace access token expired. Restart or resume the run to authenticate and verify the Workspace customer again", sticky: true}
+			session.expired = true
+			return expiredHalt()
 		}
 		exchange, err := source.exchange(g.now(), WorkspaceBaseline)
 		if err != nil {

@@ -250,7 +250,8 @@ grant is broad. App names are untrusted labels; accept by client id. Under the d
 profile the "Workspace OAuth grants (third-party app access)" sub-item is
 `not_on_plan:profile=<p>`; a refused permission is
 `insufficient_permission:admin.directory.user.security`, a coverage gap, not exit 3; a
-limit on a grants read exits 2; `unavailable:oauth_unclassified` apps were not judged.
+limit on a grants read exits 2 and the sub-item then says which accounts were read
+first (a "Users" selection line, at most *partial*); `unavailable:oauth_unclassified` apps were not judged.
 That permission can also revoke app access, sign people out and turn off 2-step
 verification: relay the selection note (a dedicated credential), never suggest adding
 it to the everyday one, and relay the separate token's `workspace_credential_warning`.
@@ -291,7 +292,7 @@ come from a supported local ADC file; an already approved service-account delega
 uses `SCHECK_WORKSPACE_SUBJECT`. Do not suggest automatic delegation setup or broader
 grants. Authorized-user callers stay unknown. A freshly verified delegated account
 is identity evidence, never assurance about its privileges. Every Workspace resume
-repeats admission and reuses no authenticated Workspace responses. Inactivity findings
+repeats admission and reuses no authenticated Workspace responses. A Workspace session token that expires before every read is made (long runs; Workspace's Check runs before GitHub's) leaves the tenant incomplete with `limit_reached` (exit 2); resume to read the rest. Inactivity findings
 need fresh detail; reported sign-in is not proof that sessions or apps are inactive.
 Account acceptances name the current primary address; stable provider ids accompany
 subjects, but cross-run rename comparison is not implemented.
@@ -393,7 +394,8 @@ contact, because the audit log is the record of what was sent; use `--state-dir`
 keep that run somewhere disposable instead. `--out FILE` writes the report to a file instead of stdout.
 `--stop-after STAGE` ends after that stage and prints its document; `plan` prints each
 GitHub organization's repositories in the order Check will read them, with the tier and
-declaration that put each there, and "Not judged for lack of a declaration:", the rules
+declaration that put each there, and each Workspace tenant's account count with its tier
+counts (the order Check reads OAuth grants in; `plan.json` lists the accounts), and "Not judged for lack of a declaration:", the rules
 that will not decide for lack of a declaration: relay it, since the operator can add the
 declaration before resuming (Recon has already sent its requests; Check sends none until
 the run is resumed); `intake` validates

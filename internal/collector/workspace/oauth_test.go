@@ -378,7 +378,9 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		}
 		return gate.Result{RequestID: "x", Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:admin.directory.user.security", Repeats: true}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	// Check hands collectGrants the accounts in Plan's order (CollectUsers).
+	attrs := attribute("asset", e.Users.Items, c.People, e.Users.Complete)
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "check"}, inOrder(accountViews(e, c, attrs), orderUsers(e.Users.Items, e.Access.Accounts, attrs, c)))
 	if !slices.Equal(asked, []string{"zed"}) || e.OAuth.Complete || len(e.OAuth.Accounts) != 1 {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}
@@ -390,7 +392,7 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		asked = append(asked, r.Params["user"])
 		return gate.Result{RequestID: "t-" + r.Params["user"], Decision: "sent", Response: &gate.Response{Status: 200, Body: []byte(`[]`), Population: full}}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "check"}, inOrder(accountViews(e, c, attrs), orderUsers(e.Users.Items, e.Access.Accounts, attrs, c)))
 	if !slices.Equal(asked, []string{"zed", "amy", "bob"}) || !e.OAuth.Complete {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}

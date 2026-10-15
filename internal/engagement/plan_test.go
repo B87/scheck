@@ -3,6 +3,8 @@ package engagement
 import (
 	"slices"
 	"testing"
+
+	"github.com/b87/scheck/internal/collector/workspace"
 )
 
 // Plan's not-judged list names each rule a missing declaration leaves
@@ -37,5 +39,23 @@ access:
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// Check's Workspace reads can only leave a collected tenant incomplete,
+// recorded once; a tenant Recon left short keeps its single shortfall.
+func TestCheckedWorkspaceStatus(t *testing.T) {
+	limited := workspace.Outcome{Status: workspace.OutcomeIncomplete, Reason: "limit_reached", Detail: "d"}
+	got, short := checkedWorkspace(ReconAsset{Status: StatusCollected}, limited)
+	if !short || got.Status != StatusIncomplete || got.Reason != "limit_reached" {
+		t.Fatalf("%+v %v", got, short)
+	}
+	got, short = checkedWorkspace(ReconAsset{Status: StatusIncomplete, Reason: ReasonFailed}, limited)
+	if short || got.Reason != ReasonFailed {
+		t.Fatalf("%+v %v", got, short)
+	}
+	got, short = checkedWorkspace(ReconAsset{Status: StatusCollected}, workspace.Outcome{Status: workspace.OutcomeComplete, Detail: "ok"})
+	if short || got.Status != StatusCollected || got.Detail != "ok" {
+		t.Fatalf("%+v %v", got, short)
 	}
 }

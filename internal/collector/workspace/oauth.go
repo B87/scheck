@@ -72,6 +72,9 @@ type OAuthEvidence struct {
 	Selected bool            `json:"selected"`
 	Accounts []AccountGrants `json:"accounts,omitempty"`
 	Complete bool            `json:"complete"`
+	// Selection names what chose the accounts read when a cap, the
+	// deadline or a rate limit cut the sequence; nil otherwise.
+	Selection *finding.Selection `json:"selection,omitempty"`
 }
 
 // collectGrants reads every admitted account's grants after the baseline,

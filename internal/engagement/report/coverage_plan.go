@@ -76,6 +76,14 @@ func (b *builder) planCoverage(row *Row, a AssetInput, plan CoveragePlan) bool {
 			}
 			si.Reasons = appendReason(si.Reasons, ReasonDetail(*group.Gap))
 		}
+		if sel := group.Selection; sel != nil {
+			// A cut population: the sub-item counts what was read and names
+			// what chose it, and is at most partial.
+			si.Population = &Population{Kind: sel.Unit, InScope: sel.InScope, Read: sel.Read, Selection: sel}
+			if si.Mark == "assessed" || si.Mark == "not_applicable" {
+				si.Mark = "partial"
+			}
+		}
 		if group.Limit != "" {
 			si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: "no_rule", Detail: group.Limit})
 		}

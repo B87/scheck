@@ -437,6 +437,16 @@ func TestWorkspaceResumeAlwaysBootstrapsAndProfilesDoNotReuse(t *testing.T) {
 	if r.Decision != "unavailable:bootstrap_required" || len(api.requests()) != 6 {
 		t.Fatal(r)
 	}
+	// Every later read halts as the expiry did, never as an unbound tenant
+	// (docs/spec/workspace-collector.md); nothing is sent.
+	r = g2.Send(context.Background(), Request{Op: "workspace.customer", Asset: wsAsset, Params: map[string]string{"domain": "example.com"}})
+	if r.Decision != "unavailable:bootstrap_required" || !r.Repeats || len(api.requests()) != 6 {
+		t.Fatal("a read after the expiry:", r)
+	}
+	// A new bootstrap clears it.
+	if reads := wsBootstrap(g2); !reads[0].OK() || g2.workspace[wsAsset].expired {
+		t.Fatal("bootstrap after expiry", reads[0])
+	}
 }
 func TestWorkspaceRetainedScopeEchoHasRedactionMarker(t *testing.T) {
 	w := newWorld(t)

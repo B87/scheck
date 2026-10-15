@@ -63,6 +63,9 @@ type CoverageGroup struct {
 	// group, with what it judges (HostJudges): a rule over a host's facts.
 	HostDomain check.Domain
 	HostJudges string
+	// Selection is what chose the part of the group's population that was
+	// read, when a cap, the deadline or a rate limit cut it short.
+	Selection *Selection
 }
 
 // CoverageUnread is a sub-item nothing reads.

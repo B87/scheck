@@ -116,6 +116,9 @@ type Evidence struct {
 	DelegatedUser     *User              `json:"delegated_user,omitempty"`
 	Attribution       []Attribution      `json:"attribution,omitempty"`
 	Notes             []Note             `json:"notes"`
+	// usersPending is true between Recon and Check: the per-user grants
+	// and forwarding are not read yet, so their readout is not written.
+	usersPending bool
 }
 
 func usable(r gate.Result) bool {
@@ -133,8 +136,11 @@ func readOf(op string, r gate.Result) Read {
 	return out
 }
 
-// Collect hides binding order, population reads, recognition, attribution and
-// diagnostic wording (docs/spec/workspace-collector.md, "Reads and projections").
+// Collect is what Recon reads of a tenant: binding, populations, roles and
+// each account's assignments and detail. It hides binding order, population
+// reads, recognition, attribution and diagnostic wording
+// (docs/spec/workspace-collector.md, "Reads and projections"); Check reads
+// the per-user OAuth grants and forwarding (CollectUsers).
 // It gives no verdict: Analyze calls Judge on what it read
 // (docs/spec/runs.md, "Verdicts are not evidence").
 func Collect(ctx context.Context, sender Sender, target Target, view Context) Evidence {
@@ -169,9 +175,11 @@ func Collect(ctx context.Context, sender Sender, target Target, view Context) Ev
 		}
 	}
 	e.collectAccess(ctx, sender, target, view)
-	views := accountViews(e, view, attribute(target.Asset, e.Users.Items, view.People, e.Users.Complete))
-	e.collectGrants(ctx, sender, target, views)
-	e.collectMail(ctx, sender, target, views)
+	// Whether the profile reads grants and forwarding is known now; Check
+	// reads them (CollectUsers).
+	e.OAuth.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceOAuthGrants)
+	e.Mail.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceGmailForwarding)
+	e.usersPending = true
 	e.finish(target.Asset, view)
 	return e
 }
@@ -284,7 +292,10 @@ func (e Evidence) Reads() []Read {
 	return out
 }
 
+// finish writes the evidence's notes and attribution over everything read
+// so far; Check calls it again after its reads.
 func (e *Evidence) finish(asset string, view Context) {
+	e.Notes = nil
 	e.InventoryComplete = e.Binding.CustomerID != "" && len(e.Users.Reads) > 0 && e.Domains.Complete && e.Aliases.Complete && e.Units.Complete && e.Users.Complete
 	credential := CredentialNote(e.Binding)
 	credential.Source = asset
@@ -307,6 +318,18 @@ func (e *Evidence) finish(asset string, view Context) {
 	}
 	e.Attribution = attribute(asset, e.Users.Items, view.People, e.Users.Complete)
 	e.Notes = append(e.Notes, Readout(*e, asset, view)...)
+	if e.usersPending {
+		var pending []string
+		if e.OAuth.Selected {
+			pending = append(pending, "third-party app grants")
+		}
+		if e.Mail.Selected {
+			pending = append(pending, "mail forwarding")
+		}
+		if len(pending) > 0 {
+			e.Notes = append(e.Notes, Note{Kind: "workspace_inventory", Source: asset, Detail: "This profile reads " + strings.Join(pending, " and ") + "; Check reads them after Plan orders the accounts."})
+		}
+	}
 	for _, a := range e.Attribution {
 		if a.MatchedBy == "alias" {
 			e.Notes = append(e.Notes, Note{Kind: "workspace_people", Source: asset, Detail: a.Handle + " → " + a.Key + ", by alias. Record the current primary address in people."})

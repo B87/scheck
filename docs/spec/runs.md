@@ -22,11 +22,13 @@ and locked while a run holds it:
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
   plan.json            stage 4: each host's planned and disabled checks, each GitHub
-                       root's repositories in the order Check reads them, and the
-                       not-judged list (E9 step 6a; with a model, hypotheses too)
+                       root's repositories and each Workspace tenant's accounts in the
+                       order Check reads them, and the not-judged list (E9 steps 6a and
+                       6b; with a model, hypotheses too)
   check.json           stage 5: what Check read of each GitHub root's repositories, in
-                       Plan's order, with the requests spent and the people fields recomputed after Check (E9 step 6a);
-                       `recon.json` keeps the inventory only
+                       Plan's order, with the requests spent and the people fields recomputed after Check (E9 step 6a),
+                       and of each Workspace tenant its OAuth grants and Gmail forwarding
+                       (E9 step 6b); `recon.json` keeps the inventory only
   evidence/            stages 3 and 5: one file per result, redacted and truncated;
                        per host <asset>.json and <asset>.collection.json, and
                        requests/, the gate's successes a resume may reuse
@@ -74,9 +76,12 @@ each repository in Plan's order."; after Check the status is reconciled in memor
 `recon.json` keeps Recon's. The report's `method.levels_used` names
 the levels the run's requests used: `observe` when a host was collected or a site's
 front page requested, `passive` when a domain root was read.
-Plan lists each host's checks, orders each GitHub root's repositories and names what will
-not be judged ("Plan selection and follow-ups"); Check reads those repositories under the
-request budget and opens no follow-up until E9 step 7. `evidence/<asset>.json`, written by Recon,
+Plan lists each host's checks, orders each GitHub root's repositories and each Workspace
+tenant's accounts and names what will not be judged ("Plan selection and follow-ups");
+Check reads those repositories under the request budget, reads each tenant's OAuth grants
+and Gmail forwarding in Plan's order, and opens no follow-up until E9 step 7. A Workspace
+tenant `collected` by Recon is reconciled in memory to `incomplete` when Check's reads end
+short; `recon.json` keeps Recon's. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
@@ -120,7 +125,7 @@ written. `scheck run <directory>` resumes:
   a better token on resume reads again what the weaker one could not.
 - **Verdicts are not evidence** (built in E9 steps 1b and 1c). The evidence types carry no verdicts: `recon.json`,
   `check.json` and `evidence/` hold what was read, and Analyze judges every web, GitHub and
-  Workspace asset from what this session's Recon and Check hold (Check's GitHub evidence is
+  Workspace asset from what this session's Recon and Check hold (Check's GitHub and Workspace evidence is
   joined to Recon's in memory), on each session including a resume (the
   gate answers Recon's and Check's reads from the ledger, each counted against the budget as
   when it was first sent). A host's `evidence/<asset>.json` is the

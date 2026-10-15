@@ -362,7 +362,7 @@ is *partial*, with "2 of 120 repositories". A cap carries its `selection` ("the 
 most recently pushed"), since a sample nobody can name cannot be compared between
 runs.
 
-**A selection names what chose it** (GitHub built in E9 step 6a, Workspace design in 6b;
+**A selection names what chose it** (GitHub built in E9 step 6a, Workspace in 6b;
 contract when E9 lands; [engagement.md](engagement.md), "Plan selection and follow-ups").
 In text:
 `40 of 120 repositories: deploys_to production (3, assets.*.deploys_to), declared secret
@@ -382,6 +382,18 @@ listed read; the list was not complete, so more may be in scope". A row whose ki
 reached different populations prints one line per
 selection, "Repositories read for <kind>: ...", `kind` being `access`, `ci`, `secret_alerts`,
 `dependabot_alerts` or `secret_locations`.
+
+A Workspace selection has `unit` `users`, `kind` `oauth_grants` or `mail_forwarding` and
+the fallback "active, last sign-in desc, primaryEmail" ("active, primaryEmail" for
+forwarding). Tiers print in tier order. Its sentence reads "no declaration named any user;
+<fallback words> (N)" and "then <fallback words> (N)" (users "the rest, active and most
+recently signed in first", forwarding "the rest, active first"), "no declaration named any
+user" alone when nothing was read in the fallback, and, with no budget, "all N users read"; the line is "Users: ..." or "Users read for third-party app
+grants: ...". It exists only when a cap, the timeout, the rate limit or the Workspace
+session's token expiring (`limit_reached`, exit 2; detail "The Workspace session's token
+expired before every Workspace read was made; resume to read the rest.") cut the
+population, and the sub-item carrying it is at most *partial*. Recon's per-user assignment
+cap carries no selection.
 
 A request-budget cut is `sampled` and does not change the exit code. Its reason sits on
 the row or sub-item whose kind was cut, the population counts the repositories that got

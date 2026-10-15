@@ -20,6 +20,17 @@ func TestSelectionTextWordsWhatChoseTheRead(t *testing.T) {
 		{finding.Selection{Unit: "repositories", Read: 30, InScope: 90, Spent: 4003, Budget: 4000, Tiers: []finding.SelectionTier{
 			{Basis: "public", Source: "observed", Count: 2}, {Basis: "most recently pushed", Count: 28}}},
 			"30 of 90 repositories: public (2, observed), no declaration named any repository; most recently pushed (28); sent 4,003 of a 4,000 budget."},
+		{finding.Selection{Unit: "users", Read: 3, InScope: 40, Tiers: []finding.SelectionTier{
+			{Basis: "left and still active", Source: "people.*.left", Count: 1}, {Basis: "admin holders no one named", Source: "observed", Count: 2}}},
+			"3 of 40 users: left and still active (1, people.*.left), admin holders no one named (2, observed)."},
+		{finding.Selection{Unit: "users", Read: 5, InScope: 9, Tiers: []finding.SelectionTier{
+			{Basis: "the rest, active and most recently signed in first", Count: 5}}},
+			"5 of 9 users: no declaration named any user; the rest, active and most recently signed in first (5)."},
+		{finding.Selection{Kind: "oauth_grants", Unit: "users", Read: 3, InScope: 40, Tiers: []finding.SelectionTier{
+			{Basis: "admin holders no one named", Source: "observed", Count: 3}}},
+			"3 of 40 users: admin holders no one named (3, observed), no declaration named any user."},
+		{finding.Selection{Kind: "oauth_grants", Unit: "users", Read: 0, InScope: 9, Tiers: []finding.SelectionTier{}},
+			"0 of 9 users: no declaration named any user."},
 		{finding.Selection{Unit: "repositories", Read: 12, InScope: 12, Spent: 80, Budget: 4000},
 			"all 12 repositories read; the request budget cut nothing; sent 80 of a 4,000 budget."},
 	} {
