@@ -403,9 +403,11 @@ func TestEngagementCopyMasksRedactExtra(t *testing.T) {
 	}
 }
 
-// The asset's context and the accepted risks naming it reach the host
-// collector; nothing else does.
-func TestHostOptionsCarryTheAssetOnly(t *testing.T) {
+// The host collector receives the asset's reach and narrowing, nothing
+// else; its context and the accepted risks naming it are what Analyze
+// grades it through, read at the collecting session's start in
+// engagement.timezone (docs/spec/runs.md, "Verdicts are not evidence").
+func TestHostOptionsCarryTheAssetAndAnalyzeItsContext(t *testing.T) {
 	file := hostAndGitHub + `    known_hosts: /kh
     timeout: 1m
     disable_checks: [fs.suid]
@@ -438,25 +440,33 @@ intent:
 		t.Fatal(err)
 	}
 	findings := out.Document.(*FindingsDoc)
-	// Acceptances are graded at the collection time, in engagement.timezone.
-	if !got.Now.Equal(started) {
-		t.Errorf("graded at %v, want the run's start", got.Now)
-	}
-	if _, err := time.LoadLocation("Europe/Madrid"); err == nil {
-		if z := got.Context.AcceptedRisks[0].Zone; z == nil || z.String() != "Europe/Madrid" {
-			t.Errorf("acceptance read in %v, want engagement.timezone Europe/Madrid", z)
-		}
-	}
 	if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "intent.accepted_risks[1] (sshd.password_auth_enabled on web, subject x) not applied") ||
 		len(findings.AcceptancesNotApplied) != 1 {
 		t.Errorf("warnings %q, findings.json %q", out.Warnings, findings.AcceptancesNotApplied)
 	}
-	c := got.Context
 	if got.Host != "203.0.113.5" || got.Port != 22 || got.User != "deploy" || got.Elevate != "sudo" || got.Profile != "baseline" ||
 		got.KnownHosts != "/kh" || got.RunTimeout != time.Minute || len(got.DisableChecks) != 1 || len(got.DenyPaths) != 1 ||
-		len(got.RedactExtra) != 1 || c == nil || c.Exposure != "internet" || len(c.ExpectedServices) != 1 ||
-		len(c.AcceptedRisks) != 1 || c.AcceptedRisks[0].Reason != "legacy" || c.AcceptedRisks[0].Source != "engagement.yaml intent.accepted_risks[0]" {
-		t.Fatalf("options = %+v, context %+v", got, c)
+		len(got.RedactExtra) != 1 {
+		t.Fatalf("options = %+v", got)
+	}
+	zone, err := time.LoadLocation(res.Engagement.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	collected := started.Add(-48 * time.Hour)
+	r := &run{res: res, zone: zone, session: started, graded: map[string]time.Time{"web": collected}}
+	web, _ := r.asset("web")
+	g := r.hostGrading(web)
+	c := g.Context
+	if !g.Now.Equal(collected) || g.Source != "engagement.yaml assets.web" || c == nil || c.Exposure != "internet" || len(c.ExpectedServices) != 1 ||
+		len(c.AcceptedRisks) != 1 || c.AcceptedRisks[0].Reason != "legacy" || c.AcceptedRisks[0].Source != "engagement.yaml intent.accepted_risks[0]" ||
+		c.AcceptedRisks[0].Zone != zone {
+		t.Fatalf("grading = %+v, context %+v", g, c)
+	}
+	// A host this session collected is graded at its start.
+	r.graded = map[string]time.Time{}
+	if g := r.hostGrading(web); !g.Now.Equal(started) {
+		t.Errorf("graded at %v, want the session's start", g.Now)
 	}
 }
 

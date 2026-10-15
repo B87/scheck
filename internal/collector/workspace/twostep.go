@@ -308,9 +308,9 @@ func unitJudgment(unit stepUnit, s stepState, asset string, c Context) finding.J
 		}
 		decide(&j, true, true, fmt.Sprintf("Google reports that 2-step verification is not currently required for %s%s in %s (isEnforcedIn2Sv: false).%s Enrollment, as Google reports it: %d not enrolled, %d enrolled, %d unknown. %s %s", qualifier, plural(affected, "active account"), where, why, len(n.notEnrolled), len(n.enrolled), len(n.enrollmentUnknown), listAccounts(n.notEnrolled, n.enrolled, n.enrollmentUnknown), twoStepParagraph))
 		if unit.raised {
-			j.Attributes = []string{"contradiction"}
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Sources = []string{c.MFASource}
-			j.Context = raisedWhy(c, n.superOff)
+			j.Why = raisedWhy(c, n.superOff)
 			j.NotChecked = []string{federationCaveat}
 		}
 	case Disproved:

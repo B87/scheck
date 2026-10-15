@@ -123,12 +123,12 @@ func reasons(rs []ReasonDetail) []string {
 func TestReportsValidateAgainstTheSchema(t *testing.T) {
 	s := schema(t)
 	for _, fx := range []string{"ubuntu", "fedora", "macos"} {
-		t.Run(fx, func(t *testing.T) { validate(t, s, Build(oneHost(t, fx))) })
+		t.Run(fx, func(t *testing.T) { validate(t, s, build(oneHost(t, fx))) })
 	}
-	t.Run("root without collector", func(t *testing.T) { validate(t, s, Build(withGitHubRoot(t))) })
-	t.Run("lost session", func(t *testing.T) { validate(t, s, Build(lostSession(t))) })
-	t.Run("refused host", func(t *testing.T) { validate(t, s, Build(refusedHost(t))) })
-	t.Run("acceptances", func(t *testing.T) { validate(t, s, Build(withAcceptances(t))) })
+	t.Run("root without collector", func(t *testing.T) { validate(t, s, build(withGitHubRoot(t))) })
+	t.Run("lost session", func(t *testing.T) { validate(t, s, build(lostSession(t))) })
+	t.Run("refused host", func(t *testing.T) { validate(t, s, build(refusedHost(t))) })
+	t.Run("acceptances", func(t *testing.T) { validate(t, s, build(withAcceptances(t))) })
 }
 
 // A host domain is marked from the rules that decided, never from the
@@ -137,7 +137,7 @@ func TestReportsValidateAgainstTheSchema(t *testing.T) {
 // not installed do not lower Software updates when apt answered
 // (docs/spec/report.md, "Coverage").
 func TestHostCoverageComesFromRules(t *testing.T) {
-	r := Build(oneHost(t, "ubuntu"))
+	r := build(oneHost(t, "ubuntu"))
 	hosts := row(t, r, "hosts")
 	if hosts.Mark != "partial" {
 		t.Fatalf("Hosts on Ubuntu is %s; with no rule for the firewall it can only be partial", hosts.Mark)
@@ -177,7 +177,7 @@ func TestHostCoverageComesFromRules(t *testing.T) {
 	if r.Exit.Code != 0 || len(r.Findings) != 0 {
 		t.Errorf("Ubuntu fixture: exit %d with %d findings, want 0 and none", r.Exit.Code, len(r.Findings))
 	}
-	if a := r.Assets[0]; a.Checks == nil || a.Checks.Planned != 33 || a.Checks.NotRun != 0 {
+	if a := r.Assets[0]; a.Checks == nil || a.Checks.Planned != 34 || a.Checks.NotRun != 0 {
 		t.Errorf("checks %+v", a.Checks)
 	}
 }
@@ -185,7 +185,7 @@ func TestHostCoverageComesFromRules(t *testing.T) {
 // The updates family's assessment is decided and complete when apt
 // answered, so a later run may read its absence as fixed.
 func TestFamiliesDecideOnOneMember(t *testing.T) {
-	r := Build(oneHost(t, "ubuntu"))
+	r := build(oneHost(t, "ubuntu"))
 	for _, a := range r.Assessments {
 		if a.ID != finding.IDUpdatesPending {
 			continue
@@ -240,7 +240,7 @@ func withDomainRoot(t *testing.T) Input {
 // marked from the judgments and names what no rule judges yet, and the
 // email row says its records were read but not judged.
 func TestDomainRootFindings(t *testing.T) {
-	r := Build(withDomainRoot(t))
+	r := build(withDomainRoot(t))
 	var open, accepted []string
 	for _, f := range r.Findings {
 		if f.Key.Subject == nil {
@@ -276,7 +276,7 @@ func TestDomainRootFindings(t *testing.T) {
 	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "engagement.yaml intent.accepted_risks[1]",
 		ID: finding.IDDNSDanglingExternal, Asset: "domain:old.example.com", AssetID: "domain:old.example.com",
 		Reason: "being migrated", AcceptedBy: "alice", Expires: "2027-03-01"})
-	r = Build(in)
+	r = build(in)
 	for _, f := range r.Findings {
 		if f.Key.Subject != nil && *f.Key.Subject == "old.example.com" {
 			if f.Key.Asset != "domain:old.example.com" || f.Severity != "high" || len(f.Adjustments) != 1 ||
@@ -293,7 +293,7 @@ func TestDomainRootFindings(t *testing.T) {
 	in = withDomainRoot(t)
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
 		Asset: "example.com", AssetID: "domain:example.com", Subject: "old.example.com", Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"}}
-	if r = Build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "domain:old.example.com") {
+	if r = build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "domain:old.example.com") {
 		t.Errorf("an acceptance on the root %+v", r.Acceptances[0])
 	}
 	// Accepted on its own name too, the instance is not open: the root's
@@ -301,7 +301,7 @@ func TestDomainRootFindings(t *testing.T) {
 	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "engagement.yaml intent.accepted_risks[1]",
 		ID: finding.IDDNSDanglingExternal, Asset: "domain:old.example.com", AssetID: "domain:old.example.com",
 		Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"})
-	if r = Build(in); strings.Contains(r.Acceptances[0].Why, "open under it") || r.Acceptances[1].Outcome != "applied" {
+	if r = build(in); strings.Contains(r.Acceptances[0].Why, "open under it") || r.Acceptances[1].Outcome != "applied" {
 		t.Errorf("both entries %+v", r.Acceptances)
 	}
 	// A name once dangling and now gone was looked up: its entry is not
@@ -310,14 +310,14 @@ func TestDomainRootFindings(t *testing.T) {
 	in.Assets[len(in.Assets)-1].Judged = in.Assets[len(in.Assets)-1].Judged[1:]
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDDNSDanglingExternal,
 		Asset: "domain:old.example.com", AssetID: "domain:old.example.com", Subject: "old.example.com", Reason: "r", AcceptedBy: "alice", Expires: "2027-03-01"}}
-	if r = Build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "population") {
+	if r = build(in); r.Acceptances[0].Outcome != "rule_not_decided" || !strings.Contains(r.Acceptances[0].Why, "population") {
 		t.Errorf("a fixed name's entry %+v", r.Acceptances[0])
 	}
 	// A declared domain read with its root is read in coverage.
 	in = withDomainRoot(t)
 	in.Assets = append(in.Assets, AssetInput{Name: "shop", ID: "domain:shop.example.com", Kind: "domain", Status: "collected",
 		Detail: "read with example.com", ReadWith: "domain:example.com"})
-	if ext := row(t, Build(in), "external"); ext.Population.Read != 2 || slices.Contains(reasons(ext.Reasons), "collector_not_built") {
+	if ext := row(t, build(in), "external"); ext.Population.Read != 2 || slices.Contains(reasons(ext.Reasons), "collector_not_built") {
 		t.Errorf("external %+v", ext)
 	}
 }
@@ -325,7 +325,7 @@ func TestDomainRootFindings(t *testing.T) {
 // A declared root with no collector leaves the run incomplete, whatever
 // the findings, and its areas say so (docs/spec/scope.md, "Exit codes").
 func TestARootWithoutCollectorExitsTwo(t *testing.T) {
-	r := Build(withGitHubRoot(t))
+	r := build(withGitHubRoot(t))
 	if r.Exit.Code != 2 {
 		t.Fatalf("exit %d, want 2", r.Exit.Code)
 	}
@@ -373,7 +373,7 @@ func lostSession(t *testing.T) Input {
 // A lost session is incomplete with reason failed; the checks after the
 // loss are not run, never unavailable, and what was read is kept.
 func TestALostSessionIsNotRunNotUnavailable(t *testing.T) {
-	r := Build(lostSession(t))
+	r := build(lostSession(t))
 	if r.Exit.Code != 2 || len(r.Incomplete) != 1 {
 		t.Fatalf("exit %d, incomplete %+v", r.Exit.Code, r.Incomplete)
 	}
@@ -404,7 +404,7 @@ func refusedHost(t *testing.T) Input {
 
 // A host that refused us exits 3, and every other asset is still reported.
 func TestARefusedHostExitsThreeAndKeepsTheOthers(t *testing.T) {
-	r := Build(refusedHost(t))
+	r := build(refusedHost(t))
 	if r.Exit.Code != 3 || len(r.Refused) != 1 || r.Refused[0].AssetName != "deploy" {
 		t.Fatalf("exit %d refused %+v", r.Exit.Code, r.Refused)
 	}
@@ -421,7 +421,7 @@ func TestARefusedHostExitsThreeAndKeepsTheOthers(t *testing.T) {
 // one: one item ranks, the low one is counted below it, and a baseline
 // host exits 1.
 func TestRankingAndThreshold(t *testing.T) {
-	r := Build(oneHost(t, "macos"))
+	r := build(oneHost(t, "macos"))
 	if len(r.Summary.Items) != 1 || r.Summary.Items[0].IDs[0] != finding.IDAppFirewallDisabled {
 		t.Fatalf("items %+v", r.Summary.Items)
 	}
@@ -474,7 +474,7 @@ func withAcceptances(t *testing.T) Input {
 // complete evidence may say "likely fixed" (docs/spec/report.md,
 // "Acceptances").
 func TestAcceptanceOutcomes(t *testing.T) {
-	r := Build(withAcceptances(t))
+	r := build(withAcceptances(t))
 	want := []string{"applied", "not_matched", "expired", "not_applied", "rule_not_decided"}
 	for i, a := range r.Acceptances {
 		if a.Outcome != want[i] {
@@ -525,11 +525,11 @@ func TestExpiryIsReadInTheEngagementZone(t *testing.T) {
 	}
 	in := withAcceptances(t)
 	in.Zone, in.Started = madrid, time.Date(2026, 10, 19, 22, 30, 0, 0, time.UTC)
-	if got := Build(in).Acceptances[0].Outcome; got != "expired" {
+	if got := build(in).Acceptances[0].Outcome; got != "expired" {
 		t.Errorf("2026-10-19 in Madrid at 00:30 on the 20th: %s, want expired", got)
 	}
 	in.Zone = time.UTC
-	if got := Build(in).Acceptances[0].Outcome; got != "applied" {
+	if got := build(in).Acceptances[0].Outcome; got != "applied" {
 		t.Errorf("2026-10-19 in UTC at 22:30 the same day: %s, want applied", got)
 	}
 }
@@ -549,7 +549,7 @@ func TestNotApplicableIsNoAnswer(t *testing.T) {
 			env.Assessments[i].Status, env.Assessments[i].Reason = finding.NotApplicable, "check-not-in-platform-catalog"
 		}
 	}
-	r := Build(in)
+	r := build(in)
 	for _, a := range r.Assessments {
 		if a.ID == finding.IDUpdatesPending && (a.Status != finding.NotAssessed || a.Complete) {
 			t.Errorf("updates.pending: %+v, want not_assessed and incomplete", a)
@@ -568,13 +568,13 @@ func TestForgedMarkersAreNotCounted(t *testing.T) {
 	o := env.Observations["sshd.config#1"]
 	o.Output = "banner [REDACTED:extra:0:9 bytes] [REDACTED:aws-access-key:20 bytes]"
 	env.Observations["sshd.config#1"] = o
-	r := Build(in)
+	r := build(in)
 	if r.Redaction.Operator.Matches != 0 || len(r.Redaction.Builtin) != 0 {
 		t.Errorf("forged markers counted: %+v", r.Redaction)
 	}
 	o.Redactions = 1
 	env.Observations["sshd.config#1"] = o
-	r = Build(in)
+	r = build(in)
 	if r.Redaction.Builtin["unattributed"] != 1 || r.Redaction.Operator.Matches != 0 {
 		t.Errorf("one real redaction, two markers: %+v, want it unattributed", r.Redaction)
 	}
@@ -598,7 +598,7 @@ func TestDaysCountCalendarDates(t *testing.T) {
 func TestARefusedHostKeepsItsTrace(t *testing.T) {
 	in := refusedHost(t)
 	in.Assets[1].Trace = []policy.AuditEntry{{CheckID: "sys.canary", Decision: "denied:canary", Time: started}}
-	r := Build(in)
+	r := build(in)
 	if tr := r.Assets[1].Trace; len(tr) != 1 || tr[0].Check != "sys.canary" {
 		t.Errorf("trace %+v", tr)
 	}
@@ -608,7 +608,7 @@ func TestARefusedHostKeepsItsTrace(t *testing.T) {
 func TestHostsRowNeedsSubItems(t *testing.T) {
 	in := oneHost(t, "ubuntu")
 	in.Assets[0].Host.Envelope.Host.Platform = "plan9"
-	r := Build(in)
+	r := build(in)
 	if got := row(t, r, "hosts"); got.Mark == "assessed" || len(got.Reasons) == 0 {
 		t.Errorf("Hosts is %s with %d sub-items and reasons %v", got.Mark, len(got.SubItems), got.Reasons)
 	}
@@ -622,7 +622,7 @@ func TestStatusNamesOnlyWhatWasRead(t *testing.T) {
 	in.Assets = append(in.Assets, AssetInput{Name: "shop", ID: "url:https://203.0.113.5/", Kind: "url", Root: false,
 		Status: "not_collected", Reason: "collector_not_built"})
 	var buf bytes.Buffer
-	r := Build(in)
+	r := build(in)
 	if r.Exit.Code != 0 {
 		t.Fatalf("exit %d: a non-root asset without a collector does not make the run incomplete", r.Exit.Code)
 	}
@@ -633,7 +633,7 @@ func TestStatusNamesOnlyWhatWasRead(t *testing.T) {
 		t.Errorf("status:\n%s", out)
 	}
 	buf.Reset()
-	r = Build(manyFindings(t))
+	r = build(manyFindings(t))
 	if len(r.Summary.Items) != 5 || r.Summary.More != 1 {
 		t.Fatalf("items %d, more %d", len(r.Summary.Items), r.Summary.More)
 	}
@@ -652,7 +652,7 @@ func TestASampledReadIsNeverComplete(t *testing.T) {
 	in := withAcceptances(t)
 	in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDWorldWritablePresent,
 		Asset: "macos", AssetID: "host:macos:22", Reason: "old", AcceptedBy: "alice"}}
-	r := Build(in)
+	r := build(in)
 	for _, a := range r.Assessments {
 		if a.ID == finding.IDWorldWritablePresent && (a.Status != finding.NotMatched || a.Complete) {
 			t.Errorf("world-writable: %+v, want not_matched and incomplete", a)
@@ -672,7 +672,7 @@ func TestEgressCountsJumpHostsApart(t *testing.T) {
 	in.Assets = append(in.Assets, AssetInput{Name: "db", ID: "host:10.0.0.5:22", Kind: "host", Root: true, Status: "failed",
 		Reason: "failed", Detail: "ssh: jump host could not reach 10.0.0.5:22", Via: "admin@bastion.example.com:22",
 		Contact: "unreached", JumpContact: "connected"})
-	r := Build(in)
+	r := build(in)
 	var hosts EgressAsset
 	for _, a := range r.Egress.Assets {
 		if a.Kind == "hosts" {
@@ -699,7 +699,7 @@ func TestIncludeEvidenceSkipsAKeptHost(t *testing.T) {
 		in := oneHost(t, "ubuntu")
 		in.Assets[0].Kept = kept
 		var buf bytes.Buffer
-		if err := WriteJSON(&buf, Build(in), true); err != nil {
+		if err := WriteJSON(&buf, build(in), true); err != nil {
 			t.Fatal(err)
 		}
 		if got := strings.Contains(buf.String(), `"stdout"`); got == kept {
@@ -749,7 +749,7 @@ func withTakeoverRoot(t *testing.T) Input {
 
 func TestTakeoverReport(t *testing.T) {
 	in := withTakeoverRoot(t)
-	r := Build(in)
+	r := build(in)
 	var found int
 	for _, f := range r.Findings {
 		if f.ID != finding.IDDNSTakeoverCandidate && f.ID != finding.IDDNSUnclaimedAtProvider {
@@ -777,7 +777,7 @@ func TestTakeoverReport(t *testing.T) {
 		}
 	}
 	in.Acceptances = append(in.Acceptances, AcceptanceInput{Entry: "e.yaml intent.accepted_risks[1]", AssetID: "domain:example.com", ID: finding.IDDNSTakeoverCandidate, Subject: "*.example.com", Reason: "repair scheduled", AcceptedBy: "alice"})
-	r = Build(in)
+	r = build(in)
 	if a := r.Acceptances[len(r.Acceptances)-1]; a.Outcome != "applied" || len(a.Findings) != 1 || *a.Findings[0].Subject != "*.example.com" {
 		t.Fatal(a)
 	}
@@ -788,7 +788,7 @@ func TestDiscoveredNameSetsExitThreshold(t *testing.T) {
 	in.Assets = in.Assets[len(in.Assets)-1:]
 	in.Assets[0].Judged = []Judgment{{ID: finding.IDDNSTakeoverCandidate, Asset: "domain:old.example.com", Subject: Subject{Kind: "dns_name", Key: "old.example.com"}, Verdict: "fired", Reads: []string{"dns1"}}}
 	in.Acceptances = nil
-	r := Build(in)
+	r := build(in)
 	if r.Exit.Code != 1 || r.Exit.Thresholds["domain:old.example.com"].Severity != "medium" || len(r.Exit.Reasons) != 1 || !strings.Contains(r.Exit.Reasons[0].Why, "1 open finding") {
 		t.Fatal(r.Exit)
 	}

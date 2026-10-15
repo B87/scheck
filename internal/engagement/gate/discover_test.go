@@ -2,6 +2,7 @@ package gate_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -741,19 +742,31 @@ func TestReconReadsADomainRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { dir.Close() })
-	out, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(file), Dir: dir, StopAfter: "recon",
+	out, err := engagement.Run(context.Background(), res, engagement.RunOptions{Raw: []byte(file), Dir: dir, StopAfter: "analyze",
 		Started: discoveryStart, Version: "test", NewGate: h.NewGate})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var ev *webc.Evidence
 	judged := map[string]string{}
-	for _, a := range out.Document.(*engagement.ReconDoc).Assets {
+	for _, a := range out.Document.(*engagement.FindingsDoc).Assets {
 		if a.ID == "domain:example.com" {
-			ev = a.Web
 			for _, j := range a.Judged {
 				judged[j.ID+" "+j.Subject.Key] = j.Verdict
 			}
+		}
+	}
+	data, err := os.ReadFile(dir.File("recon.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recon engagement.ReconDoc
+	if err := json.Unmarshal(data, &recon); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range recon.Assets {
+		if a.ID == "domain:example.com" {
+			ev = a.Web
 		}
 	}
 	// The run's own rules judged what it read: the NS target that does not

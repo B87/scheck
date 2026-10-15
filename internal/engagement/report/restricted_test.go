@@ -20,7 +20,7 @@ func restrictedReport(t *testing.T, v string, resumed bool) Input {
 	}
 	in.Observations = map[string]Observation{"admin1": {CollectedAt: started, Vantage: v}, "private1": {CollectedAt: started.Add(time.Hour), Vantage: v}}
 	a := AssetInput{ID: "url:https://admin.example.com/", Name: "admin", Kind: "url", Root: true, Status: "collected", Collector: "web"}
-	j := Judgment{ID: finding.IDWebRestrictedReachable, Asset: a.ID, Subject: Subject{Kind: "url", Key: "https://admin.example.com/", Label: "https://admin.example.com/"}, Verdict: verdictFired, Reads: []string{"admin1"}, Attributes: []string{"contradiction"}, Context: "intent.not_exposed[0]", Excerpt: "https://admin.example.com/ answered HTTP 401 from the declared internet vantage, outside every permitted source, including office allowlists and VPN; declared audience: vpn. Authentication was not tested", Details: map[string]any{"audience": "vpn", "vantage": v}}
+	j := Judgment{ID: finding.IDWebRestrictedReachable, Asset: a.ID, Subject: Subject{Kind: "url", Key: "https://admin.example.com/", Label: "https://admin.example.com/"}, Verdict: verdictFired, Reads: []string{"admin1"}, Attributes: []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: "intent.not_exposed[0]"}}}, Sources: []string{"intent.not_exposed[0]"}, Why: "You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested.", Excerpt: "https://admin.example.com/ answered HTTP 401 from the declared internet vantage, outside every permitted source, including office allowlists and VPN; declared audience: vpn. Authentication was not tested", Details: map[string]any{"audience": "vpn", "vantage": v}}
 	n := j
 	n.Subject = Subject{Kind: "url", Key: "https://admin.example.com/private", Label: "https://admin.example.com/private"}
 	n.Reads = []string{"private1"}
@@ -51,8 +51,7 @@ func restrictedReport(t *testing.T, v string, resumed bool) Input {
 }
 func TestRestrictedReportSeverityAndObservedMetadata(t *testing.T) {
 	in := restrictedReport(t, "internet", true)
-	in.Exposures = []ExposureInput{{URL: "https://admin.example.com/", Reason: "must not lower contradiction"}}
-	r := Build(in)
+	r := build(in, exposed("https://admin.example.com/", "must not lower contradiction"))
 	validate(t, schema(t), r)
 	if len(r.Findings) != 1 || r.Findings[0].Severity != "high" || r.Findings[0].ExposureFinding || r.Exit.Code != 1 {
 		t.Fatal(r.Findings, r.Exit)
@@ -74,11 +73,11 @@ func TestRestrictedReportSeverityAndObservedMetadata(t *testing.T) {
 func TestMissingAcceptanceSubjectNeedsCompletePopulation(t *testing.T) {
 	in := restrictedReport(t, "", false)
 	in.Acceptances = []AcceptanceInput{{ID: finding.IDWebRestrictedReachable, AssetID: in.Assets[0].ID, Subject: "https://admin.example.com/removed", Entry: "intent.accepted_risks[0]"}}
-	if got := Build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
+	if got := build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
 		t.Fatal(got)
 	}
 	in.Assets[0].Judged = nil
-	if got := Build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
+	if got := build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
 		t.Fatal(got)
 	}
 }
@@ -87,11 +86,11 @@ func TestMissingAcceptanceSubjectIgnoresUnrelatedPopulation(t *testing.T) {
 	in := restrictedReport(t, "internet", false)
 	in.Acceptances = []AcceptanceInput{{ID: finding.IDWebRestrictedReachable, AssetID: in.Assets[0].ID, Subject: "https://admin.example.com/removed", Entry: "intent.accepted_risks[0]"}}
 	in.Assets = append(in.Assets, AssetInput{ID: "domain:other.example", Kind: "domain", Root: true, Collector: "web", Status: statusCollected, PopulationIncomplete: true})
-	if got := Build(in).Acceptances[0].Outcome; got != "subject_not_found" {
+	if got := build(in).Acceptances[0].Outcome; got != "subject_not_found" {
 		t.Fatal(got)
 	}
 	in.Assets[0].PopulationIncomplete = true
-	if got := Build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
+	if got := build(in).Acceptances[0].Outcome; got != "rule_not_decided" {
 		t.Fatal(got)
 	}
 }

@@ -33,6 +33,7 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Assessments   []Assessment `json:"assessments"`
 	Acceptances   []Acceptance `json:"acceptances"`
+	PeopleLeft    []PersonLeft `json:"people_left"`
 	Excluded      []Excluded   `json:"excluded"`
 	Redaction     Redaction    `json:"redaction"`
 	Egress        Egress       `json:"egress"`
@@ -190,15 +191,18 @@ type Summary struct {
 
 // Item is one ranked entry of "Fix these first".
 type Item struct {
-	Rank      int      `json:"rank"`
-	Kind      string   `json:"kind"` // finding_id | person
-	IDs       []string `json:"ids"`
-	Person    *string  `json:"person"`
-	Title     string   `json:"title"`
-	Severity  string   `json:"severity"`
-	Keys      []Key    `json:"keys"`
-	Assets    []string `json:"assets"`
-	RankBasis []string `json:"rank_basis"`
+	Rank   int      `json:"rank"`
+	Kind   string   `json:"kind"` // finding_id | person
+	IDs    []string `json:"ids"`
+	Person *string  `json:"person"`
+	// OtherPeople says a departed-people item lost instances to a person
+	// item and ranks on the others.
+	OtherPeople bool     `json:"other_people,omitempty"`
+	Title       string   `json:"title"`
+	Severity    string   `json:"severity"`
+	Keys        []Key    `json:"keys"`
+	Assets      []string `json:"assets"`
+	RankBasis   []string `json:"rank_basis"`
 }
 
 // Below counts what "Fix these first" leaves out.
@@ -239,9 +243,15 @@ type Row struct {
 	Caps                []Cap          `json:"caps,omitempty"`
 	Narrowing           []Narrowing    `json:"narrowing,omitempty"`
 	DeclaredNotVerified []Note         `json:"declared_not_verified,omitempty"`
-	UnattributedMembers *int           `json:"unattributed_members,omitempty"`
-	SubItems            []SubItem      `json:"sub_items,omitempty"`
-	PlannedIn           string         `json:"planned_in,omitempty"`
+	// ContextNotes are the context notes on the area: evidence that
+	// contradicts its not_used (docs/spec/engagement.md, "Context notes").
+	ContextNotes        []Note    `json:"context_notes,omitempty"`
+	UnattributedMembers *int      `json:"unattributed_members,omitempty"`
+	SubItems            []SubItem `json:"sub_items,omitempty"`
+	// NotJudged is the area's fixed list of sub-items this version does not
+	// judge; every risk-area row carries it, and no other row.
+	NotJudged []FixedItem `json:"not_judged,omitempty"`
+	PlannedIn string      `json:"planned_in,omitempty"`
 }
 
 // SubItem is a rule, or a family sharing a finding id, on an asset; for a
@@ -271,6 +281,9 @@ type Population struct {
 	Kind    string `json:"kind"`
 	InScope int    `json:"in_scope"`
 	Read    int    `json:"read"`
+	// Selection names what chose the items read when a budget could stop
+	// the reads short (docs/spec/report.md, "Coverage").
+	Selection *finding.Selection `json:"selection,omitempty"`
 }
 
 // Cap is a limit on what was read, and how the part read was chosen.
@@ -369,6 +382,10 @@ type FindingAccept struct {
 	Expires             *string `json:"expires"`
 	Expired             bool    `json:"expired"`
 	CoversEveryInstance bool    `json:"covers_every_instance"`
+	// JudgedAt is the collection time its expiry was read at: the latest
+	// read the finding cites, or for a host the start of the session that
+	// collected it (docs/spec/engagement.md, "Severity in context").
+	JudgedAt *time.Time `json:"judged_at"`
 }
 
 // Rule is what produced a finding and every input it read.

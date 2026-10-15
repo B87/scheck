@@ -48,6 +48,7 @@ func WriteText(w io.Writer, r *Report, opt Options) error {
 	t.coverage()
 	t.findings()
 	t.pastes()
+	t.peopleLeft()
 	t.notChecked()
 	t.excluded()
 	t.egress()
@@ -410,7 +411,7 @@ func lower(label string) string {
 // declared for its area, and nothing in the file points at it.
 func folds(row Row) bool {
 	return row.Mark == "not_assessed" && len(row.Reasons) == 1 && row.Reasons[0].Reason == "not_declared" &&
-		len(row.DeclaredNotVerified) == 0
+		len(row.DeclaredNotVerified) == 0 && len(row.ContextNotes) == 0
 }
 
 func (t *text) areas() (checked, part, notChecked, folded, na []string) {
@@ -487,6 +488,25 @@ func (t *text) summary() {
 			names = append(names, t.name(a))
 		}
 		first := fmt.Sprintf("  %d  %s  ", it.Rank, t.sev(pad(it.Severity, 8)))
+		if it.Person != nil {
+			// A person item: the title, the raise that set it, and the
+			// person's own lines (docs/spec/report.md, "A person item").
+			t.hang(first, "             ", clean(it.Title))
+			if why := t.personRaise(it.Keys[0]); why != "" {
+				t.hang("             ", "             ", why)
+			}
+			for _, p := range t.r.PeopleLeft {
+				if p.Handle == *it.Person {
+					for _, tl := range p.Tenants {
+						t.hang("             ", "               ", clean(tl.Line))
+					}
+				}
+			}
+			continue
+		}
+		if it.OtherPeople {
+			names = append(names, "and other people")
+		}
 		t.hang(first, "             ", clean(it.Title)+"  ("+strings.Join(names, ", ")+")")
 		if why := t.raisedBy(it.Keys[0]); why != "" {
 			t.hang("             ", "             ", why)
@@ -510,6 +530,7 @@ func (t *text) summary() {
 
 	var s strings.Builder
 	s.WriteString("A short list is not a clean bill of health. scheck reports only what its rules could decide.")
+	s.WriteString(" No area is fully checked in this version; each area row under Coverage lists what this version does not judge.")
 	if len(checked) > 0 {
 		s.WriteString(" Checked: ")
 		s.WriteString(lowerAll(checked))
@@ -580,6 +601,11 @@ func (t *text) hostAreas() []hostArea {
 		}
 		h := hostArea{name: clean(a.Name)}
 		for _, row := range t.r.Coverage {
+			// A host's areas are the Hosts row's; a rule over its facts in
+			// another area (data stores) is counted there.
+			if row.Area != "hosts" {
+				continue
+			}
 			for _, si := range row.SubItems {
 				if si.Asset != a.ID || si.Mark == "not_applicable" {
 					continue
@@ -711,13 +737,41 @@ func (t *text) raisedBy(k Key) string {
 	}
 	why := ""
 	if len(f.WhyHere) > 0 {
-		why = f.WhyHere[0]
-		if i := strings.LastIndex(why, " ("); i > 0 {
+		// A trailing source key, "(assets.deploy.context.exposure)", is
+		// printed with the finding; an operator's parenthesis is kept.
+		why = strings.TrimSuffix(f.WhyHere[0], ".")
+		if i := strings.LastIndex(why, " ("); i > 0 && strings.HasSuffix(why, ")") && !strings.Contains(why[i+2:], " ") {
 			why = why[:i]
 		}
 		why = ": " + lower(strings.TrimSuffix(clean(why), "."))
 	}
 	return "base " + f.SeverityBase + ", " + dir + why
+}
+
+// personRaise is a person item's raise phrase: R4's, when it set the
+// item's severity, else the finding's own.
+func (t *text) personRaise(k Key) string {
+	f := t.finding(k)
+	if f != nil && slices.ContainsFunc(f.Adjustments, func(a Adjustment) bool { return a.Rule == "attribute:production_write" }) {
+		return "base " + f.SeverityBase + ", raised: can still push to " + clean(strings.TrimPrefix(f.Key.Asset, "repo:github:")) + ", declared production"
+	}
+	return t.raisedBy(k)
+}
+
+// peopleLeft prints every person with a declared leaving date and one line
+// per tenant (docs/spec/report.md, "People who left").
+func (t *text) peopleLeft() {
+	if len(t.r.PeopleLeft) == 0 {
+		return
+	}
+	t.line(t.bold("People who left"))
+	for _, p := range t.r.PeopleLeft {
+		t.line("  " + clean(p.Handle) + " (left " + clean(p.Left) + ")")
+		for _, tl := range p.Tenants {
+			t.hang("    ", "      ", clean(tl.Line))
+		}
+	}
+	t.blank()
 }
 
 func (t *text) finding(k Key) *Finding {
@@ -818,6 +872,21 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"mailbox_authorization_expired": "the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update expires, or wait until date, and run again",
 			"forwarding_subdomain":          "forwarding to a subdomain that is not itself a domain of this Workspace was not judged",
 			"api_disabled":                  "Google has not enabled the API this read needs in the credential's project",
+			"listeners":                     "the listening sockets could not be read",
+			"listener_owner":                "some listening ports' owners are not shown to a read without sudo",
+			"container_port":                "a container runtime publishes this port, and its rules bypass the host firewall",
+			"firewall_ufw":                  "ufw's rules could not be read in full",
+			"firewall_firewalld":            "firewalld's rules are not read in this version",
+			"firewall_nft":                  "the nftables rules could not be judged",
+			"firewall_backend":              "which iptables backend the host uses was not recognized",
+			"incomplete_read":               "what it read was incomplete, so it could show a problem but not rule one out",
+			"accounts":                      "which accounts have no password and can log in was not established",
+			"sshd_config":                   "sshd's effective settings did not settle whether it accepts an empty password",
+			"sshd_listener":                 "whether sshd listens beyond this host was not established",
+			"no_declaration":                "no service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a service's reach only against what you declared",
+			"audience":                      "a service's audience is localhost, lan, vpn or internet",
+			"audience_network":              "on a host not declared internet-facing, scheck cannot tell which networks its addresses face",
+			"bind_network":                  "the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall",
 		}[arg]; ok {
 			return detail
 		}
@@ -827,6 +896,12 @@ func (t *text) reasonText(rd ReasonDetail) string {
 		return "the command that reads it did not give a usable answer (" + clean(arg) + ")"
 	case "no_rule":
 		return "this version of scheck has no rule for it"
+	case "leaving_date_not_passed":
+		return "the declared leaving date had not passed when it was read"
+	case "left_date_within_collection":
+		return "the declared leaving date falls within or after collection; run again after that date"
+	case "no_declared_github_login":
+		return "no GitHub login is declared for this person"
 	}
 	return clean(rd.Reason)
 }
@@ -901,14 +976,29 @@ func (t *text) row(row Row) {
 		head += fmt.Sprintf(": %d of %d hosts read", p.Read, p.InScope)
 	}
 	t.field("", areaLabel[row.Area], 25, head)
+	// The limits inside built sub-items join the area's fixed list in one
+	// line; the reasons line keeps what the run left open
+	// (docs/spec/report.md, "Coverage").
+	var reasons []ReasonDetail
+	var limits []string
+	for _, rd := range row.Reasons {
+		if rd.Reason == "no_rule" {
+			if rd.Detail != "" {
+				limits = append(limits, clean(rd.Detail))
+			}
+			continue
+		}
+		reasons = append(reasons, rd)
+	}
 	if row.Area == "hosts" {
+		t.notJudged(row, nil)
 		t.hosts(row)
 	} else {
 		if p := row.Population; p != nil && row.Mark != "assessed" {
 			t.hang("  ", "  ", fmt.Sprintf("%d of %s read.", p.Read, count(p.InScope, singular(p.Kind), p.Kind)))
 		}
-		if len(row.Reasons) > 0 {
-			s := upper(t.reasonsText(row.Reasons))
+		if len(reasons) > 0 {
+			s := upper(t.reasonsText(reasons))
 			if len(row.AssetsCovered) == 0 && row.Population != nil && row.Population.Read == 0 {
 				var unread []string
 				for _, a := range t.r.Assets {
@@ -923,6 +1013,9 @@ func (t *text) row(row Row) {
 			t.hang("  ", "  ", s+".")
 		}
 	}
+	for _, l := range selectionLines(row) {
+		t.hang("  ", "  ", clean(l))
+	}
 	for _, item := range row.SubItems {
 		if item.Name == "Services your names point at" {
 			t.hang("  Services your names point at: ", "    ", clean(item.Asset))
@@ -931,9 +1024,32 @@ func (t *text) row(row Row) {
 			}
 		}
 	}
+	if row.Area != "hosts" {
+		t.notJudged(row, limits)
+	}
 	for _, n := range row.DeclaredNotVerified {
 		t.hang("  Declared, not verified: ", "    ", clean(n.Detail)+" ("+clean(entryKey(n.Source))+").")
 	}
+	for _, n := range row.ContextNotes {
+		t.hang("  Note: ", "    ", clean(n.Detail))
+	}
+}
+
+// notJudged is a row's line of what this version does not judge: the
+// area's fixed list, then the limits inside its built sub-items.
+func (t *text) notJudged(row Row, limits []string) {
+	if len(row.NotJudged) == 0 || row.Mark == "not_applicable" {
+		return
+	}
+	items := make([]string, len(row.NotJudged))
+	for i, f := range row.NotJudged {
+		items[i] = f.Text
+	}
+	s := "Not judged in this version: " + strings.Join(items, "; ") + "."
+	if len(limits) > 0 {
+		s += " Also not judged on the assets read: " + strings.Join(limits, "; ") + "."
+	}
+	t.hang("  ", "  ", s)
 }
 
 func (t *text) hosts(row Row) {
@@ -980,7 +1096,7 @@ func (t *text) hosts(row Row) {
 		if c := a.Checks; c != nil {
 			sel, dec, without := 0, 0, 0
 			for _, ea := range t.r.Assessments {
-				if ea.Asset != a.ID {
+				if def, _ := finding.Lookup(ea.ID); ea.Asset != a.ID || def.Area != finding.AreaHosts {
 					continue
 				}
 				sel++
@@ -1180,8 +1296,12 @@ func (t *text) acceptedLine(f Finding) string {
 		s += ": accepted by " + by + ", no expiry"
 	} else {
 		s += ": accepted by " + by + " until " + *a.Expires
-		if days := t.daysUntil(*a.Expires); days >= 0 && days <= 30 {
-			s += fmt.Sprintf(" (expires in %s)", count(days, "day", "days"))
+		// Dated by the collection it was judged at, never the day the
+		// report is read (docs/spec/report.md).
+		if a.JudgedAt != nil {
+			if days := calendarDays(*a.JudgedAt, *a.Expires, t.zone); days >= 0 && days <= 30 {
+				s += fmt.Sprintf(" (%s after collection on %s)", count(days, "day", "days"), a.JudgedAt.In(t.zone).Format(time.DateOnly))
+			}
 		}
 	}
 	s += `: "` + clean(a.Reason) + `"`
@@ -1193,8 +1313,6 @@ func (t *text) acceptedLine(f Finding) string {
 	}
 	return s + "."
 }
-
-func (t *text) daysUntil(date string) int { return calendarDays(t.r.Run.Started, date, t.zone) }
 
 // entryKey drops the file from "<file> intent.accepted_risks[0]".
 func entryKey(entry string) string {

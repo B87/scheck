@@ -96,19 +96,21 @@ func (j *judging) tls(s Site, ps []Page) {
 				}
 			}
 		case finding.IDTLSCertificateExpiring:
-			if !t.Verified || len(t.Chain) == 0 || t.Chain[0].NotAfter.IsZero() || j.in.Now.IsZero() {
+			switch {
+			case !t.Verified || len(t.Chain) == 0 || t.Chain[0].NotAfter.IsZero():
 				x.Reason = "unavailable:certificate"
-			} else {
-				at := p.CollectedAt
-				if at.IsZero() {
-					at = j.in.Now
-				}
-				left := t.Chain[0].NotAfter.Sub(at)
+			case p.CollectedAt.IsZero():
+				// Judged at the TLS read's own time, never the session's
+				// (docs/spec/engagement.md, "Severity in context").
+				x.Reason = ReasonNoCollectionTime
+			default:
+				left := t.Chain[0].NotAfter.Sub(p.CollectedAt)
 				x.Verdict = Disproved
 				if left >= 0 && left <= 14*24*time.Hour {
 					x.Verdict = Fired
 				}
-				x.Excerpt = fmt.Sprintf("Certificate expires at %s (%.1f days from collection); confirm renewal is working", t.Chain[0].NotAfter.Format(time.RFC3339), left.Hours()/24)
+				x.Excerpt = fmt.Sprintf("Certificate expires at %s, %.1f days after the TLS read of %s; confirm renewal is working",
+					t.Chain[0].NotAfter.Format(time.RFC3339), left.Hours()/24, p.CollectedAt.UTC().Format(time.RFC3339))
 				x.Details = map[string]any{"days_remaining": left.Hours() / 24}
 			}
 		}

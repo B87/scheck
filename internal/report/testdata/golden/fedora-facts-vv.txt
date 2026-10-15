@@ -138,6 +138,13 @@ Firewall                 skipped  fw.firewalld            exit 127: bash: line 1
   | stderr:
   | bash: line 1: firewall-cmd: command not found
   |
+Firewall                 ran      fw.iptables_backend     no output
+                                                          iptables userspace backend (where
+                                                          /usr/sbin/iptables resolves; exit 1: none)
+  |
+  | stderr:
+  | realpath: /usr/sbin/iptables: No such file or directory
+  |
 Firewall                 skipped  fw.nft                  sudo: sudo: a password is required (no
                                                           NOPASSWD rule for this command, or nft is
                                                           not installed) [elevated]
@@ -154,11 +161,11 @@ Firewall                 skipped  fw.ufw                  sudo: sudo: a password
   | stderr:
   | sudo: a password is required
   |
-Network exposure         ran      net.listeners           2 listening sockets
+Network exposure         ran      net.listeners           2 listening sockets [elevated]
                                                           Listening TCP/UDP sockets with owning
                                                           process
-  | tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*
-  | tcp LISTEN 0      128       [::]:22    [::]:*
+  | tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=11,fd=3))
+  | tcp LISTEN 0      128       [::]:22    [::]:* users:(("sshd",pid=11,fd=4))
 SSH server               ran      sshd.config             93 settings [elevated]
                                                           Effective sshd configuration
   | port 22

@@ -40,6 +40,7 @@ func TestSelectiveWebResume(t *testing.T) {
 	start := time.Now().UTC().Truncate(time.Second)
 	var path string
 	recons := map[*engagement.Outcome]*engagement.ReconDoc{}
+	verdicts := map[*engagement.Outcome]*engagement.FindingsDoc{}
 	selector, audience, second := "s1", "vpn", true
 	source := func() string {
 		tail := ""
@@ -98,11 +99,19 @@ intent:
 			t.Fatal(err)
 		}
 		recons[out] = &recon
+		var findings engagement.FindingsDoc
+		if data, err = os.ReadFile(filepath.Join(path, "findings.json")); err != nil {
+			t.Fatal(err)
+		}
+		if err = json.Unmarshal(data, &findings); err != nil {
+			t.Fatal(err)
+		}
+		verdicts[out] = &findings
 		return out
 	}
 	first := run("internet", false)
 	foundRestricted := false
-	for _, a := range recons[first].Assets {
+	for _, a := range verdicts[first].Assets {
 		for _, j := range a.Judged {
 			if j.ID == finding.IDWebRestrictedReachable && j.Subject.Key == "https://admin.example.page/a%20b" {
 				foundRestricted = true
@@ -202,7 +211,7 @@ intent:
 	}
 	second = false
 	removed := run("internet", true)
-	for _, a := range recons[removed].Assets {
+	for _, a := range verdicts[removed].Assets {
 		for _, j := range a.Judged {
 			if j.ID == finding.IDWebRestrictedReachable && strings.HasSuffix(j.Subject.Key, "/b") {
 				t.Fatal(j)

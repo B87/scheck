@@ -29,13 +29,18 @@ type builder struct {
 	// applying maps "<asset id>\x00<finding id>" to the acceptance the host
 	// grader applied: the last entry without a subject.
 	applying map[string]AcceptanceInput
-	r        *Report
+	// acceptedAt is, by entry, the collection time an acceptance whose
+	// finding was matched had its expiry judged at.
+	acceptedAt map[string]time.Time
+	// entryAt memoizes acceptanceAt by entry.
+	entryAt map[string]time.Time
+	r       *Report
 }
 
 // Build assembles the report from a run's collections. It never fails: an
 // asset that was not read is a coverage gap and an exit code, not an error.
 func Build(in Input) *Report {
-	b := &builder{in: in, zone: in.Zone, hosts: map[string]*hostView{}, applying: map[string]AcceptanceInput{}}
+	b := &builder{in: in, zone: in.Zone, hosts: map[string]*hostView{}, applying: map[string]AcceptanceInput{}, acceptedAt: map[string]time.Time{}, entryAt: map[string]time.Time{}}
 	if b.zone == nil {
 		b.zone = time.UTC
 	}
@@ -53,7 +58,7 @@ func Build(in Input) *Report {
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
-		Findings: []Finding{}, Assessments: []Assessment{}, Acceptances: []Acceptance{},
+		Findings: []Finding{}, Assessments: []Assessment{}, Acceptances: []Acceptance{}, PeopleLeft: []PersonLeft{},
 		Excluded: []Excluded{}, Assets: []Asset{}, Notes: []Note{},
 		Redaction: Redaction{Builtin: map[string]int{}, Operator: OperatorRedaction{Rules: in.RedactExtra}},
 	}
@@ -90,9 +95,13 @@ func Build(in Input) *Report {
 					r.Redaction.Builtin[h.Rule]++
 				}
 			}
-			r.Findings = append(r.Findings, b.judgedFindings(a)...)
-			r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 		}
+		// A network collector's verdicts, and the multi-fact rules' on a host.
+		r.Findings = append(r.Findings, b.judgedFindings(a)...)
+		r.Assessments = append(r.Assessments, judgedAssessments(a)...)
+	}
+	for _, n := range in.ContextNotes {
+		r.Notes = append(r.Notes, n.Note)
 	}
 	r.Findings = uniqueFindings(r.Findings)
 	r.Assessments = uniqueAssessments(r.Assessments)
@@ -108,6 +117,7 @@ func Build(in Input) *Report {
 		r.Excluded = append(r.Excluded, x)
 	}
 	r.Egress = b.egress()
+	r.PeopleLeft = b.peopleLeft()
 	r.Summary = b.summary()
 	r.Exit = b.exit()
 	return r
@@ -235,17 +245,23 @@ func (b *builder) acceptances() {
 		if kind != "" {
 			b.note(kind, acc.Entry, out.Why)
 		}
-		switch days := b.daysLeft(acc.Expires, acc.AssetID); {
+		// An acceptance whose finding was not matched has no time its
+		// expiry is judged at; its date is printed and nothing else.
+		at, judged := b.acceptedAt[acc.Entry]
+		switch days := calendarDays(at, acc.Expires, b.zone); {
 		case acc.Expires == "" && out.Outcome != "not_matched":
 			b.note("acceptance_without_expiry", acc.Entry, "it has no expiry date, so nobody is asked to look at it again")
-		case out.Outcome != "expired" && days >= 0 && days <= 30:
-			b.note("acceptance_expiring", acc.Entry, fmt.Sprintf("it expires on %s, in %d days", acc.Expires, days))
+		case judged && out.Outcome != "expired" && days >= 0 && days <= 30:
+			b.note("acceptance_expiring", acc.Entry, fmt.Sprintf("it expires on %s, %s after collection on %s", acc.Expires, count(days, "day", "days"), b.day(at)))
 		}
 	}
 }
 
 func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string) {
-	if judged, read := b.judgedFor(acc.AssetID); read {
+	// A host's posture findings are the host grader's to accept, by whole
+	// id; a multi-fact rule's are judged like a network collector's.
+	def, _ := finding.Lookup(acc.ID)
+	if judged, read := b.judgedFor(acc.AssetID); read && (b.hosts[acc.AssetID] == nil || def.MultiFact) {
 		return b.judgedOutcome(acc, out, judged)
 	}
 	v := b.hosts[acc.AssetID]
@@ -275,8 +291,10 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 		if applied := b.applying[acc.AssetID+"\x00"+acc.ID]; applied.Entry != acc.Entry {
 			return "not_applied", "a later entry for the same id applies: " + applied.Entry
 		}
-		if b.expired(acc.Expires, acc.AssetID) {
-			return "expired", "expired " + acc.Expires + "; the finding is open again"
+		at := b.readAt(acc.AssetID, nil)
+		b.acceptedAt[acc.Entry] = at
+		if b.expired(acc.Expires, at) {
+			return "expired", "expired " + acc.Expires + ", before collection on " + b.day(at) + "; the finding is open again"
 		}
 		return "applied", ""
 	case ea.Status == finding.NotMatched && ea.Complete:
@@ -289,29 +307,45 @@ func (b *builder) outcome(acc AcceptanceInput, out *Acceptance) (string, string)
 		"whether the problem is still there"
 }
 
-// expired reads an acceptance's date in engagement.timezone against the
-// collection time of the asset it names (docs/spec/engagement.md,
-// "Accepted risks"), as its grader did.
-func (b *builder) expired(date, asset string) bool {
-	return operator.Risk{Expires: date, Zone: b.zone}.Expired(b.gradedAt(asset))
+// expired reads an acceptance's date in engagement.timezone against at,
+// the collection time of what the matched finding rests on
+// (docs/spec/engagement.md, "Accepted risks", "Severity in context").
+func (b *builder) expired(date string, at time.Time) bool {
+	return operator.Risk{Expires: date, Zone: b.zone}.Expired(at)
 }
 
-// daysLeft is how many calendar days remain before date ends, in the
-// engagement's zone, from the asset's collection date; negative once it
-// has passed.
-func (b *builder) daysLeft(date, asset string) int {
-	return calendarDays(b.gradedAt(asset), date, b.zone)
+// readAt is the collection time a finding's acceptance is judged at: the
+// latest of the reads it cites; for a host, the start of the session that
+// collected it. Zero when it cites no read with a recorded time: then no
+// clock decides the acceptance, and the finding stays open.
+func (b *builder) readAt(asset string, reads []string) time.Time {
+	if at := b.gradedAt(asset); !at.IsZero() {
+		return at
+	}
+	var at time.Time
+	for _, r := range reads {
+		if meta, ok := b.in.Observations[r]; ok && meta.CollectedAt.After(at) {
+			at = meta.CollectedAt
+		}
+	}
+	return at
+}
+
+// current says an acceptance holds at at: a collection time is recorded
+// and its date had not ended then.
+func (b *builder) current(date string, at time.Time) bool {
+	return !at.IsZero() && !b.expired(date, at)
 }
 
 // gradedAt is when the host asset was graded, a resumed run's sessions
-// apart; the run's start for anything else.
+// apart; zero for anything else.
 func (b *builder) gradedAt(asset string) time.Time {
 	for _, a := range b.in.Assets {
-		if a.ID == asset && a.Host != nil && !a.Host.Graded.IsZero() {
-			return a.Host.Graded
+		if a.ID == asset && a.Host != nil {
+			return cmp.Or(a.Host.Graded, b.in.Started)
 		}
 	}
-	return b.in.Started
+	return time.Time{}
 }
 
 // calendarDays counts the days from at's date in zone to date, as calendar
@@ -325,6 +359,9 @@ func calendarDays(at time.Time, date string, zone *time.Location) int {
 	return int(d.Sub(time.Date(y, m, day, 0, 0, 0, 0, time.UTC)).Hours() / 24)
 }
 
+// day is a collection time's date in engagement.timezone.
+func (b *builder) day(at time.Time) string { return at.In(b.zone).Format(time.DateOnly) }
+
 func (b *builder) note(kind, source, detail string) {
 	b.r.Notes = append(b.r.Notes, Note{Kind: kind, Source: source, Detail: detail})
 }
@@ -335,7 +372,8 @@ func (b *builder) findingAcceptance(asset, id, reason string) *FindingAccept {
 	if !ok {
 		return &FindingAccept{Reason: reason, Expires: nil, CoversEveryInstance: true}
 	}
-	fa := &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: true}
+	at := b.readAt(asset, nil)
+	fa := &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: true, JudgedAt: &at}
 	if acc.Expires != "" {
 		e := acc.Expires
 		fa.Expires = &e
@@ -396,18 +434,11 @@ func (b *builder) rankFindings() {
 }
 
 // summary ranks the open findings at medium or above into at most five
-// items, one per finding id (docs/spec/report.md, "Ranking").
+// items: one per finding id, or one per person who left whose open
+// findings one offboarding closes (docs/spec/report.md, "Ranking").
 func (b *builder) summary() Summary {
 	s := Summary{Items: []Item{}, Areas: AreaCounts{Total: len(finding.Areas)}}
-	type group struct {
-		item  Item
-		rank  int
-		area  int
-		dmm   string // the first asset data.matters_most names
-		count int
-	}
-	groups := map[string]*group{}
-	var order []*group
+	var open []Finding
 	for _, f := range b.r.Findings {
 		switch {
 		case f.Status == finding.StatusAccepted:
@@ -420,24 +451,44 @@ func (b *builder) summary() Summary {
 			s.Below.Low++
 			continue
 		}
+		// An empty password SSH accepts is ranked; the host-local finding on
+		// the same host is its first fix, listed under Findings only, when
+		// the remote one names every account it does.
+		if f.ID == finding.IDEmptyPassword && slices.ContainsFunc(b.r.Findings, func(o Finding) bool {
+			return o.ID == finding.IDEmptyPasswordRemote && o.Key.Asset == f.Key.Asset && o.Status == finding.StatusOpen &&
+				o.Affected != nil && coversAccounts(o.Affected.Listed, f)
+		}) {
+			continue
+		}
+		open = append(open, f)
+	}
+	people, taken := b.personGroups(open)
+	groups := map[string]*rankGroup{}
+	order := people
+	for i, f := range open {
 		g := groups[f.ID]
 		if g == nil {
-			g = &group{item: Item{Kind: "finding_id", IDs: []string{f.ID}, Title: f.Title, Keys: []Key{}, Assets: []string{}}, rank: -1,
+			g = &rankGroup{item: Item{Kind: "finding_id", IDs: []string{f.ID}, Title: f.Title, Keys: []Key{}, Assets: []string{}}, rank: -1,
 				area: slices.Index(finding.Areas, finding.Area(f.Area))}
 			groups[f.ID] = g
+		}
+		if taken[i] {
+			g.item.OtherPeople = true
+			continue
+		}
+		if len(g.item.Keys) == 0 {
 			order = append(order, g)
 		}
-		if r := finding.Severity(f.Severity).Rank(); r > g.rank {
-			g.rank, g.item.Severity = r, f.Severity
-		}
-		g.item.Keys = append(g.item.Keys, f.Key)
-		g.item.Assets = appendUnique(g.item.Assets, f.Key.Asset)
-		g.count++
-		if g.dmm == "" && slices.Contains(b.in.DataMattersMost, f.Key.Asset) {
-			g.dmm = f.Key.Asset
+		g.add(f, b.in.DataMattersMost)
+	}
+	for _, g := range order {
+		if g.item.Kind == "finding_id" && slices.Contains(leaverIDs, g.item.IDs[0]) {
+			// One person's access across many repositories is one thing
+			// to fix: count people, not instances.
+			g.count = len(g.people)
 		}
 	}
-	slices.SortStableFunc(order, func(x, y *group) int {
+	slices.SortStableFunc(order, func(x, y *rankGroup) int {
 		return cmp.Or(
 			cmp.Compare(y.rank, x.rank),
 			cmp.Compare(x.area, y.area),
@@ -454,8 +505,16 @@ func (b *builder) summary() Summary {
 		}
 		g.item.Rank = i + 1
 		g.item.RankBasis = []string{"severity:" + g.item.Severity, "area:" + string(finding.Areas[max(g.area, 0)])}
+		if g.item.Person != nil {
+			g.item.RankBasis = append(g.item.RankBasis, "person:"+*g.item.Person)
+		}
 		if g.dmm != "" {
 			g.item.RankBasis = append(g.item.RankBasis, "data_matters_most:"+g.dmm)
+		}
+		if g.item.Person != nil {
+			for _, a := range g.top.Adjustments {
+				g.item.RankBasis = appendUnique(g.item.RankBasis, a.Rule)
+			}
 		}
 		s.Items = append(s.Items, g.item)
 	}
@@ -557,4 +616,29 @@ func (b *builder) openAtOrAbove(t map[string]Threshold) int {
 		}
 	}
 	return n
+}
+
+// coversAccounts says listed names every account the host-local
+// empty-password finding cites in its password-state evidence, which
+// reads "name=<account> status=NP" per account.
+func coversAccounts(listed []string, f Finding) bool {
+	n := 0
+	for _, e := range f.Evidence {
+		if e.Check != "accounts.passwd_status" {
+			continue
+		}
+		for part := range strings.SplitSeq(e.Excerpt, "; ") {
+			for field := range strings.FieldsSeq(part) {
+				name, ok := strings.CutPrefix(field, "name=")
+				if !ok {
+					continue
+				}
+				if !slices.Contains(listed, name) {
+					return false
+				}
+				n++
+			}
+		}
+	}
+	return n > 0
 }

@@ -75,7 +75,7 @@ func TestOAuthFiresOnBroadScopeAndListsOnlyBroadGrantors(t *testing.T) {
 			t.Fatalf("excerpt lacks %q: %s", want, j.Excerpt)
 		}
 	}
-	if len(j.Attributes) != 0 || j.Context != "" {
+	if len(j.Attributes) != 0 || j.Why != "" {
 		t.Fatal("a non-administrator grant raised the app", j)
 	}
 	if _, ok := assetOutcome(e, c); ok {
@@ -89,7 +89,7 @@ func TestOAuthAdminRaiseNeedsTheAdministratorsOwnBroadGrant(t *testing.T) {
 	e, c := oauthFixture(admin, oauthUser("bob"))
 	grant(&e, 0, appDrive, "drive", "gmail.readonly")
 	j := appResult(t, e, c, appDrive)
-	if !slices.Equal(j.Attributes, []string{"admin_grantor"}) || !strings.Contains(j.Context, "root@example.com is a super administrator and granted this app the scopes drive, gmail.readonly") || strings.Contains(j.Context, " (") {
+	if (len(j.Attributes) != 1 || !j.Has("admin_grantor")) || !strings.Contains(j.Why, "root@example.com is a super administrator and granted this app the scopes drive, gmail.readonly") || strings.Contains(j.Why, " (") {
 		t.Fatalf("%+v", j)
 	}
 	if !strings.Contains(j.Excerpt, "can read gmail.readonly and can change drive") || !strings.Contains(j.Excerpt, "root@example.com (super administrator)") {
@@ -111,7 +111,7 @@ func TestOAuthBreakGlassRaisesAndDelegatesDoNot(t *testing.T) {
 	c.People = []Person{{Handle: "recovery", Kind: "break_glass", Addresses: []string{"recovery@example.com"}}}
 	grant(&e, 0, appDrive, "https://mail.google.com/")
 	j := appResult(t, e, c, appDrive)
-	if j.Verdict != Fired || !slices.Equal(j.Attributes, []string{"admin_grantor"}) || !strings.Contains(j.Context, "is declared as a break-glass account") || !strings.Contains(j.Excerpt, "can change https://mail.google.com/") {
+	if j.Verdict != Fired || (len(j.Attributes) != 1 || !j.Has("admin_grantor")) || !strings.Contains(j.Why, "is declared as a break-glass account") || !strings.Contains(j.Excerpt, "can change https://mail.google.com/") {
 		t.Fatalf("%+v", j)
 	}
 
@@ -378,7 +378,9 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		}
 		return gate.Result{RequestID: "x", Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:admin.directory.user.security", Repeats: true}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	// Check hands collectGrants the accounts in Plan's order (CollectUsers).
+	attrs := attribute("asset", e.Users.Items, c.People, e.Users.Complete)
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "check"}, inOrder(accountViews(e, c, attrs), orderUsers(e.Users.Items, e.Access.Accounts, attrs, c)))
 	if !slices.Equal(asked, []string{"zed"}) || e.OAuth.Complete || len(e.OAuth.Accounts) != 1 {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}
@@ -390,14 +392,14 @@ func TestCollectGrantsStopsOnASessionFailureAndReadsAdminsFirst(t *testing.T) {
 		asked = append(asked, r.Params["user"])
 		return gate.Result{RequestID: "t-" + r.Params["user"], Decision: "sent", Response: &gate.Response{Status: 200, Body: []byte(`[]`), Population: full}}
 	})
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "check"}, inOrder(accountViews(e, c, attrs), orderUsers(e.Users.Items, e.Access.Accounts, attrs, c)))
 	if !slices.Equal(asked, []string{"zed", "amy", "bob"}) || !e.OAuth.Complete {
 		t.Fatalf("asked %v, evidence %+v", asked, e.OAuth)
 	}
 
 	asked = nil
 	e.Binding.Profile, e.Binding.Surfaces, e.OAuth = "directory_mail", nil, OAuthEvidence{}
-	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
+	e.collectGrants(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, accountViews(e, c, attribute("asset", e.Users.Items, c.People, e.Users.Complete)))
 	if len(asked) != 0 || e.OAuth.Selected {
 		t.Fatal("an unselected profile read grants", asked)
 	}
@@ -456,7 +458,7 @@ func TestOAuthReviewRegressions(t *testing.T) {
 	grant(&e, 0, appDrive, "https://mail.google.com/")
 	e.OAuth.Accounts[0].Grants[0].NativeApp = new(true)
 	j := appResult(t, e, c, appDrive)
-	if !strings.Contains(j.Excerpt, "Google's and Apple's own") || j.Details["admin_grant_read"] != "t-root" || !strings.HasSuffix(j.Context, "though not that account's other administrator rights.") || !strings.Contains(j.Context, "granted this app the scope https://mail.google.com/:") {
+	if !strings.Contains(j.Excerpt, "Google's and Apple's own") || j.Details["admin_grant_read"] != "t-root" || !strings.HasSuffix(j.Why, "though not that account's other administrator rights.") || !strings.Contains(j.Why, "granted this app the scope https://mail.google.com/:") {
 		t.Fatalf("%+v", j)
 	}
 }

@@ -138,6 +138,11 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for _, d := range githubDefs {
 		reachable[d.ID] = true
 	}
+	// The engagement's multi-fact rules raise these; their tests prove each
+	// fires, is disproved and abstains (internal/engagement/rules).
+	for _, d := range multiFactDefs {
+		reachable[d.ID] = true
+	}
 	for _, id := range append(append(GitHubCIIDs(), GitHubAlertIDs()...), GitHubHistoryIDs()...) {
 		reachable[id] = true
 	}

@@ -47,7 +47,7 @@ func inventoryOps() []gate.Op {
 	owners := list(OpOwners, "/orgs/{org}/members", "&role=admin&filter=all", accounts, gate.KindOther, "")
 	outside := list(OpOutside, "/orgs/{org}/outside_collaborators", "&filter=all", accounts, gate.KindOther, "")
 	invitations := list(OpInvitations, "/orgs/{org}/invitations", "", []string{"id", "login", "role", "invitation_source"}, gate.KindOther, "")
-	repos := list(OpRepositories, "/orgs/{org}/repos", "&type=all", []string{"id", "name", "full_name", "owner.id", "owner.login", "owner.type", "visibility", "private", "archived", "default_branch"}, gate.KindRepo, "full_name")
+	repos := list(OpRepositories, "/orgs/{org}/repos", "&type=all", []string{"id", "name", "full_name", "owner.id", "owner.login", "owner.type", "visibility", "private", "archived", "default_branch", "pushed_at"}, gate.KindRepo, "full_name")
 	repos.List.Subject = "repo:github:{key}"
 	membersMFA := list(OpMembersWithoutMFA, "/orgs/{org}/members", "&role=all&filter=2fa_disabled", accounts, gate.KindOther, "")
 	ownersMFA := list(OpOwnersWithoutMFA, "/orgs/{org}/members", "&role=admin&filter=2fa_disabled", accounts, gate.KindOther, "")

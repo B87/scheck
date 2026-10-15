@@ -86,7 +86,7 @@ var ErrInvalid = errors.New("invalid finding")
 func hostIDs() []string {
 	var out []string
 	for _, id := range IDs() {
-		if defs[id].Area == AreaHosts {
+		if defs[id].Area == AreaHosts && !defs[id].MultiFact {
 			out = append(out, id)
 		}
 	}
@@ -167,7 +167,7 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 	def, ok := Lookup(c.ID)
 	// The model reads a host: another collector's findings are not its to
 	// report, and are not offered to it.
-	if !ok || def.Area != AreaHosts {
+	if !ok || def.Area != AreaHosts || def.MultiFact {
 		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if err := s.ruleAllows(def); err != nil {
@@ -224,7 +224,7 @@ func (s *Store) RuleOut(c Candidate) (RuledOut, error) {
 		if !customSlug.MatchString(c.ID) {
 			return r, fmt.Errorf("%w: a custom id is custom:<slug> with [a-z0-9_-], 3..64 characters", ErrInvalid)
 		}
-	} else if def, ok := Lookup(c.ID); !ok || def.Area != AreaHosts {
+	} else if def, ok := Lookup(c.ID); !ok || def.Area != AreaHosts || def.MultiFact {
 		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if i, seen := s.byID[c.ID]; seen {

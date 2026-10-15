@@ -189,7 +189,7 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    and equal redaction or truncation markers never establish a match. A nonempty
    dangling chain matching the control's chain, outcome and addresses is grouped
    the same way. `domains[].control` keeps the
-   concrete control name, chain, addresses, outcome and request id; Recon judges that
+   concrete control name, chain, addresses, outcome and request id; Analyze judges that
    answer once on `*.<root>` (E7 step 2b-ii,
    [web-collector.md](web-collector.md#takeover-fingerprints), "Wildcards"). The
    control names are random. A resolver that answers `.invalid`

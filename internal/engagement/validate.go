@@ -746,7 +746,11 @@ func (v *validator) hostSettings(key string, r Ref, a Asset) {
 			if v.required(sk+".proto", s.Proto) {
 				v.enum(sk+".proto", s.Proto, Protos)
 			}
-			if s.Audience != "" {
+			switch {
+			case s.Audience == "airgapped":
+				// docs/spec/engagement.md, "Exposure vocabulary".
+				v.fail(sk+".audience", "a service's audience is localhost, lan, vpn or internet; airgapped describes a host")
+			case s.Audience != "":
 				v.enum(sk+".audience", s.Audience, Audiences)
 			}
 			if k := strconv.Itoa(s.Port) + "/" + s.Proto; seen[k] {
@@ -870,7 +874,7 @@ func (v *validator) tools() {
 			v.fail(key, "%s is listed twice", a)
 		}
 		seen[a] = true
-		if why := notUsedRefusal(a, v.roots, repoAssets(v.f), hostAssets(v.f)); why != "" {
+		if why := notUsedRefusal(a, v.roots, repoAssets(v.f), hostAssets(v.f), internetHosts(v.f)); why != "" {
 			v.fail(key, "%s", why)
 		}
 	}
@@ -879,7 +883,7 @@ func (v *validator) tools() {
 // notUsedRefusal is why area cannot be marked not applicable, or "".
 // identity, secrets and logging are never optional. An area a declared
 // root already feeds is not optional either (docs/spec/engagement.md, "Intake").
-func notUsedRefusal(area string, roots []Ref, repos, hosts []string) string {
+func notUsedRefusal(area string, roots []Ref, repos, hosts, internet []string) string {
 	switch area {
 	case "identity", "secrets", "logging":
 		return area + " cannot be marked not applicable"
@@ -895,7 +899,23 @@ func notUsedRefusal(area string, roots []Ref, repos, hosts []string) string {
 	if area == "hosts" && len(hosts) > 0 {
 		return "hosts is already covered by " + hosts[0]
 	}
+	// Two declarations that contradict each other need no evidence.
+	if area == "external" && len(internet) > 0 {
+		return "external is marked not applicable, but " + internet[0] + ".context.exposure declares that host internet-facing"
+	}
 	return ""
+}
+
+// internetHosts are the host assets whose context declares them
+// internet-facing.
+func internetHosts(f *File) []string {
+	var out []string
+	for _, name := range sortedKeys(f.Assets) {
+		if a := f.Assets[name]; a.Host != "" && a.Context != nil && a.Context.Exposure == "internet" {
+			out = append(out, "assets."+name)
+		}
+	}
+	return out
 }
 
 func hostAssets(f *File) []string {

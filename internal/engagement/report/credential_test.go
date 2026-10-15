@@ -17,14 +17,14 @@ func TestAssessmentCredentialNotesAreUnranked(t *testing.T) {
 			for i := range in.Assets {
 				in.Assets[i].InventoryNotes = nil
 			}
-			before := Build(in)
+			before := build(in)
 			note := githubc.AssessmentCredential(githubc.PrincipalRead{Read: githubc.Read{Decision: "sent", Status: 200}, Account: &githubc.Account{ID: 41, Login: "alice", Type: "User"}, Identity: "github:user:41", Scopes: scopes})
 			kind := "github_credential"
 			if note.Capability == githubc.CapabilityBeyondReads {
 				kind = "github_credential_warning"
 			}
 			in.Assets[0].InventoryNotes = []Note{{Kind: kind, Source: in.Assets[0].ID, Detail: note.Detail}}
-			after := Build(in)
+			after := build(in)
 			for name, pair := range map[string][2]any{
 				"findings": {before.Findings, after.Findings}, "assessments": {before.Assessments, after.Assessments},
 				"ranking": {before.Summary, after.Summary}, "coverage": {before.Coverage, after.Coverage},

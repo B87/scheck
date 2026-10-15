@@ -19,8 +19,10 @@ const (
 
 // Coverage is the tenant's coverage plan: every rule id in exactly one group
 // (coverage_plan_test.go), worded here and marked by the engagement report
-// (docs/spec/workspace-collector.md, "Reporting and coverage").
-func (e Evidence) Coverage() []finding.CoveragePlan {
+// (docs/spec/workspace-collector.md, "Reporting and coverage"). judged are
+// Judge's verdicts on e, which Analyze gives: the unclassified apps fold
+// into one line.
+func (e Evidence) Coverage(judged []finding.Judgment) []finding.CoveragePlan {
 	evidence := finding.CoverageReason{Reason: "unavailable:workspace_evidence"}
 	assignments := finding.CoverageGroup{Name: "Workspace administrator assignments and counts", Rules: []string{IDTooManySuperAdmins, IDSuspendedAdminAssignment}}
 	if !e.Access.AdministrationComplete {
@@ -34,6 +36,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 	oauth := finding.CoverageGroup{Name: "Workspace OAuth grants (third-party app access)", Rules: []string{IDOAuthBroadScope}, Always: true, Limit: oauthLimit, Unassessed: "OAuth grants"}
 	oauth.Empty = evidence
 	oauth.Empty.Detail = "No OAuth grant outcome was recorded for this tenant"
+	oauth.Selection = e.OAuth.Selection
 	if e.Binding.CustomerID != "" && !e.OAuth.Selected {
 		which := "The default Workspace profile, directory,"
 		if e.Binding.Profile != "directory" {
@@ -44,7 +47,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 	}
 	// Most tenants hold many unclassified apps: one line, the JSON and the
 	// readout list each.
-	if n := len(slices.DeleteFunc(slices.Clone(e.Judgments), func(j finding.Judgment) bool { return j.Reason != reasonUnclassified })); n > 0 {
+	if n := len(slices.DeleteFunc(slices.Clone(judged), func(j finding.Judgment) bool { return j.Reason != reasonUnclassified })); n > 0 {
 		holds := "apps hold"
 		if n == 1 {
 			holds = "app holds"
@@ -63,7 +66,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 			oauth,
 		},
 		Incomplete: finding.CoverageReason{Reason: "unavailable:workspace_inventory", Detail: "Current population is incomplete"},
-		Unread: []finding.CoverageUnread{{Name: "Workspace domain-wide delegation", Unassessed: "domain-wide delegation",
+		Unread: []finding.CoverageUnread{{Name: "Workspace domain-wide delegation", Unassessed: "domain-wide delegation", Fixed: "identity.delegation",
 			Detail: "Nothing was read: Google offers no Directory read for it. Review it in the Admin console at Security → Access and data control → API controls → Manage Domain Wide Delegation. With a service-account credential, scheck's own delegation is listed there"}},
 		RowAlso: "2-step verification policy, grace periods and other sign-in services were not assessed",
 	}
@@ -75,6 +78,7 @@ func (e Evidence) Coverage() []finding.CoveragePlan {
 func (e Evidence) mailCoverage() finding.CoveragePlan {
 	forwarding := finding.CoverageGroup{Name: "Workspace mail forwarding", Rules: []string{IDExternalForwarding}, Always: true, Limit: mailLimit, Unassessed: "mail forwarding"}
 	forwarding.Empty = finding.CoverageReason{Reason: "unavailable:workspace_evidence", Detail: "No mail forwarding outcome was recorded for this tenant"}
+	forwarding.Selection = e.Mail.Selection
 	if e.Binding.CustomerID != "" && !e.Mail.Selected {
 		which := "The default Workspace profile, directory,"
 		if e.Binding.Profile != "directory" {
@@ -103,7 +107,8 @@ func (e Evidence) checksCollected() string {
 		selected bool
 		name     string
 	}{{e.OAuth.Selected, "OAuth grant"}, {e.Mail.Selected, "mail forwarding"}} {
-		if s.selected {
+		// In Recon these are still Check's to read.
+		if s.selected && !e.usersPending {
 			checks = append(checks, s.name)
 		}
 	}
@@ -133,14 +138,17 @@ type Outcome struct {
 // (docs/spec/scope.md, "Outcomes").
 func (e Evidence) Outcome() Outcome {
 	reads := e.Reads()
-	limited := slices.ContainsFunc(reads, func(read Read) bool { return read.Reason == "limit_reached" })
+	limited := slices.ContainsFunc(reads, limitedRead)
 	if e.InventoryComplete && e.Access.Complete && !limited {
 		return Outcome{Status: OutcomeComplete, Detail: "Workspace " + e.checksCollected() + " checks collected; notes and coverage show any unresolved evidence."}
 	}
 	o := Outcome{Status: OutcomeIncomplete, Detail: "Workspace evidence is incomplete; notes show what was read and what remains unknown."}
 	for _, read := range reads {
-		if read.Reason == "limit_reached" {
-			o.Reason = read.Reason
+		if limitedRead(read) {
+			o.Reason = "limit_reached"
+			if read.Decision == "unavailable:bootstrap_required" {
+				o.Detail = "The Workspace session's token expired before every Workspace read was made; resume to read the rest."
+			}
 		}
 		if read.Reason == "no_credentials" {
 			o.Reason, o.Detail = read.Reason, read.Detail

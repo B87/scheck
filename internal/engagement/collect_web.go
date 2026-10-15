@@ -9,9 +9,12 @@ import (
 
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/engagement/gate"
-	"github.com/b87/scheck/internal/finding"
 )
 
+// collectDomain reads a domain root through the gate with the web collector
+// (docs/spec/web-collector.md, "Reads"): its mail domains' records, its NS,
+// the names those records point at, and the names Scope chose to read.
+// Analyze judges them together with Scope's lookups.
 func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset) ReconAsset {
 	if ctx.Err() != nil {
 		ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
@@ -28,12 +31,9 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 	r.o.Log("recon: %s (%s)", a.Name, a.ID)
 	r.checkResolver(ctx, g, a)
 	ev := web.Collect(ctx, g, r.webDomain(a))
-	ra.Web = &ev
-	ra.Judged = web.Judge(r.webInput(a, ev))
-	r.suspendConfirmations(ra.Judged)
+	r.suspendConfirmations(web.Suspensions(r.webInput(a, ev)))
 	ev = web.Enrich(ctx, g, r.webDomain(a), ev)
 	ra.Web = &ev
-	ra.Judged = web.Judge(r.webInput(a, ev))
 	ra.Status = StatusCollected
 	if ctx.Err() != nil || ev.Cut() {
 		ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
@@ -47,7 +47,7 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 // the names Scope looked up, what it could not list, whether the resolver
 // invents answers, and what Recon read.
 func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
-	view := web.ScopeView{Now: r.session, Vantage: r.o.Vantage}
+	view := web.ScopeView{Vantage: r.o.Vantage}
 	root := a.name
 	for _, plan := range r.webPlans(a) {
 		for _, entry := range plan.Entries {
@@ -209,39 +209,30 @@ func webName(sn ScopeName) web.Name {
 
 // Positive fingerprints narrow the live scope and mark the persisted
 // confirmation as suspended (docs/spec/web-collector.md, "Never claim a name").
-func (r *run) suspendConfirmations(judged []finding.Judgment) {
-	for _, j := range judged {
-		if j.Verdict != web.Fired || (j.ID != finding.IDDNSTakeoverCandidate && j.ID != finding.IDDNSUnclaimedAtProvider) {
+func (r *run) suspendConfirmations(names []string) {
+	for _, name := range names {
+		if r.webScope != nil {
+			r.webScope.suspended.Store(name, true)
+		}
+		if r.scoped == nil {
 			continue
 		}
-		names := append([]string{j.Subject.Key}, j.Members...)
-		for _, name := range names {
-			if strings.HasPrefix(name, "*.") {
-				continue
+		suspend := func(e *Evidence) {
+			if e != nil && e.Kind == "operator" {
+				e.Kind = "suspended"
 			}
-			if r.webScope != nil {
-				r.webScope.suspended.Store(name, true)
+		}
+		for i := range r.scoped.Assets {
+			a := &r.scoped.Assets[i]
+			if ref, ok := parseSubject(a.ID); ok && ref.name == name {
+				suspend(a.FirstParty)
 			}
-			if r.scoped == nil {
-				continue
-			}
-			suspend := func(e *Evidence) {
-				if e != nil && e.Kind == "operator" {
-					e.Kind = "suspended"
-				}
-			}
-			for i := range r.scoped.Assets {
-				a := &r.scoped.Assets[i]
-				if ref, ok := parseSubject(a.ID); ok && ref.name == name {
-					suspend(a.FirstParty)
-				}
-			}
-			for i := range r.scoped.Domains {
-				for k := range r.scoped.Domains[i].Names {
-					n := &r.scoped.Domains[i].Names[k]
-					if n.Name == name {
-						suspend(n.FirstParty)
-					}
+		}
+		for i := range r.scoped.Domains {
+			for k := range r.scoped.Domains[i].Names {
+				n := &r.scoped.Domains[i].Names[k]
+				if n.Name == name {
+					suspend(n.FirstParty)
 				}
 			}
 		}

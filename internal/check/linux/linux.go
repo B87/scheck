@@ -41,9 +41,15 @@ func init() {
 		elevated(unit(base("fw.ufw", "ufw status and rules", check.DomainFirewall, check.ParseLines, "ufw", "status", "verbose"), "ufw report lines")),
 		exitOK(base("fw.firewalld", "firewalld state", check.DomainFirewall, check.ParseRaw, "firewall-cmd", "--state"), check.AnyExit...),
 		elevated(base("fw.nft", "nftables ruleset", check.DomainFirewall, check.ParseRaw, "nft", "list", "ruleset")),
+		// Which backend the iptables userspace drives, so an empty nftables
+		// ruleset can be read as no filtering (docs/ROADMAP.md, E9, D3): exit 1
+		// means no iptables userspace at all. iptables itself stays denied.
+		exitOK(base("fw.iptables_backend", "iptables userspace backend (where /usr/sbin/iptables resolves; exit 1: none)", check.DomainFirewall, check.ParseRaw, "realpath", "-e", "/usr/sbin/iptables"), 0, 1),
 
 		// Listening sockets
-		base("net.listeners", "Listening TCP/UDP sockets with owning process", check.DomainNetwork, check.ParseListeners, "ss", "-tulpnH"),
+		// Elevated: ss names only the caller's own sockets' owners, and a database
+		// runs as its own user (docs/ROADMAP.md, E9, D3b).
+		elevated(base("net.listeners", "Listening TCP/UDP sockets with owning process", check.DomainNetwork, check.ParseListeners, "ss", "-tulpnH")),
 
 		// sshd
 		elevated(unit(base("sshd.config", "Effective sshd configuration", check.DomainSSHD, check.ParseKV, "sshd", "-T"), "settings")),

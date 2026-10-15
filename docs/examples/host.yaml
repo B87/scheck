@@ -17,13 +17,22 @@
 #
 #  context.exposure is what can move a finding that exposure applies to. A
 #  password login on an internet host is not graded like one on a private
-#  host. expected_services names the listeners you intend. The posture rules
-#  in this build do not file from that list; they do read the host.
+#  host. expected_services names the listeners you intend. The host posture
+#  rules do not file from that list. Two rules read it. db.listens_unfiltered:
+#  a database port declared for localhost, lan or vpn that listens beyond
+#  localhost with no host firewall rule in front ranks one step higher; the
+#  declaration never lowers it. svc.listens_beyond_declared: any other
+#  service declared for localhost, lan or vpn that listens beyond that
+#  audience with no host firewall rule in front is a finding of its own
+#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). Both need
+#  elevate: sudo below, since the listeners are read with sudo -n.
 #
 #  HOW TO READ THE RESULT
 #  ----------------------
 #    findings   the host posture rules. Two that are easy to recognize:
-#               sshd.password_auth_enabled, sshd.root_login_enabled.
+#               sshd.password_auth_enabled, sshd.root_login_enabled. A
+#               database open to every address is db.listens_unfiltered,
+#               under data stores; a cloud firewall was not read.
 #               `scheck catalog` lists the checks; the rules are in
 #               docs/spec/host-collector.md.
 #    -v         the host's fact sheet, under the engagement report.

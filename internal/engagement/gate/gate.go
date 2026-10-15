@@ -336,6 +336,9 @@ type Result struct {
 	Until time.Time
 	// Response is what came back; never nil when OK.
 	Response *Response
+	// Sent says a send line was written for this request or one of its
+	// retries, whatever came back: what a request budget counts.
+	Sent bool
 	// Identity is what a resume finds the success under, "" when it is
 	// never reused (docs/spec/scope.md, "Resume").
 	Identity string
@@ -383,9 +386,12 @@ func (g *Gate) Send(ctx context.Context, r Request) Result {
 }
 
 // sendRetrying sends a request and its retries.
-func (g *Gate) sendRetrying(ctx context.Context, r Request) Result {
+func (g *Gate) sendRetrying(ctx context.Context, r Request) (out Result) {
+	sent := false
+	defer func() { out.Sent = out.Sent || sent }()
 	first := g.nextID()
 	res, rt := g.attempt(ctx, r, first, "", 1)
+	sent = res.Sent
 	if r.exchange != nil {
 		return res
 	} // credential POSTs are never retried
@@ -408,6 +414,7 @@ func (g *Gate) sendRetrying(ctx context.Context, r Request) Result {
 			return out
 		}
 		res, rt = g.attempt(ctx, r, g.nextID(), first, i+2)
+		sent = sent || res.Sent
 	}
 	if rt != nil {
 		return g.exhausted(res, rt)

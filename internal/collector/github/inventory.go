@@ -83,6 +83,9 @@ type Repository struct {
 	Private       *bool   `json:"private,omitempty"`
 	Archived      *bool   `json:"archived,omitempty"`
 	DefaultBranch *string `json:"default_branch,omitempty"`
+	// PushedAt orders repositories within a selection tier; it is never
+	// evidence for a rule.
+	PushedAt *string `json:"pushed_at,omitempty"`
 }
 
 // Population.Complete describes the returned visible population. Authority and
@@ -104,7 +107,6 @@ type Evidence struct {
 	RepositoriesAlerts           []RepositoryAlerts        `json:"repositories_alerts,omitempty"`
 	OrganizationWorkflow         DefaultEvidence           `json:"organization_workflow"`
 	RepositoriesCI               []RepositoryCI            `json:"repositories_ci,omitempty"`
-	Judgments                    []Judgment                `json:"judgments,omitempty"`
 	Principal                    PrincipalRead             `json:"principal"`
 	OrganizationRead             Read                      `json:"organization_read"`
 	Organization                 *OrganizationObject       `json:"organization,omitempty"`
@@ -121,6 +123,11 @@ type Evidence struct {
 	OwnersWithoutMFA             Population[Account]       `json:"owners_without_mfa"`
 	RepositoriesAccess           []RepositoryAccess        `json:"repositories_access,omitempty"`
 	RepositoryVisibilityComplete bool                      `json:"repository_visibility_complete"`
+	// RepositoriesUnread is true when Check did not read every selected
+	// repository (the budget, the deadline, a failed object): an absence
+	// over repository populations is then unknown, never a disproval. Set by
+	// With; never persisted.
+	RepositoriesUnread bool `json:"-"`
 }
 
 var loginRE = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)

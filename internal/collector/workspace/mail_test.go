@@ -248,10 +248,10 @@ func TestForwardingAdminRaiseAndLeaver(t *testing.T) {
 	c.People = []Person{{Handle: "root", Kind: "employee", Left: "2026-10-01", Addresses: []string{"root@example.com"}}}
 	e.Mail.Accounts[0].Enabled, e.Mail.Accounts[0].Address = new(true), "x@gmail.com"
 	j := outcome(t, e, c, "root@example.com -> x@gmail.com")
-	if !slices.Equal(j.Attributes, []string{"admin"}) || j.Details["admin_mailbox_read"] != "a-root" || !strings.HasPrefix(j.Context, "root@example.com is a super administrator: mail sent to administrators") {
+	if (len(j.Attributes) != 1 || !j.Has("admin")) || j.Details["admin_mailbox_read"] != "a-root" || !strings.HasPrefix(j.Why, "root@example.com is a super administrator: mail sent to administrators") {
 		t.Fatalf("%+v", j)
 	}
-	if !strings.Contains(j.Excerpt, "root@example.com belongs to root, declared as having left on 2026-10-01.") {
+	if !strings.Contains(j.Excerpt, "root@example.com belongs to root, declared as having left on 2026-10-01 (as of the users read of 2026-10-10).") {
 		t.Fatal(j.Excerpt)
 	}
 	// A conflicting fresh detail leaves the account unread and unraised.
@@ -270,7 +270,7 @@ func TestForwardingAssetOutcomes(t *testing.T) {
 	if len(out) != 1 || out[0].Subject.Key != "" || out[0].Reason != "unavailable:needs_service_account" {
 		t.Fatalf("%+v", out)
 	}
-	plan := e.Coverage()[1]
+	plan := e.Coverage(nil)[1]
 	if plan.Area != finding.AreaEmail || plan.Groups[0].Gap == nil || plan.Groups[0].Gap.Reason != "unavailable:needs_service_account" {
 		t.Fatalf("%+v", plan)
 	}
@@ -279,7 +279,7 @@ func TestForwardingAssetOutcomes(t *testing.T) {
 	}
 	// A refused permission names the scope and the delegation entry.
 	e.Mail.Accounts[0].AutoRead = Read{Op: OpMailAutoForwarding, RequestID: "a-amy", Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:gmail.readonly"}
-	if g := e.Coverage()[1].Groups[0].Gap; g == nil || g.Reason != "insufficient_permission:gmail.readonly" {
+	if g := e.Coverage(nil)[1].Groups[0].Gap; g == nil || g.Reason != "insufficient_permission:gmail.readonly" {
 		t.Fatal(g)
 	}
 	if !slices.ContainsFunc(Readout(e, "asset", c), func(n Note) bool { return strings.Contains(n.Detail, "Manage Domain Wide Delegation") }) {
@@ -293,7 +293,7 @@ func TestForwardingAssetOutcomes(t *testing.T) {
 	if len(forwarding(e, c)) != 0 {
 		t.Fatal("an unselected surface was judged")
 	}
-	g := e.Coverage()[1].Groups[0]
+	g := e.Coverage(nil)[1].Groups[0]
 	if g.NotOnPlan == nil || g.NotOnPlan.Reason != "not_on_plan:profile=directory_oauth" || !strings.Contains(g.NotOnPlan.Detail, "SCHECK_WORKSPACE_PROFILE=directory_oauth_mail") {
 		t.Fatal(g)
 	}
@@ -305,7 +305,7 @@ func TestForwardingAssetOutcomes(t *testing.T) {
 		t.Fatal("credential warning missing")
 	}
 	// The limits note and the coverage limit are one sentence.
-	if !slices.ContainsFunc(Readout(e, "asset", c), func(n Note) bool { return strings.Contains(n.Detail, mailLimit+".") }) || e.Coverage()[1].Groups[0].Limit != mailLimit {
+	if !slices.ContainsFunc(Readout(e, "asset", c), func(n Note) bool { return strings.Contains(n.Detail, mailLimit+".") }) || e.Coverage(nil)[1].Groups[0].Limit != mailLimit {
 		t.Fatal("limits differ")
 	}
 }
@@ -328,7 +328,7 @@ func TestCollectMailReadsEligibleMailboxesAndStops(t *testing.T) {
 		}
 		return gate.Result{RequestID: r.Op + r.Params["user"], Decision: "sent", Response: &gate.Response{Status: 200, Body: []byte(body), Population: full}}
 	})
-	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, views)
 	if !slices.Equal(asked, []string{OpMailAutoForwarding + ":root", OpMailFilters + ":root", OpMailAutoForwarding + ":amy", OpMailFilters + ":amy"}) || !e.Mail.Complete {
 		t.Fatalf("asked %v, %+v", asked, e.Mail)
 	}
@@ -342,13 +342,13 @@ func TestCollectMailReadsEligibleMailboxesAndStops(t *testing.T) {
 		asked = append(asked, r.Params["user"])
 		return gate.Result{Decision: "unavailable:needs_service_account", Reason: "unavailable:needs_service_account", Repeats: true}
 	})
-	e.collectMail(context.Background(), stop, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), stop, Target{Asset: "asset", Stage: "recon"}, views)
 	if !slices.Equal(asked, []string{"root"}) || e.Mail.Complete || len(e.Mail.Accounts) != 1 {
 		t.Fatalf("asked %v", asked)
 	}
 	asked = nil
 	e.Mail, e.Binding.Surfaces = MailEvidence{}, nil
-	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, c, views)
+	e.collectMail(context.Background(), send, Target{Asset: "asset", Stage: "recon"}, views)
 	if len(asked) != 0 || e.Mail.Selected {
 		t.Fatal("an unselected profile read mail settings")
 	}
@@ -388,7 +388,7 @@ func TestForwardingRefusalIsDecidedOnce(t *testing.T) {
 		FiltersRead: Read{Op: OpMailFilters, RequestID: "f-amy", Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:gmail.readonly"}}
 	e.Mail.Accounts[1].FiltersUsable, e.Mail.Accounts[1].FiltersComplete = false, false
 	e.Mail.Accounts[1].FiltersRead = Read{Op: OpMailFilters, RequestID: "f-bob", Decision: "unavailable:mailbox_unavailable", Status: 400, Reason: "unavailable:mailbox_unavailable"}
-	if e.Coverage()[1].Groups[0].Gap != nil {
+	if e.Coverage(nil)[1].Groups[0].Gap != nil {
 		t.Fatal("a per-mailbox refusal became the surface's gap while settings were read")
 	}
 	if slices.ContainsFunc(Readout(e, "asset", c), func(n Note) bool {
@@ -401,7 +401,7 @@ func TestForwardingRefusalIsDecidedOnce(t *testing.T) {
 	}
 	// Every mailbox refused one by one: the policy wording, never the scope's.
 	e.Mail.Accounts = e.Mail.Accounts[:1]
-	if g := e.Coverage()[1].Groups[0].Gap; g == nil || !strings.Contains(g.Detail, "every mailbox it tried") {
+	if g := e.Coverage(nil)[1].Groups[0].Gap; g == nil || !strings.Contains(g.Detail, "every mailbox it tried") {
 		t.Fatal(g)
 	}
 	// A breaker after one mailbox was read: the surface's gap, its note, and
@@ -409,7 +409,7 @@ func TestForwardingRefusalIsDecidedOnce(t *testing.T) {
 	e, c = mailFixture(mailUser("amy"), mailUser("bob"), mailUser("cat"))
 	e.Mail.Accounts[1] = MailboxForwarding{ID: "bob", AutoRead: Read{Op: OpMailAutoForwarding, RequestID: "a-bob", Decision: "unavailable:credential_exchange", Reason: "unavailable:credential_exchange", Repeats: true}}
 	e.Mail.Accounts, e.Mail.Complete = e.Mail.Accounts[:2], false
-	if g := e.Coverage()[1].Groups[0].Gap; g == nil || g.Reason != "unavailable:credential_exchange" {
+	if g := e.Coverage(nil)[1].Groups[0].Gap; g == nil || g.Reason != "unavailable:credential_exchange" {
 		t.Fatal(g)
 	}
 	if !slices.ContainsFunc(Readout(e, "asset", c), func(n Note) bool { return strings.Contains(n.Detail, "so scheck stopped after 2 mailboxes") }) {

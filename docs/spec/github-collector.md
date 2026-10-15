@@ -84,7 +84,7 @@ is `full_name`; exclusions are applied before persistence.
 | `github.membership` | `state`, `role`, organization `id`, `login`, optional `type`; user `id`, `login`, `type` |
 | `github.members`, `github.owners`, `github.outside_collaborators` | `id`, `login`, `type` |
 | `github.invitations` | `id`, nullable `login`, `role`, `invitation_source` |
-| `github.repositories` | `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility`, `private`, `archived`, `default_branch` |
+| `github.repositories` | `id`, `name`, `full_name`, owner `id`, `login`, `type`, `visibility`, `private`, `archived`, `default_branch`, and from E9 step 6 `pushed_at` (metadata only; absent or null is unknown) |
 
 An active own membership establishes member authority only when its user matches
 the freshly read principal, its organization matches the declared organization's
@@ -141,6 +141,88 @@ means all collaborators visible to the credential. Its `VisibilityComplete` rema
 false and the read keeps `repository_collaborator_visibility_unknown`. Affirmative
 access may fire, but absence cannot disprove access, offboarding or privilege rules.
 Organization-wide repository visibility remains unknown separately.
+
+### Selection under a budget and the permission follow-up (E9)
+
+Design; becomes contract when E9 lands (steps 6 and 7). Step 6a builds the selection
+and the budget for GitHub (`internal/collector/github/selection.go`: `Select`,
+`CollectRepositories`, `TiersVersion`, `RepositoryBudget`); Workspace is 6b (`workspace-collector.md`). Recon reads the repository list (with
+`pushed_at`, retained on the `github.repositories` and `github.repository` projections)
+and the organization inventory, and persists the inventory only. Select, in Plan, orders
+the repositories by the tiers of [engagement.md](engagement.md), "Plan selection and
+follow-ups": by tier, within a tier by `pushed_at` (none last), then `full_name`. Check,
+after Plan, sends the per-repository reads in that order and writes their evidence to
+`check.json`; Analyze judges the union of Recon's and Check's evidence. The kinds are
+`access`, `ci`, `secret_alerts`, `dependabot_alerts` and `secret_locations`. A kind the
+budget did not reach on a repository is marked `sampled` in its evidence, and the CI and
+alert rules judge nothing from it: no firing, no disproof, and a secret alert locations
+cut abstains with reason `sampled`. `github.undeclared_public_repository` is among the
+access kind's rules; for any public repository whose object Check did not read (the
+budget, the deadline or a failed read) it is still fired from the organization repository
+list, positive only and never disproved from it.
+
+Reads go **breadth first by kind** in five passes, each over every selected repository
+before the next, under a compiled budget of 4,000 requests per organization per run:
+
+1. Access and protection: the `github.repository` object, the default-branch read, branch
+   rules, the workflow default, collaborators and deploy keys, every page.
+2. CI: the workflow directory listing, the repository's Actions secret names, then the
+   workflow files (100 files and 8 MiB per repository stay).
+3. Alerts, as three passes: secret-scanning alerts, Dependabot alerts, then secret alert
+   locations (100 per repository stay).
+
+A repository object that is not found (a 404, or an object that is not this repository)
+ends that repository's reads and the repository is left out of every later kind's
+`in_scope` (`Repositories.NoObject`), so it is never presented as a budget choice. An
+object read that failed any other way (a 5xx, a timeout, a denial) is not "not found":
+the repository stays in the later kinds' `in_scope`, unread, with that read's own reason,
+and no budget cut is claimed for it. The local mirror (two ref listings, then the local read)
+runs after every counted pass. Every repository the access kind reached gets a history
+entry: with a declared mirror it is read, without one the entry records
+`mirror_not_declared` and sends nothing.
+
+The meter counts only results the gate sent or answered from the ledger: a result whose
+`Sent` is true (a send line was written for the request or one of its retries, whatever
+came back, so a 5xx, a timeout or a reset after sending is spent) or that the ledger
+answered (`reused`; on resume it counts as when it was first sent), every page once and a
+retry of the same request once. A request the gate refused, or that a limit stopped
+before sending, is not spent. The `github.repository`
+object counts; inventory, the mirror and the F1 and F1b follow-ups do not. A kind is all or
+nothing per repository: it starts only while the requests spent are below the budget and,
+once started, finishes on that repository, so the spend can pass the budget by one
+repository's kind. Declared repositories (`assets` entries) are never cut by the budget; tier 2
+repositories selected for an organization secret and tier 3 public repositories are
+ordered first but can be cut. A repository root with no declared organization has no
+budget. A budget cut is `sampled`, exit code unchanged, on the row or sub-item whose kind
+was cut. A kind cut on the access pass cuts every later kind on that repository, also
+`sampled`. Once the run's context is done Check starts nothing more, and that is
+`limit_reached`, never the budget's. A declared repository that stop left unstarted gets
+an access entry `unavailable:not_started`, reason `limit_reached`, with the stop's detail,
+so it reconciles to `limit_reached` and is listed incomplete, never `failed`; an
+undeclared repository gets no such entry and is counted unread by the kinds. A kind that
+needs no request on a repository (`secret_locations` where there is no alert to locate)
+counts that repository as read. A request the gate refuses in Check (a refusal kind
+from the status mapping) is recorded for its root as a refusal, exit 3, even where Recon
+left the root incomplete; limits and failures in Check change only a root Recon left
+collected. `limits.timeout` and
+GitHub's rate limit stop the run as `limit_reached`, exit 2, and a kind cut inside a
+repository by either or by a page cap is partial with that read's own reason, never the
+budget's. The kind's `selection` carries the requests `spent` against the `budget`. The coverage
+population names `read` against `in_scope` with the `selection`
+([report.md](report.md), "Coverage"; [engagement.md](engagement.md), "Plan selection and
+follow-ups", for the words and the not-judged list). The collector owns the tiers, the
+kinds and the meter; the report words the selection.
+
+`github.collaborator_permission` is the follow-up read of F1 and the one new operation:
+`GET /repos/{owner}/{repo}/collaborators/{login}/permission`, with the same origin,
+credential binding, API version and 1 MiB body cap as the other operations. Its parameters are the left person's declared login and one
+`deploys_to: production` repository, at most 20 per run, depth 1. It is read only when
+`identity.former_person_has_access` fired for that person, or abstained for lack of
+repository visibility, and it supplies the `push`, `maintain` or `admin` permission that
+the `attribute:production_write` raise reads for a login the collaborators list does not
+show ([engagement.md](engagement.md), R4); until step 7 that case is "not established".
+A missing or denied read applies no raise and says why. The retained fields and
+the permission requirements are frozen with the operation in step 7.
 
 App installation permissions and repository selection, and repository runners and
 applicable runner groups, are carried candidate reads. Their exact scope and
@@ -238,13 +320,51 @@ exposure; it does not claim a secret was found.
 
 Former-person access is filed once per observed asset and account: organization
 access and each observed repository access remain separate instances. Only observed
-organization ownership raises its organization instance as admin; only recognized
-effective admin on a declared production repository raises that repository instance.
+organization ownership raises its organization instance as admin; recognized effective
+admin on a repository is the fact `repository_admin` on that repository's instance, and
+the severity table raises it only where the repository is declared production.
+A fired repository-level judgment also carries the attribute `write` when the collaborator
+entry shows effective write; the collector cites the collaborators read and an excerpt
+of `role_name` and the permission booleans. One judgment per login, the carrier (the
+organization-level one when it fired, else the fired repository-level one with the lowest
+asset id, none for an observed owner), carries `write_held` and `write_unsettled`
+attributes, each with `Asset` naming the repository and, for `write_unsettled`, the cause
+in the reference's excerpt, so the table can say "not applied" ([engagement.md](engagement.md), R4).
+Every GitHub judgment on a left person carries `details.membership`: `owner`, `member`,
+`outside_collaborator` (organization), `collaborator` (repository), or `none` (absence).
+A person with no declared login is judged once, an abstention with reason
+`no_declared_github_login` on the subject `declared:<handle>`. It never reads `deploys_to`: production is
+decided by the `attribute:production_write` row of the severity table
+([engagement.md](engagement.md), R4). The organization-level judgment carries no `write`.
+`EffectiveWrite` (write, not write, unknown) is:
+
+- `role_name` redacted or truncated: unknown.
+- Effective admin known true: write.
+- `permissions` absent: unknown; a `role_name` alone never establishes write.
+- `push` or `maintain` true: write only when `pull` is not false, `maintain` true does
+  not come with `push` false, and `role_name` is absent, or `write`, `push`, `maintain`
+  or `admin`, or a custom role (anything outside `read`, `pull` and `triage`). A `read`,
+  `pull` or `triage` role with `push` or `maintain` true is a contradiction: unknown.
+- `admin`, `push` and `maintain` all present and false: not write, unless `role_name` is
+  `write`, `push`, `maintain` or `admin`, a contradiction: unknown.
+- Anything else: unknown.
+
+Not write on a listed collaborator settles that repository, since per-collaborator
+permissions are effective across direct, team and base access; the visibility caveat
+applies only to a login the list does not show. An archived repository (`archived: true`
+in the repository read) gets no `write` for a person who is not admin, and the cause
+reads "*owner/repo* is archived".
+
+Remediation of `identity.former_person_has_access` ends with the fixed sentence: "If they
+could push to a repository that deploys to production, also rotate the secrets that
+repository's workflows can read and its deploy keys, and review its commits and workflow
+runs since their leaving date."
+
 Unknown privilege never erases affirmative access. An aggregate absence judgment
 still requires every applicable trusted population complete.
 
 Former-person access compares every declared GitHub login. The declared departure
-date must be strictly before the current date in the engagement timezone. Retired
+date must have passed in the engagement timezone at the collection time of the read that observed the account: the members or collaborators read, or where the page that held an item is not recorded, the earliest read of that population. Absence is disproved as of the earliest read of the population. A date that passed at the latest read but not the earliest abstains ("left date *d* falls within or after collection; re-run after *d*"), and a read with no recorded collection time abstains. The excerpt and any readout note name that read (`engagement.md`, "Severity in context", "Time"). Retired
 service accounts are included. A null invitation login cannot match a person and prevents an offboarding absence
 claim, even after full pagination. An invitation grants possible future access, not
 a current admin role. An observed owner establishes current access even when the
@@ -267,8 +387,8 @@ built in E5 step 3.
 | Unexpected owner | Known owner outside declared expected handles | Owner matches expectation | Tenant absent from `access.admins`, unknown match or role |
 | Unattributed admin | Recognized admin with no declared person match, under the engagement's attribution conditions | Login matches a declared person | No relevant people identifiers or unknown privilege |
 | Contractor or shared admin | Recognized admin attributed to either kind | Known other kind or nonadmin | Role or attribution unavailable |
-| Former person retains access | Passed declared leaving date and membership or collaboration remains | Complete applicable populations establish absence | Future departure, no login or partial population |
-| Former person invited | Passed declared leaving date and matching pending invitation remains | Complete trusted invitation population establishes absence | Future departure, no login, null invitation login or partial population |
+| Former person retains access | Declared leaving date passed at the observing read, and membership or collaboration remains | Complete applicable populations establish absence as of their earliest read | Future departure at the observing read, date within collection, no recorded collection time, no login or partial population |
+| Former person invited | Declared leaving date passed at the observing read, and matching pending invitation remains | Complete trusted invitation population establishes absence as of its earliest read | Future departure at the observing read, date within collection, no recorded collection time, no login, null invitation login or partial population |
 | Too many owners | Engagement threshold reached; partial counts may establish only an absolute lower bound | Complete population below threshold | Partial unresolved population; no incomplete ratio |
 | Undeclared public repository | Explicit public visibility without `public:true` | Private/internal or declared public | Unknown visibility |
 | Broad default member permission | Verified owner-visible explicit write/admin | Verified owner-visible explicit none/read | Non-owner, missing or unrecognized setting |
@@ -958,7 +1078,7 @@ than reusing an earlier permission conclusion.
 permission guidance, reuse explanations and inventory gaps. Engagement places
 those explanations on the asset; the report renders them. `github.CoverageReason`
 maps `insufficient_evidence` to `unavailable:github_evidence` at the report edge,
-while persisted Recon judgments retain the original evidence reason.
+while the judgments Analyze writes to `findings.json` keep the original evidence reason.
 An unavailable permission read with no provider detail says access or feature
 availability was not established. Dependabot guidance asks the owner to check
 Dependabot alerts read permission, token repository selection and feature

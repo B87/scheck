@@ -55,7 +55,13 @@ func jumpRefused(t *testing.T) Input {
 func TestGoldenReports(t *testing.T) {
 	s := schema(t)
 	cases := map[string]func(*testing.T) Input{
-		"host-ubuntu": func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-ubuntu":             func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-database-fired":     hostDatabaseFiredReport,
+		"host-database-disproved": hostDatabaseDisprovedReport,
+		"host-database-abstained": hostDatabaseAbstainedReport,
+		"host-ssh-empty-password": hostSSHFiredReport,
+		"host-service-beyond":     hostServiceBeyondReport,
+		"context-notes":           contextNotesReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.
 			in := oneHost(t, "macos")
@@ -89,7 +95,9 @@ func TestGoldenReports(t *testing.T) {
 		"github-ci-fired":                   githubCIFiredReport,
 		"github-ci-disproved":               githubCIDisprovedReport,
 		"github-ci-abstained":               githubCIAbstainedReport,
+		"github-selection-cut":              githubSelectionCutReport,
 		"github-access-fired":               githubAccessFiredReport,
+		"people-left":                       peopleLeftReport,
 		"github-access-disproved":           githubAccessDisprovedReport,
 		"github-access-abstained":           githubAccessAbstainedReport,
 		"github-inventory-partial":          githubPartialInventoryReport,
@@ -116,7 +124,7 @@ func TestGoldenReports(t *testing.T) {
 			// this session kept the host, and a record it kept was edited
 			// by hand.
 			in := oneHost(t, "ubuntu")
-			in.Resumed, in.EditedByHand = true, []string{"evidence/deploy.collection.json"}
+			in.Resumed, in.EditedByHand = true, []string{"scope.json"}
 			in.Assets[0].Kept = true
 			in.Directory = "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z"
 			in.Egress = &EgressInput{Unrecorded: []time.Time{in.Started},
@@ -133,7 +141,7 @@ func TestGoldenReports(t *testing.T) {
 			}
 			// What the run passes on from the gate.
 			in.Egress.UserAgent = "scheck/test (security self-assessment)"
-			r := Build(in)
+			r := build(in)
 			validate(t, s, r)
 			for _, v := range []int{0, 1} {
 				var txt bytes.Buffer
@@ -201,7 +209,7 @@ func compareGolden(t *testing.T, name, got string) {
 func TestTextIsWordsAndSafe(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
 		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {
-		r := Build(mk(t))
+		r := build(mk(t))
 		var buf bytes.Buffer
 		if err := WriteText(&buf, r, Options{}); err != nil {
 			t.Fatal(err)

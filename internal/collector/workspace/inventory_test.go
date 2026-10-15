@@ -48,7 +48,7 @@ func TestCollectOwnsSequenceAndPreservesUnknownFlags(t *testing.T) {
 	if string(a) != string(b) {
 		t.Fatal(calls)
 	}
-	if !e.Users.Complete || len(e.Users.Items) != 1 || len(e.Judgments) == 0 || len(e.Attribution) != 1 || e.Attribution[0].MatchedBy != "alias" || e.Attribution[0].ProviderID != "123" {
+	if !e.Users.Complete || len(e.Users.Items) != 1 || len(Judge(e, "saas:google-workspace:example.com", Context{})) == 0 || len(e.Attribution) != 1 || e.Attribution[0].MatchedBy != "alias" || e.Attribution[0].ProviderID != "123" {
 		t.Fatal(e)
 	}
 	u := e.Users.Items[0]
@@ -83,7 +83,7 @@ func TestCollectInventoryUnavailableAndUnrecognized(t *testing.T) {
 			if op == OpUsers && e.Users.Complete {
 				t.Fatal(e.Users)
 			}
-			if len(e.Judgments) == 0 {
+			if len(Judge(e, "saas:google-workspace:example.com", Context{})) == 0 {
 				t.Fatal("missing abstained judgments")
 			}
 		}

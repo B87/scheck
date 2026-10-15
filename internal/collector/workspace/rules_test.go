@@ -2,7 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
-	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,9 +12,9 @@ import (
 func ruleFixture() (Evidence, Context) {
 	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	u := User{ID: "1", Primary: "alice@example.com", Customer: "C123", Unit: "/", Suspended: new(false), Archived: new(false), IsAdmin: new(false), CreationTime: new("2025-01-01T00:00:00Z"), LastLoginTime: new("2026-10-10T11:00:00Z")}
-	read := Read{Op: OpUsers, RequestID: OpUsers, Decision: "sent", Status: 200}
-	e := Evidence{Users: Population[User]{Items: []User{u}, Complete: true, Reads: []Read{read}}, Access: AccessEvidence{Roles: Population[Role]{Complete: true, Items: []Role{}, Reads: []Read{{Op: OpRoles, RequestID: OpRoles, Decision: "sent", Status: 200}}}, Privileges: Population[Privilege]{Complete: true, Items: []Privilege{}, Reads: []Read{{Op: OpPrivileges, RequestID: OpPrivileges, Decision: "sent", Status: 200}}}, Accounts: []AccountAccess{{ID: "1", Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: OpUserAssignments, Decision: "sent", Status: 200}}}, Detail: &u, DetailRead: Read{Op: OpUserDetail, RequestID: OpUserDetail, Decision: "sent", Status: 200}}}}}
-	c := Context{People: []Person{{Handle: "alice", Kind: "employee", Addresses: []string{u.Primary}}}, ExpectedAdmins: []string{"alice"}, AdminsDeclared: true, AssessedAt: now, Zone: time.UTC}
+	read := Read{Op: OpUsers, RequestID: OpUsers, Decision: "sent", Status: 200, CollectedAt: now}
+	e := Evidence{Users: Population[User]{Items: []User{u}, Complete: true, Reads: []Read{read}}, Access: AccessEvidence{Roles: Population[Role]{Complete: true, Items: []Role{}, Reads: []Read{{Op: OpRoles, RequestID: OpRoles, Decision: "sent", Status: 200}}}, Privileges: Population[Privilege]{Complete: true, Items: []Privilege{}, Reads: []Read{{Op: OpPrivileges, RequestID: OpPrivileges, Decision: "sent", Status: 200}}}, Accounts: []AccountAccess{{ID: "1", Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: OpUserAssignments, Decision: "sent", Status: 200, CollectedAt: now}}}, Detail: &u, DetailRead: Read{Op: OpUserDetail, RequestID: OpUserDetail, Decision: "sent", Status: 200, CollectedAt: now}}}}}
+	c := Context{People: []Person{{Handle: "alice", Kind: "employee", Addresses: []string{u.Primary}}}, ExpectedAdmins: []string{"alice"}, AdminsDeclared: true, Zone: time.UTC}
 	// The list carries the 2-step flags; the fresh detail leaves them out,
 	// which never implies a change.
 	e.Users.Items[0].Enforced, e.Users.Items[0].Enrolled = new(true), new(true)
@@ -157,8 +157,9 @@ func TestWorkspaceInactivityCalendarBoundaries(t *testing.T) {
 		for _, delta := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
 			e, c := ruleFixture()
 			c.Zone = z
-			c.AssessedAt = time.Date(2026, 11, 1, 12, 0, 0, 0, z)
-			boundary := c.AssessedAt.AddDate(0, 0, -days).Add(delta)
+			at := time.Date(2026, 11, 1, 12, 0, 0, 0, z)
+			e.Access.Accounts[0].DetailRead.CollectedAt = at
+			boundary := at.AddDate(0, 0, -days).Add(delta)
 			id := IDStaleAccount
 			if days == 30 {
 				id = IDNeverSignedIn
@@ -231,7 +232,7 @@ func TestWorkspaceAdminCountExemptionsAndRatio(t *testing.T) {
 	e.Users.Items[0].IsAdmin = new(true)
 	c.People[0].Left = "2026-10-09"
 	j = getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess)
-	if j.Verdict != Fired || !slices.Contains(j.Attributes, "admin") {
+	if j.Verdict != Fired || !j.Has("admin") {
 		t.Fatal(j)
 	}
 }
@@ -337,5 +338,112 @@ func TestLoginConflictRejectsRegressionToNever(t *testing.T) {
 	fresh.LastLoginTime = new("2026-10-10T11:00:00Z")
 	if securityConflict(list, fresh) {
 		t.Fatal("legitimate first login became a conflict")
+	}
+}
+
+// Every Workspace time-dependent rule is judged at the read it rests on,
+// never the session's start, and abstains when that read has no recorded
+// time (docs/spec/engagement.md, "Severity in context").
+func TestWorkspaceRulesAreJudgedAtTheReadsTime(t *testing.T) {
+	// Stale: judged at the detail read that returned the sign-in time.
+	e, c := ruleFixture()
+	read := e.Access.Accounts[0].DetailRead.CollectedAt
+	e.Access.Accounts[0].Detail.LastLoginTime = new(read.AddDate(0, 0, -100).Format(time.RFC3339))
+	j := getRule(t, Judge(e, "asset", c), IDStaleAccount)
+	if j.Verdict != Fired || !strings.Contains(j.Excerpt, "100 days before the account read of 2026-10-10") {
+		t.Fatalf("stale: %+v", j)
+	}
+	e.Access.Accounts[0].DetailRead.CollectedAt = time.Time{}
+	if j := getRule(t, Judge(e, "asset", c), IDStaleAccount); j.Verdict != Abstained || j.Reason != finding.ReasonNoCollectionTime {
+		t.Fatalf("stale, no read time: %+v", j)
+	}
+	// A sign-in later than its own read, past the skew allowance, is
+	// malformed; within it, it is not.
+	e, _ = ruleFixture()
+	e.Access.Accounts[0].Detail.LastLoginTime = new(read.Add(10 * time.Minute).Format(time.RFC3339))
+	if j := getRule(t, Judge(e, "asset", c), IDStaleAccount); j.Verdict != Abstained {
+		t.Fatalf("future sign-in: %+v", j)
+	}
+	e.Access.Accounts[0].Detail.LastLoginTime = new(read.Add(2 * time.Minute).Format(time.RFC3339))
+	if j := getRule(t, Judge(e, "asset", c), IDStaleAccount); j.Verdict != Disproved {
+		t.Fatalf("skewed sign-in: %+v", j)
+	}
+
+	// The leaver: passed at the users read, within collection, unknown.
+	e, c = ruleFixture()
+	c.People[0].Left = "2026-10-09"
+	if j := getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess); j.Verdict != Fired || !strings.Contains(j.Excerpt, "observed in the users read of 2026-10-10") {
+		t.Fatalf("leaver: %+v", j)
+	}
+	e.Users.Reads = append(e.Users.Reads, Read{Op: OpUsers, RequestID: "users-2", Decision: "sent", Status: 200, CollectedAt: read.Add(-36 * time.Hour)})
+	if j := getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess); j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+		t.Fatalf("leaver within collection: %+v", j)
+	}
+	e.Users.Reads[1].CollectedAt = time.Time{}
+	if j := getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess); j.Verdict != Abstained || j.Reason != finding.ReasonNoCollectionTime {
+		t.Fatalf("leaver, no read time: %+v", j)
+	}
+	// An absence read before the date passed disproves nothing.
+	e, c = ruleFixture()
+	c.People = append(c.People, Person{Handle: "bob", Kind: "employee", Left: "2026-10-09", Addresses: []string{"bob@example.com"}})
+	e.Users.Reads = append(e.Users.Reads, Read{Op: OpUsers, RequestID: "users-2", Decision: "sent", Status: 200, CollectedAt: read.Add(-36 * time.Hour)})
+	found := false
+	for _, j := range Judge(e, "asset", c) {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Subject.Key == "bob@example.com" {
+			found = true
+			if j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+				t.Fatalf("absence within collection: %+v", j)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no absence judgment for bob")
+	}
+
+	// A role assignment is current if it had not expired at the
+	// assignments read.
+	e, _ = ruleFixture()
+	expiry := json.RawMessage(`{"expireTime":"` + read.Add(time.Hour).Format(time.RFC3339) + `"}`)
+	if current, ok := currentAssignment(Assignment{Expiration: expiry}, assignmentsAt(e.Access.Accounts[0])); !ok || !current {
+		t.Fatal("an assignment expiring after its read is current")
+	}
+	e.Access.Accounts[0].Assignments.Reads[0].CollectedAt = read.Add(2 * time.Hour)
+	if current, ok := currentAssignment(Assignment{Expiration: expiry}, assignmentsAt(e.Access.Accounts[0])); !ok || current {
+		t.Fatal("an assignment that had expired at its read is not current")
+	}
+	e.Access.Accounts[0].Assignments.Reads[0].CollectedAt = time.Time{}
+	if _, ok := currentAssignment(Assignment{Expiration: expiry}, assignmentsAt(e.Access.Accounts[0])); ok {
+		t.Fatal("an expiring assignment read at no recorded time is known")
+	}
+}
+
+// Nothing read is not an unrecorded time: a refused users read keeps the
+// rule's own reason and judges no leaver absence, each leaver abstaining
+// under their own name (docs/spec/report.md, "People who left"); an administrator
+// whose leaving date is ambiguous at the reads is not judged as current.
+func TestWorkspaceLeaverWithNothingReadAndAmbiguousAdmin(t *testing.T) {
+	e, c := ruleFixture()
+	c.People = append(c.People, Person{Handle: "bob", Kind: "employee", Left: "2099-05-01", Addresses: []string{"bob@example.com"}},
+		Person{Handle: "carol", Kind: "employee", Left: "2020-05-01", Addresses: []string{"carol@example.com"}})
+	e.Users.Reads = []Read{{Op: OpUsers, RequestID: OpUsers, Decision: "refused", Reason: "refused"}}
+	e.Users.Complete = false
+	attributed := map[string]bool{}
+	for _, j := range Judge(e, "asset", c) {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && (j.Reason == finding.ReasonNoCollectionTime || j.Verdict != Abstained) {
+			t.Fatalf("nothing read: %+v", j)
+		}
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && (j.Subject.Person == "bob" || j.Subject.Person == "carol") {
+			attributed[j.Subject.Person] = true
+		}
+	}
+	if !attributed["bob"] || !attributed["carol"] {
+		t.Fatalf("a leaver lost their line: %v", attributed)
+	}
+	e, c = ruleFixture()
+	e.Users.Items[0].IsAdmin = new(true)
+	c.People[0].Left = "2026-10-09"
+	e.Users.Reads = append(e.Users.Reads, Read{Op: OpUsers, RequestID: "users-2", Decision: "sent", Status: 200, CollectedAt: e.Users.Reads[0].CollectedAt.Add(-36 * time.Hour)})
+	if j := getRule(t, Judge(e, "asset", c), finding.IDIdentityUnexpectedAdmin); j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
+		t.Fatalf("ambiguous admin: %+v", j)
 	}
 }

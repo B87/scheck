@@ -34,13 +34,11 @@ func githubCIReport(t *testing.T, verdict string) Input {
 			j.Excerpt = "release: actions/checkout@v4; job contents: write"
 		}
 		if id == finding.IDGitHubPRTargetUnsafe {
-			j.Context = "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified."
+			j.Why = "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified."
 			j.Excerpt = "pull_request_target; checkout ref: github.event.pull_request.head.sha; npm ci; contents: write"
 		}
 		if id == finding.IDGitHubRepositoryWorkflowWrite || id == finding.IDGitHubDefaultBranchUnprotected || id == finding.IDGitHubPRTargetUnsafe {
-			j.Attributes = []string{"production"}
 			j.Sources = []string{"assets.production"}
-			j.Context += " This repository is declared to deploy to production, so this rating rises one step."
 		}
 		switch id {
 		case finding.IDGitHubRepositoryWorkflowWrite:
@@ -68,13 +66,13 @@ func githubCIReport(t *testing.T, verdict string) Input {
 		repo.InventoryNotes = []Note{}
 		repo.InventoryNotes = append(repo.InventoryNotes, Note{Kind: "github_ci", Source: repo.ID, Detail: "GitHub denied the workflow contents and branch-rule reads. Ask the repository owner to authorize Contents read and Metadata read for the intended repository, then resume."})
 	}
-	return in
+	return graded(in, production(repo.ID, "production"))
 }
 func githubCIFiredReport(t *testing.T) Input     { return githubCIReport(t, verdictFired) }
 func githubCIDisprovedReport(t *testing.T) Input { return githubCIReport(t, verdictDisproved) }
 func githubCIAbstainedReport(t *testing.T) Input { return githubCIReport(t, verdictAbstained) }
 func TestGitHubCIReportSeveritySubjectsAndSuppression(t *testing.T) {
-	r := Build(githubCIFiredReport(t))
+	r := build(githubCIFiredReport(t))
 	validate(t, schema(t), r)
 	found := map[string]bool{}
 	for _, f := range r.Findings {
@@ -101,6 +99,20 @@ func TestGitHubCIReportSeveritySubjectsAndSuppression(t *testing.T) {
 	for _, assessment := range r.Assessments {
 		if assessment.ID == finding.IDGitHubMutableAction && assessment.Outcomes[0].Outcome != verdictFired {
 			t.Fatal("suppression erased assessment")
+		}
+	}
+}
+
+// An acceptance whose only instance another, worse finding supersedes is
+// neither fixed nor to be removed: it names the finding to accept instead.
+func TestAcceptanceOfASupersededInstanceNamesTheWorseFinding(t *testing.T) {
+	for _, subject := range []string{".github/workflows/release.yml", ""} {
+		in := githubCIFiredReport(t)
+		repo := in.Assets[1]
+		in.Acceptances = []AcceptanceInput{{Entry: "engagement.yaml intent.accepted_risks[0]", ID: finding.IDGitHubMutableAction, Asset: repo.Name, AssetID: repo.ID, Subject: subject, Reason: "r", AcceptedBy: "alex", Expires: "2099-01-01"}}
+		a := build(in).Acceptances[0]
+		if a.Outcome != "rule_not_decided" || !strings.Contains(a.Why, "reported as "+finding.IDGitHubMutableActionWrite) || len(a.Findings) != 0 {
+			t.Fatalf("subject %q: %+v", subject, a)
 		}
 	}
 }

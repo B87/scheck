@@ -34,6 +34,20 @@ type Def struct {
 	// every instance the asset gains later (docs/spec/engagement.md,
 	// "Accepted risks").
 	Subject SubjectKind
+	// Ceiling is the highest severity any step may give it, "" for none: a
+	// limit of what was read, part of the definition like its base, never a
+	// setting (docs/spec/engagement.md, "Severity in context", "Ceilings").
+	Ceiling Severity
+	// HostAccess marks a host finding about access to the host, which
+	// data.matters_most raises on a host that holds the data.
+	HostAccess bool
+	// Attributes are the steps the collector owns: each applies when a
+	// judgment carries the attribute (attribute:password_form).
+	Attributes []AttributeRaise
+	// MultiFact marks a finding an engagement rule produces from several
+	// facts (docs/spec/engagement.md, "Multi-fact rules"): never a host
+	// posture rule's, and never the model's to report.
+	MultiFact bool
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as
@@ -238,8 +252,9 @@ var defs = map[string]Def{
 		Impact: "The account has an empty password field and a shell that lets someone log in. Most Linux " +
 			"distributions accept an empty password for local logins by default (su, the console, a provider's " +
 			"serial console), so anyone or anything already running on this host can become this account without " +
-			"a credential, and become root if the account is root. scheck did not check whether sshd or another " +
-			"network service accepts empty passwords; if one does, the account can be logged into remotely.",
+			"a credential, and become root if the account is root. If sshd or another network service accepts " +
+			"empty passwords, the account can be logged into remotely; an engagement judges sshd's case as " +
+			"accounts.empty_password_remote when it reads sshd's settings and listeners.",
 		Remediation: Remediation{
 			Summary: "Lock the account, or set a password if a person really logs in with one.",
 			Commands: []string{
@@ -446,6 +461,9 @@ func Register(d Def) {
 	}
 	if d.ID == "" || d.Title == "" || d.Impact == "" || d.Remediation.Summary == "" || d.Area == "" || d.Exposure == 0 || d.Judges == "" {
 		panic("incomplete finding definition: " + d.ID)
+	}
+	if d.Ceiling != "" && d.Ceiling.Rank() < d.BaseSeverity.Rank() {
+		panic("finding definition ceiling below its base: " + d.ID)
 	}
 	defs[d.ID] = d
 }

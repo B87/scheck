@@ -171,8 +171,13 @@ func TestRetries(t *testing.T) {
 	w2 := newWorld(t)
 	w2.env["GITHUB_TOKEN"] = testToken
 	w2.github(func(rw http.ResponseWriter, _ *http.Request) { rw.WriteHeader(http.StatusBadGateway) })
-	if res := w2.gate().Send(context.Background(), repo("example-org", "shop")); res.Decision != "unavailable:server_error" {
-		t.Errorf("still failing: %+v", res)
+	if res := w2.gate().Send(context.Background(), repo("example-org", "shop")); res.Decision != "unavailable:server_error" || !res.Sent {
+		t.Errorf("still failing, and sent: %+v", res)
+	}
+	// A request refused before any send line is not sent.
+	w3 := newWorld(t)
+	if res := w3.gate().Send(context.Background(), repo("example-org", "shop")); res.Sent {
+		t.Errorf("no credential, yet sent: %+v", res)
 	}
 }
 

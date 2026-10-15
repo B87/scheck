@@ -140,6 +140,11 @@ fired, disproved or abstained assessments. Owner authority is required for trust
 MFA evidence; unknown authority or missing/partial populations are not passes.
 GitHub account 2FA is independent of identity-provider MFA; SAML enforcement alone
 does not settle the GitHub 2FA rules.
+Every risk-area row in the JSON coverage carries `not_judged`, a list of `{id, text}`
+for what this version never judges; no area row is `assessed` in this version, and a
+partial row whose only reasons are `no_rule`, or none, is partial only by this
+version's limits, not by anything the run left open. Read `not_judged` as unknown, not
+fine.
 Read partial coverage and permission gaps before conclusions. Public-repository
 and deploy-key rules and six CI configuration rules assess part of CI/CD. Read
 separate coverage for token defaults, default-branch protection presence, dependency
@@ -245,7 +250,8 @@ grant is broad. App names are untrusted labels; accept by client id. Under the d
 profile the "Workspace OAuth grants (third-party app access)" sub-item is
 `not_on_plan:profile=<p>`; a refused permission is
 `insufficient_permission:admin.directory.user.security`, a coverage gap, not exit 3; a
-limit on a grants read exits 2; `unavailable:oauth_unclassified` apps were not judged.
+limit on a grants read exits 2 and the sub-item then says which accounts were read
+first (a "Users" selection line, at most *partial*); `unavailable:oauth_unclassified` apps were not judged.
 That permission can also revoke app access, sign people out and turn off 2-step
 verification: relay the selection note (a dedicated credential), never suggest adding
 it to the everyday one, and relay the separate token's `workspace_credential_warning`.
@@ -286,7 +292,7 @@ come from a supported local ADC file; an already approved service-account delega
 uses `SCHECK_WORKSPACE_SUBJECT`. Do not suggest automatic delegation setup or broader
 grants. Authorized-user callers stay unknown. A freshly verified delegated account
 is identity evidence, never assurance about its privileges. Every Workspace resume
-repeats admission and reuses no authenticated Workspace responses. Inactivity findings
+repeats admission and reuses no authenticated Workspace responses. A Workspace session token that expires before every read is made (long runs; Workspace's Check runs before GitHub's) leaves the tenant incomplete with `limit_reached` (exit 2); resume to read the rest. Inactivity findings
 need fresh detail; reported sign-in is not proof that sessions or apps are inactive.
 Account acceptances name the current primary address; stable provider ids accompany
 subjects, but cross-run rename comparison is not implemented.
@@ -344,6 +350,38 @@ scheck explain sshd.password_auth_enabled --exposure internet --format json
 scheck sudoers --platform linux --user ops
 ```
 
+Databases on a Linux host: `db.listens_unfiltered` (area data stores, subject
+`port/proto`) fires when a database from scheck's list listens beyond localhost and the
+host firewall (ufw, or none at all) does not restrict the port. It needs `--sudo`:
+`net.listeners` is elevated because `ss` shows only your own sockets' owners otherwise,
+and without it the rule abstains (`unavailable:listeners`, `unavailable:listener_owner`).
+It also abstains when firewalld, other nftables rules or a legacy iptables backend are in
+use (`unavailable:firewall_*`) and for a port Docker or Podman publishes
+(`unavailable:container_port`). A cloud firewall and the database's own sign-in rules
+were not read, and the finding says so; never report a host's databases as safe from a
+disproved or abstained verdict alone. `scheck sudoers` grants the `ss` read.
+
+Declared services on a Linux host: `svc.listens_beyond_declared` (area external surface,
+subject `port/proto`, base low, raised by the contradiction and by an internet-facing
+host, never past high) fires when a service declared in `expected_services` for
+`localhost`, `lan` or `vpn` listens beyond that audience and the host firewall does not
+restrict the port. It judges only what was declared and abstains without a declaration
+(`unavailable:no_declaration`), on a `lan` or `vpn` service of a host not declared
+internet-facing (`unavailable:audience_network`), on a private bind of an internet-facing
+host (`unavailable:bind_network`) and for the cases above; a cloud firewall was not read.
+Database ports are the previous rule's. An area in `not_used` that holds a finding is
+still reported as checked.
+
+Empty password over SSH on a Linux host: `accounts.empty_password_remote` (critical, area
+hosts, one finding per host with the accounts under `affected`) fires when an account
+with no password and a login shell exists, sshd accepts empty passwords and a password
+sign-in, no user or group list limits it, and sshd listens beyond loopback. It needs
+`--sudo` (`sshd -T` and `net.listeners` are elevated) and abstains otherwise
+(`unavailable:sshd_config`, `unavailable:sshd_listener`, `unavailable:accounts`). Settings
+inside `Match` blocks and whether PAM accepts an empty password were not read, and the
+finding says so. `accounts.empty_password` stays open beside it but is left out of "Fix
+these first" on that host: fix the accounts once.
+
 Capture stdout, stderr and the exit code separately. With `--format json`, stdout is one
 document, the engagement report; stderr carries diagnostics and, on exit 1–3, a short
 line saying why. Without `--no-persist` each run also writes a run directory,
@@ -354,7 +392,13 @@ and command trace. It is for host runs only: an engagement file with any other r
 asset (domain, url, network, SaaS, repository, cloud) is refused with exit 3 before any
 contact, because the audit log is the record of what was sent; use `--state-dir` to
 keep that run somewhere disposable instead. `--out FILE` writes the report to a file instead of stdout.
-`--stop-after STAGE` ends after that stage and prints its document; `intake` validates
+`--stop-after STAGE` ends after that stage and prints its document; `plan` prints each
+GitHub organization's repositories in the order Check will read them, with the tier and
+declaration that put each there, and each Workspace tenant's account count with its tier
+counts (the order Check reads OAuth grants in; `plan.json` lists the accounts), and "Not judged for lack of a declaration:", the rules
+that will not decide for lack of a declaration: relay it, since the operator can add the
+declaration before resuming (Recon has already sent its requests; Check sends none until
+the run is resumed); `intake` validates
 and prints the file resolved without contacting anything. `scope` also expands each
 `domain` root from certificate transparency (crt.sh) and DNS, contacting no server of the
 company's: in `scope.json`, `domains[].names[]` carries each name's `status` (`resolves`,
@@ -410,12 +454,21 @@ in this order:
    never covers (`outside_scheck`). Marks are `assessed`, `partial`, `not_assessed`,
    `not_applicable` (declared under `not_used`) and `outside_scheck`. A row is marked
    from the rules that decided, never from the checks that ran, and `population` says
-   how many of the in-scope assets were read. Every row that is not `assessed` carries
+   how many of the in-scope assets were read. A GitHub organization's repositories are read
+   in an order Plan sets from what the engagement file declares, under a compiled budget of
+   4,000 requests per organization; the population's `selection` names what chose the
+   repositories read (`tiers`, `fallback`, `read`, `in_scope`, `spent`, `budget`, and the
+   `kind` of read it counts), and text prints it as "Repositories: ..." or, when kinds
+   differ, "Repositories read for <kind>: ...". `sampled` on such a row means the budget
+   stopped before every repository got that kind: the rest is unknown, nothing is judged
+   from the part not read, and the exit code does not change (`limit_reached` still
+   means exit 2). Tell the user which declaration would move a repository up, never that
+   an unread repository is clean. Every row that is not `assessed` carries
    `reasons` from a closed list: `no_credentials`, `insufficient_permission:<scope>`,
    `not_on_plan:<feature>`, `collector_not_built`, `refused`, `not_declared`,
    `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
-   `unavailable:<code>` (a check gave no usable answer) and `no_rule` (read, but no rule
-   in this version judges it, such as a Linux host's firewall and listeners). The Hosts
+   `unavailable:<code>` (a check gave no usable answer), `no_rule` (read, but no rule
+   in this version judges it, such as a Linux host's listening services you did not declare), and, on a departed person's line, `leaving_date_not_passed`, `left_date_within_collection` and `no_declared_github_login`. The Hosts
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no
@@ -423,7 +476,13 @@ in this order:
    root; one there is `not_applicable` when its rules had nothing to judge (no CNAME, no
    MX), since anything scheck could not read makes it `partial` or `not_assessed`.
 4. **`summary`**: up to five `items` to fix first (open, medium or above), `more` past
-   those, and counts of areas and of rules that had no usable evidence.
+   those, and counts of areas and of rules that had no usable evidence. An item is
+   `kind` `finding_id` or `person`. A `person` item (`person` is the handle; at most two)
+   gathers one departed person's open findings across tenants or ids, because removing
+   that person's access fixes them together; its `keys` still name each finding. A
+   `finding_id` item with `other_people: true` ranks on the instances left after a
+   person item took theirs (the text says "and other people"); do not add the two
+   counts. Open the findings by `keys`, not by the item's title.
 5. **`findings`**: one record per instance, keyed `{id, asset, subject}`, already in
    ranking order: open findings by severity in context first, then informational, then
    accepted. Lead with the first. A domain finding's `asset` is the most specific one
@@ -448,16 +507,34 @@ in this order:
    `not_applicable` or `not_assessed`, and whether it decided on `complete` evidence.
    `not_matched` means the evidence disproved that one predicate; `not_assessed` is
    never a pass.
-7. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
+7. **`people_left`**: one record per person with a declared `left` date, whenever any
+   is declared, restating verdicts and deciding nothing. `tenants[]` has one entry per
+   Workspace or GitHub tenant: `asset` (null when no tenant of that provider is in
+   scope), `provider`, `state`, `line` (the sentence the text prints), `reason` where
+   there is one, and `accounts[]` with `finding_keys`. `state` `finding` or `accepted`
+   points at findings; `no_access_observed` means a complete read found none, and
+   `not_proven` means an incomplete read did not see the person, which is not proof of
+   no access. `not_judged` (leaving date not passed or within collection),
+   `not_checked`, `not_in_scope` and `no_login_declared` mean nothing was concluded:
+   report them as gaps, never as a person being clean. `production_write` on an
+   account says whether the raise for push access to a production repository applied
+   (`applied`, with `repositories`) or was not established. Treat names as personal
+   data.
+8. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
    `expired`, `not_applied`, `not_matched` for likely fixed, `rule_not_decided`,
    `subject_not_found` when no instance with that subject was read on this run), and the
-   items for a readout. A `rule_not_decided` whose `why` says "an instance is open under
+   items for a readout. A `context_*` note says a declaration and the evidence
+   disagree (a verified Workspace domain outside the roots, a `deploys_to` repository not
+   seen, archived or not read, a `not_used` area the evidence contradicts); it is not a
+   finding, has no severity and never moves the exit code. A `context_not_used` note is
+   also on its risk-area row as `context_notes`: the area is not *not applicable*, so
+   tell the user to remove it from `not_used` if the evidence is theirs. A `rule_not_decided` whose `why` says "an instance is open under
    it" means the entry is on a root while the finding is on a name under it: tell the
    user to accept it on the asset it names. A `subject_not_found` whose `why` says "that
    subject was read on" names the asset the entry belongs on; one that says "nothing
    with that subject points anywhere" means the record is gone: confirm, then remove the
    entry.
-8. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
+9. **`egress`**: what left the machine. `sources` (the DNS resolver with its query
    count, of which `control_lookups` counts root controls and `invalid_queries` counts
    actual queries for reserved-name controls; `control_invalid` says whether any
    such query was sent,
@@ -471,7 +548,7 @@ in this order:
    asked for) and `ssh_resolved_by_jump` (names a jump host resolved),
    `host_side_effects`, and `model` and `telemetry`, always `none`. `stored` is the run
    directory, null under `--no-persist`.
-9. **`assets`**: per asset its status, principal, `trace` (every command sent, with
+10. **`assets`**: per asset its status, principal, `trace` (every command sent, with
    decision and output hash, in order) and, for a host, `checks` counts and its own
    report whole at `envelope`.
 

@@ -31,37 +31,53 @@ Outside scheck   Malware on any machine, application logic, processes, lookalike
 
 Fix these first: a ranking of what was checked, not of all your risks
   1  critical   A departed person or retired account retains access (production)
-             base high, raised: pat left on 2026-09-01 and still administers the production
-             repository
-  2  high      An outside collaborator administers a production repository (production)
-  3  high      The organization does not require two-factor authentication (engineering)
+             base high, raised: this person left and still holds administrator rights, so this ranks
+             one step higher
+  2  critical   The organization does not require two-factor authentication (engineering)
+             base high, raised: what was observed contradicts what you declared at access.mfa[0], so
+             this ranks one step higher
+  3  high      An outside collaborator administers a production repository (production)
   4  high      An organization owner has no two-factor authentication (engineering)
-  5  high      An administrator is not among the declared expected administrators (engineering)
-             base medium, raised: the expected owners declaration names Alex; unexpected was also
-             observed as an owner
+  5  high      A repository is public without a public declaration (production)
 4 more open at medium or above; see Findings. Below: 0 low, 0 informational, 0 accepted.
 
-A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
-in part: identity and access, CI/CD and supply chain. Not checked: secrets, cloud configuration,
-data stores and backups, external surface, web application, hosts, email and domain, logging and
-incident readiness. Anything not checked is unknown, not fine.
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: identity and access, CI/CD and supply chain. Not checked: secrets, cloud
+configuration, data stores and backups, external surface, web application, hosts, email and domain,
+logging and incident readiness. Anything not checked is unknown, not fine.
 
 COVERAGE
 Identity and access      checked in part
   2 of 2 assets read.
-  This version of scheck has no rule for it (Delegated organization roles, repository invitations,
-  sign-in history, selected-repository visibility and unobserved repository administrators are not
-  assessed).
+  Not judged in this version: sign-in through another identity provider (SSO), and that provider's
+  2-step verification; which kind of 2-step verification people use (security key, app or text
+  message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed
+  to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
+  Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
+  the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
+  members' SSH keys; write to production repositories by a departed person not listed among its
+  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  self-hosted runners a departed person added; what a departed person did after leaving (audit log
+  not read). Also not judged on the assets read: Delegated organization roles, repository
+  invitations, sign-in history, selected-repository visibility and unobserved repository
+  administrators are not assessed.
 Secrets                  not checked
   2 of 2 assets read.
-  This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
-  unsupported secret locations, unreported patterns and history outside the supported mirror
-  traversal are not assessed).
+  Not judged in this version: whether GitHub blocks secrets before they are pushed (push
+  protection); secrets printed in CI logs; secrets inside container images; secrets pasted in chat
+  and shared documents. Also not judged on the assets read: Actions secret values, credential
+  usability/rotation, unsupported secret locations, unreported patterns and history outside the
+  supported mirror traversal are not assessed.
 CI/CD and supply chain   checked in part
   2 of 2 assets read.
-  This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
+  Not judged in this version: who can push to repositories that deploy to production, contractors
+  included; review rules on the production deployment environment; approval before workflows run on
+  pull requests from forks; self-hosted runners that public repositories can use; which third-party
+  actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where
+  they send data. Also not judged on the assets read: PR review strength and bypass, Actions runtime
   policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and
-  dependency runtime exploitability are not assessed).
+  dependency runtime exploitability are not assessed.
 Not requested            Not part of this run: cloud configuration, data stores and backups,
                          external surface, web application, hosts, email and domain, logging and
                          incident readiness. To include one, list it under roots in the engagement
@@ -71,11 +87,11 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          any of them, and laptops you did not list were not looked at.
                          Application logic: authenticated testing of access control and business
                          rules.
-                         Processes: whether offboarding, incident response and vendor reviews are
-                         done as written.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
-FINDINGS: 9 open (1 critical, 6 high, 2 medium), 0 informational, 0 accepted
+FINDINGS: 9 open (2 critical, 4 high, 3 medium), 0 informational, 0 accepted
 Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
 problems than anything here.
 To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
@@ -88,31 +104,34 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Concluded from request:collaborators, declared:people.pat.left
    Severity      critical: base high, +1 attribute admin (collaborators: former
                  permissions.admin=true)
-   Why here      Pat left on 2026-09-01 and still administers the production repository.
+   Why here      This person left and still holds administrator rights, so this ranks one step
+                 higher.
    Fix           Complete offboarding: suspend or remove the account or its access, and review
-                 credentials and sessions.
+                 credentials and sessions. If they could push to a repository that deploys to
+                 production, also rotate the secrets that repository's workflows can read and its
+                 deploy keys, and review its commits and workflow runs since their leaving date.
 
-2  high  An outside collaborator administers a production repository (production)
-   [github.outside_admin_on_production]
-   Subject       external (account external)
-   You declared  engagement.yaml assets.production.context.deploys_to: Operator declaration at
-                 assets.production.context.deploys_to
-   Observed      outside (12:00, as alice (user ID 41)): external permissions.admin=true
-   Observed      collaborators (12:00, as alice (user ID 41)): external permissions.admin=true
-   Concluded from request:outside, request:collaborators,
-                  declared:assets.production.context.deploys_to
-   Severity      high
-   Why here      The repository deploys to production and external has effective administrative
-                 permission.
-   Fix           Confirm the administrative need and reduce repository permissions where possible.
-
-3  high  The organization does not require two-factor authentication (engineering)
+2  critical  The organization does not require two-factor authentication (engineering)
    [github.mfa_not_required]
+   You declared  engagement.yaml access.mfa[0]: Operator declaration at access.mfa[0]
    Observed      organization (12:00, as alice (user ID 41)): two_factor_requirement_enabled=false
-   Severity      high
-   Why here      This is the standard rating for the observed access or settings.
+   Concluded from request:organization, declared:access.mfa[0]
+   Severity      critical: base high, +1 contradiction (access.mfa[0])
+   Why here      What was observed contradicts what you declared at access.mfa[0], so this ranks one
+                 step higher.
    Fix           Enable GitHub's organization two-factor requirement after checking users and
                  automation; SAML or identity-provider MFA does not replace this GitHub control.
+
+3  high  An outside collaborator administers a production repository (production)
+   [github.outside_admin_on_production]
+   Subject       external (account external)
+   You declared  engagement.yaml assets.production: Operator declaration at assets.production
+   Observed      outside (12:00, as alice (user ID 41)): external permissions.admin=true
+   Observed      collaborators (12:00, as alice (user ID 41)): external permissions.admin=true
+   Concluded from request:outside, request:collaborators, declared:assets.production
+   Severity      high
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Confirm the administrative need and reduce repository permissions where possible.
 
 4  high  An organization owner has no two-factor authentication (engineering)
    [github.owner_without_mfa]
@@ -124,20 +143,7 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Fix           Enable strong GitHub two-factor authentication for this account, preferably
                  security keys; check it even when SAML sign-in uses MFA.
 
-5  high  An administrator is not among the declared expected administrators (engineering)
-   [identity.unexpected_admin]
-   Subject       unexpected (account unexpected)
-   You declared  engagement.yaml identity.expected_owners: Operator declaration at
-                 identity.expected_owners
-   Observed      owners (12:00, as alice (user ID 41)): owner unexpected
-   Concluded from request:owners, declared:identity.expected_owners
-   Severity      high: base medium, +1 contradiction (identity.expected_owners)
-   Why here      The expected owners declaration names Alex; unexpected was also observed as an
-                 owner.
-   Fix           Confirm whether the person needs full administrator access; remove it or correct
-                 the expected administrator declaration.
-
-6  high  A repository is public without a public declaration (production)
+5  high  A repository is public without a public declaration (production)
    [github.undeclared_public_repository]
    Subject       example-org/production (repository example-org/production)
    Observed      repository (12:00, as alice (user ID 41)): visibility=public
@@ -146,25 +152,24 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Fix           Confirm public visibility is intentional and declare public: true, or change the
                  repository visibility.
 
-7  high  A deploy key can write to the repository (production) [github.writable_deploy_key]
+6  high  A deploy key can write to the repository (production) [github.writable_deploy_key]
    Subject       deploy key 9 (deploy_key deploy-key:9)
-   You declared  engagement.yaml assets.production.context: Operator declaration at
-                 assets.production.context
+   You declared  engagement.yaml assets.production: Operator declaration at assets.production
    Observed      keys (12:00, as alice (user ID 41)): deploy key 9 read_only=false
-   Concluded from request:keys, declared:assets.production.context
-   Severity      high: base medium, +1 deploys to production (assets.production.context.deploys_to)
-   Why here      This repository deploys to production.
+   Concluded from request:keys, declared:assets.production
+   Severity      high: base medium, +1 deploys to production (assets.production.deploys_to)
+   Why here      This repository is declared to deploy to production, so this rating rises one step.
    Fix           Replace the key with a read-only deploy key or a narrowly scoped application
                  credential.
 
-8  medium  Organization members receive broad default repository access (engineering)
+7  medium  Organization members receive broad default repository access (engineering)
    [github.broad_default_member_permission]
    Observed      organization (12:00, as alice (user ID 41)): default_repository_permission=write
    Severity      medium
    Why here      This is the standard rating for the observed access or settings.
    Fix           Set a narrow base permission and grant repository access through specific teams.
 
-9  medium  The organization has more owners than its size needs (engineering)
+8  medium  The organization has more owners than its size needs (engineering)
    [github.too_many_owners]
    Observed      owners (12:00, as alice (user ID 41)): observed owners=5 members=6
    Observed      members (12:00, as alice (user ID 41)): observed owners=5 members=6
@@ -172,6 +177,18 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Why here      This is the standard rating for the observed access or settings.
    Fix           Reduce owner privileges to the people who need them while retaining at least two
                  recovery-capable owners.
+
+9  medium  An administrator is not among the declared expected administrators (engineering)
+   [identity.unexpected_admin]
+   Subject       unexpected (account unexpected)
+   You declared  engagement.yaml access.admins: Operator declaration at access.admins
+   You declared  engagement.yaml people.casey: Operator declaration at people.casey
+   Observed      owners (12:00, as alice (user ID 41)): owner unexpected
+   Concluded from request:owners, declared:access.admins, declared:people.casey
+   Severity      medium
+   Why here      This is the standard rating for the observed access or settings.
+   Fix           Confirm whether the person needs full administrator access; remove it or correct
+                 the expected administrator declaration.
 
 IF YOU DECIDE NOT TO FIX A FINDING
 Only for a risk you decide not to fix, and decided by whoever owns it: paste the entry under
@@ -182,6 +199,16 @@ intent.accepted_risks in engagement.yaml and write the reason.
     - id: identity.former_person_has_access
       asset: production
       subject: former              # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
+      expires: 2027-01-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+  # The organization does not require two-factor authentication (engineering)
+  # critical: accept only with whoever owns the business, never to quiet the report
+    - id: github.mfa_not_required
+      asset: engineering
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
       date: 2026-10-09             # the day this acceptance is written
@@ -199,32 +226,11 @@ intent.accepted_risks in engagement.yaml and write the reason.
       expires: 2027-01-07          # after this date the finding counts again
                                    # until someone re-reviews it
 
-  # The organization does not require two-factor authentication (engineering)
-  # high: accept only with whoever owns the business, never to quiet the report
-    - id: github.mfa_not_required
-      asset: engineering
-      reason: ""                   # why this is acceptable here; required
-      accepted_by: ""              # a handle under people: alex (employee)
-      date: 2026-10-09             # the day this acceptance is written
-      expires: 2027-01-07          # after this date the finding counts again
-                                   # until someone re-reviews it
-
   # An organization owner has no two-factor authentication (engineering)
   # high: accept only with whoever owns the business, never to quiet the report
     - id: github.owner_without_mfa
       asset: engineering
       subject: alex                # required: this entry accepts this one only
-      reason: ""                   # why this is acceptable here; required
-      accepted_by: ""              # a handle under people: alex (employee)
-      date: 2026-10-09             # the day this acceptance is written
-      expires: 2027-01-07          # after this date the finding counts again
-                                   # until someone re-reviews it
-
-  # An administrator is not among the declared expected administrators (engineering)
-  # high: accept only with whoever owns the business, never to quiet the report
-    - id: identity.unexpected_admin
-      asset: engineering
-      subject: unexpected          # required: this entry accepts this one only
       reason: ""                   # why this is acceptable here; required
       accepted_by: ""              # a handle under people: alex (employee)
       date: 2026-10-09             # the day this acceptance is written
@@ -270,6 +276,20 @@ intent.accepted_risks in engagement.yaml and write the reason.
       date: 2026-10-09             # the day this acceptance is written
       expires: 2027-04-07          # after this date the finding counts again
                                    # until someone re-reviews it
+
+  # An administrator is not among the declared expected administrators (engineering)
+    - id: identity.unexpected_admin
+      asset: engineering
+      subject: unexpected          # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # a handle under people: alex (employee)
+      date: 2026-10-09             # the day this acceptance is written
+      expires: 2027-04-07          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+People who left
+  pat (left 2026-09-30)
+    GitHub: former can still push to example-org/production, declared production (finding).
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.

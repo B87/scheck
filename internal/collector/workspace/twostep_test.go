@@ -23,7 +23,7 @@ func stepFixture(users ...User) (Evidence, Context) {
 	e.Users.Items = users
 	e.Access.Accounts = nil
 	for _, u := range users {
-		e.Access.Accounts = append(e.Access.Accounts, AccountAccess{ID: u.ID, Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: "a" + u.ID, Decision: "sent", Status: 200}}}})
+		e.Access.Accounts = append(e.Access.Accounts, AccountAccess{ID: u.ID, Assignments: Population[Assignment]{Complete: true, Items: []Assignment{}, Reads: []Read{{Op: OpUserAssignments, RequestID: "a" + u.ID, Decision: "sent", Status: 200, CollectedAt: e.Users.Reads[0].CollectedAt}}}})
 	}
 	return e, c
 }
@@ -281,7 +281,7 @@ func TestAdminWithoutTwoStepOutcomes(t *testing.T) {
 			if j.Verdict != tc.want || !strings.Contains(j.Excerpt, tc.text) {
 				t.Fatalf("want %s with %q, got %+v", tc.want, tc.text, j)
 			}
-			if slices.Contains(j.Attributes, "contradiction") {
+			if j.Has("contradiction") {
 				t.Fatal("enrollment raised as a contradiction")
 			}
 		})
@@ -299,7 +299,7 @@ func TestAdminWithoutTwoStepOutcomes(t *testing.T) {
 
 func TestTwoStepDeclarationComparison(t *testing.T) {
 	raised := func(j finding.Judgment) bool {
-		return slices.Contains(j.Attributes, "contradiction") && slices.Equal(j.Sources, []string{"access.mfa[0]"}) && strings.Contains(j.Context, "so this ranks one step higher") && slices.Equal(j.NotChecked, []string{federationCaveat})
+		return j.Has("contradiction") && slices.Equal(j.Sources, []string{"access.mfa[0]"}) && strings.Contains(j.Why, "so this ranks one step higher") && slices.Equal(j.NotChecked, []string{federationCaveat})
 	}
 	base := func() (Evidence, Context) {
 		admin := stepUser("boss", "/Eng", new(false), new(false))
@@ -338,7 +338,7 @@ func TestTwoStepDeclarationComparison(t *testing.T) {
 			if raised(eng) != tc.eng || raised(sales) != tc.sales || raised(root) {
 				t.Fatalf("raise mismatch: eng %+v sales %+v", eng, sales)
 			}
-			if !raised(eng) && (eng.Context != "" || len(eng.Sources) != 0 || len(eng.NotChecked) != 0) {
+			if !raised(eng) && (eng.Why != "" || len(eng.Sources) != 0 || len(eng.NotChecked) != 0) {
 				t.Fatal("caveat or source on an unraised instance", eng)
 			}
 			if j := accountOutcome(t, out, "boss@example.com"); j.Verdict != Fired || raised(j) {
@@ -443,7 +443,7 @@ func TestCollectFreshDetailTwoStepEvidence(t *testing.T) {
 				return inventoryFixture(r.Op)
 			})
 			e := Collect(context.Background(), sender, Target{Asset: "saas:google-workspace:example.com", Stage: "recon"}, Context{})
-			j, ok := unitOutcome(t, e.Judgments, "/")
+			j, ok := unitOutcome(t, Judge(e, "saas:google-workspace:example.com", Context{}), "/")
 			if !ok || j.Verdict != tc.want {
 				t.Fatalf("want %s got %+v", tc.want, j)
 			}
@@ -478,8 +478,8 @@ func TestTwoStepReviewWording(t *testing.T) {
 		} {
 			c.MFA = mfa
 			j, _ := unitOutcome(t, Judge(e, "asset", c), "/")
-			if !strings.Contains(j.Context, want) || strings.Count(j.Context, ". ") != 0 {
-				t.Fatal(mfa, j.Context)
+			if !strings.Contains(j.Why, want) || strings.Count(j.Why, ". ") != 0 {
+				t.Fatal(mfa, j.Why)
 			}
 		}
 	})

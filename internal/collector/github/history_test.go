@@ -447,7 +447,7 @@ func TestHistoryPublicSourceAndPathRedaction(t *testing.T) {
 	js := JudgeHistory(e)
 	for _, j := range js {
 		if j.ID == finding.IDGitHubHistoryCredential && j.Verdict == Fired {
-			if !slices.Contains(j.Attributes, "observed_public") || j.Details["repository_read"] != "repo-read" {
+			if !j.Has("public_repository") || j.Details["repository_read"] != "repo-read" {
 				t.Fatal(j)
 			}
 		}
