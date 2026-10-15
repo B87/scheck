@@ -26,7 +26,7 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"identity.github_apps", "GitHub Apps installed on the organization and what they can reach"},
 		{"identity.github_tokens", "GitHub's rules for personal access tokens"},
 		{"identity.ssh_keys", "GitHub members' SSH keys"},
-		{"identity.leaver_unlisted_write", "write to production repositories by a departed person not listed among its collaborators (read per login from a later step)"},
+		{"identity.leaver_unlisted_write", "access to repositories not declared `deploys_to: production` by a departed person not listed among their collaborators"},
 		{"identity.leaver_additions", "deploy keys, GitHub App authorizations and self-hosted runners a departed person added"},
 		{"identity.leaver_activity", "what a departed person did after leaving (audit log not read)"},
 	},

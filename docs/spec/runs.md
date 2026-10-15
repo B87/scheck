@@ -28,13 +28,14 @@ and locked while a run holds it:
   check.json           stage 5: what Check read of each GitHub root's repositories, in
                        Plan's order, with the requests spent and the people fields recomputed after Check (E9 step 6a),
                        and of each Workspace tenant its OAuth grants and Gmail forwarding
-                       (E9 step 6b); `recon.json` keeps the inventory only
+                       (E9 step 6b), and `follow_ups[]`, one object per F1 pair opened or
+                       cut (E9 step 7); `recon.json` keeps the inventory only
   evidence/            stages 3 and 5: one file per result, redacted and truncated;
                        per host <asset>.json and <asset>.collection.json, and
                        requests/, the gate's successes a resume may reuse
-  findings.json        stage 6: rule outcomes and follow-ups opened and settled; every
-                       network-collector verdict with its severity chain, as output only
-                       (E9 step 1b)
+  findings.json        stage 6: rule outcomes (a judgment cites a follow-up's
+                       read in its references); every network-collector verdict
+                       with its severity chain, as output only (E9 step 1b)
   report.json          stage 7, with report.txt
   audit.jsonl          every request, command and API call, in order
 ```
@@ -79,7 +80,7 @@ front page requested, `passive` when a domain root was read.
 Plan lists each host's checks, orders each GitHub root's repositories and each Workspace
 tenant's accounts and names what will not be judged ("Plan selection and follow-ups");
 Check reads those repositories under the request budget, reads each tenant's OAuth grants
-and Gmail forwarding in Plan's order, and opens no follow-up until E9 step 7. A Workspace
+and Gmail forwarding in Plan's order, then opens the follow-up reads of F1 ("Plan selection and follow-ups", E9 step 7). A Workspace
 tenant `collected` by Recon is reconciled in memory to `incomplete` when Check's reads end
 short; `recon.json` keeps Recon's. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with

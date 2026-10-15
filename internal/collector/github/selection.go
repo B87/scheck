@@ -73,7 +73,8 @@ type Selection struct {
 	// complete: more repositories may be in scope than were listed.
 	InScopeAtLeast bool       `json:"in_scope_at_least,omitempty"`
 	Order          []Selected `json:"order"`
-	// Notes are Plan's sentences about a declaration that ordered nothing.
+	// Notes are Plan's sentences on the selection: a declaration that
+	// ordered nothing, or the permission follow-up Check may add.
 	Notes []string `json:"notes,omitempty"`
 }
 
@@ -254,6 +255,9 @@ type Repositories struct {
 	CI        []RepositoryCI      `json:"ci,omitempty"`
 	Alerts    []RepositoryAlerts  `json:"alerts,omitempty"`
 	History   []RepositoryHistory `json:"history,omitempty"`
+	// Permissions are the permission follow-up's entries (F1), read after
+	// the kinds and never counted against the budget.
+	Permissions []PermissionRead `json:"permissions,omitempty"`
 }
 
 // meter counts the requests Check sends under the budget: a request the
@@ -413,6 +417,7 @@ func CollectRepositories(ctx context.Context, g Sender, sel Selection, in CheckI
 // read of the selection.
 func (e Evidence) With(r Repositories) Evidence {
 	e.RepositoriesAccess, e.RepositoriesCI, e.RepositoriesAlerts, e.RepositoriesHistory = r.Access, r.CI, r.Alerts, r.History
+	e.Permissions = r.Permissions
 	read := 0
 	for _, a := range r.Access {
 		if a.Repository != nil {

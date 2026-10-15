@@ -55,6 +55,31 @@ func TestRegistryInvariants(t *testing.T) {
 		{"no kept fields", func(o *Op) { o.Keep = nil }, "fields it keeps"},
 		{"a repository list without an exclusion key", func(o *Op) { o.List = &List{Items: "$", Kind: KindRepo} }, "exclusion key"},
 		{"a user list without an exclusion key", func(o *Op) { o.List = &List{Items: "users", Kind: KindUser} }, "exclusion key"},
+		{"a collaborator login on another path", func(o *Op) {
+			o.URL += "/hooks/{username}"
+			o.Params = append(o.Params, Param{Name: "username", Type: CollaboratorLogin})
+		}, "only the username of the compiled repository permission read"},
+		{"a collaborator login under an organization", func(o *Op) {
+			o.URL = "https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission"
+			o.Subject = "saas:github:{owner}"
+			o.Params = append(o.Params, Param{Name: "username", Type: CollaboratorLogin})
+		}, "{repo} picks the target"},
+		{"a permission read keeping wider fields", func(o *Op) {
+			o.ID = "github.collaborator_permission"
+			o.URL = "https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission"
+			o.Params = append(o.Params, Param{Name: "username", Type: CollaboratorLogin})
+			o.Keep = []string{"permission", "user.email"}
+		}, "keeps exactly its frozen fields"},
+		{"another op on the permission path", func(o *Op) {
+			o.ID = "github.other"
+			o.URL = "https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission"
+			o.Params = append(o.Params, Param{Name: "username", Type: CollaboratorLogin})
+			o.Keep = slices.Clone(collaboratorPermissionKeep)
+		}, "keeps exactly its frozen fields"},
+		{"a plain login picking whose permission", func(o *Op) {
+			o.URL = "https://api.github.com/repos/{owner}/{repo}/collaborators/{username}/permission"
+			o.Params = append(o.Params, Param{Name: "username", Type: Login})
+		}, "{username} picks the target but is not in the subject"},
 		{"a credential on a web op", func(o *Op) { *o = testOps[3]; o.Auth = GitHubToken }, "never carries a credential"},
 		{"a web op with a fixed host", func(o *Op) { *o = testOps[3]; o.URL = "https://example.com/x" }, "{host}"},
 		{"an optional path parameter", func(o *Op) { o.Params[1].Optional = true }, "optional"},

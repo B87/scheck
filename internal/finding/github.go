@@ -18,6 +18,11 @@ const (
 	IDGitHubWritableDeployKey            = "github.writable_deploy_key"
 )
 
+// RemediationFormerPersonWorkspace is identity.former_person_has_access's
+// remediation on a Workspace account, where the shared definition's words
+// are GitHub's (docs/spec/workspace-collector.md, "Rules").
+const RemediationFormerPersonWorkspace = "Suspend the account now. Before deleting it, revoke its third-party app tokens and remove any forwarding or delegation; deleting the account does not tell you where its mail went."
+
 var githubDefs = []Def{
 	githubDef(IDGitHubMFANotRequired, "The organization does not require two-factor authentication", SevHigh, "", "An account can join or remain without the organization's second-factor requirement.", "Enable GitHub's organization two-factor requirement after checking users and automation; SAML or identity-provider MFA does not replace this GitHub control."),
 	githubDef(IDGitHubOwnerWithoutMFA, "An organization owner has no two-factor authentication", SevHigh, "account", "Compromise of this owner's password can grant organization administration.", "Enable strong GitHub two-factor authentication for this account, preferably security keys; check it even when SAML sign-in uses MFA."),

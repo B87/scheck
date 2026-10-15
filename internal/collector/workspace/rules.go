@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -242,6 +243,9 @@ func Judge(e Evidence, asset string, c Context) []finding.Judgment {
 			if j.Verdict == Fired && admin {
 				j.Reads = adminReads
 				j.Attributes = []finding.Attribute{{Name: "admin"}}
+			}
+			if j.Verdict == Fired {
+				j.NotChecked = append(j.NotChecked, e.leaverUnread(u, c)...)
 			}
 			out = append(out, j)
 		}
@@ -632,4 +636,59 @@ func privilegeLabel(p Privilege) string {
 		return " (reset account passwords)"
 	}
 	return ""
+}
+
+// leaverUnread names, for a fired leaver, the account's OAuth grants and
+// mail forwarding that were not read: tier 1 reads them first, so F2 is
+// no follow-up row, and the finding says what that order did not reach
+// (docs/spec/workspace-collector.md, "Rules").
+func (e Evidence) leaverUnread(u User, c Context) []string {
+	var out []string
+	address := u.Primary
+	stopped := func(reads []Read) string {
+		for _, r := range reads {
+			if limitedRead(r) {
+				return "the run stopped first (" + cmp.Or(r.Detail, "a limit was reached") + ")"
+			}
+		}
+		return "the run stopped first (a limit was reached)"
+	}
+	failed := func(r Read) string {
+		return "the read failed: " + cmp.Or(r.Detail, strings.ReplaceAll(strings.TrimPrefix(cmp.Or(r.Reason, r.Decision), "unavailable:"), "_", " "))
+	}
+	switch i := slices.IndexFunc(e.OAuth.Accounts, func(a AccountGrants) bool { return a.ID == u.ID }); {
+	case !e.OAuth.Selected:
+		out = append(out, "Third-party app grants of "+address+" were not read: the optional OAuth grants profile is not selected (`directory_oauth`)")
+	case i < 0:
+		var reads []Read
+		for _, a := range e.OAuth.Accounts {
+			reads = append(reads, a.Read)
+		}
+		out = append(out, "Third-party app grants of "+address+" were not read: "+stopped(reads))
+	case !e.OAuth.Accounts[i].Usable:
+		out = append(out, "Third-party app grants of "+address+" were not read: "+failed(e.OAuth.Accounts[i].Read))
+	}
+	mail := "Mail forwarding from " + address + " was not read: "
+	switch i := slices.IndexFunc(e.Mail.Accounts, func(a MailboxForwarding) bool { return a.ID == u.ID }); {
+	case i >= 0 && e.Mail.Accounts[i].AutoUsable && e.Mail.Accounts[i].FiltersUsable:
+	case c.MailApproval == nil:
+		out = append(out, mail+"`authorization.mailboxes` does not name this mailbox")
+	case !c.MailApproval.Current:
+		out = append(out, mail+"`authorization.mailboxes` is not current")
+	case !e.Mail.Selected:
+		// The profile's own coverage line says forwarding was not read.
+	case i < 0:
+		var reads []Read
+		for _, a := range e.Mail.Accounts {
+			reads = append(reads, a.AutoRead, a.FiltersRead)
+		}
+		out = append(out, mail+stopped(reads))
+	default:
+		r := e.Mail.Accounts[i].AutoRead
+		if e.Mail.Accounts[i].AutoUsable {
+			r = e.Mail.Accounts[i].FiltersRead
+		}
+		out = append(out, mail+failed(r))
+	}
+	return out
 }

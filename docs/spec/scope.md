@@ -564,6 +564,11 @@ rejects:
 - a placeholder in the URL's host or path that is not in the subject, so the subject
   admitted is the target sent to (only the query, a page or a cursor, varies outside
   it);
+- a parameter typed `CollaboratorLogin` anywhere but the `{username}` of the GitHub
+  repository permission read (`github.collaborator_permission`, GET, exact compiled path,
+  subject the repository, no query, not a list), where it names whose permission is asked
+  and never the target, and only on that op id with its retained fields equal to the
+  frozen list exactly;
 - a principal op or a credential exchange with any parameter, since only its asset
   scopes it.
 

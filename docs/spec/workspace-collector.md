@@ -641,6 +641,24 @@ step 6 the forwarding rule.
 | `workspace.oauth_broad_scope` | medium / oauth_app, `+1 attribute:admin_grantor` when a known-active super admin's or declared break-glass account's own grant is broad | A known-active grantor's grant to the app holds a supported broad scope | On a complete grant population, the app holds only recognized sign-in scopes, or access beyond sign-in only through suspended or archived accounts | Broad only through accounts of unknown status, only unclassified scopes, or a partial population; asset-level outcomes in "OAuth grants" |
 | `workspace.external_forwarding` | medium / mail_forward, `+1 attribute:admin` when the mailbox is a known-active super admin's | A read mailbox has enabled auto-forwarding, or a filter that forwards, to an address outside the verified domains | Per mailbox, both reads usable and whole, and every forward goes to a verified domain or none exists; outcomes in "Forwarding interpretation" | A read that failed, was cut or was not recognized; an unplaceable destination; unknown mailbox activity; a subdomain of a verified domain |
 
+A fired `identity.former_person_has_access` names what was not read for that account
+(E9 step 7; [engagement.md](engagement.md), "Plan selection and follow-ups", on F2, which
+is not a follow-up row: the account's tier-1 reads are the answer). When the account's
+OAuth grants were not read, Not checked gains "Third-party app grants of *address* were
+not read: *reason*", and when its mail forwarding was not read, "Mail forwarding from
+*address* was not read: *reason*". The reasons:
+
+| Read | Reasons, in the order they are tried |
+|---|---|
+| OAuth grants | the profile is not selected: "the optional OAuth grants profile is not selected (`directory_oauth`)"; the account has no grants entry: "the run stopped first (*phrase*)"; its entry is not usable: "the read failed: *phrase*" |
+| Forwarding | the mailbox's forwarding was read and usable: no line; the tenant has no `authorization.mailboxes` entry for it: "`authorization.mailboxes` does not name this mailbox"; its entry is not current: "`authorization.mailboxes` is not current"; the profile does not select forwarding: no line, since the profile's own coverage line says it; the mailbox was never asked: "the run stopped first (*phrase*)"; otherwise "the read failed: *phrase*" |
+
+On a Workspace account the finding's remediation (`finding.RemediationFormerPersonWorkspace`,
+used by the report) is: "Suspend the account now. Before deleting it, revoke its
+third-party app tokens and remove any forwarding or delegation; deleting the account does
+not tell you where its mail went." A raise for a left person's forwarding mailbox on
+`workspace.external_forwarding` is deferred to the next severity-table change.
+
 Admin counts follow [engagement.md](engagement.md), "Admins": exclude declared service
 accounts and at most two break-glass accounts from the numerator; shared and
 unattributed accounts count. Active users less service and break-glass accounts form

@@ -46,8 +46,8 @@ Identity and access      not checked
   to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
   Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
   the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
-  members' SSH keys; write to production repositories by a departed person not listed among its
-  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  members' SSH keys; access to repositories not declared `deploys_to: production` by a departed
+  person not listed among their collaborators; deploy keys, GitHub App authorizations and
   self-hosted runners a departed person added; what a departed person did after leaving (audit log
   not read). Also not judged on the assets read: Delegated organization roles, repository
   invitations, sign-in history, selected-repository visibility and unobserved repository

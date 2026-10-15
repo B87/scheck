@@ -66,6 +66,9 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && a.Collector == "workspace" {
+			f.Remediation.Summary = finding.RemediationFormerPersonWorkspace
+		}
 		if def.MultiFact {
 			f.Rule.Kind = "multi_fact"
 		}

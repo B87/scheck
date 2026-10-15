@@ -268,6 +268,8 @@ type SubItem struct {
 	Judged []string `json:"judged,omitempty"`
 	// ReadNotJudged is what was read in the area that no rule judges.
 	ReadNotJudged []string `json:"read_not_judged,omitempty"`
+	// Detail is a line on how far the sub-item's follow-up reads got.
+	Detail string `json:"detail,omitempty"`
 }
 
 // ReasonDetail is one reason from the closed list and its detail.

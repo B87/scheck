@@ -472,7 +472,10 @@ in this order:
    row's `sub_items` are the host's domains. An `assessed` sub-item means only what its
    `judged` list names (the rules in `rules`) and nothing else: "SSH server assessed" on
    two settings is not "SSH is fine". `read_not_judged` is what was read there that no
-   rule judges; say so when you report it. The external row has sub-items per domain
+   rule judges; say so when you report it. A sub-item may carry `detail`, a line on how far
+   follow-up reads got (the Identity row's departed-people item says how many of a
+   departed person's production-repository permission reads GitHub was asked); report it
+   with the item. The external row has sub-items per domain
    root; one there is `not_applicable` when its rules had nothing to judge (no CNAME, no
    MX), since anything scheck could not read makes it `partial` or `not_assessed`.
 4. **`summary`**: up to five `items` to fix first (open, medium or above), `more` past

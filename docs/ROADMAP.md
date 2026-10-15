@@ -1644,8 +1644,9 @@ fixed sub-item lists per risk area; and a 7-day maximum age for what a resume ke
   `--stop-after plan` shows what will be read before any of it is.
 - *Check:* every read only rules consume, in Plan's order (per-repository children,
   workflow files, alerts, the mirror; per-user OAuth grants and Gmail forwarding),
-  breadth first under a request budget; then the follow-up table F1, F1b and F2, depth
-  at most 2, an invariants test.
+  breadth first under a request budget; then the follow-up table (F1; F1b and F2 are
+  answered by the access pass and Workspace tier 1, step 7), depth at most 2, an
+  invariants test.
 - *Analyze:* every collector's `Judge`, the host's grading, the multi-fact rules and then
   the adjustment table, which is data. The context notes C1 to C3.
 - *Report:* fixed sub-item lists with "not judged in this version: …", the oldest
@@ -1833,9 +1834,9 @@ older than 7 days is collected again on resume; every risk area's row prints its
    `github.JudgeAccess`; the users-unread line now carries the read's reason); a second
    found an address missing from an incomplete users list printed as "account observed"
    (fixed: the `not_proven` line). Step 4 is done.
-   Deferred to step 7 with F1 (per-login write reads): the R4 coverage sub-item "no
-   repository declared `deploys_to: production`; push to production by people who left
-   not judged", which is not built.
+   Carried to step 8: the R4 coverage sub-item "no repository declared
+   `deploys_to: production`; push to production by people who left not judged", which
+   step 7 did not build.
 5. R3 and the context notes, in two parts (5a done; 5b design).
    - *5a (done).* R3 `svc.listens_beyond_declared` with the `exposure:internet` step
      moving it as well as R1; the validation that exits 3 for `airgapped` on a service's
@@ -2007,10 +2008,50 @@ older than 7 days is collected again on resume; every risk area's row prints its
    - *Verified:* every finding id named in the not-judged list exists in
      `internal/finding` or its collector.
 7. The follow-up table, the loop and its invariants test; F1 with
-   `github.collaborator_permission`, and F2.
+   `github.collaborator_permission`; F1b and F2 recorded as answered by the access pass
+   and Workspace tier 1. Done (offline). Decided by the `security-consultant` (define,
+   2026-10-15), adopted by the implementing session. The table has one row, F1: F1b would
+   have no consumer (no rule reads branch protection for R4) and F2 duplicates Workspace
+   tier 1, so neither is a row; the invariants test still enforces depth at most 2 and
+   acyclicity, and the depth-2 allowance is unused in 0.0.2. F1 settles R4's "not listed"
+   cause and, in one narrow case, makes an abstained leaver judgment fire, never disprove
+   one; its causes, cap of 20, order, loop and `check.json` `follow_ups[]` are in
+   `spec/engagement.md` ("Plan selection and follow-ups", R4), the operation's frozen
+   fields and interpretation in `spec/github-collector.md`. The Workspace leaver finding
+   names the reads that did not happen and gains a remediation sentence
+   (`spec/workspace-collector.md`, "Rules"); the Identity row's departed-people item
+   carries the coverage line and the fixed not-judged item is reworded
+   (`spec/report.md`, "Coverage").
+   - *Design, `modularity` agent (code detail, not contract):* the follow-up table is data
+     in `internal/engagement/followup.go`; the permission read lives in the GitHub
+     collector (`permission.go`); the triggers are judged in memory in Check, over Recon's,
+     Check's and the follow-up evidence, and not persisted.
+   - *Code review of step 7* (`code-reviewer`), no must-fix. Should-fix, fixed with tests:
+     a declared `[bot]` login opened pairs that were refused; the limit and refusal
+     outcomes were untested. Nits, fixed: a read sent and stopped by a limit was worded
+     "not asked" (it is `failed`, worded as a failed read); the gate did not pin the op id
+     and retained fields of the `CollaboratorLogin` read; the spec's order sentence was
+     ambiguous (the round is now the primary key).
+   - *Re-review of the step 7 fixes*: two should-fixes, fixed: after a 401 the loop kept
+     sending with the rejected token; a limit applied before sending was reported as sent
+     and failed.
+   - *Third review of step 7*: a must-fix, fixed: a request sent but answered by no response
+     (the deadline in flight) was worded not asked; reads now keep the gate's `sent`.
+     Should-fixes fixed: the coverage count used another rule; the 401 tests did not count
+     requests or cover two roots.
+   - *Deferred from step 7:* F1 for repositories not declared `deploys_to: production`;
+     a departed person's GitHub Apps, personal access tokens, SSH keys and deploy keys;
+     a `+1 attribute:left` on `workspace.external_forwarding` for a left person's mailbox
+     (the next change to the severity table); lab assertions for the 403 behaviour and
+     the 200 `none` answer; a test that a ledger answer on resume counts against the F1
+     cap; building F1's request parameters from the row's declared sources (the run test
+     asserts them instead).
 8. The 7-day resume maximum (a zero collection time counts as expired, so a kept
    observation with no recorded time is collected again), and the critical definition with its ceilings in
    `spec/engagement.md`.
+   - *Carried from step 7 (decided by the implementing session):* the R4 coverage
+     sub-item "no repository declared `deploys_to: production`; push to production by
+     people who left not judged" (first carried from step 4).
 9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
    `data.matters_most` again, run through the `client` interview mode on the wording,
    and gains the `expected_services` consumers (`db.listens_unfiltered`,

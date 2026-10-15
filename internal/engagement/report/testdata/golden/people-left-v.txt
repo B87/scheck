@@ -55,14 +55,16 @@ Identity and access      checked in part
   The declared leaving date had not passed when it was read (erin-gh; Workspace offboarding); no
   GitHub login is declared for this person (declared:dana); the Workspace evidence it needs was
   missing or not recognized (Workspace offboarding).
+  Departed people's access to production repositories: asked GitHub for 2 of 3 (login, repository)
+  pairs; the cap of 20 per run stopped the rest.
   Not judged in this version: sign-in through another identity provider (SSO), and that provider's
   2-step verification; which kind of 2-step verification people use (security key, app or text
   message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed
   to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
   Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
   the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
-  members' SSH keys; write to production repositories by a departed person not listed among its
-  collaborators (read per login from a later step); deploy keys, GitHub App authorizations and
+  members' SSH keys; access to repositories not declared `deploys_to: production` by a departed
+  person not listed among their collaborators; deploy keys, GitHub App authorizations and
   self-hosted runners a departed person added; what a departed person did after leaving (audit log
   not read). Also not judged on the assets read: Delegated organization roles, repository
   invitations, sign-in history, selected-repository visibility and unobserved repository
@@ -140,10 +142,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  date passed)
    Why here      This person left and still holds administrator rights, so this ranks one step
                  higher.
-   Fix           Complete offboarding: suspend or remove the account or its access, and review
-                 credentials and sessions. If they could push to a repository that deploys to
-                 production, also rotate the secrets that repository's workflows can read and its
-                 deploy keys, and review its commits and workflow runs since their leaving date.
+   Fix           Suspend the account now. Before deleting it, revoke its third-party app tokens and
+                 remove any forwarding or delegation; deleting the account does not tell you where
+                 its mail went.
 
 3  high  A departed person or retired account retains access (engineering)
    [identity.former_person_has_access]

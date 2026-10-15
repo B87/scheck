@@ -18,6 +18,10 @@ const (
 	OpRepository        = "github.repository"
 	OpCollaborators     = "github.collaborators"
 	OpDeployKeys        = "github.deploy_keys"
+	// OpCollaboratorPermission is F1's read: one login's permission on one
+	// repository (docs/spec/github-collector.md, "Selection under a budget
+	// and the permission follow-up (E9)").
+	OpCollaboratorPermission = "github.collaborator_permission"
 )
 
 // Ops is the compiled, GET-only inventory surface. Pagination accepts only a
@@ -65,5 +69,9 @@ func inventoryOps() []gate.Op {
 	collaborators := repoList(OpCollaborators, "/collaborators", []string{"id", "login", "type", "role_name", "permissions.admin", "permissions.pull", "permissions.push", "permissions.maintain", "permissions.triage"})
 	collaborators.URL += "&affiliation=all"
 	keys := repoList(OpDeployKeys, "/keys", []string{"id", "read_only"})
-	return []gate.Op{principal, org, membership, members, owners, outside, invitations, repos, membersMFA, ownersMFA, repository, collaborators, keys}
+	permission := object(OpCollaboratorPermission, "/repos/{owner}/{repo}/collaborators/{username}/permission", []string{"permission", "role_name",
+		"user.id", "user.login", "user.type", "user.role_name", "user.permissions.admin", "user.permissions.maintain", "user.permissions.push", "user.permissions.triage", "user.permissions.pull"})
+	permission.Subject = repository.Subject
+	permission.Params = []gate.Param{{Name: "owner", Type: gate.Login}, {Name: "repo", Type: gate.RepoName}, {Name: "username", Type: gate.CollaboratorLogin}}
+	return []gate.Op{principal, org, membership, members, owners, outside, invitations, repos, membersMFA, ownersMFA, repository, collaborators, keys, permission}
 }

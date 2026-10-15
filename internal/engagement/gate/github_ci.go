@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -227,4 +228,37 @@ func workflowNode(n *yaml.Node, depth int, count *int) (any, string) {
 		}
 	}
 	return nil, "workflow_yaml_type_unknown"
+}
+
+// collaboratorPermissionPath is the one path a CollaboratorLogin may
+// vary: the permission follow-up's read (docs/spec/github-collector.md,
+// "Selection under a budget and the permission follow-up (E9)").
+const collaboratorPermissionPath = "/repos/{owner}/{repo}/collaborators/{username}/permission"
+
+// collaboratorPermissionKeep are the read's frozen retained fields: no
+// address, name or URL of the account asked about.
+var collaboratorPermissionKeep = []string{"permission", "role_name", "user.id", "user.login", "user.type", "user.role_name",
+	"user.permissions.admin", "user.permissions.maintain", "user.permissions.push", "user.permissions.triage", "user.permissions.pull"}
+
+func (c *compiled) collaboratorResource(name string) bool {
+	return c.types[name].Type == CollaboratorLogin
+}
+
+// checkCollaboratorResource keeps a CollaboratorLogin to an exact GitHub
+// repository GET of one login's permission: the repository is the
+// subject, and the login only says whose permission is asked.
+func (c *compiled) checkCollaboratorResource() error {
+	for _, p := range c.Params {
+		if p.Type != CollaboratorLogin {
+			continue
+		}
+		if c.Provider != "github" || c.Method != GET || c.Subject != "repo:github:{owner}/{repo}" || c.types["owner"].Type != Login ||
+			c.types["repo"].Type != RepoName || p.Optional || p.Name != "username" || c.path != collaboratorPermissionPath || len(c.query) != 0 || c.List != nil {
+			return errors.New("a collaborator login is only the username of the compiled repository permission read")
+		}
+		if c.ID != "github.collaborator_permission" || !slices.Equal(c.Keep, collaboratorPermissionKeep) {
+			return errors.New("the permission read is github.collaborator_permission and keeps exactly its frozen fields")
+		}
+	}
+	return nil
 }

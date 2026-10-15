@@ -192,7 +192,8 @@
                 "population": { "$ref": "#/$defs/population" },
                 "rules": { "type": "array", "items": { "type": "string" } },
                 "judged": { "type": "array", "items": { "type": "string" }, "description": "What the rules that decided judge: an assessed area rests on these and nothing else." },
-                "read_not_judged": { "type": "array", "items": { "type": "string" }, "description": "What was read in the area that no rule judges." }
+                "read_not_judged": { "type": "array", "items": { "type": "string" }, "description": "What was read in the area that no rule judges." },
+                "detail": { "type": "string", "description": "How far the sub-item's follow-up reads got (spec/report.md, \"Coverage\"): the departed-people line of F1." }
               },
               "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
             }

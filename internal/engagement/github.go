@@ -111,9 +111,24 @@ func (r *run) planGitHub() []githubc.Selection {
 				declared = append(declared, githubTarget(repo.ID))
 			}
 		}
-		out = append(out, githubc.Select(*ra.GitHub, r.githubContext(a), declared, r.checkouts()))
+		sel := githubc.Select(*ra.GitHub, r.githubContext(a), declared, r.checkouts())
+		if r.leaverWithLogin() && len(r.productionRepositories(ra.ID)) > 0 {
+			sel.Notes = append(sel.Notes, "After these reads, Check may ask GitHub for a departed person's permission on each production repository (at most 20 requests, not counted in the budget).")
+		}
+		out = append(out, sel)
 	}
 	return out
+}
+
+// leaverWithLogin says some person with a left date declares a GitHub
+// login: the permission follow-up may then ask about them.
+func (r *run) leaverWithLogin() bool {
+	for _, p := range r.res.People {
+		if p.Left != "" && len(p.GitHub) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *run) checkouts() map[string]string {
@@ -243,6 +258,7 @@ func (r *run) githubReportInput(ra ReconAsset, judged []githubc.Judgment, ai *er
 			}
 		}
 	}
+	ai.PermissionAsks = permissionAsks(*ev)
 	p := ev.Principal
 	note := githubc.AssessmentCredential(p)
 	kind := "github_credential"
@@ -308,6 +324,9 @@ func (r *run) githubReportInput(ra ReconAsset, judged []githubc.Judgment, ai *er
 		ai.InventoryNotes = append(ai.InventoryNotes, ereport.Note{Kind: "github_inventory", Source: ra.ID, Detail: fmt.Sprintf("A mirror is the local repository copy supplied for this check; its origin is its saved repository connection. Supported mirror history read for %d of %d selected repositories; %d complete supported traversals with matching observed refs. Hidden repositories and history outside the supported traversal remain unassessed.", readHistory, len(ev.RepositoriesHistory), completeHistory)})
 	}
 
+	for _, read := range ev.PermissionReads() {
+		ai.Redactions = append(ai.Redactions, read.Redactions...)
+	}
 	for _, read := range ev.Reads() {
 		ai.Redactions = append(ai.Redactions, read.Redactions...)
 		if read.Op != githubc.OpPrincipal && githubReadOK(read) {
@@ -319,7 +338,7 @@ func (r *run) githubReportInput(ra ReconAsset, judged []githubc.Judgment, ai *er
 	}
 	if r.gate != nil {
 		for _, e := range r.gate.Entries() {
-			if e.Asset == ra.ID || slices.ContainsFunc(ev.Reads(), func(read githubc.Read) bool { return read.RequestID == e.RequestID }) {
+			if e.Asset == ra.ID || slices.ContainsFunc(slices.Concat(ev.Reads(), ev.PermissionReads()), func(read githubc.Read) bool { return read.RequestID == e.RequestID }) {
 				ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: e.RequestID, Params: e.Params, At: e.Time, Decision: e.Decision, OutputSHA256: e.OutputHash})
 			}
 		}

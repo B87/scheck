@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -445,5 +446,51 @@ func TestWorkspaceLeaverWithNothingReadAndAmbiguousAdmin(t *testing.T) {
 	e.Users.Reads = append(e.Users.Reads, Read{Op: OpUsers, RequestID: "users-2", Decision: "sent", Status: 200, CollectedAt: e.Users.Reads[0].CollectedAt.Add(-36 * time.Hour)})
 	if j := getRule(t, Judge(e, "asset", c), finding.IDIdentityUnexpectedAdmin); j.Verdict != Abstained || j.Reason != finding.ReasonLeftDuringCollection {
 		t.Fatalf("ambiguous admin: %+v", j)
+	}
+}
+
+// A fired leaver names the account's tier-1 reads that did not happen
+// (docs/spec/workspace-collector.md, "Rules"): F2 is no follow-up row.
+func TestLeaverNamesItsUnreadReads(t *testing.T) {
+	leaver := func(e Evidence, c Context) finding.Judgment {
+		c.People[0].Left = "2026-10-09"
+		j := getRule(t, Judge(e, "asset", c), finding.IDIdentityFormerPersonHasAccess)
+		if j.Verdict != Fired {
+			t.Fatalf("leaver: %+v", j)
+		}
+		return j
+	}
+	unread := func(j finding.Judgment) []string {
+		return slices.DeleteFunc(slices.Clone(j.NotChecked), func(s string) bool {
+			return !strings.Contains(s, "were not read") && !strings.Contains(s, "was not read")
+		})
+	}
+	e, c := ruleFixture()
+	if got := unread(leaver(e, c)); len(got) != 0 {
+		t.Fatalf("both read: %q", got)
+	}
+	e.OAuth = OAuthEvidence{}
+	e.Mail = MailEvidence{Selected: true}
+	c.MailApproval = &MailApproval{By: "cto", Current: false}
+	want := []string{"Third-party app grants of alice@example.com were not read: the optional OAuth grants profile is not selected (`directory_oauth`)",
+		"Mail forwarding from alice@example.com was not read: `authorization.mailboxes` is not current"}
+	if got := unread(leaver(e, c)); !slices.Equal(got, want) {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+	e, c = ruleFixture()
+	e.OAuth.Accounts[0].Usable = false
+	e.OAuth.Accounts[0].Read = Read{Op: OpUserTokens, RequestID: "t1", Decision: "unavailable:server_error", Status: 503, Reason: "unavailable:server_error"}
+	e.Mail.Accounts = nil
+	e.Mail.Accounts = append(e.Mail.Accounts, MailboxForwarding{ID: "9", AutoRead: Read{Reason: "limit_reached", Detail: "the run's timeout passed"}})
+	c.MailApproval = &MailApproval{By: "cto", Current: true}
+	want = []string{"Third-party app grants of alice@example.com were not read: the read failed: server error",
+		"Mail forwarding from alice@example.com was not read: the run stopped first (the run's timeout passed)"}
+	if got := unread(leaver(e, c)); !slices.Equal(got, want) {
+		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+	e, c = ruleFixture()
+	e.Mail.Accounts = nil
+	if got := unread(leaver(e, c)); !slices.Equal(got, []string{"Mail forwarding from alice@example.com was not read: `authorization.mailboxes` does not name this mailbox"}) {
+		t.Fatalf("no approval: %q", got)
 	}
 }

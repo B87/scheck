@@ -228,7 +228,7 @@
         },
         {
           "id": "identity.leaver_unlisted_write",
-          "text": "write to production repositories by a departed person not listed among its collaborators (read per login from a later step)"
+          "text": "access to repositories not declared `deploys_to: production` by a departed person not listed among their collaborators"
         },
         {
           "id": "identity.leaver_additions",
@@ -287,6 +287,7 @@
       "sub_items": [
         {
           "asset": "saas:github:example-org",
+          "detail": "Departed people's access to production repositories: asked GitHub for 2 of 3 (login, repository) pairs; the cap of 20 per run stopped the rest.",
           "judged": [
             "departed people"
           ],
@@ -1125,7 +1126,7 @@
       },
       "not_checked": [],
       "remediation": {
-        "summary": "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."
+        "summary": "Suspend the account now. Before deleting it, revoke its third-party app tokens and remove any forwarding or delegation; deleting the account does not tell you where its mail went."
       },
       "rule": {
         "kind": "multi_fact",

@@ -21,7 +21,6 @@ import (
 
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
-	"github.com/b87/scheck/internal/collector/workspace"
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/engagement/hostasset"
 	ereport "github.com/b87/scheck/internal/engagement/report"
@@ -523,7 +522,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 	if r.gate != nil {
 		return r.gate, nil
 	}
-	reg, err := gate.NewRegistry(slices.Concat(discoveryOps, web.Ops, githubc.Ops, workspace.Ops)...)
+	reg, err := gate.NewRegistry(gateOps...)
 	if err != nil {
 		return nil, err
 	}
@@ -842,10 +841,10 @@ func (r *run) plan(context.Context) (any, error) {
 }
 
 // check reads each GitHub root's repositories and each Workspace tenant's
-// per-user OAuth grants and forwarding, in Plan's order. Follow-ups arrive
-// with E9 step 7.
+// per-user OAuth grants and forwarding, in Plan's order, then the
+// follow-up table's reads.
 func (r *run) check(ctx context.Context) (any, error) {
-	doc := &CheckDoc{Header: r.header("check"), FollowUps: []string{}, Assets: []CheckAsset{}}
+	doc := &CheckDoc{Header: r.header("check"), FollowUps: []FollowUp{}, Assets: []CheckAsset{}}
 	// Workspace first: its session's token lives about an hour from
 	// Recon's bootstrap, and GitHub's budgeted reads can take long.
 	if err := r.checkWorkspace(ctx, doc); err != nil {
@@ -854,6 +853,9 @@ func (r *run) check(ctx context.Context) (any, error) {
 	if err := r.checkGitHub(ctx, doc); err != nil {
 		return nil, err
 	}
+	// Then the follow-up reads the rules name (docs/spec/engagement.md,
+	// "Plan selection and follow-ups").
+	r.followUps(ctx, doc)
 	r.checked = doc
 	return doc, r.write("check.json", doc)
 }

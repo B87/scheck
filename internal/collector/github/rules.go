@@ -461,6 +461,38 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			if carrier >= 0 && !owner {
 				out[carrier].Attributes = append(out[carrier].Attributes, productionWriteFacts(e, login)...)
 			}
+			// A login seen nowhere that GitHub itself reports with access to
+			// a repository F1 asked about is access observed; F1 never
+			// disproves (docs/spec/engagement.md, "Plan selection and
+			// follow-ups").
+			asked, none := 0, 0
+			if !present {
+				for _, repo := range e.RepositoriesAccess {
+					pr, ok := e.permissionFor(repo.Asset, login)
+					if !ok || pr.Read.RequestID == "" {
+						continue
+					}
+					asked++
+					perm := interpretPermission(pr, repo, e)
+					if perm.none && perm.access == accessNone {
+						none++
+					}
+					if perm.access != accessWrite && !perm.read {
+						continue
+					}
+					j := makePermissionAccess(p, c, repo, pr, perm, source)
+					out = append(out, j)
+					if j.Verdict == Fired {
+						present = true
+						if carrier < 0 || out[carrier].Asset != c.OrganizationAsset && repo.Asset < out[carrier].Asset {
+							carrier = len(out) - 1
+						}
+					}
+				}
+				if present && !owner {
+					out[carrier].Attributes = append(out[carrier].Attributes, productionWriteFacts(e, login)...)
+				}
+			}
 			if !present {
 				population := [][]Read{e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads}
 				for _, repo := range e.RepositoriesAccess {
@@ -468,6 +500,18 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				}
 				j := makeAccess(c.OrganizationAsset, a, readIDs(population...), false, false, population...)
 				j.Details = map[string]any{"membership": "none"}
+				if j.Verdict == Abstained && asked > 0 && none == asked {
+					noun := "production repositories"
+					if asked == 1 {
+						noun = "production repository"
+					}
+					j.NotChecked = append(j.NotChecked, fmt.Sprintf("GitHub reports no access for %s to the %d %s asked; other repositories were not asked.", login, asked, noun))
+					for _, pr := range e.Permissions {
+						if strings.EqualFold(pr.Login, login) && pr.Read.RequestID != "" {
+							j.Reads = append(j.Reads, pr.Read.RequestID)
+						}
+					}
+				}
 				out = append(out, j)
 			}
 			invitations := []Invitation{}
@@ -692,6 +736,41 @@ func unreadPhrase[T any](p Population[T]) string {
 	return InventoryGapText(p.Gaps)
 }
 
+// makePermissionAccess is the leaver judgment F1's answer gives on the
+// repository it asked about: fired when the leaving date had passed at the
+// permission read, with write and repository_admin as the answer
+// establishes them.
+func makePermissionAccess(p Person, c Context, repo RepositoryAccess, pr PermissionRead, perm grant, source []string) Judgment {
+	subject := accountSubject(perm.account, c)
+	if perm.account.ID == 0 {
+		subject.ProviderID = ""
+	}
+	j := judgment(finding.IDIdentityFormerPersonHasAccess, repo.Asset, subject, []string{pr.Read.RequestID})
+	j.Sources = source
+	j.NotChecked = []string{"Accounts renamed after declaration; undeclared logins; credential or session usability"}
+	j.Details = map[string]any{"membership": "collaborator"}
+	l := leftAt(p.Left, c, []Read{pr.Read})
+	if l != finding.LeftPassed {
+		j.Reason = leftReason(l, j.Reason)
+		return j
+	}
+	a := pr.Answer
+	role := ""
+	if a.RoleName != nil && *a.RoleName != "" && *a.RoleName != "none" {
+		role = " (role " + *a.RoleName + ")"
+	}
+	settle(&j, true, true, fmt.Sprintf("%s: GitHub reports %s%s on %s, through a direct, team, base or enterprise grant (GitHub does not say which); declared leaving date %s; observed in a permission read of %s",
+		pr.Login, *a.Permission, role, repositoryName(repo), p.Left, asOf(c, []Read{pr.Read})))
+	ref := finding.Ref{Observation: pr.Read.RequestID, Excerpt: perm.excerpt}
+	if perm.admin {
+		j.Attributes = append(j.Attributes, finding.Attribute{Name: "repository_admin", Ref: ref})
+	}
+	if perm.access == accessWrite {
+		j.Attributes = append(j.Attributes, finding.Attribute{Name: "write", Ref: ref})
+	}
+	return j
+}
+
 // productionWriteFacts are what R4 reads on the judgment that carries a
 // left login's "not applied" step: each repository this run read where the
 // login's push access is established (write_held) or not settled
@@ -704,25 +783,35 @@ func productionWriteFacts(e Evidence, login string) []finding.Attribute {
 		unsettled := func(cause string) {
 			out = append(out, finding.Attribute{Name: "write_unsettled", Asset: repo.Asset, Ref: finding.Ref{Observation: firstRead(readIDs(repo.Collaborators.Reads)), Excerpt: cause}})
 		}
-		idx := slices.IndexFunc(repo.Collaborators.Items, func(c Collaborator) bool { return strings.EqualFold(c.Login, login) })
-		if idx < 0 {
-			if len(repo.Collaborators.Reads) == 0 || slices.ContainsFunc(repo.Collaborators.Reads, func(r Read) bool { return !usableRead(r) }) {
-				unsettled("the collaborators of " + name + " could not be read: " + unreadPhrase(repo.Collaborators))
-			} else {
-				unsettled(login + " is not listed among the collaborators of " + name + ", and that list may not show everyone with access")
+		st := listState(repo, login)
+		switch st {
+		case listWrite:
+			out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset})
+			continue
+		case listNotWrite:
+			continue
+		case listArchived:
+			unsettled(name + " is archived")
+			continue
+		}
+		// The list did not settle the login: the permission follow-up's
+		// answer does, when F1 asked (docs/spec/engagement.md, R4).
+		if pr, asked := e.permissionFor(repo.Asset, login); asked {
+			switch p := interpretPermission(pr, repo, e); p.access {
+			case accessWrite:
+				out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset, Ref: finding.Ref{Observation: pr.Read.RequestID, Excerpt: p.excerpt}})
+			case accessUnknown:
+				out = append(out, finding.Attribute{Name: "write_unsettled", Asset: repo.Asset, Ref: finding.Ref{Observation: pr.Read.RequestID, Excerpt: p.cause}})
 			}
 			continue
 		}
-		c := repo.Collaborators.Items[idx]
-		write, known := EffectiveWrite(c)
-		admin, adminKnown := EffectiveAdmin(c)
-		switch {
-		case !known:
+		switch st {
+		case listUnknown:
 			unsettled("the permissions returned for " + login + " on " + name + " were missing or contradictory")
-		case write && archived(repo) && (!adminKnown || !admin):
-			unsettled(name + " is archived")
-		case write:
-			out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset})
+		case listNotListed:
+			unsettled(login + " is not listed among the collaborators of " + name + ", and that list may not show everyone with access")
+		default:
+			unsettled("the collaborators of " + name + " could not be read: " + unreadPhrase(repo.Collaborators))
 		}
 	}
 	return out

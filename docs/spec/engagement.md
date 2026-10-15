@@ -17,12 +17,12 @@ run can resume from a saved output.
 | **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
 | **3. Recon** | The inventory read per asset: SaaS tenant inventory, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Lists what the context does not name: the accounts no handle names (the `recon` stanza) and the domains a Workspace tenant holds that are not roots. Reads inventory only (users, roles and admin assignments; members, owners, outside collaborators, invitations; the repository list with `pushed_at`; DNS; host and web reads, which have no selection), persists evidence and gives no verdict. Anything outside the roots is recorded, not contacted. | Asset map |
 | **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. Under a cap, which repositories and users are read first, and the declaration that chose them ("Plan selection and follow-ups"). Names the rules that will abstain for lack of a declaration. `--stop-after plan` prints it. With a model (0.0.4), hypotheses as well. | Plan |
-| **5. Check** | Run every read only rules consume, in Plan's order (GitHub's per-repository reads by kind, then the mirror, 6a; per-user OAuth grants and Gmail forwarding, 6b), then the follow-up reads that rules named ("Plan selection and follow-ups") and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
+| **5. Check** | Run every read only rules consume, in Plan's order (GitHub's per-repository reads by kind, then the mirror, 6a; per-user OAuth grants and Gmail forwarding, 6b), then the follow-up reads that rules named (F1, built in E9 step 7; "Plan selection and follow-ups") and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
 | **6. Analyze** | Every verdict is given here: each collector's rules over the evidence Recon and Check persisted, the host's posture rules, the multi-fact rules, then the context adjustments ("Severity in context"). Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. Notes where the evidence contradicts a declaration ("Context notes"). | Findings and follow-ups |
 | **7. Report** | Coverage per risk area, then findings for the people who will fix them: what, why it matters here, evidence, remediation. | Report |
 
 In 0.0.2, which only reads, Recon runs the inventory and host, DNS and web reads for
-every asset and Check runs the selected per-item reads and the follow-ups (E9 step 6); from 0.0.3 Check is also where probes run. Keeping the split there
+every asset and Check runs the selected per-item reads and the follow-ups (E9 steps 6 and 7); from 0.0.3 Check is also where probes run. Keeping the split there
 means a collector never decides which stage its requests belong to. A collector's
 choice among its own reads while it collects (the takeover enrichment of a web name, the
 location follow-ups of a secret alert) is read selection: it stays in Recon and emits no
@@ -891,7 +891,8 @@ above, and HSTS is the only low.
 
 ## Plan selection and follow-ups
 
-Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). Step 6 is built in
+Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). Step 7, the
+follow-up table with F1 and its loop, is built. Step 6 is built in
 two parts: 6a, GitHub (the tiers, the budget, the selection, the Plan document and
 `--stop-after plan`), built, and 6b, Workspace (the per-user order, OAuth grants and
 forwarding in Check), built. The tier tables are versioned data
@@ -983,8 +984,8 @@ with a declared mirror, and is not counted.
 request counts when the gate wrote a send line for it or a retry of it, whatever came back
 (a 5xx, a timeout or a reset after sending is spent), or when the ledger answers it; a
 refusal or a limit stop before sending does not count. The
-`github.repository` object counts. Inventory, the mirror and the follow-ups (F1 and F1b
-have their own cap of 20) do not. On resume, a request the ledger answers counts as when
+`github.repository` object counts. Inventory, the mirror and the follow-ups (F1
+has its own cap of 20) do not. On resume, a request the ledger answers counts as when
 it was first sent, so a resumed run reaches exactly the selection one session would.
 
 **A kind is all or nothing per repository.** It starts on a repository only while the
@@ -1069,7 +1070,11 @@ tier, basis and source, `pushed_at` date and the flags declared, public, archive
 mirror. The text lists every repository in tiers 1 to 6, then fills to 20 lines in all
 and ends "and N more, most recently pushed first (`plan.json` lists all)". The JSON lists
 all. The text never predicts the cut: "Check sends nothing until you resume this run; the
-budget may not reach the later kinds on every repository." A Workspace tenant prints
+budget may not reach the later kinds on every repository." When some person with a `left`
+value declares a GitHub login and the root has a `deploys_to: production` repository (no
+date is checked), the selection's `notes` in `plan.json`, printed with them, gain: "After
+these reads, Check may ask GitHub for a departed person's permission on each production
+repository (at most 20 requests, not counted in the budget)." A Workspace tenant prints
 "<asset>  N accounts in scope; OAuth grants are read in this order" (N "at least N" when
 the users list was not complete) and the tier counts "(plan.json lists the accounts)"; the
 JSON lists the ordered accounts. The not-judged list follows,
@@ -1108,21 +1113,102 @@ root's repository order and each Workspace tenant's account order above, and the
 not-judged list. Its `checklist` stays empty: a rule family's order is the rules' own, and
 context narrows none of them in 0.0.2.
 
-**Follow-up reads.** A follow-up is a row of a static table: a trigger (a rule's
-verdict), a declared gate operation, parameters typed from the judgment's subject, a
-cap and a depth. No model picks a read.
+**Follow-up reads** (built, E9 step 7). A follow-up is a row of a static table
+(`internal/engagement/followup.go`, data): a trigger (a rule's verdict), a declared gate
+operation, parameters typed from the judgment's subject, a cap and a depth. No model
+picks a read. The table has one row.
 
 | # | Trigger | Read | Parameters and cap | Depth |
 |---|---|---|---|---|
-| F1 | `identity.former_person_has_access` on GitHub fired, or abstained for lack of repository visibility | `github.collaborator_permission`, `GET /repos/{o}/{r}/collaborators/{login}/permission` | the left person's login, each `deploys_to: production` repository; at most 20 | 1 |
-| F1b | R4 applied ("Multi-fact rules") | the repository's branch and active rules | the same repository | 2; normally answered from the ledger |
-| F2 | `identity.former_person_has_access` on Workspace fired | that user's OAuth grants, only when `directory_oauth` is selected; their Gmail forwarding, only when `authorization.mailboxes` is current | the user's `primaryEmail` | 1 |
+| F1 | `identity.former_person_has_access` on GitHub fired, or abstained for lack of repository visibility ("F1 triggers") | `github.collaborator_permission`, `GET /repos/{o}/{r}/collaborators/{login}/permission` | the left person's declared login and one `deploys_to: production` repository; at most 20 requests per run | 1 |
+
+F1b is answered by Check's access pass; no follow-up row reads it. The access pass reads
+the branch and rules of every declared repository, and no rule reads branch protection
+for R4: protection does not remove a writer's path to production. F2 is answered by
+Workspace tier 1: a left person's account that is still active is first in the per-user
+order ("Users"), so its OAuth grants and Gmail forwarding are read before any other
+account's. Where those reads did not happen, the Workspace finding says so
+([workspace-collector.md](workspace-collector.md), "Rules"). The depth allowance of 2 is
+unused in 0.0.2.
 
 An invariants test checks that every follow-up read is a declared gate operation, that
 its parameters are typed from the subject, and that the table is acyclic with depth at
 most 2. The gate's ledger answers a repeated success without sending; a follow-up that
-failed is not reopened in the same session. The loop ends when no follow-up is open or
-a limit is reached, and a limit stop is incomplete ("Stages").
+failed or was denied is not reopened in the same session, and a resume may ask again.
+
+*F1 triggers.* A (login, repository) pair is open only when the person has a `left` date
+that had passed at the observing reads, a declared GitHub login, and the repository is
+`deploys_to: production` in that organization (from `Declarations.Production`, never
+decided by the collector) and its object was recognized in this run. A declared login
+that is not a user login (for example one ending in `[bot]`) opens no pair. Then one of:
+
+- *Fired.* The organization-level or a repository-level
+  `identity.former_person_has_access` fired for the login, the login is not an observed
+  owner, no production repository is `write_held` for it, and on this repository the R4
+  fact is `write_unsettled` with the cause "login not listed", "permissions unknown" or
+  "collaborators read ... failed" (a 5xx, a timeout or a truncated read). A collaborators
+  read that was denied does not open the pair, since F1 needs the same permission, and an
+  archived repository where the listed person is not admin does not either.
+- *Abstained.* The judgment for a login seen nowhere (`details.membership` `none`)
+  abstained with `insufficient_evidence` ("lack of repository visibility") and a leaving
+  date that had passed at the reads of the population: members, owners, outside
+  collaborators, invitations and each repository's collaborators. The pair opens on every production repository whose collaborators
+  read was not denied. These reasons open none: `leaving_date_not_passed`,
+  `left_during_collection`, `no_collection_time` and `no_declared_github_login`. A
+  disproved judgment never triggers.
+
+For each login the pairs stop at the first write established. The cap is 20 requests per
+run across all organizations; a request sent or answered from the ledger counts, a retry
+once, and on resume a ledger answer counts as when it was first sent. The requests are
+outside the 4,000-request budget. The round is the primary key of the order: round *r*
+asks every open login its *r*-th open production repository, repositories in Plan's tier-1
+order (`pushed_at` desc, `full_name`). Within a round, fired triggers come before
+abstained ones, then people by `left` most recent first, then handle, then login.
+
+*The loop.* Inside Check, after the planned reads and the mirror, under the same
+`limits.timeout`. Check calls the GitHub `Judge` in memory over Recon's, Check's and the
+follow-up evidence to find the triggers; the verdicts are not persisted. A pair is open
+when triggered and not attempted this session, and it is judged again after each round.
+The loop ends when none is open, the cap is reached or a limit stops it. A 401 on a
+permission read, which the gate records as refused, kind `access`, also stops it: nothing
+more is sent with that token, and the remaining pairs are `not_sent` with reason
+`limit_reached` and the refusal's detail. Its requests
+carry audit stage `check`, like every Check read. `check.json` carries `follow_ups[]`,
+one object per pair opened or cut:
+
+| Field | Value |
+|---|---|
+| `row` | `F1` |
+| `trigger` | `{id, asset, subject, person, verdict}`; `verdict` is `fired` or `abstained` and says why the read was sent, never a posture verdict |
+| `op` | `github.collaborator_permission` |
+| `asset` | `repo:github:<owner>/<repo>` |
+| `params` | `{owner, repo, username}` |
+| `outcome` | `read`, `not_found`, `denied`, `failed` or `not_sent` (below) |
+| `reason` | the read's reason as the collector recorded it: the gate's reason, or `follow_up_cap` or `limit_reached` for a pair cut; omitted when empty |
+| `request` | the request id; omitted for a pair not sent |
+
+The outcome is `not_sent` for a pair the loop cut (the cap, a stop, an earlier 401) and
+for a pair the gate stopped for a limit with no send line and no response
+(`refused:rate_limit` or `refused:deadline`; reason `limit_reached`). A request the gate
+sent, meaning it wrote a send line for it or for a retry (a request the run's timeout ended
+in flight, a retry halted after a 502), is never `not_sent`: it is `failed`, worded "could
+not be read: ...", whatever came back. The R4 cause "was not asked: the run stopped first
+(...)" is for `not_sent` only. Otherwise `denied` is for
+`insufficient_permission*`, `refused`, 401 and 403; `not_found` for 404 with no reason;
+`read` for 200 with no reason and a read that was not truncated; `failed` otherwise.
+The coverage line's "asked *N* of *M*" counts the pairs that are not `not_sent`
+([report.md](report.md), "Coverage").
+
+The permission evidence is persisted beside the repository access evidence, keyed by
+(repository, login). The `findings.json` judgments that use it cite the permission read
+in `Reads` and in the attribute `Refs`. A limit stop, including the stop after a 401,
+makes a GitHub root that Check left `collected` `incomplete`, reason `limit_reached`, detail "the follow-up reads stopped: *detail*", exit 2 ("Stages"); a cap
+reached changes no status and no exit code; a read that is denied, not found or failed
+changes no root status or exit code and shows in the coverage line ([report.md](report.md),
+"Coverage"); the one gate refusal that exits 3 on the follow-up is a 401 the gate records as refused,
+kind `access` (the root it was sent for is refused; another GitHub root Check left
+`collected` is `incomplete` as above). Any other gate refusal of the permission read is a defect
+the tests catch, not an outcome.
 
 ## Context notes
 
@@ -1644,7 +1730,8 @@ an observed owner (admin everywhere, already critical through `attribute:admin`)
 `write_unsettled` for each where it is not, each with `Asset` (the repository) and, for
 `write_unsettled`, the cause as the reference's excerpt. A repository is unsettled when
 its collaborators read is missing, denied or failed, the login is not listed, the listed
-permissions are unknown, or it is archived and the person is not admin. A repository
+permissions are unknown, F1 was asked and did not settle it, or it is archived and the
+person is not admin. A repository
 where write is known false is neither. The table keeps the production repositories among
 them and says the move on the carrier only when no production repository is
 `write_held` and at least one is `write_unsettled`. Nothing is emitted when no repository
@@ -1659,13 +1746,43 @@ repository in canonical order:
 | login not listed | "*login* is not listed among the collaborators of *owner/repo*, and that list may not show everyone with access" |
 | permissions unknown | "the permissions returned for *login* on *owner/repo* were missing or contradictory" |
 | archived | "*owner/repo* is archived" |
+| permission read denied (F1) | "the credential was not allowed to read *login*'s permission on *owner/repo*" |
+| permission read 404 (F1) | "GitHub has no account named *login* now (it may have been renamed or deleted), so its access to *owner/repo* could not be read" |
+| permission read failed (F1), including one sent and stopped by a limit | "*login*'s permission on *owner/repo* could not be read: *reason phrase*" |
+| account id differs (F1) | "the account now named *login* is not the one this run saw in *org*" |
+| cut by the F1 cap | "*login*'s permission on *owner/repo* was not asked: scheck asks GitHub about at most 20 production repositories per run" |
+| cut by a limit before it was sent, or left unsent after a 401 | "*login*'s permission on *owner/repo* was not asked: the run stopped first (*reason phrase*)" |
+
+The F1 causes take precedence, in the order of the table; "login not listed" survives only
+where F1 was not sent and none of them applies. A permission answer that is unknown or
+contradictory uses the "permissions unknown" wording.
 
 When more than one repository is unsettled, the cause ends "; and 1 more production
 repository" or "; and *N* more production repositories". In the chain the move has rule
 `attribute:production_write`, `from` equal to `to`, `stopped` `not_established` and `why`
 the sentence. The report JSON carries no chain; the text report prints the sentence under
-"Why here", and `findings.json` judgments carry the move. The
-`github.collaborator_permission` read (F1, step 7) will settle most "not listed" causes.
+"Why here", and `findings.json` judgments carry the move.
+
+*The permission read (F1, built, E9 step 7).* For a production repository the
+collaborators list did not settle, `productionWriteFacts` reads F1's answer; the list wins
+when it settles. Write established gives `write_held` with a reference to the permission
+read and an excerpt such as "permission: write; role_name: maintain; admin: false;
+maintain: true; push: true; pull: true". Known not write settles that repository false.
+F1 may make an abstained leaver judgment fire, and never disproves one: the answer for a
+reclaimed or hidden login is `none` or 404, which is not an absence. A fired judgment
+is on the production repository, its subject the account from the answer (id, login,
+type), with `details.membership` `collaborator`, the attribute `write` and, where
+established, `repository_admin`, with references to the permission read. It becomes a
+carrier candidate under the lowest-canonical-asset rule, and once it fires the
+organization-level `none` abstention is no longer emitted. The leaving date is judged at
+the permission read's collection time. Its excerpt reads: "*login*: GitHub reports
+*permission* (role *role_name*) on *owner/repo*, through a direct, team, base or
+enterprise grant (GitHub does not say which); declared leaving date *d*; observed in a
+permission read of *date*." When the judgment stays abstained and every production
+repository answered `none`, its Not checked gains: "GitHub reports no access for *login*
+to the *N* production repositories asked; other repositories were not asked." What the
+collector reads from the answer is in [github-collector.md](github-collector.md),
+"Selection under a budget and the permission follow-up (E9)".
 
 *Effective write.* The collector's predicate `EffectiveWrite` returns write, not write or
 unknown, from one collaborator entry:

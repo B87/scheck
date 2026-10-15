@@ -38,6 +38,8 @@ func peopleLeftReport(t *testing.T) Input {
 	}
 	org := &in.Assets[0]
 	org.Detail = "GitHub identity and repository-access evidence collected."
+	// F1 asked about two pairs and the cap stopped a third.
+	org.PermissionAsks = &FollowUpCount{Opened: 3, Asked: 2, Capped: true}
 	account := func(key, person string) finding.Subject {
 		return finding.Subject{Kind: "account", Key: key, Label: key, Person: person}
 	}

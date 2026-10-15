@@ -94,6 +94,9 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		} else if decided == 0 && unknown == 0 {
 			continue
 		}
+		if fam.name == "departed people" {
+			si.Detail = permissionAsksText(a.PermissionAsks)
+		}
 		for _, reason := range si.Reasons {
 			row.Reasons = appendReason(row.Reasons, reason)
 		}
@@ -129,4 +132,20 @@ func selectionFor(si *SubItem, kinds []finding.KindSelection) string {
 	sel := pick.Selection
 	si.Population = &Population{Kind: sel.Unit, InScope: sel.InScope, Read: sel.Read, Selection: &sel}
 	return pick.Cut
+}
+
+// permissionAsksText is the departed-people line of the permission
+// follow-up (docs/spec/report.md, "Coverage"), empty when no pair was open.
+func permissionAsksText(n *FollowUpCount) string {
+	if n == nil || n.Opened == 0 {
+		return ""
+	}
+	s := fmt.Sprintf("Departed people's access to production repositories: asked GitHub for %d of %d (login, repository) pairs", n.Asked, n.Opened)
+	switch {
+	case n.Stopped != "":
+		s += "; the run stopped before the rest (" + n.Stopped + ")"
+	case n.Capped:
+		s += "; the cap of 20 per run stopped the rest"
+	}
+	return s + "."
 }

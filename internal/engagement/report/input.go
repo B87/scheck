@@ -132,6 +132,9 @@ type AssetInput struct {
 	// reached among what Plan selected, with the finding ids that rest on
 	// each (docs/spec/report.md, "Coverage").
 	Selections []finding.KindSelection
+	// PermissionAsks counts the permission follow-up's pairs (F1) on a
+	// GitHub root, nil when none was open.
+	PermissionAsks *FollowUpCount
 	// Echo is a canary mismatch's echo, redacted and cut; JSON only.
 	Echo string
 	// Refusal is a refused asset's kind: host_key_unknown,
@@ -222,4 +225,13 @@ type Observation struct {
 	Principal   string // Optional collector-specific actor for local evidence.
 	CollectedAt time.Time
 	Vantage     string
+}
+
+// FollowUpCount is how far a follow-up got: the pairs it opened, how many
+// it asked, and whether the cap or a limit (Stopped, its detail) cut the
+// rest (docs/spec/report.md, "Coverage").
+type FollowUpCount struct {
+	Opened, Asked int
+	Capped        bool
+	Stopped       string
 }

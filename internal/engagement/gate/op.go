@@ -226,6 +226,9 @@ const (
 	AlertNumber
 	// CustomerID is a stable Google customer token, checked against fresh binding.
 	CustomerID
+	// CollaboratorLogin is a GitHub login asked about on a repository the
+	// subject names: only the permission read takes it (github_ci.go).
+	CollaboratorLogin
 )
 
 // Param is one typed parameter. An optional parameter may be left out; it
@@ -420,7 +423,7 @@ func parseTemplate(op Op) (c *compiled, rawQuery string, wholePath bool, err err
 // declareParams checks each parameter's name and type.
 func (c *compiled) declareParams(prov provider, wholePath bool) error {
 	for _, p := range c.Params {
-		if p.Name == "" || p.Type < Login || p.Type > CustomerID {
+		if p.Name == "" || p.Type < Login || p.Type > CollaboratorLogin {
 			return fmt.Errorf("parameter %q has no type", p.Name)
 		}
 		if _, dup := c.types[p.Name]; dup {
@@ -555,7 +558,7 @@ func (u uses) subject() error {
 		inSubject[m[1]] = true
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(c.scheme+"://"+c.host+c.path, -1) {
-		if !inSubject[m[1]] && !c.ciResource(m[1]) && !c.workspaceResource(m[1]) {
+		if !inSubject[m[1]] && !c.ciResource(m[1]) && !c.workspaceResource(m[1]) && !c.collaboratorResource(m[1]) {
 			return fmt.Errorf("{%s} picks the target but is not in the subject", m[1])
 		}
 	}
@@ -592,6 +595,9 @@ func (c *compiled) checkResponse(prov provider) error {
 		return errors.New("declares no fields it keeps")
 	}
 	if err := c.checkCIResources(); err != nil {
+		return err
+	}
+	if err := c.checkCollaboratorResource(); err != nil {
 		return err
 	}
 	if err := c.checkWorkspaceOp(); err != nil {
@@ -837,7 +843,7 @@ var (
 // form: names lowercased, a path as its normalized escaping.
 func bindValue(t ParamType, v string) (string, error) {
 	switch t {
-	case Login:
+	case Login, CollaboratorLogin:
 		if !loginRE.MatchString(v) {
 			return "", errors.New("not a GitHub login")
 		}

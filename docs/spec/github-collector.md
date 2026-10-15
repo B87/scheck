@@ -144,7 +144,7 @@ Organization-wide repository visibility remains unknown separately.
 
 ### Selection under a budget and the permission follow-up (E9)
 
-Design; becomes contract when E9 lands (steps 6 and 7). Step 6a builds the selection
+Design; becomes contract when E9 lands (steps 6 and 7; step 7, F1, is built). Step 6a builds the selection
 and the budget for GitHub (`internal/collector/github/selection.go`: `Select`,
 `CollectRepositories`, `TiersVersion`, `RepositoryBudget`); Workspace is 6b (`workspace-collector.md`). Recon reads the repository list (with
 `pushed_at`, retained on the `github.repositories` and `github.repository` projections)
@@ -187,7 +187,7 @@ came back, so a 5xx, a timeout or a reset after sending is spent) or that the le
 answered (`reused`; on resume it counts as when it was first sent), every page once and a
 retry of the same request once. A request the gate refused, or that a limit stopped
 before sending, is not spent. The `github.repository`
-object counts; inventory, the mirror and the F1 and F1b follow-ups do not. A kind is all or
+object counts; inventory, the mirror and the F1 follow-up do not. A kind is all or
 nothing per repository: it starts only while the requests spent are below the budget and,
 once started, finishes on that repository, so the spend can pass the budget by one
 repository's kind. Declared repositories (`assets` entries) are never cut by the budget; tier 2
@@ -213,16 +213,83 @@ population names `read` against `in_scope` with the `selection`
 follow-ups", for the words and the not-judged list). The collector owns the tiers, the
 kinds and the meter; the report words the selection.
 
-`github.collaborator_permission` is the follow-up read of F1 and the one new operation:
-`GET /repos/{owner}/{repo}/collaborators/{login}/permission`, with the same origin,
-credential binding, API version and 1 MiB body cap as the other operations. Its parameters are the left person's declared login and one
-`deploys_to: production` repository, at most 20 per run, depth 1. It is read only when
-`identity.former_person_has_access` fired for that person, or abstained for lack of
-repository visibility, and it supplies the `push`, `maintain` or `admin` permission that
-the `attribute:production_write` raise reads for a login the collaborators list does not
-show ([engagement.md](engagement.md), R4); until step 7 that case is "not established".
-A missing or denied read applies no raise and says why. The retained fields and
-the permission requirements are frozen with the operation in step 7.
+`github.collaborator_permission` is the follow-up read of F1 and the one new operation
+(built, E9 step 7): `GET /repos/{owner}/{repo}/collaborators/{login}/permission`, with
+the same origin, credential binding, API version (2026-03-10) and shared 1 MiB body cap as
+the other operations. It returns one object, not a page. Its parameters are `owner` and
+`repo`, taken from the recognized repository object of a `deploys_to: production`
+repository, and `username`, the person's declared login, typed `CollaboratorLogin` and
+refused before sending when it is not a login. The gate lets that type vary outside the
+subject only as `{username}` of the exact compiled path
+`/repos/{owner}/{repo}/collaborators/{username}/permission`, with subject
+`repo:github:{owner}/{repo}`, method GET, no query and not a list; the invariants test
+rejects any other op that uses it, and the gate pins it: `CollaboratorLogin` is allowed
+only on the op id `github.collaborator_permission`, whose retained fields equal the
+frozen list exactly. The subject, and so scope admission, is the repository.
+The request is sent with `Exists` false, so a 404 is kept as an answer (status 404, no
+reason). At most 20 requests per run, depth 1; the triggers, the
+order and the cap are in [engagement.md](engagement.md), "Plan selection and follow-ups".
+It supplies the write fact that the `attribute:production_write` raise reads for a login
+the collaborators list does not settle (R4). A denied, missing or failed read applies no
+raise and says why.
+
+*What GitHub documents.* "The calculated permissions are the highest role assigned to the
+collaborator after considering all sources of grants, including: repo, teams, organization,
+and enterprise." So the answer reflects direct, team, base-permission and enterprise
+grants, which is what the collaborators list may not show. `permission` is the legacy
+level (`admin`, `write`, `read`, `none`; `maintain` maps to `write` and `triage` to
+`read`); `role_name` is the assigned role, custom roles included. Both are required
+strings. `user` is nullable. Documented statuses are 200 and 404. A fine-grained token
+needs Repository "Metadata" read; a classic token needs `repo` and `read:org`. In practice
+GitHub answers 403 "Must have push access to view repository collaborators" to a credential
+without push, as it does for the collaborators list. F1 needs nothing the collaborators
+read did not already need. A denial is a coverage gap, never a reason to widen the
+credential.
+
+*Retained fields (frozen).* `permission`, `role_name`, `user.id`, `user.login`,
+`user.type`, `user.role_name`, `user.permissions.admin`, `user.permissions.maintain`,
+`user.permissions.push`, `user.permissions.triage` and `user.permissions.pull`. Everything
+else is dropped.
+
+*Interpretation.* The collector builds a collaborator entry: `RoleName` is the top-level
+`role_name` (empty or `none` means absent) and `Permissions` is `user.permissions`. The
+legacy level *L* is `admin` or `write` for write, `read` or `none` for not write, anything
+else unknown. The answer is **unknown first** when any of these holds:
+
+- a retained string was redacted or truncated;
+- `user` is present and `user.login` is not the requested login (case-insensitive);
+- `user.type` is not `User`;
+- `user.role_name` and the top-level `role_name` are both present and differ;
+- `user.id` differs from the account id this run already saw for that login in members,
+  owners or outside collaborators (a reclaimed login).
+
+Otherwise:
+
+| Result | When |
+|---|---|
+| write established | `user.permissions` present, `EffectiveWrite` write and *L* write; or `user` null or permissions absent, *L* write and `role_name` not in `read`, `pull`, `triage` |
+| known not write | permissions present, `EffectiveWrite` not write and *L* not write; or permissions absent, *L* not write and `role_name` not in `write`, `push`, `maintain`, `admin` |
+| repository admin | `EffectiveAdmin` known true and `permission` `admin` |
+| read access, used only to fire an abstained judgment | *L* `read`, `pull` true or absent, and the repository's visibility from its object is private or internal |
+| unknown | everything else, including any disagreement between *L* and the booleans |
+
+Write established on an archived repository by a person who is not admin stays unsettled
+with the cause "archived".
+
+*Statuses.* 404 means the login resolves to no account (renamed, deleted or hidden):
+unsettled, never "no write". 401 and 403 are denied, unsettled. A 5xx, a timeout or a
+reset is failed, unsettled, not reopened in the session; a resume may ask again. A gate
+refusal exits 3.
+
+*Traps, asserted in the lab.* A public repository answers `read` for anyone, so `read`
+never fires on a public repository. A base permission of write makes every member a writer,
+which is what this read settles. An owner answers `admin` everywhere: owners are excluded
+from R4, and an owner the owners list did not show fires with `repository_admin`. A
+reclaimed login answers `none`, which is why F1 never disproves; "Accounts renamed after
+declaration" stays in Not checked. A suspended Enterprise Managed User still reports a
+role, so "credential or session usability" stays in Not checked. A pending invitation
+answers `none`; the invitation rule covers it. The lab assertions for the 403 behaviour and
+for a 200 `none` answer are deferred.
 
 App installation permissions and repository selection, and repository runners and
 applicable runner groups, are carried candidate reads. Their exact scope and
@@ -1108,7 +1175,7 @@ gaps. CI summary wording and actionable evidence are governed by [report.md](rep
 summary". A successful
 API read is not an assessed control.
 Inventory evidence keeps each read's status, observation
-time and reuse decision; asset principals and request traces identify the account
+time, reuse decision and `sent` (the gate wrote a send line for the request or a retry); asset principals and request traces identify the account
 and execution decisions without a credential value. A changed known identity is
 carried in optional
 `engagement.principal_changes` and printed in the header. The normal header also

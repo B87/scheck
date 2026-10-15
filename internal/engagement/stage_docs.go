@@ -195,11 +195,12 @@ type PlanHost struct {
 }
 
 // CheckDoc is check.json: what Check read of each GitHub root's selection
-// and of each Workspace tenant's accounts.
-// Follow-ups arrive with E9 step 7.
+// and of each Workspace tenant's accounts, and the pairs the follow-up
+// table opened.
 type CheckDoc struct {
 	Header
-	FollowUps []string     `json:"follow_ups"`
+	// FollowUps are the pairs the follow-up table opened or cut.
+	FollowUps []FollowUp   `json:"follow_ups"`
 	Assets    []CheckAsset `json:"assets"`
 	// The people stanza again, after Check read repository collaborators:
 	// Recon's lists only the accounts its inventory showed.

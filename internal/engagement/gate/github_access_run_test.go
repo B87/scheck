@@ -77,6 +77,11 @@ access:
 			fmt.Fprint(w, `[{"id":3,"login":"bob","type":"User","role_name":"admin","permissions":{"admin":true,"pull":true,"push":true,"triage":true,"maintain":true}}]`)
 		case "/repos/acme/shop/keys":
 			fmt.Fprint(w, `[{"id":8,"read_only":false,"key":"discarded-public-key"}]`)
+		case "/repos/acme/shop/collaborators/carol/permission":
+			// The base permission is write: the collaborators list did not
+			// show carol, and F1 asks (docs/spec/engagement.md, "Plan
+			// selection and follow-ups").
+			fmt.Fprint(w, `{"permission":"write","role_name":"write","user":{"id":4,"login":"carol","type":"User","email":"discarded@example.com","role_name":"write","permissions":{"admin":false,"maintain":false,"push":true,"triage":true,"pull":true}}}`)
 		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets", "/repos/alice/shop/actions/secrets":
 			fmt.Fprint(w, `{"secrets":[]}`)
 		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts", "/repos/alice/shop/dependabot/alerts", "/repos/alice/shop/secret-scanning/alerts":
@@ -196,6 +201,21 @@ access:
 	var check engagement.CheckDoc
 	if err = json.Unmarshal(cb, &check); err != nil {
 		t.Fatal(err)
+	}
+	if len(check.FollowUps) != 1 || check.FollowUps[0].Row != "F1" || check.FollowUps[0].Outcome != "read" || check.FollowUps[0].Params["username"] != "carol" ||
+		check.FollowUps[0].Trigger.Verdict != "fired" || strings.Contains(string(cb), "discarded@example.com") {
+		t.Fatalf("follow-ups: %+v", check.FollowUps)
+	}
+	held := false
+	for _, a := range findings.Assets {
+		for _, j := range a.Judged {
+			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Subject.Key == "carol" && j.Verdict == "fired" {
+				held = held || slices.ContainsFunc(j.Attributes, func(at finding.Attribute) bool { return at.Name == "write_held" && at.Asset == "repo:github:acme/shop" })
+			}
+		}
+	}
+	if !held {
+		t.Fatal("F1's answer did not establish carol's write on production")
 	}
 	if !slices.ContainsFunc(check.PeopleCandidates, func(c engagement.PeopleCandidate) bool { return c.Login == "ghost" }) {
 		t.Fatalf("check.json lost the people stanza: %+v", check.PeopleCandidates)

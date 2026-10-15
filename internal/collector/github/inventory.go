@@ -20,14 +20,17 @@ type Sender interface {
 
 // Read preserves execution and observation metadata without retaining a raw body.
 type Read struct {
-	Op         string           `json:"op"`
-	RequestID  string           `json:"request_id"`
-	Decision   string           `json:"decision"`
-	Reason     string           `json:"reason,omitempty"`
-	Kind       string           `json:"kind,omitempty"`
-	Detail     string           `json:"detail,omitempty"`
-	ObservedAt time.Time        `json:"observed_at"`
-	Reused     bool             `json:"reused,omitempty"`
+	Op         string    `json:"op"`
+	RequestID  string    `json:"request_id"`
+	Decision   string    `json:"decision"`
+	Reason     string    `json:"reason,omitempty"`
+	Kind       string    `json:"kind,omitempty"`
+	Detail     string    `json:"detail,omitempty"`
+	ObservedAt time.Time `json:"observed_at"`
+	Reused     bool      `json:"reused,omitempty"`
+	// Sent says the gate wrote a send line for the request or a retry of
+	// it, whatever came back.
+	Sent       bool             `json:"sent,omitempty"`
 	Truncated  bool             `json:"truncated,omitempty"`
 	Status     int              `json:"status,omitempty"`
 	Population *gate.Population `json:"population,omitempty"`
@@ -123,6 +126,9 @@ type Evidence struct {
 	OwnersWithoutMFA             Population[Account]       `json:"owners_without_mfa"`
 	RepositoriesAccess           []RepositoryAccess        `json:"repositories_access,omitempty"`
 	RepositoryVisibilityComplete bool                      `json:"repository_visibility_complete"`
+	// Permissions are F1's answers, one per (repository, login) pair the
+	// follow-up opened; Check persists them with its repositories.
+	Permissions []PermissionRead `json:"permissions,omitempty"`
 	// RepositoriesUnread is true when Check did not read every selected
 	// repository (the budget, the deadline, a failed object): an absence
 	// over repository populations is then unknown, never a disproval. Set by
@@ -176,7 +182,7 @@ func ResolvePrincipal(ctx context.Context, g Sender, asset, stage string) Princi
 }
 
 func readOf(op string, r gate.Result) Read {
-	v := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Kind: r.Kind, Detail: r.Detail, Reused: r.Decision == gate.DecisionReused}
+	v := Read{Op: op, RequestID: r.RequestID, Decision: r.Decision, Reason: r.Reason, Kind: r.Kind, Detail: r.Detail, Reused: r.Decision == gate.DecisionReused, Sent: r.Sent}
 	if r.Response != nil {
 		v.ObservedAt, v.Status, v.Population = r.Response.CollectedAt, r.Response.Status, r.Response.Population
 		v.Truncated = r.Response.Truncated
