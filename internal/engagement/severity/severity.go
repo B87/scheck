@@ -77,6 +77,9 @@ func whyPastHigh(rule string) string {
 var productionIDs = []string{finding.IDGitHubWritableDeployKey, finding.IDGitHubRepositoryWorkflowWrite,
 	finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}
 
+// internetIDs are the findings a host's declared internet exposure raises.
+var internetIDs = []string{finding.IDDBListensUnfiltered, finding.IDSvcListensBeyond}
+
 // rules is the table, in the order it is applied. A row it does not name
 // does not exist.
 var rules = []rule{
@@ -113,7 +116,7 @@ var rules = []rule{
 		}
 		return finding.Ref{Key: p.Key}, "This repository is declared to deploy to production, so this rating rises one step.", true
 	}},
-	{name: "exposure:internet", ids: []string{finding.IDDBListensUnfiltered}, match: func(d Declarations, in instance) (finding.Ref, string, bool) {
+	{name: "exposure:internet", ids: internetIDs, match: func(d Declarations, in instance) (finding.Ref, string, bool) {
 		key, ok := d.Internet[in.owner]
 		return finding.Ref{Key: key}, "You declared this host internet-facing, so this ranks one step higher.", ok
 	}},

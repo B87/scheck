@@ -66,8 +66,12 @@ func (b *builder) coverage() []Row {
 	var rows []Row
 	for _, area := range finding.Areas {
 		var row Row
+		// A declaration never hides a finding: an area with one fired in it
+		// is built as if not_used did not name it (docs/spec/report.md,
+		// "Coverage").
+		found := slices.ContainsFunc(b.r.Findings, func(f Finding) bool { return f.Area == string(area) })
 		switch {
-		case slices.Contains(b.in.NotUsed, string(area)):
+		case slices.Contains(b.in.NotUsed, string(area)) && !found:
 			row = Row{Area: string(area), Mark: "not_applicable", Reasons: []ReasonDetail{},
 				Detail: "you declared it does not apply (not_used)"}
 		case area == finding.AreaHosts:

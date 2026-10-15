@@ -42,11 +42,10 @@ Secrets                  checked in part
   points.
 External surface         checked in part
   1 of 1 asset read.
-  Not judged in this version: services on hosts reachable beyond the audience you declared for them;
-  which ports and services answer from the internet (scheck reads; it does not scan); the registrar
-  account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS
-  hosting account and who can change records. Also not judged on the assets read: TLS versions and
-  ciphers other than those negotiated, and revocation.
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records. Also not judged on
+  the assets read: TLS versions and ciphers other than those negotiated, and revocation.
 Web application          checked in part
   1 of 1 asset read.
   Some web-response checks could not reach a decision (no judgments from web responses were

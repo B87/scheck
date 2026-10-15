@@ -50,9 +50,10 @@ func (r *run) hostRules() map[string]rules.Result {
 		}
 		h := rules.Host{Asset: ra.ID, Name: ra.Name, Facts: c.Facts()}
 		if a.Context != nil {
+			h.Context.Exposure = a.Context.Exposure
 			for i, s := range a.Context.ExpectedServices {
 				h.Context.Services = append(h.Context.Services, rules.Service{Port: s.Port, Proto: strings.ToLower(s.Proto),
-					Audience: s.Audience, Key: fmt.Sprintf("assets.%s.context.expected_services[%d]", a.Name, i)})
+					Audience: s.Audience, Purpose: s.Purpose, Key: fmt.Sprintf("assets.%s.context.expected_services[%d]", a.Name, i)})
 			}
 		}
 		hosts = append(hosts, h)

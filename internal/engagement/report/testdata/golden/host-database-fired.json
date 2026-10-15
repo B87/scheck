@@ -149,6 +149,16 @@
         "check:fw.iptables_backend"
       ],
       "status": "matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "svc.listens_beyond_declared",
+      "instances": 0,
+      "reads": [
+        "check:net.listeners"
+      ],
+      "status": "not_matched"
     }
   ],
   "assets": [
@@ -402,12 +412,11 @@
     },
     {
       "area": "external",
-      "mark": "not_assessed",
+      "assets_covered": [
+        "host:ubuntu:22"
+      ],
+      "mark": "partial",
       "not_judged": [
-        {
-          "id": "external.beyond_declared",
-          "text": "services on hosts reachable beyond the audience you declared for them"
-        },
         {
           "id": "external.open_ports",
           "text": "which ports and services answer from the internet (scheck reads; it does not scan)"
@@ -421,9 +430,24 @@
           "text": "the DNS hosting account and who can change records"
         }
       ],
-      "reasons": [
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
+      "reasons": [],
+      "sub_items": [
         {
-          "reason": "not_declared"
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "Declared services listening beyond their audience"
+          ],
+          "mark": "assessed",
+          "name": "Declared services listening beyond their audience",
+          "reasons": [],
+          "rules": [
+            "svc.listens_beyond_declared"
+          ]
         }
       ]
     },
@@ -459,7 +483,7 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports"
+          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
@@ -571,18 +595,20 @@
         {
           "asset": "host:ubuntu:22",
           "judged": [
-            "whether database ports are filtered only; see Data stores"
+            "whether database ports are filtered only; see Data stores",
+            "whether declared services listen beyond their audience only; see External surface"
           ],
           "mark": "assessed",
           "name": "Firewall",
           "population": {
-            "in_scope": 1,
+            "in_scope": 2,
             "kind": "rules",
-            "read": 1
+            "read": 2
           },
           "reasons": [],
           "rules": [
-            "db.listens_unfiltered"
+            "db.listens_unfiltered",
+            "svc.listens_beyond_declared"
           ]
         },
         {
@@ -1033,8 +1059,8 @@
     "areas": {
       "assessed": 0,
       "not_applicable": 0,
-      "not_assessed": 8,
-      "partial": 2,
+      "not_assessed": 7,
+      "partial": 3,
       "total": 10
     },
     "below": {
@@ -1070,8 +1096,8 @@
     ],
     "more": 0,
     "rules": {
-      "decided": 7,
-      "selected": 11,
+      "decided": 8,
+      "selected": 12,
       "without_evidence": 4
     }
   }

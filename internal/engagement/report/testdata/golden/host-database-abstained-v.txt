@@ -14,10 +14,10 @@ not checked.
 
 SUMMARY
 Checked in part  Hosts (ubuntu, 4 of 13 areas judged).
-Not checked      Data stores and backups: see Coverage.
+Not checked      Data stores and backups, External surface: see Coverage.
 Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
-                 supply chain, external surface, web application, email and domain, logging and
-                 incident readiness. To include one, list it under roots in the engagement file.
+                 supply chain, web application, email and domain, logging and incident readiness. To
+                 include one, list it under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
@@ -28,8 +28,8 @@ A short list is not a clean bill of health. scheck reports only what its rules c
 is fully checked in this version; each area row under Coverage lists what this version does not
 judge. Checked in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings
 named under Coverage; 5 have no rule in this version and 4 had no usable evidence. Not checked: data
-stores and backups, identity and access, secrets, cloud configuration, CI/CD and supply chain,
-external surface, web application, email and domain, logging and incident readiness. Anything not
+stores and backups, external surface, identity and access, secrets, cloud configuration, CI/CD and
+supply chain, web application, email and domain, logging and incident readiness. Anything not
 checked is unknown, not fine.
 
 COVERAGE
@@ -43,13 +43,21 @@ Data stores and backups  not checked
   bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
   RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
   link; whether backups exist, where they are kept, and who can delete them.
+External surface         not checked
+  1 of 1 asset read.
+  No service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a
+  service's reach only against what you declared (Declared services listening beyond their
+  audience).
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records.
 Hosts                    checked in part
-  Not judged in this version: the firewall on Linux hosts, apart from database ports; listening
-  services you did not declare; who can become root or administrator, and sudo rules that need no
-  password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and
-  whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root
-  rights (SUID files); programs started at boot or on a schedule; credential files (.env files,
-  ~/.aws, ~/.ssh, cloud CLI logins).
+  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
+  services you declared; listening services you did not declare; who can become root or
+  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
+  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
+  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
+  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
   checks 34: 23 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
@@ -60,8 +68,12 @@ Hosts                    checked in part
                              bash: line 1: sestatus: command not found)
     Firewall                 not checked: a container runtime publishes this port, and its rules
                              bypass the host firewall (Docker publishes this port; its rules bypass
-                             ufw and firewalld, and scheck does not read them in this version); also
-                             read, not judged: /usr/sbin/xtables-nft-multi
+                             ufw and firewalld, and scheck does not read them in this version); no
+                             service on this host is declared for localhost, lan or vpn
+                             (expected_services); scheck judges a service's reach only against what
+                             you declared (no service on this host is declared for localhost, lan or
+                             vpn (expected_services); scheck judges a service's reach only against
+                             what you declared); also read, not judged: /usr/sbin/xtables-nft-multi
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
     SSH server               checked in part (password login, direct root login): nothing found by
@@ -86,9 +98,9 @@ Hosts                    checked in part
                              (exit_error) (time.timedatectl: exit 1: System has not been booted with
                              systemd as init system (PID 1). Can't operate.)
 Not requested            Not part of this run: identity and access, secrets, cloud configuration,
-                         CI/CD and supply chain, external surface, web application, email and
-                         domain, logging and incident readiness. To include one, list it under roots
-                         in the engagement file.
+                         CI/CD and supply chain, web application, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
 Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
                          list; it does not look for malware, infostealers or signs of compromise on
                          any of them, and laptops you did not list were not looked at.
@@ -235,6 +247,6 @@ Session and shell        ran      sys.uname               Linux 21859b827686 7.0
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 6 rules that could decide. That is not a
-clean result: 5 rules had no usable evidence, and 9 areas were not checked.
+clean result: 6 rules had no usable evidence, and 9 areas were not checked.
 --no-persist: no run directory or audit log was written; the command trace is in the JSON report
 (--format json).

@@ -672,6 +672,9 @@ func applyContext(f *File, answer string) error {
 			if !contains(Exposures, exp) {
 				return fmt.Errorf("exposure must be internet, vpn, lan, or airgapped")
 			}
+			if exp == "internet" && contains(f.NotUsed, "external") {
+				return fmt.Errorf("you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing")
+			}
 			a.Context.Exposure = exp
 		}
 		if env := block["environment"]; env != "" {
@@ -703,7 +706,7 @@ func applyNotUsed(f *File, answer string) error {
 		if !contains(Areas, area) {
 			return fmt.Errorf("%q is not an area", area)
 		}
-		if why := notUsedRefusal(area, roots, repoAssets(f), hostAssets(f)); why != "" {
+		if why := notUsedRefusal(area, roots, repoAssets(f), hostAssets(f), internetHosts(f)); why != "" {
 			return fmt.Errorf("%s", why)
 		}
 		f.NotUsed = append(f.NotUsed, area)

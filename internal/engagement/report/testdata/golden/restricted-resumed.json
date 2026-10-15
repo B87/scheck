@@ -302,10 +302,6 @@
       "mark": "partial",
       "not_judged": [
         {
-          "id": "external.beyond_declared",
-          "text": "services on hosts reachable beyond the audience you declared for them"
-        },
-        {
           "id": "external.open_ports",
           "text": "which ports and services answer from the internet (scheck reads; it does not scan)"
         },
@@ -518,7 +514,7 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports"
+          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
         },
         {
           "id": "hosts.listeners",

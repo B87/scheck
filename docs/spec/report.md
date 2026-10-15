@@ -332,7 +332,7 @@ renderer:
 | `assessed` | checked | every sub-item of the area decided with recognized evidence on every in-scope asset it applies to |
 | `partial` | checked in part | some did; the row names what decided and what did not |
 | `not_assessed` | not checked | none did; the row gives the reason |
-| `not_applicable` | not applicable | the operator declared under `not_used` that the area does not apply (`not_used: [hosts, cloud]`); printed as their declaration |
+| `not_applicable` | not applicable | the operator declared under `not_used` that the area does not apply (`not_used: [hosts, cloud]`); printed as their declaration. Never when a finding, open or accepted, fired in the area (below) |
 | `outside_scheck` | outside scheck | scheck does not cover this area in any mode |
 
 **A sub-item is a rule, never a check.** A rule that is not applicable on a platform
@@ -434,6 +434,10 @@ the target:
 | `unavailable:mailbox_authorization_missing` | the engagement file records no approval for signing in as mailboxes for this asset; to check forwarding, have whoever approves access to staff mailboxes approve it, add `authorization.mailboxes`, and run again |
 | `unavailable:mailbox_authorization_expired` | the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update `expires`, or wait until `date`, and run again |
 | `unavailable:forwarding_subdomain` | forwarding to a subdomain that is not itself a domain of this Workspace was not judged |
+| `unavailable:no_declaration` | no service on this host is declared for localhost, lan or vpn (`expected_services`); scheck judges a service's reach only against what you declared |
+| `unavailable:audience` | a service's audience is localhost, lan, vpn or internet |
+| `unavailable:audience_network` | on a host not declared internet-facing, scheck cannot tell which networks its addresses face |
+| `unavailable:bind_network` | the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `leaving_date_not_passed` | the declared leaving date had not passed when it was read |
 | `left_date_within_collection` | the declared leaving date falls within or after collection; run again after that date |
@@ -476,6 +480,11 @@ and a host asset covers `hosts`. `identity`, `secrets` and `logging` cannot be m
 applicable. There is no `payments` area
 ([engagement.md](engagement.md), "Validation").
 
+**A declaration never hides a finding** (built, E9 step 5a). A `not_used` area with a
+finding in it, open or accepted, is not *not applicable*: its row is built as if
+`not_used` were absent, and the `context_not_used` note ([engagement.md](engagement.md),
+"Context notes", C3; step 5b) is attached to it.
+
 | Risk area | Judged in this version | Not judged in this version |
 |---|---|---|
 | Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | sign-in through another identity provider (SSO), and that provider's 2-step verification; which kind of 2-step verification people use (security key, app or text message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on the organization and what they can reach; GitHub's rules for personal access tokens; GitHub members' SSH keys; write to production repositories by a departed person not listed among its collaborators (read per login from a later step); deploy keys, GitHub App authorizations and self-hosted runners a departed person added; what a departed person did after leaving (audit log not read) |
@@ -485,7 +494,7 @@ applicable. There is no `payments` area
 | CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | who can push to repositories that deploy to production, contractors included; review rules on the production deployment environment; approval before workflows run on pull requests from forks; self-hosted runners that public repositories can use; which third-party actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where they send data |
 | External surface | dangling records; subdomain takeover; private addresses; TLS and certificates. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
 | Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files, debug pages and admin panels (such as /.git, /.env or /admin); third-party scripts the site loads; which other sites may read the site's responses (CORS) |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports and the services you declared; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
 | Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | whether Workspace lets staff forward mail outside the company (the tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in transit (MTA-STS and TLS reporting) |
 | Logging and incident readiness | none in 0.0.2: the row prints "not checked" | alerts on administrator changes and suspicious sign-ins in Workspace; GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere off the host |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
@@ -494,9 +503,9 @@ applicable. There is no `payments` area
 | Lookalike and typo domains | *outside scheck*: registrations of names you do not own are outside every root ([scope.md](scope.md)), and they are the most common small-company email fraud |
 | Other declared SaaS | one row per tool in `tools` without a collector, by name |
 
-One item is in the right column until its rule lands and moves left in the commit that
-builds it: services reachable beyond the declared audience (`external.beyond_declared`,
-step 5). Databases listening beyond localhost moved left in step 3a: the Data row reads a
+Services listening beyond the declared audience moved left in step 5a (`svc.listens_beyond_declared`;
+the External surface row's sub-item "Declared services listening beyond their
+audience", read from a host's coverage plan like the Data row's). Databases listening beyond localhost moved left in step 3a: the Data row reads a
 host's coverage plan, and its remaining right-hand items are `data.db_signin`,
 `data.db_firewall_rules`, `data.db_containers` and `data.other_stores`. An empty password
 that SSH accepts moved left in step 3b (`accounts.empty_password_remote`); the Hosts row
@@ -553,11 +562,14 @@ checks its facts cite no longer print as `also read, not judged` there: the SSH 
 line reads `checked (password login, direct root login, accounts with no password that
 SSH lets in)`, and the Firewall line reads `checked (whether database ports are filtered
 only; see Data stores)`, or `not checked: <reason>` when R1 abstained. The host-area
-counts include these groups. The
+counts include these groups. From E9 step 5a the Firewall
+line also reads "whether declared services listen beyond their audience only; see
+External surface" (R3), and `expected_services` is read by R3 as well as R1, so the
+"Declared, not verified" line names both. The
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
-no rule fully consumes in this version (`expected_services`, which only `db.listens_unfiltered` reads, for database ports, and which never lowers a finding). The row's "Not judged in this version" line prints once under the mark. With more than three
+no rule fully consumes in this version (`expected_services`, which `db.listens_unfiltered` and `svc.listens_beyond_declared` read, and which never lowers a finding). The row's "Not judged in this version" line prints once under the mark. With more than three
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
@@ -724,10 +736,13 @@ context").
 
 ### Findings
 
-**Context notes** (design; contract when E9 lands, step 5). A note that a declaration
+**Context notes** (design; contract when E9 lands, step 5b). A note that a declaration
 reached nothing or that the evidence contradicts one ([engagement.md](engagement.md),
-"Context notes") prints under "Notes for the readout" and in `notes` in JSON. It has
-no id, no severity and no effect on the exit code.
+"Context notes") prints under "Notes for the readout" and in `notes` in JSON as
+`{kind, source, detail}`, `kind` one of `context_workspace_domain`, `context_deploys_to`
+and `context_not_used`. It has no id, no severity and no effect on the exit code. A
+`context_not_used` note also prints on its row, which is then not *not applicable*
+("Coverage").
 
 Network collectors return the shared `finding.Judgment` and `finding.Subject`
 types; the report aliases these types and remains the author of the final report.
@@ -781,7 +796,7 @@ a day, so retained evidence is not presented as newly collected.
 **Subjects.** Host posture findings carry no subject in 0.0.2, and the host grader
 accepts a whole id. The first host-side subject is a listener's, `{kind: service, key:
 "<port>/<proto>"}`, declared by the engagement rules `db.listens_unfiltered` (built, E9 step 3a) and
-`svc.listens_beyond_declared` (E9 step 5; [engagement.md](engagement.md), "The multi-fact
+`svc.listens_beyond_declared` (E9 step 5a; [engagement.md](engagement.md), "The multi-fact
 rules of 0.0.2"); an acceptance of either names it, and it is applied to the judgment
 like a network collector's, never by the host grader. Host posture acceptance by subject stays
 unbuilt. A person's account is keyed by the address rules match

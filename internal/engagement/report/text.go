@@ -883,6 +883,10 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"accounts":                      "which accounts have no password and can log in was not established",
 			"sshd_config":                   "sshd's effective settings did not settle whether it accepts an empty password",
 			"sshd_listener":                 "whether sshd listens beyond this host was not established",
+			"no_declaration":                "no service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a service's reach only against what you declared",
+			"audience":                      "a service's audience is localhost, lan, vpn or internet",
+			"audience_network":              "on a host not declared internet-facing, scheck cannot tell which networks its addresses face",
+			"bind_network":                  "the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall",
 		}[arg]; ok {
 			return detail
 		}

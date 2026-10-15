@@ -41,38 +41,21 @@ func init() {
 // localhost on a port the host firewall leaves open to every source
 // (docs/spec/engagement.md, "The multi-fact rules of 0.0.2").
 func dbListensUnfiltered(v *View) []Outcome {
-	f, why := v.Fact(checkListeners)
-	recs, typed := f.Parsed.(check.Records)
-	if why != "" || !typed {
-		return []Outcome{{Verdict: Abstained, Reason: reasonListeners, Incomplete: true,
-			NotChecked: []string{"the listening sockets could not be read (" + why + ")"}}}
+	l, abstain := readListening(v)
+	if abstain != nil {
+		return []Outcome{*abstain}
 	}
-	ls, portsOK := listeners(recs)
-	complete := !f.Partial && portsOK
-	byKey := map[string][]listener{}
-	var keys []string
-	for _, l := range ls {
-		if l.loopback {
-			continue
-		}
-		if !l.known || l.process == "" {
-			complete = false
-		}
-		if _, seen := byKey[l.key()]; !seen {
-			keys = append(keys, l.key())
-		}
-		byKey[l.key()] = append(byKey[l.key()], l)
-	}
+	fr := newFirewallReader(v)
 	var out []Outcome
-	var fw *firewall
-	for _, key := range keys {
-		o, ok := dbSubject(v, byKey[key], &fw)
-		if ok {
-			out = append(out, o)
+	for _, g := range l.groups {
+		if beyond := g.beyond(); len(beyond) > 0 {
+			if o, ok := dbSubject(v, g, beyond, fr); ok {
+				out = append(out, o)
+			}
 		}
 	}
 	switch {
-	case !complete:
+	case !l.complete:
 		// A database on a port whose owner is not shown cannot be ruled
 		// out: the host is not disproved, whatever its subjects say.
 		out = append(out, Outcome{Verdict: Abstained, Reason: reasonListenerOwner, Incomplete: true,
@@ -83,21 +66,22 @@ func dbListensUnfiltered(v *View) []Outcome {
 	return out
 }
 
-// dbSubject is R1's verdict on one port/proto, ok false when nothing on it
-// may be a database.
-func dbSubject(v *View, group []listener, fw **firewall) (Outcome, bool) {
-	port, proto := group[0].port, group[0].proto
-	table := slices.Contains(tablePorts, port)
+// dbSubject is R1's verdict on one port/proto's listeners beyond loopback,
+// ok false when nothing on it may be a database.
+func dbSubject(v *View, g portGroup, group []listener, fr *firewallReader) (Outcome, bool) {
+	table := slices.Contains(tablePorts, g.port)
 	var dbs []listener
 	var doubt, doubtDetail string
 	for _, l := range group {
+		reason, detail := ownerDoubt(l)
 		switch {
 		case isDatabase(l.process, l.port):
 			dbs = append(dbs, l)
-		case containerOwners[l.process] != "":
-			doubt, doubtDetail = reasonContainerPort, containerOwners[l.process]
-		case table && slices.Contains(portProxies, l.process):
-			doubt, doubtDetail = reasonContainerPort, "a container port proxy owns this port; the service behind it is not known"
+		case reason != "" && table:
+			// A container runtime or port proxy hides a database only on a
+			// database's usual port (docs/spec/engagement.md, R1); elsewhere
+			// the port is R3's when declared.
+			doubt, doubtDetail = reason, detail
 		case table && l.process == "":
 			doubt, doubtDetail = reasonListenerOwner, "the owner of this port is not shown to a read without sudo, and it is a database's usual port"
 		}
@@ -105,67 +89,37 @@ func dbSubject(v *View, group []listener, fw **firewall) (Outcome, bool) {
 	if len(dbs) == 0 && doubt == "" {
 		return Outcome{}, false
 	}
-	key := group[0].key()
-	subject := finding.Subject{Kind: "service", Key: key, Label: key}
+	subject := finding.Subject{Kind: "service", Key: g.key(), Label: g.key()}
 	if len(dbs) > 0 {
 		subject.Label = dbs[0].process
 	}
-	var lines []string
-	for _, l := range group {
-		lines = append(lines, l.excerpt())
-	}
-	listened := Excerpt{checkListeners, strings.Join(lines, "; ")}
+	listened := cited(group)
 	if len(dbs) == 0 {
 		return Outcome{Subject: subject, Verdict: Abstained, Reason: doubt, Excerpts: []Excerpt{listened},
 			NotChecked: []string{doubtDetail}}, true
 	}
-	if *fw == nil {
-		read := readFirewall(v)
-		*fw = &read
-	}
-	var open, unknown *answer
-	filtered := []Excerpt{}
-	filteredNotChecked := ""
-	for _, v6 := range []bool{false, true} {
-		if !slices.ContainsFunc(dbs, func(l listener) bool { return l.known && (v6 && l.v6 || !v6 && l.v4) }) {
-			continue
-		}
-		a := (*fw).open(port, proto, v6)
-		switch a.filter {
-		case filterOpen:
-			if open == nil {
-				open = &a
-			}
-		case filterUnknown:
-			if unknown == nil {
-				unknown = &a
-			}
-		default:
-			filtered = append(filtered, a.excerpts...)
-			filteredNotChecked = a.notChecked
-		}
-	}
-	if slices.ContainsFunc(dbs, func(l listener) bool { return !l.known }) && unknown == nil && open == nil {
-		unknown = &answer{reason: reasonListeners, detail: "a database's bind address was not recognized"}
-	}
+	r := fr.reach(dbs)
 	o := Outcome{Subject: subject, Excerpts: []Excerpt{listened}, NotChecked: []string{notCheckedDB}}
 	switch {
-	case open != nil:
+	case r.open != nil:
 		o.Verdict = Fired
-		o.Excerpts = append(o.Excerpts, open.excerpts...)
-		o.NotChecked = append(o.NotChecked, open.notChecked)
-		o.Attributes, o.Why = declared(v, port, proto)
-	case unknown != nil:
-		o.Verdict, o.Reason = Abstained, unknown.reason
-		o.NotChecked = []string{unknown.detail, notCheckedDB}
+		o.Excerpts = append(o.Excerpts, r.open.excerpts...)
+		o.NotChecked = append(o.NotChecked, r.open.notChecked)
+		o.Attributes, o.Why = declared(v, g.port, g.proto)
+	case r.unknown != nil:
+		o.Verdict, o.Reason = Abstained, r.unknown.reason
+		o.NotChecked = []string{r.unknown.detail, notCheckedDB}
 	case doubt != "":
 		o.Verdict, o.Reason = Abstained, doubt
 		o.NotChecked = []string{doubtDetail, notCheckedDB}
 	default:
 		o.Verdict = Disproved
-		o.Excerpts = append(o.Excerpts, dedupe(filtered)...)
-		if filteredNotChecked != "" {
-			o.NotChecked = append(o.NotChecked, filteredNotChecked)
+		o.Excerpts = append(o.Excerpts, r.filtered...)
+		if r.notChecked != "" {
+			o.NotChecked = append(o.NotChecked, r.notChecked)
+		}
+		if line := r.allowedFrom("the ones that need it"); line != "" {
+			o.NotChecked = append(o.NotChecked, line)
 		}
 	}
 	return o, true

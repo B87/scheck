@@ -44,6 +44,9 @@ type answer struct {
 	reason, detail string
 	// notChecked is what the branch that decided leaves unread.
 	notChecked string
+	// sources are the sources of the ALLOW rules for the port that were
+	// passed over because they name a source: a filtered answer lets them in.
+	sources []string
 }
 
 // firewall is the host firewall read once per rule run.
@@ -192,6 +195,7 @@ type ufwRule struct {
 	v6     bool
 	iface  bool
 	open   bool // from every source
+	from   string
 	// srcPort is the source port spec of a rule whose From names ports and
 	// no address: the source is still every address, and a sender
 	// chooses its own source port.
@@ -295,6 +299,7 @@ func parseUFWRule(l string) (*ufwRule, bool) {
 	if from, ok = r.location(from); !ok {
 		return nil, false
 	}
+	r.from = from
 	switch {
 	case from == "Anywhere" || anywhereProto(from):
 		r.open = true
@@ -434,6 +439,7 @@ func (st ufwState) walk(port int, proto string, v6 bool) answer {
 		return answer{reason: reasonUFW, detail: "ufw lists no IPv6 rule, so its output does not show whether it filters IPv6"}
 	}
 	head := []Excerpt{{checkUFW, st.status + "; " + st.defaults}}
+	var sources []string
 	for _, r := range st.rules {
 		if r.v6 != v6 {
 			continue
@@ -445,7 +451,11 @@ func (st ufwState) walk(port int, proto string, v6 bool) answer {
 		case r.iface:
 			return answer{reason: reasonUFW, detail: "a ufw rule for this port applies to one network interface, and scheck cannot tell which networks that interface faces"}
 		case !r.open:
-			// Traffic from other sources does not match it.
+			// Traffic from other sources does not match it; a filtered
+			// answer says whom it lets in.
+			if (r.action == "ALLOW" || r.action == "LIMIT") && !slices.Contains(sources, r.from) {
+				sources = append(sources, r.from)
+			}
 			continue
 		case r.srcPort != "" && (r.action == "DENY" || r.action == "REJECT"):
 			// Traffic from other source ports does not match it.
@@ -463,7 +473,7 @@ func (st ufwState) walk(port int, proto string, v6 bool) answer {
 		case r.action == "ALLOW" || r.action == "LIMIT":
 			return answer{filter: filterOpen, excerpts: append(head, Excerpt{checkUFW, r.line})}
 		default:
-			return answer{filter: filterFiltered, excerpts: append(head, Excerpt{checkUFW, r.line})}
+			return answer{filter: filterFiltered, excerpts: append(head, Excerpt{checkUFW, r.line}), sources: sources}
 		}
 	}
 	if st.partial {
@@ -472,5 +482,96 @@ func (st ufwState) walk(port int, proto string, v6 bool) answer {
 	if st.incoming == "allow" {
 		return answer{filter: filterOpen, excerpts: head}
 	}
-	return answer{filter: filterFiltered, excerpts: head}
+	return answer{filter: filterFiltered, excerpts: head, sources: sources}
+}
+
+// firewallReader reads the firewall on first use: a rule that never asks
+// touches no firewall fact, so a partial one cannot withdraw its
+// disproval.
+type firewallReader struct {
+	v  *View
+	fw *firewall
+}
+
+func newFirewallReader(v *View) *firewallReader { return &firewallReader{v: v} }
+
+// reach is the firewall's answer for the families some listeners of one
+// port reach: the first open answer, the first unknown one, or what
+// filters every family.
+type reach struct {
+	open, unknown *answer
+	// openV4 and openV6 are the families left open: a rule judging the
+	// bind reads only the listeners in them.
+	openV4, openV6 bool
+	filtered       []Excerpt
+	// notChecked is the deciding branch's sentence when filtered.
+	notChecked string
+	// sources are what source-restricted ALLOW rules let in, when filtered.
+	sources []string
+}
+
+// reach answers for listeners of one port/proto beyond loopback. A bind
+// address that was not recognized is unknown.
+func (r *firewallReader) reach(ls []listener) reach {
+	if r.fw == nil {
+		read := readFirewall(r.v)
+		r.fw = &read
+	}
+	var out reach
+	port, proto := ls[0].port, ls[0].proto
+	for _, v6 := range []bool{false, true} {
+		if !slices.ContainsFunc(ls, func(l listener) bool { return l.known && (v6 && l.v6 || !v6 && l.v4) }) {
+			continue
+		}
+		a := r.fw.open(port, proto, v6)
+		switch a.filter {
+		case filterOpen:
+			if out.open == nil {
+				out.open = &a
+			}
+			if v6 {
+				out.openV6 = true
+			} else {
+				out.openV4 = true
+			}
+		case filterUnknown:
+			if out.unknown == nil {
+				out.unknown = &a
+			}
+		default:
+			out.filtered = append(out.filtered, a.excerpts...)
+			out.notChecked = a.notChecked
+			for _, src := range a.sources {
+				if !slices.Contains(out.sources, src) {
+					out.sources = append(out.sources, src)
+				}
+			}
+		}
+	}
+	if slices.ContainsFunc(ls, func(l listener) bool { return !l.known }) && out.unknown == nil && out.open == nil {
+		out.unknown = &answer{reason: reasonListeners, detail: "a listener's bind address was not recognized"}
+	}
+	out.filtered = dedupe(out.filtered)
+	return out
+}
+
+// allowedFrom is the Not checked line of a filtered answer that passed
+// over source-restricted ALLOW rules, "" when none: whom they let in was
+// not compared with whom should be (docs/spec/engagement.md, R1, R3).
+func (r reach) allowedFrom(whom string) string {
+	if len(r.sources) == 0 {
+		return ""
+	}
+	return "ufw allows this port from " + strings.Join(r.sources, ", ") + "; whether those addresses are only " + whom + " was not judged"
+}
+
+// inOpen are the listeners in a family the firewall left open.
+func (r reach) inOpen(ls []listener) []listener {
+	var out []listener
+	for _, l := range ls {
+		if l.known && (l.v4 && r.openV4 || l.v6 && r.openV6) {
+			out = append(out, l)
+		}
+	}
+	return out
 }

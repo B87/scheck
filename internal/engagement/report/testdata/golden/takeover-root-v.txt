@@ -50,12 +50,11 @@ External surface         checked in part
   not give a usable answer (dns_servfail); some web-response checks could not reach a decision.
   Services your names point at: domain:example.com
     old.example.com → gone.saas.example; not checked for takeover: no fingerprint for this provider.
-  Not judged in this version: services on hosts reachable beyond the audience you declared for them;
-  which ports and services answer from the internet (scheck reads; it does not scan); the registrar
-  account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS
-  hosting account and who can change records. Also not judged on the assets read: 1 not checked for
-  takeover: no fingerprint for this provider; TLS versions and ciphers other than those negotiated,
-  and revocation.
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records. Also not judged on
+  the assets read: 1 not checked for takeover: no fingerprint for this provider; TLS versions and
+  ciphers other than those negotiated, and revocation.
 Web application          not checked
   1 of 1 asset read.
   Some web-response checks could not reach a decision (no judgments from web responses were
@@ -64,12 +63,12 @@ Web application          not checked
   /admin); third-party scripts the site loads; which other sites may read the site's responses
   (CORS).
 Hosts                    checked in part
-  Not judged in this version: the firewall on Linux hosts, apart from database ports; listening
-  services you did not declare; who can become root or administrator, and sudo rules that need no
-  password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and
-  whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root
-  rights (SUID files); programs started at boot or on a schedule; credential files (.env files,
-  ~/.aws, ~/.ssh, cloud CLI logins).
+  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
+  services you declared; listening services you did not declare; who can become root or
+  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
+  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
+  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
+  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
   macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, 07:12-07:12
   checks 28: 22 ran, 6 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): 1 open finding (see Findings)

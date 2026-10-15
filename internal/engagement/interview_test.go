@@ -277,3 +277,45 @@ not_used: [hosts]
 		t.Fatalf("host asset: %v", err)
 	}
 }
+
+// A service's audience is never airgapped, and external is never not
+// applicable beside a host declared internet-facing: both exit 3 at intake
+// (docs/spec/engagement.md, "Exposure vocabulary", "Validation").
+func TestServiceAudienceAndExternalNotUsed(t *testing.T) {
+	file := `schema: 1
+engagement: {name: acme, timezone: Europe/Madrid, trigger: routine}
+roots:
+  - host: 203.0.113.5
+assets:
+  web:
+    host: 203.0.113.5
+    context:
+      exposure: internet
+      expected_services:
+        - {port: 8080, proto: tcp, audience: airgapped}
+not_used: [external]
+`
+	_, err := Parse("e.yaml", []byte(file), testOpts)
+	if err == nil {
+		t.Fatal("expected refusals")
+	}
+	for _, want := range []string{"a service's audience is localhost, lan, vpn or internet; airgapped describes a host",
+		"external is marked not applicable, but assets.web.context.exposure declares that host internet-facing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in %s", want, err)
+		}
+	}
+}
+
+// The interview refuses the contradiction at the answer, in either order,
+// so scheck init never ends with a file intake refuses.
+func TestInterviewRefusesExternalBesideAnInternetHost(t *testing.T) {
+	f := File{Assets: map[string]Asset{"web": {Host: "203.0.113.5", Context: &HostContext{Exposure: "internet"}}}}
+	if err := Apply(&f, "not_used", "external"); err == nil || !strings.Contains(err.Error(), "assets.web.context.exposure declares that host internet-facing") {
+		t.Fatalf("not_used after context: %v", err)
+	}
+	f = File{Assets: map[string]Asset{"web": {Host: "203.0.113.5"}}, NotUsed: []string{"external"}}
+	if err := Apply(&f, "context", "name: web\nexposure: internet"); err == nil || !strings.Contains(err.Error(), "not_used: external") {
+		t.Fatal("context after not_used accepted")
+	}
+}

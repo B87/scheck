@@ -136,3 +136,88 @@ func (l *listener) classify() {
 		l.v4, l.v6 = false, false
 	}
 }
+
+// portGroup is every listener of one port/proto, loopback included.
+type portGroup struct {
+	port  int
+	proto string
+	all   []listener
+}
+
+func (g portGroup) key() string { return strconv.Itoa(g.port) + "/" + g.proto }
+
+// beyond are the listeners beyond loopback.
+func (g portGroup) beyond() []listener {
+	var out []listener
+	for _, l := range g.all {
+		if !l.loopback {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// cited is the listeners as a judgment cites them.
+func cited(ls []listener) Excerpt {
+	var lines []string
+	for _, l := range ls {
+		lines = append(lines, l.excerpt())
+	}
+	return Excerpt{checkListeners, strings.Join(lines, "; ")}
+}
+
+// listening is the listener read grouped by port, in read order, and
+// whether it is complete: not partial, every port parsed and every
+// listener beyond loopback recognized and named.
+type listening struct {
+	groups   []portGroup
+	complete bool
+	// portsOK is false when a record's port was unreadable: any port may
+	// be the one it hides.
+	portsOK bool
+}
+
+// readListening reads net.listeners, or the abstention when it cannot.
+func readListening(v *View) (listening, *Outcome) {
+	f, why := v.Fact(checkListeners)
+	recs, typed := f.Parsed.(check.Records)
+	if why != "" || !typed {
+		return listening{}, &Outcome{Verdict: Abstained, Reason: reasonListeners, Incomplete: true,
+			NotChecked: []string{"the listening sockets could not be read (" + why + ")"}}
+	}
+	ls, portsOK := listeners(recs)
+	out := listening{complete: !f.Partial && portsOK, portsOK: portsOK}
+	for _, l := range ls {
+		if !l.loopback && (!l.known || l.process == "") {
+			out.complete = false
+		}
+		i := slices.IndexFunc(out.groups, func(g portGroup) bool { return g.port == l.port && g.proto == l.proto })
+		if i < 0 {
+			out.groups = append(out.groups, portGroup{port: l.port, proto: l.proto})
+			i = len(out.groups) - 1
+		}
+		out.groups[i].all = append(out.groups[i].all, l)
+	}
+	return out, nil
+}
+
+// at is the group of port/proto.
+func (l listening) at(port int, proto string) (portGroup, bool) {
+	i := slices.IndexFunc(l.groups, func(g portGroup) bool { return g.port == port && strings.EqualFold(g.proto, proto) })
+	if i < 0 {
+		return portGroup{}, false
+	}
+	return l.groups[i], true
+}
+
+// ownerDoubt is why a listener's owner leaves the service behind it
+// unknown: a container runtime or port proxy publishes it.
+func ownerDoubt(l listener) (reason, detail string) {
+	switch {
+	case containerOwners[l.process] != "":
+		return reasonContainerPort, containerOwners[l.process]
+	case slices.Contains(portProxies, l.process):
+		return reasonContainerPort, "a container port proxy owns this port; the service behind it is not known"
+	}
+	return "", ""
+}

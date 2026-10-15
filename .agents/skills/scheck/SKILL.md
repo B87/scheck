@@ -360,6 +360,17 @@ use (`unavailable:firewall_*`) and for a port Docker or Podman publishes
 were not read, and the finding says so; never report a host's databases as safe from a
 disproved or abstained verdict alone. `scheck sudoers` grants the `ss` read.
 
+Declared services on a Linux host: `svc.listens_beyond_declared` (area external surface,
+subject `port/proto`, base low, raised by the contradiction and by an internet-facing
+host, never past high) fires when a service declared in `expected_services` for
+`localhost`, `lan` or `vpn` listens beyond that audience and the host firewall does not
+restrict the port. It judges only what was declared and abstains without a declaration
+(`unavailable:no_declaration`), on a `lan` or `vpn` service of a host not declared
+internet-facing (`unavailable:audience_network`), on a private bind of an internet-facing
+host (`unavailable:bind_network`) and for the cases above; a cloud firewall was not read.
+Database ports are the previous rule's. An area in `not_used` that holds a finding is
+still reported as checked.
+
 Empty password over SSH on a Linux host: `accounts.empty_password_remote` (critical, area
 hosts, one finding per host with the accounts under `affected`) fires when an account
 with no password and a login shell exists, sshd accepts empty passwords and a password

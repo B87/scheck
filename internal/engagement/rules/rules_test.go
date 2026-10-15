@@ -197,7 +197,7 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 	if v := Validate(All()); len(v) > 0 {
 		t.Fatalf("the rule table breaks its invariants: %v", v)
 	}
-	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures}
+	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures, finding.IDSvcListensBeyond: svcFixtures}
 	for _, r := range All() {
 		fs := fixtures[r.ID]
 		used := map[Read]bool{}
@@ -235,12 +235,14 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 // fact marked partial, no fixture is disproved; with the listeners alone
 // partial, what fired still fires.
 func TestAnIncompleteReadNeverDisproves(t *testing.T) {
-	for _, fx := range sshFixtures {
+	for _, fx := range append(slices.Clone(sshFixtures), svcFixtures...) {
 		f := fx.host.Facts.(fakeFacts)
 		f.partial = true
 		h := fx.host
 		h.Facts = f
 		js, _ := run(ruleByID(t, finding.IDEmptyPasswordRemote), h)
+		svc, _ := run(ruleByID(t, finding.IDSvcListensBeyond), h)
+		js = append(js, svc...)
 		for _, j := range js {
 			if j.Verdict == Disproved {
 				t.Errorf("%s: disproved on an incomplete read: %+v", fx.name, j)
@@ -296,7 +298,7 @@ func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
 	if j.Subject.Label != "postgres" || len(j.NotChecked) < 2 {
 		t.Errorf("subject or not-checked wrong: %+v", j)
 	}
-	if len(res.Coverage) != 2 || res.Coverage[0].Area != finding.AreaData || len(res.Coverage[0].Groups) != 1 || res.Coverage[1].Area != finding.AreaHosts {
+	if len(res.Coverage) != 3 || res.Coverage[0].Area != finding.AreaData || len(res.Coverage[0].Groups) != 1 || res.Coverage[1].Area != finding.AreaHosts || res.Coverage[2].Area != finding.AreaExternal {
 		t.Errorf("coverage %+v", res.Coverage)
 	}
 }
@@ -305,7 +307,8 @@ func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
 // it was not judged.
 func TestAMacOSHostIsNotJudged(t *testing.T) {
 	res := Judge([]Host{{Asset: "host:mac:22", Name: "mac", Facts: fakeFacts{platform: check.MacOS}}})["host:mac:22"]
-	if len(res.Judged) != 0 || len(res.Coverage) != 2 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[0].Groups) != 0 || len(res.Coverage[1].Groups) != 0 {
+	if len(res.Judged) != 0 || len(res.Coverage) != 3 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[2].Unread) != 1 ||
+		len(res.Coverage[0].Groups) != 0 || len(res.Coverage[1].Groups) != 0 || len(res.Coverage[2].Groups) != 0 {
 		t.Errorf("a macOS host was judged: %+v", res)
 	}
 }

@@ -7,6 +7,7 @@ package finding
 const (
 	IDDBListensUnfiltered = "db.listens_unfiltered"
 	IDEmptyPasswordRemote = "accounts.empty_password_remote"
+	IDSvcListensBeyond    = "svc.listens_beyond_declared"
 )
 
 var multiFactDefs = []Def{
@@ -53,6 +54,31 @@ var multiFactDefs = []Def{
 				"sudo sshd -T | grep -i permitemptypasswords",
 			},
 			Caveat: "Find out what each account is for before you lock it; locking stops password logins only.",
+		}},
+	{ID: IDSvcListensBeyond, Title: "A service listens beyond the audience you declared",
+		Category: CategoryNetwork, Area: AreaExternal, Exposure: NotExposure, Subject: "service", MultiFact: true,
+		Judges: "declared services listening beyond their audience",
+		// It fires only against a declaration, so contradiction always
+		// raises it: medium, high on an internet-facing host
+		// (docs/spec/engagement.md, R3).
+		BaseSeverity: SevLow, Ceiling: SevHigh,
+		Impact: "The service listens on an address beyond the audience you declared for it, and the host firewall does " +
+			"not restrict that port, so machines outside that audience can try to connect to it. Whether a cloud " +
+			"firewall or security group blocks it was not assessed, and whether the service asks for a password or " +
+			"key was not read.",
+		Remediation: Remediation{
+			Summary: "If only this host uses it, bind it to 127.0.0.1 and restart it; if it serves your LAN or VPN, bind it to " +
+				"that interface's address instead of all addresses. Or allow the port only from the addresses that need it. " +
+				"If Docker publishes it, publish it on 127.0.0.1 or the private address: Docker's rules bypass ufw. Check " +
+				"your cloud firewall rules too: scheck did not read them. If the wider audience is intended, correct " +
+				"expected_services.",
+			Commands: []string{
+				"# only this host uses it: bind it to 127.0.0.1 in its configuration, then restart it",
+				"# or allow only the addresses that need it",
+				"sudo ufw default deny incoming",
+				"sudo ufw allow from 10.0.0.0/24 to any port 8080 proto tcp",
+				"# Docker: publish on loopback, -p 127.0.0.1:8080:8080",
+			},
 		}},
 }
 

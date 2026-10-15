@@ -63,7 +63,6 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"cicd.webhooks", "webhooks and where they send data"},
 	},
 	finding.AreaExternal: {
-		{"external.beyond_declared", "services on hosts reachable beyond the audience you declared for them"},
 		{"external.open_ports", "which ports and services answer from the internet (scheck reads; it does not scan)"},
 		{"external.registrar", "the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires"},
 		{"external.dns_account", "the DNS hosting account and who can change records"},
@@ -74,7 +73,7 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"web.cors", "which other sites may read the site's responses (CORS)"},
 	},
 	finding.AreaHosts: {
-		{"hosts.firewall_linux", "the firewall on Linux hosts, apart from database ports"},
+		{"hosts.firewall_linux", "the firewall on Linux hosts, apart from database ports and the services you declared"},
 		{"hosts.listeners", "listening services you did not declare"},
 		{"hosts.admins_sudo", "who can become root or administrator, and sudo rules that need no password"},
 		{"hosts.ssh_keys", "SSH keys allowed to log in (authorized_keys)"},

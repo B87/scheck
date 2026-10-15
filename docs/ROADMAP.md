@@ -1836,7 +1836,38 @@ older than 7 days is collected again on resume; every risk area's row prints its
    Deferred to step 7 with F1 (per-login write reads): the R4 coverage sub-item "no
    repository declared `deploys_to: production`; push to production by people who left
    not judged", which is not built.
-5. R3, and the context notes C1 to C3.
+5. R3 and the context notes, in two parts (5a done; 5b design).
+   - *5a (done).* R3 `svc.listens_beyond_declared` with the `exposure:internet` step
+     moving it as well as R1; the validation that exits 3 for `airgapped` on a service's
+     `audience` and for `not_used: [external]` beside a host with `exposure: internet`;
+     the coverage rule that a `not_used` area with a finding, open or accepted, is not
+     *not applicable*. R1 and R3 share the listener grouping and a lazily read firewall
+     (`internal/engagement/rules`). Deferred to step 9: the interview's
+     `expected_services` consumers (`db.listens_unfiltered`,
+     `svc.listens_beyond_declared`), since the interview test accepts only merged
+     slices. `spec/engagement.md` ("The multi-fact rules of 0.0.2", R3; "Severity in
+     context"; "Validation") and `spec/report.md` ("Coverage") are the wording. Decided
+     by the `security-consultant`, adopted under the owner's delegation.
+     Review of 5a (`code-reviewer`), all fixed except the last nit. Must-fix: R3 could
+     take "open" from one IP family and the bind from the other (the bind is judged only
+     in families the firewall left open). Should-fix: R1 judged Docker and Podman proxies
+     on any port, double-judging R3's (now table ports only, as `spec/engagement.md`
+     says); the interview accepted `not_used: [external]` beside an internet host and
+     `init` then exited 3 (`notUsedRefusal` is shared by intake and the interview); R3
+     disproved a host on a listener read with an unreadable port. Nits: R1's subject
+     order follows the first listener, loopback included; the unrecognized-bind detail
+     reads "a listener's bind address"; deferred, a partial fact read for one subject
+     withdraws another subject's disproval with `unavailable:incomplete_read` (safe,
+     the wording is imprecise).
+     A second review found that a declared port seen only on loopback was disproved on a
+     listener read with an unreadable port (fixed, with a fixture), and a test nit (R1's
+     host verdict is now asserted unaffected by Docker off a database port). Step 5a is
+     done.
+   - *5b.* The context notes C1 to C3, `{kind, source, detail}`, and the versioned C3
+     table (`spec/engagement.md`, "Context notes"; `spec/report.md`, "Findings").
+   - *Deferred, owner 0.0.3 or to be assigned:* `svc.expected_missing` has base medium,
+     which is mis-anchored against the base anchors; consider low or info
+     (`spec/host-collector.md`, where the finding is defined).
 6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,
    breadth-first GitHub reads under the 4,000-request budget, the `selection` text and
    JSON, the Plan document's read and abstain lists, `--stop-after plan`. A fake server
@@ -1847,7 +1878,9 @@ older than 7 days is collected again on resume; every risk area's row prints its
    observation with no recorded time is collected again), and the critical definition with its ceilings in
    `spec/engagement.md`.
 9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
-   `data.matters_most` again, run through the `client` interview mode on the wording.
+   `data.matters_most` again, run through the `client` interview mode on the wording,
+   and gains the `expected_services` consumers (`db.listens_unfiltered`,
+   `svc.listens_beyond_declared`; carried from step 5a).
 
 R3 may move out of E9 if the slice runs long; a deferral is recorded here with its owner.
 

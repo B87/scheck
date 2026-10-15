@@ -45,9 +45,13 @@ type Read struct {
 	Name string
 }
 
-// DeclaredServices is the host's expected_services, the one declaration
-// a rule reads in this build; the exposure raise is the severity table's.
-const DeclaredServices = "expected_services"
+// The declarations of the host's context a rule may read. The exposure
+// raise is the severity table's; R3 reads exposure itself, since it decides
+// whether a lan or vpn service is judged at all.
+const (
+	DeclaredServices = "expected_services"
+	DeclaredExposure = "exposure"
+)
 
 // Rule is one multi-fact rule over a host.
 type Rule struct {
@@ -86,13 +90,15 @@ type Host struct {
 // Context is the host's declared context the rules may read.
 type Context struct {
 	Services []Service
+	// Exposure is the host's declared exposure as written, "" when none.
+	Exposure string
 }
 
 // Service is one expected_services entry.
 type Service struct {
-	Port            int
-	Proto, Audience string
-	Key             string
+	Port                     int
+	Proto, Audience, Purpose string
+	Key                      string
 }
 
 // Excerpt is what one fact shows that a judgment rests on.
@@ -170,6 +176,14 @@ func (v *View) Services() []Service {
 		return nil
 	}
 	return slices.Clone(v.host.Context.Services)
+}
+
+// Exposure is the host's declared exposure, if the rule declared it.
+func (v *View) Exposure() string {
+	if !v.declares(ReadDeclared, DeclaredExposure) {
+		return ""
+	}
+	return v.host.Context.Exposure
 }
 
 // registry is every multi-fact rule over a host, in order.

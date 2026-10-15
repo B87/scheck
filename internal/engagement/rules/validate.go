@@ -46,7 +46,7 @@ func Validate(rules []Rule) []Violation {
 					bad("reads %s, which is not in the %s catalog", read.Name, r.Platform)
 				}
 			case ReadDeclared:
-				if read.Name != DeclaredServices {
+				if read.Name != DeclaredServices && read.Name != DeclaredExposure {
 					bad("reads declaration %s, which no host context carries", read.Name)
 				}
 			default:

@@ -67,7 +67,11 @@ func withHostFacts(t *testing.T, set map[string]finding.Fact, d severity.Declara
 		why: map[string]string{"fw.ufw": "check-unavailable:command_missing", "fw.firewalld": "check-unavailable:command_missing"},
 	}
 	maps.Copy(facts.facts, set)
-	res := rules.Judge([]rules.Host{{Asset: a.ID, Name: a.Name, Facts: facts, Context: rules.Context{Services: services}}})[a.ID]
+	exposure := ""
+	if _, ok := d.Internet[a.ID]; ok {
+		exposure = "internet"
+	}
+	res := rules.Judge([]rules.Host{{Asset: a.ID, Name: a.Name, Facts: facts, Context: rules.Context{Services: services, Exposure: exposure}}})[a.ID]
 	a.Judged, a.Coverage, a.PopulationIncomplete = res.Judged, res.Coverage, res.PopulationIncomplete
 	severity.GradeAll(a.Judged, a.ID, d)
 	return in
@@ -202,5 +206,38 @@ func TestAnEmptyPasswordOverSSHReachesTheReport(t *testing.T) {
 	ssh := subItem(t, row(t, r, "hosts"), "SSH server")
 	if !slices.Contains(ssh.Judged, "accounts with no password that SSH lets in") || !slices.Contains(ssh.Rules, finding.IDEmptyPasswordRemote) {
 		t.Errorf("SSH server %+v", ssh)
+	}
+}
+
+// hostServiceBeyondReport is R3 firing: a service declared for this host
+// only listens on every address of an internet-facing host with no host
+// firewall.
+func hostServiceBeyondReport(t *testing.T) Input {
+	return withHostRules(t, listenRecs(listen("tcp", "0.0.0.0", "22", "sshd"), listen("tcp", "0.0.0.0", "8080", "node")),
+		severity.Declarations{Internet: map[string]string{"host:ubuntu:22": "assets.ubuntu.context.exposure"}},
+		rules.Service{Port: 8080, Proto: "tcp", Audience: "localhost", Purpose: "admin dashboard", Key: "assets.ubuntu.context.expected_services[0]"})
+}
+
+// R3 reaches the report at high, citing the declaration it contradicts,
+// and an area marked not used never hides it.
+func TestAServiceBeyondItsAudienceReachesTheReport(t *testing.T) {
+	in := hostServiceBeyondReport(t)
+	r := build(in)
+	validate(t, schema(t), r)
+	var f *Finding
+	for i := range r.Findings {
+		if r.Findings[i].ID == finding.IDSvcListensBeyond {
+			f = &r.Findings[i]
+		}
+	}
+	if f == nil || f.Severity != "high" || f.Subject == nil || f.Subject.Label != "node" || f.Area != string(finding.AreaExternal) {
+		t.Fatalf("%+v", f)
+	}
+	in.NotUsed = []string{"external"}
+	r = build(in)
+	for _, row := range r.Coverage {
+		if row.Area == string(finding.AreaExternal) && row.Mark == "not_applicable" {
+			t.Fatalf("not_used hid a finding: %+v", row)
+		}
 	}
 }

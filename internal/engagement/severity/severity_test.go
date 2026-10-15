@@ -303,3 +303,17 @@ func TestProductionWriteNotEstablished(t *testing.T) {
 		t.Fatalf("nothing declared production: %+v", c)
 	}
 }
+
+// R3 always carries its contradiction: medium, and high on a host
+// declared internet-facing (docs/spec/engagement.md, R3).
+func TestADeclaredServiceBeyondItsAudience(t *testing.T) {
+	const host = "host:app:22"
+	j := fired(finding.IDSvcListensBeyond, finding.Attribute{Name: "contradiction", Ref: finding.Ref{Key: "assets.app.context.expected_services[0]"}})
+	if c := Grade(j, host, Declarations{}); c.Severity != finding.SevMedium || strings.Join(moved(c), ",") != "contradiction" {
+		t.Fatalf("%+v", c)
+	}
+	d := Declarations{Internet: map[string]string{host: "assets.app.context.exposure"}}
+	if c := Grade(j, host, d); c.Severity != finding.SevHigh || strings.Join(moved(c), ",") != "exposure:internet,contradiction" {
+		t.Fatalf("%+v", c)
+	}
+}

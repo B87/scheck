@@ -145,6 +145,15 @@
         "check:net.listeners"
       ],
       "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "svc.listens_beyond_declared",
+      "instances": 0,
+      "reads": [],
+      "reason": "unavailable:no_declaration",
+      "status": "not_assessed"
     }
   ],
   "assets": [
@@ -398,12 +407,11 @@
     },
     {
       "area": "external",
+      "assets_covered": [
+        "host:ubuntu:22"
+      ],
       "mark": "not_assessed",
       "not_judged": [
-        {
-          "id": "external.beyond_declared",
-          "text": "services on hosts reachable beyond the audience you declared for them"
-        },
         {
           "id": "external.open_ports",
           "text": "which ports and services answer from the internet (scheck reads; it does not scan)"
@@ -417,9 +425,31 @@
           "text": "the DNS hosting account and who can change records"
         }
       ],
+      "population": {
+        "in_scope": 1,
+        "kind": "assets",
+        "read": 1
+      },
       "reasons": [
         {
-          "reason": "not_declared"
+          "detail": "Declared services listening beyond their audience",
+          "reason": "unavailable:no_declaration"
+        }
+      ],
+      "sub_items": [
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Declared services listening beyond their audience",
+          "reasons": [
+            {
+              "detail": "no service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a service's reach only against what you declared",
+              "reason": "unavailable:no_declaration"
+            }
+          ],
+          "rules": [
+            "svc.listens_beyond_declared"
+          ]
         }
       ]
     },
@@ -455,7 +485,7 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports"
+          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
@@ -508,6 +538,9 @@
         },
         {
           "reason": "unavailable:command_missing"
+        },
+        {
+          "reason": "unavailable:no_declaration"
         },
         {
           "reason": "unavailable:accounts"
@@ -569,19 +602,25 @@
           "judged": [
             "whether database ports are filtered only; see Data stores"
           ],
-          "mark": "assessed",
+          "mark": "partial",
           "name": "Firewall",
           "population": {
-            "in_scope": 1,
+            "in_scope": 2,
             "kind": "rules",
             "read": 1
           },
           "read_not_judged": [
             "/usr/sbin/xtables-nft-multi"
           ],
-          "reasons": [],
+          "reasons": [
+            {
+              "detail": "no service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a service's reach only against what you declared",
+              "reason": "unavailable:no_declaration"
+            }
+          ],
           "rules": [
-            "db.listens_unfiltered"
+            "db.listens_unfiltered",
+            "svc.listens_beyond_declared"
           ]
         },
         {
@@ -909,8 +948,8 @@
     "more": 0,
     "rules": {
       "decided": 7,
-      "selected": 11,
-      "without_evidence": 4
+      "selected": 12,
+      "without_evidence": 5
     }
   }
 }
