@@ -241,7 +241,10 @@ type Row struct {
 	DeclaredNotVerified []Note         `json:"declared_not_verified,omitempty"`
 	UnattributedMembers *int           `json:"unattributed_members,omitempty"`
 	SubItems            []SubItem      `json:"sub_items,omitempty"`
-	PlannedIn           string         `json:"planned_in,omitempty"`
+	// NotJudged is the area's fixed list of sub-items this version does not
+	// judge; every risk-area row carries it, and no other row.
+	NotJudged []FixedItem `json:"not_judged,omitempty"`
+	PlannedIn string      `json:"planned_in,omitempty"`
 }
 
 // SubItem is a rule, or a family sharing a finding id, on an asset; for a

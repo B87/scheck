@@ -102,7 +102,7 @@ func (b *builder) planCoverage(row *Row, a AssetInput, plan CoveragePlan) bool {
 	}
 	for _, u := range plan.Unread {
 		row.SubItems = append(row.SubItems, SubItem{Name: u.Name, Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: u.Detail}}})
-		if u.Unassessed != "" {
+		if u.Unassessed != "" && !slices.ContainsFunc(fixedNotJudged[plan.Area], func(f FixedItem) bool { return f.ID == u.Fixed }) {
 			unassessed = append(unassessed, u.Unassessed)
 		}
 	}

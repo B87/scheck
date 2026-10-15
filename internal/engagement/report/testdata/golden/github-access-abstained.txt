@@ -31,28 +31,42 @@ Fix these first: a ranking of what was checked, not of all your risks
   No security verdict was possible from the collected evidence. Below: 0 low, 0 informational, 0
   accepted.
 
-A short list is not a clean bill of health. scheck reports only what its rules could decide. Not
-checked: identity and access, secrets, CI/CD and supply chain, cloud configuration, data stores and
-backups, external surface, web application, hosts, email and domain, logging and incident readiness.
-Anything not checked is unknown, not fine.
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Not checked: identity and access, secrets, CI/CD and supply chain, cloud configuration, data
+stores and backups, external surface, web application, hosts, email and domain, logging and incident
+readiness. Anything not checked is unknown, not fine.
 
 COVERAGE
 Identity and access      not checked
   2 of 2 assets read.
-  Required GitHub authority, visibility, context or recognized evidence was missing; this version of
-  scheck has no rule for it (Delegated organization roles, repository invitations, sign-in history,
-  selected-repository visibility and unobserved repository administrators are not assessed).
+  Required GitHub authority, visibility, context or recognized evidence was missing.
+  Not judged in this version: sign-in through another identity provider (SSO), and that provider's
+  2-step verification; which kind of 2-step verification people use (security key, app or text
+  message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed
+  to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
+  Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
+  the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
+  members' SSH keys. Also not judged on the assets read: Delegated organization roles, repository
+  invitations, sign-in history, selected-repository visibility and unobserved repository
+  administrators are not assessed.
 Secrets                  not checked
   2 of 2 assets read.
-  This version of scheck has no rule for it (Actions secret values, credential usability/rotation,
-  unsupported secret locations, unreported patterns and history outside the supported mirror
-  traversal are not assessed).
+  Not judged in this version: whether GitHub blocks secrets before they are pushed (push
+  protection); secrets printed in CI logs; secrets inside container images; secrets pasted in chat
+  and shared documents. Also not judged on the assets read: Actions secret values, credential
+  usability/rotation, unsupported secret locations, unreported patterns and history outside the
+  supported mirror traversal are not assessed.
 CI/CD and supply chain   not checked
   2 of 2 assets read.
-  This version of scheck has no rule for it (PR review strength and bypass, Actions runtime
+  Required GitHub authority, visibility, context or recognized evidence was missing.
+  Not judged in this version: who can push to repositories that deploy to production, contractors
+  included; review rules on the production deployment environment; approval before workflows run on
+  pull requests from forks; self-hosted runners that public repositories can use; which third-party
+  actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where
+  they send data. Also not judged on the assets read: PR review strength and bypass, Actions runtime
   policies, execution, reusable/composite internals, runner access, OIDC trust, App grants and
-  dependency runtime exploitability are not assessed); required GitHub authority, visibility,
-  context or recognized evidence was missing.
+  dependency runtime exploitability are not assessed.
 Not requested            Not part of this run: cloud configuration, data stores and backups,
                          external surface, web application, hosts, email and domain, logging and
                          incident readiness. To include one, list it under roots in the engagement
@@ -62,8 +76,8 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          any of them, and laptops you did not list were not looked at.
                          Application logic: authenticated testing of access control and business
                          rules.
-                         Processes: whether offboarding, incident response and vendor reviews are
-                         done as written.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
 FINDINGS: 0 open, 0 informational, 0 accepted

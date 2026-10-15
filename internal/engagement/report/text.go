@@ -510,6 +510,7 @@ func (t *text) summary() {
 
 	var s strings.Builder
 	s.WriteString("A short list is not a clean bill of health. scheck reports only what its rules could decide.")
+	s.WriteString(" No area is fully checked in this version; each area row under Coverage lists what this version does not judge.")
 	if len(checked) > 0 {
 		s.WriteString(" Checked: ")
 		s.WriteString(lowerAll(checked))
@@ -903,14 +904,29 @@ func (t *text) row(row Row) {
 		head += fmt.Sprintf(": %d of %d hosts read", p.Read, p.InScope)
 	}
 	t.field("", areaLabel[row.Area], 25, head)
+	// The limits inside built sub-items join the area's fixed list in one
+	// line; the reasons line keeps what the run left open
+	// (docs/spec/report.md, "Coverage").
+	var reasons []ReasonDetail
+	var limits []string
+	for _, rd := range row.Reasons {
+		if rd.Reason == "no_rule" {
+			if rd.Detail != "" {
+				limits = append(limits, clean(rd.Detail))
+			}
+			continue
+		}
+		reasons = append(reasons, rd)
+	}
 	if row.Area == "hosts" {
+		t.notJudged(row, nil)
 		t.hosts(row)
 	} else {
 		if p := row.Population; p != nil && row.Mark != "assessed" {
 			t.hang("  ", "  ", fmt.Sprintf("%d of %s read.", p.Read, count(p.InScope, singular(p.Kind), p.Kind)))
 		}
-		if len(row.Reasons) > 0 {
-			s := upper(t.reasonsText(row.Reasons))
+		if len(reasons) > 0 {
+			s := upper(t.reasonsText(reasons))
 			if len(row.AssetsCovered) == 0 && row.Population != nil && row.Population.Read == 0 {
 				var unread []string
 				for _, a := range t.r.Assets {
@@ -933,9 +949,29 @@ func (t *text) row(row Row) {
 			}
 		}
 	}
+	if row.Area != "hosts" {
+		t.notJudged(row, limits)
+	}
 	for _, n := range row.DeclaredNotVerified {
 		t.hang("  Declared, not verified: ", "    ", clean(n.Detail)+" ("+clean(entryKey(n.Source))+").")
 	}
+}
+
+// notJudged is a row's line of what this version does not judge: the
+// area's fixed list, then the limits inside its built sub-items.
+func (t *text) notJudged(row Row, limits []string) {
+	if len(row.NotJudged) == 0 || row.Mark == "not_applicable" {
+		return
+	}
+	items := make([]string, len(row.NotJudged))
+	for i, f := range row.NotJudged {
+		items[i] = f.Text
+	}
+	s := "Not judged in this version: " + strings.Join(items, "; ") + "."
+	if len(limits) > 0 {
+		s += " Also not judged on the assets read: " + strings.Join(limits, "; ") + "."
+	}
+	t.hang("  ", "  ", s)
 }
 
 func (t *text) hosts(row Row) {

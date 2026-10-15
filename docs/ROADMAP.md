@@ -1722,7 +1722,26 @@ older than 7 days is collected again on resume; every risk area's row prints its
      session that collected it, and the JSON carries it as
      `findings[].acceptance.judged_at`. Not built: step 8's 7-day maximum and a zero
      collection time counted as expired on resume.
-2. The fixed sub-item lists, with "not judged in this version: …" in every row; goldens.
+2. *(done, offline).* The fixed sub-item lists, with "not judged in this version: …" in
+   every row; goldens. `internal/engagement/report/fixed.go` holds each area's ordered
+   `{id, text}` list; `coverage[].not_judged` is required on the ten area rows, no area
+   row is `assessed`, and the list never lifts *not assessed* or changes
+   `not_applicable`, the exit code or the run status. The text line prints on each row
+   shown on its own, once under the Hosts mark, and replaces the row-level `no_rule`
+   reason; the not-a-clean-bill paragraph says no area is fully checked. A collector's
+   unread sub-item names its fixed id (`CoverageUnread.Fixed`) so it is not said twice.
+   Decided 2026-10-15 (`security-consultant` define, adopted by the owner's standing
+   delegation): the lists come from the practitioner's list, not from the rules; new
+   items for 2-step kind and app access policy, container-image secrets, push to
+   production, the DNS account, host SSH keys, admins with sudo, Linux disk encryption,
+   email forwarding policy and off-host logs; credential files under Hosts only, cloud
+   keys and databases under Cloud only; the restore test moved to the Processes
+   *outside scheck* row; R1, R2 and R3 sit in the right column until steps 3 and 5 build
+   them. Deferred: collector limit details keep their own "remain unassessed" and "were
+   not assessed" phrasing (ask collectors for noun phrases later), and a free-text limit
+   that overlaps a fixed item is printed twice (Workspace forwarding's Admin console
+   setting, GitHub CI/CD's OIDC trust; give such limits a fixed id); the population line
+   "1 of 1 asset read." on a row where no sub-item reads anything (logging) may mislead.
 3. The multi-fact rule framework in `internal/engagement`: declared reads, the three
    outcomes, an incomplete population fires and never disproves, a `ValidateRules`-style
    invariants test. The `fw.iptables_backend` check. R1 and R2 on host fixtures; R2 last.

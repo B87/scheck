@@ -163,5 +163,12 @@ func TestFailedGitHubInventoryDoesNotCountAsRead(t *testing.T) {
 				t.Fatalf("mixed=%v %s falsely counted inventory: %+v", mixed, area, v.Population)
 			}
 		}
+		var buf bytes.Buffer
+		if err := WriteText(&buf, r, Options{}); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.Join(strings.Fields(buf.String()), " "), "assets read: engineering: inventory only") {
+			t.Errorf("mixed=%v: an unread inventory is described as read:\n%s", mixed, buf.String())
+		}
 	}
 }

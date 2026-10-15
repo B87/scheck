@@ -195,9 +195,27 @@
               "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
             }
           },
+          "not_judged": {
+            "type": "array", "minItems": 1,
+            "description": "A risk area's fixed list of sub-items this version does not judge, in print order. Every risk-area row carries it, not_applicable included, and no other row; a non-empty list keeps the row from assessed. A partial row whose reasons are only no_rule, or none, is partial only by this version's limits.",
+            "items": {
+              "type": "object", "required": ["id", "text"], "additionalProperties": false,
+              "properties": { "id": { "type": "string", "pattern": "^[a-z]+\\.[a-z_]+$" }, "text": { "type": "string" } }
+            }
+          },
           "planned_in": { "type": "string", "description": "For collector_not_built: the release that brings the collector. Never printed in text." }
         },
-        "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
+        "allOf": [
+          {
+            "if": { "properties": { "mark": { "enum": ["partial", "not_assessed"] } }, "required": ["mark"] },
+            "then": { "anyOf": [{ "properties": { "reasons": { "minItems": 1 } } }, { "required": ["not_judged"] }] }
+          },
+          {
+            "if": { "properties": { "area": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"] } }, "required": ["area"] },
+            "then": { "required": ["not_judged"], "properties": { "mark": { "not": { "const": "assessed" } } } },
+            "else": { "not": { "required": ["not_judged"] } }
+          }
+        ]
       }
     },
     "findings": {

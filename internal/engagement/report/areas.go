@@ -57,7 +57,7 @@ var outside = []Row{
 	{Area: "application_logic", Mark: "outside_scheck", Reasons: []ReasonDetail{},
 		Detail: "authenticated testing of access control and business rules"},
 	{Area: "processes", Mark: "outside_scheck", Reasons: []ReasonDetail{},
-		Detail: "whether offboarding, incident response and vendor reviews are done as written"},
+		Detail: "whether offboarding, incident response, backup restore tests and vendor reviews are done as written"},
 	{Area: "lookalike_domains", Mark: "outside_scheck", Reasons: []ReasonDetail{},
 		Detail: "registrations of names you do not own"},
 }
@@ -82,7 +82,7 @@ func (b *builder) coverage() []Row {
 				row.DeclaredNotVerified = append(row.DeclaredNotVerified, Note{Kind: "declared_not_verified", Source: d.Source, Detail: d.Detail})
 			}
 		}
-		rows = append(rows, row)
+		rows = append(rows, withFixedList(row, area))
 	}
 	for _, tool := range b.in.OtherTools {
 		rows = append(rows, Row{Area: "other_saas", Tool: tool, Mark: "not_assessed",
@@ -118,11 +118,13 @@ func (b *builder) areaRow(area finding.Area) Row {
 			if a.InventoryRead {
 				read++
 			}
-			detail := a.Name + ": inventory only; no " + map[string]string{"github": "GitHub", "workspace": "Workspace"}[a.Collector] + " security control was assessed"
-			if a.Collector == "workspace" && len(a.Judged) > 0 {
-				detail = a.Name + ": no logging or incident-readiness control was assessed"
+			// A judged Workspace tenant's logging limits are the area's
+			// fixed list, printed once.
+			// "Inventory only" is a limit on an inventory that was read.
+			if a.InventoryRead && (a.Collector != "workspace" || len(a.Judged) == 0) {
+				detail := a.Name + ": inventory only; no " + map[string]string{"github": "GitHub", "workspace": "Workspace"}[a.Collector] + " security control was assessed"
+				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 			}
-			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
 			}
@@ -274,4 +276,14 @@ func inventoryCoverageReason(a AssetInput) string {
 		return "unavailable:workspace_inventory"
 	}
 	return a.Reason
+}
+
+// unreadInventory is why a collector's controls went unjudged: its
+// inventory-only limit when the inventory was read, else the asset's own
+// reason, so an unread inventory is never called "inventory only".
+func unreadInventory(a AssetInput, limit ReasonDetail) ReasonDetail {
+	if a.InventoryRead || a.Reason == "" {
+		return limit
+	}
+	return ReasonDetail{Reason: inventoryCoverageReason(a), Detail: a.Name}
 }

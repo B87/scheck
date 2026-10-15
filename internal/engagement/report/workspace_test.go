@@ -476,3 +476,24 @@ func TestWorkspaceMailRaiseCoverageAndAcceptance(t *testing.T) {
 		t.Fatal(email)
 	}
 }
+
+// A Workspace tenant whose inventory failed, in an identity row another
+// collector judged, is named with its own reason in the row and its
+// sub-item, never as "inventory only".
+func TestAFailedWorkspaceInventoryIsNamedInAJudgedRow(t *testing.T) {
+	in := githubAccessFiredReport(t)
+	ws := workspaceInventoryReport(t).Assets[0]
+	ws.Status, ws.Reason, ws.InventoryRead = "incomplete", "failed", false
+	in.Assets = append(in.Assets, ws)
+	r := build(in)
+	validate(t, schema(t), r)
+	got := row(t, r, "identity")
+	if !slices.ContainsFunc(got.Reasons, func(rd ReasonDetail) bool { return rd.Detail == ws.Name && rd.Reason != "no_rule" }) {
+		t.Errorf("the failed tenant is not named in the identity row: %+v", got.Reasons)
+	}
+	for _, si := range got.SubItems {
+		if si.Asset == ws.ID && strings.Contains(strings.ToLower(si.Reasons[0].Detail), "inventory only") {
+			t.Errorf("the unread tenant's sub-item says inventory only: %+v", si)
+		}
+	}
+}

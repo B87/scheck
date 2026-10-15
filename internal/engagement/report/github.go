@@ -17,8 +17,13 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: a.Reason, Detail: a.Name})
 	}
 	if len(a.Judged) == 0 {
-		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
-		row.SubItems = append(row.SubItems, SubItem{Name: "GitHub security controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"}}})
+		// "Inventory only" is a limit on an inventory that was read; an
+		// unread one keeps its own reason.
+		if a.InventoryRead {
+			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
+		}
+		why := unreadInventory(a, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": inventory only; no GitHub security control was assessed"})
+		row.SubItems = append(row.SubItems, SubItem{Name: "GitHub security controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{why}})
 		return false
 	}
 	type family struct {

@@ -140,6 +140,11 @@ fired, disproved or abstained assessments. Owner authority is required for trust
 MFA evidence; unknown authority or missing/partial populations are not passes.
 GitHub account 2FA is independent of identity-provider MFA; SAML enforcement alone
 does not settle the GitHub 2FA rules.
+Every risk-area row in the JSON coverage carries `not_judged`, a list of `{id, text}`
+for what this version never judges; no area row is `assessed` in this version, and a
+partial row whose only reasons are `no_rule`, or none, is partial only by this
+version's limits, not by anything the run left open. Read `not_judged` as unknown, not
+fine.
 Read partial coverage and permission gaps before conclusions. Public-repository
 and deploy-key rules and six CI configuration rules assess part of CI/CD. Read
 separate coverage for token defaults, default-branch protection presence, dependency

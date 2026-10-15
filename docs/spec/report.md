@@ -176,7 +176,8 @@ statement with this run's numbers:
 
 ```
 A short list is not a clean bill of health. scheck reports only what its rules could
-decide. Checked in part: hosts. On deploy, 4 of 13 host areas were judged, each only on
+decide. No area is fully checked in this version; each area row under Coverage lists what
+this version does not judge. Checked in part: hosts. On deploy, 4 of 13 host areas were judged, each only on
 the settings named under Coverage; 6 have no rule in this version and 3 had no usable
 evidence. Not checked: identity and access, secrets, cloud configuration, … Anything not
 checked is unknown, not fine.
@@ -377,8 +378,10 @@ declared), `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,
 colon) or `no_rule` (read, but no rule in this version judges it), with a detail line.
 A `no_rule` reason on an assessed sub-item states the limits of what was checked, not
 that the sub-item was unassessed.
-A row that is not *assessed* always carries its reasons: a *partial* row usually has
-several (a permission, an excluded unit, a sample), so a row holds a list, never one
+A row that is not *assessed* always carries its reasons or a non-empty `not_judged` (the
+fixed list below). A JSON row that is *partial* with only `no_rule` reasons, or none, is
+partial only by this version's limits, not by anything the run left open. A *partial* row
+usually has several (a permission, an excluded unit, a sample), so a row holds a list, never one
 "main" reason. `sampled` makes a row at most *partial*. Only `failed` and
 `limit_reached` on a cut collection, and a declared root with no successful read,
 change the exit code ([scope.md](scope.md#outcomes)); an `unavailable` read makes coverage *partial* and
@@ -431,7 +434,7 @@ the target:
 | `unavailable:mailbox_authorization_expired` | the approval to sign in as mailboxes has ended or has not yet started; renew the approval and update `expires`, or wait until `date`, and run again |
 | `unavailable:forwarding_subdomain` | forwarding to a subdomain that is not itself a domain of this Workspace was not judged |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
-| `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not |
+| `no_rule` | not judged: this version of scheck has no rule for it; the detail says what was read and what was not. On a risk-area row the limits print inside "Also not judged on the assets read" (below), not as this phrase; it remains on host domain sub-rows |
 
 A token is never wrapped across lines; the detail wraps.
 
@@ -471,32 +474,64 @@ applicable. There is no `payments` area
 
 | Risk area | Judged in this version | Not judged in this version |
 |---|---|---|
-| Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | domain-wide delegation; SSO and federation, and their 2-step verification; app passwords and less-secure apps; the admin recovery email and phone; GitHub App installations; the personal access token policy; members' SSH keys |
-| Secrets | provider secret-scanning alerts; secrets in mirrored history; organization secrets shared with every repository; secrets in public web responses. `secrets.production` is printed as declared, not verified | push protection; credential files on hosts (0.0.3 G5); CI logs; chat and shared documents; long-lived cloud keys (0.0.3) |
-| Cloud configuration | none: no cloud collector (`collector_not_built`) | public storage and snapshots; Owner and Editor roles on people; Owner on service accounts; service account keys; VPC firewall rules; database public addresses and authorized networks; organization policies |
-| Data stores and backups | databases listening unfiltered on a host (E9) | cloud databases reachable from outside; Drive link-sharing defaults; backup existence and location (declared, not verified); whether a restore was tested |
-| CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | production environment protection; self-hosted runners on public repositories; the allowed-actions policy; fork pull request approval; webhooks; OIDC trust to a cloud (0.0.3) |
-| External surface | dangling records; subdomain takeover; private addresses; TLS and certificates; declared services listening beyond their audience (E9). The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services exposed to the outside (probes, 0.0.3); the registrar account: who can sign in to it, its 2-step verification, auto-renew and the domain's expiry |
-| Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files and debug routes (0.0.3); CORS; third-party scripts |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and a usable empty password over SSH (E9) | the host firewall in general; unexpected listeners; sudo `NOPASSWD`; SUID files; persistence; credential files (0.0.3 G5) |
-| Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | MTA-STS and TLS-RPT; Workspace inbound spoofing settings |
-| Logging and incident readiness | none in 0.0.2: the row prints "not checked" | audit logging enabled and alerting on administrative changes in Workspace; GitHub audit-log streaming; cloud audit logs |
+| Identity and access | tenant 2-step enforcement; admins without 2-step verification; members without it; admins against `access.admins`; too many admins; unattributed admins; contractor and shared admins; people who left, still active or invited; stale and never-signed-in accounts; suspended accounts holding roles; OAuth grants with broad scopes (optional profile); outside collaborators with admin on production; the base member permission | sign-in through another identity provider (SSO), and that provider's 2-step verification; which kind of 2-step verification people use (security key, app or text message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on the organization and what they can reach; GitHub's rules for personal access tokens; GitHub members' SSH keys |
+| Secrets | provider secret-scanning alerts; secrets in mirrored history; organization secrets shared with every repository; secrets in public web responses. `secrets.production` is printed as declared, not verified | whether GitHub blocks secrets before they are pushed (push protection); secrets printed in CI logs; secrets inside container images; secrets pasted in chat and shared documents |
+| Cloud configuration | none: no cloud collector (`collector_not_built`) | storage buckets and disk snapshots anyone can read; administrator roles (such as Owner or Editor) held by people; administrator roles held by service accounts, including the default ones; long-lived keys for service accounts and users, and their age; databases with a public address or authorized networks open to anyone; network firewall rules open to the whole internet; organization-wide guardrails (organization policies) |
+| Data stores and backups | none in this version | databases on hosts that listen on every address with no host firewall in front; Google Drive sharing defaults, and files shared with anyone who has the link; whether backups exist, where they are kept, and who can delete them (declared, not verified) |
+| CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | who can push to repositories that deploy to production, contractors included; review rules on the production deployment environment; approval before workflows run on pull requests from forks; self-hosted runners that public repositories can use; which third-party actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where they send data |
+| External surface | dangling records; subdomain takeover; private addresses; TLS and certificates. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
+| Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files, debug pages and admin panels (such as /.git, /.env or /admin); third-party scripts the site loads; which other sites may read the site's responses (CORS) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` | an empty password that SSH accepts; the firewall on Linux hosts; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
+| Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | whether Workspace lets staff forward mail outside the company (the tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in transit (MTA-STS and TLS reporting) |
+| Logging and incident readiness | none in 0.0.2: the row prints "not checked" | alerts on administrator changes and suspicious sign-ins in Workspace; GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere off the host |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
 | Application logic | *outside scheck*: authenticated testing of access control and business rules |
-| Processes | *outside scheck*: whether offboarding, incident response and vendor reviews are done as written. The accounts themselves are checked under Identity and access; without the row, "Identity: checked" reads as "offboarding is handled" |
+| Processes | *outside scheck*: whether offboarding, incident response, backup restore tests and vendor reviews are done as written. The accounts themselves are checked under Identity and access; without the row, "Identity: checked" reads as "offboarding is handled" |
 | Lookalike and typo domains | *outside scheck*: registrations of names you do not own are outside every root ([scope.md](scope.md)), and they are the most common small-company email fraud |
 | Other declared SaaS | one row per tool in `tools` without a collector, by name |
 
-**The lists are fixed, whatever rules are built** (design; contract when E9 lands, step 2).
-Each row's sub-items come from the practitioner's list for the area, not from the rules
-that exist, so a reader can tell *checked* from *checked thinly*. An item with no rule
-is `no_rule` (`collector_not_built` in the cloud row), and a row with one is *partial*.
-Every row prints `not judged in this version: …` followed by its right-hand column and
-the limits inside its built sub-items, so an *assessed* row still prints it, as the Hosts
-and External rows already do. An item moves left only when a rule for it lands, and a golden pins each row.
+Three items are in the right column until their rules land and move left in the commit
+that builds each: databases on hosts that listen on every address with no host firewall
+in front (`data.host_db_unfiltered`, E9 step 3), an empty password that SSH accepts
+(`hosts.empty_password_ssh`, step 3) and services reachable beyond the declared audience
+(`external.beyond_declared`, step 5). Release markers for the other items live in
+`ROADMAP.md`, not here.
+
+**The lists are fixed, whatever rules are built** (contract from E9 step 2). Each row's
+sub-items come from the practitioner's list for the area, not from the rules that exist,
+so a reader can tell *checked* from *checked thinly*. The right-hand column is the
+list, in this order, and `internal/engagement/report/fixed.go` holds it as data.
+Each item has a stable id (`identity.sso`, `hosts.ssh_keys`, `data.host_db_unfiltered`)
+that is not renamed when its words change.
+
+- *JSON.* `coverage[].not_judged` is `[{id, text}]`. The ten risk-area rows require it,
+  including `not_applicable` and folded ("Not requested") rows; *Other declared SaaS*
+  and *outside scheck* rows carry none.
+- *Mark.* A row whose list is non-empty is never *assessed*: an *assessed* row becomes
+  *partial*. The list never lifts *not assessed*, and never changes `not_applicable`, the
+  exit code or the run status. In this version every area has a non-empty list, so no
+  area row is *assessed*.
+- *Text.* Each area row printed on its own (not folded, not `not_applicable`, not an
+  *outside scheck* or *Other declared SaaS* row) ends with `Not judged in this version:
+  <items joined by "; ">.`, followed by ` Also not judged on the assets read: <limits>.`
+  when the row has `no_rule` reasons (the limits inside built sub-items). Row-level
+  `no_rule` reasons do not print again in the reasons line. It prints with and without
+  `-v`, before "Declared, not verified", and is not repeated under "NOT CHECKED, AND WHAT
+  WOULD CLOSE THE GAP". In the Hosts row it prints once, right under the Hosts mark and
+  before the host blocks, with no "Also" sentence.
+- *No duplicates.* An unread sub-item that names a fixed item
+  (`finding.CoverageUnread.Fixed`, a fixed id) is not repeated in the row's reasons: the
+  Workspace plan's "domain-wide delegation" names `identity.delegation` and stays only in
+  the JSON `sub_items`. A judged Workspace tenant adds no logging `no_rule` reason; the
+  fixed logging list replaces it. A collector's free-text limit carries no fixed id and may
+  still overlap an item (Workspace forwarding, GitHub OIDC); deferred in the roadmap. An
+  "inventory only" limit is added only for an inventory that was read.
+
+An item moves left only when a rule for it lands, and a golden pins each row.
 
 **The Hosts row** is one block per host asset, under a mark that aggregates them (all
-*assessed*: *assessed*; none: *not assessed*; otherwise *partial*). Each block has an
+*assessed*: *assessed*; none: *not assessed*; otherwise *partial*), then lowered to
+*partial* by the fixed list like every area row. Each block has an
 identity line (name, canonical id, operating system, principal and elevation,
 collection span), a counts line (`checks N: R ran, U unknown, X not run. rules M: D
 decided, I had no usable evidence.`, the same counts the run status uses), one sub-row
@@ -509,7 +544,7 @@ rule judges reads `not judged: …` with what was read; the rest give their reas
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
-no rule consumes in this version (`expected_services` until the listener rules of E9 land). With more than three
+no rule consumes in this version (`expected_services` until the listener rules of E9 land). The row's "Not judged in this version" line prints once under the mark. With more than three
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 

@@ -65,7 +65,7 @@ func (e Evidence) Coverage(judged []finding.Judgment) []finding.CoveragePlan {
 			oauth,
 		},
 		Incomplete: finding.CoverageReason{Reason: "unavailable:workspace_inventory", Detail: "Current population is incomplete"},
-		Unread: []finding.CoverageUnread{{Name: "Workspace domain-wide delegation", Unassessed: "domain-wide delegation",
+		Unread: []finding.CoverageUnread{{Name: "Workspace domain-wide delegation", Unassessed: "domain-wide delegation", Fixed: "identity.delegation",
 			Detail: "Nothing was read: Google offers no Directory read for it. Review it in the Admin console at Security → Access and data control → API controls → Manage Domain Wide Delegation. With a service-account credential, scheck's own delegation is listed there"}},
 		RowAlso: "2-step verification policy, grace periods and other sign-in services were not assessed",
 	}

@@ -501,9 +501,9 @@ var judgedFamilies = map[finding.Area][]struct {
 // brings, for a row a collector's plan read without one.
 var declaredOnly = map[finding.Area]string{finding.AreaEmail: "Domain email settings (SPF, DKIM and DMARC)"}
 
-// notJudged lists, per area, what the domain collector reads or would read
-// that no rule judges in this build.
-var notJudged = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
+// webLimits lists, per area, what the domain collector reads or would read
+// that no rule judges in this build: limits inside its built sub-items.
+var webLimits = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
 
 // judgedRow is an area a network collector reads: one sub-item per rule
 // family per asset, marked from the judgments (docs/spec/report.md,
@@ -527,8 +527,13 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			if plan != nil && len(a.Judged) > 0 {
 				some = b.planCoverage(&row, a, *plan) || some
 			} else {
-				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"}}})
-				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+				why := unreadInventory(a, ReasonDetail{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"})
+				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{why}})
+				if a.InventoryRead {
+					row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+				} else if a.Reason != "" {
+					row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: inventoryCoverageReason(a), Detail: a.Name})
+				}
 			}
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
@@ -612,7 +617,7 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: detail}}, ReadNotJudged: a.Unfingerprinted})
 			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 		}
-		if nj := notJudged[area]; len(nj) > 0 {
+		if nj := webLimits[area]; len(nj) > 0 {
 			row.SubItems = append(row.SubItems, SubItem{Name: strings.Join(nj, ", "), Asset: a.ID, Mark: "not_assessed",
 				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "not judged in this version"}}, ReadNotJudged: nj})
 		}
@@ -622,7 +627,7 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 	if !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: declaredOnly[area]})
 	}
-	if nj := notJudged[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
+	if nj := webLimits[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: strings.Join(nj, ", ")})
 	}
 	assessed := read == fed
