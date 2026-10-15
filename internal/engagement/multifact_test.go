@@ -3,6 +3,8 @@ package engagement
 import (
 	"context"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/b87/scheck/internal/engagement/hostasset"
@@ -118,5 +120,58 @@ intent:
 	// The host's own rule settles it: it found no pending update.
 	if outcomes[finding.IDUpdatesPending] != "not_matched" {
 		t.Errorf("the posture acceptance was not settled by the host: %v", outcomes)
+	}
+}
+
+// An account with no password that sshd lets in is reported from the
+// host's facts as one critical finding listing it, ranked first, while the
+// host-local finding on the same account stays under Findings only
+// (docs/spec/engagement.md, R2).
+func TestAnEmptyPasswordOverSSHIsReportedFromTheHostsFacts(t *testing.T) {
+	res, err := Parse("engagement.yaml", []byte(dbHost), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := filepath.Abs(filepath.Join("testdata", "ssh-empty-password"))
+	collect := func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
+		fx, err := fixture.Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Target = fx
+		return hostasset.Collect(ctx, o)
+	}
+	out, err := Run(context.Background(), res, RunOptions{Raw: []byte(dbHost), Collect: collect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, f := range out.Report.Findings {
+		ids[f.ID] = true
+		if f.ID == finding.IDEmptyPasswordRemote && (f.Severity != "critical" || f.Affected == nil || f.Affected.Listed[0] != "alice") {
+			t.Errorf("finding %+v", f)
+		}
+	}
+	if !ids[finding.IDEmptyPasswordRemote] || !ids[finding.IDEmptyPassword] {
+		t.Fatalf("findings %v", ids)
+	}
+	for _, item := range out.Report.Summary.Items {
+		if slices.Contains(item.IDs, finding.IDEmptyPassword) {
+			t.Errorf("the host-local finding is ranked beside the one sshd makes remote: %+v", out.Report.Summary.Items)
+		}
+	}
+}
+
+// R2 is about the host as a whole: an acceptance naming a subject is
+// refused at intake, never left to look applied or "found nothing".
+func TestAnEmptyPasswordOverSSHIsAcceptedWithoutASubject(t *testing.T) {
+	raw := dbHost + `people:
+  alice: {kind: employee}
+intent:
+  accepted_risks:
+    - {id: accounts.empty_password_remote, asset: db, subject: alice, reason: r, accepted_by: alice, date: 2026-10-01, expires: 2027-06-01}
+`
+	if _, err := Parse("engagement.yaml", []byte(raw), testOpts); err == nil || !strings.Contains(err.Error(), "remove subject") {
+		t.Fatalf("a subject on a whole-host finding: %v", err)
 	}
 }

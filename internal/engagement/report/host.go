@@ -200,6 +200,9 @@ func (v *hostView) domains() []SubItem {
 		notApplicable int
 		read          map[string]string // check id -> what it read, for checks that answered
 		unread        []string
+		// groups are the multi-fact rules over this host that report in
+		// this area too (docs/spec/report.md, "The Hosts row").
+		groups []finding.CoverageGroup
 	}
 	byDomain := map[check.Domain]*dom{}
 	get := func(d check.Domain) *dom {
@@ -219,6 +222,13 @@ func (v *hostView) domains() []SubItem {
 				continue
 			}
 			get(c.Domain).rules = append(get(c.Domain).rules, as)
+		}
+	}
+	for _, plan := range v.a.Coverage {
+		for _, g := range plan.Groups {
+			if g.HostDomain != "" {
+				get(g.HostDomain).groups = append(get(g.HostDomain).groups, g)
+			}
 		}
 	}
 	for _, id := range sortedKeys(v.env.Facts) {
@@ -255,13 +265,22 @@ func (v *hostView) domains() []SubItem {
 				judged[as.With] = true
 			}
 		}
+		for _, g := range dm.groups {
+			for _, j := range v.a.Judged {
+				if slices.Contains(g.Rules, j.ID) {
+					for _, f := range j.Facts {
+						judged[f.Check] = true
+					}
+				}
+			}
+		}
 		var notJudged []string
 		for _, id := range sortedKeys(dm.read) {
 			if !judged[id] {
 				notJudged = append(notJudged, dm.read[id])
 			}
 		}
-		if len(dm.rules) == 0 {
+		if len(dm.rules) == 0 && len(dm.groups) == 0 {
 			si.Mark = "not_assessed"
 			// The detail is what was read, so a person can judge it, and
 			// what was not.
@@ -288,9 +307,34 @@ func (v *hostView) domains() []SubItem {
 			}
 			si.Reasons = appendReason(si.Reasons, v.reason(as))
 		}
+		for _, g := range dm.groups {
+			si.Rules = append(si.Rules, g.Rules...)
+			decided, undecided := 0, 0
+			for _, j := range v.a.Judged {
+				if !slices.Contains(g.Rules, j.ID) {
+					continue
+				}
+				if j.Decided() {
+					decided++
+					continue
+				}
+				undecided++
+				detail := g.Name
+				if len(j.NotChecked) > 0 {
+					detail = j.NotChecked[0]
+				}
+				si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: j.Reason, Detail: detail})
+			}
+			if decided > 0 {
+				si.Judged = appendUnique(si.Judged, g.HostJudges)
+			}
+			if decided > 0 && undecided == 0 {
+				n++
+			}
+		}
 		si.ReadNotJudged = notJudged
-		si.Population = &Population{Kind: "rules", InScope: len(dm.rules), Read: n}
-		si.Mark = markOf(n, len(dm.rules))
+		si.Population = &Population{Kind: "rules", InScope: len(dm.rules) + len(dm.groups), Read: n}
+		si.Mark = markOf(n, len(dm.rules)+len(dm.groups))
 		out = append(out, si)
 	}
 	return out

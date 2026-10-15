@@ -252,8 +252,9 @@ var defs = map[string]Def{
 		Impact: "The account has an empty password field and a shell that lets someone log in. Most Linux " +
 			"distributions accept an empty password for local logins by default (su, the console, a provider's " +
 			"serial console), so anyone or anything already running on this host can become this account without " +
-			"a credential, and become root if the account is root. scheck did not check whether sshd or another " +
-			"network service accepts empty passwords; if one does, the account can be logged into remotely.",
+			"a credential, and become root if the account is root. If sshd or another network service accepts " +
+			"empty passwords, the account can be logged into remotely; an engagement judges sshd's case as " +
+			"accounts.empty_password_remote when it reads sshd's settings and listeners.",
 		Remediation: Remediation{
 			Summary: "Lock the account, or set a password if a person really logs in with one.",
 			Commands: []string{

@@ -52,7 +52,7 @@ var engagementOptions = engagement.Options{
 	FindingSubject: func(id string) string { return string(finding.SubjectOf(id)) },
 	HostFinding: func(id string) bool {
 		d, ok := finding.Lookup(id)
-		return ok && d.Area == finding.AreaHosts
+		return ok && d.Area == finding.AreaHosts && !d.MultiFact
 	},
 }
 

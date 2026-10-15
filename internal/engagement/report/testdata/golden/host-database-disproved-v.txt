@@ -9,11 +9,11 @@ Handle with care: this report names people, accounts, internal hosts and service
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
 
-Read: ubuntu (checked only in part: data stores and backups; ubuntu, 4 of 13 host areas judged). See
+Read: ubuntu (checked only in part: data stores and backups; ubuntu, 5 of 13 host areas judged). See
 Coverage for what was not checked.
 
 SUMMARY
-Checked in part  Data stores and backups, Hosts (ubuntu, 4 of 13 areas judged).
+Checked in part  Data stores and backups, Hosts (ubuntu, 5 of 13 areas judged).
 Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
                  supply chain, external surface, web application, email and domain, logging and
                  incident readiness. To include one, list it under roots in the engagement file.
@@ -25,8 +25,8 @@ Fix these first: a ranking of what was checked, not of all your risks
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
 is fully checked in this version; each area row under Coverage lists what this version does not
-judge. Checked in part: data stores and backups, hosts. On ubuntu, 4 of 13 host areas were judged,
-each only on the settings named under Coverage; 6 have no rule in this version and 3 had no usable
+judge. Checked in part: data stores and backups, hosts. On ubuntu, 5 of 13 host areas were judged,
+each only on the settings named under Coverage; 5 have no rule in this version and 3 had no usable
 evidence. Not checked: identity and access, secrets, cloud configuration, CI/CD and supply chain,
 external surface, web application, email and domain, logging and incident readiness. Anything not
 checked is unknown, not fine.
@@ -41,25 +41,29 @@ Data stores and backups  checked in part
   RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
   link; whether backups exist, where they are kept, and who can delete them.
 Hosts                    checked in part
-  Not judged in this version: an empty password that SSH accepts; the firewall on Linux hosts, apart
-  from database ports; listening services you did not declare; who can become root or administrator,
-  and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); disk
-  encryption on Linux hosts; programs that run with root rights (SUID files); programs started at
-  boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
+  Not judged in this version: the firewall on Linux hosts, apart from database ports; listening
+  services you did not declare; who can become root or administrator, and sudo rules that need no
+  password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and
+  whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root
+  rights (SUID files); programs started at boot or on a schedule; credential files (.env files,
+  ~/.aws, ~/.ssh, cloud CLI logins).
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 34: 23 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+  checks 34: 23 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
     Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
                              scheck could not tell (this is not a finding) (mac.sestatus: exit 127:
                              bash: line 1: sestatus: command not found)
-    Firewall                 not judged: this version of scheck has no rule for it (read:
-                             /usr/sbin/xtables-nft-multi; not read: fw.firewalld, fw.nft, fw.ufw)
+    Firewall                 checked (whether database ports are filtered only; see Data stores):
+                             nothing found by these rules; also read, not judged:
+                             /usr/sbin/xtables-nft-multi
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
-    SSH server               checked (password login, direct root login): nothing found by these
-                             rules
+    SSH server               checked in part (password login, direct root login): nothing found by
+                             these rules; which accounts have no password and can log in was not
+                             established (the account password states could not be read
+                             (check-not-run))
     Remote access            not judged: this version of scheck has no rule for it (read: 2 service
                              states: disabled, not-found)
     Accounts                 checked (accounts with no password and a login shell, the mode of
@@ -101,9 +105,9 @@ NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
   On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding):
     fw.firewalld, fw.nft, mac.aa_status, mac.sestatus, pkg.dnf_check_update, pkg.zypper_lp. Nothing
     to do unless you expected it installed.
-  On ubuntu, this version of scheck has no rule for disk encryption, firewall, network exposure,
-    remote access, privilege escalation, startup and persistence. What was read is in the JSON
-    report (--format json) for a person to look at.
+  On ubuntu, this version of scheck has no rule for disk encryption, network exposure, remote
+    access, privilege escalation, startup and persistence. What was read is in the JSON report
+    (--format json) for a person to look at.
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
@@ -227,6 +231,6 @@ Session and shell        ran      sys.uname               Linux 21859b827686 7.0
 
 FOR AUTOMATION
 Exit 0: no open finding at or above threshold among the 7 rules that could decide. That is not a
-clean result: 3 rules had no usable evidence, and 8 areas were not checked.
+clean result: 4 rules had no usable evidence, and 8 areas were not checked.
 --no-persist: no run directory or audit log was written; the command trace is in the JSON report
 (--format json).

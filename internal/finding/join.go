@@ -44,28 +44,63 @@ func (p StatusWithLoginShell) String() string {
 func (p StatusWithLoginShell) Eval(parsed any) Verdict { return p.EvalWith(parsed, nil) }
 
 func (p StatusWithLoginShell) EvalWith(parsed, with any) Verdict {
+	return p.Decide(parsed, with).Verdict
+}
+
+// AccountOutcome is the join's answer for one account with the status:
+// Matched when it has a login shell, NotMatched when its shell refuses
+// logins, NotAssessed with a reason when the shell is unknown.
+type AccountOutcome struct {
+	Account string
+	// UID is the account's uid in the With check, "" when not read there.
+	UID                  string
+	Status               string
+	Reason               string
+	Excerpt, WithExcerpt string
+}
+
+// JoinOutcome is the join decided per account, and the rule's verdict
+// over them.
+type JoinOutcome struct {
+	Accounts []AccountOutcome
+	Verdict  Verdict
+}
+
+// Decide is EvalWith with each account's answer, so an engagement rule
+// that needs the accounts (accounts.empty_password_remote) reads the same
+// decision as the posture rule.
+func (p StatusWithLoginShell) Decide(parsed, with any) JoinOutcome {
 	recs, ok := parsed.(check.Records)
 	if !ok {
-		return notAssessed("unexpected-parsed-shape")
+		return JoinOutcome{Verdict: notAssessed("unexpected-parsed-shape")}
 	}
 	// `passwd -S -a` always lists root: an empty listing is a broken read,
 	// never a host with no accounts.
 	if recs.Len() == 0 {
-		return notAssessed("no-records")
+		return JoinOutcome{Verdict: notAssessed("no-records")}
 	}
+	var out JoinOutcome
 	var candidates []check.Record
 	unrecognized := false
 	for _, rec := range recs.Items {
 		v := strings.TrimSpace(rec[p.Field])
 		name := strings.TrimSpace(rec[check.FieldName])
+		// An account whose state is not recognized may have the status:
+		// it is undecided, never left out. A marked name is never echoed.
+		undecided := AccountOutcome{Account: name, Status: NotAssessed, Reason: "unrecognized-value"}
+		if name == "" || check.HasMarker(name) {
+			undecided.Account = "(an account whose name was not read)"
+		}
 		if v == "" || check.HasMarker(v) || name == "" || check.HasMarker(name) {
 			unrecognized = true
+			out.Accounts = append(out.Accounts, undecided)
 			continue
 		}
 		if strings.EqualFold(v, p.Value) {
 			candidates = append(candidates, rec)
 		} else if !known(strings.ToLower(v), p.Known) {
 			unrecognized = true
+			out.Accounts = append(out.Accounts, undecided)
 		}
 	}
 	shells, shellsOK := with.(check.Records)
@@ -74,14 +109,20 @@ func (p StatusWithLoginShell) EvalWith(parsed, with any) Verdict {
 	unknown := ""
 	for _, rec := range candidates {
 		name := strings.TrimSpace(rec[check.FieldName])
+		a := AccountOutcome{Account: name, Status: NotAssessed, Excerpt: recordExcerpt(rec)}
 		if !shellsOK {
-			unknown = ReasonWithUnread
+			unknown, a.Reason = ReasonWithUnread, ReasonWithUnread
+			out.Accounts = append(out.Accounts, a)
 			continue
 		}
 		acct, last, found := accountNamed(shells, name)
 		if !found {
-			unknown = "account-not-in-passwd"
+			unknown, a.Reason = "account-not-in-passwd", "account-not-in-passwd"
+			out.Accounts = append(out.Accounts, a)
 			continue
+		}
+		if !marked(acct) {
+			a.UID = strings.TrimSpace(acct[check.FieldUID])
 		}
 		shell, hasShell := acct[check.FieldShell]
 		switch {
@@ -93,6 +134,7 @@ func (p StatusWithLoginShell) EvalWith(parsed, with any) Verdict {
 			unknown = "account-line-cut"
 		case check.RefusesLogin(shell):
 			refused = append(refused, recordExcerpt(rec))
+			a.Status, a.WithExcerpt = NotMatched, recordExcerpt(acct)
 		case check.InteractiveShell(shell):
 			fired = append(fired, recordExcerpt(rec))
 			ex := recordExcerpt(acct)
@@ -100,26 +142,46 @@ func (p StatusWithLoginShell) EvalWith(parsed, with any) Verdict {
 				ex += " shell=(empty, runs /bin/sh)"
 			}
 			withExcerpts = append(withExcerpts, ex)
+			a.Status, a.WithExcerpt = Matched, ex
 		default:
 			unknown = "unrecognized-shell:" + strings.TrimSpace(shell)
 		}
+		if a.Status == NotAssessed {
+			a.Reason = unknown
+		}
+		out.Accounts = append(out.Accounts, a)
 	}
 	if len(fired) > 0 {
 		v := matched("recognized-matching-record-with-login-shell", strings.Join(fired, "; "))
 		v.WithExcerpt = strings.Join(withExcerpts, "; ")
-		return v
+		out.Verdict = v
+		return out
 	}
 	switch {
 	case recs.Partial:
-		return notAssessed("partial-output")
+		out.Verdict = notAssessed("partial-output")
 	case unrecognized:
-		return notAssessed("unrecognized-value")
+		out.Verdict = notAssessed("unrecognized-value")
 	case unknown != "":
-		return notAssessed(unknown)
+		out.Verdict = notAssessed(unknown)
 	case len(refused) > 0:
-		return notMatched("matching-records-refuse-login", strings.Join(refused, "; "))
+		out.Verdict = notMatched("matching-records-refuse-login", strings.Join(refused, "; "))
+	default:
+		out.Verdict = notMatched("no-matching-record", "")
 	}
-	return notMatched("no-matching-record", "")
+	return out
+}
+
+// DecideJoin is the join of the posture rule that produces id on a host's
+// two facts, per account; ok is false when no such rule joins two checks.
+// with is nil when its check gave no usable fact.
+func DecideJoin(id string, parsed, with any) (JoinOutcome, bool) {
+	for _, r := range rules {
+		if d, ok := r.When.(StatusWithLoginShell); ok && r.Finding == id && r.With != "" {
+			return d.Decide(parsed, with), true
+		}
+	}
+	return JoinOutcome{}, false
 }
 
 // accountNamed finds an account's line by name, the first as getpwnam does,

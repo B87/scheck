@@ -1094,8 +1094,8 @@ disproved and abstains on a fixture, and that an all-partial read never disprove
 
 ### The multi-fact rules of 0.0.2
 
-R1 is contract (E9 step 3a); the rest is design that becomes contract when its step
-lands (R2 step 3b, R4 and R5 step 4, R3 step 5, `ROADMAP.md`). Already built
+R1 (E9 step 3a) and R2 (step 3b) are contract; the rest is design that becomes contract
+when its step lands (R4 and R5 step 4, R3 step 5, `ROADMAP.md`). Already built
 and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
 `identity.unattributed_admin`, `identity.former_person_has_access`,
 `identity.former_person_invited`, `identity.external_admin` and `identity.shared_admin`
@@ -1206,7 +1206,7 @@ not installed or unreadable, the legacy backend (`xtables-legacy-multi`,
 A fact known to be partial never disproves: the framework withdraws a disproval that
 rests on it, with the reason `unavailable:incomplete_read` ("what it read was incomplete,
 so it could show a problem but not rule one out"). The `Match`-block condition that bears
-on sshd belongs to R2, not here.
+on sshd is not read, and R2 states it as a limit.
 
 Raises: +1 `exposure:internet` when the host's `exposure` is `internet` (the severity
 table, below, not the host collector), +1 `contradiction` citing
@@ -1228,22 +1228,51 @@ alone is neither exposure nor this finding.
 
 Deferred, with owners in `ROADMAP.md`: the base-chain refinement of an `nft` ruleset and
 a parameterized `sshd -T -C user=` read (0.0.3 G5); the note for Docker's userland proxy
-turned off; R1's contradiction evidence line naming the audience (step 3b).
+turned off; R1's contradiction evidence line naming the audience (carried from step
+3b, no slice owns it yet).
 
-**R2 `accounts.empty_password_remote`.** Area hosts, base critical, built last in the
-slice. It reads the `accounts.empty_password` join, `sshd.config` (`sshd -T`, elevated)
-and `net.listeners`. It fires for an account U when `accounts.empty_password` fires for
-U; `permitemptypasswords` is `yes`; `passwordauthentication` is `yes`, or
-`kbdinteractiveauthentication` is `yes` with `usepam yes`; sshd listens on a non-loopback
-address; for `root`, `permitrootlogin` is `yes`; and no `AllowUsers`, `DenyUsers`,
-`AllowGroups` or `DenyGroups` is set (when one is, it is insufficient evidence). It is
-disproved when `permitemptypasswords no` is recognized, or `accounts.empty_password` is
-disproved. It is insufficient evidence when `sshd -T` was not read, the configuration has
-`Match` blocks, or the listeners are unknown. No host context step moves it: an account sshd lets in with an empty password is
-usable by anyone who reaches sshd, whatever the environment, so it is critical on `dev`
-and `airgapped` hosts too.
-Remediation: "Lock or set a password for these accounts (`passwd -l <user>`), and set
-`PermitEmptyPasswords no` in sshd_config, then reload sshd."
+**R2 `accounts.empty_password_remote`** (built, E9 step 3b). Area hosts, base critical,
+no subject: one finding per host, the accounts listed under `affected`. Title "An account
+with no password can log in over SSH", category `remote-access`, a host access finding.
+It judges Linux hosts only. It reads `accounts.passwd_status`, `accounts.passwd`,
+`sshd.config` (`sshd -T`, elevated) and `net.listeners`. The empty-password join is the
+posture rule's own decision per account (`finding.StatusWithLoginShell.Decide`,
+`finding.DecideJoin`; the posture rule's verdict is unchanged), so R2 and
+`accounts.empty_password` never disagree on which accounts have an empty password.
+
+| Outcome | When |
+|---|---|
+| fires | for an account U: `accounts.empty_password` fired for U; and `permitemptypasswords yes`; and a password method: `passwordauthentication yes`, or keyboard-interactive `yes` with `usepam yes` (`kbdinteractiveauthentication`, or `challengeresponseauthentication` when that is absent, OpenSSH before 8.7); and `authenticationmethods any`; and none of `allowusers`, `denyusers`, `allowgroups`, `denygroups` set; and, for an account with uid 0 (sshd applies `permitrootlogin` by uid, not name), `permitrootlogin yes`; and sshd listening beyond loopback |
+| disproved | `permitemptypasswords no`; or `accounts.empty_password` disproved; or both password methods off; or every `authenticationmethods` list includes `publickey`; or the only accounts have uid 0 and `permitrootlogin` is `no`, `prohibit-password`, `without-password` or `forced-commands-only`; or sshd listens on no address beyond localhost on a complete listener read |
+| insufficient evidence | password states unread; no account established; `sshd -T` unread, partial or unrecognized; a user or group list set; `authenticationmethods` it does not judge; `permitrootlogin` unrecognized for a uid-0 account; an account whose password state is not recognized and none fired (it is undecided, never left out); listeners unknown, an owner not shown, or a `systemd`, `inetd` or `xinetd` socket on a port sshd does not name (an `ssh.socket` `ListenStream` override moves sshd without `sshd -T` showing it) |
+
+`sshd -T` prints the four user and group lists only when they are set, so their absence
+counts only when the output is recognized: `permitemptypasswords` and `port` present and
+the read not partial. "Listening beyond loopback" means a tcp listener owned by `sshd` on
+any port, or, when the owner is `systemd` (socket activation) or not shown, on a port
+that sshd's `port` or `listenaddress` names; a socket activator on another port keeps
+the read from disproving. When R2 fires but some accounts were not decided (a password state
+or a shell scheck does not recognize, a partial password-state read), the list is a lower
+bound: the judgment marks the read incomplete and its Not checked names them ("Other
+accounts were not decided: …"). The reasons are `unavailable:accounts`,
+`unavailable:sshd_config` and `unavailable:sshd_listener`, each with report wording.
+
+*`Match` blocks.* `sshd -T` without `-C` prints the settings outside `Match` blocks, and
+nothing scheck reads shows that a `Match` block exists, so R2 cannot tell and does not
+condition on one. Every R2 judgment's Not checked says: "Settings inside Match blocks of
+sshd_config were not read, and whether PAM accepts an empty password (pam_unix nullok, on
+by default on Debian, Ubuntu and Fedora) was not read". The fixed Hosts item
+`hosts.ssh_match` carries the same limit ([report.md](report.md), "Coverage"). The
+parameterized read `sshd -T -C user=<u>` is 0.0.3 G5.
+
+No host context step moves it, and its `why_here` says: "This is the standard rating,
+whatever the host is used for: anyone who can reach sshd can sign in as these accounts."
+(A multi-fact finding that no step moved otherwise reads "This is the standard rating for
+what this host's settings show.") It is critical on `dev` and `airgapped` hosts too.
+`accounts.empty_password` keeps firing beside it; "Fix these first" leaves it out on a
+host where an open R2 fired and names every account it does ([report.md](report.md), "Ranking"), and it stays under
+Findings. Remediation: "Lock or set a password for these accounts (`passwd -l <user>`),
+and set `PermitEmptyPasswords no` in sshd_config, then reload sshd."
 
 **R3 `svc.listens_beyond_declared`.** Area external surface, base low, ceiling high,
 subject kind `service`; it reads what R1 reads, for a service that is not a database and

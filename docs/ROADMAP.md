@@ -1778,15 +1778,34 @@ older than 7 days is collected again on resume; every risk area's row prints its
      Recorded as a known limit, not fixed: an empty `fw.iptables_backend` cannot tell no
      `/usr/sbin/iptables` from a busybox `realpath` or a legacy `iptables` kept only in
      `/sbin` on a host without merged `/usr`.
-   - *3b (open).* R2 `accounts.empty_password_remote` (last); the Hosts row's Firewall
-     sub-row wording ("checked (whether database ports are filtered only; see Data
-     stores)") and its SSH sub-row; `hosts.ssh_match`; the contradiction's generic
-     "You declared … Operator declaration at …" evidence line, with the audience in the
-     excerpt. `areas.go` still says `expected_services` are not compared with listeners;
-     reword it with the Hosts row.
-   - *Deferred from 3a:* the base-chain refinement of an `nft` ruleset and a
-     parameterized `sshd -T -C user=` read (0.0.3 G5); a note for Docker's userland proxy
-     turned off.
+   - *3b (done, offline).* R2 `accounts.empty_password_remote`
+     (`internal/engagement/rules/ssh.go`), on the security-consultant's define of
+     2026-10-15: the empty-password join is the posture rule's own per-account decision
+     (`StatusWithLoginShell.Decide`, `DecideJoin`); the `Match`-block condition was
+     dropped because `sshd -T` without `-C` prints nothing that shows a block exists, and
+     every judgment says so in Not checked. `accounts.empty_password` keeps firing and
+     "Fix these first" leaves it out on a host with an open R2; its impact sentence points
+     to R2. The Hosts row: a multi-fact rule reports in its host domain's sub-row (R2 in
+     "SSH server", R1 in "Firewall": "checked (whether database ports are filtered only;
+     see Data stores)"); `hosts.empty_password_ssh` is gone and `hosts.ssh_match` added;
+     goldens `host-ssh-empty-password`. The code review found, each fixed with a test
+     before commit: a socket-activated sshd on a port `sshd -T` does not name (an
+     `ssh.socket` `ListenStream` override) was disproved, and now keeps the read from
+     disproving; `permitrootlogin` was applied to the name `root`, not to uid 0 as sshd
+     does, so a second uid-0 account fired; "Fix these first" dropped the local finding even
+     when R2 listed only some of its accounts; a fired R2 with undecided accounts read as
+     complete, and now names them and marks the list a lower bound; an R2 acceptance with
+     a subject passed intake (`HostFinding` now excludes multi-fact ids); the golden's
+     posture envelope did not carry the local finding on the same accounts. A second
+     review found an account whose password state was not recognized left out of the
+     join's accounts, so R2 could be disproved beside it (root with keys only); such an
+     account is now undecided in `finding.JoinOutcome`, and the posture verdict is
+     unchanged. Step 3 is done.
+   - *Deferred from 3a and 3b:* the contradiction's generic "You declared … Operator
+     declaration at …" evidence line, with the audience in the excerpt (still open; no
+     slice owns it yet, to be assigned); the base-chain refinement of an
+     `nft` ruleset and a parameterized `sshd -T -C user=` read (0.0.3 G5); a note for
+     Docker's userland proxy turned off.
 4. People: R4 and R5.
 5. R3, and the context notes C1 to C3.
 6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,

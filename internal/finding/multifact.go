@@ -6,6 +6,7 @@ package finding
 // its title, area, base severity, impact and fix.
 const (
 	IDDBListensUnfiltered = "db.listens_unfiltered"
+	IDEmptyPasswordRemote = "accounts.empty_password_remote"
 )
 
 var multiFactDefs = []Def{
@@ -32,6 +33,26 @@ var multiFactDefs = []Def{
 			Caveat: "If ufw lets the port in by source port alone (from any port 53), delete that rule (ufw status numbered, " +
 				"then ufw delete N): ufw already lets in replies to the host's own DNS queries through connection tracking, " +
 				"so a source-port rule is not needed.",
+		}},
+	{ID: IDEmptyPasswordRemote, Title: "An account with no password can log in over SSH",
+		Category: CategoryRemoteAccess, Area: AreaHosts, Exposure: NotExposure, MultiFact: true,
+		Judges: "accounts with no password that SSH lets in",
+		// No host context step moves it: an account sshd lets in with an
+		// empty password is usable by anyone who reaches sshd, whatever the
+		// environment (docs/spec/engagement.md, R2).
+		BaseSeverity: SevCritical, HostAccess: true,
+		Impact: "These accounts have an empty password and a login shell, and sshd is set to accept an empty password " +
+			"and listens beyond this host, so anyone who can reach sshd can sign in as them with no credential, and " +
+			"become root if the account is root.",
+		Remediation: Remediation{
+			Summary: "Lock or set a password for these accounts, and set PermitEmptyPasswords no in sshd_config, then reload sshd.",
+			Commands: []string{
+				"sudo passwd -l <account>",
+				"# in /etc/ssh/sshd_config: PermitEmptyPasswords no",
+				"sudo sshd -t && sudo systemctl reload ssh || sudo systemctl reload sshd",
+				"sudo sshd -T | grep -i permitemptypasswords",
+			},
+			Caveat: "Find out what each account is for before you lock it; locking stops password logins only.",
 		}},
 }
 

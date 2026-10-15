@@ -445,10 +445,6 @@
       ],
       "not_judged": [
         {
-          "id": "hosts.empty_password_ssh",
-          "text": "an empty password that SSH accepts"
-        },
-        {
           "id": "hosts.firewall_linux",
           "text": "the firewall on Linux hosts, apart from database ports"
         },
@@ -463,6 +459,10 @@
         {
           "id": "hosts.ssh_keys",
           "text": "SSH keys allowed to log in (authorized_keys)"
+        },
+        {
+          "id": "hosts.ssh_match",
+          "text": "SSH settings inside Match blocks, and whether PAM accepts an empty password"
         },
         {
           "id": "hosts.disk_linux",

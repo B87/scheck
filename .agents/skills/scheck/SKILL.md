@@ -360,6 +360,16 @@ use (`unavailable:firewall_*`) and for a port Docker or Podman publishes
 were not read, and the finding says so; never report a host's databases as safe from a
 disproved or abstained verdict alone. `scheck sudoers` grants the `ss` read.
 
+Empty password over SSH on a Linux host: `accounts.empty_password_remote` (critical, area
+hosts, one finding per host with the accounts under `affected`) fires when an account
+with no password and a login shell exists, sshd accepts empty passwords and a password
+sign-in, no user or group list limits it, and sshd listens beyond loopback. It needs
+`--sudo` (`sshd -T` and `net.listeners` are elevated) and abstains otherwise
+(`unavailable:sshd_config`, `unavailable:sshd_listener`, `unavailable:accounts`). Settings
+inside `Match` blocks and whether PAM accepts an empty password were not read, and the
+finding says so. `accounts.empty_password` stays open beside it but is left out of "Fix
+these first" on that host: fix the accounts once.
+
 Capture stdout, stderr and the exit code separately. With `--format json`, stdout is one
 document, the engagement report; stderr carries diagnostics and, on exit 1–3, a short
 line saying why. Without `--no-persist` each run also writes a run directory,

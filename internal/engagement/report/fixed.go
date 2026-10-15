@@ -71,11 +71,11 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"web.cors", "which other sites may read the site's responses (CORS)"},
 	},
 	finding.AreaHosts: {
-		{"hosts.empty_password_ssh", "an empty password that SSH accepts"},
 		{"hosts.firewall_linux", "the firewall on Linux hosts, apart from database ports"},
 		{"hosts.listeners", "listening services you did not declare"},
 		{"hosts.admins_sudo", "who can become root or administrator, and sudo rules that need no password"},
 		{"hosts.ssh_keys", "SSH keys allowed to log in (authorized_keys)"},
+		{"hosts.ssh_match", "SSH settings inside Match blocks, and whether PAM accepts an empty password"},
 		{"hosts.disk_linux", "disk encryption on Linux hosts"},
 		{"hosts.suid", "programs that run with root rights (SUID files)"},
 		{"hosts.persistence", "programs started at boot or on a schedule"},

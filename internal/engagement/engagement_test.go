@@ -23,7 +23,10 @@ var testOpts = Options{
 	},
 	KnownFinding:   func(id string) bool { _, ok := finding.Lookup(id); return ok },
 	FindingSubject: func(id string) string { return string(finding.SubjectOf(id)) },
-	HostFinding:    func(id string) bool { d, ok := finding.Lookup(id); return ok && d.Area == finding.AreaHosts },
+	HostFinding: func(id string) bool {
+		d, ok := finding.Lookup(id)
+		return ok && d.Area == finding.AreaHosts && !d.MultiFact
+	},
 }
 
 // specExample is the complete file docs/spec/engagement.md shows under

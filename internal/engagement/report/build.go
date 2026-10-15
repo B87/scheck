@@ -454,6 +454,15 @@ func (b *builder) summary() Summary {
 			s.Below.Low++
 			continue
 		}
+		// An empty password SSH accepts is ranked; the host-local finding on
+		// the same host is its first fix, listed under Findings only, when
+		// the remote one names every account it does.
+		if f.ID == finding.IDEmptyPassword && slices.ContainsFunc(b.r.Findings, func(o Finding) bool {
+			return o.ID == finding.IDEmptyPasswordRemote && o.Key.Asset == f.Key.Asset && o.Status == finding.StatusOpen &&
+				o.Affected != nil && coversAccounts(o.Affected.Listed, f)
+		}) {
+			continue
+		}
 		g := groups[f.ID]
 		if g == nil {
 			g = &group{item: Item{Kind: "finding_id", IDs: []string{f.ID}, Title: f.Title, Keys: []Key{}, Assets: []string{}}, rank: -1,
@@ -591,4 +600,29 @@ func (b *builder) openAtOrAbove(t map[string]Threshold) int {
 		}
 	}
 	return n
+}
+
+// coversAccounts says listed names every account the host-local
+// empty-password finding cites in its password-state evidence, which
+// reads "name=<account> status=NP" per account.
+func coversAccounts(listed []string, f Finding) bool {
+	n := 0
+	for _, e := range f.Evidence {
+		if e.Check != "accounts.passwd_status" {
+			continue
+		}
+		for part := range strings.SplitSeq(e.Excerpt, "; ") {
+			for field := range strings.FieldsSeq(part) {
+				name, ok := strings.CutPrefix(field, "name=")
+				if !ok {
+					continue
+				}
+				if !slices.Contains(listed, name) {
+					return false
+				}
+				n++
+			}
+		}
+	}
+	return n > 0
 }

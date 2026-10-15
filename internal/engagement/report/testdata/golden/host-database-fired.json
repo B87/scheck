@@ -129,6 +129,15 @@
     },
     {
       "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "accounts.empty_password_remote",
+      "instances": 0,
+      "reads": [],
+      "reason": "unavailable:accounts",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
       "complete": true,
       "id": "db.listens_unfiltered",
       "instances": 1,
@@ -437,10 +446,6 @@
       "mark": "partial",
       "not_judged": [
         {
-          "id": "hosts.empty_password_ssh",
-          "text": "an empty password that SSH accepts"
-        },
-        {
           "id": "hosts.firewall_linux",
           "text": "the firewall on Linux hosts, apart from database ports"
         },
@@ -455,6 +460,10 @@
         {
           "id": "hosts.ssh_keys",
           "text": "SSH keys allowed to log in (authorized_keys)"
+        },
+        {
+          "id": "hosts.ssh_match",
+          "text": "SSH settings inside Match blocks, and whether PAM accepts an empty password"
         },
         {
           "id": "hosts.disk_linux",
@@ -491,6 +500,9 @@
         },
         {
           "reason": "unavailable:command_missing"
+        },
+        {
+          "reason": "unavailable:accounts"
         },
         {
           "reason": "unavailable:exit_error"
@@ -546,13 +558,19 @@
         },
         {
           "asset": "host:ubuntu:22",
-          "mark": "not_assessed",
+          "judged": [
+            "whether database ports are filtered only; see Data stores"
+          ],
+          "mark": "assessed",
           "name": "Firewall",
-          "reasons": [
-            {
-              "detail": "read: /usr/sbin/xtables-nft-multi; not read: fw.firewalld, fw.nft, fw.ufw",
-              "reason": "no_rule"
-            }
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 1
+          },
+          "reasons": [],
+          "rules": [
+            "db.listens_unfiltered"
           ]
         },
         {
@@ -572,17 +590,23 @@
             "password login",
             "direct root login"
           ],
-          "mark": "assessed",
+          "mark": "partial",
           "name": "SSH server",
           "population": {
-            "in_scope": 2,
+            "in_scope": 3,
             "kind": "rules",
             "read": 2
           },
-          "reasons": [],
+          "reasons": [
+            {
+              "detail": "the account password states could not be read (check-not-run)",
+              "reason": "unavailable:accounts"
+            }
+          ],
           "rules": [
             "sshd.password_auth_enabled",
-            "sshd.root_login_enabled"
+            "sshd.root_login_enabled",
+            "accounts.empty_password_remote"
           ]
         },
         {
@@ -1034,8 +1058,8 @@
     "more": 0,
     "rules": {
       "decided": 7,
-      "selected": 10,
-      "without_evidence": 3
+      "selected": 11,
+      "without_evidence": 4
     }
   }
 }

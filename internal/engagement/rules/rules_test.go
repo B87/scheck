@@ -197,7 +197,7 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 	if v := Validate(All()); len(v) > 0 {
 		t.Fatalf("the rule table breaks its invariants: %v", v)
 	}
-	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures}
+	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures}
 	for _, r := range All() {
 		fs := fixtures[r.ID]
 		used := map[Read]bool{}
@@ -235,6 +235,18 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 // fact marked partial, no fixture is disproved; with the listeners alone
 // partial, what fired still fires.
 func TestAnIncompleteReadNeverDisproves(t *testing.T) {
+	for _, fx := range sshFixtures {
+		f := fx.host.Facts.(fakeFacts)
+		f.partial = true
+		h := fx.host
+		h.Facts = f
+		js, _ := run(ruleByID(t, finding.IDEmptyPasswordRemote), h)
+		for _, j := range js {
+			if j.Verdict == Disproved {
+				t.Errorf("%s: disproved on an incomplete read: %+v", fx.name, j)
+			}
+		}
+	}
 	r := ruleByID(t, finding.IDDBListensUnfiltered)
 	for _, fx := range dbFixtures {
 		f := fx.host.Facts.(fakeFacts)
@@ -284,7 +296,7 @@ func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
 	if j.Subject.Label != "postgres" || len(j.NotChecked) < 2 {
 		t.Errorf("subject or not-checked wrong: %+v", j)
 	}
-	if len(res.Coverage) != 1 || res.Coverage[0].Area != finding.AreaData || len(res.Coverage[0].Groups) != 1 {
+	if len(res.Coverage) != 2 || res.Coverage[0].Area != finding.AreaData || len(res.Coverage[0].Groups) != 1 || res.Coverage[1].Area != finding.AreaHosts {
 		t.Errorf("coverage %+v", res.Coverage)
 	}
 }
@@ -293,7 +305,7 @@ func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
 // it was not judged.
 func TestAMacOSHostIsNotJudged(t *testing.T) {
 	res := Judge([]Host{{Asset: "host:mac:22", Name: "mac", Facts: fakeFacts{platform: check.MacOS}}})["host:mac:22"]
-	if len(res.Judged) != 0 || len(res.Coverage) != 1 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[0].Groups) != 0 {
+	if len(res.Judged) != 0 || len(res.Coverage) != 2 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[0].Groups) != 0 || len(res.Coverage[1].Groups) != 0 {
 		t.Errorf("a macOS host was judged: %+v", res)
 	}
 }
@@ -304,5 +316,146 @@ func TestAnInternetAudienceSaysWhy(t *testing.T) {
 	j := verdictOn(t, Judge([]Host{h})[h.Asset].Judged, "5432/tcp")
 	if j.Why != whyInternet || j.Has("contradiction") {
 		t.Errorf("%+v", j)
+	}
+}
+
+// accounts is a host with these passwd -S states and /etc/passwd shells,
+// "name:STATE:shell[:uid]" per account; root's uid is 0, others' 1000.
+func accountFacts(f fakeFacts, accounts ...string) fakeFacts {
+	status := check.Records{Kind: check.ParsePasswdStatus, Items: []check.Record{}}
+	passwd := check.Records{Kind: check.ParseAccounts, Items: []check.Record{}}
+	for _, a := range accounts {
+		p := strings.Split(a, ":")
+		uid := "1000"
+		if p[0] == "root" {
+			uid = "0"
+		}
+		if len(p) > 3 {
+			uid = p[3]
+		}
+		status.Items = append(status.Items, check.Record{check.FieldName: p[0], check.FieldStatus: p[1]})
+		passwd.Items = append(passwd.Items, check.Record{check.FieldName: p[0], check.FieldUID: uid, check.FieldHome: "/home/" + p[0], check.FieldShell: p[2]})
+	}
+	f.facts[checkPasswdStatus] = finding.Fact{Parsed: status}
+	f.facts[checkPasswd] = finding.Fact{Parsed: passwd}
+	return f
+}
+
+// sshd is sshd -T's settings with edits: "key value", or "key" to remove.
+func sshd(f fakeFacts, edits ...string) fakeFacts {
+	kv := map[string]string{"port": "22", "listenaddress": "0.0.0.0:22", "permitemptypasswords": "yes", "passwordauthentication": "yes",
+		"kbdinteractiveauthentication": "no", "usepam": "yes", "authenticationmethods": "any", "permitrootlogin": "prohibit-password"}
+	for _, e := range edits {
+		k, v, set := strings.Cut(e, " ")
+		if !set {
+			delete(kv, k)
+			continue
+		}
+		kv[k] = v
+	}
+	f.facts[checkSSHD] = finding.Fact{Parsed: kv}
+	return f
+}
+
+// sshHost is a Linux host whose sshd listens on every address, with alice
+// having no password and a login shell.
+func sshHost(edits ...string) fakeFacts {
+	return sshd(accountFacts(noFirewall(ss(sshAll)), "root:L:/bin/bash", "alice:NP:/bin/bash"), edits...)
+}
+
+var sshFixtures = []fixture{
+	{"password login with an empty password", host(sshHost()), "", Fired, ""},
+	{"keyboard-interactive through PAM", host(sshHost("passwordauthentication no", "kbdinteractiveauthentication yes")), "", Fired, ""},
+	{"an older sshd's challenge-response", host(sshHost("passwordauthentication no", "kbdinteractiveauthentication", "challengeresponseauthentication yes")), "", Fired, ""},
+	{"socket-activated sshd", host(with(sshHost(), func(f fakeFacts) { f.facts[checkListeners] = ss("tcp 0.0.0.0:22 systemd") })), "", Fired, ""},
+	{"root with a password login allowed", host(sshd(accountFacts(noFirewall(ss(sshAll)), "root:NP:/bin/bash"), "permitrootlogin yes")), "", Fired, ""},
+	{"sshd refuses empty passwords", host(sshHost("permitemptypasswords no")), "", Disproved, ""},
+	{"no account without a password", host(sshd(accountFacts(noFirewall(ss(sshAll)), "root:L:/bin/bash", "alice:P:/bin/bash"))), "", Disproved, ""},
+	{"the empty-password account cannot log in", host(sshd(accountFacts(noFirewall(ss(sshAll)), "backup:NP:/usr/sbin/nologin"))), "", Disproved, ""},
+	{"no password method", host(sshHost("passwordauthentication no")), "", Disproved, ""},
+	{"every method needs a key", host(sshHost("authenticationmethods publickey,password")), "", Disproved, ""},
+	{"root only, and root logs in with keys only", host(sshd(accountFacts(noFirewall(ss(sshAll)), "root:NP:/bin/bash"))), "", Disproved, ""},
+	{"a second uid-0 account and root logs in with keys only", host(sshd(accountFacts(noFirewall(ss(sshAll)), "toor:NP:/bin/bash:0"))), "", Disproved, ""},
+	{"socket activation on a port sshd does not name", host(with(sshHost(), func(f fakeFacts) {
+		f.facts[checkListeners] = ss("tcp 127.0.0.1:22 sshd", "tcp 0.0.0.0:2222 systemd")
+	})), "", Abstained, reasonSSHListens},
+	{"root with keys only beside an unrecognized password state", host(sshd(accountFacts(noFirewall(ss(sshAll)), "root:NP:/bin/bash", "bob:XX:/bin/bash"))),
+		"", Abstained, reasonAccounts},
+	{"sshd only on localhost", host(with(sshHost(), func(f fakeFacts) { f.facts[checkListeners] = ss("tcp 127.0.0.1:22 sshd") })), "", Disproved, ""},
+	{"sshd's settings not read", host(with(sshHost(), func(f fakeFacts) { f.why[checkSSHD] = "check-denied:sudo_refused" })), "", Abstained, reasonSSHConfig},
+	{"sshd's settings cut short", host(with(sshHost(), func(f fakeFacts) {
+		c := f.facts[checkSSHD]
+		c.Partial = true
+		f.facts[checkSSHD] = c
+	})), "", Abstained, reasonSSHConfig},
+	{"a user list limits who may sign in", host(sshHost("allowusers deploy")), "", Abstained, reasonSSHConfig},
+	{"methods scheck does not judge", host(sshHost("authenticationmethods password,keyboard-interactive")), "", Abstained, reasonSSHConfig},
+	{"listeners not read", host(with(sshHost(), func(f fakeFacts) { f.why[checkListeners] = "check-denied:sudo_refused" })), "", Abstained, reasonSSHListens},
+	{"an owner not shown on another port", host(with(sshHost(), func(f fakeFacts) { f.facts[checkListeners] = ss("tcp 127.0.0.1:22 sshd", "tcp 0.0.0.0:2222 -") })),
+		"", Abstained, reasonSSHListens},
+	{"password states not read", host(with(sshHost(), func(f fakeFacts) { f.why[checkPasswdStatus] = "check-denied:sudo_refused" })), "", Abstained, reasonAccounts},
+	{"a shell scheck does not know", host(sshd(accountFacts(noFirewall(ss(sshAll)), "alice:NP:/opt/odd/shell"))), "", Abstained, reasonAccounts},
+	{"root's login setting not recognized", host(sshd(accountFacts(noFirewall(ss(sshAll)), "root:NP:/bin/bash"), "permitrootlogin maybe")), "", Abstained, reasonSSHConfig},
+}
+
+// R2 lists the accounts it fired for and cites each fact.
+func TestAnEmptyPasswordOverSSHListsItsAccounts(t *testing.T) {
+	js, _ := run(ruleByID(t, finding.IDEmptyPasswordRemote), sshFixtures[0].host)
+	j := verdictOn(t, js, "")
+	if !slices.Equal(j.Listed, []string{"alice"}) || len(j.Facts) != 4 || j.Subject.Kind != "" {
+		t.Errorf("%+v", j)
+	}
+	js, _ = run(ruleByID(t, finding.IDEmptyPasswordRemote), sshFixtures[4].host)
+	if j := verdictOn(t, js, ""); !slices.Equal(j.Listed, []string{"root"}) || !strings.Contains(j.Facts[2].Excerpt, "permitrootlogin yes") {
+		t.Errorf("%+v", j)
+	}
+	// An account whose shell is not known is not listed, and the list says
+	// it is a lower bound.
+	for _, other := range []string{"bob:NP:/opt/odd/shell", "bob:XX:/bin/bash"} {
+		lowerBound(t, host(sshd(accountFacts(noFirewall(ss(sshAll)), "alice:NP:/bin/bash", other))))
+	}
+}
+
+// lowerBound says R2 fired for alice alone on h and named bob as
+// undecided, its list a lower bound.
+func lowerBound(t *testing.T, h Host) {
+	t.Helper()
+	js, incomplete := run(ruleByID(t, finding.IDEmptyPasswordRemote), h)
+	j := verdictOn(t, js, "")
+	if j.Verdict != Fired || !slices.Equal(j.Listed, []string{"alice"}) || !incomplete ||
+		!slices.ContainsFunc(j.NotChecked, func(s string) bool { return strings.Contains(s, "bob") }) {
+		t.Errorf("an undecided account was not named: %+v", j)
+	}
+}
+
+// Each fact the rule reads, alone marked partial, never lets a fixture be
+// disproved.
+func TestEachIncompleteReadAloneNeverDisproves(t *testing.T) {
+	for id, fs := range map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures} {
+		r := ruleByID(t, id)
+		for _, fx := range fs {
+			base := fx.host.Facts.(fakeFacts)
+			v := &View{host: fx.host, rule: r}
+			r.Judge(v)
+			for _, touched := range v.touched {
+				check := touched.Check
+				if _, ok := base.facts[check]; !ok {
+					continue
+				}
+				f := base
+				f.facts = maps.Clone(base.facts)
+				fact := f.facts[check]
+				fact.Partial = true
+				f.facts[check] = fact
+				h := fx.host
+				h.Facts = f
+				js, _ := run(r, h)
+				for _, j := range js {
+					if j.Verdict == Disproved {
+						t.Errorf("%s/%s: disproved with %s partial: %+v", id, fx.name, check, j)
+					}
+				}
+			}
+		}
 	}
 }

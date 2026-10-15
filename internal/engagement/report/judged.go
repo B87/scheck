@@ -815,7 +815,12 @@ func (b *builder) renderChain(f *Finding, j Judgment) finding.Severity {
 		f.Adjustments = append(f.Adjustments, Adjustment{Rule: m.Rule, By: m.By, Delta: deltaString(m.To.Rank() - m.From.Rank()), Source: src})
 	}
 	if len(why) == 0 {
-		switch {
+		switch def, _ := finding.Lookup(j.ID); {
+		case j.ID == finding.IDEmptyPasswordRemote:
+			// docs/spec/engagement.md, R2: no host context step moves it.
+			why = []string{"This is the standard rating, whatever the host is used for: anyone who can reach sshd can sign in as these accounts."}
+		case def.MultiFact:
+			why = []string{"This is the standard rating for what this host's settings show."}
 		case strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls."):
 			why = []string{"This is the standard rating for the response or connection observed."}
 		case strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity."):

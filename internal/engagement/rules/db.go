@@ -31,6 +31,7 @@ func init() {
 		Reads: append([]Read{{ReadCheck, checkListeners}, {ReadDeclared, DeclaredServices}}, firewallReads...),
 		Judge: dbListensUnfiltered,
 		Group: "Databases listening beyond localhost", Unbuilt: "this version of scheck has no rule for databases on this platform",
+		HostDomain: check.DomainFirewall, HostJudges: "whether database ports are filtered only; see Data stores",
 		Incomplete: finding.CoverageReason{Reason: reasonListenerOwner,
 			Detail: "some listeners' owners are not shown to a read without sudo, so a database on another port could not be ruled out"},
 	})

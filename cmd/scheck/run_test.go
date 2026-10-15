@@ -842,3 +842,15 @@ func TestRunVantageValidatedBeforeContact(t *testing.T) {
 		t.Fatal(stderr, code, *calls)
 	}
 }
+
+// The options run validates with keep a subject off whole-host findings
+// of the multi-fact rules, as off any other asset-wide finding, while a
+// host posture finding's subject is still named as not applied.
+func TestEngagementOptionsTellMultiFactFromHostFindings(t *testing.T) {
+	if engagementOptions.HostFinding(finding.IDEmptyPasswordRemote) || engagementOptions.HostFinding(finding.IDDBListensUnfiltered) {
+		t.Error("a multi-fact finding is treated as the host collector's")
+	}
+	if !engagementOptions.HostFinding(finding.IDEmptyPassword) {
+		t.Error("a host posture finding is not the host collector's")
+	}
+}

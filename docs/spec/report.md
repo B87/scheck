@@ -481,7 +481,7 @@ applicable. There is no `payments` area
 | CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | who can push to repositories that deploy to production, contractors included; review rules on the production deployment environment; approval before workflows run on pull requests from forks; self-hosted runners that public repositories can use; which third-party actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where they send data |
 | External surface | dangling records; subdomain takeover; private addresses; TLS and certificates. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
 | Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files, debug pages and admin panels (such as /.git, /.env or /admin); third-party scripts the site loads; which other sites may read the site's responses (CORS) |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` | an empty password that SSH accepts; the firewall on Linux hosts, apart from database ports; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
 | Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | whether Workspace lets staff forward mail outside the company (the tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in transit (MTA-STS and TLS reporting) |
 | Logging and incident readiness | none in 0.0.2: the row prints "not checked" | alerts on administrator changes and suspicious sign-ins in Workspace; GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere off the host |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
@@ -490,12 +490,13 @@ applicable. There is no `payments` area
 | Lookalike and typo domains | *outside scheck*: registrations of names you do not own are outside every root ([scope.md](scope.md)), and they are the most common small-company email fraud |
 | Other declared SaaS | one row per tool in `tools` without a collector, by name |
 
-Two items are in the right column until their rules land and move left in the commit
-that builds each: an empty password that SSH accepts (`hosts.empty_password_ssh`, E9 step
-3b) and services reachable beyond the declared audience (`external.beyond_declared`,
+One item is in the right column until its rule lands and moves left in the commit that
+builds it: services reachable beyond the declared audience (`external.beyond_declared`,
 step 5). Databases listening beyond localhost moved left in step 3a: the Data row reads a
 host's coverage plan, and its remaining right-hand items are `data.db_signin`,
-`data.db_firewall_rules`, `data.db_containers` and `data.other_stores`. Release markers for the other items live in
+`data.db_firewall_rules`, `data.db_containers` and `data.other_stores`. An empty password
+that SSH accepts moved left in step 3b (`accounts.empty_password_remote`); the Hosts row
+keeps `hosts.ssh_match` for the two things that rule does not read. Release markers for the other items live in
 `ROADMAP.md`, not here.
 
 **The lists are fixed, whatever rules are built** (contract from E9 step 2). Each row's
@@ -541,7 +542,14 @@ sub-row never prints a bare mark that reads as a pass: a checked domain names wh
 rules judged and what they found (`checked (password login, direct root login):
 nothing found by these rules`, or `: 1 open finding (see Findings)`), then what was
 read there that no rule judges (`also read, not judged: 9 SUID files`); a domain no
-rule judges reads `not judged: …` with what was read; the rest give their reasons. The
+rule judges reads `not judged: …` with what was read; the rest give their reasons. A
+multi-fact rule ([engagement.md](engagement.md), "The multi-fact rules of 0.0.2")
+reports in the host domain its facts belong to, as a rule of that domain does, and the
+checks its facts cite no longer print as `also read, not judged` there: the SSH server
+line reads `checked (password login, direct root login, accounts with no password that
+SSH lets in)`, and the Firewall line reads `checked (whether database ports are filtered
+only; see Data stores)`, or `not checked: <reason>` when R1 abstained. The host-area
+counts include these groups. The
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
@@ -666,6 +674,11 @@ than anything here.`
   table's order; then an asset named in `data.matters_most` first; then more affected
   instances; then canonical asset id and finding id. Thresholds do not enter the
   ranking: they set the exit code, and the close names them.
+- On a host where an open `accounts.empty_password_remote` fired and lists every
+  account `accounts.empty_password` cites, "Fix these first" leaves out
+  `accounts.empty_password`: the remote finding's first remediation step is that
+  finding's fix. It stays open under Findings. When the remote finding lists fewer
+  accounts (root with key-only logins, say), both are ranked.
 - Up to five items, open, at medium or above, never padded with low or info. With
   fewer: `Nothing else open ranks at medium or above. Below: N low, M informational, K
   accepted.` With more, the summary never says "nothing else": `N more open at medium or

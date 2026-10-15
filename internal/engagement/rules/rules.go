@@ -64,6 +64,10 @@ type Rule struct {
 	// Incomplete words the coverage of a host whose read the rule could
 	// not complete.
 	Incomplete finding.CoverageReason
+	// HostDomain is the host area whose Hosts-row line also says what the
+	// rule judged, in HostJudges words ("" for the definition's Judges).
+	HostDomain check.Domain
+	HostJudges string
 }
 
 // Facts are a host's facts as a rule reads them: finding.Facts.
@@ -105,6 +109,8 @@ type Outcome struct {
 	NotChecked []string
 	Why        string
 	Details    map[string]any
+	// Listed are the instances a judgment with no subject is about.
+	Listed []string
 	// Incomplete says the rule could not read the whole population the
 	// verdict is about, so the host's coverage is partial.
 	Incomplete bool
@@ -198,7 +204,11 @@ func judgeHost(h Host, rules []Rule) Result {
 			plan.Unread = append(plan.Unread, finding.CoverageUnread{Name: r.Group, Detail: r.Unbuilt})
 			continue
 		}
-		plan.Groups = append(plan.Groups, finding.CoverageGroup{Name: r.Group, Rules: []string{r.ID}})
+		judges := r.HostJudges
+		if judges == "" {
+			judges = def.Judges
+		}
+		plan.Groups = append(plan.Groups, finding.CoverageGroup{Name: r.Group, Rules: []string{r.ID}, HostDomain: r.HostDomain, HostJudges: judges})
 		js, incomplete := run(r, h)
 		res.Judged = append(res.Judged, js...)
 		res.PopulationIncomplete = res.PopulationIncomplete || incomplete
@@ -224,7 +234,7 @@ func run(r Rule, h Host) ([]finding.Judgment, bool) {
 		}
 		incomplete = incomplete || o.Incomplete || o.Reason == ReasonIncomplete
 		j := finding.Judgment{ID: r.ID, Asset: h.Asset, Subject: o.Subject, Verdict: o.Verdict, Reason: o.Reason,
-			Reads: []string{}, NotChecked: o.NotChecked, Attributes: o.Attributes, Why: o.Why, Details: o.Details}
+			Reads: []string{}, NotChecked: o.NotChecked, Attributes: o.Attributes, Why: o.Why, Details: o.Details, Listed: o.Listed}
 		for _, e := range o.Excerpts {
 			obs := ""
 			for _, t := range v.touched {

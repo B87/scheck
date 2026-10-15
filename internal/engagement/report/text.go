@@ -834,6 +834,9 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"firewall_nft":                  "the nftables rules could not be judged",
 			"firewall_backend":              "which iptables backend the host uses was not recognized",
 			"incomplete_read":               "what it read was incomplete, so it could show a problem but not rule one out",
+			"accounts":                      "which accounts have no password and can log in was not established",
+			"sshd_config":                   "sshd's effective settings did not settle whether it accepts an empty password",
+			"sshd_listener":                 "whether sshd listens beyond this host was not established",
 		}[arg]; ok {
 			return detail
 		}
