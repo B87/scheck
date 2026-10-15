@@ -336,6 +336,12 @@ func mailDomain(address string) (string, bool) {
 	return domain, true
 }
 
+// TenantDomains are the tenant's verified domains and domain aliases,
+// lowercased, and whether both lists were read whole: what the forwarding
+// rule calls internal and the engagement's C1 note compares with the
+// declared roots (docs/spec/engagement.md, "Context notes").
+func TenantDomains(e Evidence) (map[string]bool, bool) { return tenantDomains(e) }
+
 // tenantDomains is the exact set of verified domains and verified domain
 // aliases; complete only when both lists were read whole.
 func tenantDomains(e Evidence) (map[string]bool, bool) {
@@ -915,4 +921,16 @@ func mailNotes(e Evidence, asset string, views []accountView, approval *MailAppr
 		note("workspace_inventory", "Forwarding to subdomains of your domains that are not themselves domains of this Workspace was not judged: "+capped(subdomains)+". scheck cannot tell where those names' mail goes; ask whoever runs mail for those names where it goes.")
 	}
 	return out
+}
+
+// Mailboxes counts the active accounts the users read shows with a Gmail
+// mailbox set up, and whether that read was whole.
+func Mailboxes(e Evidence) (int, bool) {
+	n := 0
+	for _, u := range e.Users.Items {
+		if yes(u.Mailbox) && active(u) {
+			n++
+		}
+	}
+	return n, e.Users.Complete
 }

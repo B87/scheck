@@ -81,6 +81,11 @@ func (b *builder) coverage() []Row {
 		default:
 			row = b.areaRow(area)
 		}
+		for _, n := range b.in.ContextNotes {
+			if n.Area == string(area) {
+				row.ContextNotes = append(row.ContextNotes, n.Note)
+			}
+		}
 		for _, d := range b.in.Declarations {
 			if d.Area == string(area) {
 				row.DeclaredNotVerified = append(row.DeclaredNotVerified, Note{Kind: "declared_not_verified", Source: d.Source, Detail: d.Detail})

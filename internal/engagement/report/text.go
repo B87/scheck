@@ -411,7 +411,7 @@ func lower(label string) string {
 // declared for its area, and nothing in the file points at it.
 func folds(row Row) bool {
 	return row.Mark == "not_assessed" && len(row.Reasons) == 1 && row.Reasons[0].Reason == "not_declared" &&
-		len(row.DeclaredNotVerified) == 0
+		len(row.DeclaredNotVerified) == 0 && len(row.ContextNotes) == 0
 }
 
 func (t *text) areas() (checked, part, notChecked, folded, na []string) {
@@ -1026,6 +1026,9 @@ func (t *text) row(row Row) {
 	}
 	for _, n := range row.DeclaredNotVerified {
 		t.hang("  Declared, not verified: ", "    ", clean(n.Detail)+" ("+clean(entryKey(n.Source))+").")
+	}
+	for _, n := range row.ContextNotes {
+		t.hang("  Note: ", "    ", clean(n.Detail))
 	}
 }
 

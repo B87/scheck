@@ -221,3 +221,29 @@ func ownerDoubt(l listener) (reason, detail string) {
 	}
 	return "", ""
 }
+
+// Database is a database process listening on the host, on any address,
+// loopback included.
+type Database struct {
+	Process, Address, Proto string
+	Port                    int
+}
+
+// Databases are the listeners in the database table on any address, in
+// read order: a local postgres is still a data store (docs/spec/engagement.md,
+// "Context notes", C3). Nothing when the listeners were not read.
+func Databases(f Facts) []Database {
+	fact, why := f.Fact(checkListeners)
+	recs, typed := fact.Parsed.(check.Records)
+	if why != "" || !typed {
+		return nil
+	}
+	ls, _ := listeners(recs)
+	var out []Database
+	for _, l := range ls {
+		if isDatabase(l.process, l.port) {
+			out = append(out, Database{Process: l.process, Address: l.address, Proto: l.proto, Port: l.port})
+		}
+	}
+	return out
+}

@@ -507,7 +507,12 @@ in this order:
 8. **`acceptances`** and **`notes`**: what became of each accepted risk (`applied`,
    `expired`, `not_applied`, `not_matched` for likely fixed, `rule_not_decided`,
    `subject_not_found` when no instance with that subject was read on this run), and the
-   items for a readout. A `rule_not_decided` whose `why` says "an instance is open under
+   items for a readout. A `context_*` note says a declaration and the evidence
+   disagree (a verified Workspace domain outside the roots, a `deploys_to` repository not
+   seen, archived or not read, a `not_used` area the evidence contradicts); it is not a
+   finding, has no severity and never moves the exit code. A `context_not_used` note is
+   also on its risk-area row as `context_notes`: the area is not *not applicable*, so
+   tell the user to remove it from `not_used` if the evidence is theirs. A `rule_not_decided` whose `why` says "an instance is open under
    it" means the entry is on a root while the finding is on a name under it: tell the
    user to accept it on the asset it names. A `subject_not_found` whose `why` says "that
    subject was read on" names the asset the entry belongs on; one that says "nothing

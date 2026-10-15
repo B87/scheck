@@ -955,47 +955,67 @@ a limit is reached, and a limit stop is incomplete ("Stages").
 
 ## Context notes
 
-Design; becomes contract when E9 lands (step 5b). A context note says that the evidence
+Built (E9 step 5b). A context note says that the evidence
 and a declaration disagree, or that a declaration reached nothing. It is not a finding.
 Its shape is `{kind, source, detail}`: no id, no severity, never a change to the exit
 code. It prints in the readout and under `notes` in JSON ([report.md](report.md),
-"Findings"). `kind` is `context_workspace_domain`, `context_deploys_to` or
+"Findings"); a C3 note is also on its area's row as `context_notes`. `kind` is `context_workspace_domain`, `context_deploys_to` or
 `context_not_used`; `source` names the declaration or asset it is about. A note is never
 made from a population scheck did not read, and never contradicts a finding: it does not
 restate one, move a severity or turn a row *assessed*.
 
 - **C1 `context_workspace_domain`**, `source` the Workspace asset's id. A verified domain
-  or domain alias the Workspace tenant's domains read returned that is not equal to any
-  domain root. An unverified one is skipped; on an incomplete list the note says what was
-  seen; when the read failed there is none; no note for a name any mail read covered.
-  Under no root: "`example.co.uk` is a verified domain (domain alias) of your Workspace
-  tenant and is under none of your domain roots, so its SPF, DKIM and DMARC were not
+  or domain alias the Workspace tenant's domains read returned (one reading merges both)
+  that is not equal to any domain root. An unverified one is skipped; an incomplete list
+  gives notes for what was seen; when the read failed there is none. No note for a domain
+  whose mail records the web collector attempted to read (the roots, and declared mail
+  senders and `no_mail` names under a root); a failed read shows in the web coverage, not
+  as a C1 note. Under no root:
+  "`example.co.uk` is a verified domain of your Workspace tenant and is under none of your domain roots, so its SPF, DKIM and DMARC were not
   read. Add it under `roots` to have them read." Under a root: "`eu.example.com` is a
   verified domain of your Workspace tenant under the root `example.com`; scheck reads
-  mail records only at each root itself, so its SPF and DMARC were not read. Add it under
-  `roots` to have them read."
+  mail records only at each root and the mail domains you declare, so its SPF and DMARC
+  were not read. Add it under `roots` to have them read." The note names the most
+  specific root that holds the domain.
 - **C2 `context_deploys_to`**, any `deploys_to` value, `source` `assets.<name>.deploys_to`.
   A repository the GitHub credential does not see, one that is archived, or one that was
-  not read. Never when any judgment exists on that repository asset. Not found: "`shop-repo`
+  not read. An archived repository is noted even when judgments exist on it, since they
+  are on a repository nothing deploys from; not found and not read are noted only when no
+  judgment exists on that repository asset. The text names the `deploys_to` value (here
+  `production`). Not found: "`shop-repo`
   (`github:example-org/shop`) is declared to deploy production, but the GitHub credential
   sees no repository `shop` in `example-org`, so nothing on it was judged and no
   production raise applied. Check the name, whether it was renamed or moved, and whether
-  the credential can see it." Archived: "`shop-repo` (`github:example-org/shop`) is
+  the credential can see it." "And no production raise applied" is said only when the value is
+  `production`; otherwise the sentence ends "nothing on it was judged." Archived: "`shop-repo` (`github:example-org/shop`) is
   declared to deploy production, but GitHub shows it archived. If production now deploys
   from another repository, declare that one." Not read: "`shop-repo`
   (`github:example-org/shop`) is declared to deploy production, but it was not read in
-  this run (*reason phrase*), so nothing on it was judged."
+  this run (*reason phrase*), so nothing on it was judged." The phrase is omitted when no
+  direct read was attempted; `insufficient_permission` reads "the credential was not
+  allowed to read it", any other reason is its code with underscores as spaces.
 - **C3 `context_not_used`**, `source` `not_used[i]`. A `not_used` area the evidence
-  contradicts: one note per area, with up to three evidence clauses in the table's order
+  contradicts: one note per area, with up to three evidence clauses in the table's order (every workflow clause, across all GitHub assets, before any secret clause)
   and then "and *N* more". "You said you run no *area phrase* (`not_used`), but *e1*;
-  *e2*; and *e3*. If these are yours, remove `<area>` from `not_used`: the report will
-  then show *area* as not assessed rather than not applicable." The area phrases are
+  *e2*; and *e3*. If these are yours, remove `<area>` from `not_used`." The area phrases are
   `cloud` "cloud accounts", `hosts` "servers", `data` "data stores", `email` "email" and
   `external` "internet-facing services". A name or a secret's name suggests: the note
   never says "leaks", "credential" or "key exposed", and a secret is cited by name only.
-  The table is versioned data (a version constant); a change to it changes the version.
+  The table is versioned data (`ContextTableVersion`); a change to it changes the version.
   A `not_used` area that has a fired finding, open or accepted, is not *not applicable*
   ([report.md](report.md), "Coverage"), and this note is attached to the row.
+
+A workflow clause names the action's purpose after it: `google-github-actions/auth`
+"which signs in to Google Cloud", `setup-gcloud` "which sets up the Google Cloud CLI",
+`deploy-cloudrun` "which deploys to Google Cloud Run", `aws-actions/configure-aws-credentials`
+"which signs in to AWS", `amazon-ecr-login` "which signs in to AWS's container registry",
+`azure/login` "which signs in to Azure"; `appleboy/ssh-action` "which connects to a server
+over SSH", `appleboy/scp-action` "which copies files to a server over SSH",
+`easingthemes/ssh-deploy` "which deploys to a server over SSH", `webfactory/ssh-agent`
+"which loads an SSH key to connect to a server", `shimataro/ssh-key-action` "which
+installs an SSH key to connect to a server". An organization secret reads "`example-org`
+has an organization Actions secret named `X`". A CNAME name an exclusion dropped is skipped.
+`external` has no contradicting evidence in 0.0.2.
 
 | Area | Contradicted by | Clause |
 |---|---|---|
@@ -1005,7 +1025,7 @@ restate one, move a severity or turn a row *assessed*.
 | `hosts` | a workflow `uses:` of `appleboy/ssh-action`, `appleboy/scp-action`, `easingthemes/ssh-deploy`, `webfactory/ssh-agent` or `shimataro/ssh-key-action` | "a workflow in `example-org/shop` uses `appleboy/ssh-action`, which connects to a server over SSH" |
 | `hosts` | an Actions secret named exactly `SSH_PRIVATE_KEY`, `SSH_KEY`, `SSH_HOST`, `DEPLOY_HOST`, `DEPLOY_SSH_KEY` or `SERVER_SSH_KEY` | as for `cloud`: "`example-org/shop` has an Actions secret named `SSH_PRIVATE_KEY`" |
 | `data` | `net.listeners` on a declared host showing a process of R1's database table on any address, loopback included | "`postgres` listens on 127.0.0.1:5432 on `deploy`" |
-| `email` | the Workspace users read: active accounts with a mailbox | "*N* accounts in `google-workspace:example.com` have a Gmail mailbox" |
+| `email` | the Workspace users read: accounts neither suspended nor archived whose mailbox is set up | "*N* accounts in `google-workspace:example.com` have a Gmail mailbox" ("1 account ... has"; "at least *N*" when the users read was not whole, counting only accounts known neither suspended nor archived) |
 
 No `run:` script is matched, and `ghs.googlehosted.com` is not a cloud name.
 

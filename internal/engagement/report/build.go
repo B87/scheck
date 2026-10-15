@@ -100,6 +100,9 @@ func Build(in Input) *Report {
 		r.Findings = append(r.Findings, b.judgedFindings(a)...)
 		r.Assessments = append(r.Assessments, judgedAssessments(a)...)
 	}
+	for _, n := range in.ContextNotes {
+		r.Notes = append(r.Notes, n.Note)
+	}
 	r.Findings = uniqueFindings(r.Findings)
 	r.Assessments = uniqueAssessments(r.Assessments)
 	b.rankFindings()

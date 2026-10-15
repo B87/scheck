@@ -177,6 +177,7 @@
           "caps": { "type": "array", "items": { "$ref": "#/$defs/cap" } },
           "narrowing": { "type": "array", "items": { "$ref": "#/$defs/narrowing" } },
           "declared_not_verified": { "type": "array", "items": { "$ref": "#/$defs/note" } },
+          "context_notes": { "type": "array", "items": { "$ref": "#/$defs/note" }, "description": "spec/engagement.md, \"Context notes\": evidence that contradicts this area's not_used." },
           "unattributed_members": { "type": "integer", "minimum": 0 },
           "sub_items": {
             "type": "array",
@@ -509,7 +510,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup", "github_history_followup", "github_credential", "github_credential_warning", "workspace_inventory", "workspace_people", "workspace_credential", "workspace_credential_warning"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup", "github_history_followup", "github_credential", "github_credential_warning", "workspace_inventory", "workspace_people", "workspace_credential", "workspace_credential_warning", "context_workspace_domain", "context_deploys_to", "context_not_used"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }

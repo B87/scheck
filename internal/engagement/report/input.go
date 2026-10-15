@@ -67,11 +67,29 @@ type Input struct {
 	// the providers they declare an account at; their accounts are what
 	// the collectors attributed (docs/spec/report.md, "People who left").
 	Departed []Departure
+	// ContextNotes are what Analyze found where the evidence and a
+	// declaration disagree, or a declaration reached nothing: listed with
+	// the notes, and on their area's row when they name one.
+	ContextNotes []ContextNote
 	// RedactExtra is the number of operator redaction rules.
 	RedactExtra int
 	// Rerun is the command that runs this engagement again ("scheck run
 	// engagement.yaml"), printed where running again closes a gap.
 	Rerun string
+}
+
+// The kinds of context note (docs/spec/engagement.md, "Context notes").
+const (
+	NoteContextWorkspaceDomain = "context_workspace_domain"
+	NoteContextDeploysTo       = "context_deploys_to"
+	NoteContextNotUsed         = "context_not_used"
+)
+
+// ContextNote is one context note: no id, no severity, no exit effect.
+// Area is the not_used area it contradicts, "" for none.
+type ContextNote struct {
+	Area string
+	Note
 }
 
 // Departure is one person with a declared leaving date: the date as

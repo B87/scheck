@@ -61,6 +61,7 @@ func TestGoldenReports(t *testing.T) {
 		"host-database-abstained": hostDatabaseAbstainedReport,
 		"host-ssh-empty-password": hostSSHFiredReport,
 		"host-service-beyond":     hostServiceBeyondReport,
+		"context-notes":           contextNotesReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.
 			in := oneHost(t, "macos")

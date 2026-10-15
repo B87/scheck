@@ -1865,6 +1865,18 @@ older than 7 days is collected again on resume; every risk area's row prints its
      done.
    - *5b.* The context notes C1 to C3, `{kind, source, detail}`, and the versioned C3
      table (`spec/engagement.md`, "Context notes"; `spec/report.md`, "Findings").
+     Built. Review found, and fixed: must-fix, C1 said mail records
+     were not read for a declared mail domain that was read, and C3's tail predicted a row
+     mark that is false where a finding exists; should-fix, an exact email count on a
+     partial users read, `report.md` claiming a noted row is not *not applicable*, and C2
+     naming a raise for a `deploys_to` value other than `production`; nits, the clause
+     order, naming the most specific root, not counting accounts of unknown archived
+     state, a merged doc comment, and the table version recorded in `rules_version`.
+     A second review found, and fixed with tests: should-fix, the table version reached
+     `rules_version` only with a domain root; should-fix, the C1 test did not exercise the
+     mail-domain skip (checked by removing the fix); nit, "read" means attempted (the spec
+     is reworded), and the `active()` filter is now tested. Step 5b is done. Step 5 is
+     done.
    - *Deferred, owner 0.0.3 or to be assigned:* `svc.expected_missing` has base medium,
      which is mis-anchored against the base anchors; consider low or info
      (`spec/host-collector.md`, where the finding is defined).

@@ -929,6 +929,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		Trigger: res.Engagement.Trigger, Zone: r.zone, FromHost: res.fromHost,
 		Path: res.Source.Path, SHA256: res.Source.SHA256, Started: r.o.Started, Finished: time.Now(),
 		NotUsed: res.NotUsed, People: len(res.People) > 0, RedactExtra: res.RedactPatterns,
+		ContextNotes: r.contextNotes(judged),
 	}
 	for _, h := range slices.Sorted(maps.Keys(res.People)) {
 		p := res.People[h]
@@ -1185,6 +1186,11 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion + ":" + githubc.AlertRulesVersion + ":" + githubc.HistoryVersion
 			break
 		}
+	}
+	// C3's table decides which notes a network report carries, whatever
+	// collector read the evidence.
+	if in.RulesVersion != "" || len(in.ContextNotes) > 0 {
+		in.RulesVersion = cmp.Or(in.RulesVersion, r.o.Version) + ":context:" + ContextTableVersion
 	}
 	partitionGitHubJudgments(in.Assets)
 	r.gradeAssets(in.Assets)

@@ -241,3 +241,16 @@ func TestAServiceBeyondItsAudienceReachesTheReport(t *testing.T) {
 		}
 	}
 }
+
+// contextNotesReport is a database host whose operator said they run no
+// data stores: the row reports the finding and carries the note, and a C2
+// note reaches the readout (docs/spec/engagement.md, "Context notes").
+func contextNotesReport(t *testing.T) Input {
+	in := hostDatabaseFiredReport(t)
+	in.NotUsed = []string{"data"}
+	in.ContextNotes = []ContextNote{
+		{Area: "data", Kind: NoteContextNotUsed, Source: "not_used[0]", Detail: "You said you run no data stores (`not_used`), but `postgres` listens on 0.0.0.0:5432 on `ubuntu`. If these are yours, remove `data` from `not_used`."},
+		{Kind: NoteContextDeploysTo, Source: "assets.shop-repo.deploys_to", Detail: "`shop-repo` (`github:acme/shop`) is declared to deploy production, but GitHub shows it archived. If production now deploys from another repository, declare that one."},
+	}
+	return in
+}

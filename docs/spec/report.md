@@ -305,7 +305,7 @@ or have no `expires`; a listed admin who is not one, and a listed admin who hold
 Owner; a domain under `mail.no_mail` that shows mail use
 ([web-collector.md](web-collector.md#email)); a declared person or system
 scheck found no trace of; declarations scheck could not verify; the count of
-unattributed members; the service and break-glass accounts, listed ("People").
+unattributed members; the service and break-glass accounts, listed ("People"); context notes, where a declaration and the evidence disagree ("Findings").
 
 **Close.** For automation, and for whoever wires scheck into a pipeline: the exit code
 and why, then where `report.txt`, `report.json`, `audit.jsonl` and the evidence are.
@@ -480,7 +480,7 @@ and a host asset covers `hosts`. `identity`, `secrets` and `logging` cannot be m
 applicable. There is no `payments` area
 ([engagement.md](engagement.md), "Validation").
 
-**A declaration never hides a finding** (built, E9 step 5a). A `not_used` area with a
+**A declaration never hides a finding** (built, E9 steps 5a and 5b). A `not_used` area with a
 finding in it, open or accepted, is not *not applicable*: its row is built as if
 `not_used` were absent, and the `context_not_used` note ([engagement.md](engagement.md),
 "Context notes", C3; step 5b) is attached to it.
@@ -736,13 +736,14 @@ context").
 
 ### Findings
 
-**Context notes** (design; contract when E9 lands, step 5b). A note that a declaration
+**Context notes** (built, E9 step 5b). A note that a declaration
 reached nothing or that the evidence contradicts one ([engagement.md](engagement.md),
-"Context notes") prints under "Notes for the readout" and in `notes` in JSON as
-`{kind, source, detail}`, `kind` one of `context_workspace_domain`, `context_deploys_to`
+"Context notes") prints under "Notes for the readout" as "*source*: *detail*" and in `notes` in JSON
+as `{kind, source, detail}`, `kind` one of `context_workspace_domain`, `context_deploys_to`
 and `context_not_used`. It has no id, no severity and no effect on the exit code. A
-`context_not_used` note also prints on its row, which is then not *not applicable*
-("Coverage").
+`context_not_used` note also goes onto its area's row as `context_notes` in JSON and
+prints under it as "  Note: *detail*"; a row with one is never folded into "Not
+requested". Whether the row is *not applicable* is decided by findings alone ("Coverage").
 
 Network collectors return the shared `finding.Judgment` and `finding.Subject`
 types; the report aliases these types and remains the author of the final report.
@@ -1027,7 +1028,9 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
 - `run: {started, directory, resumed}`, the scheck version and `rules_version`, so a
   finding that disappears because a rule changed between versions is never read as
   fixed. For network reports, `rules_version` combines the binary version with the
-  pinned web, preload, takeover and sender-data versions. `scheck_version` remains
+  pinned web, preload, takeover and sender-data versions and the C3 table's
+  (`:context:<version>`, `ContextTableVersion`), on every report that has a network
+  collector's rules version or any context note, whichever collector read the evidence. `scheck_version` remains
   the binary version, and host-only `rules_version` retains its existing value;
   the engagement source `{path, sha256}`, where for `--host` the hash is of the
   engagement exactly as `--write-engagement` would write it;
