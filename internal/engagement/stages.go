@@ -202,7 +202,10 @@ type run struct {
 	traces map[string][]policy.AuditEntry
 	zone   *time.Location
 	recon  *ReconDoc
-	out    Outcome
+	// planned is Plan's document, which Check reads; checked is Check's.
+	planned *PlanDoc
+	checked *CheckDoc
+	out     Outcome
 	// auditFile is the run directory's audit.jsonl, or io.Discard.
 	auditFile io.Writer
 	// gate is the run's scope gate, built when something sends through
@@ -595,8 +598,10 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 		case a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:") && isRoot(a):
 			ra = r.collectGitHub(ctx, a, ra)
 		case a.Kind == KindRepo && strings.HasPrefix(a.Root, "saas:github:"):
-			ra.Status = StatusCollected
-			ra.Detail = "read with " + a.Root
+			// Check reads it with its root, in Plan's order; until then
+			// nothing of it has been read.
+			ra.Status = StatusNotCollected
+			ra.Detail = "read with " + a.Root + " in Check, after Plan"
 		case a.Kind != KindHost:
 			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
 			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
@@ -697,7 +702,6 @@ func (r *run) reconStage(ctx context.Context) (any, error) {
 			return nil, err
 		}
 	}
-	r.reconcileGitHubRepositories(doc)
 	r.populateGitHubPeople(doc)
 	populateWorkspacePeople(doc)
 	return doc, r.write("recon.json", doc)
@@ -813,10 +817,12 @@ func (r *run) hostContext(a ResolvedAsset) *operator.Structured {
 	return &s
 }
 
-// plan passes through empty until 0.0.2 E9: the posture rules that apply to
-// a host are its catalog's, and nothing narrows or orders them yet.
+// plan lists each host's checks, orders each GitHub root's repositories
+// for Check and names what will not be judged for lack of a declaration
+// (docs/spec/engagement.md, "Plan selection and follow-ups"). It sends
+// nothing.
 func (r *run) plan(context.Context) (any, error) {
-	doc := &PlanDoc{Header: r.header("plan"), Method: "rules only; the plan is a checklist", Checklist: []string{}, Hosts: []PlanHost{}}
+	doc := &PlanDoc{Header: r.header("plan"), Method: "rules only; repositories in tier order under a request budget", Checklist: []string{}, Hosts: []PlanHost{}}
 	for _, a := range r.res.Assets {
 		c, ok := r.hosts[a.Name]
 		if !ok {
@@ -828,12 +834,21 @@ func (r *run) plan(context.Context) (any, error) {
 		}
 		doc.Hosts = append(doc.Hosts, PlanHost{Name: a.Name, ID: a.ID, Planned: c.Planned(), Disabled: disabled})
 	}
+	doc.GitHub = r.planGitHub()
+	doc.NotJudged = r.notJudged()
+	r.planned = doc
 	return doc, r.write("plan.json", doc)
 }
 
-// check runs the follow-ups rules named: none until 0.0.2 E9.
-func (r *run) check(context.Context) (any, error) {
-	return &CheckDoc{Header: r.header("check"), FollowUps: []string{}}, nil
+// check reads each GitHub root's repositories in Plan's order. Follow-ups
+// arrive with E9 step 7.
+func (r *run) check(ctx context.Context) (any, error) {
+	doc := &CheckDoc{Header: r.header("check"), FollowUps: []string{}, Assets: []CheckAsset{}}
+	if err := r.checkGitHub(ctx, doc); err != nil {
+		return nil, err
+	}
+	r.checked = doc
+	return doc, r.write("check.json", doc)
 }
 
 // analyze assesses each host asset's posture rules over its facts, from the

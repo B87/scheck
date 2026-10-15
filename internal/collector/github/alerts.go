@@ -116,6 +116,9 @@ type RepositoryAlerts struct {
 	Dependencies   Population[DependencyAlert] `json:"dependencies"`
 	SecretAlerts   Population[SecretAlert]     `json:"secret_alerts"`
 	Located        []LocatedSecret             `json:"located,omitempty"`
+	// Sampled names the kinds the request budget was spent before they
+	// reached this repository; their populations were not read.
+	Sampled []string `json:"sampled,omitempty"`
 }
 
 func (r RepositoryAlerts) Reads() []Read {
@@ -216,57 +219,90 @@ func locationKey(l SecretLocation) string {
 // CollectAlerts reads admitted repository objects only, never target-provided URLs.
 // docs/spec/github-collector.md, "Secret metadata and provider alerts: step 5 definition".
 func CollectAlerts(ctx context.Context, g Sender, e Evidence, org Organization) Evidence {
-	if e.Organization != nil {
-		req := gate.Request{Op: OpOrganizationSecrets, Asset: org.Asset, Stage: org.Stage, Exists: true, Params: map[string]string{"org": org.Name}}
-		e.OrganizationSecrets = metadataPopulation(ctx, g, req, secretNameKey)
-		n := 0
-		for _, s := range e.OrganizationSecrets.Items {
-			if s.Visibility == nil || *s.Visibility != "selected" {
-				continue
-			}
-			if n >= 100 {
-				metadataLimit(&e.OrganizationSecrets, "selected_secret_limit")
-				break
-			}
-			n++
-			req.Op = OpSelectedSecretRepositories
-			req.NextOf = ""
-			req.Params = map[string]string{"org": org.Name, "secret_name": s.Name}
-			p := metadataPopulation(ctx, g, req, func(r Repository) string {
-				if !repositoryOK(r, org.Name) {
-					return ""
-				}
-				return strings.ToLower(r.FullName)
-			})
-			e.SelectedSecrets = append(e.SelectedSecrets, SelectedSecret{Name: s.Name, Repositories: p})
-		}
-	}
+	e = collectOrganizationSecrets(ctx, g, e, org)
 	for _, a := range e.RepositoriesAccess {
 		if a.Repository == nil {
 			continue
 		}
-		repo := a.Repository
-		req := func(op string, extra map[string]string) gate.Request {
-			p := map[string]string{"owner": repo.Owner.Login, "repo": repo.Name}
-			maps.Copy(p, extra)
-			return gate.Request{Op: op, Asset: a.Asset, Stage: org.Stage, Exists: true, Params: p}
-		}
-		c := RepositoryAlerts{Asset: a.Asset, RepositoryRead: a.RepositoryRead, Visibility: repo.Visibility}
-		c.Secrets = metadataPopulation(ctx, g, req(OpRepositorySecrets, nil), secretNameKey)
-		c.Dependencies = metadataPopulation(ctx, g, req(OpDependabotAlerts, nil), func(d DependencyAlert) string { return numberKey(d.Number) })
-		c.SecretAlerts = metadataPopulation(ctx, g, req(OpSecretAlerts, nil), func(s SecretAlert) string { return numberKey(s.Number) })
-		for i, s := range c.SecretAlerts.Items {
-			if i >= 100 {
-				metadataLimit(&c.SecretAlerts, "secret_location_limit")
-				break
-			}
-			p := metadataPopulation(ctx, g, req(OpSecretLocations, map[string]string{"alert_number": numberKey(s.Number)}), func(l SecretLocation) string { return locationKey(l) })
-			c.Located = append(c.Located, LocatedSecret{Alert: s, Locations: p})
-		}
+		c := alertsFor(a)
+		repositorySecrets(ctx, g, a, &c, org.Stage)
+		dependabotAlerts(ctx, g, a, &c, org.Stage)
+		secretAlerts(ctx, g, a, &c, org.Stage)
+		secretLocations(ctx, g, a, &c, org.Stage)
 		e.RepositoriesAlerts = append(e.RepositoriesAlerts, c)
 	}
 	return e
 }
+
+// collectOrganizationSecrets reads the organization's Actions secret
+// names and each selected secret's repositories, organization inventory.
+func collectOrganizationSecrets(ctx context.Context, g Sender, e Evidence, org Organization) Evidence {
+	if e.Organization == nil {
+		return e
+	}
+	req := gate.Request{Op: OpOrganizationSecrets, Asset: org.Asset, Stage: org.Stage, Exists: true, Params: map[string]string{"org": org.Name}}
+	e.OrganizationSecrets = metadataPopulation(ctx, g, req, secretNameKey)
+	n := 0
+	for _, s := range e.OrganizationSecrets.Items {
+		if s.Visibility == nil || *s.Visibility != "selected" {
+			continue
+		}
+		if n >= 100 {
+			metadataLimit(&e.OrganizationSecrets, "selected_secret_limit")
+			break
+		}
+		n++
+		req.Op = OpSelectedSecretRepositories
+		req.NextOf = ""
+		req.Params = map[string]string{"org": org.Name, "secret_name": s.Name}
+		p := metadataPopulation(ctx, g, req, func(r Repository) string {
+			if !repositoryOK(r, org.Name) {
+				return ""
+			}
+			return strings.ToLower(r.FullName)
+		})
+		e.SelectedSecrets = append(e.SelectedSecrets, SelectedSecret{Name: s.Name, Repositories: p})
+	}
+	return e
+}
+
+func alertsFor(a RepositoryAccess) RepositoryAlerts {
+	return RepositoryAlerts{Asset: a.Asset, RepositoryRead: a.RepositoryRead, Visibility: a.Repository.Visibility}
+}
+
+func alertRequest(a RepositoryAccess, stage string) func(op string, extra map[string]string) gate.Request {
+	repo := a.Repository
+	return func(op string, extra map[string]string) gate.Request {
+		p := map[string]string{"owner": repo.Owner.Login, "repo": repo.Name}
+		maps.Copy(p, extra)
+		return gate.Request{Op: op, Asset: a.Asset, Stage: stage, Exists: true, Params: p}
+	}
+}
+
+func repositorySecrets(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryAlerts, stage string) {
+	c.Secrets = metadataPopulation(ctx, g, alertRequest(a, stage)(OpRepositorySecrets, nil), secretNameKey)
+}
+
+func dependabotAlerts(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryAlerts, stage string) {
+	c.Dependencies = metadataPopulation(ctx, g, alertRequest(a, stage)(OpDependabotAlerts, nil), func(d DependencyAlert) string { return numberKey(d.Number) })
+}
+
+func secretAlerts(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryAlerts, stage string) {
+	c.SecretAlerts = metadataPopulation(ctx, g, alertRequest(a, stage)(OpSecretAlerts, nil), func(s SecretAlert) string { return numberKey(s.Number) })
+}
+
+func secretLocations(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryAlerts, stage string) {
+	req := alertRequest(a, stage)
+	for i, s := range c.SecretAlerts.Items {
+		if i >= 100 {
+			metadataLimit(&c.SecretAlerts, "secret_location_limit")
+			break
+		}
+		p := metadataPopulation(ctx, g, req(OpSecretLocations, map[string]string{"alert_number": numberKey(s.Number)}), func(l SecretLocation) string { return locationKey(l) })
+		c.Located = append(c.Located, LocatedSecret{Alert: s, Locations: p})
+	}
+}
+
 func metadataLimit[T any](p *Population[T], gap string) {
 	uncertain(p, gap)
 	if len(p.Reads) > 0 {

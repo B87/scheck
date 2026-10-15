@@ -45,7 +45,14 @@ func JudgeAlerts(e Evidence, c Context) []Judgment {
 		out = append(out, populationAlertGap(finding.IDGitHubOrgSecretAll, c.OrganizationAsset, p))
 	}
 	for _, r := range e.RepositoriesAlerts {
-		out = append(out, judgeDependencies(r)...)
+		// A kind the request budget did not reach on this repository was not
+		// read: its coverage says sampled, and nothing is judged from it.
+		if !slices.Contains(r.Sampled, KindDependabot) {
+			out = append(out, judgeDependencies(r)...)
+		}
+		if slices.Contains(r.Sampled, KindSecretAlerts) {
+			continue
+		}
 		for _, located := range r.Located {
 			out = append(out, judgeLocatedSecret(r, located)...)
 		}
@@ -60,7 +67,12 @@ func JudgeAlerts(e Evidence, c Context) []Judgment {
 		}
 		if len(r.SecretAlerts.Items) > len(r.Located) {
 			j := alertJudgment(finding.IDGitHubSecretScanningOpen, r.Asset, nil, readIDs(r.SecretAlerts.Reads))
-			j.NotChecked = append(j.NotChecked, "Some provider alert locations were not read because the follow-up limit was reached")
+			why := "Some provider alert locations were not read because the follow-up limit was reached"
+			if slices.Contains(r.Sampled, KindSecretLocations) {
+				j.Reason = "sampled"
+				why = "Provider alert locations were not read: the organization's request budget was spent before they were reached"
+			}
+			j.NotChecked = append(j.NotChecked, why)
 			out = append(out, j)
 		}
 	}

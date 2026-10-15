@@ -362,14 +362,32 @@ is *partial*, with "2 of 120 repositories". A cap carries its `selection` ("the 
 most recently pushed"), since a sample nobody can name cannot be compared between
 runs.
 
-**A selection names what chose it** (design; contract when E9 lands, step 6;
-[engagement.md](engagement.md), "Plan selection and follow-ups"). In text:
+**A selection names what chose it** (GitHub built in E9 step 6a, Workspace design in 6b;
+contract when E9 lands; [engagement.md](engagement.md), "Plan selection and follow-ups").
+In text:
 `40 of 120 repositories: deploys_to production (3, assets.*.deploys_to), declared secret
 store (1, secrets.production), public (2, observed), then most recently pushed (34)`.
 With no declaration naming any item: `no declaration named any repository; most recently
-pushed.` Below the caps: `all N read; order did not matter.` In JSON the population
-carries `selection: {tiers: [{basis, source, count}], fallback: "pushed_at desc", read,
-in_scope}`.
+pushed.`, printed only when no repository is in the declared tiers (1, 2, 4, 5 and 6);
+the observed-public count still prints before it. Below the budget: `all N repositories
+read; the request budget cut nothing.` A GitHub repository population prints the line on
+every run, a Workspace population only when a cap, the timeout or the rate limit cut it,
+and a repository-root engagement, which has no budget, none: its population reads `1 of
+1`. In JSON every population Plan ordered carries `selection: {tiers: [{basis, source,
+count}], fallback: "pushed_at desc", read, in_scope}`, with `kind`, `unit`, `spent` and `budget` added
+for a budgeted GitHub population, which the text words "; sent N of a 4,000 budget." at the
+end of its line. `selection.in_scope_at_least` is set when the organization repository list was not
+complete; the text then reads "N of at least M repositories: ..." or "all N repositories
+listed read; the list was not complete, so more may be in scope". A row whose kinds
+reached different populations prints one line per
+selection, "Repositories read for <kind>: ...", `kind` being `access`, `ci`, `secret_alerts`,
+`dependabot_alerts` or `secret_locations`.
+
+A request-budget cut is `sampled` and does not change the exit code. Its reason sits on
+the row or sub-item whose kind was cut, the population counts the repositories that got
+that kind, and the detail names "the 4,000-request budget for <org>". A cut by
+`limits.timeout` or GitHub's rate limit stays `limit_reached`, exit 2, and its population
+carries the selection too.
 
 A reason is one of `no_credentials`, `insufficient_permission:<scope>`,
 `not_on_plan:<feature>`, `collector_not_built`, `refused` (an asset refused the access

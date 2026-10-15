@@ -136,7 +136,7 @@ built so far; `--stop-after` with the engagement's stage names. Until E4, Scope 
 the declared roots as written, without discovery. A `host:` root runs the host
 collector through the runner in Recon, its facts join the asset map
 (`internal/engagement/hostasset`), and its posture rules run in Analyze, which holds
-only the host collector's rules (one check, or two joined per account, E5a) until E9; Plan and Check pass through empty until then. A root
+only the host collector's rules (one check, or two joined per account, E5a) until E9; Plan selects and Check reads the per-repository GitHub evidence from E9 step 6a (Workspace follows in 6b). A root
 of a kind with no collector yet (`github:`, `domain:` and the rest, until their slice)
 is validated, recorded as not collected with the reason `collector_not_built`, and
 makes the run exit 2, as coverage will report it from E2. The host collector receives
@@ -1884,6 +1884,95 @@ older than 7 days is collected again on resume; every risk area's row prints its
    breadth-first GitHub reads under the 4,000-request budget, the `selection` text and
    JSON, the Plan document's read and abstain lists, `--stop-after plan`. A fake server
    with 150 repositories under a small budget.
+   Split in two. **6a, GitHub**, done (offline): `pushed_at` retained on the repository
+   projections, the eight tiers, the per-repository reads moved from Recon to Check, the
+   breadth-first budget, Select, the Plan document, `--stop-after plan` and the selection
+   in the report. **6b, Workspace**, design until built: the per-user order, OAuth grants
+   and forwarding in Check. 6b is not yet done.
+   - *Decided 2026-10-15* (`security-consultant` define, adopted under the owner's
+     standing delegation; `spec/engagement.md`, "Plan selection and follow-ups", carries
+     the wording):
+     - Five passes in order, each over every selected repository in tier order: access
+       and protection, CI, then alerts as three passes (secret-scanning, Dependabot,
+       secret alert locations); the mirror runs after every counted pass and is not
+       counted.
+     - The `github.repository` object is counted; inventory, the mirror and the follow-ups
+       are not. Every page is one request, a retry counts once, and a ledger answer on
+       resume counts as when first sent; a refused or limit-stopped request is not spent.
+     - A budget cut is `sampled`, exit code unchanged; the timeout and the rate limit stay
+       `limit_reached`. A kind is all or nothing per repository, so the spend may pass the
+       budget by one repository's kind; Plan and the report print "sent N of a 4,000
+       budget".
+     - Declared repositories (`assets` entries) are never cut, tier 2 selected and tier 3
+       public ones can be: tier 6 is new, "declared as a repository
+       asset" (`assets.<r>`); the lowest tier wins; a `secrets.production[].asset` naming an
+       organization orders the repositories selected for an organization secret, and
+       orders none when the visibility is `all` or `private` or the read failed. A
+       repository root with no declared organization has no budget.
+     - `--stop-after plan` prints the header, the ordered list (20 lines in text, all in
+       JSON) and a closed not-judged list (`spec/engagement.md`).
+     - The selection line prints every run for GitHub; "all N repositories read; the
+       request budget cut nothing."
+     - Workspace (6b): ordering evidence wider than finding evidence (`isAdmin`,
+       `isDelegatedAdmin` or an observed role assignment); the swapped tiers; one order for
+       Recon's per-user reads and Check's OAuth grants; no Workspace request budget in
+       0.0.2; a selection attaches only to a population a cap, the timeout or the rate
+       limit cut.
+   - *Code review of 6a* (`code-reviewer`), all fixed, with tests. Must-fix: a refusal
+     sent in Check was lost where Recon left the root incomplete, and `githubStatus`
+     dropped the refusal kind; a kind cut on the access pass did not mark later kinds on
+     that repository cut. Should-fix: the meter counted calls the gate did not send; the
+     spec and the code disagreed on which tiers are never cut (declared `assets` entries
+     are; tier 2 selected repositories and tier 3 public ones can be cut); history
+     sub-items were dropped without a mirror (now `mirror_not_declared`); `recon.json`
+     said `collected` for repositories not yet read. Nits: an incomplete repository list
+     was not a lower bound (`selection.in_scope_at_least`); `github.undeclared_public_repository`
+     was omitted from the access kind and not judged past the budget. A re-review is
+     ran again (the third and fourth rounds follow).
+   - *Second review of 6a*, all fixed, with tests. Must-fix: an absence was disproved over
+     unread repositories after a deadline (now `Evidence.RepositoriesUnread`: the
+     rules abstain). Should-fix: the meter did not count sent-but-failed requests (the
+     gate's `Result.Sent`); any failed object was treated as not found (`NoObject` is a 404
+     or another repository's object; a failed read stays unread in `in_scope`); collaborator
+     candidates were printed nowhere and Workspace attribution was dropped after Check
+     (`check.json` carries the people fields, `--stop-after check` prints the stanza). Nit:
+     a mirror audit write failure skipped the refusal re-check (it now follows it and
+     replaces a recorded limit or failure for the root with `failed`). *Deferred* (nit, to
+     be assigned within E9): the unbudgeted `CollectAccess`, `CollectCI`, `CollectAlerts`
+     and `CollectHistory` remain, used only by tests (`github_ci_run_test.go` in the gate
+     and the collector tests); move those tests to `CollectRepositories` and remove them.
+   - *Third round of review findings of 6a*, both should-fix, fixed with tests. A kind's
+     population counts a repository as read only when the kind read it (the access kind
+     when its object was recognized; later kinds when a request was sent or answered from
+     the ledger; a 404 repository is asked, not read). A gate result that says every later
+     request would be answered the same (`Repeats`: rate limit, deadline) stops Check from
+     starting another repository; the one in progress finishes its kind and the stop is
+     `limit_reached`, never the budget's. `github.undeclared_public_repository` fires from
+     the organization list for any public repository whose object Check did not read
+     (budget, deadline or failed read); `github-collector.md` and `engagement.md` now agree.
+   - *Fourth round of review of 6a*, all fixed, with tests. Must-fix: a declared repository
+     a rate-limit or deadline stop left unstarted was reported `failed`; it is now an access
+     entry `unavailable:not_started`, reason `limit_reached`, with the stop's detail, for
+     declared repositories only, so it reconciles to `limit_reached` and is listed
+     incomplete. Should-fix: `secret_locations` counted unread a repository with no alert to
+     locate (a kind needing no request counts read). A later should-fix: the not-started
+     entries for undeclared repositories produced duplicate readout notes and not-assessed
+     entries; they are now declared only, and undeclared ones are unread through `Kinds` and
+     `RepositoriesUnread`. Nits: test assertions and a comment. Step 6a is done.
+   - *Deferred, pre-existing and not 6a, to be assigned:* a declared repository answering 404
+     ends `not_collected`/`failed` with exit 0, and its gate reason `insufficient_permission`
+     is not surfaced.
+   - *Design, `modularity` agent (code detail, not contract):* the GitHub collector owns
+     tiers, kinds and the budget: `Collect` (inventory, Recon), `Select(inventory,
+     context) Selection` (Plan) and `CollectRepositories(ctx, sender, selection, input)`
+     (Check), with an unexported meter that counts every `Send`, ledger answers included.
+     `recon.json` keeps the inventory only; Check's evidence goes to `check.json`
+     (`CheckDoc`, assets) and Analyze judges the union. A shared `finding.Selection {area,
+     unit, tiers[{basis, source, count}], fallback, read, in_scope}` is what the report
+     words; the population JSON gains `selection`, plus `spent` and `budget`. Check's audit
+     lines, the mirror's included, carry stage `check`.
+   - *Verified:* every finding id named in the not-judged list exists in
+     `internal/finding` or its collector.
 7. The follow-up table, the loop and its invariants test; F1 with
    `github.collaborator_permission`, and F2.
 8. The 7-day resume maximum (a zero collection time counts as expired, so a kept

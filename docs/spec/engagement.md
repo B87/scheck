@@ -16,8 +16,8 @@ run can resume from a saved output.
 | **1. Intake** | Ask what a consultant would ask (below). | Engagement file |
 | **2. Scope** | Expand the declared roots into assets with passive discovery and cloud inventory, drop what is excluded, record which assets have evidence of being first-party, and apply defaults. The resolved list is printed before anything beyond passive runs; only first-party confirmations wait for the operator. | Scope |
 | **3. Recon** | The inventory read per asset: SaaS tenant inventory, host facts, DNS, TLS, response headers, technology fingerprint. DNS beyond what Scope used to discover names (SPF, DMARC and declared DKIM selectors as TXT, MX, NS) is read here, per domain root and declared mail domain ([web-collector.md](web-collector.md#reads)). Lists what the context does not name: the accounts no handle names (the `recon` stanza) and the domains a Workspace tenant holds that are not roots. Reads inventory only (users, roles and admin assignments; members, owners, outside collaborators, invitations; the repository list with `pushed_at`; DNS; host and web reads, which have no selection), persists evidence and gives no verdict. Anything outside the roots is recorded, not contacted. | Asset map |
-| **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. Under a cap, which repositories and users are read first, and the declaration that chose them ("Plan selection and follow-ups"). Names the rules that will abstain for lack of a declaration. With a model (0.0.4), hypotheses as well. | Plan |
-| **5. Check** | Run every read only rules consume, in Plan's order (per-repository reads, workflow files, alerts, the mirror; per-user OAuth grants and Gmail forwarding), then the follow-up reads that rules named ("Plan selection and follow-ups") and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
+| **4. Plan** | A checklist per asset type: the rules that apply, narrowed and ordered by context. Under a cap, which repositories and users are read first, and the declaration that chose them ("Plan selection and follow-ups"). Names the rules that will abstain for lack of a declaration. `--stop-after plan` prints it. With a model (0.0.4), hypotheses as well. | Plan |
+| **5. Check** | Run every read only rules consume, in Plan's order (GitHub's per-repository reads by kind, then the mirror, 6a; per-user OAuth grants and Gmail forwarding, 6b), then the follow-up reads that rules named ("Plan selection and follow-ups") and, from 0.0.3, the probes and scans the asset's modes allow, through collectors that enforce scope. | Evidence |
 | **6. Analyze** | Every verdict is given here: each collector's rules over the evidence Recon and Check persisted, the host's posture rules, the multi-fact rules, then the context adjustments ("Severity in context"). Each rule ends as *fires*, *disproved* or *insufficient evidence*, the three outcomes every rule already has; a rule may name follow-up reads that would settle it, which go back to Plan. Notes where the evidence contradicts a declaration ("Context notes"). | Findings and follow-ups |
 | **7. Report** | Coverage per risk area, then findings for the people who will fix them: what, why it matters here, evidence, remediation. | Report |
 
@@ -497,7 +497,11 @@ an owner's token and is three-valued: absent or null is *insufficient evidence*,
 "not required".
 
 **The recon stanza.** `--stop-after recon` prints the accounts no handle names, for the
-operator to paste under `people` (in JSON, `people_candidates[]` with the same fields):
+operator to paste under `people` (in JSON, `people_candidates[]` with the same fields).
+A GitHub account seen only as a collaborator on a repository Check read is a candidate
+too. Check recomputes the people fields (GitHub, then Workspace) and `check.json` carries
+them, so `--stop-after check` prints the stanza with those accounts and `--stop-after
+recon` does not; the report does not print it:
 
 ```yaml
 # Accounts no handle under people names, read 2026-10-09 14:02 (Europe/Madrid).
@@ -887,55 +891,193 @@ above, and HSTS is the only low.
 
 ## Plan selection and follow-ups
 
-Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). With rules only, the
-one decision context makes in Plan is which part of a large population is read first
-when a cap, a rate limit or the run's deadline stops the reads short. The order is a
-table, not a judgement, and every tier names the declaration or observation that put an
-item there. The capped reads run in Check, after Plan, in this order;
-`--stop-after plan` shows what will be read before any of it is.
+Design; becomes contract when E9 lands (steps 6 and 7, `ROADMAP.md`). Step 6 is built in
+two parts: 6a, GitHub (the tiers, the budget, the selection, the Plan document and
+`--stop-after plan`), built and awaiting its review, and 6b, Workspace (the per-user
+order, OAuth grants and forwarding in Check), which stays design until built. The tier
+table is versioned data (`TiersVersion` in `internal/collector/github/selection.go`);
+changing a tier or the kind order changes the version, and `plan.json` carries it as
+`tiers_version`. With rules only, the one decision context
+makes in Plan is which part of a large population is read first when a budget, a cap, a
+rate limit or the run's deadline stops the reads short. The order is a table, not a
+judgement, and every tier names the declaration or observation that put an item there.
+The capped reads run in Check, after Plan, in this order; `--stop-after plan` shows what
+will be read before any of it is.
 
 **Repositories**, in tier order; within a tier, most recently pushed first (`pushed_at`,
-a retained field of `github.repositories`), then `full_name`:
+a retained field of `github.repositories` and `github.repository`), a repository with no
+`pushed_at` last, then `full_name`:
 
-| Tier | Repositories | Source named in `selection` |
+| Tier | Repositories | Basis and source named in `selection` |
 |---|---|---|
-| 1 | `deploys_to: production` | `assets.<r>.deploys_to` |
-| 2 | named by a `secrets.production[].asset` | `secrets.production` |
-| 3 | observed visibility public | observed |
-| 4 | named by a `data.matters_most[].asset` | `data.matters_most` |
-| 5 | `deploys_to: staging` | `assets.<r>.deploys_to` |
-| 6 | the rest, not archived | |
-| 7 | archived | |
+| 1 | `deploys_to: production` | "deploys_to production", `assets.*.deploys_to` |
+| 2 | named by a `secrets.production[].asset` | "declared secret store", `secrets.production` |
+| 3 | observed visibility public | "public", observed |
+| 4 | named by a `data.matters_most[].asset` | "data that matters most", `data.matters_most` |
+| 5 | `deploys_to: staging` | "deploys_to staging", `assets.*.deploys_to` |
+| 6 | declared as a repository asset (`assets.<r>`) and in no tier above | "declared repository asset", `assets` |
+| 7 | the rest, not archived | "most recently pushed", no source |
+| 8 | archived | "archived", no source |
 
-**Users**, for the per-user Workspace reads: 1 a person who left, still active; 2 super
-admins and holders of delegated roles; 3 admin holders no handle names; 4 declared
-`contractor` and `shared` accounts; 5 `break_glass` and `service` accounts; 6 the rest.
-Within every tier: active first, then most recent sign-in, then `primaryEmail`. Gmail forwarding reads leavers still active
-first, then admins, then the rest.
+The lowest tier wins. A repository that is public and archived is in tier 3; an archived
+`deploys_to: production` repository is in tier 1. A `secrets.production[].asset` that
+names an organization puts in tier 2 the repositories the inventory shows selected for an
+organization secret (visibility `selected`), with source "secrets.production
+(organization secrets, selected repositories)" in the selection; each item in `plan.json`
+names the exact key as its source, for example "secrets.production[0] (organization
+secrets, selected repositories)". When the secret's visibility is `all` or
+`private`, or the selected-repositories read failed, it orders nothing, and Plan says
+"`secrets.production[i]` names the organization; every repository can read its secrets,
+so it orders none." This is ordering only: selected visibility is still not production
+use for any finding.
+
+**Declared repositories are never cut by the budget.** A repository declared as an
+`assets` entry is read in every kind, at its tier's place, and its requests count toward
+what is spent. Tier 2 repositories selected for an organization secret and tier 3 public
+repositories are ordered first but can be cut. A declared repository missing from the organization list is still read and counts in
+`in_scope`. A repository root with no declared organization has no budget and is read in
+full.
+
+**Users**, for the per-user Workspace reads (6b, design): 1 a person who left, still
+active; 2 admin holders no `people` handle names; 3 super admins and holders of delegated
+roles a handle names; 4 declared `contractor` and `shared` accounts; 5 `break_glass` and
+`service` accounts; 6 the rest. An admin holder, for ordering, is an account with
+`isAdmin`, `isDelegatedAdmin` or an observed role assignment; the findings' own rule for
+an admin is unchanged. Within every tier: active first, then most recent sign-in, then
+`primaryEmail`. One order serves every per-user read: Recon's per-user assignment and
+detail reads and Check's OAuth grants. Gmail forwarding keeps its own order, leavers still
+active first, then admins, then the rest. There is no Workspace request budget in 0.0.2:
+the selection attaches only when a cap, the timeout or the rate limit cuts a per-user
+population, and each keeps its reason (`limit_reached`, exit 2) and gains the selection.
+A `Repeats` stop is a failure and has no selection.
 
 **Breadth first by kind.** The budget is a compiled request count, 4,000 per organization
-per run, for the per-repository reads Check sends (inventory and the local mirror are not
-counted). `limits.timeout` and GitHub's rate limit still stop the run as `limit_reached`,
-and the existing per-repository caps (100 workflow files, 100 alert locations) stay.
-Under the budget, GitHub reads go by kind across every
-selected repository, each kind in tier order: collaborators, deploy keys, branch rules
-and the workflow default; then workflow files; then alerts. A cap therefore leaves every
-selected repository with the cheapest evidence and cuts the dearest kind first.
+per run, for the per-repository reads Check sends. `limits.timeout` and GitHub's rate
+limit still stop the run as `limit_reached`, and the existing per-repository caps (100
+workflow files, 100 alert locations) stay. GitHub reads go by kind: five passes in this
+order, each over every selected repository in tier order before the next pass starts, and
+within a pass one repository's reads run together.
 
-**What the report says.** A cap's `selection` names what chose the items, in words and
-in JSON ([report.md](report.md), "Coverage"):
+| Pass | Kind | Reads |
+|---|---|---|
+| 1 | access and protection | the `github.repository` object, the default-branch read, branch rules, the workflow default, collaborators (all pages), deploy keys (all pages) |
+| 2 | CI | the workflow directory listing, the repository's Actions secret names, then the workflow files |
+| 3a | alerts | secret-scanning alerts |
+| 3b | alerts | Dependabot alerts |
+| 3c | alerts | secret alert locations |
+
+A repository object that is not found ends that repository's reads. The local mirror (two
+ref listings, then the local read) runs after every counted pass, only for repositories
+with a declared mirror, and is not counted.
+
+**What counts.** Every page is one request; a retry of the same request counts once. A
+request counts when the gate wrote a send line for it or a retry of it, whatever came back
+(a 5xx, a timeout or a reset after sending is spent), or when the ledger answers it; a
+refusal or a limit stop before sending does not count. The
+`github.repository` object counts. Inventory, the mirror and the follow-ups (F1 and F1b
+have their own cap of 20) do not. On resume, a request the ledger answers counts as when
+it was first sent, so a resumed run reaches exactly the selection one session would.
+
+**A kind is all or nothing per repository.** It starts on a repository only while the
+requests spent are below the budget; once started it finishes on that repository. The
+spend can therefore pass the budget by one repository's kind under the caps, and Plan and
+the report print "sent N of a 4,000 budget"; no cost is estimated. A kind cut inside a
+repository by the timeout, the rate limit or a page cap is partial with that read's own
+reason, never the budget's. A cap therefore leaves every selected repository with the
+cheapest evidence and cuts the dearest kind first.
+
+**A budget cut is `sampled`, not `limit_reached`, and does not change the exit code**,
+whether it stops one kind early or leaves repositories with no per-repository read. The
+reason sits on the row or sub-item whose kind was cut; its population counts the
+repositories that got that kind (the least-reached kind among the kinds a row's rules
+rest on), and the evidence of a kind the budget did not reach is marked `sampled` in
+`check.json`, so a rule judges nothing from it (a secret alert locations cut abstains with
+reason `sampled`); its detail names "the 4,000-request budget for
+<org>". A kind's population counts a repository as read only when the kind read it: the
+access kind when its object was recognized (a 404 repository was asked, not read); a later
+kind when a request was sent or answered from the ledger. When the gate reports that every
+later request would be answered the same (`Repeats`: a provider's rate limit, the
+deadline), Check starts no further repository; the one in progress finishes its kind (the
+gate refuses without sending), and the stop is `limit_reached`, never the budget's.
+A declared repository left unstarted is recorded as an access entry
+`unavailable:not_started` with reason `limit_reached` and the stop's detail, so it is listed
+incomplete and never `failed`; an undeclared one is counted unread and adds no entry, note
+or not-assessed line. A kind that needs no request on a repository (secret alert locations
+where no alert exists) counts it as read.
+`github.undeclared_public_repository` fires from the organization repository list for any
+public repository whose object Check did not read: the budget, the deadline or a failed
+read. Repositories with no per-repository read keep their inventory judgments.
+`limits.timeout` and GitHub's rate limit stay `limit_reached`, exit 2, and their
+population carries the selection too.
+
+**What the report says.** A population's `selection` names what chose the items, in words
+and in JSON ([report.md](report.md), "Coverage"):
 
 ```
 40 of 120 repositories: deploys_to production (3, assets.*.deploys_to), declared secret
 store (1, secrets.production), public (2, observed), then most recently pushed (34)
 ```
 
-With no declaration naming any item: "no declaration named any repository; most recently
-pushed." Below the caps: "all N read; order did not matter."
+GitHub repository populations print the selection line every run; a Workspace population
+only when a cap, the timeout or the rate limit cut it; the JSON carries `selection` on
+every population Plan ordered, with `kind` (`access`, `ci`, `secret_alerts`,
+`dependabot_alerts` or `secret_locations`) naming the read it counts. "No declaration named
+any repository; most recently pushed (N)" prints only when tiers 1, 2, 4, 5 and 6 are all
+empty, and the observed-public count still prints before it; archived repositories read
+follow as "archived (N)". Below the budget: "all N repositories read; the request budget
+cut nothing." Every GitHub line ends "; sent N of a 4,000 budget." When a row's kinds
+reached different populations the text prints one line per distinct selection, "Repositories
+read for <kind words>: <selection>" (access and branch protection, workflows, secret-scanning
+alerts, Dependabot alerts, secret alert locations); otherwise one "Repositories: <selection>".
+A repository-root engagement has no budget and no selection line; its population reads
+"1 of 1".
 
-The Plan document lists, per asset, the rule families that apply, their order, and the
-rules that will abstain for lack of a declaration (`identity.unexpected_admin:
-insufficient, access.admins names no GitHub tenant`; `DKIM: no selector declared`).
+A population's `selection.in_scope_at_least` (JSON) is set when the organization
+repository list was not complete: the text reads "N of at least M repositories: ..." or
+"all N repositories listed read; the list was not complete, so more may be in scope".
+
+**`--stop-after plan`**, per GitHub organization: a header with the in-scope count, "budget
+4,000 requests; inventory, the local mirror and follow-ups not counted" and the kind order
+in words; then the ordered list, one line per repository with its position, `full_name`,
+tier, basis and source, `pushed_at` date and the flags declared, public, archived and
+mirror. The text lists every repository in tiers 1 to 6, then fills to 20 lines in all
+and ends "and N more, most recently pushed first (`plan.json` lists all)". The JSON lists
+all. The text never predicts the cut: "Check sends nothing until you resume this run; the
+budget may not reach the later kinds on every repository." A Workspace tenant prints tier
+counts only in text; the JSON lists the ordered accounts. The not-judged list follows,
+headed "Not judged for lack of a declaration:". `plan.json` holds it as `not_judged`, each
+GitHub root's order as `github[]` (`asset`, `tiers_version`, `budget`, `in_scope`, `order[]`,
+`notes[]`), and each host's checks as `hosts[]`. A Workspace tenant has no `github[]` entry
+until 6b.
+
+**The not-judged list.** Plan prints these lines, a closed list, each only when its
+condition holds on what Recon read. Rules the engagement can read but that will not decide:
+
+- Engagement-wide, when no `people` entry has a `left` date: "`identity.former_person_has_access` will not be judged on any account: no `people` entry has a `left` date, so scheck cannot tell a former employee's account from a current one." For GitHub, `identity.former_person_invited` is named in the same way.
+- Per asset and person, when a leaver has no identifier for that asset: "`identity.former_person_has_access` on `<asset>` will not be judged for `<handle>`: their `people` entry gives no <GitHub login|Workspace address>."
+- "`identity.unexpected_admin` on `<asset>` will not be judged: `access.admins` lists nobody for this <Workspace tenant|GitHub organization>, so scheck cannot tell an expected admin from an unexpected one."
+- "`identity.unattributed_admin` on `<asset>` will not be judged: no `people` entry gives a <Workspace address|GitHub login>, so scheck cannot say whose the admin accounts are."
+- "`github.outside_admin_on_production` on `<asset>` will not be judged: no repository in this organization declares `deploys_to: production`."
+- Per sending mail domain: "`email.dkim_missing` on `<domain>` will not be judged: no DKIM selector is declared for it under `mail.senders`, and DNS cannot list selectors."
+- "`email.spf_undeclared_sender` on `<domain>` will not be judged: `mail.senders` names no service that sends as this domain."
+- When `intent.not_exposed` has URLs and the vantage is not `internet`: "`web.restricted_reachable` will not be judged for <n> URLs under `intent.not_exposed`: this run's vantage is <not given|vpn|lan>; run with `--vantage internet` from a network outside your VPN and office."
+- "`svc.listens_beyond_declared` on `<host>` will not be judged: `expected_services` is empty for this host."
+- "`workspace.external_forwarding` on `<asset>` will not be judged: `authorization.mailboxes` authorizes no mailbox, so no forwarding settings are read."
+
+Declarations that are absent and change what is raised or ranked:
+
+- "No repository declares `deploys_to: production`: no finding is raised for reaching production, a departed person's push to production cannot be raised, and no repository is read first for it."
+- "`data.matters_most` is empty: no finding is raised for the data that matters most, and nothing is read or ranked first for it."
+- Per tenant or organization with `access.mfa` absent or unknown: "`access.mfa` does not say who must use 2-step verification in `<asset>`: scheck reports what it reads, but cannot raise a gap as a contradiction of what you believe."
+- When there are web roots and `intent.not_exposed` is empty: "`intent.not_exposed` lists no URL: nothing is checked for answering from the internet when it should not."
+
+`identity.external_admin`, `identity.shared_admin`, `exposed_on_purpose`, `public: true`,
+R1 and R2 are left off the list on purpose.
+
+The Plan document, `plan.json`, lists each host's planned and disabled checks, each GitHub
+root's repository order above and the not-judged list. Its `checklist` stays empty: a
+rule family's order is the rules' own, and context narrows none of them in 0.0.2. The
+account order is 6b.
 
 **Follow-up reads.** A follow-up is a row of a static table: a trigger (a rule's
 verdict), a declared gate operation, parameters typed from the judgment's subject, a
@@ -1155,7 +1297,11 @@ and only audited in E9, each with its three fixtures: `identity.unexpected_admin
 `identity.unattributed_admin`, `identity.former_person_has_access`,
 `identity.former_person_invited`, `identity.external_admin` and `identity.shared_admin`
 for Workspace and GitHub; the `deploys_to:production` raise; `web.restricted_reachable`;
-the 2-step `contradiction`. E9 adds the rules below. Each declares what it reads, ends as
+the 2-step `contradiction`. E9 adds the rules below. An absence over repository populations (`identity.former_person_has_access`, and the
+organization-level absence of `identity.unattributed_admin`) is disproved only when Check
+read the object of every selected repository; when a budget, the deadline or a failed
+object left one unread, the rule abstains (`Evidence.RepositoriesUnread`).
+Each declares what it reads, ends as
 *fires*, *disproved* or *insufficient evidence*, never fires on a population it knows to
 be incomplete and never disproves on one, and has a firing, a disproved and an
 insufficient-evidence fixture; an invariants test, like `ValidateRules`, rejects a rule

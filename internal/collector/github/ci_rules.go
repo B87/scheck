@@ -58,7 +58,10 @@ func JudgeCI(e Evidence, c Context) []Judgment {
 				out = append(out, j)
 			}
 		}
-		if len(ci.Workflows) == 0 {
+		// A repository the CI kind did not reach under the request budget has
+		// no workflow evidence: its coverage says sampled, and no rule over
+		// workflows is judged on it.
+		if len(ci.Workflows) == 0 && !ci.Sampled {
 			for _, id := range []string{finding.IDGitHubMutableAction, finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe} {
 				j = judgment(id, ci.Asset, nil, readIDs([]Read{ci.Directory, ci.Branch.Read}))
 				j.NotChecked = slices.Clone(ciLimits)

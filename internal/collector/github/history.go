@@ -110,72 +110,75 @@ func safeMirrorReason(err error) string {
 // through the API gate (docs/spec/github-collector.md, "Fresh reference comparison and resume").
 func CollectHistory(ctx context.Context, g Sender, e Evidence, checkouts map[string]string) Evidence {
 	for _, a := range e.RepositoriesAccess {
-		r := RepositoryHistory{Asset: a.Asset, RepositoryRead: a.RepositoryRead, Complete: true}
-		if a.Repository != nil {
-			r.Visibility = a.Repository.Visibility
-		}
-		checkout := checkouts[a.Asset]
-		if checkout == "" {
-			r.Complete = false
-			r.Gaps = []string{"mirror_not_declared"}
-			e.RepositoriesHistory = append(e.RepositoriesHistory, r)
-			continue
-		}
-		if a.Repository == nil || !usableRead(a.RepositoryRead) {
-			r.Complete = false
-			r.Gaps = []string{"repository_identity_unknown"}
-			e.RepositoriesHistory = append(e.RepositoriesHistory, r)
-			continue
-		}
-		refs := map[string]string{}
-		fresh := true
-		for _, op := range []string{OpHistoryHeads, OpHistoryPull} {
-			result := g.Send(ctx, gate.Request{Op: op, Asset: a.Asset, Stage: "recon", Exists: true, Params: map[string]string{"owner": a.Repository.Owner.Login, "repo": a.Repository.Name}})
-			read := readOf(op, result)
-			r.References = append(r.References, read)
-			var items []struct {
-				Ref    string `json:"ref"`
-				Object struct {
-					Type string `json:"type"`
-					SHA  string `json:"sha"`
-				} `json:"object"`
-			}
-			if !usableRead(read) || result.Response.Population == nil || result.Response.Population.More || len(result.Response.Population.Incomplete) > 0 || string(result.Response.Body) == "null" || json.Unmarshal(result.Response.Body, &items) != nil {
-				fresh = false
-				continue
-			}
-			prefix := "refs/heads/"
-			if op == OpHistoryPull {
-				prefix = "refs/pull/"
-			}
-			if len(items) > 10000 {
-				fresh = false
-				r.References[len(r.References)-1].Reason = "limit_reached"
-				r.References[len(r.References)-1].Gap = "limit_reached"
-				r.References[len(r.References)-1].Detail = "limit_reached"
-				r.Gaps = append(r.Gaps, "limit_reached")
-				continue
-			}
-			for _, item := range items {
-				if !refOK(item.Ref) || !strings.HasPrefix(item.Ref, prefix) || item.Object.Type != "commit" || !fullSHA.MatchString(item.Object.SHA) {
-					fresh = false
-					continue
-				}
-				if _, duplicate := refs[item.Ref]; duplicate {
-					fresh = false
-				}
-				refs[item.Ref] = strings.ToLower(item.Object.SHA)
-			}
-		}
-		if !fresh {
-			r.Complete = false
-			r.Gaps = append(r.Gaps, "advertised_refs_unavailable")
-		}
-		r = readMirror(ctx, g, r, checkout, refs)
-		e.RepositoriesHistory = append(e.RepositoriesHistory, r)
+		e.RepositoriesHistory = append(e.RepositoriesHistory, repositoryHistory(ctx, g, a, checkouts[a.Asset], "recon"))
 	}
 	return e
 }
+
+// repositoryHistory compares one repository's advertised refs with its
+// declared local mirror and reads the mirror.
+func repositoryHistory(ctx context.Context, g Sender, a RepositoryAccess, checkout, stage string) RepositoryHistory {
+	r := RepositoryHistory{Asset: a.Asset, RepositoryRead: a.RepositoryRead, Complete: true}
+	if a.Repository != nil {
+		r.Visibility = a.Repository.Visibility
+	}
+	if checkout == "" {
+		r.Complete = false
+		r.Gaps = []string{"mirror_not_declared"}
+		return r
+	}
+	if a.Repository == nil || !usableRead(a.RepositoryRead) {
+		r.Complete = false
+		r.Gaps = []string{"repository_identity_unknown"}
+		return r
+	}
+	refs := map[string]string{}
+	fresh := true
+	for _, op := range []string{OpHistoryHeads, OpHistoryPull} {
+		result := g.Send(ctx, gate.Request{Op: op, Asset: a.Asset, Stage: stage, Exists: true, Params: map[string]string{"owner": a.Repository.Owner.Login, "repo": a.Repository.Name}})
+		read := readOf(op, result)
+		r.References = append(r.References, read)
+		var items []struct {
+			Ref    string `json:"ref"`
+			Object struct {
+				Type string `json:"type"`
+				SHA  string `json:"sha"`
+			} `json:"object"`
+		}
+		if !usableRead(read) || result.Response.Population == nil || result.Response.Population.More || len(result.Response.Population.Incomplete) > 0 || string(result.Response.Body) == "null" || json.Unmarshal(result.Response.Body, &items) != nil {
+			fresh = false
+			continue
+		}
+		prefix := "refs/heads/"
+		if op == OpHistoryPull {
+			prefix = "refs/pull/"
+		}
+		if len(items) > 10000 {
+			fresh = false
+			r.References[len(r.References)-1].Reason = "limit_reached"
+			r.References[len(r.References)-1].Gap = "limit_reached"
+			r.References[len(r.References)-1].Detail = "limit_reached"
+			r.Gaps = append(r.Gaps, "limit_reached")
+			continue
+		}
+		for _, item := range items {
+			if !refOK(item.Ref) || !strings.HasPrefix(item.Ref, prefix) || item.Object.Type != "commit" || !fullSHA.MatchString(item.Object.SHA) {
+				fresh = false
+				continue
+			}
+			if _, duplicate := refs[item.Ref]; duplicate {
+				fresh = false
+			}
+			refs[item.Ref] = strings.ToLower(item.Object.SHA)
+		}
+	}
+	if !fresh {
+		r.Complete = false
+		r.Gaps = append(r.Gaps, "advertised_refs_unavailable")
+	}
+	return readMirror(ctx, g, r, checkout, refs)
+}
+
 func readMirror(ctx context.Context, g Sender, r RepositoryHistory, checkout string, advertised map[string]string) RepositoryHistory {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()

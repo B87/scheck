@@ -1013,6 +1013,9 @@ func (t *text) row(row Row) {
 			t.hang("  ", "  ", s+".")
 		}
 	}
+	for _, l := range selectionLines(row) {
+		t.hang("  ", "  ", clean(l))
+	}
 	for _, item := range row.SubItems {
 		if item.Name == "Services your names point at" {
 			t.hang("  Services your names point at: ", "    ", clean(item.Asset))

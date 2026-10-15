@@ -30,6 +30,10 @@ type Context struct {
 	OwnersDeclared     bool
 	MFA, MFASource     string
 	RepositoryContexts map[string]RepositoryContext
+	// SecretStores and MattersMost are the `secrets.production` and
+	// `data.matters_most` entries, by canonical asset id; only Select
+	// reads them, to order repositories.
+	SecretStores, MattersMost []Declared
 }
 type Person struct {
 	Handle, Kind, Left string
@@ -238,6 +242,7 @@ func JudgeAccess(e Evidence, c Context) []Judgment {
 	for _, r := range e.RepositoriesAccess {
 		out = append(out, repositoryJudgments(e, c, r)...)
 	}
+	out = append(out, inventoryPublic(e, c)...)
 	// Empty or unavailable populations still contribute an explicit abstention;
 	// they cannot silently disappear from coverage.
 	for _, id := range finding.GitHubIDs() {
@@ -254,7 +259,7 @@ func JudgeAccess(e Evidence, c Context) []Judgment {
 				settle(&gap, false, complete(e.Owners), "No organization owners observed in a complete trusted population")
 			case finding.IDIdentityUnattributedAdmin:
 				relevant := slices.ContainsFunc(c.People, func(p Person) bool { return len(p.GitHub) > 0 })
-				all := complete(e.Owners)
+				all := complete(e.Owners) && !e.RepositoriesUnread
 				for _, r := range e.RepositoriesAccess {
 					if production(c, r.Asset) {
 						all = all && complete(r.Collaborators)
@@ -379,7 +384,7 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				}
 			}
 			source := []string{"people." + p.Handle + ".left"}
-			full := complete(e.Members) && complete(e.Owners) && complete(e.OutsideCollaborators) && complete(e.Invitations) && identifiableInvitations(e.Invitations)
+			full := complete(e.Members) && complete(e.Owners) && complete(e.OutsideCollaborators) && complete(e.Invitations) && identifiableInvitations(e.Invitations) && !e.RepositoriesUnread
 			for _, repo := range e.RepositoriesAccess {
 				full = full && complete(repo.Collaborators)
 			}
@@ -748,4 +753,27 @@ func withDisabledAccounts(base, disabled Population[Account]) Population[Account
 
 func identifiableInvitations(p Population[Invitation]) bool {
 	return !slices.ContainsFunc(p.Items, func(i Invitation) bool { return i.Login == nil || *i.Login == "" })
+}
+
+// inventoryPublic fires the undeclared-public rule from the organization's
+// repository list for a public repository whose object Check did not read
+// (the budget or the deadline came first, or the read failed): its
+// inventory judgment stays. The list
+// only fires; a repository not shown public is never disproved from it
+// (docs/spec/engagement.md, "Plan selection and follow-ups").
+func inventoryPublic(e Evidence, c Context) []Judgment {
+	var out []Judgment
+	for _, repo := range e.Repositories.Items {
+		asset := "repo:github:" + strings.ToLower(repo.FullName)
+		if repo.Visibility == nil || *repo.Visibility != "public" || slices.ContainsFunc(e.RepositoriesAccess, func(r RepositoryAccess) bool { return strings.EqualFold(r.Asset, asset) && r.Repository != nil }) {
+			continue
+		}
+		if rc := c.RepositoryContexts[asset]; rc.Public != nil && *rc.Public {
+			continue
+		}
+		j := judgment(finding.IDGitHubUndeclaredPublicRepository, asset, &Subject{Kind: "repository", Key: strings.ToLower(repo.FullName), Label: repo.FullName, ProviderID: strconv.FormatInt(repo.ID, 10)}, readIDs(e.Repositories.Reads))
+		settle(&j, true, true, "visibility: public (organization repository list)")
+		out = append(out, j)
+	}
+	return out
 }

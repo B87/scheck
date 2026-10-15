@@ -460,7 +460,23 @@
     "population": {
       "type": "object", "required": ["kind", "in_scope", "read"], "additionalProperties": false,
       "description": "What a mark counts: the in-scope assets, repositories, users or entry points of the kind it reads, and how many were read.",
-      "properties": { "kind": { "type": "string" }, "in_scope": { "type": "integer", "minimum": 0 }, "read": { "type": "integer", "minimum": 0 } }
+      "properties": { "kind": { "type": "string" }, "in_scope": { "type": "integer", "minimum": 0 }, "read": { "type": "integer", "minimum": 0 }, "selection": { "$ref": "#/$defs/selection" } }
+    },
+    "selection": {
+      "type": "object", "required": ["unit", "tiers", "read", "in_scope"], "additionalProperties": false,
+      "description": "spec/report.md, \"Coverage\": what chose the items read when a budget or cap could stop the reads short. Tier counts are among the items read; a tier without source is the fallback order's.",
+      "properties": {
+        "kind": { "type": "string", "description": "The kind of read this population counts, the collector's own word." },
+        "unit": { "type": "string" },
+        "tiers": { "type": "array", "items": { "type": "object", "required": ["basis", "count"], "additionalProperties": false,
+          "properties": { "basis": { "type": "string" }, "source": { "type": "string" }, "count": { "type": "integer", "minimum": 0 } } } },
+        "fallback": { "type": "string" },
+        "read": { "type": "integer", "minimum": 0 },
+        "in_scope": { "type": "integer", "minimum": 0 },
+        "in_scope_at_least": { "type": "boolean", "description": "The list the population was taken from was not complete: in_scope is a lower bound." },
+        "spent": { "type": "integer", "minimum": 0 },
+        "budget": { "type": "integer", "minimum": 0 }
+      }
     },
     "cap": {
       "type": "object", "required": ["what", "of", "cap", "selection"], "additionalProperties": false,

@@ -3,6 +3,7 @@ package report
 import (
 	"time"
 
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
 	hostreport "github.com/b87/scheck/internal/report"
 )
@@ -127,6 +128,10 @@ type AssetInput struct {
 	// Coverage are a network collector's coverage plans for the asset, one
 	// per area, worded by the collector and marked by the report.
 	Coverage []CoveragePlan
+	// Selections are how far each kind of a collector's budgeted reads
+	// reached among what Plan selected, with the finding ids that rest on
+	// each (docs/spec/report.md, "Coverage").
+	Selections []finding.KindSelection
 	// Echo is a canary mismatch's echo, redacted and cut; JSON only.
 	Echo string
 	// Refusal is a refused asset's kind: host_key_unknown,

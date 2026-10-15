@@ -391,7 +391,12 @@ and command trace. It is for host runs only: an engagement file with any other r
 asset (domain, url, network, SaaS, repository, cloud) is refused with exit 3 before any
 contact, because the audit log is the record of what was sent; use `--state-dir` to
 keep that run somewhere disposable instead. `--out FILE` writes the report to a file instead of stdout.
-`--stop-after STAGE` ends after that stage and prints its document; `intake` validates
+`--stop-after STAGE` ends after that stage and prints its document; `plan` prints each
+GitHub organization's repositories in the order Check will read them, with the tier and
+declaration that put each there, and "Not judged for lack of a declaration:", the rules
+that will not decide for lack of a declaration: relay it, since the operator can add the
+declaration before resuming (Recon has already sent its requests; Check sends none until
+the run is resumed); `intake` validates
 and prints the file resolved without contacting anything. `scope` also expands each
 `domain` root from certificate transparency (crt.sh) and DNS, contacting no server of the
 company's: in `scope.json`, `domains[].names[]` carries each name's `status` (`resolves`,
@@ -447,7 +452,16 @@ in this order:
    never covers (`outside_scheck`). Marks are `assessed`, `partial`, `not_assessed`,
    `not_applicable` (declared under `not_used`) and `outside_scheck`. A row is marked
    from the rules that decided, never from the checks that ran, and `population` says
-   how many of the in-scope assets were read. Every row that is not `assessed` carries
+   how many of the in-scope assets were read. A GitHub organization's repositories are read
+   in an order Plan sets from what the engagement file declares, under a compiled budget of
+   4,000 requests per organization; the population's `selection` names what chose the
+   repositories read (`tiers`, `fallback`, `read`, `in_scope`, `spent`, `budget`, and the
+   `kind` of read it counts), and text prints it as "Repositories: ..." or, when kinds
+   differ, "Repositories read for <kind>: ...". `sampled` on such a row means the budget
+   stopped before every repository got that kind: the rest is unknown, nothing is judged
+   from the part not read, and the exit code does not change (`limit_reached` still
+   means exit 2). Tell the user which declaration would move a repository up, never that
+   an unread repository is clean. Every row that is not `assessed` carries
    `reasons` from a closed list: `no_credentials`, `insufficient_permission:<scope>`,
    `not_on_plan:<feature>`, `collector_not_built`, `refused`, `not_declared`,
    `excluded_by_operator`, `limit_reached`, `failed`, `sampled`,

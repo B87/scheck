@@ -144,19 +144,74 @@ Organization-wide repository visibility remains unknown separately.
 
 ### Selection under a budget and the permission follow-up (E9)
 
-Design; becomes contract when E9 lands (steps 6 and 7). Recon reads the repository list
-(with `pushed_at`) and the organization inventory. Check, after Plan, sends the
-per-repository reads in Plan's order ([engagement.md](engagement.md), "Plan selection and
-follow-ups"): repositories by tier, within a tier by `pushed_at`, then `full_name`. Reads
-go **breadth first by kind** under a compiled budget of 4,000 requests per organization
-per run, counting the per-repository reads Check sends and not the inventory or the local
-mirror: the collaborators, deploy keys, branch rules and workflow default of every
-selected repository first; then workflow files; then alerts. The budget leaves each
-selected repository with the cheapest evidence and cuts the dearest kind first.
-`limits.timeout` and GitHub's rate limit still stop the run as `limit_reached`, and the
-per-repository caps in this document (100 workflow files, 100 alert locations) stay. The
-coverage population names `read` against `in_scope` with the `selection`
-([report.md](report.md), "Coverage").
+Design; becomes contract when E9 lands (steps 6 and 7). Step 6a builds the selection
+and the budget for GitHub (`internal/collector/github/selection.go`: `Select`,
+`CollectRepositories`, `TiersVersion`, `RepositoryBudget`); Workspace is 6b. Recon reads the repository list (with
+`pushed_at`, retained on the `github.repositories` and `github.repository` projections)
+and the organization inventory, and persists the inventory only. Select, in Plan, orders
+the repositories by the tiers of [engagement.md](engagement.md), "Plan selection and
+follow-ups": by tier, within a tier by `pushed_at` (none last), then `full_name`. Check,
+after Plan, sends the per-repository reads in that order and writes their evidence to
+`check.json`; Analyze judges the union of Recon's and Check's evidence. The kinds are
+`access`, `ci`, `secret_alerts`, `dependabot_alerts` and `secret_locations`. A kind the
+budget did not reach on a repository is marked `sampled` in its evidence, and the CI and
+alert rules judge nothing from it: no firing, no disproof, and a secret alert locations
+cut abstains with reason `sampled`. `github.undeclared_public_repository` is among the
+access kind's rules; for any public repository whose object Check did not read (the
+budget, the deadline or a failed read) it is still fired from the organization repository
+list, positive only and never disproved from it.
+
+Reads go **breadth first by kind** in five passes, each over every selected repository
+before the next, under a compiled budget of 4,000 requests per organization per run:
+
+1. Access and protection: the `github.repository` object, the default-branch read, branch
+   rules, the workflow default, collaborators and deploy keys, every page.
+2. CI: the workflow directory listing, the repository's Actions secret names, then the
+   workflow files (100 files and 8 MiB per repository stay).
+3. Alerts, as three passes: secret-scanning alerts, Dependabot alerts, then secret alert
+   locations (100 per repository stay).
+
+A repository object that is not found (a 404, or an object that is not this repository)
+ends that repository's reads and the repository is left out of every later kind's
+`in_scope` (`Repositories.NoObject`), so it is never presented as a budget choice. An
+object read that failed any other way (a 5xx, a timeout, a denial) is not "not found":
+the repository stays in the later kinds' `in_scope`, unread, with that read's own reason,
+and no budget cut is claimed for it. The local mirror (two ref listings, then the local read)
+runs after every counted pass. Every repository the access kind reached gets a history
+entry: with a declared mirror it is read, without one the entry records
+`mirror_not_declared` and sends nothing.
+
+The meter counts only results the gate sent or answered from the ledger: a result whose
+`Sent` is true (a send line was written for the request or one of its retries, whatever
+came back, so a 5xx, a timeout or a reset after sending is spent) or that the ledger
+answered (`reused`; on resume it counts as when it was first sent), every page once and a
+retry of the same request once. A request the gate refused, or that a limit stopped
+before sending, is not spent. The `github.repository`
+object counts; inventory, the mirror and the F1 and F1b follow-ups do not. A kind is all or
+nothing per repository: it starts only while the requests spent are below the budget and,
+once started, finishes on that repository, so the spend can pass the budget by one
+repository's kind. Declared repositories (`assets` entries) are never cut by the budget; tier 2
+repositories selected for an organization secret and tier 3 public repositories are
+ordered first but can be cut. A repository root with no declared organization has no
+budget. A budget cut is `sampled`, exit code unchanged, on the row or sub-item whose kind
+was cut. A kind cut on the access pass cuts every later kind on that repository, also
+`sampled`. Once the run's context is done Check starts nothing more, and that is
+`limit_reached`, never the budget's. A declared repository that stop left unstarted gets
+an access entry `unavailable:not_started`, reason `limit_reached`, with the stop's detail,
+so it reconciles to `limit_reached` and is listed incomplete, never `failed`; an
+undeclared repository gets no such entry and is counted unread by the kinds. A kind that
+needs no request on a repository (`secret_locations` where there is no alert to locate)
+counts that repository as read. A request the gate refuses in Check (a refusal kind
+from the status mapping) is recorded for its root as a refusal, exit 3, even where Recon
+left the root incomplete; limits and failures in Check change only a root Recon left
+collected. `limits.timeout` and
+GitHub's rate limit stop the run as `limit_reached`, exit 2, and a kind cut inside a
+repository by either or by a page cap is partial with that read's own reason, never the
+budget's. The kind's `selection` carries the requests `spent` against the `budget`. The coverage
+population names `read` against `in_scope` with the `selection`
+([report.md](report.md), "Coverage"; [engagement.md](engagement.md), "Plan selection and
+follow-ups", for the words and the not-judged list). The collector owns the tiers, the
+kinds and the meter; the report words the selection.
 
 `github.collaborator_permission` is the follow-up read of F1 and the one new operation:
 `GET /repos/{owner}/{repo}/collaborators/{login}/permission`, with the same origin,

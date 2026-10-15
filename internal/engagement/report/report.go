@@ -281,6 +281,9 @@ type Population struct {
 	Kind    string `json:"kind"`
 	InScope int    `json:"in_scope"`
 	Read    int    `json:"read"`
+	// Selection names what chose the items read when a budget could stop
+	// the reads short (docs/spec/report.md, "Coverage").
+	Selection *finding.Selection `json:"selection,omitempty"`
 }
 
 // Cap is a limit on what was read, and how the part read was chosen.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -445,9 +446,24 @@ func writeStage(w io.Writer, opts *globalOpts, out *engagement.Outcome, dir *eng
 		}
 		writeGitHubPeople(w, doc)
 	case *engagement.PlanDoc:
-		fmt.Fprintf(w, "# %s: plan (%s): empty until 0.0.2 E9\n# run directory: %s\n", doc.Engagement, doc.Method, where)
+		fmt.Fprintf(w, "# %s: plan (%s)\n# run directory: %s\n", doc.Engagement, doc.Method, where)
+		writePlan(w, doc)
 	case *engagement.CheckDoc:
-		fmt.Fprintf(w, "# %s: check: no follow-ups until 0.0.2 E9\n# run directory: %s\n", doc.Engagement, where)
+		fmt.Fprintf(w, "# %s: check; no follow-ups until 0.0.2 E9 step 7\n# run directory: %s\n", doc.Engagement, where)
+		for _, a := range doc.Assets {
+			if rep := a.GitHub; rep != nil {
+				fmt.Fprintf(w, "\n%s  %s  %d %s in plan order\n", report.Sanitize(a.Name), a.ID, rep.Selection.InScope, countNoun(rep.Selection.InScope, "repository", "repositories"))
+				for _, k := range rep.Kinds() {
+					fmt.Fprintf(w, "  %s: %d read\n", k.Kind, k.Selection.Read)
+				}
+				if rep.Selection.Budget > 0 {
+					fmt.Fprintf(w, "  sent %s of a %s budget\n", thousandsInt(rep.Spent), thousandsInt(rep.Selection.Budget))
+				}
+			}
+		}
+		writeGitHubPeople(w, &engagement.ReconDoc{Header: doc.Header, Attribution: doc.Attribution, PeopleCandidates: doc.PeopleCandidates,
+			PeopleInvitationComments: doc.PeopleInvitationComments, PeopleCandidatesPartial: doc.PeopleCandidatesPartial,
+			PeopleSource: doc.PeopleSource, PeopleTenantOrder: doc.PeopleTenantOrder})
 	case *engagement.FindingsDoc:
 		fmt.Fprintf(w, "# %s: analyze; %d open %s at or above threshold\n# run directory: %s\n", doc.Engagement, doc.Open, plural(doc.Open, "finding"), where)
 		for _, a := range doc.Assets {
@@ -539,4 +555,79 @@ func or(s, def string) string {
 		return def
 	}
 	return s
+}
+
+// planListed is how many repositories the plan text lists at most beyond
+// the declared tiers (docs/spec/engagement.md, "--stop-after plan").
+const planListed = 20
+
+// writePlan prints each GitHub root's order and the not-judged list.
+func writePlan(w io.Writer, doc *engagement.PlanDoc) {
+	for _, h := range doc.Hosts {
+		fmt.Fprintf(w, "\n%s  %s  %d %s planned\n", report.Sanitize(h.Name), h.ID, len(h.Planned), plural(len(h.Planned), "check"))
+	}
+	for _, sel := range doc.GitHub {
+		fmt.Fprintf(w, "\n%s  %d %s in scope\n", sel.Asset, sel.InScope, countNoun(sel.InScope, "repository", "repositories"))
+		if sel.Budget > 0 {
+			fmt.Fprintf(w, "  budget %s requests; inventory, the local mirror and follow-ups not counted\n", thousandsInt(sel.Budget))
+			fmt.Fprintln(w, "  read by kind, each over every repository below in order before the next: access and branch protection; workflows and secret names; secret-scanning alerts; Dependabot alerts; secret alert locations; then the local mirror")
+		}
+		shown := 0
+		for i, item := range sel.Order {
+			if item.Tier > 6 && shown >= planListed {
+				fmt.Fprintf(w, "  and %d more, most recently pushed first (plan.json lists all)\n", len(sel.Order)-i)
+				break
+			}
+			shown++
+			var flags []string
+			for _, f := range []struct {
+				on   bool
+				name string
+			}{{item.Declared, "declared"}, {item.Public, "public"}, {item.Archived, "archived"}, {item.Mirror, "mirror"}} {
+				if f.on {
+					flags = append(flags, f.name)
+				}
+			}
+			line := fmt.Sprintf("  %3d  %s  tier %d: %s", i+1, report.Sanitize(item.FullName), item.Tier, item.Basis)
+			if item.Source != "" {
+				line += " (" + item.Source + ")"
+			}
+			if item.PushedAt != "" {
+				line += "  pushed " + item.PushedAt[:10]
+			}
+			if len(flags) > 0 {
+				line += "  [" + strings.Join(flags, ", ") + "]"
+			}
+			fmt.Fprintln(w, line)
+		}
+		for _, n := range sel.Notes {
+			fmt.Fprintln(w, "  "+n)
+		}
+		if sel.Budget > 0 {
+			fmt.Fprintln(w, "  Check sends nothing until you resume this run; the budget may not reach the later kinds on every repository.")
+		}
+	}
+	if len(doc.NotJudged) > 0 {
+		fmt.Fprintln(w, "\nNot judged for lack of a declaration:")
+		for _, n := range doc.NotJudged {
+			fmt.Fprintln(w, "  - "+n)
+		}
+	}
+}
+
+// thousandsInt writes n with a comma between groups of three digits.
+func thousandsInt(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+// countNoun is one or many, by n.
+func countNoun(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

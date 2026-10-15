@@ -419,19 +419,25 @@ Step 3 declares no tenant-wide direct-assignment, group or group-member reads.
 Per-user assignment reads include direct and indirect grants for current admitted
 users only; there is no claim of a tenant-wide assignment inventory. The optional
 group-context read in the table remains planned; it is not needed to interpret a
-per-user assignment returned by Directory. Fresh user details prioritize declared leavers, administrators
-and contractors before other accounts when a budget prevents reading everyone.
+per-user assignment returned by Directory. Fresh user details take accounts in the order of "Per-user read order under caps"
+below when a cap, the timeout or the rate limit prevents reading everyone.
 
-**Per-user read order under caps** (design; contract when E9 lands, step 6). Recon reads
-the users, roles and admin assignments (inventory); Check, after Plan, reads the
-per-user OAuth grants and Gmail forwarding, taking accounts in the order of [engagement.md](engagement.md), "Plan selection and follow-ups": 1 a
-person who left, still active; 2 super admins and holders of delegated roles; 3 admin
-holders no `people` handle names; 4 declared `contractor` and `shared` accounts; 5
-`break_glass` and `service` accounts; 6 the rest. Within every tier: active
-first, then most recent sign-in, then `primaryEmail`. Gmail forwarding reads leavers still active first, then admins, then the
-rest. It orders accounts within each read and replaces the account order named for OAuth
-grants below; the sequence of reads (OAuth grants after every baseline read, forwarding
-after every other read) and the `Repeats` stop are unchanged. A cap's `selection` names the tiers that chose the accounts read.
+**Per-user read order under caps** (design, step 6b; contract when built, E9). Recon
+reads the users, roles and admin assignments (inventory) and the per-user assignment and
+detail reads; Check, after Plan, reads the per-user OAuth grants. Both take accounts in
+the order of [engagement.md](engagement.md), "Plan selection and follow-ups": 1 a person
+who left, still active; 2 admin holders no `people` handle names; 3 super admins and
+holders of delegated roles a handle names; 4 declared `contractor` and `shared` accounts;
+5 `break_glass` and `service` accounts; 6 the rest. An admin holder, for ordering, has
+`isAdmin`, `isDelegatedAdmin` or an observed role assignment; the identity rules' own
+reading of an admin is unchanged. Within every tier: active first, then most recent
+sign-in, then `primaryEmail`. Gmail forwarding keeps its own order: leavers still active
+first, then admins, then the rest. The order replaces the one named for OAuth grants
+below; the sequence of reads (OAuth grants after every baseline read, forwarding after
+every other read) and the `Repeats` stop are unchanged. There is no Workspace request
+budget in 0.0.2. A `selection` attaches only to a per-user population a cap, the timeout
+or the rate limit cut: it keeps its reason (`limit_reached`, exit 2) and gains the tiers
+that chose the accounts read. A `Repeats` stop is a failure and has no selection.
 
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized 2-step flags in the current list suffice
@@ -443,7 +449,7 @@ Step 5 reads OAuth grants after every baseline read, for every admitted account,
 suspended and archived included: declared leavers, super admins, contractors, then the
 rest, active before inactive within each (E9 replaces this order, above; a suspended
 leaver no longer ranks first). Per-user OAuth and forwarding reads run in Check, after
-Plan, in that order. A result the gate marks `Repeats` (every
+Plan, in the order above. A result the gate marks `Repeats` (every
 later request of the kind would end the same way: a remembered optional failure, the
 profile not selecting the surface, an unverified principal, binding or authentication
 gone) is recorded once and stops the sequence; a per-account refusal does not. The gate

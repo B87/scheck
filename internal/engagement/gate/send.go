@@ -103,13 +103,15 @@ type Cert struct {
 
 // send writes the send line, then dials the checked addresses in order and
 // sends the request; a send line that cannot be written stops it.
-func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (Result, *retry) {
+func (g *Gate) send(ctx context.Context, e Entry, a admitted, r Request) (sentResult Result, sentRetry *retry) {
 	e.Event, e.Decision, e.Port = "send", DecisionSent, int(a.b.port)
 	if err := g.record(e); err != nil {
 		res := Result{RequestID: e.RequestID}
 		res.end("unavailable:audit_failed", "the audit log could not be written, so nothing was sent")
 		return res, nil
 	}
+	// The send line is written: whatever comes back, this was sent.
+	defer func() { sentResult.Sent = true }()
 	total := totalTimeout
 	if a.prov.timeout > 0 {
 		total = a.prov.timeout

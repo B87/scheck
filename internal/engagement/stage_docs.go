@@ -163,7 +163,10 @@ type ReconAsset struct {
 	Web       *web.Evidence       `json:"web,omitempty"`
 }
 
-// PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
+// PlanDoc is plan.json: each host's checks, the order each GitHub root's
+// repositories are read in, and the rules that will not be judged for
+// lack of a declaration (docs/spec/engagement.md, "Plan selection and
+// follow-ups").
 type PlanDoc struct {
 	Header
 	Method    string   `json:"method"`
@@ -171,6 +174,13 @@ type PlanDoc struct {
 	// Hosts lists each collected host's planned checks and the checks its
 	// disable_checks removed, so the plan reconciles with audit.jsonl.
 	Hosts []PlanHost `json:"hosts"`
+	// GitHub is each GitHub root's selection: its repositories in tier
+	// order, read by Check under the budget.
+	GitHub []githubc.Selection `json:"github"`
+	// NotJudged is the closed list of sentences naming a rule that will not
+	// decide, or a raise or order that cannot apply, for lack of a
+	// declaration.
+	NotJudged []string `json:"not_judged"`
 }
 
 // PlanHost is one host asset's baseline plan.
@@ -181,9 +191,25 @@ type PlanHost struct {
 	Disabled []string `json:"disabled"`
 }
 
-// CheckDoc is the Check stage's output: no follow-up is opened until 0.0.2
-// E9, so it writes no evidence and no file.
+// CheckDoc is check.json: what Check read of each GitHub root's selection.
+// Follow-ups arrive with E9 step 7.
 type CheckDoc struct {
 	Header
-	FollowUps []string `json:"follow_ups"`
+	FollowUps []string     `json:"follow_ups"`
+	Assets    []CheckAsset `json:"assets"`
+	// The people stanza again, after Check read repository collaborators:
+	// Recon's lists only the accounts its inventory showed.
+	Attribution              []Attribution             `json:"attribution,omitempty"`
+	PeopleCandidates         []PeopleCandidate         `json:"people_candidates,omitempty"`
+	PeopleInvitationComments []PeopleInvitationComment `json:"people_invitation_comments,omitempty"`
+	PeopleCandidatesPartial  bool                      `json:"people_candidates_partial,omitempty"`
+	PeopleSource             string                    `json:"people_source,omitempty"`
+	PeopleTenantOrder        []string                  `json:"people_tenant_order,omitempty"`
+}
+
+// CheckAsset is what Check read under one root.
+type CheckAsset struct {
+	Name   string                `json:"name"`
+	ID     string                `json:"id"`
+	GitHub *githubc.Repositories `json:"github,omitempty"`
 }

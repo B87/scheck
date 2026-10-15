@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/b87/scheck/internal/finding"
@@ -60,6 +61,7 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 	some := false
 	for _, fam := range families {
 		si := SubItem{Name: fam.name, Asset: a.ID, Mark: "not_assessed", Rules: fam.ids, Reasons: []ReasonDetail{}}
+		cut := selectionFor(&si, a.Selections)
 		decided, unknown := 0, 0
 		for _, j := range a.Judged {
 			if !slices.Contains(fam.ids, j.ID) {
@@ -80,7 +82,16 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 				si.Mark = "partial"
 			}
 		}
-		if decided == 0 && unknown == 0 {
+		if cut != "" {
+			// The request budget left this kind unread on some repositories:
+			// sampled, never limit_reached, and the exit code is unchanged
+			// (docs/spec/report.md, "Coverage").
+			p := si.Population
+			si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: "sampled", Detail: fmt.Sprintf("%d of %d repositories read (%s)", p.Read, p.InScope, cut)})
+			if si.Mark == "assessed" {
+				si.Mark = "partial"
+			}
+		} else if decided == 0 && unknown == 0 {
 			continue
 		}
 		for _, reason := range si.Reasons {
@@ -98,4 +109,24 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 	row.SubItems = append(row.SubItems, SubItem{Name: unknown, Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: unknown}}})
 	row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: unknown})
 	return some
+}
+
+// selectionFor gives a sub-item the population of the least-reached kind
+// its rules rest on, and returns that kind's cut, if the budget cut it.
+func selectionFor(si *SubItem, kinds []finding.KindSelection) string {
+	var pick *finding.KindSelection
+	for i, k := range kinds {
+		if !slices.ContainsFunc(k.Rules, func(id string) bool { return slices.Contains(si.Rules, id) }) {
+			continue
+		}
+		if pick == nil || k.Selection.Read < pick.Selection.Read || k.Selection.Read == pick.Selection.Read && k.Cut != "" && pick.Cut == "" {
+			pick = &kinds[i]
+		}
+	}
+	if pick == nil {
+		return ""
+	}
+	sel := pick.Selection
+	si.Population = &Population{Kind: sel.Unit, InScope: sel.InScope, Read: sel.Read, Selection: &sel}
+	return pick.Cut
 }

@@ -90,6 +90,10 @@ type RepositoryCI struct {
 	Workflows []WorkflowEvidence `json:"workflows,omitempty"`
 	Complete  bool               `json:"complete"`
 	Gaps      []string           `json:"gaps,omitempty"`
+	// Sampled is true when the request budget was spent before the CI kind
+	// reached this repository: its workflows were not read, and no rule
+	// over them is judged here.
+	Sampled bool `json:"sampled,omitempty"`
 }
 
 func (c RepositoryCI) Reads() []Read {
@@ -119,31 +123,26 @@ func collectDefault(ctx context.Context, g Sender, req gate.Request) DefaultEvid
 	return d
 }
 
-// CollectCI reads only exact repository objects already admitted by CollectRepository.
-// docs/spec/github-collector.md, "Compiled read plan".
-func CollectCI(ctx context.Context, g Sender, e Evidence, org Organization) Evidence {
-	if e.Organization != nil {
-		e.OrganizationWorkflow = collectDefault(ctx, g, gate.Request{Op: OpOrganizationWorkflow, Asset: org.Asset, Stage: org.Stage, Exists: true, Params: map[string]string{"org": org.Name}})
-	}
-	for _, access := range e.RepositoriesAccess {
-		if access.Repository != nil {
-			e.RepositoriesCI = append(e.RepositoriesCI, collectRepositoryCI(ctx, g, access, org.Stage))
-		}
-	}
-	return e
-}
-
-var fullSHA = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
-
-func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stage string) RepositoryCI {
-	c := RepositoryCI{Asset: a.Asset}
+// ciRequest is a request for one admitted repository object's CI reads.
+func ciRequest(a RepositoryAccess, stage string) func(op string, extra map[string]string) gate.Request {
 	repo := a.Repository
-	req := func(op string, extra map[string]string) gate.Request {
+	return func(op string, extra map[string]string) gate.Request {
 		p := map[string]string{"owner": repo.Owner.Login, "repo": repo.Name}
 		maps.Copy(p, extra)
 		return gate.Request{Op: op, Asset: a.Asset, Stage: stage, Exists: true, Params: p}
 	}
-	c.Default = collectDefault(ctx, g, req(OpRepositoryWorkflow, nil))
+}
+
+var fullSHA = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
+
+// ciProtection reads the default branch, its active rules and the
+// repository's workflow default: pass 1 beside the access reads
+// (docs/spec/engagement.md, "Plan selection and follow-ups").
+func ciProtection(ctx context.Context, g Sender, a RepositoryAccess, stage string) (c RepositoryCI) {
+	c.Asset = a.Asset
+	repo := a.Repository
+	req := ciRequest(a, stage)
+	defer func() { c.Default = collectDefault(ctx, g, req(OpRepositoryWorkflow, nil)) }()
 	if repo.DefaultBranch == nil || !gate.ValidBranchName(*repo.DefaultBranch) {
 		c.Gaps = append(c.Gaps, "default_branch_unknown")
 		return c
@@ -165,16 +164,26 @@ func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stag
 	}
 	c.Branch.Name, c.Branch.SHA, c.Branch.Protected = b.Name, strings.ToLower(b.Commit.SHA), b.Protected
 	c.Branch.Rules = collectBranchRules(ctx, g, req(OpBranchRules, map[string]string{"branch": branch}))
-	r = g.Send(ctx, req(OpWorkflowDirectory, map[string]string{"sha": c.Branch.SHA}))
+	return c
+}
+
+// ciDirectory lists the workflow directory at the default branch's
+// commit; it returns the entries to read, or nil when there are none or
+// the listing could not be used.
+func ciDirectory(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryCI, stage string) []WorkflowEntry {
+	if c.Branch.SHA == "" {
+		return nil
+	}
+	r := g.Send(ctx, ciRequest(a, stage)(OpWorkflowDirectory, map[string]string{"sha": c.Branch.SHA}))
 	c.Directory = readOf(OpWorkflowDirectory, r)
 	if !usable(r) {
 		c.Gaps = append(c.Gaps, "workflow_directory_unavailable")
-		return c
+		return nil
 	}
 	var entries []WorkflowEntry
 	if string(r.Response.Body) == "null" || json.Unmarshal(r.Response.Body, &entries) != nil || r.Response.Population == nil {
 		c.Directory.Gap = "workflow_directory_unrecognized"
-		return c
+		return nil
 	}
 	c.Complete = len(r.Response.Population.Incomplete) == 0 && !r.Response.Population.More
 	if len(entries) >= 1000 {
@@ -182,6 +191,12 @@ func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stag
 		c.Gaps = append(c.Gaps, "provider_directory_limit")
 	}
 	slices.SortFunc(entries, func(a, b WorkflowEntry) int { return strings.Compare(a.Path, b.Path) })
+	return entries
+}
+
+// ciWorkflows reads the listed workflow files under the compiled caps.
+func ciWorkflows(ctx context.Context, g Sender, a RepositoryAccess, c *RepositoryCI, entries []WorkflowEntry, stage string) {
+	req := ciRequest(a, stage)
 	seen := map[string]bool{}
 	total := 0
 	files := 0
@@ -198,7 +213,7 @@ func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stag
 		}
 		seen[item.Path] = true
 		if files >= 100 || item.Size > gate.WorkflowMaxBytes || total+int(item.Size) > 8<<20 {
-			ciLimit(&c, "workflow_collection_limit")
+			ciLimit(c, "workflow_collection_limit")
 			break
 		}
 		files++
@@ -228,8 +243,36 @@ func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stag
 		}
 		c.Workflows = append(c.Workflows, w)
 	}
+}
+
+// CollectCI reads only exact repository objects already admitted by CollectRepository.
+// docs/spec/github-collector.md, "Compiled read plan".
+func CollectCI(ctx context.Context, g Sender, e Evidence, org Organization) Evidence {
+	e = collectOrganizationWorkflow(ctx, g, e, org)
+	for _, access := range e.RepositoriesAccess {
+		if access.Repository != nil {
+			e.RepositoriesCI = append(e.RepositoriesCI, collectRepositoryCI(ctx, g, access, org.Stage))
+		}
+	}
+	return e
+}
+
+// collectOrganizationWorkflow reads the organization's workflow default,
+// organization inventory.
+func collectOrganizationWorkflow(ctx context.Context, g Sender, e Evidence, org Organization) Evidence {
+	if e.Organization != nil {
+		e.OrganizationWorkflow = collectDefault(ctx, g, gate.Request{Op: OpOrganizationWorkflow, Asset: org.Asset, Stage: org.Stage, Exists: true, Params: map[string]string{"org": org.Name}})
+	}
+	return e
+}
+
+// collectRepositoryCI is one repository's CI reads in one go.
+func collectRepositoryCI(ctx context.Context, g Sender, a RepositoryAccess, stage string) RepositoryCI {
+	c := ciProtection(ctx, g, a, stage)
+	ciWorkflows(ctx, g, a, &c, ciDirectory(ctx, g, a, &c, stage), stage)
 	return c
 }
+
 func ciLimit(c *RepositoryCI, gap string) {
 	c.Complete = false
 	c.Gaps = append(c.Gaps, gap)

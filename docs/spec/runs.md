@@ -21,8 +21,12 @@ and locked while a run holds it:
                        for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
-  plan.json            stage 4: the checklist per asset, and each host's planned and
-                       disabled checks (with a model, hypotheses too)
+  plan.json            stage 4: each host's planned and disabled checks, each GitHub
+                       root's repositories in the order Check reads them, and the
+                       not-judged list (E9 step 6a; with a model, hypotheses too)
+  check.json           stage 5: what Check read of each GitHub root's repositories, in
+                       Plan's order, with the requests spent and the people fields recomputed after Check (E9 step 6a);
+                       `recon.json` keeps the inventory only
   evidence/            stages 3 and 5: one file per result, redacted and truncated;
                        per host <asset>.json and <asset>.collection.json, and
                        requests/, the gate's successes a resume may reuse
@@ -63,10 +67,16 @@ with `limit_reached` when `limits.timeout` ends the engagement before it is read
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
 when the asset is a root. A declared `domain` or `url` asset under a root that was read is
 recorded with the root's status and the detail "read with *root*"
-([web-collector.md](web-collector.md#reads)). The report's `method.levels_used` names
+([web-collector.md](web-collector.md#reads)). A declared repository under a GitHub
+organization is recorded `not_collected` with the detail "read with *root* in Check, after
+Plan", and the organization root's Recon detail is "GitHub inventory read; Check reads
+each repository in Plan's order."; after Check the status is reconciled in memory, and
+`recon.json` keeps Recon's. The report's `method.levels_used` names
 the levels the run's requests used: `observe` when a host was collected or a site's
 front page requested, `passive` when a domain root was read.
-Plan writes an empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
+Plan lists each host's checks, orders each GitHub root's repositories and names what will
+not be judged ("Plan selection and follow-ups"); Check reads those repositories under the
+request budget and opens no follow-up until E9 step 7. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
@@ -83,8 +93,7 @@ host or jump host without an SSH user) happen before the run directory is create
 refused run leaves nothing behind. Stdout is the report, as text or with `--format json`
 as `report.json` (`--include-evidence` adds the hosts' captures to stdout only); a run
 stopped earlier prints that stage's document with `--format json` (`--stop-after check`
-prints one that no file holds, since Check writes none until E9), and a summary per
-asset as text.
+prints `check.json`), and a summary per asset as text.
 
 **Stop and resume.** `--stop-after <stage>` ends the run after that stage's file is
 written. `scheck run <directory>` resumes:
@@ -109,10 +118,12 @@ written. `scheck run <directory>` resumes:
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
   a better token on resume reads again what the weaker one could not.
-- **Verdicts are not evidence** (built in E9 steps 1b and 1c). The evidence types carry no verdicts: `recon.json` and
-  `evidence/` hold what was read, and Analyze judges every web, GitHub and Workspace
-  asset from what this session's Recon holds, on each session including a resume (the
-  gate answers Recon's reads from the ledger). A host's `evidence/<asset>.json` is the
+- **Verdicts are not evidence** (built in E9 steps 1b and 1c). The evidence types carry no verdicts: `recon.json`,
+  `check.json` and `evidence/` hold what was read, and Analyze judges every web, GitHub and
+  Workspace asset from what this session's Recon and Check hold (Check's GitHub evidence is
+  joined to Recon's in memory), on each session including a resume (the
+  gate answers Recon's and Check's reads from the ledger, each counted against the budget as
+  when it was first sent). A host's `evidence/<asset>.json` is the
   host envelope with its facts, observations, host and run and no assessment, finding
   or context; Analyze rebuilds the fact sheet from it and evaluates and grades the
   posture rules, for a host collected this session and for a kept one alike. `findings.json` holds every

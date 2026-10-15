@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"strings"
@@ -472,5 +473,44 @@ func TestLeaverWithNothingReadAndAmbiguousOwner(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("no unexpected-admin judgment")
+	}
+}
+
+// When Check left a selected repository unread (the deadline came first),
+// absence over repository populations is unknown: neither a person who left
+// nor an unattributed administrator is disproved from what was not read.
+func TestUnreadRepositoriesNeverDisproveAbsence(t *testing.T) {
+	e, c := ruleFixture()
+	c.People[0].Left = "2026-10-09"
+	e.Members.Items, e.Owners.Items = nil, nil
+	e.RepositoriesAccess = nil
+	if !hasVerdict(JudgeAccess(e, c), finding.IDIdentityFormerPersonHasAccess, Disproved) {
+		t.Fatal("fixture: the leaver should be disproved with every repository read")
+	}
+	e.RepositoriesUnread = true
+	if hasVerdict(JudgeAccess(e, c), finding.IDIdentityFormerPersonHasAccess, Disproved) {
+		t.Fatal("leaver disproved over unread repositories")
+	}
+	// The organization-level absence, with no subject: no administrator
+	// is unattributed anywhere read.
+	absent := func(out []Judgment) bool {
+		return slices.ContainsFunc(out, func(j Judgment) bool {
+			return j.ID == finding.IDIdentityUnattributedAdmin && j.Verdict == Disproved && j.Subject.Key == ""
+		})
+	}
+	e, c = ruleFixture()
+	e.Owners.Items, e.RepositoriesAccess = nil, nil
+	if !absent(JudgeAccess(e, c)) {
+		t.Fatal("fixture: the absence should be disproved with every repository read")
+	}
+	e.RepositoriesUnread = true
+	if absent(JudgeAccess(e, c)) {
+		t.Fatal("unattributed admin disproved over unread repositories")
+	}
+	sel := Select(orgOf(1), orgContext(), nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !e.With(CollectRepositories(ctx, &repoWorld{}, sel, CheckInput{Stage: "check"})).RepositoriesUnread {
+		t.Fatal("a run the deadline ended before Check is not marked unread")
 	}
 }
