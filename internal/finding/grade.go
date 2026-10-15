@@ -48,6 +48,9 @@ func (g Grader) Grade(f Finding) (Finding, []Step) {
 	f.Status = StatusOpen
 	f.AcceptedReason = ""
 	steps := []Step{{Stage: "base", From: "", To: string(f.Severity), Reason: baseReason(f)}}
+	// raisedBy is the last raise that took the finding past high.
+	raisedBy := ""
+	f.CappedBy = ""
 	if g.Context != nil {
 		for _, adj := range g.adjustments(f) {
 			next := f.Severity.Shift(adj.delta)
@@ -63,8 +66,20 @@ func (g Grader) Grade(f Finding) (Finding, []Step) {
 			}
 			f.Adjustments = append(f.Adjustments, Adjustment{Rule: adj.rule, Source: adj.source, Delta: deltaString(adj.delta)})
 			steps = append(steps, Step{Stage: "adjustment", From: string(f.Severity), To: string(next), Reason: adj.rule + " from " + adj.source})
+			if next.Rank() > SevHigh.Rank() && f.Severity.Rank() <= SevHigh.Rank() {
+				raisedBy = adj.rule
+			}
 			f.Severity = next
 		}
+	}
+	// No step of the table passes high: after the whole table, a finding
+	// left above high is capped there, so a lowering step counts from the
+	// uncapped value (docs/spec/host-collector.md §5.3; docs/spec/engagement.md,
+	// "Severity in context", "Ceilings").
+	if raisedBy != "" && f.Severity.Rank() > SevHigh.Rank() {
+		steps = append(steps, Step{Stage: "cap", From: string(f.Severity), To: string(SevHigh), Reason: WhyPastHigh(raisedBy)})
+		f.Severity = SevHigh
+		f.CappedBy = raisedBy
 	}
 	if f.Custom && f.Severity.Rank() > SevMedium.Rank() {
 		steps = append(steps, Step{Stage: "cap", From: string(f.Severity), To: string(SevMedium), Reason: "custom findings are capped at medium"})
@@ -95,6 +110,12 @@ func (g Grader) now() time.Time {
 		return time.Now()
 	}
 	return g.Now
+}
+
+// WhyPastHigh is the wording of a step stopped at high because it may not
+// pass it (docs/spec/engagement.md, "Severity in context", "Ceilings").
+func WhyPastHigh(rule string) string {
+	return fmt.Sprintf("capped at high by %s: critical means that anyone, or someone with no right to it, can use this now, or that you believe it is handled; %s says neither.", rule, rule)
 }
 
 func baseReason(f Finding) string {

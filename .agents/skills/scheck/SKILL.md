@@ -556,7 +556,9 @@ in this order:
    report whole at `envelope`.
 
 `run.resumed` true means the run took more than one session: `run.started` and the
-collection span start at the first, a kept host (`kept: true` on its asset) was read in
+collection span start at the first, `run.session_started` is when this one started, a
+resume keeps no reading older than 7 days, `assets[].oldest_collected_at` is the
+collection time of the oldest successful reading the asset rests on (null when none), a kept host (`kept: true` on its asset) was read in
 an earlier session, and `egress` covers every session. `egress.unrecorded_sessions`
 lists the starts of earlier sessions that ended before recording what they sent: the
 counts are then "at least", and `audit.jsonl` in the run directory lists every request.

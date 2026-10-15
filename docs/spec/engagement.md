@@ -850,13 +850,10 @@ The excerpt states the comparison in dated words, each against its own read:
 | Never signed in | "created 2026-08-20, no sign-in as of the account read of 2026-09-30 (41 days)" |
 | Certificate | "certificate expires 2026-10-20, 6 days after the TLS read of 2026-10-14" |
 
-A resume re-judges persisted evidence, so this holds from step 1d; the 7-day maximum
-is step 8 ([runs.md](runs.md), "Stop and resume").
+A resume re-judges persisted evidence, so this holds from step 1d; a resume keeps
+nothing older than 7 days ([runs.md](runs.md), "Stop and resume"; built, step 8).
 
-**Ceilings.** A context raise may reach critical only where the table's last column
-says so: critical means that someone with no right to it can use the weakness now, or
-that the company believes it is handled, and a declaration of stakes alone is neither
-(`deploys_to:production` and `data_matters_most` stop at high). A finding definition may
+**Ceilings.** Critical is the anchor's definition: anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled. A step may take a finding past high only where the table's last column says yes: `contradiction`, `attribute:admin` on a left person's account, `attribute:production_write` and `attribute:public_repository`. No other step passes high: not the other rows of the table, not a collector's own steps declared on a definition (`Attributes`; none may pass high in 0.0.2), and not the host collector's own table (`host-collector.md §5.3`, which caps a finding left above high at high after the table). A declaration of stakes alone (`deploys_to:production`, `data_matters_most`, a host's `exposure: internet`) says neither that someone with no right to it can use the weakness now nor that the company believes it is handled. A finding definition may
 also carry a severity ceiling that no engagement rule passes: `db.listens_unfiltered`
 and `svc.listens_beyond_declared` stop at high, since the cloud firewall and the
 database's own authentication were not read. A step stopped by a ceiling is recorded in
@@ -1719,7 +1716,9 @@ permission booleans. The organization-level judgment never carries `write`. The 
 
 The chain sentence is: "This person left and can still push to *owner/repo*, which you
 declared deploys to production, so this ranks one step higher." It never disproves
-anything and creates no finding.
+anything and creates no finding. When no repository is declared `deploys_to: production`
+and a leaver judgment fired or abstained, the coverage row says the push to production was
+not judged ([report.md](report.md), "Coverage"; built, E9 step 8).
 
 *Not applied.* "Not applied" is a chain move said but not taken (`from` equals `to`, not
 an adjustment), as `exposed_on_purpose`'s is. For each login the collector puts two

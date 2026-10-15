@@ -5,7 +5,7 @@ Vantage        internet (your declaration; not verified). internet means outside
                source, including office allowlists and VPN.
 Resumed        this run was stopped and resumed: what an earlier session read completely was kept,
                and everything else was read again. Kept evidence was not read again and retains its
-               original observation date.
+               original observation date. Readings older than 7 days were read again, never kept.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
 Authorization  none recorded. This run only read, with access you already hold; scheck requires a

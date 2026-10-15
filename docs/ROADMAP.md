@@ -1721,8 +1721,8 @@ older than 7 days is collected again on resume; every risk area's row prints its
      `Read` carries `CollectedAt`. An acceptance's expiry is judged at the latest
      collection time among the reads its finding cites, a host's at the start of the
      session that collected it, and the JSON carries it as
-     `findings[].acceptance.judged_at`. Not built: step 8's 7-day maximum and a zero
-     collection time counted as expired on resume.
+     `findings[].acceptance.judged_at`. The 7-day maximum and a zero
+     collection time counted as expired on resume are step 8.
 2. *(done, offline).* The fixed sub-item lists, with "not judged in this version: …" in
    every row; goldens. `internal/engagement/report/fixed.go` holds each area's ordered
    `{id, text}` list; `coverage[].not_judged` is required on the ten area rows, no area
@@ -1834,9 +1834,8 @@ older than 7 days is collected again on resume; every risk area's row prints its
    `github.JudgeAccess`; the users-unread line now carries the read's reason); a second
    found an address missing from an incomplete users list printed as "account observed"
    (fixed: the `not_proven` line). Step 4 is done.
-   Carried to step 8: the R4 coverage sub-item "no repository declared
-   `deploys_to: production`; push to production by people who left not judged", which
-   step 7 did not build.
+   Carried to step 8 and closed there: the R4 coverage sub-item "Push to production by
+   people who left: not judged".
 5. R3 and the context notes, in two parts (5a done; 5b design).
    - *5a (done).* R3 `svc.listens_beyond_declared` with the `exposure:internet` step
      moving it as well as R1; the validation that exits 3 for `airgapped` on a service's
@@ -2046,12 +2045,44 @@ older than 7 days is collected again on resume; every risk area's row prints its
      the 200 `none` answer; a test that a ledger answer on resume counts against the F1
      cap; building F1's request parameters from the row's declared sources (the run test
      asserts them instead).
-8. The 7-day resume maximum (a zero collection time counts as expired, so a kept
-   observation with no recorded time is collected again), and the critical definition with its ceilings in
-   `spec/engagement.md`.
-   - *Carried from step 7 (decided by the implementing session):* the R4 coverage
-     sub-item "no repository declared `deploys_to: production`; push to production by
-     people who left not judged" (first carried from step 4).
+8. *(done, offline).* The 7-day resume maximum (a zero
+   collection time counts as expired, so a kept observation with no recorded time is
+   collected again), the oldest collection time per asset in the report, and the critical
+   definition with its ceilings in `spec/engagement.md`.
+   - *Define:* `security-consultant`, adopted as is by the implementing session. The
+     rule is `0 <= session start - collection time < 7 x 24 hours`; a zero time and a
+     time after the session's start are expired. The define asked for one stderr line per
+     collector for the ledger; the ledger's records carry no collector, so one line is
+     printed for all.
+   - *D1 applied to the host table (decided, step 8):* the host grader
+     (`host-collector.md §5.3`) caps a finding left above high at high once, after the whole
+     table, as the engagement's ceilings require, so an internet-facing root login no longer reaches critical. This
+     deviates from the v0.0.1 host contract.
+   - *Closed, carried from steps 4 and 7:* the R4 coverage sub-item "Push to production by
+     people who left: not judged" (`spec/report.md`, "Coverage").
+   - *Code review:* no must-fix. Should-fixes fixed: the capped host step left no trace in
+     the report (now "Why here"); the per-step cap lowered an internet+dev host finding to
+     medium (security-consultant: cap once after the whole table, option b);
+     `oldest_collected_at` counted failed reads; two resume tests depended on the date.
+     Nits fixed: a future collection time worded as "older than 7 days"; a critical-base
+     finding's chain.
+     A re-review found a must-fix, fixed: a request's host-name DNS answer, which shares
+     its id, dated an asset whose read failed (decided per request now); should-fix fixed:
+     a 200 the gate ended as unavailable dated an asset; nit fixed: "they" for one read. A
+     third review found a should-fix, fixed: a request the gate stopped after looking up its
+     host (no such name, a private address, the deadline) dated an asset by its DNS answer;
+     nits fixed: a Workspace token exchange dated a tenant, and the spec did not say the
+     local mirror's line never dates an asset.
+   - *Deferred:* an asset whose expired reading was read again and failed gets no "an
+     earlier reading of <date> was older than 7 days and was not used" detail; a kept
+     host's coverage line prints only the time, not the date, when it differs from the
+     header's first date; no run test takes a host's cap from the grader through to the
+     report's "Why here" (a unit test sets it by hand; nothing round-trips the in-memory
+     `CappedBy` through JSON today).
+   - *To check before E9 closes (consultant, outside step 8):* `spec/engagement.md`,
+     "Data that matters most", says the host posture findings `sshd.password_auth_enabled`,
+     `sshd.root_login_enabled` and `accounts.empty_password` carry `HostAccess`; in code
+     only the multi-fact definitions set it.
 9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
    `data.matters_most` again, run through the `client` interview mode on the wording,
    and gains the `expected_services` consumers (`db.listens_unfiltered`,

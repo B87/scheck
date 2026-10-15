@@ -327,3 +327,43 @@ func TestGitHubLeaverLinesFromTheCollector(t *testing.T) {
 		}
 	}
 }
+
+// An organization that declares no production repository says, on its
+// departed-people item, that push to production by people who left is not
+// judged: only while a leaver's judgment fired or abstained, and never in
+// place of the permission follow-up's line. Neither mark nor exit moves.
+func TestDepartedPeopleWithoutProduction(t *testing.T) {
+	detail := func(in Input) string {
+		for _, row := range build(in).Coverage {
+			for _, si := range row.SubItems {
+				if si.Name == "departed people" {
+					return si.Detail
+				}
+			}
+		}
+		return ""
+	}
+	in := peopleLeftReport(t)
+	base := build(in)
+	in.Assets[0].PermissionAsks, in.Assets[0].NoProduction = nil, true
+	if got := detail(in); got != noProductionText {
+		t.Fatalf("no production: %q", got)
+	}
+	if r := build(in); r.Exit.Code != base.Exit.Code {
+		t.Fatalf("exit %d, was %d", r.Exit.Code, base.Exit.Code)
+	}
+	validate(t, schema(t), build(in))
+	in.Assets[0].PermissionAsks = &FollowUpCount{Opened: 1, Asked: 1}
+	if got := detail(in); got == noProductionText {
+		t.Fatal("the follow-up's line was replaced")
+	}
+	in.Assets[0].PermissionAsks = nil
+	for i, j := range in.Assets[0].Judged {
+		if j.ID == finding.IDIdentityFormerPersonHasAccess {
+			in.Assets[0].Judged[i].Verdict, in.Assets[0].Judged[i].Reason = verdictDisproved, ""
+		}
+	}
+	if got := detail(in); got != "" {
+		t.Fatalf("every leaver disproved: %q", got)
+	}
+}

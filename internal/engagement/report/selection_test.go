@@ -85,3 +85,25 @@ func TestGitHubSelectionCutIsSampledAndKeepsTheExitCode(t *testing.T) {
 		t.Fatal("no sampled sub-item")
 	}
 }
+
+// A host finding the grader capped at high says why under "Why here"
+// (docs/spec/engagement.md, "Severity in context", "Ceilings").
+func TestHostFindingCappedAtHighSaysWhy(t *testing.T) {
+	in := manyFindings(t)
+	i := slices.IndexFunc(in.Assets, func(a AssetInput) bool { return a.Host != nil && len(a.Host.Envelope.Findings) > 0 })
+	if i < 0 {
+		t.Fatal("no host finding in the input")
+	}
+	fs := in.Assets[i].Host.Envelope.Findings
+	fs[0].CappedBy = "exposure:internet"
+	r := build(in)
+	for _, f := range r.Findings {
+		if f.ID == fs[0].ID {
+			if !slices.Contains(f.WhyHere, finding.WhyPastHigh("exposure:internet")) {
+				t.Fatalf("why here %q", f.WhyHere)
+			}
+			return
+		}
+	}
+	t.Fatalf("finding %s not reported", fs[0].ID)
+}

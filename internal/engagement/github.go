@@ -259,6 +259,7 @@ func (r *run) githubReportInput(ra ReconAsset, judged []githubc.Judgment, ai *er
 		}
 	}
 	ai.PermissionAsks = permissionAsks(*ev)
+	ai.NoProduction = len(r.productionRepositories(ra.ID)) == 0
 	p := ev.Principal
 	note := githubc.AssessmentCredential(p)
 	kind := "github_credential"

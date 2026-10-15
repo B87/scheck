@@ -456,7 +456,7 @@ user@address:port` on every line (0.0.2 E1c); the hop never appears as a target.
 ## 5. Operator-supplied context
 
 A generic host audit produces generic findings. `0.0.0.0:5432` is low-signal noise on a
-box behind a strict security group and critical on an internet-facing host. Operator
+box behind a strict security group and high on an internet-facing host. Operator
 context is the single highest-leverage input to precision, so it is a first-class
 feature rather than a flag.
 
@@ -548,7 +548,12 @@ The two kinds of context have different consumers.
 
 The grader applies the table in a fixed order: expected services first (they decide
 what a listener means), then exposure, then environment; each step is clamped to the
-scale and a step that cannot move a severity is recorded in the chain but not as an
+scale, and after the whole table is applied, a finding left above high is capped at high,
+recorded as a final cap step naming the raise that took it past high
+([engagement.md](engagement.md), "Severity in context", "Ceilings"); because the cap comes
+last, a lowering step such as `environment: dev` counts from the uncapped value. The
+engagement report prints the cap under "Why here" for a host finding. A step that
+cannot move a severity is recorded in the chain but not as an
 adjustment. A listener is matched to `expected_services` by the finding's `service`
 (`{port, proto}`), which the model supplies for a network finding; with no declared
 services there is no judgement to make and the finding keeps its base. A custom

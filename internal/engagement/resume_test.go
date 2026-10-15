@@ -23,7 +23,16 @@ import (
 // or dirty build read.
 const resumeVersion = "v0.0.2"
 
-var resumeStart = time.Date(2026, 10, 7, 7, 12, 3, 0, time.UTC)
+// resumeStart is 07:12:03 UTC yesterday, and a resume's session starts
+// now: a kept host's envelope carries the wall clock, and a resume keeps
+// nothing collected after its own start or 7 days before it.
+// day is the date n days from resumeStart, for an acceptance's dates.
+func day(n int) string { return resumeStart.AddDate(0, 0, n).Format(time.DateOnly) }
+
+var resumeStart = func() time.Time {
+	y := time.Now().UTC().AddDate(0, 0, -1)
+	return time.Date(y.Year(), y.Month(), y.Day(), 7, 12, 3, 0, time.UTC)
+}()
 
 // startRun writes file where a resume reads it again and runs it once.
 func startRun(t *testing.T, file string, collect func(context.Context, hostasset.Options) (*hostasset.Collection, error)) (string, string, *Outcome) {
@@ -61,6 +70,13 @@ func resume(t *testing.T, dir, version string, collect func(context.Context, hos
 // resumeErr is resume for a session that may end on an error.
 func resumeErr(t *testing.T, dir, version string, collect func(context.Context, hostasset.Options) (*hostasset.Collection, error)) (*Outcome, error) {
 	t.Helper()
+	return resumeAt(t, dir, version, time.Now(), nil, collect)
+}
+
+// resumeAt is resume for a session that starts at session, its stderr to
+// log.
+func resumeAt(t *testing.T, dir, version string, session time.Time, log func(string, ...any), collect func(context.Context, hostasset.Options) (*hostasset.Collection, error)) (*Outcome, error) {
+	t.Helper()
 	d, err := OpenRun(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +91,7 @@ func resumeErr(t *testing.T, dir, version string, collect func(context.Context, 
 		t.Fatal(err)
 	}
 	return Run(context.Background(), res, RunOptions{Raw: raw, Dir: d, Resume: p, Started: p.Manifest.Started,
-		Session: resumeStart.Add(time.Hour), Version: version, Collect: collect})
+		Session: session, Version: version, Collect: collect, Log: log})
 }
 
 // collectFirstFails refuses 203.0.113.5 while fail is set and collects
@@ -121,6 +137,9 @@ func TestResumeKeepsACompletedHost(t *testing.T) {
 	if !out.Report.Run.Started.Equal(resumeStart) || out.Report.Engagement.Source.Path == nil || *out.Report.Engagement.Source.Path != path {
 		t.Errorf("run %+v, source %+v", out.Report.Run, out.Report.Engagement.Source)
 	}
+	if at := out.Report.Assets[1].OldestCollectedAt; at == nil || !at.Before(out.Report.Run.SessionStarted) || !at.Equal(*first.Report.Assets[1].OldestCollectedAt) {
+		t.Errorf("the kept host rests on its first collection: %v, session %v", at, out.Report.Run.SessionStarted)
+	}
 	if got := out.Report.Assets[1].Trace; len(got) == 0 || len(got) != len(keptTrace) || got[0].Check != keptTrace[0].Check {
 		t.Errorf("the kept host's trace: %d entries, %d before", len(got), len(keptTrace))
 	}
@@ -147,7 +166,7 @@ func TestResumeKeepsACompletedHost(t *testing.T) {
 // contacts nothing (docs/spec/runs.md, "Verdicts are not evidence").
 func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 	base := twoHosts + "assets:\n  ops:\n    host: 203.0.113.6\n"
-	risk := "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-10-06}\npeople:\n  alice: {kind: employee}\n"
+	risk := "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: " + day(-10) + ", expires: " + day(-9) + "}\npeople:\n  alice: {kind: employee}\n"
 	for name, tc := range map[string]struct {
 		start   string // the first session's file; base when empty
 		edit    func(string) string
@@ -157,7 +176,7 @@ func TestResumeCollectsAgainWhatChanged(t *testing.T) {
 		"nothing":   {edit: func(f string) string { return f }, want: 1},
 		"elevation": {edit: func(f string) string { return f + "    elevate: sudo\n" }, want: 2},
 		"accepted risk": {edit: func(f string) string {
-			return f + "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\npeople:\n  alice: {kind: employee}\n"
+			return f + "intent:\n  accepted_risks:\n    - {id: sshd.password_auth_enabled, asset: ops, reason: lab, accepted_by: alice, date: " + day(-10) + ", expires: " + day(30) + "}\npeople:\n  alice: {kind: employee}\n"
 		}, want: 1},
 		"redact_extra": {edit: func(f string) string { return f + "redact_extra: ['tangerine']\n" }, want: 2},
 		"an exclude":   {edit: func(f string) string { return f + "exclude:\n  - network: 198.51.100.0/24\n" }, want: 2},
@@ -393,7 +412,7 @@ func TestResumeRegradesAKeptHost(t *testing.T) {
 		t.Fatalf("the kept envelope holds a verdict: %d findings, %d assessments, %v", len(env.Findings), len(env.Assessments), err)
 	}
 	accepted := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-12-31}\n"
+		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: " + day(-10) + ", expires: " + day(30) + "}\n"
 	if err := os.WriteFile(path, []byte(accepted), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -421,14 +440,16 @@ func TestResumeRegradesAKeptHost(t *testing.T) {
 }
 
 // A changed engagement.timezone regrades a kept host's acceptances in the
-// new zone, contacting nothing: collected at 07:12 UTC on 2026-10-07, an
-// acceptance that expires on 2026-10-06 has ended in Madrid and not yet in
-// Pago Pago.
+// new zone, contacting nothing: collected at 07:12 UTC, an acceptance that
+// expired the day before has ended in Madrid and not yet in Pago Pago.
 func TestResumeRegradesAKeptHostInTheNewTimezone(t *testing.T) {
 	fail, calls := false, map[string]int{}
 	collect := collectFirstFailsFrom(t, "macos", &fail, calls)
+	// Collected at 07:12 UTC: the day before in Pago Pago, the same day in
+	// Madrid.
+	expires := resumeStart.AddDate(0, 0, -1)
 	file := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: 2026-10-01, expires: 2026-10-06}\n"
+		"    - {id: fw.app_firewall_disabled, asset: ops@203.0.113.6, reason: lab, accepted_by: alice, date: " + expires.AddDate(0, 0, -5).Format(time.DateOnly) + ", expires: " + expires.Format(time.DateOnly) + "}\n"
 	path, dir, first := startRun(t, file, collect)
 	if len(first.Report.Acceptances) != 1 || first.Report.Acceptances[0].Outcome != "expired" {
 		t.Fatalf("in Madrid: %+v", first.Report.Acceptances)
@@ -490,7 +511,7 @@ func TestResumeCollectsAgainARecordEditedToGrade(t *testing.T) {
 // collected it says expired, as the finding it no longer covers is open.
 func TestResumeGradesAcceptancesWhenTheHostWasCollected(t *testing.T) {
 	file := twoHosts + "people:\n  alice: {kind: employee}\nintent:\n  accepted_risks:\n" +
-		"    - {id: fw.app_firewall_disabled, asset: deploy@203.0.113.5, reason: lab, accepted_by: alice, date: 2026-10-06, expires: 2026-10-08}\n"
+		"    - {id: fw.app_firewall_disabled, asset: deploy@203.0.113.5, reason: lab, accepted_by: alice, date: " + day(-10) + ", expires: " + day(1) + "}\n"
 	fail, calls := true, map[string]int{}
 	collect := collectFirstFailsFrom(t, "macos", &fail, calls)
 	_, dir, _ := startRun(t, file, collect)
@@ -822,5 +843,58 @@ func TestSessionSitesPreserveFirstPartyAdmission(t *testing.T) {
 	mergeEgress(into, &ereport.EgressInput{Sites: []ereport.SiteInput{{Name: "app.example.com", Requests: 2}}})
 	if len(into.Sites) != 2 || into.Sites[0].FirstParty || into.Sites[0].Requests != 5 || !into.Sites[1].FirstParty || into.Sites[1].Requests != 3 {
 		t.Fatal(into.Sites)
+	}
+}
+
+// The maximum age a resume keeps (docs/spec/runs.md, "Stop and resume"):
+// younger than 7×24 hours in absolute time; none recorded, or after the
+// session's start, is expired.
+func TestKeptFresh(t *testing.T) {
+	session := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		t    time.Time
+		want bool
+	}{
+		{session.Add(-maxKept + time.Minute), true},
+		{session.Add(-maxKept), false},
+		{session, true},
+		{session.Add(time.Second), false},
+		{time.Time{}, false},
+	} {
+		if got := keptFresh(c.t, session); got != c.want {
+			t.Errorf("%v: %v, want %v", c.t, got, c.want)
+		}
+	}
+	var logs []string
+	r := &run{session: session, o: RunOptions{Log: func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }}}
+	kept := r.freshRequests(map[string]*gate.Response{
+		"fresh": {CollectedAt: session.Add(-time.Hour)}, "old": {CollectedAt: session.Add(-maxKept)},
+		"untimed": {}, "future": {CollectedAt: session.Add(time.Hour)}, "nil": nil,
+	})
+	if len(kept) != 1 || kept["fresh"] == nil || !slices.Equal(logs, []string{"resume: 1 earlier read is older than 7 days, 1 has no recorded time and 1 is dated after this session started; they are sent again."}) {
+		t.Fatalf("kept %v, logs %q", kept, logs)
+	}
+}
+
+// A resume 8 days later keeps no host and no Scope: both are collected
+// again, and stderr says why.
+func TestResumeCollectsAgainWhatIsOlderThan7Days(t *testing.T) {
+	fail, calls := false, map[string]int{}
+	collect := collectFirstFails(t, &fail, calls)
+	_, dir, _ := startRun(t, twoHosts, collect)
+	var logs []string
+	log := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	if _, err := resumeAt(t, dir, resumeVersion, time.Now().Add(8*24*time.Hour), log, collect); err != nil {
+		t.Fatal(err)
+	}
+	if calls["203.0.113.5"] != 2 || calls["203.0.113.6"] != 2 {
+		t.Fatalf("collections %v: an expired host is collected again", calls)
+	}
+	for _, want := range []string{"scope: discovery of ", "host:203.0.113.5:22: kept collection of "} {
+		if !slices.ContainsFunc(logs, func(l string) bool {
+			return strings.HasPrefix(l, want) && strings.HasSuffix(l, "is older than 7 days; "+map[bool]string{true: "running Scope again.", false: "collecting it again."}[strings.HasPrefix(want, "scope")])
+		}) {
+			t.Errorf("no %q line in %q", want, logs)
+		}
 	}
 }

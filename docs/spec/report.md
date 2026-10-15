@@ -494,8 +494,26 @@ data was read as (once per asset in text, per row and per piece of evidence in J
 with where its permissions came from (`provider`, `declared` or `unknown`; text prints
 "permissions not readable" for `unknown`, never "read-only"); the collection span (per
 row in text only when it differs from the header's) and, per asset, the oldest
-collection date of any observation the report rests on (E9; a resume keeps nothing older
-than 7 days, [runs.md](runs.md), "Stop and resume"); caps and sampling, with the
+collection time of any successful observation the report rests on (built, E9 step 8; a
+successful observation is decided per request, not per audit line: a ledger answer
+(`reused`) counts; for a request that was sent, only its result decides, a response of
+200 to 499 other than 401, 403, 407 and 429 that the gate did not end as unavailable (a
+200 cut for its size or not recognized does not count); the DNS lookup of a request's
+host shares its id and is no reading of it; for a DNS read, its answer counts (NXDOMAIN
+counts; a timeout, SERVFAIL or refusal does not); a send line alone, a request the
+gate refused at any step (one stopped after the lookup of its host included), a failed
+read, a Workspace token exchange and the local mirror's line never date an asset; a
+resume keeps nothing older than 7 days, [runs.md](runs.md), "Stop and resume"). The JSON
+`assets[].oldest_collected_at` is a UTC date-time or null, never omitted: a host's
+envelope collection start; for a network asset, the earliest successful read (sent or
+reused) in its final trace, after the partition to repositories, a reused one at its
+original time; a `domain` or `url` asset also Scope's `collected_at`; null when nothing
+was read. `run.session_started` (required) is when this session started. The text prints
+it only on a resumed run, in the `Resumed` field of the header: "Readings older than 7
+days were read again, never kept." and the line "Oldest reading kept, per asset:
+*name* *date time* (*N* days before this session, or "under a day"); …", listing only
+assets whose oldest reading is before this session's start, with whole days floored and
+the date in `engagement.timezone`; caps and sampling, with the
 selection; narrowing that removed something; and declared facts scheck did not verify
 ("backups declared in gcp:example-backups, not verified"), the line most often misread
 as verified. An excluded organizational unit is named and makes the row at most
@@ -643,6 +661,15 @@ repositories: asked GitHub for *N* of *M* (login, repository) pairs", then "; th
 optional `detail` string of the sub-item in the JSON; the text prints it on the area row
 after the selection lines. A denied, not found or failed read adds no status and no exit
 code.
+
+When the organization declares no `deploys_to: production` repository, some
+`identity.former_person_has_access` judgment on GitHub fired or abstained, and the line
+above is not there, the sub-item's `detail` is: "Push to production by people who left:
+not judged. No repository in this organization is declared `deploys_to: production`, so a
+departed person's write access is reported but not raised as access to production, and no
+repository's permissions were asked for it. Declare the repositories that deploy to
+production to judge it." (built, E9 step 8). It is the after-the-fact counterpart of
+Plan's not-judged sentence, and it changes no mark and no exit code.
 
 **The external, email and web rows, in this build.** A domain root the web
 collector read feeds these rows; a URL root feeds external, web and secrets coverage.
@@ -1065,7 +1092,7 @@ JSON (`docs/engagement-report-schema.json`, `schema_version` `MAJOR.MINOR`, free
 change until 0.0.2 is published) carries what a consumer agent or a comparison of runs
 (0.0.3 G6) needs and the text leaves out:
 
-- `run: {started, directory, resumed}`, the scheck version and `rules_version`, so a
+- `run: {started, session_started, directory, resumed}`, the scheck version and `rules_version`, so a
   finding that disappears because a rule changed between versions is never read as
   fixed. For network reports, `rules_version` combines the binary version with the
   pinned web, preload, takeover and sender-data versions and the C3 table's

@@ -113,13 +113,32 @@ written. `scheck run <directory>` resumes:
   inputs is kept; any other is collected again on a new session, canary first. A host
   costs seconds, and an envelope merged from two sessions would break what its command
   trace means (`host-collector.md §9`).
-- **Nothing kept is older than 7 days.** (Design; contract when E9 lands, step 8.) The
-  maximum is compiled in and no setting widens it. It applies to every observation a
-  resume would keep: the Scope document, a host's envelope and the gate ledger's
-  successes. Age is measured from the observation's own collection time to the start of
-  the resuming session. An observation with no recorded collection time (a zero time) counts as expired. An expired observation is collected again, never an error. When
-  collecting it again fails, the asset is *failed* or *unread* for that part and the old
-  data is not reported in its place. The report prints the oldest collection date of the
+- **Nothing kept is older than 7 days** (built, E9 step 8). The maximum is compiled in
+  and no setting widens it. It applies to every observation a resume would keep: the
+  Scope document, a host's envelope and the gate ledger's successes. An observation is
+  kept only when `0 <= session start - collection time < 7 x 24 hours`, in absolute
+  time. Exactly 7 x 24 hours is expired. A zero time (no recorded collection time) is
+  expired, and so is a time after the session's start (a wrong clock or file; no skew is
+  allowed). The collection time is Scope's `collected_at` in `scope.json` (the start of
+  the session that ran Scope; a `scope.json` without it reads as zero), a host
+  envelope's `run.started`, and a ledger success's own collection time, HTTP and DNS
+  alike. An expired observation is collected again, never an error. When collecting it
+  again fails, the asset is *failed* or *unread* for that part and the old data is not
+  reported in its place. stderr says what was dropped, with dates in
+  `engagement.timezone` to the minute: "*asset*: kept collection of *date time* is older
+  than 7 days; collecting it again." (or "kept collection has no recorded time"),
+  "scope: discovery of *date time* is older than 7 days; running Scope again." (or
+  "discovery has no recorded time"), and, when above zero, one line for all the
+  ledger's reads: "resume: *n* earlier reads are older than 7 days, *m* have no
+  recorded time and *k* are dated after this session started; they are sent again."
+  Only the clauses above zero are printed, with "and" before the last and the singular
+  for one ("1 earlier read is …", "1 has …", "1 is …"); the line ends "it is sent
+  again." when the total is one and "they are sent again." otherwise; with all three
+  zero there is no line. A collection time after the session's start has its own wording: "*asset*: kept
+  collection is dated *date time*, after this session started, so its age is unknown;
+  collecting it again." and "scope: discovery is dated *date time*, after this session
+  started, so its age is unknown; running Scope again." The ledger's records carry no
+  collector, so the line is not split by collector. The report prints the oldest collection time of the
   observations each asset rests on ([report.md](report.md), "Coverage").
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
@@ -175,8 +194,8 @@ written. `scheck run <directory>` resumes:
   (a host's accepted risks at the start of the session that collected it), never the
   session start or the render time, and the excerpt names that moment; the rules and their reads are the table in `engagement.md`, "Severity in
   context", "Time". A read with no recorded collection time makes the rule abstain
-  ("collection time not recorded"). Step 8 adds the 7-day maximum, and a zero
-  collection time counts as expired on resume (planned, not built).
+  ("collection time not recorded"). On resume the 7-day maximum applies, and a
+  zero collection time counts as expired (above).
 
 `scheck run <directory>` resolves a path that reaches the directory
 through a link, locks the directory and exits 3 when it is locked; when it holds no
@@ -261,7 +280,8 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
   that everything else was read again. It states that kept evidence was not read again
-  and retains its original observation date. A file the resume used (`scope.json` when kept; a success the gate
+  and retains its original observation date, that readings older than 7 days were read
+  again and never kept, and, per asset, how old its oldest kept reading is. A file the resume used (`scope.json` when kept; a success the gate
   reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An

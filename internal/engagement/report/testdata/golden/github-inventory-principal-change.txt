@@ -3,7 +3,8 @@ For Alex. Read 2026-10-09 12:00 to 2026-10-10 12:00 (UTC). scheck test.
 Trigger        routine
 Resumed        this run was stopped and resumed: what an earlier session read completely was kept
                where reuse was allowed, and everything else was read again. Kept evidence was not
-               read again and retains its original observation date.
+               read again and retains its original observation date. Readings older than 7 days were
+               read again, never kept.
 GitHub account saas:github:example-org: bob (user ID 72). Inventory visibility depends on this
                credential.
 Credential     saas:github:example-org: GitHub assessment credential: write capability was not

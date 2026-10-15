@@ -11,9 +11,10 @@
     "scheck_version": { "type": "string" },
     "rules_version": { "type": "string", "description": "Identifies the rule set, so a finding that disappears because a rule changed between versions is never read as fixed." },
     "run": {
-      "type": "object", "required": ["started", "directory", "resumed"], "additionalProperties": false,
+      "type": "object", "required": ["started", "directory", "resumed", "session_started"], "additionalProperties": false,
       "properties": {
         "started": { "type": "string", "format": "date-time" },
+        "session_started": { "type": "string", "format": "date-time", "description": "When this session started; a kept reading's age is counted to it (spec/runs.md, \"Stop and resume\")." },
         "directory": { "type": ["string", "null"], "description": "null under --no-persist." },
         "resumed": { "type": "boolean" },
         "vantage": { "enum": ["internet", "vpn", "lan"] },
@@ -377,7 +378,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "id", "bound_id", "kind", "root", "status", "trace"],
+        "required": ["name", "id", "bound_id", "kind", "root", "status", "oldest_collected_at", "trace"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string" },
@@ -394,6 +395,7 @@
           "collected": { "$ref": "#/$defs/span" },
           "evidence": { "type": ["string", "null"], "description": "Path of the asset's evidence file in the run directory; null under --no-persist." },
           "kept": { "type": "boolean", "description": "For a host on a resume: kept from the earlier session that collected it, not contacted by this one. Its captures were never stored, so --include-evidence adds no evidence to its envelope." },
+          "oldest_collected_at": { "type": ["string", "null"], "format": "date-time", "description": "The collection time of the oldest successful observation the asset rests on (a reused read at its original time); null when nothing was read for it. A resume keeps nothing older than 7 days (spec/runs.md, \"Stop and resume\")." },
           "checks": {
             "type": "object", "description": "For a host: its plan, what ran, what gave no usable answer, and what a cut collection never reached.",
             "required": ["planned", "ran", "unknown", "not_run"], "additionalProperties": false,

@@ -126,6 +126,9 @@ func TestGoldenReports(t *testing.T) {
 			in := oneHost(t, "ubuntu")
 			in.Resumed, in.EditedByHand = true, []string{"scope.json"}
 			in.Assets[0].Kept = true
+			// This session started three days after the host was read.
+			in.Assets[0].OldestCollectedAt = in.Started
+			in.Session = in.Started.Add(3*24*time.Hour + 2*time.Hour)
 			in.Directory = "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z"
 			in.Egress = &EgressInput{Unrecorded: []time.Time{in.Started},
 				Sources:  []SourceInput{{Source: "dns", Operator: "your network", Host: "192.0.2.53", Requests: 4}},

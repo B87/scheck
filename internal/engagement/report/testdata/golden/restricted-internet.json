@@ -46,6 +46,7 @@
       "id": "url:https://admin.example.com/",
       "kind": "url",
       "name": "admin",
+      "oldest_collected_at": null,
       "root": true,
       "status": "collected",
       "trace": []
@@ -809,6 +810,7 @@
     "command": "scheck run engagement.yaml --vantage internet",
     "directory": null,
     "resumed": false,
+    "session_started": "2026-10-07T07:12:03Z",
     "started": "2026-10-07T07:12:03Z",
     "vantage": "internet"
   },

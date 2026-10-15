@@ -157,6 +157,7 @@
       "id": "host:macos:22",
       "kind": "host",
       "name": "macos",
+      "oldest_collected_at": null,
       "principal": {
         "elevation": "none",
         "identity": "deploy",
@@ -173,6 +174,7 @@
       "id": "host:203.0.113.5:22",
       "kind": "host",
       "name": "deploy",
+      "oldest_collected_at": null,
       "reason": "refused",
       "root": true,
       "status": "refused",
@@ -1003,6 +1005,7 @@
     "command": "scheck run engagement.yaml",
     "directory": "/state/engagements/example/2026-10-07T07:12:03Z",
     "resumed": false,
+    "session_started": "2026-10-07T07:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",

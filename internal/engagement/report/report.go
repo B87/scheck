@@ -47,6 +47,9 @@ type Run struct {
 	Started   time.Time `json:"started"`
 	Directory *string   `json:"directory"`
 	Resumed   bool      `json:"resumed"`
+	// SessionStarted is when this session started, which a kept
+	// reading's age is counted to.
+	SessionStarted time.Time `json:"session_started"`
 	// Command runs the engagement again ("scheck run engagement.yaml").
 	Command string `json:"command,omitempty"`
 }
@@ -537,8 +540,12 @@ type Asset struct {
 	// Kept says a resume kept the host from the earlier session that
 	// collected it. Its captures were never stored, so --include-evidence
 	// adds none to its envelope rather than empty ones.
-	Kept  bool    `json:"kept,omitempty"`
-	Trace []Trace `json:"trace"`
+	Kept bool `json:"kept,omitempty"`
+	// OldestCollectedAt is the collection time of the oldest successful
+	// observation the asset rests on, null when nothing was read for it
+	// (docs/spec/report.md, "Coverage").
+	OldestCollectedAt *time.Time `json:"oldest_collected_at"`
+	Trace             []Trace    `json:"trace"`
 }
 
 // Trace is one command or request attempted on an asset.

@@ -68,9 +68,7 @@ const (
 	whyExposed = "not applied: declared exposed on purpose (%s)."
 )
 
-func whyPastHigh(rule string) string {
-	return fmt.Sprintf("capped at high by %s: critical means that anyone, or someone with no right to it, can use this now, or that you believe it is handled; %s says neither.", rule, rule)
-}
+func whyPastHigh(rule string) string { return finding.WhyPastHigh(rule) }
 
 // productionIDs are the findings a production declaration on their
 // repository raises.

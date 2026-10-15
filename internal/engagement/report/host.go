@@ -415,6 +415,9 @@ func (b *builder) hostFindings(v *hostView) []Finding {
 				ef.WhyHere = append(ef.WhyHere, line)
 			}
 		}
+		if f.CappedBy != "" {
+			ef.WhyHere = append(ef.WhyHere, finding.WhyPastHigh(f.CappedBy))
+		}
 		for _, e := range f.Evidence {
 			if e.Check == "context" {
 				ef.Evidence = append(ef.Evidence, Evidence{Kind: "declared", Source: v.h.ExpectedSource, Excerpt: e.Excerpt})

@@ -140,6 +140,7 @@
       "id": "saas:github:example-org",
       "kind": "saas",
       "name": "engineering",
+      "oldest_collected_at": null,
       "principal": {
         "identity": "alice (user ID 41)",
         "scopes": [
@@ -224,6 +225,7 @@
       "id": "repo:github:example-org/production",
       "kind": "repo",
       "name": "production",
+      "oldest_collected_at": null,
       "principal": {
         "identity": "alice (user ID 41)",
         "scopes": [
@@ -927,6 +929,7 @@
     "command": "scheck run engagement.yaml",
     "directory": "/state/engagements/github-inventory/2026-10-09T12:00:00Z",
     "resumed": false,
+    "session_started": "2026-10-09T12:00:00Z",
     "started": "2026-10-09T12:00:00Z"
   },
   "scheck_version": "test",

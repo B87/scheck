@@ -54,7 +54,7 @@ func Build(in Input) *Report {
 	}
 	r := &Report{
 		SchemaVersion: SchemaVersion, ScheckVersion: in.Version, RulesVersion: in.Version,
-		Run:        Run{Vantage: in.Vantage, Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun},
+		Run:        Run{Vantage: in.Vantage, Started: in.Started.UTC(), Resumed: in.Resumed, Command: in.Rerun, SessionStarted: cmp.Or(in.Session, in.Started).UTC()},
 		Engagement: b.engagement(),
 		Notice:     Notice{PersonalData: true, InternalTopology: true, Audience: "operator"},
 		Refused:    []Shortfall{}, Incomplete: []Shortfall{},
@@ -159,6 +159,10 @@ func (b *builder) engagement() Engagement {
 func (b *builder) asset(a AssetInput) Asset {
 	out := Asset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, Status: a.Status, Reason: a.Reason,
 		Detail: a.Detail, Via: a.Via, Trace: []Trace{}}
+	if !a.OldestCollectedAt.IsZero() {
+		at := a.OldestCollectedAt.UTC()
+		out.OldestCollectedAt = &at
+	}
 	if a.Kind == "host" {
 		host := "host"
 		out.Collector = &host

@@ -36,6 +36,9 @@ type Input struct {
 	Finished time.Time
 	// Directory is the run directory, "" under --no-persist.
 	Directory string
+	// Session is when this session started: a kept reading's age is
+	// counted to it.
+	Session time.Time
 	// Resumed says an earlier session of the run left what this one kept;
 	// EditedByHand names the files it used although they changed since
 	// they were written (docs/spec/runs.md, "Stop and resume").
@@ -132,6 +135,12 @@ type AssetInput struct {
 	// reached among what Plan selected, with the finding ids that rest on
 	// each (docs/spec/report.md, "Coverage").
 	Selections []finding.KindSelection
+	// OldestCollectedAt is the collection time of the oldest successful
+	// observation the asset rests on; zero when nothing was read for it.
+	OldestCollectedAt time.Time
+	// NoProduction says a GitHub root declares no deploys_to: production
+	// repository, so a departed person's push to production is not judged.
+	NoProduction bool
 	// PermissionAsks counts the permission follow-up's pairs (F1) on a
 	// GitHub root, nil when none was open.
 	PermissionAsks *FollowUpCount

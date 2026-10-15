@@ -177,6 +177,7 @@
       "id": "host:ubuntu:22",
       "kind": "host",
       "name": "ubuntu",
+      "oldest_collected_at": null,
       "principal": {
         "elevation": "sudo",
         "identity": "deploy",
@@ -927,6 +928,7 @@
     "command": "scheck run engagement.yaml",
     "directory": null,
     "resumed": false,
+    "session_started": "2026-10-07T07:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",

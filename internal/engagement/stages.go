@@ -445,7 +445,7 @@ func (r *run) scope(ctx context.Context) (any, error) {
 	// every request from the file (docs/spec/runs.md, "Stop and
 	// resume").
 	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
-	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() {
+	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() && r.fresh("scope: discovery", "running Scope again", p.Scope.CollectedAt) {
 		r.o.Log("scope: kept from an earlier session")
 		r.used("scope.json")
 		r.scoped = p.Scope
@@ -454,7 +454,7 @@ func (r *run) scope(ctx context.Context) (any, error) {
 	if r.manifest != nil {
 		r.manifest.ScopeInputs = inputs
 	}
-	doc := &ScopeDoc{Header: r.header("scope"), Roots: r.res.Roots, Exclude: r.res.Exclude,
+	doc := &ScopeDoc{Header: r.header("scope"), CollectedAt: r.session.UTC(), Roots: r.res.Roots, Exclude: r.res.Exclude,
 		Discovery: "none: no domain root"}
 	if doc.Exclude == nil {
 		doc.Exclude = []Ref{}
@@ -531,7 +531,7 @@ func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
 		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1, Vantage: r.o.Vantage,
 		DNSInputs: mailInputs(r.res), WebInputs: intentInputs(r.res)}
 	if p := r.o.Resume; p != nil {
-		cfg.Prior, cfg.Session = p.Requests, len(r.manifest.Sessions)
+		cfg.Prior, cfg.Session = r.freshRequests(p.Requests), len(r.manifest.Sessions)
 	}
 	if d, ok := ctx.Deadline(); ok {
 		cfg.Deadline = d
@@ -1030,7 +1030,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		in.Directory = r.o.Dir.Path
 	}
 	in.PrincipalChanges = r.githubPrincipalChanges()
-	in.Resumed, in.EditedByHand = r.o.Resume != nil, slices.Clone(r.edited)
+	in.Resumed, in.EditedByHand, in.Session = r.o.Resume != nil, slices.Clone(r.edited), r.session
 	if a := res.Authorization; a != nil {
 		auth := &ereport.Authorization{By: a.By, Date: a.Date, Source: a.Source, Note: a.Note}
 		for _, w := range a.Windows {
@@ -1217,8 +1217,94 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		in.RulesVersion = cmp.Or(in.RulesVersion, r.o.Version) + ":context:" + ContextTableVersion
 	}
 	partitionGitHubJudgments(in.Assets)
+	r.oldestCollected(in.Assets)
 	r.gradeAssets(in.Assets)
 	return in
+}
+
+// answered are the requests whose audit lines record a reading, decided
+// per request: a ledger answer; for a request that sent, only its result,
+// a response of 200 to 499 other than 401, 403, 407 and 429 the gate did
+// not end as unavailable (the DNS lookup of its host shares its id and is
+// no reading of it); for a DNS read, its answer, no such name included.
+// A send line alone, a request the gate refused at any step, a failed read,
+// a Workspace token exchange or the local mirror's line is none.
+func answered(entries []gate.Entry) map[string]bool {
+	type lines struct{ reused, sent, result, ok, dns, refused bool }
+	by := map[string]*lines{}
+	for _, e := range entries {
+		// A Workspace token exchange reads nothing of the tenant.
+		if strings.HasPrefix(e.Op, "workspace.credential_exchange") {
+			continue
+		}
+		l := by[e.RequestID]
+		if l == nil {
+			l = &lines{}
+			by[e.RequestID] = l
+		}
+		switch e.Event {
+		case gate.DecisionReused:
+			l.reused = true
+		case "send":
+			l.sent = true
+		case "result":
+			l.result = true
+			l.ok = l.ok || e.Status >= 200 && e.Status < 500 && !slices.Contains([]int{401, 403, 407, 429}, e.Status) && !strings.HasPrefix(e.Decision, "unavailable:")
+		case "dns_answer":
+			l.dns = l.dns || !strings.HasPrefix(e.Decision, "unavailable:") || e.Decision == "unavailable:nxdomain"
+		case "refused":
+			l.refused = true
+		}
+	}
+	out := map[string]bool{}
+	for id, l := range by {
+		switch {
+		case l.reused:
+			out[id] = true
+		case l.refused:
+			// Stopped after the lookup of its host, or never answered.
+		case l.sent || l.result:
+			out[id] = l.ok
+		default:
+			out[id] = l.dns
+		}
+	}
+	return out
+}
+
+// oldestCollected gives each asset the collection time of the oldest
+// successful observation it rests on, after partition moved each read to
+// its repository: a host's collection start, a network asset's earliest
+// gate read, a reused one at its first time, and for a domain or url asset
+// Scope's discovery (docs/spec/report.md, "Coverage"). An asset nothing
+// was read for has none.
+func (r *run) oldestCollected(assets []ereport.AssetInput) {
+	var observed map[string]gate.Observation
+	read := map[string]bool{}
+	if r.gate != nil {
+		observed = r.gate.Observations()
+		read = answered(r.gate.Entries())
+	}
+	for i := range assets {
+		a := &assets[i]
+		var times []time.Time
+		if c, ok := r.hosts[a.Name]; ok {
+			times = append(times, c.Evidence().Run.Started)
+		}
+		for _, tr := range a.NetworkTrace {
+			if read[tr.Request] {
+				times = append(times, observed[tr.Request].CollectedAt)
+			}
+		}
+		if (a.Kind == string(KindDomain) || a.Kind == string(KindURL)) && r.scoped != nil {
+			times = append(times, r.scoped.CollectedAt)
+		}
+		for _, t := range times {
+			if !t.IsZero() && (a.OldestCollectedAt.IsZero() || t.Before(a.OldestCollectedAt)) {
+				a.OldestCollectedAt = t
+			}
+		}
+	}
 }
 
 // excludeMatches counts, by exclude, the names discovery dropped for it:

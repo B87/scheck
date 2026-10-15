@@ -96,6 +96,11 @@ func (b *builder) githubCoverage(row *Row, area finding.Area, a AssetInput) bool
 		}
 		if fam.name == "departed people" {
 			si.Detail = permissionAsksText(a.PermissionAsks)
+			if si.Detail == "" && a.NoProduction && slices.ContainsFunc(a.Judged, func(j Judgment) bool {
+				return j.ID == finding.IDIdentityFormerPersonHasAccess && j.Verdict != verdictDisproved
+			}) {
+				si.Detail = noProductionText
+			}
 		}
 		for _, reason := range si.Reasons {
 			row.Reasons = appendReason(row.Reasons, reason)
@@ -149,3 +154,7 @@ func permissionAsksText(n *FollowUpCount) string {
 	}
 	return s + "."
 }
+
+// noProductionText is the departed-people line of an organization that
+// declares no production repository (docs/spec/report.md, "Coverage").
+const noProductionText = "Push to production by people who left: not judged. No repository in this organization is declared `deploys_to: production`, so a departed person's write access is reported but not raised as access to production, and no repository's permissions were asked for it. Declare the repositories that deploy to production to judge it."

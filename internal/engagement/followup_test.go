@@ -131,3 +131,38 @@ roots: [{saas: "github:acme"}, {saas: "github:beta"}]
 		t.Fatalf("exit %d", r.out.ExitCode())
 	}
 }
+
+// Only a reading dates an asset, decided per request: a failed read or a
+// send line alone never does, nor the DNS lookup of a request's host
+// (docs/spec/report.md, "Coverage").
+func TestAnswered(t *testing.T) {
+	lines := func(id string, es ...gate.Entry) []gate.Entry {
+		for i := range es {
+			es[i].RequestID = id
+		}
+		return es
+	}
+	got := answered(slices.Concat(
+		lines("ok", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "sent"}, gate.Entry{Event: "send", Decision: "sent"}, gate.Entry{Event: "result", Status: 200, Decision: "sent"}),
+		lines("401", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "sent"}, gate.Entry{Event: "send", Decision: "sent"}, gate.Entry{Event: "result", Status: 401, Decision: "sent"}),
+		lines("too_large", gate.Entry{Event: "send", Decision: "sent"}, gate.Entry{Event: "result", Status: 200, Decision: "unavailable:response_too_large"}),
+		lines("404", gate.Entry{Event: "send", Decision: "sent"}, gate.Entry{Event: "result", Status: 404, Decision: "sent"}),
+		lines("502", gate.Entry{Event: "send", Decision: "sent"}, gate.Entry{Event: "result", Status: 502}),
+		lines("in_flight", gate.Entry{Event: "send", Decision: "sent"}),
+		lines("reused", gate.Entry{Event: "reused", Decision: "reused"}),
+		lines("txt", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer"}),
+		lines("nxdomain", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "unavailable:nxdomain"}),
+		lines("dns_timeout", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "unavailable:timeout"}),
+		lines("refused", gate.Entry{Event: "refused", Decision: "refused:scope"}),
+		lines("dangling", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "unavailable:nxdomain"}, gate.Entry{Event: "refused", Decision: "unavailable:nxdomain"}),
+		lines("private", gate.Entry{Event: "dns"}, gate.Entry{Event: "dns_answer", Decision: "sent"}, gate.Entry{Event: "refused", Decision: "refused:address_not_public"}),
+		lines("token", gate.Entry{Event: "send", Op: "workspace.credential_exchange"}, gate.Entry{Event: "result", Op: "workspace.credential_exchange", Status: 200, Decision: "sent"}),
+		lines("mirror", gate.Entry{Event: "mirror", Decision: "sent"}),
+	))
+	for id, want := range map[string]bool{"ok": true, "401": false, "too_large": false, "404": true, "502": false, "in_flight": false,
+		"reused": true, "txt": true, "nxdomain": true, "dns_timeout": false, "refused": false, "dangling": false, "private": false, "token": false, "mirror": false} {
+		if got[id] != want {
+			t.Errorf("%s: %v", id, got[id])
+		}
+	}
+}

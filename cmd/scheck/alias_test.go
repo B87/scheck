@@ -43,7 +43,7 @@ func timeless(t *testing.T, raw string) any {
 		case map[string]any:
 			for k := range x {
 				switch k {
-				case "at", "started", "from", "to", "collected_at", "duration_ms", "time", "finished":
+				case "at", "started", "from", "to", "collected_at", "oldest_collected_at", "session_started", "duration_ms", "time", "finished":
 					delete(x, k)
 				default:
 					x[k] = walk(x[k])

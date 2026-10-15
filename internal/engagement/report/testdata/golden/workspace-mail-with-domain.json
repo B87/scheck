@@ -167,6 +167,7 @@
       "id": "domain:example.com",
       "kind": "domain",
       "name": "example.com",
+      "oldest_collected_at": null,
       "root": true,
       "status": "collected",
       "trace": []
@@ -178,6 +179,7 @@
       "id": "saas:google-workspace:example.com",
       "kind": "saas",
       "name": "Workspace",
+      "oldest_collected_at": null,
       "principal": {
         "identity": "unknown",
         "scopes_source": "unknown"
@@ -1563,6 +1565,7 @@
     "command": "scheck run engagement.yaml",
     "directory": null,
     "resumed": false,
+    "session_started": "2026-10-07T07:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",

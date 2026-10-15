@@ -150,6 +150,7 @@
       "kept": true,
       "kind": "host",
       "name": "ubuntu",
+      "oldest_collected_at": "2026-10-07T07:12:03Z",
       "principal": {
         "elevation": "sudo",
         "identity": "deploy",
@@ -843,6 +844,7 @@
     "command": "scheck run --host deploy@ubuntu (with the same flags)",
     "directory": "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z",
     "resumed": true,
+    "session_started": "2026-10-10T09:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",

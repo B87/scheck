@@ -26,10 +26,14 @@ type Header struct {
 // document.
 type ScopeDoc struct {
 	Header
-	Discovery string       `json:"discovery"`
-	Roots     []Ref        `json:"roots"`
-	Exclude   []Ref        `json:"exclude"`
-	Assets    []ScopeAsset `json:"assets"`
+	// CollectedAt is when the session that ran Scope started: a resume
+	// keeps the document only while it is fresh (docs/spec/runs.md, "Stop
+	// and resume").
+	CollectedAt time.Time    `json:"collected_at"`
+	Discovery   string       `json:"discovery"`
+	Roots       []Ref        `json:"roots"`
+	Exclude     []Ref        `json:"exclude"`
+	Assets      []ScopeAsset `json:"assets"`
 	// Resolver is the DNS resolver discovery asked; nil without a domain
 	// root.
 	Resolver *Resolver     `json:"resolver,omitempty"`

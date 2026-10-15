@@ -122,7 +122,7 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		t.Fatalf("evidence %+v", ev)
 	}
 	dir.Close()
-	resume := func() *engagement.Outcome {
+	resumeAt := func(session time.Time) *engagement.Outcome {
 		d, err := engagement.OpenRun(path)
 		if err != nil {
 			t.Fatal(err)
@@ -136,15 +136,21 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out, err := engagement.Run(context.Background(), r, engagement.RunOptions{Raw: raw, Dir: d, Resume: p, Started: p.Manifest.Started, Session: time.Now(), Version: "v0.0.2", NewGate: h.Build})
+		out, err := engagement.Run(context.Background(), r, engagement.RunOptions{Raw: raw, Dir: d, Resume: p, Started: p.Manifest.Started, Session: session, Version: "v0.0.2", NewGate: h.Build})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return out
 	}
+	resume := func() *engagement.Outcome { return resumeAt(time.Now()) }
 	second := resume()
 	if second.ExitCode() != 0 {
 		t.Fatalf("same-principal exit %d", second.ExitCode())
+	}
+	// A reused read keeps its first collection time: the organization
+	// rests on the first session's reads (the principal is read again).
+	if o1, o2 := first.Report.Assets[0].OldestCollectedAt, second.Report.Assets[0].OldestCollectedAt; o1 == nil || o2 == nil || o2.Before(*o1) || !o2.Before(second.Report.Run.SessionStarted) {
+		t.Fatalf("oldest collected: first %v, second %v, session %v", o1, o2, second.Report.Run.SessionStarted)
 	}
 	mu.Lock()
 	sameOrg, samePrincipal := hits["/orgs/acme"], hits["/user"]
@@ -225,6 +231,18 @@ func TestGitHubInventoryRunAndPrincipalResume(t *testing.T) {
 	}
 	if !marked {
 		t.Fatal("redacted marker missing from persisted evidence")
+	}
+	// Eight days on, no earlier read is kept: the organization is read
+	// again.
+	mu.Lock()
+	before := hits["/orgs/acme"]
+	mu.Unlock()
+	late := resumeAt(time.Now().Add(8 * 24 * time.Hour))
+	mu.Lock()
+	after := hits["/orgs/acme"]
+	mu.Unlock()
+	if after != before+1 || late.Report.Assets[0].OldestCollectedAt == nil || late.Report.Assets[0].OldestCollectedAt.Before(time.Now().Add(-time.Minute)) {
+		t.Fatalf("an 8-day-old read was kept: org %d -> %d, oldest %v", before, after, late.Report.Assets[0].OldestCollectedAt)
 	}
 }
 

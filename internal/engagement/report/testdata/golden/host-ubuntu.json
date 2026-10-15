@@ -149,6 +149,7 @@
       "id": "host:ubuntu:22",
       "kind": "host",
       "name": "ubuntu",
+      "oldest_collected_at": null,
       "principal": {
         "elevation": "sudo",
         "identity": "deploy",
@@ -829,6 +830,7 @@
     "command": "scheck run --host deploy@ubuntu (with the same flags)",
     "directory": null,
     "resumed": false,
+    "session_started": "2026-10-07T07:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",

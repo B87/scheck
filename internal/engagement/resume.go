@@ -524,6 +524,9 @@ func (r *run) keptHost(a ResolvedAsset, inputs string) (ReconAsset, bool) {
 		rec.Recon.Kind != a.Kind || rec.Envelope == "" || rec.Envelope != p.Manifest.Files[envFile] || rec.Envelope != sha(raw) {
 		return ReconAsset{}, false
 	}
+	if !r.fresh(a.Name+": kept collection", "collecting it again", env.Run.Started) {
+		return ReconAsset{}, false
+	}
 	// The report embeds the envelope as a fresh collection's: without
 	// the path it was written to.
 	env.Run.Persisted = nil
@@ -557,4 +560,87 @@ func (r *run) recordHost(a ResolvedAsset, c *hostasset.Collection, inputs string
 type GitHubPrincipal struct {
 	Identity string `json:"identity"`
 	Label    string `json:"label"`
+}
+
+// maxKept is the age past which a resume keeps no observation: compiled
+// in, and no setting widens it (docs/spec/runs.md, "Stop and resume").
+const maxKept = 7 * 24 * time.Hour
+
+// keptFresh says an observation collected at t may be kept by a session
+// that started at session: in absolute time, younger than maxKept. A zero
+// time is no recorded collection time, and a time after the session's
+// start is a clock or a file that is wrong: both count as expired.
+func keptFresh(t, session time.Time) bool {
+	d := session.Sub(t)
+	return !t.IsZero() && d >= 0 && d < maxKept
+}
+
+// fresh is keptFresh for one unit a resume would keep, saying on stderr
+// why one is collected again: what names it, again what is done instead.
+func (r *run) fresh(what, again string, t time.Time) bool {
+	switch {
+	case keptFresh(t, r.session):
+		return true
+	case t.IsZero():
+		r.o.Log("%s has no recorded time; %s.", what, again)
+	case t.After(r.session):
+		r.o.Log("%s is dated %s, after this session started, so its age is unknown; %s.", what, t.In(r.res.loc).Format("2006-01-02 15:04"), again)
+	default:
+		r.o.Log("%s of %s is older than 7 days; %s.", what, t.In(r.res.loc).Format("2006-01-02 15:04"), again)
+	}
+	return false
+}
+
+// freshRequests are the earlier sessions' successes the gate may answer
+// from: those collected within the maximum age. An expired one is sent
+// again, never an error, and stderr counts them.
+func (r *run) freshRequests(prior map[string]*gate.Response) map[string]*gate.Response {
+	out := make(map[string]*gate.Response, len(prior))
+	old, untimed, later := 0, 0, 0
+	for k, v := range prior {
+		switch {
+		case v == nil:
+		case keptFresh(v.CollectedAt, r.session):
+			out[k] = v
+		case v.CollectedAt.IsZero():
+			untimed++
+		case v.CollectedAt.After(r.session):
+			later++
+		default:
+			old++
+		}
+	}
+	// "3 earlier reads are older than 7 days, 1 has … and 2 are …".
+	var clauses []string
+	for _, c := range []struct {
+		n         int
+		one, many string
+	}{{old, "is older than 7 days", "are older than 7 days"}, {untimed, "has no recorded time", "have no recorded time"},
+		{later, "is dated after this session started", "are dated after this session started"}} {
+		what := c.many
+		if c.n == 1 {
+			what = c.one
+		}
+		switch {
+		case c.n == 0:
+		case len(clauses) == 0 && c.n == 1:
+			clauses = append(clauses, "1 earlier read "+what)
+		case len(clauses) == 0:
+			clauses = append(clauses, fmt.Sprintf("%d earlier reads %s", c.n, what))
+		default:
+			clauses = append(clauses, fmt.Sprintf("%d %s", c.n, what))
+		}
+	}
+	if len(clauses) > 0 {
+		list := clauses[len(clauses)-1]
+		if len(clauses) > 1 {
+			list = strings.Join(clauses[:len(clauses)-1], ", ") + " and " + list
+		}
+		them := "they are"
+		if old+untimed+later == 1 {
+			them = "it is"
+		}
+		r.o.Log("resume: %s; %s sent again.", list, them)
+	}
+	return out
 }

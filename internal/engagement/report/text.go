@@ -153,7 +153,11 @@ func (t *text) header() {
 			kept += " where reuse was allowed"
 		}
 		t.field("", "Resumed", 15, "this run was stopped and resumed: what an earlier session read completely "+kept+", and "+
-			"everything else was read again. Kept evidence was not read again and retains its original observation date.")
+			"everything else was read again. Kept evidence was not read again and retains its original observation date. "+
+			"Readings older than 7 days were read again, never kept.")
+		if line := t.oldestKept(); line != "" {
+			t.field("", "", 15, line)
+		}
 	}
 	for _, a := range t.r.Assets {
 		if a.Collector != nil && *a.Collector == "github" && a.Principal != nil {
@@ -1861,4 +1865,27 @@ func wrapHang(first, indent, s string, width int) []string {
 		empty = false
 	}
 	return append(out, cur)
+}
+
+// oldestKept names, on a resumed run, each asset resting on a reading an
+// earlier session made, with its oldest one's date and age in whole days
+// to this session's start (docs/spec/report.md, "Coverage").
+func (t *text) oldestKept() string {
+	session := t.r.Run.SessionStarted
+	var parts []string
+	for _, a := range t.r.Assets {
+		at := a.OldestCollectedAt
+		if at == nil || !at.Before(session) {
+			continue
+		}
+		age := "under a day"
+		if days := int(session.Sub(*at) / (24 * time.Hour)); days > 0 {
+			age = count(days, "day", "days")
+		}
+		parts = append(parts, fmt.Sprintf("%s %s (%s before this session)", clean(a.Name), at.In(t.zone).Format("2006-01-02 15:04"), age))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Oldest reading kept, per asset: " + strings.Join(parts, "; ") + "."
 }

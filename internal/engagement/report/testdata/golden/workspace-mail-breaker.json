@@ -257,6 +257,7 @@
       "id": "saas:google-workspace:example.com",
       "kind": "saas",
       "name": "Workspace",
+      "oldest_collected_at": null,
       "principal": {
         "identity": "unknown",
         "scopes_source": "unknown"
@@ -1114,6 +1115,7 @@
     "command": "scheck run engagement.yaml",
     "directory": null,
     "resumed": false,
+    "session_started": "2026-10-10T12:00:00Z",
     "started": "2026-10-10T12:00:00Z"
   },
   "scheck_version": "test",
