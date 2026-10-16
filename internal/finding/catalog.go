@@ -3,6 +3,7 @@ package finding
 import (
 	"maps"
 	"sort"
+	"strings"
 )
 
 // Def is a finding id's compiled-in definition (docs/spec/host-collector.md §6.1). Title,
@@ -38,8 +39,9 @@ type Def struct {
 	// limit of what was read, part of the definition like its base, never a
 	// setting (docs/spec/engagement.md, "Severity in context", "Ceilings").
 	Ceiling Severity
-	// HostAccess marks a host finding about access to the host, which
-	// data.matters_most raises on a host that holds the data.
+	// HostAccess marks a host finding about access to the host: on a host
+	// named in data.matters_most only these raise, whatever their area
+	// (docs/spec/engagement.md, "Severity in context").
 	HostAccess bool
 	// Attributes are the steps the collector owns: each applies when a
 	// judgment carries the attribute (attribute:password_form).
@@ -215,7 +217,7 @@ var defs = map[string]Def{
 	},
 	IDPasswordAuthEnabled: {
 		ID: IDPasswordAuthEnabled, Title: "sshd accepts password authentication",
-		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "password login", BaseSeverity: SevMedium,
+		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "password login", BaseSeverity: SevMedium, HostAccess: true,
 		Impact: "Anyone who can reach this sshd can guess passwords online against every account that has " +
 			"a usable one, at whatever rate the server allows.",
 		Remediation: Remediation{
@@ -231,7 +233,7 @@ var defs = map[string]Def{
 	},
 	IDRootLoginEnabled: {
 		ID: IDRootLoginEnabled, Title: "sshd permits direct root login",
-		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "direct root login", BaseSeverity: SevHigh,
+		Category: "remote-access", Area: AreaHosts, Exposure: NotExposure, Judges: "direct root login", BaseSeverity: SevHigh, HostAccess: true,
 		Impact: "root can authenticate over the network directly, so a single credential is enough for full " +
 			"control and there is no record of which operator escalated.",
 		Remediation: Remediation{
@@ -245,7 +247,7 @@ var defs = map[string]Def{
 	},
 	IDEmptyPassword: {
 		ID: IDEmptyPassword, Title: "A local account with a login shell has no password",
-		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "accounts with no password and a login shell",
+		Category: "accounts", Area: AreaHosts, Exposure: NotExposure, Judges: "accounts with no password and a login shell", HostAccess: true,
 		// High, not critical: host facts show the account usable locally, not
 		// from the network (docs/spec/engagement.md, "Severity in context").
 		BaseSeverity: SevHigh,
@@ -473,6 +475,19 @@ func Register(d Def) {
 func Known(id string) bool {
 	_, ok := defs[id]
 	return ok
+}
+
+// MattersMostRaises says a data.matters_most entry naming owner, an asset
+// id, raises this definition's findings there: on a host only the host
+// access findings, whatever their area (D8); on any other asset the
+// findings of the identity, secrets, data and external areas
+// (docs/spec/engagement.md, "Severity in context"). The severity table
+// applies it and the report's readout counts the checks it names.
+func (d Def) MattersMostRaises(owner string) bool {
+	if strings.HasPrefix(owner, "host:") {
+		return d.HostAccess
+	}
+	return d.Area == AreaIdentity || d.Area == AreaSecrets || d.Area == AreaData || d.Area == AreaExternal
 }
 
 // Lookup returns the definition for a finding id.

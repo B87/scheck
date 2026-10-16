@@ -35,7 +35,12 @@ and locked while a run holds it:
                        requests/, the gate's successes a resume may reuse
   findings.json        stage 6: rule outcomes (a judgment cites a follow-up's
                        read in its references); every network-collector verdict
-                       with its severity chain, as output only (E9 step 1b)
+                       with its severity chain, as output only (E9 step 1b); per host
+                       asset, `host_chains`, the engagement's steps on a host posture
+                       finding after the host collector's table, by finding id
+                       (E9 step 9): `findings` keep the collector's severity, a
+                       chain's `base` is that severity, and
+                       `open_at_or_above_threshold` counts the chain's
   report.json          stage 7, with report.txt
   audit.jsonl          every request, command and API call, in order
 ```

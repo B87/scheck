@@ -1651,6 +1651,7 @@
         "title": "The origin serves plain HTTP instead of redirecting to HTTPS"
       }
     ],
+    "matters_most": [],
     "more": 0,
     "rules": {
       "decided": 15,

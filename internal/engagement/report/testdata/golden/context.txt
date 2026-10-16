@@ -24,6 +24,10 @@ Not requested    Not part of this run: identity and access, secrets, cloud confi
                  incident readiness. To include one, list it under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
+Data that matters most
+  macos (customer orders and invoices): read, but none of the 2 checks this answer raises could
+    decide (the access scheck was given cannot read this; it needs sudo); nothing on it was raised.
+
 Fix these first: a ranking of what was checked, not of all your risks
   1  high      The macOS application firewall is disabled (macos)
              base medium, raised: you declared macos internet-facing

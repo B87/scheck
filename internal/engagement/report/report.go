@@ -190,6 +190,32 @@ type Summary struct {
 	Below Below      `json:"below"`
 	Areas AreaCounts `json:"areas"`
 	Rules RuleCounts `json:"rules"`
+	// MattersMost is the readout of each data.matters_most entry, in file
+	// order (docs/spec/report.md, "Data that matters most").
+	MattersMost []MattersMost `json:"matters_most"`
+}
+
+// MattersMost is one data.matters_most entry's readout: the findings on
+// its asset the answer raises, how many of the checks it raises decided,
+// or that the asset was not read.
+type MattersMost struct {
+	Key   string `json:"key"`
+	Asset string `json:"asset"`
+	Name  string `json:"name"`
+	What  string `json:"what"`
+	// Outcome is raised, read (every check this answer raises decided),
+	// partial, not_judged (read, none decided) or not_read.
+	Outcome string `json:"outcome"`
+	// Raised counts the open or accepted findings on the asset this answer
+	// raises, moved or already at the top of the scale.
+	Raised int `json:"raised"`
+	// Checks are the rules this answer raises on the asset, Undecided those
+	// that did not decide.
+	Checks    int `json:"checks"`
+	Undecided int `json:"undecided"`
+	// Reasons are why: the undecided checks' reasons, the one covering most
+	// first, or why the asset was not read.
+	Reasons []string `json:"reasons"`
 }
 
 // Item is one ranked entry of "Fix these first".

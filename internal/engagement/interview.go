@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
 )
 
@@ -25,13 +26,28 @@ type Consumer struct {
 	Slice string
 }
 
-// Question is one interview question. The prompt is what the operator reads.
+// Question is one interview question. The prompt is what the operator
+// reads; a question that offers what the file declares adds that list
+// (Text).
 type Question struct {
 	ID        string
 	Prompt    string
 	Consumers []Consumer
 	answered  func(*File) bool
 	apply     func(*File, string) error
+	// offer, when set, is the list printed under the prompt from what the
+	// file declares so far.
+	offer func(*File) string
+	// notes, when set, are lines printed after an accepted answer.
+	notes func(string) []string
+}
+
+// Text is the prompt as scheck init prints it for f.
+func (q Question) Text(f *File) string {
+	if q.offer == nil {
+		return q.Prompt
+	}
+	return q.Prompt + "\n" + q.offer(f)
 }
 
 // Answered reports whether the file already answers q.
@@ -42,9 +58,9 @@ func (q Question) Answered(f *File) bool {
 	return q.answered(f)
 }
 
-// MergedSlices are the slices whose consumers must already exist.
-// E9 is not among them: a question kept for E9 is cut.
-var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7"}
+// MergedSlices are the slices whose consumers must already exist. E9
+// joins at its step 9 (docs/ROADMAP.md, E9).
+var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7", "E9"}
 
 // Questions is the interview, in the order scheck init asks.
 // It asks the Intake questions that have a consumer in a merged slice
@@ -168,13 +184,27 @@ func Questions() []Question {
 			"  name: shop\n" +
 			"  exposure: internet\n" +
 			"  environment: prod\n" +
-			"  service: 443 tcp the public HTTPS listener\n" +
+			"  service: 443 tcp internet the public HTTPS listener\n" +
+			"  service: 5432 tcp localhost the shop's Postgres, used only by the app on this server\n" +
 			"exposure is internet (the internet can open a session), vpn, lan, or airgapped. internet raises remote-access and network findings one step. airgapped lowers remote-access findings two steps. vpn and lan do not move a finding.\n" +
 			"environment is prod, staging, or dev. dev lowers findings one step. prod does not raise them.\n" +
-			"Name a port that should be open, with tcp or udp. If you do not know the port, leave service out. Do not name a port you hope is closed.",
-			Consumers: []Consumer{{ID: "host.context.exposure", Slice: "E1b"}, {ID: "host.context.environment", Slice: "E1b"}, {ID: "svc.expected_missing", Slice: "E1b"}},
-			answered:  func(f *File) bool { return !hostNeedsContext(f) },
-			apply:     applyContext},
+			"A service is a port that should be open, with tcp or udp, then who should reach it: localhost (only this server), lan (the office network), vpn, or internet, then a few words on what it is. " +
+			"A database only this server uses is localhost: it should be open, to this server. scheck reports a service that listens more widely than you said. " +
+			"If you do not know who should reach it, leave that word out. If you do not know the port, leave service out. Do not name a port you hope is closed.",
+			Consumers: []Consumer{{ID: "host.context.exposure", Slice: "E1b"}, {ID: "host.context.environment", Slice: "E1b"}, {ID: "svc.expected_missing", Slice: "E1b"},
+				{ID: finding.IDDBListensUnfiltered, Slice: "E9"}, {ID: finding.IDSvcListensBeyond, Slice: "E9"}},
+			answered: func(f *File) bool { return !hostNeedsContext(f) },
+			apply:    applyContext,
+			notes:    contextNotes},
+		{ID: "matters_most", Prompt: "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? " +
+			"Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank.\n" +
+			"Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. " +
+			"This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding.",
+			Consumers: []Consumer{{ID: "severity.data_matters_most", Slice: "E9"}, {ID: "plan.github_tier4", Slice: "E9"},
+				{ID: "report.rank_tiebreak", Slice: "E2"}, {ID: "report.matters_most_readout", Slice: "E9"}},
+			answered: func(f *File) bool { return len(f.Data.MattersMost) > 0 || len(offers(f)) == 0 },
+			apply:    applyMattersMost,
+			offer:    offerText},
 		{ID: "not_used", Prompt: "Which of these do you not operate at all? One per line: hosts, cloud, data, cicd, email, web, external.\n" +
 			"hosts only when you have no servers. cloud only when you administer no cloud project. data (databases and backups you operate) only when you also have no cloud project. cicd only when you have no GitHub organization and no repository. email only when you have no domain. web only when you have no domain and no url. external only when you have no domain, url, or network.\n" +
 			"You cannot say identity, secrets, or logging do not apply. You cannot set aside an area you already named something in.",
@@ -188,18 +218,31 @@ func Questions() []Question {
 // nothing. An answer shaped like a credential is refused by the same
 // detector as validation, and the value is not in the error.
 func Apply(f *File, id, answer string) error {
+	_, err := Answer(f, id, answer)
+	return err
+}
+
+// Answer is Apply, and the lines scheck init prints after an accepted
+// answer (a service declared with no audience).
+func Answer(f *File, id, answer string) ([]string, error) {
 	q, ok := questionByID(id)
 	if !ok {
-		return fmt.Errorf("unknown question %q", id)
+		return nil, fmt.Errorf("unknown question %q", id)
 	}
 	answer = strings.TrimSpace(answer)
 	if answer == "" || isSkip(answer) {
-		return nil
+		return nil, nil
 	}
 	if d, ok := policy.DetectCredential(answer); ok {
-		return credentialRefusal(d)
+		return nil, credentialRefusal(d)
 	}
-	return q.apply(f, answer)
+	if err := q.apply(f, answer); err != nil {
+		return nil, err
+	}
+	if q.notes == nil {
+		return nil, nil
+	}
+	return q.notes(answer), nil
 }
 
 // Explanations is what scheck init prints when the file names a Google
@@ -658,7 +701,8 @@ func applyContext(f *File, answer string) error {
 	if err != nil {
 		return err
 	}
-	for _, block := range blocks {
+	services := servicesOf(answer)
+	for i, block := range blocks {
 		name := block["name"]
 		a, ok := f.Assets[name]
 		if !ok || a.Host == "" {
@@ -684,7 +728,7 @@ func applyContext(f *File, answer string) error {
 			}
 			a.Context.Environment = env
 		}
-		if svc := block["service"]; svc != "" {
+		for _, svc := range services[i] {
 			s, err := parseService(svc)
 			if err != nil {
 				return err
@@ -751,6 +795,9 @@ func (l Locator) one() (Kind, string, bool) {
 	}
 }
 
+// parseService reads `<port> <tcp|udp> [localhost|lan|vpn|internet]
+// <purpose>`: a third word that is an audience is the audience, otherwise
+// the rest is the purpose (docs/spec/engagement.md, "Intake").
 func parseService(s string) (Service, error) {
 	fields := strings.Fields(s)
 	if len(fields) < 2 {
@@ -764,7 +811,61 @@ func parseService(s string) (Service, error) {
 	if !contains(Protos, proto) {
 		return Service{}, fmt.Errorf("protocol must be tcp or udp; leave the service out if you do not know")
 	}
-	return Service{Port: port, Proto: proto, Purpose: strings.Join(fields[2:], " ")}, nil
+	svc := Service{Port: port, Proto: proto}
+	rest := fields[2:]
+	if len(rest) > 0 {
+		switch w := strings.ToLower(rest[0]); w {
+		case "localhost", "lan", "vpn", "internet":
+			svc.Audience, rest = w, rest[1:]
+		case "airgapped":
+			return Service{}, fmt.Errorf("a service's audience is localhost, lan, vpn or internet; airgapped describes a host")
+		}
+	}
+	svc.Purpose = strings.Join(rest, " ")
+	return svc, nil
+}
+
+// contextNotes says, for each service declared with no audience, what
+// scheck will and will not judge of it.
+func contextNotes(answer string) []string {
+	var out []string
+	for _, block := range servicesOf(answer) {
+		for _, line := range block {
+			if svc, err := parseService(line); err == nil && svc.Audience == "" {
+				out = append(out, fmt.Sprintf("No audience given for %d/%s: scheck will check that it is listening, but not whether it listens more widely than it should.", svc.Port, svc.Proto))
+			}
+		}
+	}
+	return out
+}
+
+// servicesOf is every service: line of each block, in the order blocksOf
+// returns the blocks: a host may declare several.
+func servicesOf(s string) [][]string {
+	var out [][]string
+	var cur []string
+	open := false
+	for line := range strings.SplitSeq(s, "\n") {
+		if strings.TrimSpace(line) == "" {
+			if open {
+				out = append(out, cur)
+			}
+			cur, open = nil, false
+			continue
+		}
+		k, v, ok := splitField(line)
+		if !ok {
+			continue
+		}
+		open = true
+		if k == "service" {
+			cur = append(cur, v)
+		}
+	}
+	if open {
+		out = append(out, cur)
+	}
+	return out
 }
 
 func normKind(s string) (string, error) {

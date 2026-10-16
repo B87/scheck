@@ -1144,6 +1144,7 @@
         "title": "A DKIM RSA key is shorter than 1024 bits"
       }
     ],
+    "matters_most": [],
     "more": 0,
     "rules": {
       "decided": 10,

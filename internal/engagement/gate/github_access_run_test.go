@@ -191,7 +191,7 @@ access:
 		t.Fatal(err)
 	}
 	if len(plan.GitHub) != 1 || plan.GitHub[0].Budget != 4000 || plan.GitHub[0].Order[0].FullName != "acme/shop" || plan.GitHub[0].Order[0].Tier != 1 ||
-		!slices.Contains(plan.NotJudged, "`data.matters_most` is empty: no finding is raised for the data that matters most, and nothing is read or ranked first for it.") {
+		!slices.Contains(plan.NotJudged, "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it.") {
 		t.Fatalf("plan: %+v", plan)
 	}
 	cb, err := os.ReadFile(dir.File("check.json"))

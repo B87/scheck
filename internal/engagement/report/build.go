@@ -119,6 +119,7 @@ func Build(in Input) *Report {
 	r.Egress = b.egress()
 	r.PeopleLeft = b.peopleLeft()
 	r.Summary = b.summary()
+	r.Summary.MattersMost = b.mattersMost()
 	r.Exit = b.exit()
 	return r
 }

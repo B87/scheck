@@ -2,6 +2,7 @@ package engagement
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/b87/scheck/internal/collector/web"
@@ -94,8 +95,8 @@ func (r *run) notJudged() []string {
 			n, plural(n, "URL", "URLs"), cmpOr(r.o.Vantage, "not given")))
 	}
 	for _, h := range hosts {
-		if h.Context == nil || len(h.Context.ExpectedServices) == 0 {
-			out = append(out, fmt.Sprintf("`svc.listens_beyond_declared` on `%s` will not be judged: `expected_services` is empty for this host.", h.Name))
+		if !narrowService(h) {
+			out = append(out, fmt.Sprintf("`svc.listens_beyond_declared` on `%s` will not be judged: no service on this host is declared for localhost, lan or vpn (`expected_services`).", h.Name))
 		}
 	}
 	for _, a := range workspace {
@@ -107,7 +108,7 @@ func (r *run) notJudged() []string {
 		out = append(out, "No repository declares `deploys_to: production`: no finding is raised for reaching production, a departed person's push to production cannot be raised, and no repository is read first for it.")
 	}
 	if len(r.res.Assets) > 0 && len(r.res.Data.MattersMost) == 0 {
-		out = append(out, "`data.matters_most` is empty: no finding is raised for the data that matters most, and nothing is read or ranked first for it.")
+		out = append(out, "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it.")
 	}
 	for _, a := range identity {
 		if enforced, _ := r.res.MFAFor(a.ID); enforced == "" || enforced == "unknown" {
@@ -118,6 +119,17 @@ func (r *run) notJudged() []string {
 		out = append(out, "`intent.not_exposed` lists no URL: nothing is checked for answering from the internet when it should not.")
 	}
 	return out
+}
+
+// narrowService says the host declares a service for localhost, lan or
+// vpn, the only audiences svc.listens_beyond_declared judges against.
+func narrowService(h ResolvedAsset) bool {
+	if h.Context == nil {
+		return false
+	}
+	return slices.ContainsFunc(h.Context.ExpectedServices, func(s Service) bool {
+		return s.Audience == "localhost" || s.Audience == "lan" || s.Audience == "vpn"
+	})
 }
 
 // mailUse is each mail domain Recon read under a domain root, as the

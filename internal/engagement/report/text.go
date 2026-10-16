@@ -476,6 +476,13 @@ func (t *text) summary() {
 	}
 	t.field("", "Outside scheck", 17, "Malware on any machine, application logic, processes, lookalike domains.")
 	t.blank()
+	if len(t.r.Summary.MattersMost) > 0 {
+		t.line(t.bold("Data that matters most"))
+		for _, m := range t.r.Summary.MattersMost {
+			t.hang("  ", "    ", t.mattersLine(m))
+		}
+		t.blank()
+	}
 
 	// Provider-closed but active alerts need attention without inventing a finding.
 	// docs/spec/github-collector.md, "Coverage, wording and verification".
@@ -1506,13 +1513,15 @@ func (t *text) notChecked() {
 	var lines []string
 	host := t.r.Engagement.BuiltFrom == "host"
 	rerun := false
-	for _, s := range t.r.Incomplete {
+	// Items on an asset named in data.matters_most come first.
+	for _, s := range t.mattersFirstShortfalls(t.r.Incomplete) {
 		if s.Effect != nil || s.Reason == "failed" || s.Reason == "limit_reached" {
 			lines = append(lines, "Run again: "+t.shortfall(s))
 			rerun = true
 		}
 	}
-	for _, a := range t.r.Assets {
+	assets := t.mattersFirstAssets()
+	for _, a := range assets {
 		if a.Envelope == nil {
 			continue
 		}
@@ -1567,7 +1576,7 @@ func (t *text) notChecked() {
 		}
 	}
 	var unread []string
-	for _, a := range t.r.Assets {
+	for _, a := range assets {
 		if a.Reason == "collector_not_built" {
 			unread = append(unread, clean(a.Name)+" ("+kindLabel(a.ID)+")")
 		}
@@ -1670,6 +1679,22 @@ func (t *text) acceptanceName(a Acceptance) string {
 // with an execution status, and at -vv the redacted captures too
 // (docs/spec/report.md, "Text and JSON"). The default report leaves
 // them to the JSON: a reader does not act on them.
+// engagementSeverities is the host's envelope with each finding at the
+// severity this report gives it, so the fact sheet's flags agree with the
+// findings above it; the envelope itself keeps the collector's.
+func (t *text) engagementSeverities(a Asset) hostreport.Envelope {
+	env := *a.Envelope
+	env.Findings = slices.Clone(env.Findings)
+	for i, f := range env.Findings {
+		for _, ef := range t.r.Findings {
+			if ef.Key.Asset == a.ID && ef.ID == f.ID && ef.Key.Subject == nil {
+				env.Findings[i].Severity = finding.Severity(ef.Severity)
+			}
+		}
+	}
+	return env
+}
+
 func (t *text) factSheets() {
 	if t.opt.Verbose < 1 {
 		return
@@ -1680,7 +1705,7 @@ func (t *text) factSheets() {
 		}
 		t.line(t.bold("FACTS READ ON " + strings.ToUpper(clean(a.Name))))
 		_ = t.w.Flush()
-		_ = hostreport.WriteFactSheet(t.w, *a.Envelope, t.opt)
+		_ = hostreport.WriteFactSheet(t.w, t.engagementSeverities(a), t.opt)
 		t.blank()
 	}
 }

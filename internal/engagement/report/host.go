@@ -371,8 +371,9 @@ func (v *hostView) principal(observation string) string {
 }
 
 // findings converts the host's graded findings. The host collector's chain
-// is kept as the collector's; the engagement appends none of its own in
-// 0.0.2 for a host (docs/spec/engagement.md, "Severity in context").
+// is kept as the collector's, and the engagement's steps after it
+// (data.matters_most on a host access finding) are appended
+// (docs/spec/engagement.md, "Severity in context").
 func (b *builder) hostFindings(v *hostView) []Finding {
 	var out []Finding
 	bound := v.env.Host.ID
@@ -418,6 +419,10 @@ func (b *builder) hostFindings(v *hostView) []Finding {
 		if f.CappedBy != "" {
 			ef.WhyHere = append(ef.WhyHere, finding.WhyPastHigh(f.CappedBy))
 		}
+		sev := f.Severity
+		if c := v.h.Chains[f.ID]; c != nil {
+			sev = b.hostChain(&ef, c)
+		}
 		for _, e := range f.Evidence {
 			if e.Check == "context" {
 				ef.Evidence = append(ef.Evidence, Evidence{Kind: "declared", Source: v.h.ExpectedSource, Excerpt: e.Excerpt})
@@ -430,11 +435,31 @@ func (b *builder) hostFindings(v *hostView) []Finding {
 		if f.Status == finding.StatusAccepted {
 			ef.Acceptance = b.findingAcceptance(v.a.ID, f.ID, f.AcceptedReason)
 		} else {
-			ef.AcceptTemplate = b.template(v.a, f.ID, f.Severity)
+			ef.AcceptTemplate = b.template(v.a, f.ID, sev)
 		}
 		out = append(out, ef)
 	}
 	return out
+}
+
+// hostChain adds the engagement's steps after the host collector's table
+// to a host finding (docs/spec/engagement.md, "Stacking"): a step that
+// moved it is an adjustment and its reason, a cap that holds is said.
+func (b *builder) hostChain(ef *Finding, c *finding.Chain) finding.Severity {
+	for _, m := range c.Moves {
+		if m.Stopped == "" && m.From != m.To {
+			ef.Adjustments = append(ef.Adjustments, Adjustment{Rule: m.Rule, By: m.By, Delta: deltaString(m.To.Rank() - m.From.Rank()),
+				Source: SourceRef{File: b.in.Path, Key: m.Ref.Key}})
+			ef.WhyHere = appendUnique(ef.WhyHere, m.Why)
+		}
+	}
+	for _, m := range c.Moves {
+		if m.Stopped != "" && m.Why != "" && c.Severity.Rank() <= m.To.Rank() {
+			ef.WhyHere = appendUnique(ef.WhyHere, m.Why)
+		}
+	}
+	ef.Severity = string(c.Severity)
+	return c.Severity
 }
 
 func (v *hostView) collectedAt(observation string) time.Time {

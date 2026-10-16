@@ -79,8 +79,8 @@ reader needs to interpret the findings: the trigger, authorization, scope and ac
 risks. A question nothing consumes is removed from the interview, not kept for a later
 release; an operator who answers questions that change nothing stops answering
 carefully. A question whose consumers belong only to a slice that has not merged is
-cut the same way. E9 has not merged, so a question kept for Plan, Analyze or a
-multi-fact rule is not asked. The mapping from question to consumer is code
+cut the same way. E9 is merged into the interview at its step 9, so a question kept
+for Plan, Analyze or a multi-fact rule is asked. The mapping from question to consumer is code
 (`internal/engagement/interview.go`): each question declares its consumers by id,
 with the slice that owns each. A test proves at every commit that each declaration
 is well formed and that every consumer owned by a slice already merged exists. The
@@ -101,10 +101,81 @@ stubbed to pass.
 | Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
 | Intent | What is exposed on purpose, and to whom? | Exposure findings on that exact URL or service drop to *info*, attributed ("Severity in context") |
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
-| Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Design, asked again when E9 lands |
-| Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` and `svc.listens_beyond_declared` (E9 step 5a). The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
+| Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Asked after `context` and before `not_used`; rules below the table |
+| Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a) and `svc.listens_beyond_declared` (E9 step 5a); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation"; `external` is refused beside a host already answered `internet`, by the same refusal as intake |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
+
+**The service line of the `context` question** (built in E9 step 9). The line is
+`service: <port> <tcp|udp> [localhost|lan|vpn|internet] <purpose>`. A third token that
+is one of the four words is the audience; otherwise the audience is unset and the rest
+is the purpose. Several `service:` lines per host block are accepted. `airgapped` is refused with the intake text ("Exposure vocabulary"). An
+`internet` service on a `lan` or `vpn` host is not refused. The prompt's examples are:
+
+```
+service: 443 tcp internet the public HTTPS listener
+service: 5432 tcp localhost the shop's Postgres, used only by the app on this server
+```
+
+and its closing text: "A service is a port that should be open, with tcp or udp, then
+who should reach it: localhost (only this server), lan (the office network), vpn, or
+internet, then a few words on what it is. A database only this server uses is localhost:
+it should be open, to this server. scheck reports a service that listens more widely than
+you said. If you do not know who should reach it, leave that word out. If you do not know
+the port, leave service out. Do not name a port you hope is closed." With no audience the
+line is accepted and `init` prints: "No audience given for 5432/tcp: scheck will check
+that it is listening, but not whether it listens more widely than it should."
+
+**The `data.matters_most` question** (built in E9 step 9). It is asked after `context`
+and before `not_used`. It offers every declared, non-excluded thing in a fixed group
+order: hosts, Workspace tenants, GitHub organizations, repositories (repo roots and
+`assets` entries with `repo`), url sites (url roots and url assets), cloud roots. Within
+a group the order is the file's; `assets` entries are in name order, since `assets` is a
+map. Domain roots, networks and excluded assets are never offered. Each line is
+numbered from 1 and labelled with the asset name first, and its locator in parentheses,
+when an `assets` name exists, else the root as written:
+
+```
+1. shop (host: deploy@203.0.113.5)
+2. saas: google-workspace:example.com
+3. saas: github:example-org (GitHub organization: its members and admins)
+4. shop-repo (repo: github:example-org/shop)
+```
+
+Under the list: "Picking an organization covers its members and admins. To cover a
+repository's code, pick the repository." An organization and its repositories may both
+be picked; the organization pick raises the organization's own findings, not its
+repositories'. Cloud roots stay offered: the readout says nothing reads them in 0.0.2
+([report.md](report.md), "The report").
+
+An answer line is `N: a few words`. A line `repo: github:org/name: a few words` is also
+accepted for a repository under a declared GitHub organization root; `init` writes an
+`assets` entry named from the repository's last path segment, as the deploys question
+does, and refuses when the segment is not a valid name or collides with an existing one:
+"name this repository in the deploys question or in the file's assets; `<seg>` cannot be
+used as a name here." `asset` is written as the `assets` name when one exists, else the
+root value as written. `what` is required, goes through the credential detector, and is
+at most 120 characters. Refusals, whole-answer (any bad line refuses all):
+
+| Line | Refusal |
+|---|---|
+| malformed | "Write each line as a number, a colon and a few words, for example `2: customer orders and invoices`." |
+| no words | "Say in a few words what data number N holds, for example `N: customer orders and invoices`." |
+| a `repo:` line with no words | "Say in a few words what data <repo> holds, for example `repo: <repo>: customer orders and invoices`." |
+| out of range | "There is no number N here; pick from 1 to M." |
+| a domain typed in | "A domain is not offered: pick the site (url) or server that holds the data." |
+| a number repeated | "N is listed twice; give one line per number and put both descriptions on it." |
+| a `repo:` line, malformed | "Write a repository as repo: github:org/name: a few words." |
+| a `repo:` line, excluded | "<repo> is excluded (<exclude id>), so scheck reads nothing in it; it cannot be picked." |
+| a repository twice | "<repo> is listed twice; give one line per repository and put both descriptions on it." |
+| a repository already offered | "<repo> is already listed as number N; pick that number." |
+| not under a declared organization | "<repo> is not under a GitHub organization you listed under roots." |
+| a description over 120 characters | "Keep the description of number N to 120 characters or fewer." |
+
+The question is skipped, with no prompt printed, when the file already has
+`data.matters_most` or nothing is offerable. A blank answer writes nothing. Its consumers
+are `severity.data_matters_most` (E9 step 1a), `plan.github_tier4` (E9 step 6a),
+`report.rank_tiebreak` (E2) and `report.matters_most_readout` (E9 step 9).
 
 Not asked, and why. The keys below stay valid. The interview does not ask them.
 
@@ -124,11 +195,6 @@ Not asked, and why. The keys below stay valid. The interview does not ask them.
   text. The interview does not ask where production secrets live: a free-text store
   cannot say whether scheck read it. Plan reads `secrets.production[].asset` when the
   file has it ("Plan selection and follow-ups").
-- **Data that matters most.** E8 did not ask it. E9 asks it again, as a pick from the
-  declared assets (row "Intent" above; wording in E9 step 9), because Plan's selection and the severity rule
-  read it ("Severity in context", "Plan selection and follow-ups"). It does not raise
-  along a link from a repository to a host: `deploys_to` stays the string `production`,
-  `staging` or `development`, and a link between assets is 0.0.3 G4.
 - **Backups.** `data.backups` stays valid. The interview does not ask where backups
   are. A declaration still prints as *declared, not verified*, and the row stays *not
   assessed* until a cloud collector can compare it with inventory (0.0.3).
@@ -247,7 +313,7 @@ secrets:
     - {store: env-file, asset: deploy}
 
 data:
-  matters_most:                       # valid, not asked
+  matters_most:                       # asked by the interview
     - {what: "customer orders and invoices", asset: deploy}
   backups:                            # valid, not asked
     - {where: "bucket example-backups", account: gcp:example-backups}
@@ -780,11 +846,20 @@ not named here does not exist.
   a host are governed by its `expected_services`, not by intent.
 - **Data that matters most** leaves findings in other areas (headers, email, host
   hardening) where they are. A finding's area is a required field of its definition.
-  On a host named in `data.matters_most`, only the host access findings raise, by a flag
-  on their definitions, not by area: `sshd.password_auth_enabled`,
-  `sshd.root_login_enabled`, `accounts.empty_password`,
-  `accounts.empty_password_remote` and `db.listens_unfiltered`. Time sync, auditd and
-  pending updates never move. The raise stacks with any other adjustment on the same finding ("Stacking").
+  On a host asset, only definitions flagged `HostAccess` move, whatever their area:
+  `sshd.password_auth_enabled`, `sshd.root_login_enabled`, `accounts.empty_password`,
+  `accounts.empty_password_remote` and `db.listens_unfiltered`; every other asset kind
+  matches by area. Time sync, auditd and pending updates never move. The step is applied
+  by the engagement (`by: engagement`) after the host collector's own table
+  (`host-collector.md §5.3`, unchanged): the embedded host envelope keeps the
+  collector's severity, and the engagement finding carries the step (built, E9 step 9).
+  `svc.listens_beyond_declared` does not raise on a `data.matters_most` host and its
+  chain has no `data_matters_most` step: it is not a host access finding. A host access
+  finding the host table left at high records the step as stopped, "capped at high by
+  data_matters_most".
+  It does not raise along a link from a repository to a host: `deploys_to` stays the
+  string `production`, `staging` or `development`, and a link between assets is 0.0.3
+  G4. The raise stacks with any other adjustment on the same finding ("Stacking").
 - **A contradiction** raises because someone believes they are protected, which makes
   the weakness worse than the same one never declared.
 - **An attribute raise or a separate id.** When the fix is the same and only the stakes
@@ -1092,13 +1167,13 @@ condition holds on what Recon read. Rules the engagement can read but that will 
 - Per sending mail domain: "`email.dkim_missing` on `<domain>` will not be judged: no DKIM selector is declared for it under `mail.senders`, and DNS cannot list selectors."
 - "`email.spf_undeclared_sender` on `<domain>` will not be judged: `mail.senders` names no service that sends as this domain."
 - When `intent.not_exposed` has URLs and the vantage is not `internet`: "`web.restricted_reachable` will not be judged for <n> URLs under `intent.not_exposed`: this run's vantage is <not given|vpn|lan>; run with `--vantage internet` from a network outside your VPN and office."
-- "`svc.listens_beyond_declared` on `<host>` will not be judged: `expected_services` is empty for this host."
+- "`svc.listens_beyond_declared` on `<host>` will not be judged: no service on this host is declared for localhost, lan or vpn (`expected_services`)." It is also named when entries exist but none has a narrow audience.
 - "`workspace.external_forwarding` on `<asset>` will not be judged: `authorization.mailboxes` authorizes no mailbox, so no forwarding settings are read."
 
 Declarations that are absent and change what is raised or ranked:
 
 - "No repository declares `deploys_to: production`: no finding is raised for reaching production, a departed person's push to production cannot be raised, and no repository is read first for it."
-- "`data.matters_most` is empty: no finding is raised for the data that matters most, and nothing is read or ranked first for it."
+- "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it."
 - Per tenant or organization with `access.mfa` absent or unknown: "`access.mfa` does not say who must use 2-step verification in `<asset>`: scheck reports what it reads, but cannot raise a gap as a contradiction of what you believe."
 - When there are web roots and `intent.not_exposed` is empty: "`intent.not_exposed` lists no URL: nothing is checked for answering from the internet when it should not."
 
@@ -1695,8 +1770,8 @@ not-judged list. The Hosts row's Firewall line reads "whether declared services 
 beyond their audience only; see External surface" beside R1's.
 
 The interview's `expected_services` answers have two consumers: `db.listens_unfiltered`
-and `svc.listens_beyond_declared`. The interview does not yet ask for them; E9 step 9
-joins them (`ROADMAP.md`).
+and `svc.listens_beyond_declared`. The interview's `context` question asks for them
+("Intake", the service line).
 
 **R4 `attribute:production_write`** (built, E9 step 4). A raise on the GitHub
 `identity.former_person_has_access` finding. The GitHub collector states facts and the

@@ -200,6 +200,47 @@ or usability was tested; origin cleanup is assigned to the mirror maintainer aft
 revocation or rotation. The summary has no
 score, grade, percentage or compliance claim.
 
+**Data that matters most** (E9 step 9). When `data.matters_most` has entries, the
+summary carries a readout block, one line per entry, in file order:
+
+Let M be the rules this answer raises on the asset (`finding.Def.MattersMostRaises`:
+the `HostAccess` definitions on a host, the identity, secrets, data and external areas
+elsewhere), D those of them that decided and U = M - D the rest. A check decided when
+it fired (`matched`) or was disproved over everything it had to read (`not_matched`
+and complete); a disproval over part of a read is undecided, with its own reason (a
+budget cut's `sampled`), or `unavailable:incomplete_read` when it has none. A rule that cannot apply on the asset
+(`not_applicable`, another platform's) is not one of the M. The outcomes:
+
+- `raised`: "*asset* (*what*): N findings on it that this answer raises." N counts
+  every open or accepted finding on the asset that this answer raises, those already at
+  the top included, not only the ones it moved ("1 finding"). When U > 0 the line adds
+  "; U of the M checks this answer raises could not decide (*reason*)."
+- `read` (D = M > 0, nothing raised): "*asset* (*what*): read; every check this answer
+  raises decided, and none found anything it raises."
+- `partial` (0 < D < M): "*asset* (*what*): read; U of the M checks this answer raises
+  could not decide (*reason*); the other D found nothing it raises."
+- `not_judged` (read, D = 0): "*asset* (*what*): read, but none of the M checks this
+  answer raises could decide (*reason*); nothing on it was raised." With M = 1: "the one
+  check this answer raises could not decide". With M = 0: "*asset* (*what*): read, but
+  this version of scheck has no check this answer raises for it; nothing on it was
+  raised."
+- `not_read`: "*asset* (*what*): not read in this run (*reason*); nothing on it was
+  checked or raised." For a cloud root in 0.0.2 the reason is "this version of scheck
+  does not read cloud projects".
+
+The reason is the not-assessed reason covering most of the undecided checks (ties in
+assessment order), worded as coverage words it; with more than one reason the line
+adds ", and other reasons; see Not checked". Only `read` means every check this answer
+raises decided.
+
+The JSON is `summary.matters_most[]`, always present (an empty array when the file has
+no entry), each item `{key, asset, name, what, outcome, raised, checks, undecided,
+reasons}`: `key` is `data.matters_most[i]`, `asset` the canonical asset id, `name` its
+name, `outcome` one of `raised`, `read`, `partial`, `not_judged` or `not_read`, `raised`
+the count, `checks` M, `undecided` U, and `reasons` an array of reason tokens, always
+present: the undecided checks' reasons, most common first, or for `not_read` the asset's
+reason or status (`failed`, `collector_not_built`).
+
 **Not checked, and what would close the gap.** Grouped by the action that closes it,
 as the host report groups by remedy (`host-collector.md §6.6`): re-run with elevation;
 for missing access, the permission needed, read-only where the provider offers it, and
@@ -207,7 +248,7 @@ where to look by hand for the one setting it hides ("GitHub > Settings >
 Authentication security"), never "give scheck an owner's token" as the default; or
 "this version of scheck does not read it; assess it by other means until it does". No
 manual checklist is printed for a root without a collector: it would be a second,
-unreviewed catalog.
+unreviewed catalog. Items on an asset named in `data.matters_most` are listed first.
 
 **Excluded, narrowed and not run.** Every `exclude` entry and whether it matched
 anything: an entry discovery covers prints how many discovered names it dropped, and
@@ -1122,7 +1163,7 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   decided without a request; it never invents a request id. A finding still requires
   nonempty rule inputs and observed evidence;
 - `summary` with its items (`kind`, `ids[]`, `person`, member keys, severity,
-  `rank_basis`) and disjoint area counts (`assessed`, `partial`, `not_assessed`,
+  `rank_basis`), `matters_most[]` ("Summary") and disjoint area counts (`assessed`, `partial`, `not_assessed`,
   `not_applicable`, `total`);
 - `people_left[]`, one record per person with a declared `left` ("People who left");
 - `acceptances[]`, every `intent.accepted_risks` entry with its outcome and the
@@ -1144,7 +1185,8 @@ Text only: the plain wording of marks and reasons, the summary sentences, the fo
 line, the grouping in "Fix these first", remedy phrasing, the YAML of the paste, the
 closing sentences, and colour on a tty (decided in `cmd/scheck`, `host-collector.md
 §6.6`). A host's fact sheet prints under `-v`, not by default, and `-vv` adds its
-redacted captures, as in 0.0.1.
+redacted captures, as in 0.0.1. The sheet's `finding:` flags show the severity the
+engagement report gives the finding, not the host collector's.
 
 The text and JSON reports are pinned by golden files under the rules of the host
 report's (`host-collector.md §9`).

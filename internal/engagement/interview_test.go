@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/engagement/severity"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/operator"
 )
@@ -93,9 +94,54 @@ func proveConsumer(t *testing.T, id string) {
 		if out.Severity != finding.SevLow {
 			t.Fatalf("dev did not lower password auth: %s", out.Severity)
 		}
+	case "severity.data_matters_most", "plan.github_tier4":
+		proveMattersMost(t, id)
+	case "report.rank_tiebreak", "report.matters_most_readout":
+		in := ereport.Input{Name: "acme", Started: time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC),
+			Assets:          []ereport.AssetInput{{Name: "shop", ID: "host:203.0.113.5:22", Kind: "host", Status: "not_collected", Reason: "failed"}},
+			DataMattersMost: []string{"host:203.0.113.5:22"},
+			MattersMost:     []ereport.MatterInput{{Key: "data.matters_most[0]", Asset: "host:203.0.113.5:22", What: "orders"}}}
+		rep := ereport.Build(in)
+		if len(rep.Summary.MattersMost) != 1 || rep.Summary.MattersMost[0].Outcome != "not_read" {
+			t.Fatalf("readout %+v", rep.Summary.MattersMost)
+		}
 	default:
 		if _, ok := finding.Lookup(id); !ok {
 			t.Errorf("no consumer %s", id)
+		}
+	}
+}
+
+// proveMattersMost resolves an answered data.matters_most entry into the
+// severity table's declaration and the GitHub selection's tier 4 source.
+func proveMattersMost(t *testing.T, id string) {
+	t.Helper()
+	res, err := Parse("e.yaml", []byte(minimal+"assets:\n  shop:\n    repo: github:example-org/shop\ndata:\n  matters_most:\n    - {what: orders, asset: shop}\n"), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &run{res: res, zone: time.UTC}
+	switch id {
+	case "severity.data_matters_most":
+		d := r.declarations()
+		if len(d.MattersMost) != 1 || d.MattersMost[0].Asset != "repo:github:example-org/shop" {
+			t.Fatalf("declarations %+v", d.MattersMost)
+		}
+		c := severity.GradeHost(finding.IDPasswordAuthEnabled, finding.SevMedium, "host:203.0.113.5:22",
+			severity.Declarations{MattersMost: []severity.Matter{{Asset: "host:203.0.113.5:22", Key: "data.matters_most[0]"}}})
+		if c == nil || c.Severity != finding.SevHigh {
+			t.Fatalf("host access finding not raised: %+v", c)
+		}
+	case "plan.github_tier4":
+		var org ResolvedAsset
+		for _, a := range res.Assets {
+			if a.ID == "saas:github:example-org" {
+				org = a
+			}
+		}
+		c := r.githubContext(org)
+		if len(c.MattersMost) != 1 || c.MattersMost[0].Key != "data.matters_most[0]" {
+			t.Fatalf("github context %+v", c.MattersMost)
 		}
 	}
 }
@@ -317,5 +363,177 @@ func TestInterviewRefusesExternalBesideAnInternetHost(t *testing.T) {
 	f = File{Assets: map[string]Asset{"web": {Host: "203.0.113.5"}}, NotUsed: []string{"external"}}
 	if err := Apply(&f, "context", "name: web\nexposure: internet"); err == nil || !strings.Contains(err.Error(), "not_used: external") {
 		t.Fatal("context after not_used accepted")
+	}
+}
+
+// The data.matters_most question offers hosts, Workspace tenants, GitHub
+// organizations, repositories, url sites and cloud roots in that order,
+// never a domain or an excluded asset, and writes the asset's name or the
+// root as written (docs/spec/engagement.md, "The `data.matters_most`
+// question").
+func TestMattersMostOffersInGroupOrder(t *testing.T) {
+	f := &File{
+		Roots: []Locator{{Cloud: "gcp:acme-prod"}, {URL: "https://shop.example.com/"}, {Domain: "example.com"},
+			{SaaS: "github:acme"}, {SaaS: "google-workspace:example.com"}, {Host: "deploy@203.0.113.5"}, {URL: "https://old.example.com/"}},
+		Exclude: []Locator{{URL: "https://old.example.com/"}},
+		Assets: map[string]Asset{
+			"shop":      {Locator: Locator{Host: "deploy@203.0.113.5"}},
+			"shop-repo": {Locator: Locator{Repo: "github:acme/shop"}, DeploysTo: "production"},
+		},
+	}
+	q, _ := questionByID("matters_most")
+	text := q.Text(f)
+	want := "  1. shop (host: deploy@203.0.113.5)\n" +
+		"  2. saas: google-workspace:example.com\n" +
+		"  3. saas: github:acme (GitHub organization: its members and admins)\n" +
+		"  4. shop-repo (repo: github:acme/shop)\n" +
+		"  5. url: https://shop.example.com/\n" +
+		"  6. cloud: gcp:acme-prod\n" +
+		"Picking an organization covers its members and admins. To cover a repository's code, pick the repository.\n"
+	if !strings.Contains(text, want) || strings.Contains(text, "domain:") || strings.Contains(text, "old.example.com") {
+		t.Fatalf("offer:\n%s", text)
+	}
+	if err := Apply(f, "matters_most", "1: customer orders\n3: who can push code\n4: the shop's code\n6: invoices"); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, d := range f.Data.MattersMost {
+		got = append(got, d.Asset+"="+d.What)
+	}
+	if strings.Join(got, ",") != "shop=customer orders,github:acme=who can push code,shop-repo=the shop's code,gcp:acme-prod=invoices" {
+		t.Fatalf("written %v", got)
+	}
+	if q.Answered(f) == false {
+		t.Fatal("an answered matters_most is asked again")
+	}
+	// Intake refuses an excluded root; the offer only had to skip it.
+	f.Roots, f.Exclude = f.Roots[:6], nil
+	f.Engagement.Name, f.Engagement.Timezone, f.Engagement.Trigger = "acme", "Europe/Madrid", "routine"
+	raw, err := Encode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse("e.yaml", raw, testOpts); err != nil {
+		t.Fatalf("written file does not validate: %v\n%s", err, raw)
+	}
+}
+
+func TestMattersMostRefusesBadLines(t *testing.T) {
+	base := func() *File {
+		return &File{Roots: []Locator{{Domain: "example.com"}, {SaaS: "github:acme"}, {Host: "deploy@203.0.113.5"}}, Exclude: []Locator{{Repo: "github:acme/secret"}},
+			Assets: map[string]Asset{"api": {Locator: Locator{Repo: "github:acme/api"}}}}
+	}
+	for answer, want := range map[string]string{
+		"customer orders":                     "Write each line as a number, a colon and a few words, for example `2: customer orders and invoices`.",
+		"two: orders":                         "Write each line as a number, a colon and a few words",
+		"2:":                                  "Say in a few words what data number 2 holds, for example `2: customer orders and invoices`.",
+		"9: orders":                           "There is no number 9 here; pick from 1 to 3.",
+		"example.com: orders":                 "A domain is not offered: pick the site (url) or server that holds the data.",
+		"domain: example.com":                 "A domain is not offered",
+		"1: a\n1: b":                          "1 is listed twice; give one line per number and put both descriptions on it.",
+		"1: " + strings.Repeat("x", 121):      "120 characters",
+		"repo: github:other/x: code":          "github:other/x is not under a GitHub organization you listed under roots.",
+		"repo: github:acme/api: code":         "github:acme/api is already listed as number 3; pick that number.",
+		"repo: github:acme/Bad_Name: code":    "`Bad_Name` cannot be used as a name here.",
+		"1: ok\n9: orders":                    "There is no number 9 here",
+		"repo: github:acme/secret: card data": "github:acme/secret is excluded (repo:github:acme/secret), so scheck reads nothing in it; it cannot be picked.",
+		"repo: github:acme/pay: cards\nrepo: github:acme/pay: refunds": "github:acme/pay is listed twice; give one line per repository and put both descriptions on it.",
+		"repo: github:acme/pay:": "Say in a few words what data github:acme/pay holds, for example `repo: github:acme/pay: customer orders and invoices`.",
+	} {
+		f := base()
+		err := Apply(f, "matters_most", answer)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: got %v, want %q", answer, err, want)
+		}
+		if len(f.Data.MattersMost) != 0 || len(f.Assets) != 1 {
+			t.Errorf("%q: a refused answer wrote %+v %+v", answer, f.Data.MattersMost, f.Assets)
+		}
+	}
+}
+
+// A repository not listed, under a declared organization, becomes an
+// assets entry named from its last segment; a name already used is
+// refused.
+func TestMattersMostRepoLine(t *testing.T) {
+	f := &File{Roots: []Locator{{SaaS: "github:acme"}}, Assets: map[string]Asset{"billing": {Locator: Locator{Host: "deploy@203.0.113.5"}}}}
+	f.Roots = append(f.Roots, Locator{Host: "deploy@203.0.113.5"})
+	if err := Apply(f, "matters_most", "repo: github:acme/billing: invoices"); err == nil || !strings.Contains(err.Error(), "`billing` cannot be used as a name here") {
+		t.Fatalf("collision: %v", err)
+	}
+	if err := Apply(f, "matters_most", "repo: github:acme/payments: card tokens\n2: who pushes"); err != nil {
+		t.Fatal(err)
+	}
+	if f.Assets["payments"].Repo != "github:acme/payments" || f.Data.MattersMost[0].Asset != "payments" || f.Data.MattersMost[1].Asset != "github:acme" {
+		t.Fatalf("assets %+v matters %+v", f.Assets, f.Data.MattersMost)
+	}
+	f.Engagement.Name, f.Engagement.Timezone, f.Engagement.Trigger = "acme", "Europe/Madrid", "routine"
+	raw, err := Encode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse("e.yaml", raw, testOpts); err != nil {
+		t.Fatalf("%v\n%s", err, raw)
+	}
+}
+
+// Nothing offerable (a domain only) skips the question.
+func TestMattersMostSkippedWithNothingToOffer(t *testing.T) {
+	q, _ := questionByID("matters_most")
+	if !q.Answered(&File{Roots: []Locator{{Domain: "example.com"}, {Network: "203.0.113.0/28"}}}) {
+		t.Fatal("asked with nothing to offer")
+	}
+	if q.Answered(&File{Roots: []Locator{{URL: "https://shop.example.com/"}}}) {
+		t.Fatal("a url root was not offered")
+	}
+}
+
+// A service line takes an optional audience as its third word; a host
+// may declare several; airgapped is refused; a missing audience is noted.
+func TestContextServiceAudience(t *testing.T) {
+	f := &File{Assets: map[string]Asset{"web": {Locator: Locator{Host: "203.0.113.5"}}}}
+	notes, err := Answer(f, "context", "name: web\nexposure: internet\nservice: 443 tcp internet the shop\nservice: 5432 tcp localhost postgres\nservice: 8080 tcp the admin panel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := f.Assets["web"].Context.ExpectedServices
+	if len(got) != 3 || got[0].Audience != "internet" || got[0].Purpose != "the shop" || got[1].Audience != "localhost" ||
+		got[2].Audience != "" || got[2].Purpose != "the admin panel" {
+		t.Fatalf("services %+v", got)
+	}
+	if len(notes) != 1 || notes[0] != "No audience given for 8080/tcp: scheck will check that it is listening, but not whether it listens more widely than it should." {
+		t.Fatalf("notes %q", notes)
+	}
+	f = &File{Assets: map[string]Asset{"web": {Locator: Locator{Host: "203.0.113.5"}}}}
+	if _, err := Answer(f, "context", "name: web\nservice: 5432 tcp airgapped db"); err == nil || !strings.Contains(err.Error(), "airgapped describes a host") {
+		t.Fatalf("airgapped: %v", err)
+	}
+}
+
+// Dani's answer from the client interview of 2026-10-16, kept as typed: a
+// person where an audience goes ("MSP and Leo only") is no audience, so the
+// line is kept with the whole rest as its purpose and the note says what
+// will not be judged; a guessed database port is taken as declared.
+func TestBrightcartServiceAnswerKeepsWhatDaniTyped(t *testing.T) {
+	f := &File{Assets: map[string]Asset{"app": {Locator: Locator{Host: "deploy@203.0.113.5"}}}}
+	notes, err := Answer(f, "context", "name: app\nexposure: internet\nenvironment: prod\n"+
+		"service: 443 tcp internet the shop website\nservice: 80 tcp internet the shop website\n"+
+		"service: 22 tcp MSP and Leo only, ssh\nservice: 3306 tcp localhost the shop database i think\n"+
+		"service: 25 tcp internet order emails, the shop sends them from the server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := f.Assets["app"].Context.ExpectedServices
+	if len(got) != 5 || got[2].Audience != "" || got[2].Purpose != "MSP and Leo only, ssh" || got[3].Audience != "localhost" {
+		t.Fatalf("services %+v", got)
+	}
+	if len(notes) != 1 || !strings.HasPrefix(notes[0], "No audience given for 22/tcp:") {
+		t.Fatalf("notes %q", notes)
+	}
+	f.Roots = []Locator{{Host: "deploy@203.0.113.5"}, {SaaS: "google-workspace:brightcart.co.uk"}, {SaaS: "github:brightcart-dev"}}
+	if err := Apply(f, "matters_most", "1: the shop, customer orders and addresses\n2: staff email, customer service and invoices"); err != nil {
+		t.Fatal(err)
+	}
+	if f.Data.MattersMost[0].Asset != "app" || f.Data.MattersMost[1].Asset != "google-workspace:brightcart.co.uk" {
+		t.Fatalf("%+v", f.Data.MattersMost)
 	}
 }

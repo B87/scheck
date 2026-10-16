@@ -1096,6 +1096,7 @@
         "title": "A database listens beyond localhost and the host firewall does not restrict it"
       }
     ],
+    "matters_most": [],
     "more": 0,
     "rules": {
       "decided": 8,

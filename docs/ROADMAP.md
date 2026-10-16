@@ -2079,14 +2079,62 @@ older than 7 days is collected again on resume; every risk area's row prints its
      header's first date; no run test takes a host's cap from the grader through to the
      report's "Why here" (a unit test sets it by hand; nothing round-trips the in-memory
      `CappedBy` through JSON today).
-   - *To check before E9 closes (consultant, outside step 8):* `spec/engagement.md`,
-     "Data that matters most", says the host posture findings `sshd.password_auth_enabled`,
-     `sshd.root_login_enabled` and `accounts.empty_password` carry `HostAccess`; in code
-     only the multi-fact definitions set it.
-9. E9 joins the merged slices in `internal/engagement/interview.go`; `scheck init` asks
-   `data.matters_most` again, run through the `client` interview mode on the wording,
-   and gains the `expected_services` consumers (`db.listens_unfiltered`,
-   `svc.listens_beyond_declared`; carried from step 5a).
+   - *Closed in step 9:* the `HostAccess` flag on the host posture findings
+     `sshd.password_auth_enabled`, `sshd.root_login_enabled` and `accounts.empty_password`
+     (D8 is built in step 9, below).
+9. E9 joins the merged slices in `internal/engagement/interview.go` (`MergedSlices` gains
+   E9); `scheck init` asks `data.matters_most` again, run through the `client` interview
+   mode on the wording, and gains the `expected_services` consumers
+   (`db.listens_unfiltered`, `svc.listens_beyond_declared`; carried from step 5a).
+   **Decided 2026-10-16 by the `security-consultant` on the owner's delegation**
+   (built, offline). `spec/engagement.md` ("Intake", "Severity in context", "Plan selection
+   and follow-ups") and `spec/report.md` ("Summary", "Not checked") carry the wording.
+   - The `data.matters_most` question: offered assets, answer lines, refusals, and the
+     `repo:` line that writes an `assets` entry. Consumers: `severity.data_matters_most`,
+     `plan.github_tier4`, `report.rank_tiebreak`, `report.matters_most_readout`.
+   - The `context` question's service line asks the audience
+     (`service: <port> <tcp|udp> [localhost|lan|vpn|internet] <purpose>`); `airgapped`
+     is refused; no audience is accepted with a printed note.
+   - Plan's not-judged sentences for `svc.listens_beyond_declared` and an empty
+     `data.matters_most` are reworded.
+   - D8 built: on a host asset only `HostAccess` definitions move, whatever their area,
+     applied by the engagement after the host collector's table; the host envelope keeps
+     the collector's severity. `svc.listens_beyond_declared` does not raise on a
+     `data.matters_most` host.
+   - The report's summary gains the `summary.matters_most[]` readout, and "Not checked"
+     lists items on a named asset first.
+   - The readout has five outcomes (`raised`, `read`, `partial`, `not_judged`, `not_read`)
+     and says `read` only over checks that decided (decided 2026-10-16,
+     `security-consultant`, after review: "nothing found" had been said over checks that
+     never decided). The interview refuses an excluded, repeated, already offered,
+     undeclared-org or malformed `repo:` line and a description over 120 characters.
+     `findings.json` gains `host_chains` per host asset; the `-v` fact sheet shows the
+     engagement report's severity.
+   - *Review record (2026-10-16).* Client interview (`client`, brightcart's Dani): she
+     typed `service: 22 tcp MSP and Leo only, ssh`, a person where the audience goes. It
+     is accepted as no audience, with the note, and kept as a test case
+     (`TestBrightcartServiceAnswerKeepsWhatDaniTyped`); no wording change on one client's
+     misreading. Carried, not fixed: the SSH-exposure question is hard to map to
+     internet, vpn or lan; the Postgres example may be copied as a pattern; "hold data"
+     for a host is unclear. Code review (`code-reviewer`): no must-fix. Should-fix, all
+     fixed with tests: the `repo:` line accepted an excluded repository (`init` then
+     exited 3); the readout said "nothing found" over checks that never decided, and
+     counted only moved findings; no test drove Analyze's host raise
+     (`TestDataMattersMostRaisesAHostsAccessFindings`); `findings.json` and the `-v`
+     fact sheet carried the collector's severity beside the raised one. Nit fixed: a
+     repeated repository line got the naming refusal. The step 8 `HostAccess` item is
+     closed. A re-review of the fixes found a must-fix, fixed with a test
+     (`TestMattersMostReadoutCountsOnlyWholeDecisions`): a disproval over part of a read
+     counted as decided, so the readout could say every check decided where coverage said
+     partial; such a check is now undecided, with its own reason or
+     `unavailable:incomplete_read`, and a rule not applicable on the platform is not
+     counted. A targeted review of that fix was clean; its two nits are fixed. Should-fix fixed: the `repo:` line's
+     no-words refusal gave an example that was itself refused. Nits fixed: the
+     `host-matters-most` golden's sshd assessments now match its findings; a host chain's
+     `base` is documented as the severity after the host table. Spec drift the re-review
+     saw was already synced.
+   - *Status:* E9's build steps (1 to 9) are done, offline. The slice-closing audit and
+     the acceptance record are separate and not run.
 
 R3 may move out of E9 if the slice runs long; a deferral is recorded here with its owner.
 

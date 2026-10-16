@@ -55,7 +55,10 @@ type Input struct {
 	Declarations []Declaration
 	// DataMattersMost are the asset ids data.matters_most names.
 	DataMattersMost []string
-	Acceptances     []AcceptanceInput
+	// MattersMost are the data.matters_most entries naming an asset in
+	// scope, in file order, for the summary's readout.
+	MattersMost []MatterInput
+	Acceptances []AcceptanceInput
 	// Excludes are the exclude entries as written; ExcludeMatches counts,
 	// by entry, the names discovery dropped for it, nil when no discovery
 	// ran.
@@ -103,6 +106,10 @@ type Departure struct {
 	Handle, Left string
 	Providers    []string
 }
+
+// MatterInput is one data.matters_most entry: its key
+// (data.matters_most[i]), the asset id it names and what the data is.
+type MatterInput struct{ Key, Asset, What string }
 
 // AssetInput is one asset in scope after Recon.
 type AssetInput struct {
@@ -178,6 +185,10 @@ type AssetInput struct {
 // HostInput is a host asset's collection.
 type HostInput struct {
 	Envelope hostreport.Envelope
+	// Chains are the engagement's steps on a posture finding after the
+	// host collector's table, by finding id; the envelope keeps the
+	// collector's severity (docs/spec/engagement.md, "Stacking").
+	Chains map[string]*finding.Chain
 	// Graded is when its accepted risks were graded: the start of the
 	// session that collected it, which a resume may have kept; zero is the
 	// run's start.

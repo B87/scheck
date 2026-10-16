@@ -114,8 +114,26 @@
       }
     },
     "summary": {
-      "type": "object", "required": ["items", "more", "below", "areas", "rules"], "additionalProperties": false,
+      "type": "object", "required": ["items", "more", "below", "areas", "rules", "matters_most"], "additionalProperties": false,
       "properties": {
+        "matters_most": {
+          "type": "array",
+          "description": "One readout per data.matters_most entry, in file order. Only read means every check this answer raises decided and found nothing it raises.",
+          "items": {
+            "type": "object", "required": ["key", "asset", "name", "what", "outcome", "raised", "checks", "undecided", "reasons"], "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string", "pattern": "^data\\.matters_most\\[[0-9]+\\]$" },
+              "asset": { "type": "string" },
+              "name": { "type": "string" },
+              "what": { "type": "string" },
+              "outcome": { "enum": ["raised", "read", "partial", "not_judged", "not_read"] },
+              "raised": { "type": "integer", "minimum": 0, "description": "Open or accepted findings on the asset this answer raises." },
+              "checks": { "type": "integer", "minimum": 0, "description": "Rules this answer raises on the asset." },
+              "undecided": { "type": "integer", "minimum": 0, "description": "Of those, how many did not decide." },
+              "reasons": { "type": "array", "items": { "type": "string" }, "description": "Reason tokens: the undecided checks' (most common first), or why the asset was not read." }
+            }
+          }
+        },
         "items": {
           "type": "array", "maxItems": 5,
           "description": "Fix these first: a ranking of what was checked, not of all risks. Open, at medium or above, never padded.",

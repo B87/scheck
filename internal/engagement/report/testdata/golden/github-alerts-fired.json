@@ -1329,6 +1329,7 @@
         "title": "GitHub reports an open medium severity dependency alert"
       }
     ],
+    "matters_most": [],
     "more": 0,
     "rules": {
       "decided": 5,

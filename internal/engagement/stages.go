@@ -134,6 +134,11 @@ type AssessedAsset struct {
 	// judges again from the evidence (docs/spec/runs.md, "Verdicts are not
 	// evidence").
 	Judged []finding.Judgment `json:"judged,omitempty"`
+	// HostChains are the engagement's steps on a host posture finding after
+	// the host collector's table, by finding id: Findings keep the
+	// collector's severity, and a chain's severity is the one the report
+	// and Open count (docs/spec/engagement.md, "Stacking").
+	HostChains map[string]*finding.Chain `json:"host_chains,omitempty"`
 }
 
 // Outcome is how a run ended.
@@ -896,6 +901,9 @@ func (r *run) analyze(context.Context) (any, error) {
 		for _, ai := range in.Assets {
 			if ai.ID == doc.Assets[i].ID {
 				doc.Assets[i].Judged = slices.Clone(ai.Judged)
+				if ai.Host != nil {
+					doc.Assets[i].HostChains = ai.Host.Chains
+				}
 			}
 		}
 	}
@@ -1158,9 +1166,10 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 			Source: fmt.Sprintf("%s secrets.production[%d]", res.Source.Path, i),
 			Detail: "production secrets declared in " + st.Store + " on " + st.Asset + ", not read"})
 	}
-	for _, d := range res.Data.MattersMost {
+	for i, d := range res.Data.MattersMost {
 		if id, ok := res.AssetID(d.Asset); ok {
 			in.DataMattersMost = append(in.DataMattersMost, id)
+			in.MattersMost = append(in.MattersMost, ereport.MatterInput{Key: fmt.Sprintf("data.matters_most[%d]", i), Asset: id, What: d.What})
 		}
 	}
 	for i, risk := range res.Intent.AcceptedRisks {

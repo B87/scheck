@@ -317,3 +317,58 @@ func TestADeclaredServiceBeyondItsAudience(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+// D8: on a host named in data.matters_most only the host access findings
+// raise, whatever their area; R3 (external) and the other host findings
+// do not. A host posture finding is raised from the severity the host
+// collector's table left it at, and stops at high (docs/spec/engagement.md,
+// "Severity in context").
+func TestDataMattersMostOnAHostRaisesOnlyHostAccess(t *testing.T) {
+	const host = "host:db1:22"
+	d := Declarations{MattersMost: []Matter{{Asset: host, Name: "db1", What: "orders", Key: "data.matters_most[0]"}}}
+	for _, id := range []string{finding.IDPasswordAuthEnabled, finding.IDRootLoginEnabled, finding.IDEmptyPassword} {
+		def, _ := finding.Lookup(id)
+		if !def.HostAccess {
+			t.Fatalf("%s is not flagged", id)
+		}
+	}
+	c := GradeHost(finding.IDPasswordAuthEnabled, finding.SevMedium, host, d)
+	if c == nil || c.Severity != finding.SevHigh || strings.Join(moved(c), ",") != "data_matters_most" || c.Moves[0].Ref.Key != "data.matters_most[0]" ||
+		c.Base != finding.SevMedium {
+		t.Fatalf("%+v", c)
+	}
+	// Lowered by airgapped (-2) to low, the step still applies from there.
+	if c := GradeHost(finding.IDPasswordAuthEnabled, finding.SevLow, host, d); c.Severity != finding.SevMedium {
+		t.Fatalf("%+v", c)
+	}
+	// Left at high by the host table: the step stops there, worded.
+	c = GradeHost(finding.IDRootLoginEnabled, finding.SevHigh, host, d)
+	if c.Severity != finding.SevHigh || c.Moves[0].Stopped != finding.StoppedPastHigh || !strings.HasPrefix(c.Moves[0].Why, "capped at high by data_matters_most") {
+		t.Fatalf("%+v", c)
+	}
+	for _, id := range []string{finding.IDAppFirewallDisabled, finding.IDUpdatesPending} {
+		if c := GradeHost(id, finding.SevMedium, host, d); c != nil {
+			t.Fatalf("%s moved: %+v", id, c)
+		}
+	}
+	if c := GradeHost(finding.IDPasswordAuthEnabled, finding.SevMedium, "host:other:22", d); c != nil {
+		t.Fatalf("another host: %+v", c)
+	}
+	// The multi-fact rules: R1 (data) and R2 (hosts) raise by their flag;
+	// R3 (external) does not.
+	if c := Grade(fired(finding.IDDBListensUnfiltered), host, d); strings.Join(moved(c), ",") != "data_matters_most" {
+		t.Fatalf("R1: %+v", c)
+	}
+	if c := Grade(fired(finding.IDEmptyPasswordRemote), host, d); len(c.Moves) != 1 || c.Moves[0].Rule != "data_matters_most" || c.Severity != finding.SevCritical {
+		t.Fatalf("R2: %+v", c)
+	}
+	r3 := fired(finding.IDSvcListensBeyond, finding.Attribute{Name: "contradiction", Ref: finding.Ref{Key: "assets.db1.context.expected_services[0]"}})
+	if c := Grade(r3, host, d); slices.ContainsFunc(c.Moves, func(m finding.Move) bool { return m.Rule == "data_matters_most" }) {
+		t.Fatalf("R3: %+v", c)
+	}
+	// Any other asset kind still matches by area.
+	if c := Grade(fired(finding.IDIdentityUnexpectedAdmin), "saas:github:acme",
+		Declarations{MattersMost: []Matter{{Asset: "saas:github:acme", Key: "data.matters_most[0]"}}}); strings.Join(moved(c), ",") != "data_matters_most" {
+		t.Fatalf("by area: %+v", c)
+	}
+}

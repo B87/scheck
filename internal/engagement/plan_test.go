@@ -35,7 +35,7 @@ access:
 		"`github.outside_admin_on_production` on `saas:github:acme` will not be judged: no repository in this organization declares `deploys_to: production`.",
 		"`workspace.external_forwarding` on `saas:google-workspace:example.com` will not be judged: `authorization.mailboxes` authorizes no mailbox, so no forwarding settings are read.",
 		"No repository declares `deploys_to: production`: no finding is raised for reaching production, a departed person's push to production cannot be raised, and no repository is read first for it.",
-		"`data.matters_most` is empty: no finding is raised for the data that matters most, and nothing is read or ranked first for it.",
+		"`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it.",
 		"`access.mfa` does not say who must use 2-step verification in `saas:google-workspace:example.com`: scheck reports what it reads, but cannot raise a gap as a contradiction of what you believe.",
 	}
 	if !slices.Equal(got, want) {

@@ -1078,6 +1078,21 @@
         "title": "The macOS application firewall is disabled"
       }
     ],
+    "matters_most": [
+      {
+        "asset": "host:macos:22",
+        "checks": 2,
+        "key": "data.matters_most[0]",
+        "name": "macos",
+        "outcome": "not_judged",
+        "raised": 0,
+        "reasons": [
+          "insufficient_permission:sudo"
+        ],
+        "undecided": 2,
+        "what": "customer orders and invoices"
+      }
+    ],
     "more": 0,
     "rules": {
       "decided": 6,

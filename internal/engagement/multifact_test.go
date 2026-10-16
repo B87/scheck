@@ -175,3 +175,47 @@ intent:
 		t.Fatalf("a subject on a whole-host finding: %v", err)
 	}
 }
+
+// A host named in data.matters_most: Analyze raises its host access
+// posture finding one step after the host collector's table, and the
+// readout counts every finding the answer raises on it, moved or already
+// at the top (docs/spec/engagement.md, "Severity in context"; report.md,
+// "Data that matters most").
+func TestDataMattersMostRaisesAHostsAccessFindings(t *testing.T) {
+	raw := strings.Replace(dbHost, "exposure: internet", "exposure: lan", 1) + "data:\n  matters_most:\n    - {what: orders, asset: db}\n"
+	res, err := Parse("engagement.yaml", []byte(raw), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := filepath.Abs(filepath.Join("testdata", "ssh-empty-password"))
+	collect := func(ctx context.Context, o hostasset.Options) (*hostasset.Collection, error) {
+		fx, err := fixture.Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Target = fx
+		return hostasset.Collect(ctx, o)
+	}
+	out, err := Run(context.Background(), res, RunOptions{Raw: []byte(raw), Collect: collect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raised bool
+	for _, f := range out.Report.Findings {
+		if f.ID != finding.IDPasswordAuthEnabled {
+			continue
+		}
+		raised = f.Severity == "high" && f.SeverityBase == "medium" && len(f.Adjustments) == 1 &&
+			f.Adjustments[0].Rule == "data_matters_most" && f.Adjustments[0].By == "engagement" && f.Adjustments[0].Source.Key == "data.matters_most[0]"
+		if !raised {
+			t.Errorf("password auth %+v", f)
+		}
+	}
+	if !raised {
+		t.Fatal("no password auth finding")
+	}
+	mm := out.Report.Summary.MattersMost
+	if len(mm) != 1 || mm[0].Outcome != "raised" || mm[0].Raised != 3 || mm[0].Name != "db" || mm[0].Undecided != 0 {
+		t.Fatalf("readout %+v", mm)
+	}
+}

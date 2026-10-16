@@ -6,6 +6,7 @@ import (
 
 	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/engagement/severity"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // declarations are what the severity table reads of the engagement file,
@@ -44,12 +45,26 @@ func (r *run) declarations() severity.Declarations {
 }
 
 // gradeAssets gives each fired judgment its chain under the asset that
-// owns it, after partitionGitHubJudgments moved each to its repository:
-// the report renders the chains and decides none.
+// owns it, after partitionGitHubJudgments moved each to its repository,
+// and each host posture finding the engagement's steps after the host
+// collector's table: the report renders the chains and decides none.
 func (r *run) gradeAssets(assets []ereport.AssetInput) {
 	d := r.declarations()
 	for i := range assets {
 		severity.GradeAll(assets[i].Judged, assets[i].ID, d)
+		h := assets[i].Host
+		if h == nil {
+			continue
+		}
+		h.Chains = nil
+		for _, f := range h.Envelope.Findings {
+			if c := severity.GradeHost(f.ID, f.Severity, assets[i].ID, d); c != nil {
+				if h.Chains == nil {
+					h.Chains = map[string]*finding.Chain{}
+				}
+				h.Chains[f.ID] = c
+			}
+		}
 	}
 }
 

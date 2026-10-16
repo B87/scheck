@@ -485,7 +485,12 @@ in this order:
    that person's access fixes them together; its `keys` still name each finding. A
    `finding_id` item with `other_people: true` ranks on the instances left after a
    person item took theirs (the text says "and other people"); do not add the two
-   counts. Open the findings by `keys`, not by the item's title.
+   counts. Open the findings by `keys`, not by the item's title. `summary.matters_most[]`
+   has one record per `data.matters_most` entry (`outcome` `raised`, `read`,
+   `partial`, `not_judged` or `not_read`; `raised`, `checks` and `undecided` counts;
+   `reasons` tokens). Only `read` means every check the answer raises decided; `partial`
+   and `not_judged` mean some or all of them could not, and a `not_read` asset was not
+   checked, whatever the findings say.
 5. **`findings`**: one record per instance, keyed `{id, asset, subject}`, already in
    ranking order: open findings by severity in context first, then informational, then
    accepted. Lead with the first. A domain finding's `asset` is the most specific one

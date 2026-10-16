@@ -93,7 +93,7 @@ var rules = []rule{
 		return finding.Ref{}, "", false
 	}},
 	{name: "data_matters_most", match: func(d Declarations, in instance) (finding.Ref, string, bool) {
-		if !mattersMost(in.def.Area) {
+		if !mattersMost(in.def, in.owner) {
 			return finding.Ref{}, "", false
 		}
 		for _, m := range d.MattersMost {
@@ -243,10 +243,9 @@ func attribute(j finding.Judgment, name string) (finding.Attribute, bool) {
 	return finding.Attribute{}, false
 }
 
-// mattersMost says data.matters_most moves findings of the area.
-func mattersMost(area finding.Area) bool {
-	return area == finding.AreaIdentity || area == finding.AreaSecrets || area == finding.AreaData || area == finding.AreaExternal
-}
+// mattersMost says data.matters_most moves the finding on its owner
+// (finding.Def.MattersMostRaises).
+func mattersMost(def finding.Def, owner string) bool { return def.MattersMostRaises(owner) }
 
 // Grade is a fired judgment's chain under the asset that owns it: the
 // collector's own steps first, then the table's rows in order, each at
@@ -257,8 +256,14 @@ func Grade(j finding.Judgment, owner string, d Declarations) *finding.Chain {
 	if !ok {
 		return nil
 	}
+	return chain(def, j, owner, d, def.BaseSeverity)
+}
+
+// chain grades j from start: the collector's attribute steps, then the
+// table.
+func chain(def finding.Def, j finding.Judgment, owner string, d Declarations, start finding.Severity) *finding.Chain {
 	in := instance{def: def, j: j, owner: owner}
-	c := &finding.Chain{Base: def.BaseSeverity, Severity: def.BaseSeverity, Moves: []finding.Move{}}
+	c := &finding.Chain{Base: start, Severity: start, Moves: []finding.Move{}}
 	for _, raise := range def.Attributes {
 		if a, ok := attribute(j, raise.Name); ok {
 			step(c, def, finding.Move{Rule: "attribute:" + raise.Name, By: finding.ByCollector, Delta: raise.Delta, Ref: refOf(j, a.Ref), Why: raise.Why}, raise.PastHigh)
@@ -292,6 +297,24 @@ func Grade(j finding.Judgment, owner string, d Declarations) *finding.Chain {
 			exposed = ref.Key
 		}
 		step(c, def, m, row.pastHigh)
+	}
+	return c
+}
+
+// GradeHost is the engagement's steps on a host posture finding, after the
+// host collector's own table (host-collector.md §5.3) left it at sev: the
+// table's rows in order, as Grade applies them (docs/spec/engagement.md,
+// "Stacking"). The host collector's chain stays its own, so the chain's
+// Base is the severity after the host table, not the definition's base;
+// nil when no row applies.
+func GradeHost(id string, sev finding.Severity, owner string, d Declarations) *finding.Chain {
+	def, ok := finding.Lookup(id)
+	if !ok {
+		return nil
+	}
+	c := chain(def, finding.Judgment{ID: id}, owner, d, sev)
+	if len(c.Moves) == 0 {
+		return nil
 	}
 	return c
 }
