@@ -133,8 +133,8 @@
       "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
       "checks": {
         "not_run": 0,
-        "planned": 33,
-        "ran": 22,
+        "planned": 34,
+        "ran": 23,
         "unknown": 11
       },
       "collected": {
@@ -150,6 +150,7 @@
       "kept": true,
       "kind": "host",
       "name": "ubuntu",
+      "oldest_collected_at": "2026-10-07T07:12:03Z",
       "principal": {
         "elevation": "sudo",
         "identity": "deploy",
@@ -164,6 +165,56 @@
     {
       "area": "identity",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "identity.sso",
+          "text": "sign-in through another identity provider (SSO), and that provider's 2-step verification"
+        },
+        {
+          "id": "identity.twostep_kind",
+          "text": "which kind of 2-step verification people use (security key, app or text message)"
+        },
+        {
+          "id": "identity.app_passwords",
+          "text": "app passwords and other sign-ins that skip 2-step verification"
+        },
+        {
+          "id": "identity.delegation",
+          "text": "service accounts allowed to act as any Workspace user (domain-wide delegation)"
+        },
+        {
+          "id": "identity.app_access_policy",
+          "text": "which third-party apps staff may connect to Workspace (app access control)"
+        },
+        {
+          "id": "identity.recovery",
+          "text": "administrators' recovery email and phone"
+        },
+        {
+          "id": "identity.github_apps",
+          "text": "GitHub Apps installed on the organization and what they can reach"
+        },
+        {
+          "id": "identity.github_tokens",
+          "text": "GitHub's rules for personal access tokens"
+        },
+        {
+          "id": "identity.ssh_keys",
+          "text": "GitHub members' SSH keys"
+        },
+        {
+          "id": "identity.leaver_unlisted_write",
+          "text": "access to repositories not declared `deploys_to: production` by a departed person not listed among their collaborators"
+        },
+        {
+          "id": "identity.leaver_additions",
+          "text": "deploy keys, GitHub App authorizations and self-hosted runners a departed person added"
+        },
+        {
+          "id": "identity.leaver_activity",
+          "text": "what a departed person did after leaving (audit log not read)"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -173,6 +224,24 @@
     {
       "area": "secrets",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "secrets.push_protection",
+          "text": "whether GitHub blocks secrets before they are pushed (push protection)"
+        },
+        {
+          "id": "secrets.ci_logs",
+          "text": "secrets printed in CI logs"
+        },
+        {
+          "id": "secrets.images",
+          "text": "secrets inside container images"
+        },
+        {
+          "id": "secrets.chat_docs",
+          "text": "secrets pasted in chat and shared documents"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -182,6 +251,36 @@
     {
       "area": "cloud",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "cloud.public_storage",
+          "text": "storage buckets and disk snapshots anyone can read"
+        },
+        {
+          "id": "cloud.admin_people",
+          "text": "administrator roles (such as Owner or Editor) held by people"
+        },
+        {
+          "id": "cloud.admin_service_accounts",
+          "text": "administrator roles held by service accounts, including the default ones"
+        },
+        {
+          "id": "cloud.keys",
+          "text": "long-lived keys for service accounts and users, and their age"
+        },
+        {
+          "id": "cloud.databases",
+          "text": "databases with a public address or authorized networks open to anyone"
+        },
+        {
+          "id": "cloud.firewall",
+          "text": "network firewall rules open to the whole internet"
+        },
+        {
+          "id": "cloud.org_policies",
+          "text": "organization-wide guardrails (organization policies)"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -191,6 +290,32 @@
     {
       "area": "data",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "data.db_signin",
+          "text": "who can sign in to each database (pg_hba.conf, database users and their passwords)"
+        },
+        {
+          "id": "data.db_firewall_rules",
+          "text": "databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet)"
+        },
+        {
+          "id": "data.db_containers",
+          "text": "databases published by Docker or Podman, whose port rules bypass the host firewall"
+        },
+        {
+          "id": "data.other_stores",
+          "text": "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"
+        },
+        {
+          "id": "data.drive_sharing",
+          "text": "Google Drive sharing defaults, and files shared with anyone who has the link"
+        },
+        {
+          "id": "data.backups",
+          "text": "whether backups exist, where they are kept, and who can delete them"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -200,6 +325,36 @@
     {
       "area": "cicd",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "cicd.push_production",
+          "text": "who can push to repositories that deploy to production, contractors included"
+        },
+        {
+          "id": "cicd.environments",
+          "text": "review rules on the production deployment environment"
+        },
+        {
+          "id": "cicd.fork_approval",
+          "text": "approval before workflows run on pull requests from forks"
+        },
+        {
+          "id": "cicd.self_hosted",
+          "text": "self-hosted runners that public repositories can use"
+        },
+        {
+          "id": "cicd.allowed_actions",
+          "text": "which third-party actions the organization allows"
+        },
+        {
+          "id": "cicd.oidc",
+          "text": "trust from workflows to cloud accounts (OIDC)"
+        },
+        {
+          "id": "cicd.webhooks",
+          "text": "webhooks and where they send data"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -209,6 +364,20 @@
     {
       "area": "external",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "external.open_ports",
+          "text": "which ports and services answer from the internet (scheck reads; it does not scan)"
+        },
+        {
+          "id": "external.registrar",
+          "text": "the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires"
+        },
+        {
+          "id": "external.dns_account",
+          "text": "the DNS hosting account and who can change records"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -218,6 +387,20 @@
     {
       "area": "web",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "web.exposed_files",
+          "text": "exposed files, debug pages and admin panels (such as /.git, /.env or /admin)"
+        },
+        {
+          "id": "web.third_party_scripts",
+          "text": "third-party scripts the site loads"
+        },
+        {
+          "id": "web.cors",
+          "text": "which other sites may read the site's responses (CORS)"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -230,6 +413,44 @@
         "host:ubuntu:22"
       ],
       "mark": "partial",
+      "not_judged": [
+        {
+          "id": "hosts.firewall_linux",
+          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+        },
+        {
+          "id": "hosts.listeners",
+          "text": "listening services you did not declare"
+        },
+        {
+          "id": "hosts.admins_sudo",
+          "text": "who can become root or administrator, and sudo rules that need no password"
+        },
+        {
+          "id": "hosts.ssh_keys",
+          "text": "SSH keys allowed to log in (authorized_keys)"
+        },
+        {
+          "id": "hosts.ssh_match",
+          "text": "SSH settings inside Match blocks, and whether PAM accepts an empty password"
+        },
+        {
+          "id": "hosts.disk_linux",
+          "text": "disk encryption on Linux hosts"
+        },
+        {
+          "id": "hosts.suid",
+          "text": "programs that run with root rights (SUID files)"
+        },
+        {
+          "id": "hosts.persistence",
+          "text": "programs started at boot or on a schedule"
+        },
+        {
+          "id": "hosts.credential_files",
+          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+        }
+      ],
       "population": {
         "in_scope": 1,
         "kind": "hosts",
@@ -307,7 +528,7 @@
           "name": "Firewall",
           "reasons": [
             {
-              "detail": "not read: fw.firewalld, fw.nft, fw.ufw",
+              "detail": "read: /usr/sbin/xtables-nft-multi; not read: fw.firewalld, fw.nft, fw.ufw",
               "reason": "no_rule"
             }
           ]
@@ -460,6 +681,20 @@
     {
       "area": "email",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "email.forwarding_policy",
+          "text": "whether Workspace lets staff forward mail outside the company (the tenant setting)"
+        },
+        {
+          "id": "email.spoofing_protection",
+          "text": "Workspace protection against spoofed and lookalike senders"
+        },
+        {
+          "id": "email.mta_sts",
+          "text": "encryption of mail in transit (MTA-STS and TLS reporting)"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -469,6 +704,24 @@
     {
       "area": "logging",
       "mark": "not_assessed",
+      "not_judged": [
+        {
+          "id": "logging.workspace_alerts",
+          "text": "alerts on administrator changes and suspicious sign-ins in Workspace"
+        },
+        {
+          "id": "logging.github_audit",
+          "text": "GitHub audit log retention and streaming"
+        },
+        {
+          "id": "logging.cloud_audit",
+          "text": "cloud audit logs"
+        },
+        {
+          "id": "logging.host_logs_offhost",
+          "text": "whether host logs are kept anywhere off the host"
+        }
+      ],
       "reasons": [
         {
           "reason": "not_declared"
@@ -489,7 +742,7 @@
     },
     {
       "area": "processes",
-      "detail": "whether offboarding, incident response and vendor reviews are done as written",
+      "detail": "whether offboarding, incident response, backup restore tests and vendor reviews are done as written",
       "mark": "outside_scheck",
       "reasons": []
     },
@@ -540,7 +793,7 @@
       "to": "2026-10-07T07:19:03Z"
     },
     "edited_by_hand": [
-      "evidence/deploy.collection.json"
+      "scope.json"
     ],
     "method": {
       "assessment": "rules",
@@ -577,6 +830,7 @@
     "internal_topology": true,
     "personal_data": true
   },
+  "people_left": [],
   "redaction": {
     "builtin": {},
     "operator": {
@@ -590,6 +844,7 @@
     "command": "scheck run --host deploy@ubuntu (with the same flags)",
     "directory": "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z",
     "resumed": true,
+    "session_started": "2026-10-10T09:12:03Z",
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",
@@ -608,6 +863,7 @@
       "low": 0
     },
     "items": [],
+    "matters_most": [],
     "more": 0,
     "rules": {
       "decided": 6,

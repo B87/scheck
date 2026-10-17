@@ -27,28 +27,41 @@ Fix these first: a ranking of what was checked, not of all your risks
 Nothing else open ranks at medium or above among what was checked. Below: 3 low, 2 informational, 0
 accepted.
 
-A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
-in part: secrets, external surface, web application, email and domain. Not checked: identity and
-access, cloud configuration, data stores and backups, CI/CD and supply chain, hosts, logging and
-incident readiness. Anything not checked is unknown, not fine.
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: secrets, external surface, web application, email and domain. Not checked:
+identity and access, cloud configuration, data stores and backups, CI/CD and supply chain, hosts,
+logging and incident readiness. Anything not checked is unknown, not fine.
 
 COVERAGE
 Secrets                  checked in part
   1 of 1 asset read.
-  This version of scheck has no rule for it (loaded scripts and pages beyond entry points).
+  Not judged in this version: whether GitHub blocks secrets before they are pushed (push
+  protection); secrets printed in CI logs; secrets inside container images; secrets pasted in chat
+  and shared documents. Also not judged on the assets read: loaded scripts and pages beyond entry
+  points.
 External surface         checked in part
   1 of 1 asset read.
-  This version of scheck has no rule for it (TLS versions and ciphers other than those negotiated,
-  and revocation).
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records. Also not judged on
+  the assets read: TLS versions and ciphers other than those negotiated, and revocation.
 Web application          checked in part
   1 of 1 asset read.
   Some web-response checks could not reach a decision; the login flow was not read, so session
   cookies were not fully checked; the redirect could not be followed within the declared entry
   points.
+  Not judged in this version: exposed files, debug pages and admin panels (such as /.git, /.env or
+  /admin); third-party scripts the site loads; which other sites may read the site's responses
+  (CORS).
 Email and domain         checked in part
   1 of 1 asset read.
-  This version of scheck has no rule for it (SPF term ip4:192.0.2.0/24 has no service mapping); DKIM
-  was not checked: no selector given (DKIM for sendgrid on news.example.com: no selector given).
+  DKIM was not checked: no selector given (DKIM for sendgrid on news.example.com: no selector
+  given).
+  Not judged in this version: whether Workspace lets staff forward mail outside the company (the
+  tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in
+  transit (MTA-STS and TLS reporting). Also not judged on the assets read: SPF term ip4:192.0.2.0/24
+  has no service mapping.
 Not requested            Not part of this run: identity and access, cloud configuration, data stores
                          and backups, CI/CD and supply chain, hosts, logging and incident readiness.
                          To include one, list it under roots in the engagement file.
@@ -57,8 +70,8 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          any of them, and laptops you did not list were not looked at.
                          Application logic: authenticated testing of access control and business
                          rules.
-                         Processes: whether offboarding, incident response and vendor reviews are
-                         done as written.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
 FINDINGS: 6 open (1 critical, 1 high, 1 medium, 3 low), 2 informational, 0 accepted

@@ -55,7 +55,7 @@ func runInit(cmd *cobra.Command, opts *globalOpts, args []string) error {
 			continue
 		}
 		for {
-			answer, err := readAnswer(cmd.ErrOrStderr(), in, q)
+			answer, err := readAnswer(cmd.ErrOrStderr(), in, q.Text(f))
 			if err != nil {
 				return err
 			}
@@ -63,13 +63,17 @@ func runInit(cmd *cobra.Command, opts *globalOpts, args []string) error {
 			if err != nil {
 				return err
 			}
-			if err := engagement.Apply(f, q.ID, answer); err != nil {
+			notes, err := engagement.Answer(f, q.ID, answer)
+			if err != nil {
 				*f = *snap
 				if !interactive {
 					return usageErr("%s", err.Error())
 				}
 				fmt.Fprintln(cmd.ErrOrStderr(), err.Error())
 				continue
+			}
+			for _, n := range notes {
+				fmt.Fprintln(cmd.ErrOrStderr(), n)
 			}
 			break
 		}
@@ -125,8 +129,8 @@ func loadInit(path string) (*engagement.File, bool, error) {
 	return &f, true, nil
 }
 
-func readAnswer(w io.Writer, in *bufio.Reader, q engagement.Question) (string, error) {
-	fmt.Fprintln(w, q.Prompt)
+func readAnswer(w io.Writer, in *bufio.Reader, prompt string) (string, error) {
+	fmt.Fprintln(w, prompt)
 	fmt.Fprintln(w, "End with a line containing only a dot.")
 	var b strings.Builder
 	for {

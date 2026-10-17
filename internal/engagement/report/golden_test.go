@@ -13,6 +13,7 @@ import (
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/collector/workspace"
+	"github.com/b87/scheck/internal/engagement/severity"
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/policy"
 	"github.com/b87/scheck/internal/runner"
@@ -55,7 +56,13 @@ func jumpRefused(t *testing.T) Input {
 func TestGoldenReports(t *testing.T) {
 	s := schema(t)
 	cases := map[string]func(*testing.T) Input{
-		"host-ubuntu": func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-ubuntu":             func(t *testing.T) Input { return oneHost(t, "ubuntu") },
+		"host-database-fired":     hostDatabaseFiredReport,
+		"host-database-disproved": hostDatabaseDisprovedReport,
+		"host-database-abstained": hostDatabaseAbstainedReport,
+		"host-ssh-empty-password": hostSSHFiredReport,
+		"host-service-beyond":     hostServiceBeyondReport,
+		"context-notes":           contextNotesReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.
 			in := oneHost(t, "macos")
@@ -89,7 +96,9 @@ func TestGoldenReports(t *testing.T) {
 		"github-ci-fired":                   githubCIFiredReport,
 		"github-ci-disproved":               githubCIDisprovedReport,
 		"github-ci-abstained":               githubCIAbstainedReport,
+		"github-selection-cut":              githubSelectionCutReport,
 		"github-access-fired":               githubAccessFiredReport,
+		"people-left":                       peopleLeftReport,
 		"github-access-disproved":           githubAccessDisprovedReport,
 		"github-access-abstained":           githubAccessAbstainedReport,
 		"github-inventory-partial":          githubPartialInventoryReport,
@@ -108,6 +117,7 @@ func TestGoldenReports(t *testing.T) {
 		"jump-refused":                      jumpRefused,
 		"unreachable-host":                  unreachableHost,
 		"many-findings":                     manyFindings,
+		"host-matters-most":                 hostMattersMost,
 		"context":                           withContext,
 		"acceptances":                       withAcceptances,
 		"resumed": func(t *testing.T) Input {
@@ -116,8 +126,11 @@ func TestGoldenReports(t *testing.T) {
 			// this session kept the host, and a record it kept was edited
 			// by hand.
 			in := oneHost(t, "ubuntu")
-			in.Resumed, in.EditedByHand = true, []string{"evidence/deploy.collection.json"}
+			in.Resumed, in.EditedByHand = true, []string{"scope.json"}
 			in.Assets[0].Kept = true
+			// This session started three days after the host was read.
+			in.Assets[0].OldestCollectedAt = in.Started
+			in.Session = in.Started.Add(3*24*time.Hour + 2*time.Hour)
 			in.Directory = "/home/ops/.local/state/scheck/engagements/acme/2026-10-07T07:12:03Z"
 			in.Egress = &EgressInput{Unrecorded: []time.Time{in.Started},
 				Sources:  []SourceInput{{Source: "dns", Operator: "your network", Host: "192.0.2.53", Requests: 4}},
@@ -133,7 +146,7 @@ func TestGoldenReports(t *testing.T) {
 			}
 			// What the run passes on from the gate.
 			in.Egress.UserAgent = "scheck/test (security self-assessment)"
-			r := Build(in)
+			r := build(in)
 			validate(t, s, r)
 			for _, v := range []int{0, 1} {
 				var txt bytes.Buffer
@@ -201,7 +214,7 @@ func compareGolden(t *testing.T, name, got string) {
 func TestTextIsWordsAndSafe(t *testing.T) {
 	for _, mk := range []func(*testing.T) Input{withGitHubRoot, lostSession, canaryRefused, withAcceptances,
 		func(t *testing.T) Input { return oneHost(t, "ubuntu") }} {
-		r := Build(mk(t))
+		r := build(mk(t))
 		var buf bytes.Buffer
 		if err := WriteText(&buf, r, Options{}); err != nil {
 			t.Fatal(err)
@@ -283,6 +296,7 @@ func withContext(t *testing.T) Input {
 	in.Operator, in.Trigger, in.RedactExtra = "platform-team", "incident", 1
 	in.Candidates = []Candidate{{Handle: "alice", Why: "employee"}}
 	in.DataMattersMost = []string{"host:macos:22"}
+	in.MattersMost = []MatterInput{{Key: "data.matters_most[0]", Asset: "host:macos:22", What: "customer orders and invoices"}}
 	in.OtherTools = []string{"stripe"}
 	in.Excludes = []string{"repo:github:example-org/old"}
 	in.Declarations = []Declaration{{Area: "data", Source: "engagement.yaml data.backups[0]",
@@ -336,4 +350,80 @@ func ruleFinding(t *testing.T, id string, raw map[string]string) (finding.Findin
 	}
 	t.Fatalf("the rules raised no %s over %v", id, raw)
 	return finding.Finding{}, finding.Assessment{}
+}
+
+// hostMattersMost names three assets in data.matters_most: a collected host,
+// whose host access findings rise one step after the host collector's table
+// (sshd.root_login_enabled stops at high, worded) while the others do not
+// move; a host that never answered; and a cloud root no collector reads. The
+// readout says which, and "Not checked" lists the unread host first.
+func hostMattersMost(t *testing.T) Input {
+	in := manyFindings(t)
+	in.FromHost, in.Path, in.Rerun = false, "engagement.yaml", "scheck run engagement.yaml"
+	in.Assets = append(in.Assets,
+		AssetInput{Name: "other", ID: "host:198.51.100.9:22", Kind: "host", Root: true, Status: "failed", Reason: "failed",
+			Detail: "ssh: dial 198.51.100.9:22: i/o timeout (host unreachable)", Profile: "baseline", Contact: "unreached"},
+		AssetInput{Name: "deploy", ID: "host:203.0.113.5:22", Kind: "host", Root: true, Status: "failed", Reason: "failed",
+			Detail: "ssh: dial 203.0.113.5:22: i/o timeout (host unreachable)", Profile: "baseline", Contact: "unreached"},
+		AssetInput{Name: "gcp:acme-prod", ID: "cloud:gcp:acme-prod", Kind: "cloud", Root: true, Status: "not_collected", Reason: "collector_not_built"})
+	host := in.Assets[0].ID
+	in.MattersMost = []MatterInput{
+		{Key: "data.matters_most[0]", Asset: host, What: "customer orders"},
+		{Key: "data.matters_most[1]", Asset: "host:203.0.113.5:22", What: "invoices"},
+		{Key: "data.matters_most[2]", Asset: "cloud:gcp:acme-prod", What: "backups"},
+	}
+	d := severity.Declarations{}
+	for _, m := range in.MattersMost {
+		in.DataMattersMost = append(in.DataMattersMost, m.Asset)
+		d.MattersMost = append(d.MattersMost, severity.Matter{Asset: m.Asset, Name: m.Asset, What: m.What, Key: m.Key})
+	}
+	d.MattersMost[0].Name = in.Assets[0].Name
+	h := in.Assets[0].Host
+	// The sshd findings manyFindings adds are matched by their rules here,
+	// so the readout's checks agree with the findings it counts.
+	for i, as := range h.Envelope.Assessments {
+		if as.Finding == finding.IDPasswordAuthEnabled || as.Finding == finding.IDRootLoginEnabled {
+			h.Envelope.Assessments[i].Status, h.Envelope.Assessments[i].Reason = finding.Matched, ""
+		}
+	}
+	h.Chains = map[string]*finding.Chain{}
+	for _, f := range h.Envelope.Findings {
+		if c := severity.GradeHost(f.ID, f.Severity, host, d); c != nil {
+			h.Chains[f.ID] = c
+		}
+	}
+	return in
+}
+
+// The readout says "every check decided" only over checks that fired or
+// were disproved over a whole read: a disproval over part of a read is
+// undecided, with its reason, and a rule that cannot apply on the platform
+// is not counted (docs/spec/report.md, "Data that matters most").
+func TestMattersMostReadoutCountsOnlyWholeDecisions(t *testing.T) {
+	in := hostMattersMost(t)
+	h := in.Assets[0].Host
+	var kept []finding.Finding
+	for _, f := range h.Envelope.Findings {
+		if def, _ := finding.Lookup(f.ID); !def.HostAccess {
+			kept = append(kept, f)
+		}
+	}
+	h.Envelope.Findings, h.Chains = kept, nil
+	for i, as := range h.Envelope.Assessments {
+		if def, _ := finding.Lookup(as.Finding); def.HostAccess {
+			h.Envelope.Assessments[i].Status, h.Envelope.Assessments[i].Reason = finding.NotMatched, ""
+		}
+	}
+	readout := func(in Input) MattersMost { return Build(in).Summary.MattersMost[0] }
+	if m := readout(in); m.Outcome != "read" || m.Checks != 3 || m.Undecided != 0 {
+		t.Fatalf("whole disprovals: %+v", m)
+	}
+	// sshd.config's capture was cut: its two rules answered from part of it.
+	f := h.Envelope.Facts["sshd.config"]
+	f.Truncated = true
+	h.Envelope.Facts["sshd.config"] = f
+	m := readout(in)
+	if m.Outcome != "partial" || m.Checks != 3 || m.Undecided != 2 || len(m.Reasons) != 1 || m.Reasons[0] != "unavailable:incomplete_read" {
+		t.Fatalf("partial disprovals: %+v", m)
+	}
 }

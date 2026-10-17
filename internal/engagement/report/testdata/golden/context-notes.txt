@@ -1,0 +1,198 @@
+scheck engagement report: host-ubuntu
+Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        routine
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record for probes, scans and signing in as staff mailboxes.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: ubuntu (checked only in part: data stores and backups; external surface; ubuntu, 5 of 13 host
+areas judged). See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Data stores and backups, External surface, Hosts (ubuntu, 5 of 13 areas judged).
+Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
+                 supply chain, web application, email and domain, logging and incident readiness. To
+                 include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      A database listens beyond localhost and the host firewall does not restrict it
+             (ubuntu)
+             base medium, raised: you declared this host internet-facing, so this ranks one step
+             higher
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: data stores and backups, external surface, hosts. On ubuntu, 5 of 13 host
+areas were judged, each only on the settings named under Coverage; 5 have no rule in this version
+and 3 had no usable evidence. Not checked: identity and access, secrets, cloud configuration, CI/CD
+and supply chain, web application, email and domain, logging and incident readiness. Anything not
+checked is unknown, not fine.
+
+COVERAGE
+Data stores and backups  checked in part
+  1 of 1 asset read.
+  Not judged in this version: who can sign in to each database (pg_hba.conf, database users and
+  their passwords); databases on hosts that filter with firewalld or their own nftables rules
+  (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules
+  bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
+  RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
+  link; whether backups exist, where they are kept, and who can delete them.
+  Note: You said you run no data stores (`not_used`), but `postgres` listens on 0.0.0.0:5432 on
+    `ubuntu`. If these are yours, remove `data` from `not_used`.
+External surface         checked in part
+  1 of 1 asset read.
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records.
+Hosts                    checked in part
+  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
+  services you declared; listening services you did not declare; who can become root or
+  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
+  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
+  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
+  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
+  ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
+  checks 34: 23 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
+    Software updates         checked (pending updates): nothing found by these rules
+    Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
+                             devices; not read: disk.crypttab)
+    System integrity         not checked: the tool that would tell is not installed on the host, so
+                             scheck could not tell (this is not a finding)
+    Firewall                 checked (whether database ports are filtered only; see Data stores,
+                             whether declared services listen beyond their audience only; see
+                             External surface): 1 open finding (see Findings)
+    Network exposure         not judged: this version of scheck has no rule for it (read: 2
+                             listening sockets)
+    SSH server               checked in part (password login, direct root login): nothing found by
+                             these rules; which accounts have no password and can log in was not
+                             established
+    Remote access            not judged: this version of scheck has no rule for it (read: 2 service
+                             states: disabled, not-found)
+    Accounts                 checked (accounts with no password and a login shell, the mode of
+                             /etc/shadow): nothing found by these rules
+    Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
+                             lines; 33 sudoers.d lines)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
+                             entries; 13 units, all enabled; not read: persist.timers)
+    Filesystem               checked (world-writable paths, depth-capped): nothing found by these
+                             rules; also read, not judged: 9 SUID files
+    Logging and audit        not checked: the command that reads it did not give a usable answer
+                             (exit_error); also read, not judged: Archived and active journals take
+                             up 0B in the file system.
+    Time synchronisation     not checked: the command that reads it did not give a usable answer
+                             (exit_error)
+Not requested            Not part of this run: identity and access, secrets, cloud configuration,
+                         CI/CD and supply chain, web application, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 1 open (1 high), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  A database listens beyond localhost and the host firewall does not restrict it (ubuntu)
+   [db.listens_unfiltered]
+   Subject       postgres (service 5432/tcp)
+   You declared  engagement.yaml assets.ubuntu.context.expected_services[0]: Operator declaration at
+                 assets.ubuntu.context.expected_services[0]
+   Observed      net.listeners#1 (07:12, as deploy (sudo -n)): tcp 0.0.0.0:5432 (postgres); tcp
+                 [::]:5432 (postgres)
+   Observed      fw.ufw#1 (07:12, as deploy (sudo -n)): not installed (command not found)
+   Observed      fw.firewalld#1 (07:12, as deploy): not installed (command not found)
+   Observed      fw.nft#1 (07:12, as deploy): empty ruleset (no tables)
+   Observed      fw.iptables_backend#1 (07:12, as deploy): /usr/sbin/xtables-nft-multi
+   Concluded from declared:assets.ubuntu.context.expected_services[0], check:net.listeners,
+                  check:fw.ufw, check:fw.firewalld, check:fw.nft, check:fw.iptables_backend
+   Severity      high: base medium, +1 exposure internet (assets.ubuntu.context.exposure)
+   Why here      You declared this host internet-facing, so this ranks one step higher. capped at
+                 high: the cloud firewall and the service's own sign-in were not read, so scheck
+                 cannot say anyone can use this now.
+   Not checked   Whether a cloud firewall or security group blocks it was not assessed; who can sign
+                 in to the database (pg_hba.conf, database users and passwords) was not read;
+                 Filters outside nftables (eBPF programs such as Cilium's) were not read
+   Fix           If only this host uses the database, bind it to localhost and restart it. If other
+                 machines need it, allow the port only from their addresses. Check your cloud
+                 firewall rules too: scheck did not read them.
+                 Caveat: If ufw lets the port in by source port alone (from any port 53), delete
+                   that rule (ufw status numbered, then ufw delete N): ufw already lets in replies
+                   to the host's own DNS queries through connection tracking, so a source-port rule
+                   is not needed.
+                 Commands (review before running):
+                   # only this host uses it: bind it to localhost, then restart the database
+                   #   postgres: listen_addresses = 'localhost'
+                   #   MySQL/MariaDB: bind-address = 127.0.0.1
+                   #   Redis: bind 127.0.0.1
+                   # other machines need it: allow only their addresses
+                   sudo ufw default deny incoming
+                   sudo ufw allow from 10.0.0.5 to any port 5432 proto tcp
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # A database listens beyond localhost and the host firewall does not restrict it (ubuntu)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: db.listens_unfiltered
+      asset: ubuntu
+      subject: 5432/tcp            # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      date: 2026-10-07             # the day this acceptance is written
+      expires: 2027-01-05          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  On ubuntu, 5 checks did not give a usable answer: disk.crypttab, fw.ufw, log.auditd,
+    persist.timers, time.timedatectl. `scheck explain <check-id>` prints each command; run it by
+    hand to see why.
+  On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding;
+    listed with -v).
+  On ubuntu, this version of scheck has no rule for disk encryption, network exposure, remote
+    access, privilege escalation, startup and persistence. What was read is in the JSON report
+    (--format json) for a person to look at.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  not_used[0]: You said you run no data stores (`not_used`), but `postgres` listens on 0.0.0.0:5432
+    on `ubuntu`. If these are yours, remove `data` from `not_used`.
+  assets.shop-repo.deploys_to: `shop-repo` (`github:acme/shop`) is declared to deploy production,
+    but GitHub shows it archived. If production now deploys from another repository, declare that
+    one.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (ubuntu: medium, profile baseline). Exit 0
+would not have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

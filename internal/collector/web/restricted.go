@@ -26,7 +26,7 @@ func (j *judging) restricted() {
 			}
 		}
 		x := j.webVerdict(finding.IDWebRestrictedReachable, r.URL, "url", "unavailable:not_read", "", ps)
-		x.Context = r.Source
+		x.Sources = []string{r.Source}
 		x.Details = map[string]any{"audience": r.Audience, "vantage": j.in.Vantage}
 		switch {
 		case j.in.Vantage == "":
@@ -53,7 +53,8 @@ func (j *judging) restricted() {
 						x.Reason = "unavailable:certificate"
 					case p.Status >= 200 && p.Status < 300 || p.Status == 401 || p.Status >= 300 && p.Status < 400 && loginRedirect(p):
 						x.Verdict, x.Reason = Fired, ""
-						x.Attributes = []string{"contradiction"}
+						x.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: r.Source}}}
+						x.Why = "You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested."
 						x.Excerpt = fmt.Sprintf("%s answered HTTP %d from the declared internet vantage, outside every permitted source, including office allowlists and VPN; declared audience: %s. Authentication was not tested", r.URL, p.Status, r.Audience)
 					default:
 						x.Reason = "unavailable:http_status"

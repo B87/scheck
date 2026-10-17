@@ -114,6 +114,10 @@ type Finding struct {
 	// Custom marks a custom:<slug> finding: capped at medium, never
 	// escalated, flagged for a reviewer to promote into the catalog (docs/spec/host-collector.md §6.1).
 	Custom bool `json:"custom,omitempty"`
+	// CappedBy is the context raise that took the finding past high before
+	// the grader capped it there; the engagement report says why. Not part
+	// of the host report's JSON.
+	CappedBy string `json:"-"`
 }
 
 // Confidence levels (docs/spec/host-collector.md §6.3).

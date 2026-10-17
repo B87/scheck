@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/b87/scheck/internal/finding"
 )
@@ -24,22 +25,32 @@ const (
 // as: DNS and public web pages are read as nobody in particular.
 const readBy = "anonymous"
 
+// reported says a judgment is a finding the report shows: fired, and not
+// superseded by another finding. The findings, an acceptance's time and its
+// outcome all read this one set.
+func reported(j Judgment) bool {
+	return j.Verdict == verdictFired && j.Details["superseded_by"] == nil
+}
+
 // judgedFindings turns an asset's fired judgments into findings, one per
-// subject, each under the most specific asset holding it. A collector's
-// configuration findings carry no context adjustment but the engagement's
-// own for the data that matters most (docs/spec/engagement.md, "Severity
-// in context").
+// subject, each under the most specific asset holding it, at the severity
+// Analyze graded (docs/spec/engagement.md, "Severity in context").
 func (b *builder) judgedFindings(a AssetInput) []Finding {
 	var out []Finding
 	at := b.in.Started.UTC()
 	for _, j := range a.Judged {
-		if j.Verdict != verdictFired || j.Details["superseded_by"] != nil {
+		if !reported(j) {
 			continue
+		}
+		if j.Chain == nil {
+			// Never drop a fired verdict: one Analyze did not grade is
+			// reported at its base.
+			j.Chain = &finding.Chain{Base: def0(j.ID), Severity: def0(j.ID)}
 		}
 		def, _ := finding.Lookup(j.ID)
 		key, subject := j.Subject.Key, j.Subject
 		owner := b.ownerOf(a, j)
-		sev := def.BaseSeverity
+		var sev finding.Severity
 		var subjectPtr *Subject
 		var keyPtr *string
 		if def.Subject != "" {
@@ -55,16 +66,22 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			Impact: def.Impact, NotChecked: append([]string{}, j.NotChecked...),
 			Remediation: Remediation{Summary: def.Remediation.Summary, Commands: def.Remediation.Commands, Caveat: def.Remediation.Caveat},
 		}
+		if j.ID == finding.IDIdentityFormerPersonHasAccess && a.Collector == "workspace" {
+			f.Remediation.Summary = finding.RemediationFormerPersonWorkspace
+		}
+		if def.MultiFact {
+			f.Rule.Kind = "multi_fact"
+		}
 		if slices.Contains([]string{finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubSecretScanningOpen, finding.IDGitHubHistoryCredential}, j.ID) {
 			f.Rule.Kind = "multi_fact"
 		}
 		if j.ID == finding.IDWebRestrictedReachable {
 			f.Rule.Kind = "multi_fact"
-			f.Rule.Reads = append(f.Rule.Reads, "declared:"+j.Context, "declared:--vantage")
+			declared := firstRead(j.Sources)
+			f.Rule.Reads = append(f.Rule.Reads, "declared:"+declared, "declared:--vantage")
 			audience, _ := j.Details["audience"].(string)
-			f.Evidence = append(f.Evidence, Evidence{Kind: "declared", Source: b.in.Path + " " + j.Context, Excerpt: key + " is reachable only from " + audience}, Evidence{Kind: "declared", Source: "--vantage", Excerpt: b.in.Vantage + " (your declaration; not verified)"})
-		}
-		if len(j.Sources) > 0 {
+			f.Evidence = append(f.Evidence, Evidence{Kind: "declared", Source: b.in.Path + " " + declared, Excerpt: key + " is reachable only from " + audience}, Evidence{Kind: "declared", Source: "--vantage", Excerpt: b.in.Vantage + " (your declaration; not verified)"})
+		} else if len(j.Sources) > 0 {
 			f.Rule.Kind = "multi_fact"
 			for _, source := range j.Sources {
 				if source != "" {
@@ -73,84 +90,7 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 				}
 			}
 		}
-		if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
-			f.WhyHere = []string{"This rating is based on the access and settings observed; unobserved permissions remain unknown."}
-		}
-		if j.Context != "" {
-			f.WhyHere = []string{j.Context}
-		} else if mattersMost(def.Area) && slices.Contains(b.in.DataMattersMost, owner.ID) {
-			sev = raise(sev)
-			f.Adjustments = append(f.Adjustments, Adjustment{Rule: "data_matters_most", By: "engagement", Delta: "+1",
-				Source: SourceRef{File: b.in.Path, Key: "data.matters_most"}})
-			f.WhyHere = []string{"You listed " + owner.Name + " under data.matters_most, so this ranks one step higher."}
-		} else {
-			// What is configured is not moved by how the asset is used.
-			f.WhyHere = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
-		}
-		for _, attr := range j.Attributes {
-			if strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.") {
-				rule := ""
-				source := SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}
-				if attr == "contradiction" {
-					rule = "contradiction"
-					if len(j.Sources) > 0 {
-						source = SourceRef{File: b.in.Path, Key: j.Sources[0]}
-					}
-				}
-				if attr == "admin" && j.ID == finding.IDIdentityFormerPersonHasAccess {
-					rule = "attribute:admin"
-				}
-				if attr == "admin" && j.ID == "workspace.external_forwarding" {
-					rule = "attribute:admin"
-					if read, ok := j.Details["admin_mailbox_read"].(string); ok && read != "" {
-						source = SourceRef{Observation: read, Excerpt: j.Context}
-					}
-				}
-				if attr == "admin_grantor" && j.ID == "workspace.oauth_broad_scope" {
-					rule = "attribute:admin_grantor"
-					if read, ok := j.Details["admin_grant_read"].(string); ok && read != "" {
-						source = SourceRef{Observation: read, Excerpt: j.Context}
-					}
-				}
-				if attr == "production" && slices.Contains([]string{finding.IDGitHubWritableDeployKey, finding.IDGitHubRepositoryWorkflowWrite, finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}, j.ID) {
-					rule = "deploys_to:production"
-					if len(j.Sources) > 0 {
-						source = SourceRef{File: b.in.Path, Key: j.Sources[0] + ".deploys_to"}
-					}
-				}
-				if attr == "observed_public" && (j.ID == finding.IDGitHubSecretScanningOpen || j.ID == finding.IDGitHubHistoryCredential) {
-					rule = "attribute:public_repository"
-					f.WhyHere = []string{"This finding concerns a secret in an observed public repository, so the rating rises to critical. Credential usability was not tested."}
-					if observation, ok := j.Details["repository_read"].(string); ok && observation != "" {
-						source = SourceRef{Observation: observation, Excerpt: "Observed repository visibility: public"}
-					}
-				}
-				if rule != "" {
-					sev = raise(sev)
-					f.Adjustments = append(f.Adjustments, Adjustment{Rule: rule, By: "engagement", Delta: "+1", Source: source})
-				}
-			}
-			if attr == "contradiction" && j.ID == finding.IDWebRestrictedReachable {
-				sev = raise(sev)
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "contradiction", By: "engagement", Delta: "+1", Source: SourceRef{File: b.in.Path, Key: j.Context}})
-				f.WhyHere = []string{"You declared this URL restricted, but it answered from a source you declared outside every permitted network. Authentication was not tested."}
-			}
-			if attr == "password_form" && j.ID == finding.IDWebPlaintextHTTP {
-				sev = raise(sev)
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:password_form", By: "collector", Delta: "+1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
-			}
-			if attr == "slack_webhook" && j.ID == finding.IDWebSecretInResponse {
-				sev = finding.SevHigh
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "attribute:slack_webhook", By: "collector", Delta: "-1", Source: SourceRef{Observation: firstRead(j.Reads), Excerpt: j.Excerpt}})
-			}
-		}
-		for _, e := range b.in.Exposures {
-			if j.ID == finding.IDWebVersionDisclosed && e.URL == key {
-				sev = finding.SevInfo
-				f.Adjustments = append(f.Adjustments, Adjustment{Rule: "exposed_on_purpose", By: "engagement", Delta: "-1", Source: SourceRef{File: b.in.Path, Key: e.Source}})
-				f.WhyHere = []string{"You declared this URL exposed on purpose: " + e.Reason}
-			}
-		}
+		sev = b.renderChain(&f, j)
 		if len(j.Listed) > 0 {
 			f.Affected = &Affected{Count: len(j.Listed), Listed: j.Listed, Cap: len(j.Listed)}
 			for _, n := range j.OfNote {
@@ -164,17 +104,6 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 		slices.Sort(keys)
 		for _, k := range keys {
 			f.Derived = append(f.Derived, Derived{Name: k, Value: j.Details[k]})
-		}
-		if (strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity.")) && j.Context == "" && len(f.Adjustments) == 0 {
-			f.WhyHere = []string{"This is the standard rating for the observed access or settings."}
-		}
-		if strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls.") {
-			if j.Context == "" && len(f.Adjustments) == 0 {
-				f.WhyHere = []string{"This is the standard rating for the response or connection observed."}
-			}
-			if slices.Contains(j.Attributes, "password_form") {
-				f.WhyHere = []string{"The HTTP page contains a password input, so it ranks one step higher."}
-			}
 		}
 		f.Severity = string(sev)
 		for _, r := range j.Reads {
@@ -202,9 +131,20 @@ func (b *builder) judgedFindings(a AssetInput) []Finding {
 			f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Request: r, Observation: r,
 				CollectedAt: &observed, Vantage: vantage, Principal: principal, Excerpt: excerpt})
 		}
-		if acc, ok := b.effective(owner.ID, j.ID, key); ok && !b.expired(acc.Expires, owner.ID) {
+		// A host fact an engagement rule rests on, as the host's own
+		// findings cite theirs.
+		if v := b.hosts[owner.ID]; v != nil {
+			for _, fr := range j.Facts {
+				observed := v.collectedAt(fr.Observation)
+				f.Rule.Reads = appendUnique(f.Rule.Reads, "check:"+fr.Check)
+				f.Evidence = append(f.Evidence, Evidence{Kind: "observed", Asset: owner.ID, Check: fr.Check, Observation: fr.Observation,
+					CollectedAt: &observed, Principal: v.principal(fr.Observation), Excerpt: fr.Excerpt})
+			}
+		}
+		if acc, ok := b.effective(owner.ID, j.ID, key); ok && b.current(acc.Expires, b.acceptanceAt(acc)) {
+			at := b.acceptanceAt(acc)
 			f.Status = finding.StatusAccepted
-			f.Acceptance = &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: acc.Subject == ""}
+			f.Acceptance = &FindingAccept{Entry: acc.Entry, Reason: acc.Reason, AcceptedBy: acc.AcceptedBy, CoversEveryInstance: acc.Subject == "", JudgedAt: &at}
 			if acc.Expires != "" {
 				e := acc.Expires
 				f.Acceptance.Expires = &e
@@ -243,10 +183,10 @@ func (b *builder) openUnder(asset, id, subject string) string {
 	for _, a := range b.in.Assets {
 		for _, j := range a.Judged {
 			name, isDomain := strings.CutPrefix(j.Asset, "domain:")
-			if j.Verdict == verdictFired && j.ID == id && isDomain && j.Asset != asset &&
+			if reported(j) && j.ID == id && isDomain && j.Asset != asset &&
 				strings.HasSuffix(name, "."+parent) && (subject == "" || j.Subject.Key == subject) {
 				// One its own entry accepts is not open.
-				if acc, ok := b.effective(j.Asset, id, j.Subject.Key); ok && !b.expired(acc.Expires, j.Asset) {
+				if acc, ok := b.effective(j.Asset, id, j.Subject.Key); ok && b.current(acc.Expires, b.acceptanceAt(acc)) {
 					continue
 				}
 				return name
@@ -272,21 +212,6 @@ func (b *builder) heldUnder(asset, id, subject string) string {
 		}
 	}
 	return ""
-}
-
-// mattersMost says data.matters_most moves findings of the area
-// (docs/spec/engagement.md, "Severity in context").
-func mattersMost(area finding.Area) bool {
-	return area == finding.AreaIdentity || area == finding.AreaSecrets || area == finding.AreaData || area == finding.AreaExternal
-}
-
-// raise is one step higher, critical staying critical.
-func raise(s finding.Severity) finding.Severity {
-	order := []finding.Severity{finding.SevInfo, finding.SevLow, finding.SevMedium, finding.SevHigh, finding.SevCritical}
-	if i := slices.Index(order, s); i >= 0 && i < len(order)-1 {
-		return order[i+1]
-	}
-	return s
 }
 
 // ownerOf is the asset a judgment's subject belongs to: the declared asset
@@ -320,6 +245,37 @@ func requestRefs(ids []string) []string {
 		out = appendUnique(out, "request:"+id)
 	}
 	return out
+}
+
+// acceptanceAt is the one collection time an acceptance's expiry is read
+// at, for its outcome and every instance it covers alike: the latest of
+// the reads its matched instances cite; zero, so undecided and every
+// instance open, when any of them cites no read with a recorded time
+// (docs/spec/engagement.md, "Severity in context").
+func (b *builder) acceptanceAt(acc AcceptanceInput) time.Time {
+	if at, ok := b.entryAt[acc.Entry]; ok {
+		return at
+	}
+	var at time.Time
+	judged, _ := b.judgedFor(acc.AssetID)
+	for _, j := range judged {
+		if !reported(j) || j.ID != acc.ID || acc.Subject != "" && j.Subject.Key != acc.Subject {
+			continue
+		}
+		if e, _ := b.effective(acc.AssetID, j.ID, j.Subject.Key); e.Entry != acc.Entry {
+			continue
+		}
+		t := b.readAt(acc.AssetID, j.Reads)
+		if t.IsZero() {
+			at = time.Time{}
+			break
+		}
+		if t.After(at) {
+			at = t
+		}
+	}
+	b.entryAt[acc.Entry] = at
+	return at
 }
 
 // effective is the acceptance that applies to one instance: the last entry
@@ -366,6 +322,9 @@ func judgedAssessments(a AssetInput) []Assessment {
 		for _, r := range requestRefs(j.Reads) {
 			ea.Reads = appendUnique(ea.Reads, r)
 		}
+		for _, fr := range j.Facts {
+			ea.Reads = appendUnique(ea.Reads, "check:"+fr.Check)
+		}
 		if j.Reason != "" {
 			ea.Complete = false
 			if ea.Reason == "" {
@@ -401,10 +360,10 @@ func (b *builder) judgedFor(asset string) ([]Judgment, bool) {
 	var out []Judgment
 	read := false
 	for _, a := range b.in.Assets {
-		if a.Collector == "" {
+		if a.Collector == "" && a.Host == nil {
 			continue
 		}
-		read = read || a.ID == asset
+		read = read || a.ID == asset && (a.Collector != "" || b.hosts[a.ID] != nil)
 		for _, j := range a.Judged {
 			owner := j.Asset
 			if owner == "" {
@@ -438,8 +397,17 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 		return "rule_not_decided", "no rule decides a custom finding"
 	}
 	var fired, disproved, abstained, applies int
+	// supersededBy names the finding that reports an instance in its place:
+	// that instance is no finding, so it neither counts, lists nor sets a
+	// time (reported).
+	supersededBy := ""
+	at := b.acceptanceAt(acc)
 	for _, j := range judged {
 		if j.ID != acc.ID || acc.Subject != "" && j.Subject.Key != acc.Subject {
+			continue
+		}
+		if j.Verdict == verdictFired && !reported(j) {
+			supersededBy = fmt.Sprint(j.Details["superseded_by"])
 			continue
 		}
 		switch j.Verdict {
@@ -460,6 +428,11 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 			abstained++
 		}
 	}
+	if fired == 0 && supersededBy != "" {
+		// The problem is there, reported as a worse finding: never "fixed"
+		// nor "remove the entry".
+		return "rule_not_decided", "what it names is reported as " + supersededBy + " on this run, a worse finding: accept that one if the risk is still accepted"
+	}
 	if under := b.openUnder(acc.AssetID, acc.ID, acc.Subject); fired == 0 && under != "" {
 		return "rule_not_decided", "an instance is open under it, on " + under + ", which is its own asset: accept it there " +
 			"(asset: domain:" + under + ")"
@@ -467,9 +440,14 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 	switch {
 	case fired > 0 && applies == 0:
 		return "not_applied", "a later entry for the same id applies to every instance it names"
-	case fired > 0 && b.expired(acc.Expires, acc.AssetID):
-		return "expired", "expired " + acc.Expires + "; the finding is open again"
+	case fired > 0 && at.IsZero():
+		return "rule_not_decided", "no collection time was recorded for what the finding rests on, so its expiry cannot be read: " +
+			"the finding stays open"
+	case fired > 0 && b.expired(acc.Expires, at):
+		b.acceptedAt[acc.Entry] = at
+		return "expired", "expired " + acc.Expires + ", before collection on " + b.day(at) + "; the finding is open again"
 	case fired > 0:
+		b.acceptedAt[acc.Entry] = at
 		return "applied", ""
 	case acc.Subject != "" && disproved+abstained == 0:
 		complete, seen := true, false
@@ -499,6 +477,9 @@ func (b *builder) judgedOutcome(acc AcceptanceInput, out *Acceptance, judged []J
 		}
 		if under := b.heldUnder(acc.AssetID, acc.ID, acc.Subject); under != "" {
 			return "subject_not_found", "that subject was read on " + under + ", which is its own asset (asset: domain:" + under + ")"
+		}
+		if finding.SubjectOf(acc.ID) == "service" {
+			return "subject_not_found", "nothing listens on that port on this run: if the service was moved or closed, remove the entry"
 		}
 		return "subject_not_found", "nothing with that subject points anywhere on this run: if the record was removed, remove the entry"
 	case abstained == 0 && disproved > 0:
@@ -542,9 +523,9 @@ var judgedFamilies = map[finding.Area][]struct {
 // brings, for a row a collector's plan read without one.
 var declaredOnly = map[finding.Area]string{finding.AreaEmail: "Domain email settings (SPF, DKIM and DMARC)"}
 
-// notJudged lists, per area, what the domain collector reads or would read
-// that no rule judges in this build.
-var notJudged = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
+// webLimits lists, per area, what the domain collector reads or would read
+// that no rule judges in this build: limits inside its built sub-items.
+var webLimits = map[finding.Area][]string{finding.AreaExternal: {"TLS versions and ciphers other than those negotiated, and revocation"}, finding.AreaSecrets: {"loaded scripts and pages beyond entry points"}}
 
 // judgedRow is an area a network collector reads: one sub-item per rule
 // family per asset, marked from the judgments (docs/spec/report.md,
@@ -558,6 +539,15 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			continue
 		}
 		fed++
+		if plan := planOf(a, area); plan != nil && a.Host != nil {
+			// A host the multi-fact rules judged, by their plan.
+			if b.hosts[a.ID] != nil {
+				read++
+				row.AssetsCovered = append(row.AssetsCovered, a.ID)
+			}
+			some = b.planCoverage(&row, a, *plan) || some
+			continue
+		}
 		if a.Collector == "workspace" {
 			plan := planOf(a, area)
 			// An asset whose plan reads nothing in this area was not read for it.
@@ -568,8 +558,13 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			if plan != nil && len(a.Judged) > 0 {
 				some = b.planCoverage(&row, a, *plan) || some
 			} else {
-				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"}}})
-				row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+				why := unreadInventory(a, ReasonDetail{Reason: "no_rule", Detail: "Inventory only; no Workspace rule judgments were recorded"})
+				row.SubItems = append(row.SubItems, SubItem{Name: "Workspace account controls", Asset: a.ID, Mark: "not_assessed", Reasons: []ReasonDetail{why}})
+				if a.InventoryRead {
+					row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: a.Name + ": Workspace inventory only"})
+				} else if a.Reason != "" {
+					row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: inventoryCoverageReason(a), Detail: a.Name})
+				}
 			}
 			if a.NetworkPrincipal != nil {
 				row.Principals = append(row.Principals, *a.NetworkPrincipal)
@@ -653,17 +648,17 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: detail}}, ReadNotJudged: a.Unfingerprinted})
 			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: detail})
 		}
-		if nj := notJudged[area]; len(nj) > 0 {
+		if nj := webLimits[area]; len(nj) > 0 {
 			row.SubItems = append(row.SubItems, SubItem{Name: strings.Join(nj, ", "), Asset: a.ID, Mark: "not_assessed",
 				Reasons: []ReasonDetail{{Reason: "no_rule", Detail: "not judged in this version"}}, ReadNotJudged: nj})
 		}
 	}
 	// A row read only through a collector's plan still says what declaring
 	// its own kind of asset would add (domains for email).
-	if !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
-		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: declaredOnly[area]})
+	if only, ok := declaredOnly[area]; ok && !slices.ContainsFunc(b.in.Assets, func(a AssetInput) bool { return declaredFeeds(area, a) }) {
+		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "not_declared", Detail: only})
 	}
-	if nj := notJudged[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
+	if nj := webLimits[area]; len(nj) > 0 && slices.ContainsFunc(assets, func(a AssetInput) bool { return a.Collector == "web" }) {
 		row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "no_rule", Detail: strings.Join(nj, ", ")})
 	}
 	assessed := read == fed
@@ -780,4 +775,77 @@ func observedPrincipal(a AssetInput) string {
 		return a.NetworkPrincipal.Identity
 	}
 	return readBy
+}
+
+// renderChain writes the chain Analyze gave a judgment as the finding's
+// adjustments and why-here, and returns its severity. A step that did not
+// move it is not an adjustment; a cap is still said.
+func (b *builder) renderChain(f *Finding, j Judgment) finding.Severity {
+	var why []string
+	add := func(s string) {
+		if s != "" && !slices.Contains(why, s) {
+			why = append(why, s)
+		}
+	}
+	// The reasons of steps that moved it first (the ranking prints the
+	// first), then the collector's, then a cap that still holds: one a
+	// later step went past no longer explains the severity.
+	moved := false
+	for _, m := range j.Chain.Moves {
+		if m.Stopped == "" && m.From != m.To {
+			moved = true
+			add(m.Why)
+		}
+	}
+	add(j.Why)
+	if len(why) == 0 && moved {
+		// Decided before any cap: a cap is never the reason it moved.
+		add("Context moved this rating; see the adjustments.")
+	}
+	for _, m := range j.Chain.Moves {
+		if m.Stopped != "" && j.Chain.Severity.Rank() <= m.To.Rank() {
+			add(m.Why)
+		}
+	}
+	for _, m := range j.Chain.Moves {
+		if m.Stopped != "" {
+			continue
+		}
+		src := SourceRef{Observation: m.Ref.Observation, Excerpt: m.Ref.Excerpt}
+		if m.Ref.Key != "" {
+			src = SourceRef{File: b.in.Path, Key: m.Ref.Key}
+		}
+		f.Adjustments = append(f.Adjustments, Adjustment{Rule: m.Rule, By: m.By, Delta: deltaString(m.To.Rank() - m.From.Rank()), Source: src})
+	}
+	if len(why) == 0 {
+		switch def, _ := finding.Lookup(j.ID); {
+		case j.ID == finding.IDEmptyPasswordRemote:
+			// docs/spec/engagement.md, R2: no host context step moves it.
+			why = []string{"This is the standard rating, whatever the host is used for: anyone who can reach sshd can sign in as these accounts."}
+		case def.MultiFact:
+			why = []string{"This is the standard rating for what this host's settings show."}
+		case strings.HasPrefix(j.ID, "web.") || strings.HasPrefix(j.ID, "tls."):
+			why = []string{"This is the standard rating for the response or connection observed."}
+		case strings.HasPrefix(j.ID, "github.") || strings.HasPrefix(j.ID, "workspace.") || strings.HasPrefix(j.ID, "identity."):
+			why = []string{"This is the standard rating for the observed access or settings."}
+		default:
+			// What is configured is not moved by how the asset is used.
+			why = []string{"This is the standard rating: it is about how the records are set up, which nothing you declared changes."}
+		}
+	}
+	f.WhyHere = why
+	return j.Chain.Severity
+}
+
+func deltaString(d int) string {
+	if d > 0 {
+		return fmt.Sprintf("+%d", d)
+	}
+	return fmt.Sprint(d)
+}
+
+// def0 is a finding id's base severity, "" for an unknown id.
+func def0(id string) finding.Severity {
+	def, _ := finding.Lookup(id)
+	return def.BaseSeverity
 }

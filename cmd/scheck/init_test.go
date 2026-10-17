@@ -38,6 +38,7 @@ func TestInitWritesBrightcartAndContactsNothing(t *testing.T) {
 		".",
 		".",
 		".",
+		".",
 		"cloud", ".",
 	}, "\n") + "\n"
 	// The script is one answer per asked question, in order. Blank answers
@@ -96,8 +97,9 @@ func TestInitAsksOnlyWhatTheHostFileDoesNotAnswer(t *testing.T) {
 	if _, _, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--write-engagement", path); code != exitOK {
 		t.Fatal(code)
 	}
-	// operator, exclude, people, exposed, restricted, context, not_used.
-	script := "platform-team\n.\n.\n.\n.\n.\nname: host-203-0-113-5\nexposure: lan\nenvironment: prod\n.\ncloud\n.\n"
+	// operator, exclude, people, exposed, restricted, context, matters_most, not_used.
+	script := "platform-team\n.\n.\n.\n.\n.\nname: host-203-0-113-5\nexposure: lan\nenvironment: prod\nservice: 22 tcp\nservice: 5432 tcp localhost postgres\n.\n" +
+		"1: customer orders and invoices\n.\ncloud\n.\n"
 	root := newRootCmd()
 	var stderr bytes.Buffer
 	root.SetIn(strings.NewReader(script))
@@ -120,5 +122,23 @@ func TestInitAsksOnlyWhatTheHostFileDoesNotAnswer(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "What brought you to run this") {
 		t.Fatal("init asked the trigger the host file already answered")
+	}
+	// The list offers the host by name; the service with no audience is
+	// accepted and said to be judged only for listening.
+	if !strings.Contains(stderr.String(), "1. host-203-0-113-5 (host: deploy@203.0.113.5)") ||
+		!strings.Contains(stderr.String(), "No audience given for 22/tcp") || strings.Contains(stderr.String(), "No audience given for 5432/tcp") {
+		t.Fatalf("stderr:\n%s", stderr.String())
+	}
+	if len(res.Data.MattersMost) != 1 || res.Data.MattersMost[0].Asset != "host-203-0-113-5" || res.Data.MattersMost[0].What != "customer orders and invoices" {
+		t.Fatalf("matters_most %+v", res.Data.MattersMost)
+	}
+	var svcs []engagement.Service
+	for _, a := range res.Assets {
+		if a.Context != nil {
+			svcs = a.Context.ExpectedServices
+		}
+	}
+	if len(svcs) != 2 || svcs[0].Audience != "" || svcs[1].Audience != "localhost" || svcs[1].Purpose != "postgres" {
+		t.Fatalf("services %+v", svcs)
 	}
 }

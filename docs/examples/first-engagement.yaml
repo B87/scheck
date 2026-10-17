@@ -94,8 +94,9 @@ intent:
     - {url: https://yourlab.example/status, audience: internet, reason: "the uptime vendor reads it"}
   not_exposed:
     - {url: https://yourlab.example/admin, audience: vpn}
-  # accepted_risks are pasted from a report, at the readout. A host finding
-  # has no subject in 0.0.2. A forwarding acceptance names one mailbox and
+  # accepted_risks are pasted from a report, at the readout. A host posture
+  # finding has no subject in 0.0.2; a listener rule's names the port and
+  # protocol (docs/spec/report.md, "Findings"). A forwarding acceptance names one mailbox and
   # one destination; see workspace-mail.yaml.
 
 # Mailbox sign-in is off unless you uncomment this and select a mail profile.

@@ -64,6 +64,11 @@ type MailEvidence struct {
 	Selected bool                `json:"selected"`
 	Accounts []MailboxForwarding `json:"accounts,omitempty"`
 	Complete bool                `json:"complete"`
+	// Selection names what chose the mailboxes read when a cap, the
+	// deadline or a rate limit cut the sequence; nil otherwise.
+	Selection *finding.Selection `json:"selection,omitempty"`
+	// order is the order the mailboxes were asked in.
+	order []SelectedUser
 }
 
 // refusal is the read that decides the surface's own outcome: the read
@@ -183,16 +188,18 @@ func mailboxStateOf(v accountView) mailboxState {
 
 // collectMail reads each readable mailbox's automatic forwarding and its
 // filters, in the optional-surface read order, after every other read.
-func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target, view Context, views []accountView) {
+func (e *Evidence) collectMail(ctx context.Context, sender Sender, target Target, views []accountView) {
 	e.Mail.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceGmailForwarding)
 	if !e.Mail.Selected {
 		return
 	}
-	eligible := slices.DeleteFunc(slices.Clone(views), func(v accountView) bool { return mailboxStateOf(v) != mailboxRead })
+	// Only readable mailboxes, in forwarding's own order.
+	eligible, order := mailOrder(slices.DeleteFunc(slices.Clone(views), func(v accountView) bool { return mailboxStateOf(v) != mailboxRead }))
+	e.Mail.order = order
 	req := func(op, user string) gate.Request {
 		return gate.Request{Op: op, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": user}}
 	}
-	all := readAccounts(eligible, view, func(v accountView) bool {
+	all := readAccounts(eligible, func(v accountView) bool {
 		u := v.user
 		m := MailboxForwarding{ID: u.ID, Filters: []FilterForward{}}
 		auto := sender.Send(ctx, req(OpMailAutoForwarding, u.ID))
@@ -335,6 +342,12 @@ func mailDomain(address string) (string, bool) {
 	}
 	return domain, true
 }
+
+// TenantDomains are the tenant's verified domains and domain aliases,
+// lowercased, and whether both lists were read whole: what the forwarding
+// rule calls internal and the engagement's C1 note compares with the
+// declared roots (docs/spec/engagement.md, "Context notes").
+func TenantDomains(e Evidence) (map[string]bool, bool) { return tenantDomains(e) }
 
 // tenantDomains is the exact set of verified domains and verified domain
 // aliases; complete only when both lists were read whole.
@@ -600,7 +613,7 @@ func mailJudgments(e Evidence, asset string, views []accountView, c Context) []f
 	// asset; otherwise each mailbox has its outcome.
 	if s.usable {
 		for _, b := range s.boxes {
-			out = append(out, b.judgments(asset, base, s.domainsComplete, e.Users.Complete, c)...)
+			out = append(out, b.judgments(asset, base, s.domainsComplete, e.Users.Complete, c, e.Users.Reads)...)
 		}
 	}
 	rs := slices.Clone(base)
@@ -636,7 +649,7 @@ func mailJudgments(e Evidence, asset string, views []accountView, c Context) []f
 // judgments are one mailbox's outcomes: a finding per outside destination,
 // an abstention per destination scheck cannot place, and otherwise one
 // outcome for the mailbox as a whole.
-func (b mailbox) judgments(asset string, base []string, domainsComplete, usersComplete bool, c Context) []finding.Judgment {
+func (b mailbox) judgments(asset string, base []string, domainsComplete, usersComplete bool, c Context, users []Read) []finding.Judgment {
 	v := b.view
 	who := v.user.Primary
 	if b.state == mailboxUnknown {
@@ -683,7 +696,7 @@ func (b mailbox) judgments(asset string, base []string, domainsComplete, usersCo
 			j.NotChecked = []string{j.Excerpt}
 		case destExternal:
 			decided = true
-			b.fire(&j, d, domainsComplete, usersComplete, c)
+			b.fire(&j, d, domainsComplete, usersComplete, c, users)
 		}
 		out = append(out, j)
 	}
@@ -738,7 +751,7 @@ func (b mailbox) details(domainsComplete bool) map[string]any {
 var dispositions = map[string]string{"trash": "moves the original to Trash", "archive": "archives it", "markRead": "marks it read"}
 
 // fire words one outside destination of one mailbox.
-func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersComplete bool, c Context) {
+func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersComplete bool, c Context, users []Read) {
 	who := b.view.user.Primary
 	parts := []string{}
 	mechanisms := []string{}
@@ -772,8 +785,10 @@ func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersCom
 	} else {
 		parts = append(parts, d.domain+" is not a domain of this Workspace.")
 	}
-	if p := b.view.person; p != nil && leftPassed(p.Left, c) {
-		parts = append(parts, who+" belongs to "+p.Handle+", declared as having left on "+p.Left+".")
+	// Said only when the date had passed at the users read that
+	// attributed the mailbox, dated by it.
+	if p := b.view.person; p != nil && leftAt(p.Left, c, users) == finding.LeftPassed {
+		parts = append(parts, who+" belongs to "+p.Handle+", declared as having left on "+p.Left+" (as of the users read of "+usersAsOf(c, users)+").")
 	}
 	parts = append(parts, "scheck read the setting, not whether any message was forwarded.")
 	decide(j, true, true, strings.Join(parts, " "))
@@ -805,9 +820,9 @@ func (b mailbox) fire(j *finding.Judgment, d mailDest, domainsComplete, usersCom
 	// administrators (docs/spec/workspace-collector.md, "Forwarding
 	// interpretation").
 	if yes(b.view.user.IsAdmin) && !b.view.access.Conflict {
-		j.Attributes = []string{"admin"}
 		j.Details["admin_mailbox_read"] = firstRead(j.Reads, b.m)
-		j.Context = who + " is a super administrator: mail sent to administrators, such as security alerts and password-reset links from other services, goes to this mailbox."
+		j.Why = who + " is a super administrator: mail sent to administrators, such as security alerts and password-reset links from other services, goes to this mailbox."
+		j.Attributes = []finding.Attribute{{Name: "admin", Ref: finding.Ref{Observation: firstRead(j.Reads, b.m), Excerpt: j.Why}}}
 	}
 	j.NotChecked = []string{"Whether any message was forwarded, and what each filter matches, were not checked."}
 }
@@ -913,4 +928,16 @@ func mailNotes(e Evidence, asset string, views []accountView, approval *MailAppr
 		note("workspace_inventory", "Forwarding to subdomains of your domains that are not themselves domains of this Workspace was not judged: "+capped(subdomains)+". scheck cannot tell where those names' mail goes; ask whoever runs mail for those names where it goes.")
 	}
 	return out
+}
+
+// Mailboxes counts the active accounts the users read shows with a Gmail
+// mailbox set up, and whether that read was whole.
+func Mailboxes(e Evidence) (int, bool) {
+	n := 0
+	for _, u := range e.Users.Items {
+		if yes(u.Mailbox) && active(u) {
+			n++
+		}
+	}
+	return n, e.Users.Complete
 }

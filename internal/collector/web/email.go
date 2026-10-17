@@ -75,7 +75,7 @@ func (in Input) mailUse(m MailEvidence) mailUse {
 
 func (j *judging) email(m MailEvidence) {
 	u := j.in.mailUse(m)
-	base := Judgment{Asset: j.in.Asset, Subject: Subject{Kind: "mail_domain", Key: m.Domain, Label: u.label}, Context: u.detail, Reads: []string{}}
+	base := Judgment{Asset: j.in.Asset, Subject: Subject{Kind: "mail_domain", Key: m.Domain, Label: u.label}, Why: u.detail, Reads: []string{}}
 	j.dmarc(m, u, base)
 	j.spfRules(m, u, base)
 	j.dkim(m, u, base)
@@ -137,4 +137,25 @@ func MailNotes(in Input) []MailNote {
 		}
 	}
 	return notes
+}
+
+// MailDomainUse is one mail domain read under a root and whether Judge
+// treats it as a domain that sends no mail: declared under mail.no_mail,
+// or shown by the records read to have no mail use.
+type MailDomainUse struct {
+	Domain  string
+	NoMail  bool
+	Senders []MailSender
+}
+
+// MailUse is the mail use Judge reads for each mail domain in what was
+// collected, so Plan can name the email rules that will not decide
+// (docs/spec/engagement.md, "The not-judged list"). It sends nothing.
+func MailUse(in Input) []MailDomainUse {
+	var out []MailDomainUse
+	for _, m := range in.Evidence.Mail {
+		u := in.mailUse(m)
+		out = append(out, MailDomainUse{Domain: m.Domain, NoMail: u.mode == "none", Senders: u.senders})
+	}
+	return out
 }

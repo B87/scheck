@@ -7,7 +7,7 @@ import (
 	ereport "github.com/b87/scheck/internal/engagement/report"
 )
 
-func githubCINotes(e githubc.Evidence) []ereport.Note {
+func githubCINotes(e githubc.Evidence, judged []githubc.Judgment) []ereport.Note {
 	notes := []ereport.Note{}
 	add := func(asset, detail string) {
 		notes = append(notes, ereport.Note{Kind: "github_ci", Source: asset, Detail: detail})
@@ -24,7 +24,7 @@ func githubCINotes(e githubc.Evidence) []ereport.Note {
 			if w.Gap != "" {
 				add(ci.Asset, w.Path+": "+w.Gap)
 			}
-			for _, j := range e.Judgments {
+			for _, j := range judged {
 				if j.Asset == ci.Asset && j.Subject != (githubc.Subject{}) && j.Subject.Key == w.Path && j.ID == "github.pr_target_unsafe_checkout" {
 					if requests, ok := j.Details["runner_requests"].([]string); ok {
 						for _, request := range requests {

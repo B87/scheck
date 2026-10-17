@@ -61,11 +61,15 @@ func restrictedOutcomes(t *testing.T) []Judgment {
 			if a == "" {
 				a = "vpn"
 			}
-			js := Judge(Input{Asset: "domain:example.com", Vantage: v, Restricted: []Restriction{{URL: raw, Audience: a}}, Evidence: Evidence{Sites: []Site{{Name: "admin.example.com", Pages: []Page{p}}}}})
+			js := Judge(Input{Asset: "domain:example.com", Vantage: v, Restricted: []Restriction{{URL: raw, Audience: a, Source: "intent.not_exposed[0]"}}, Evidence: Evidence{Sites: []Site{{Name: "admin.example.com", Pages: []Page{p}}}}})
 			for _, j := range js {
 				if j.ID == finding.IDWebRestrictedReachable {
 					if j.Verdict != tc.want {
 						t.Fatalf("%+v", j)
+					}
+					// The contradiction cites its declaration and says why it raises.
+					if tc.want == Fired && (len(j.Attributes) != 1 || j.Attributes[0].Ref.Key != "intent.not_exposed[0]" || !strings.HasPrefix(j.Why, "You declared this URL restricted")) {
+						t.Fatal(j)
 					}
 					if tc.want == Disproved && !strings.Contains(j.Excerpt, "server that is down") {
 						t.Fatal(j)

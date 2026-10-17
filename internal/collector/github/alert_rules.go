@@ -45,7 +45,14 @@ func JudgeAlerts(e Evidence, c Context) []Judgment {
 		out = append(out, populationAlertGap(finding.IDGitHubOrgSecretAll, c.OrganizationAsset, p))
 	}
 	for _, r := range e.RepositoriesAlerts {
-		out = append(out, judgeDependencies(r)...)
+		// A kind the request budget did not reach on this repository was not
+		// read: its coverage says sampled, and nothing is judged from it.
+		if !slices.Contains(r.Sampled, KindDependabot) {
+			out = append(out, judgeDependencies(r)...)
+		}
+		if slices.Contains(r.Sampled, KindSecretAlerts) {
+			continue
+		}
 		for _, located := range r.Located {
 			out = append(out, judgeLocatedSecret(r, located)...)
 		}
@@ -60,7 +67,12 @@ func JudgeAlerts(e Evidence, c Context) []Judgment {
 		}
 		if len(r.SecretAlerts.Items) > len(r.Located) {
 			j := alertJudgment(finding.IDGitHubSecretScanningOpen, r.Asset, nil, readIDs(r.SecretAlerts.Reads))
-			j.NotChecked = append(j.NotChecked, "Some provider alert locations were not read because the follow-up limit was reached")
+			why := "Some provider alert locations were not read because the follow-up limit was reached"
+			if slices.Contains(r.Sampled, KindSecretLocations) {
+				j.Reason = "sampled"
+				why = "Provider alert locations were not read: the organization's request budget was spent before they were reached"
+			}
+			j.NotChecked = append(j.NotChecked, why)
 			out = append(out, j)
 		}
 	}
@@ -85,7 +97,7 @@ func judgeDependencies(r RepositoryAlerts) []Judgment {
 			known := knownState && subject != nil && knownSev && (fires || metadataComplete(r.Dependencies))
 			settle(&j, fires, known, fmt.Sprintf("Provider Dependabot alert %d: state=%s; severity=%s; manifest=%s; dependency scope=%s. Dismissal closes the alert; it does not prove the vulnerability was fixed.", d.Number, d.State, sev, d.Dependency.ManifestPath, d.Dependency.Scope))
 			j.Details = map[string]any{"provider_severity": sev, "provider_state": d.State, "dependency_scope": d.Dependency.Scope, "manifest_path": d.Dependency.ManifestPath, "package": d.Dependency.Package.Name, "ecosystem": d.Dependency.Package.Ecosystem, "ghsa_id": d.Advisory.GHSA}
-			j.Context = "GitHub's vulnerability severity is retained as provider evidence; deployed versions and exploitability were not verified. Provider critical is rated high by scheck."
+			j.Why = "GitHub's vulnerability severity is retained as provider evidence; deployed versions and exploitability were not verified. Provider critical is rated high by scheck."
 			out = append(out, j)
 		}
 	}
@@ -128,7 +140,7 @@ func judgeLocatedSecret(r RepositoryAlerts, l LocatedSecret) []Judgment {
 			j.Details["provider_resolution"] = *s.Resolution
 		}
 		if metadataReadOK(r.RepositoryRead) && r.Visibility != nil && *r.Visibility == "public" {
-			j.Attributes = []string{"observed_public"}
+			j.Attributes = []finding.Attribute{{Name: "public_repository", Ref: finding.Ref{Observation: r.RepositoryRead.RequestID, Excerpt: "Observed repository visibility: public"}}}
 			j.Excerpt += " Observed repository visibility: public."
 			j.Details["repository_visibility"] = "public"
 			j.Details["repository_read"] = r.RepositoryRead.RequestID

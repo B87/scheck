@@ -593,7 +593,7 @@ func TestFingerprintSuspendsConfirmation(t *testing.T) {
 	}
 	fp := &Evidence{Kind: "operator", Target: "blog.example-hosting.net"}
 	r := run{webScope: s, scoped: &ScopeDoc{Assets: []ScopeAsset{{ID: "domain:blog.example.com", FirstParty: fp}}, Domains: []ScopeDomain{{Root: "domain:example.com", Names: []ScopeName{{Name: "blog.example.com", FirstParty: &Evidence{Kind: "operator"}}}}}}}
-	r.suspendConfirmations([]web.Judgment{{ID: "dns.takeover_candidate", Verdict: web.Fired, Subject: web.Subject{Key: "*.example.com"}, Members: []string{"blog.example.com"}}})
+	r.suspendConfirmations([]string{"blog.example.com"})
 	if a := s.Admits("https://blog.example.com", "/robots.txt", &l); a.Refused != "address_moved" {
 		t.Fatal(a)
 	}

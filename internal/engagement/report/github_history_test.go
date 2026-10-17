@@ -18,7 +18,7 @@ func githubHistoryReport(t *testing.T, verdict string) Input {
 	repo := &in.Assets[1]
 	commit := strings.Repeat("a", 40)
 	key := "history:" + commit + ":config%2FProd.env:2:kv-secret"
-	history := Judgment{ID: finding.IDGitHubHistoryCredential, Asset: repo.ID, Verdict: verdict, Subject: Subject{Kind: "secret_location", Key: key, Label: "config/Prod.env:2 at " + commit}, Reads: []string{"mirror-history", "heads", "pull"}, Attributes: []string{"observed_public"}, Details: map[string]any{"marker": "[REDACTED:kv-secret:31 bytes]", "commit": commit, "path": "config/Prod.env", "line": 2, "detector": "kv-secret", "repository_read": "repository"}, Excerpt: "config/Prod.env:2 at commit " + commit + ": [REDACTED:kv-secret:31 bytes]. Observed repository visibility: public."}
+	history := Judgment{ID: finding.IDGitHubHistoryCredential, Asset: repo.ID, Verdict: verdict, Subject: Subject{Kind: "secret_location", Key: key, Label: "config/Prod.env:2 at " + commit}, Reads: []string{"mirror-history", "heads", "pull"}, Attributes: []finding.Attribute{{Name: "public_repository", Ref: finding.Ref{Observation: "repository", Excerpt: "Observed repository visibility: public"}}}, Details: map[string]any{"marker": "[REDACTED:kv-secret:31 bytes]", "commit": commit, "path": "config/Prod.env", "line": 2, "detector": "kv-secret", "repository_read": "repository"}, Excerpt: "config/Prod.env:2 at commit " + commit + ": [REDACTED:kv-secret:31 bytes]. Observed repository visibility: public."}
 	remote := Judgment{ID: finding.IDGitHubRemoteCredential, Asset: repo.ID, Verdict: verdict, Subject: Subject{Kind: "secret_location", Key: "remote:origin", Label: "mirror origin configuration"}, Reads: []string{"mirror-history"}, Details: map[string]any{"markers": "[REDACTED:url-credentials:31 bytes]"}, Excerpt: "Recognized credential-bearing mirror origin userinfo: [REDACTED:url-credentials:31 bytes]. No remote URL retained."}
 	for _, j := range []*Judgment{&history, &remote} {
 		j.NotChecked = []string{"Credential usability and revocation were not tested", "Unadvertised/deleted refs, objects served only by SHA, unreachable objects, reflogs, submodule/LFS payloads and detector misses remain unassessed"}
@@ -64,7 +64,7 @@ func githubHistoryAbstainedReport(t *testing.T) Input {
 }
 func TestGitHubHistoryReportSubjectsSeverityAndCoverage(t *testing.T) {
 	in := githubHistoryFiredReport(t)
-	r := Build(in)
+	r := build(in)
 	validate(t, schema(t), r)
 	if len(r.Findings) != 2 {
 		t.Fatal(r.Findings)
@@ -99,7 +99,7 @@ func TestHistoryPartialPositiveKeepsFamilyPartial(t *testing.T) {
 	in := githubHistoryFiredReport(t)
 	repo := &in.Assets[1]
 	repo.Judged = append(repo.Judged, Judgment{ID: finding.IDGitHubHistoryCredential, Asset: repo.ID, Verdict: verdictAbstained, Reason: "unavailable:github_evidence", Reads: []string{"mirror-history"}})
-	r := Build(in)
+	r := build(in)
 	validate(t, schema(t), r)
 	found := false
 	for _, row := range r.Coverage {

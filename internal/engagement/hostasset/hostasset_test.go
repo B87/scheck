@@ -35,8 +35,10 @@ func load(t *testing.T, name string) *fixture.Target {
 }
 
 // The host asset is the 0.0.1 host collector: for the same profile,
-// elevation and context, its facts, assessments and findings equal the
-// golden JSON report's (docs/ROADMAP.md, E1b "Done when").
+// elevation and context, its facts, assessments and findings, graded,
+// equal the golden JSON report's (docs/ROADMAP.md, E1b "Done when"), and
+// so do a kept host's, read back from its evidence envelope
+// (docs/spec/runs.md, "Verdicts are not evidence").
 func TestHostAssetEqualsTheGoldenReport(t *testing.T) {
 	for name, elev := range fixtureElevation {
 		t.Run(name, func(t *testing.T) {
@@ -47,22 +49,47 @@ func TestHostAssetEqualsTheGoldenReport(t *testing.T) {
 			if !c.Complete() {
 				t.Fatal("collection incomplete")
 			}
-			var got bytes.Buffer
-			if err := report.WriteJSON(&got, c.Envelope()); err != nil {
-				t.Fatal(err)
-			}
 			raw, err := os.ReadFile(filepath.Join("..", "..", "report", "testdata", "golden", name+".json"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			want, have := sections(t, raw, false), sections(t, got.Bytes(), elev == "none")
-			for _, key := range []string{"facts", "assessments", "findings", "observations"} {
-				if !bytes.Equal(want[key], have[key]) {
-					t.Errorf("%s differs from the 0.0.1 golden report\n--- want ---\n%.2000s\n--- got ---\n%.2000s", key, want[key], have[key])
+			want := sections(t, raw, false)
+			evidence := c.Evidence()
+			if len(evidence.Findings) != 0 || len(evidence.Assessments) != 0 {
+				t.Fatal("the evidence envelope holds a verdict")
+			}
+			kept, err := Restore(roundTrip(t, evidence), c.Planned(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for label, env := range map[string]report.Envelope{"collected": c.Grade(Grading{}), "kept": kept.Grade(Grading{})} {
+				var got bytes.Buffer
+				if err := report.WriteJSON(&got, env); err != nil {
+					t.Fatal(err)
+				}
+				have := sections(t, got.Bytes(), elev == "none")
+				for _, key := range []string{"facts", "assessments", "findings", "observations"} {
+					if !bytes.Equal(want[key], have[key]) {
+						t.Errorf("%s: %s differs from the 0.0.1 golden report\n--- want ---\n%.2000s\n--- got ---\n%.2000s", label, key, want[key], have[key])
+					}
 				}
 			}
 		})
 	}
+}
+
+// roundTrip is env as a resume reads it back from the run directory.
+func roundTrip(t *testing.T, env report.Envelope) report.Envelope {
+	t.Helper()
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out report.Envelope
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // sections returns the envelope's top-level keys re-encoded with run-time
@@ -119,19 +146,16 @@ func TestContextAndAcceptedRisksGrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := base.Envelope().Findings
-	if len(open) == 0 || base.OpenFindings() == 0 {
+	baseEnv := base.Grade(Grading{})
+	open := baseEnv.Findings
+	if len(open) == 0 || baseEnv.OpenFindings(base.profile) == 0 {
 		t.Fatal("the macos fixture has no open finding to accept; pick a fixture that has one")
 	}
 	accepted := open[0].ID
 	src, entry := "engagement.yaml assets.web", "engagement.yaml intent.accepted_risks[0]"
-	c, err := Collect(context.Background(), Options{Target: load(t, "macos"),
-		ContextSource: src, Context: &operator.Structured{Exposure: "internet",
-			AcceptedRisks: []operator.Risk{{ID: accepted, Reason: "known", Source: entry}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	env := c.Envelope()
+	g := Grading{Source: src, Context: &operator.Structured{Exposure: "internet",
+		AcceptedRisks: []operator.Risk{{ID: accepted, Reason: "known", Source: entry}}}}
+	env := base.Grade(g)
 	var got *finding.Finding
 	for i, f := range env.Findings {
 		if f.ID == accepted {
@@ -141,14 +165,20 @@ func TestContextAndAcceptedRisksGrade(t *testing.T) {
 	if got == nil || got.Status != "accepted" || got.AcceptedReason != "known" {
 		t.Fatalf("finding %s = %+v, want accepted", accepted, got)
 	}
-	_, steps := c.meta.Grader().Grade(*got)
+	meta := base.meta
+	meta.Context = merged(g.Context, g.Source)
+	_, steps := meta.Grader().Grade(*got)
 	if !slices.ContainsFunc(steps, func(s finding.Step) bool {
 		return s.To == "accepted" && strings.Contains(s.Reason, "accepted in "+entry)
 	}) {
 		t.Errorf("the acceptance is not attributed to %s: %+v", entry, steps)
 	}
-	if c.OpenFindings() != base.OpenFindings()-1 {
-		t.Errorf("open findings %d, want %d", c.OpenFindings(), base.OpenFindings()-1)
+	if env.OpenFindings(base.profile) != baseEnv.OpenFindings(base.profile)-1 {
+		t.Errorf("open findings %d, want %d", env.OpenFindings(base.profile), baseEnv.OpenFindings(base.profile)-1)
+	}
+	// Grading leaves the evidence as it was: no verdict, no context.
+	if ev := base.Evidence(); len(ev.Findings) != 0 || len(ev.Run.ContextSources) != 0 {
+		t.Errorf("grading changed the evidence: %+v", ev.Run)
 	}
 	if len(env.Run.ContextSources) != 1 || env.Run.ContextSources[0].Name != src || env.Run.ContextSources[0].Kind != "config" {
 		t.Errorf("context sources = %+v", env.Run.ContextSources)
@@ -181,7 +211,7 @@ func TestLostSessionCutsTheCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := c.Envelope()
+	env := c.Evidence()
 	if c.Complete() || c.Lost() == "" || env.Run.Status != "incomplete" {
 		t.Fatalf("complete %v, lost %q, status %s", c.Complete(), c.Lost(), env.Run.Status)
 	}
@@ -211,7 +241,7 @@ func TestRedactExtraAndSeededSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := report.WriteJSON(&out, c.Envelope()); err != nil {
+	if err := report.WriteJSON(&out, c.Evidence()); err != nil {
 		t.Fatal(err)
 	}
 	for _, secret := range []string{"AKIAIOSFODNN7EXAMPLE", "tangerine-42"} {
@@ -233,8 +263,8 @@ func TestRunTimeoutCutsTheCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Complete() || c.Envelope().Run.Status != "incomplete" {
-		t.Fatalf("complete = %v, status %s", c.Complete(), c.Envelope().Run.Status)
+	if c.Complete() || c.Evidence().Run.Status != "incomplete" {
+		t.Fatalf("complete = %v, status %s", c.Complete(), c.Evidence().Run.Status)
 	}
 }
 

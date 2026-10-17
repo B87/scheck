@@ -13,6 +13,7 @@ import (
 
 	"github.com/b87/scheck/internal/engagement"
 	"github.com/b87/scheck/internal/engagement/gate"
+	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/finding"
 )
 
@@ -76,6 +77,11 @@ access:
 			fmt.Fprint(w, `[{"id":3,"login":"bob","type":"User","role_name":"admin","permissions":{"admin":true,"pull":true,"push":true,"triage":true,"maintain":true}}]`)
 		case "/repos/acme/shop/keys":
 			fmt.Fprint(w, `[{"id":8,"read_only":false,"key":"discarded-public-key"}]`)
+		case "/repos/acme/shop/collaborators/carol/permission":
+			// The base permission is write: the collaborators list did not
+			// show carol, and F1 asks (docs/spec/engagement.md, "Plan
+			// selection and follow-ups").
+			fmt.Fprint(w, `{"permission":"write","role_name":"write","user":{"id":4,"login":"carol","type":"User","email":"discarded@example.com","role_name":"write","permissions":{"admin":false,"maintain":false,"push":true,"triage":true,"pull":true}}}`)
 		case "/orgs/acme/actions/secrets", "/repos/acme/shop/actions/secrets", "/repos/alice/shop/actions/secrets":
 			fmt.Fprint(w, `{"secrets":[]}`)
 		case "/repos/acme/shop/dependabot/alerts", "/repos/acme/shop/secret-scanning/alerts", "/repos/alice/shop/dependabot/alerts", "/repos/alice/shop/secret-scanning/alerts":
@@ -139,11 +145,111 @@ access:
 	if err = json.Unmarshal(b, &recon); err != nil {
 		t.Fatal(err)
 	}
-	if len(recon.Attribution) == 0 || len(recon.PeopleCandidates) == 0 || len(recon.Assets[0].GitHub.Judgments) == 0 {
-		t.Fatal("missing persisted attribution/candidates/judgments")
+	if len(recon.Attribution) == 0 || len(recon.PeopleCandidates) == 0 {
+		t.Fatal("missing persisted attribution/candidates")
+	}
+	// Verdicts are not evidence: recon.json holds what was read, and
+	// findings.json every verdict with its chain (docs/spec/runs.md).
+	if strings.Contains(string(b), `"verdict"`) || strings.Contains(string(b), `"judgments"`) || strings.Contains(string(b), `"judged"`) {
+		t.Fatal("recon.json carries a verdict")
+	}
+	fb, err := os.ReadFile(dir.File("findings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var findings engagement.FindingsDoc
+	if err = json.Unmarshal(fb, &findings); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(fb), "discarded-public-key") {
+		t.Fatal("public key in findings.json")
+	}
+	graded := false
+	for _, a := range findings.Assets {
+		for _, j := range a.Judged {
+			graded = graded || j.Verdict == "fired" && j.Chain != nil
+		}
+	}
+	if !graded {
+		t.Fatal("findings.json lacks graded verdicts")
 	}
 	if strings.Contains(string(b), "discarded-public-key") {
 		t.Fatal("public key persisted")
+	}
+	// Recon read inventory only; Plan ordered the repositories; Check read
+	// them, attributed to its own stage (docs/spec/engagement.md, "Plan
+	// selection and follow-ups").
+	if strings.Contains(string(b), `"repositories_access"`) || strings.Contains(string(b), `"repositories_ci"`) {
+		t.Fatal("recon.json carries a per-repository read")
+	}
+	pb, err := os.ReadFile(dir.File("plan.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan engagement.PlanDoc
+	if err = json.Unmarshal(pb, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.GitHub) != 1 || plan.GitHub[0].Budget != 4000 || plan.GitHub[0].Order[0].FullName != "acme/shop" || plan.GitHub[0].Order[0].Tier != 1 ||
+		!slices.Contains(plan.NotJudged, "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it.") {
+		t.Fatalf("plan: %+v", plan)
+	}
+	cb, err := os.ReadFile(dir.File("check.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var check engagement.CheckDoc
+	if err = json.Unmarshal(cb, &check); err != nil {
+		t.Fatal(err)
+	}
+	if len(check.FollowUps) != 1 || check.FollowUps[0].Row != "F1" || check.FollowUps[0].Outcome != "read" || check.FollowUps[0].Params["username"] != "carol" ||
+		check.FollowUps[0].Trigger.Verdict != "fired" || strings.Contains(string(cb), "discarded@example.com") {
+		t.Fatalf("follow-ups: %+v", check.FollowUps)
+	}
+	held := false
+	for _, a := range findings.Assets {
+		for _, j := range a.Judged {
+			if j.ID == finding.IDIdentityFormerPersonHasAccess && j.Subject.Key == "carol" && j.Verdict == "fired" {
+				held = held || slices.ContainsFunc(j.Attributes, func(at finding.Attribute) bool { return at.Name == "write_held" && at.Asset == "repo:github:acme/shop" })
+			}
+		}
+	}
+	if !held {
+		t.Fatal("F1's answer did not establish carol's write on production")
+	}
+	if !slices.ContainsFunc(check.PeopleCandidates, func(c engagement.PeopleCandidate) bool { return c.Login == "ghost" }) {
+		t.Fatalf("check.json lost the people stanza: %+v", check.PeopleCandidates)
+	}
+	if len(check.Assets) != 1 || check.Assets[0].GitHub == nil || len(check.Assets[0].GitHub.Access) != 1 || strings.Contains(string(cb), "discarded-public-key") {
+		t.Fatalf("check.json: %s", cb)
+	}
+	ab, err := os.ReadFile(dir.File("audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(ab)), "\n") {
+		var e gate.Entry
+		if json.Unmarshal([]byte(line), &e) != nil || e.Op == "" {
+			continue
+		}
+		perRepository := e.Asset == "repo:github:acme/shop"
+		if perRepository != (e.Stage == "check") {
+			t.Fatalf("stage %q for %s %s", e.Stage, e.Op, e.Asset)
+		}
+	}
+	selected := false
+	for _, row := range out.Report.Coverage {
+		for _, si := range row.SubItems {
+			if p := si.Population; p != nil && p.Selection != nil {
+				selected = true
+				if p.Selection.Read != 1 || p.Selection.InScope != 1 || slices.ContainsFunc(si.Reasons, func(r ereport.ReasonDetail) bool { return r.Reason == "sampled" }) {
+					t.Fatalf("selection: %+v", si)
+				}
+			}
+		}
+	}
+	if !selected {
+		t.Fatal("no selection in coverage")
 	}
 	sharedNote := false
 	for _, note := range out.Report.Notes {

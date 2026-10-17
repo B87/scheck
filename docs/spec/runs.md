@@ -21,12 +21,26 @@ and locked while a run holds it:
                        for `--host`, the engagement built in memory
   scope.json           stage 2: resolved assets, evidence, exclusions
   recon.json           stage 3: the asset map
-  plan.json            stage 4: the checklist per asset, and each host's planned and
-                       disabled checks (with a model, hypotheses too)
+  plan.json            stage 4: each host's planned and disabled checks, each GitHub
+                       root's repositories and each Workspace tenant's accounts in the
+                       order Check reads them, and the not-judged list (E9 steps 6a and
+                       6b; with a model, hypotheses too)
+  check.json           stage 5: what Check read of each GitHub root's repositories, in
+                       Plan's order, with the requests spent and the people fields recomputed after Check (E9 step 6a),
+                       and of each Workspace tenant its OAuth grants and Gmail forwarding
+                       (E9 step 6b), and `follow_ups[]`, one object per F1 pair opened or
+                       cut (E9 step 7); `recon.json` keeps the inventory only
   evidence/            stages 3 and 5: one file per result, redacted and truncated;
                        per host <asset>.json and <asset>.collection.json, and
                        requests/, the gate's successes a resume may reuse
-  findings.json        stage 6: rule outcomes and follow-ups opened and settled
+  findings.json        stage 6: rule outcomes (a judgment cites a follow-up's
+                       read in its references); every network-collector verdict
+                       with its severity chain, as output only (E9 step 1b); per host
+                       asset, `host_chains`, the engagement's steps on a host posture
+                       finding after the host collector's table, by finding id
+                       (E9 step 9): `findings` keep the collector's severity, a
+                       chain's `base` is that severity, and
+                       `open_at_or_above_threshold` counts the chain's
   report.json          stage 7, with report.txt
   audit.jsonl          every request, command and API call, in order
 ```
@@ -55,16 +69,25 @@ target is contacted, a host or jump host without an SSH user. Scope also expands
 each `domain` root by passive discovery, through the gate and contacting no server of
 the company's ([scope.md](scope.md#discovery)). Every asset of kind `host`, a root or an `assets` entry,
 is collected. `domain` and `url` roots are read through the web collector
-([web-collector.md](web-collector.md#reads)) and judged in Recon by the applicable
+([web-collector.md](web-collector.md#reads)) and judged in Analyze by the applicable
 DNS, email, TLS and response rules, then recorded as `collected`, or
 with `limit_reached` when `limits.timeout` ends the engagement before it is read (`not_collected`) or while it is (`incomplete`); an asset of any other kind is
 `not_collected` with reason `collector_not_built`. Either reason makes the run exit 2
 when the asset is a root. A declared `domain` or `url` asset under a root that was read is
 recorded with the root's status and the detail "read with *root*"
-([web-collector.md](web-collector.md#reads)). The report's `method.levels_used` names
+([web-collector.md](web-collector.md#reads)). A declared repository under a GitHub
+organization is recorded `not_collected` with the detail "read with *root* in Check, after
+Plan", and the organization root's Recon detail is "GitHub inventory read; Check reads
+each repository in Plan's order."; after Check the status is reconciled in memory, and
+`recon.json` keeps Recon's. The report's `method.levels_used` names
 the levels the run's requests used: `observe` when a host was collected or a site's
 front page requested, `passive` when a domain root was read.
-Plan writes an empty checklist and Check opens no follow-up. `evidence/<asset>.json`, written by Recon,
+Plan lists each host's checks, orders each GitHub root's repositories and each Workspace
+tenant's accounts and names what will not be judged ("Plan selection and follow-ups");
+Check reads those repositories under the request budget, reads each tenant's OAuth grants
+and Gmail forwarding in Plan's order, then opens the follow-up reads of F1 ("Plan selection and follow-ups", E9 step 7). A Workspace
+tenant `collected` by Recon is reconciled in memory to `incomplete` when Check's reads end
+short; `recon.json` keeps Recon's. `evidence/<asset>.json`, written by Recon,
 is the host collector's envelope; its `context_sources` names `<file> assets.<name>` with
 kind `config`, and the accepted risks it grades are those in `intent.accepted_risks` that
 name the asset by catalog id without a `subject`, each attributed to its own entry
@@ -81,8 +104,7 @@ host or jump host without an SSH user) happen before the run directory is create
 refused run leaves nothing behind. Stdout is the report, as text or with `--format json`
 as `report.json` (`--include-evidence` adds the hosts' captures to stdout only); a run
 stopped earlier prints that stage's document with `--format json` (`--stop-after check`
-prints one that no file holds, since Check writes none until E9), and a summary per
-asset as text.
+prints `check.json`), and a summary per asset as text.
 
 **Stop and resume.** `--stop-after <stage>` ends the run after that stage's file is
 written. `scheck run <directory>` resumes:
@@ -96,15 +118,58 @@ written. `scheck run <directory>` resumes:
   inputs is kept; any other is collected again on a new session, canary first. A host
   costs seconds, and an envelope merged from two sessions would break what its command
   trace means (`host-collector.md §9`).
+- **Nothing kept is older than 7 days** (built, E9 step 8). The maximum is compiled in
+  and no setting widens it. It applies to every observation a resume would keep: the
+  Scope document, a host's envelope and the gate ledger's successes. An observation is
+  kept only when `0 <= session start - collection time < 7 x 24 hours`, in absolute
+  time. Exactly 7 x 24 hours is expired. A zero time (no recorded collection time) is
+  expired, and so is a time after the session's start (a wrong clock or file; no skew is
+  allowed). The collection time is Scope's `collected_at` in `scope.json` (the start of
+  the session that ran Scope; a `scope.json` without it reads as zero), a host
+  envelope's `run.started`, and a ledger success's own collection time, HTTP and DNS
+  alike. An expired observation is collected again, never an error. When collecting it
+  again fails, the asset is *failed* or *unread* for that part and the old data is not
+  reported in its place. stderr says what was dropped, with dates in
+  `engagement.timezone` to the minute: "*asset*: kept collection of *date time* is older
+  than 7 days; collecting it again." (or "kept collection has no recorded time"),
+  "scope: discovery of *date time* is older than 7 days; running Scope again." (or
+  "discovery has no recorded time"), and, when above zero, one line for all the
+  ledger's reads: "resume: *n* earlier reads are older than 7 days, *m* have no
+  recorded time and *k* are dated after this session started; they are sent again."
+  Only the clauses above zero are printed, with "and" before the last and the singular
+  for one ("1 earlier read is …", "1 has …", "1 is …"); the line ends "it is sent
+  again." when the total is one and "they are sent again." otherwise; with all three
+  zero there is no line. A collection time after the session's start has its own wording: "*asset*: kept
+  collection is dated *date time*, after this session started, so its age is unknown;
+  collecting it again." and "scope: discovery is dated *date time*, after this session
+  started, so its age is unknown; running Scope again." The ledger's records carry no
+  collector, so the line is not split by collector. The report prints the oldest collection time of the
+  observations each asset rests on ([report.md](report.md), "Coverage").
 - **Only success is reused.** "No check re-runs with the same inputs" applies to
   successful results, and the inputs include the principal and its granted scopes, so
   a better token on resume reads again what the weaker one could not.
+- **Verdicts are not evidence** (built in E9 steps 1b and 1c). The evidence types carry no verdicts: `recon.json`,
+  `check.json` and `evidence/` hold what was read, and Analyze judges every web, GitHub and
+  Workspace asset from what this session's Recon and Check hold (Check's GitHub and Workspace evidence is
+  joined to Recon's in memory), on each session including a resume (the
+  gate answers Recon's and Check's reads from the ledger, each counted against the budget as
+  when it was first sent). A host's `evidence/<asset>.json` is the
+  host envelope with its facts, observations, host and run and no assessment, finding
+  or context; Analyze rebuilds the fact sheet from it and evaluates and grades the
+  posture rules, for a host collected this session and for a kept one alike. `findings.json` holds every
+  network-collector verdict, after partition to its repository and grading, as `judged`
+  per asset with the severity chain of a fired one. It is output only, never read on
+  resume. A kept host is graded again in Analyze, so editing an accepted risk that
+  names it or its context does not collect it again; the host's collection inputs below
+  exclude both. An envelope the sheet cannot be rebuilt from (an unknown platform or
+  status, a check not in this build's catalog, a parsed value not in its parser's
+  shape, a fact whose observation is not its own) is not kept: the host is collected
+  again.
 - **A changed engagement file.** The resume reads the file again at its recorded path,
   and each stage compares what it reads from it. If anything Scope reads changed, Scope
-  runs again. A host is kept only while nothing its collection reads changed, the
-  accepted risks that name it and `engagement.timezone` included: nothing regrades a kept envelope, so a changed
-  accepted risk on a host collects that host again rather than re-running only Analyze
-  and Report, which adds only contact the file already authorizes. A change to people,
+  runs again. A host is kept only while nothing its collection reads changed. A changed
+  context, accepted risk that names a host, or `engagement.timezone` is not among those
+  reads: it re-runs only Analyze and Report and contacts no host. A change to people,
   access, data, secrets or anything no host or Scope reads contacts no target. Scope is kept when only `mail` or `intent` changes: discovery reads
   neither. Mail declarations are hashed by canonical domain; changed senders, selectors
   or no-mail declarations refresh that domain's records and dependent follow-ups.
@@ -112,7 +177,8 @@ written. `scheck run <directory>` resumes:
   accepted risks only regrade retained evidence. Unaffected successful reads are kept.
   Changed vantage reruns Scope and web/DNS reads; hosts are unaffected.
 - **Hand edits.** A file the resume uses is used as written, and the report names each
-  one edited since scheck wrote it; a host's envelope is never used as written (below).
+  one edited since scheck wrote it; a host's envelope and its record are never used as
+  written (below).
   An edit cannot widen scope: the gate checks every request against the engagement
   file's roots and exclude, not against `scope.json`. `run.json` is trusted as written:
   whoever can write the run directory can change which engagement file it names and the
@@ -127,10 +193,14 @@ written. `scheck run <directory>` resumes:
   or unknown-to-known transition is not reported as a changed principal. Unknown principals reuse no earlier
   authenticated successes; retained inventory preserves its original observation
   time and is not current access validation.
-  The report prints the collection span from the run's first start, and time-based
-  rules (stale accounts, expiries) are computed against collection time: scope and
-  first-party confirmations are read at the start of the session that reads them, and a
-  host's accepted risks at the start of the session that collected it.
+  The report prints the collection span from the run's first start. Scope and
+  first-party confirmations are read at the start of the session that reads them.
+  Every time-dependent rule is judged at the collection time of the read it is about
+  (a host's accepted risks at the start of the session that collected it), never the
+  session start or the render time, and the excerpt names that moment; the rules and their reads are the table in `engagement.md`, "Severity in
+  context", "Time". A read with no recorded collection time makes the rule abstain
+  ("collection time not recorded"). On resume the 7-day maximum applies, and a
+  zero collection time counts as expired (above).
 
 `scheck run <directory>` resolves a path that reaches the directory
 through a link, locks the directory and exits 3 when it is locked; when it holds no
@@ -193,16 +263,16 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
   `evidence/<asset>.json` for each host it collected, completely or not, as `{inputs,
   graded, envelope_sha256, recon, planned, trace}` (`recon` the asset's whole Recon
   entry, `graded` the start of the session that collected it). The host is kept when the
-  record's inputs match, its `recon` status is `collected` with the same name and id,
-  and the sha256 of `evidence/<asset>.json` as it is on disk equals both the record's
-  `envelope_sha256` and `run.json`'s hash for that file. The record, its trace included,
-  is used as written; the envelope never is: one edited, or written by a session cut
-  before it recorded it, collects the host again, so no kept host mixes two sessions.
+  record's inputs match, its `recon` status is `collected` with the same name, id and
+  kind, the sha256 of the record as it is on disk equals `run.json`'s hash for it, and
+  the sha256 of `evidence/<asset>.json` as it is on disk equals both the record's
+  `envelope_sha256` and `run.json`'s hash for that file. Neither file is used as written,
+  since the record's `graded` is the clock the host's acceptances are graded at: one
+  edited, or written by a session cut before it recorded it, collects the host again, so
+  no kept host mixes two sessions.
   `recon.json` is not read. The inputs are a hash of the build version and everything the collection
   reads (reach, user, identity, known_hosts, jump, elevate, profile, `disable_checks`,
-  `deny_paths`, `redact_extra`, timeout, its context with the accepted risks that name
-  it and `engagement.timezone`, in which their expiry is graded, the context's source,
-  and the engagement's `exclude`, which its SSH dial is checked against).
+  `deny_paths`, `redact_extra`, timeout, and the engagement's `exclude`, which its SSH dial is checked against).
 - A build whose version names no commit (`dev`) or carries uncommitted changes
   (`-dirty`) keeps neither Scope nor any host.
 - **The gate's successes** are written after each stage to
@@ -215,12 +285,14 @@ Workspace authenticated responses are never eligible for ledger reuse, whatever 
 - **The report.** `run.resumed` is true, and the text header's `Resumed` line says the
   run was stopped and resumed, that what an earlier session read completely was kept and
   that everything else was read again. It states that kept evidence was not read again
-  and retains its original observation date. A file the resume used (`scope.json` when kept;
-  `evidence/<asset>.collection.json` for a kept host; a success the gate reused) whose bytes differ from its hash in `run.json` is listed in
+  and retains its original observation date, that readings older than 7 days were read
+  again and never kept, and, per asset, how old its oldest kept reading is. A file the resume used (`scope.json` when kept; a success the gate
+  reused) whose bytes differ from its hash in `run.json` is listed in
   `engagement.edited_by_hand` and on the header's `Edited by hand` line: `<files>:
   changed since scheck wrote it, and used as written.` ("them" for more than one). An
-  acceptance's outcome and its "expires in N days" are decided at the time the host it
-  names was graded, the start of the session that collected it. A kept host's asset
+  acceptance's outcome and its dated expiry wording ("until <date> (<N> days after
+  collection on <date>)") are decided at the host's collection, the start of the
+  session that collected it. A kept host's asset
   carries `kept: true`; its captures were never stored, so `--include-evidence` adds no
   `evidence` to its envelope rather than empty captures that would read as a command
   that printed nothing.

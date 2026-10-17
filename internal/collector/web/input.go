@@ -2,7 +2,6 @@ package web
 
 import (
 	"strings"
-	"time"
 )
 
 // SenderDeclaration is operator context, not observed sending activity.
@@ -25,14 +24,13 @@ type ScopeView struct {
 	Senders       []SenderDeclaration
 	NoMail        []string
 	OtherEvidence []Evidence
-	Now           time.Time
 	Vantage       string
 }
 
 // InputFrom assembles rule input without interpreting engagement-file types or
 // deciding which roots own names. It performs no reads.
 func InputFrom(asset, root string, evidence Evidence, view ScopeView) Input {
-	in := Input{Asset: asset, Root: root, Evidence: evidence, Now: view.Now,
+	in := Input{Asset: asset, Root: root, Evidence: evidence,
 		Vantage: view.Vantage, Names: view.Names, Wildcard: view.Wildcard,
 		Gaps: view.Gaps, Doubt: view.Doubt, Restricted: view.Restricted, URLAssets: view.URLAssets}
 	for _, m := range evidence.Mail {

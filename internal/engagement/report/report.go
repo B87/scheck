@@ -33,6 +33,7 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Assessments   []Assessment `json:"assessments"`
 	Acceptances   []Acceptance `json:"acceptances"`
+	PeopleLeft    []PersonLeft `json:"people_left"`
 	Excluded      []Excluded   `json:"excluded"`
 	Redaction     Redaction    `json:"redaction"`
 	Egress        Egress       `json:"egress"`
@@ -46,6 +47,9 @@ type Run struct {
 	Started   time.Time `json:"started"`
 	Directory *string   `json:"directory"`
 	Resumed   bool      `json:"resumed"`
+	// SessionStarted is when this session started, which a kept
+	// reading's age is counted to.
+	SessionStarted time.Time `json:"session_started"`
 	// Command runs the engagement again ("scheck run engagement.yaml").
 	Command string `json:"command,omitempty"`
 }
@@ -186,19 +190,48 @@ type Summary struct {
 	Below Below      `json:"below"`
 	Areas AreaCounts `json:"areas"`
 	Rules RuleCounts `json:"rules"`
+	// MattersMost is the readout of each data.matters_most entry, in file
+	// order (docs/spec/report.md, "Data that matters most").
+	MattersMost []MattersMost `json:"matters_most"`
+}
+
+// MattersMost is one data.matters_most entry's readout: the findings on
+// its asset the answer raises, how many of the checks it raises decided,
+// or that the asset was not read.
+type MattersMost struct {
+	Key   string `json:"key"`
+	Asset string `json:"asset"`
+	Name  string `json:"name"`
+	What  string `json:"what"`
+	// Outcome is raised, read (every check this answer raises decided),
+	// partial, not_judged (read, none decided) or not_read.
+	Outcome string `json:"outcome"`
+	// Raised counts the open or accepted findings on the asset this answer
+	// raises, moved or already at the top of the scale.
+	Raised int `json:"raised"`
+	// Checks are the rules this answer raises on the asset, Undecided those
+	// that did not decide.
+	Checks    int `json:"checks"`
+	Undecided int `json:"undecided"`
+	// Reasons are why: the undecided checks' reasons, the one covering most
+	// first, or why the asset was not read.
+	Reasons []string `json:"reasons"`
 }
 
 // Item is one ranked entry of "Fix these first".
 type Item struct {
-	Rank      int      `json:"rank"`
-	Kind      string   `json:"kind"` // finding_id | person
-	IDs       []string `json:"ids"`
-	Person    *string  `json:"person"`
-	Title     string   `json:"title"`
-	Severity  string   `json:"severity"`
-	Keys      []Key    `json:"keys"`
-	Assets    []string `json:"assets"`
-	RankBasis []string `json:"rank_basis"`
+	Rank   int      `json:"rank"`
+	Kind   string   `json:"kind"` // finding_id | person
+	IDs    []string `json:"ids"`
+	Person *string  `json:"person"`
+	// OtherPeople says a departed-people item lost instances to a person
+	// item and ranks on the others.
+	OtherPeople bool     `json:"other_people,omitempty"`
+	Title       string   `json:"title"`
+	Severity    string   `json:"severity"`
+	Keys        []Key    `json:"keys"`
+	Assets      []string `json:"assets"`
+	RankBasis   []string `json:"rank_basis"`
 }
 
 // Below counts what "Fix these first" leaves out.
@@ -239,9 +272,15 @@ type Row struct {
 	Caps                []Cap          `json:"caps,omitempty"`
 	Narrowing           []Narrowing    `json:"narrowing,omitempty"`
 	DeclaredNotVerified []Note         `json:"declared_not_verified,omitempty"`
-	UnattributedMembers *int           `json:"unattributed_members,omitempty"`
-	SubItems            []SubItem      `json:"sub_items,omitempty"`
-	PlannedIn           string         `json:"planned_in,omitempty"`
+	// ContextNotes are the context notes on the area: evidence that
+	// contradicts its not_used (docs/spec/engagement.md, "Context notes").
+	ContextNotes        []Note    `json:"context_notes,omitempty"`
+	UnattributedMembers *int      `json:"unattributed_members,omitempty"`
+	SubItems            []SubItem `json:"sub_items,omitempty"`
+	// NotJudged is the area's fixed list of sub-items this version does not
+	// judge; every risk-area row carries it, and no other row.
+	NotJudged []FixedItem `json:"not_judged,omitempty"`
+	PlannedIn string      `json:"planned_in,omitempty"`
 }
 
 // SubItem is a rule, or a family sharing a finding id, on an asset; for a
@@ -258,6 +297,8 @@ type SubItem struct {
 	Judged []string `json:"judged,omitempty"`
 	// ReadNotJudged is what was read in the area that no rule judges.
 	ReadNotJudged []string `json:"read_not_judged,omitempty"`
+	// Detail is a line on how far the sub-item's follow-up reads got.
+	Detail string `json:"detail,omitempty"`
 }
 
 // ReasonDetail is one reason from the closed list and its detail.
@@ -271,6 +312,9 @@ type Population struct {
 	Kind    string `json:"kind"`
 	InScope int    `json:"in_scope"`
 	Read    int    `json:"read"`
+	// Selection names what chose the items read when a budget could stop
+	// the reads short (docs/spec/report.md, "Coverage").
+	Selection *finding.Selection `json:"selection,omitempty"`
 }
 
 // Cap is a limit on what was read, and how the part read was chosen.
@@ -369,6 +413,10 @@ type FindingAccept struct {
 	Expires             *string `json:"expires"`
 	Expired             bool    `json:"expired"`
 	CoversEveryInstance bool    `json:"covers_every_instance"`
+	// JudgedAt is the collection time its expiry was read at: the latest
+	// read the finding cites, or for a host the start of the session that
+	// collected it (docs/spec/engagement.md, "Severity in context").
+	JudgedAt *time.Time `json:"judged_at"`
 }
 
 // Rule is what produced a finding and every input it read.
@@ -518,8 +566,12 @@ type Asset struct {
 	// Kept says a resume kept the host from the earlier session that
 	// collected it. Its captures were never stored, so --include-evidence
 	// adds none to its envelope rather than empty ones.
-	Kept  bool    `json:"kept,omitempty"`
-	Trace []Trace `json:"trace"`
+	Kept bool `json:"kept,omitempty"`
+	// OldestCollectedAt is the collection time of the oldest successful
+	// observation the asset rests on, null when nothing was read for it
+	// (docs/spec/report.md, "Coverage").
+	OldestCollectedAt *time.Time `json:"oldest_collected_at"`
+	Trace             []Trace    `json:"trace"`
 }
 
 // Trace is one command or request attempted on an asset.

@@ -178,6 +178,7 @@ func (g *Gate) MirrorExtraRedactions(b []byte) []policy.Hit {
 }
 
 // RecordMirrorAttempt emits numeric accounting only; no local contents or paths.
-func (g *Gate) RecordMirrorAttempt(asset, request, decision, reason string, objects, commits, blobs int, at time.Time) error {
-	return g.record(Entry{Event: "mirror", Asset: asset, RequestID: request, Op: "github.mirror_history", Stage: "recon", Time: at, Level: "passive", Decision: decision, Detail: reason, Counts: map[string]int{"objects": objects, "commits": commits, "blobs": blobs}})
+// stage is the stage that read the mirror.
+func (g *Gate) RecordMirrorAttempt(asset, stage, request, decision, reason string, objects, commits, blobs int, at time.Time) error {
+	return g.record(Entry{Event: "mirror", Asset: asset, RequestID: request, Op: "github.mirror_history", Stage: stage, Time: at, Level: "passive", Decision: decision, Detail: reason, Counts: map[string]int{"objects": objects, "commits": commits, "blobs": blobs}})
 }

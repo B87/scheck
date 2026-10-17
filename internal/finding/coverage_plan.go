@@ -1,5 +1,7 @@
 package finding
 
+import "github.com/b87/scheck/internal/check"
+
 // Decided says a judgment settled its subject: fired or disproved, with no
 // reason left open. Coverage marking and the collectors that word coverage
 // read it alike (docs/spec/report.md, "Coverage").
@@ -57,6 +59,13 @@ type CoverageGroup struct {
 	// Unassessed names the group in the row's reason when nothing in it was
 	// decided; empty leaves it out.
 	Unassessed string
+	// HostDomain is the host area whose Hosts-row line also reports the
+	// group, with what it judges (HostJudges): a rule over a host's facts.
+	HostDomain check.Domain
+	HostJudges string
+	// Selection is what chose the part of the group's population that was
+	// read, when a cap, the deadline or a rate limit cut it short.
+	Selection *Selection
 }
 
 // CoverageUnread is a sub-item nothing reads.
@@ -64,6 +73,9 @@ type CoverageUnread struct {
 	Name, Detail string
 	// Unassessed names it in the row's reason.
 	Unassessed string
+	// Fixed is the id of the area's fixed not-judged item it is, which the
+	// report prints once in the area's list instead of the row's reason.
+	Fixed string
 }
 
 // CoverageReason is a coverage reason code and its collector-worded detail.

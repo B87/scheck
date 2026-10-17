@@ -3,6 +3,8 @@ package workspace
 import (
 	"slices"
 	"strings"
+
+	"github.com/b87/scheck/internal/finding"
 )
 
 // CredentialNote uses returned grants only; requested scopes are not assurance.
@@ -57,6 +59,10 @@ func ReadNotes(read Read, asset string) []Note {
 // readout: administrative and 2-step verification notes beside the rules.
 func Readout(e Evidence, asset string, c Context) []Note {
 	views := accountViews(e, c, attribute(asset, e.Users.Items, c.People, e.Users.Complete))
+	if e.usersPending {
+		// Recon: grants and forwarding are Check's to read and word.
+		return slices.Concat(accessNotes(e, asset, c), twoStepNotes(e, asset, c))
+	}
 	return slices.Concat(accessNotes(e, asset, c), twoStepNotes(e, asset, c), oauthNotes(e, asset, views), mailNotes(e, asset, views, c.MailApproval))
 }
 
@@ -81,13 +87,13 @@ func accessNotes(e Evidence, asset string, c Context) []Note {
 		if p == nil {
 			continue
 		}
-		if leftPassed(p.Left, c) && !strings.EqualFold(u.Primary, firstPrimary(p, u)) {
-			note("A departed person's declared address matches an alias of " + u.Primary + ". Verify ownership or a rename; active access was not concluded from an alias-only match.")
+		if leftAt(p.Left, c, e.Users.Reads) == finding.LeftPassed && !strings.EqualFold(u.Primary, firstPrimary(p, u)) {
+			note("A departed person's declared address matches an alias of " + u.Primary + " in the users read of " + usersAsOf(c, e.Users.Reads) + ". Verify ownership or a rename; active access was not concluded from an alias-only match.")
 		}
 		if p.Kind == "shared" {
 			for _, handle := range p.UsedBy {
-				if used := person(c, handle); used != nil && leftPassed(used.Left, c) {
-					note("A departed person was declared to use shared account " + u.Primary + ". Rotate its password and second factors; rotation was not observed.")
+				if used := person(c, handle); used != nil && leftAt(used.Left, c, e.Users.Reads) == finding.LeftPassed {
+					note("A departed person was declared to use shared account " + u.Primary + " (departed as of the users read of " + usersAsOf(c, e.Users.Reads) + "). Rotate its password and second factors; rotation was not observed.")
 				}
 			}
 		}
@@ -103,7 +109,7 @@ func accessNotes(e Evidence, asset string, c Context) []Note {
 			note("Current list and detail security flags conflicted for account id " + a.ID + "; affected conclusions remain unknown.")
 		}
 		for _, assignment := range a.Assignments.Items {
-			if _, known := currentAssignment(assignment, c.AssessedAt); !known {
+			if _, known := currentAssignment(assignment, assignmentsAt(a)); !known {
 				note("Role assignment " + assignment.ID + " has an unsupported condition or unreadable expiry; its current privilege remains unknown.")
 			}
 		}

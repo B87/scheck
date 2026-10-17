@@ -18,12 +18,12 @@ func githubAlertsReport(t *testing.T, verdict string) Input {
 	org.Judged = []Judgment{{ID: finding.IDGitHubOrgSecretAll, Asset: org.ID, Subject: Subject{Kind: "secret_location", Key: "actions:prod_key", Label: "Actions secret PROD_KEY"}, Reads: []string{"organization-secrets"}, Excerpt: "Actions secret PROD_KEY: provider visibility all; names only, no value read"}}
 	for i, id := range finding.GitHubAlertIDs()[1:] {
 		subject := Subject{Kind: "dependency_alert", Key: "dependabot:" + string(rune('3'+i)) + ":App%2Fpackage-lock.json", Label: "Dependabot alert in App/package-lock.json"}
-		j := Judgment{ID: id, Asset: repo.ID, Subject: subject, Reads: []string{"dependabot-alerts"}, Excerpt: "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.", Context: "Provider-reported vulnerability severity; runtime exploitability was not verified."}
+		j := Judgment{ID: id, Asset: repo.ID, Subject: subject, Reads: []string{"dependabot-alerts"}, Excerpt: "GitHub reports an open dependency alert in App/package-lock.json. Deployed versions and exploitability were not established.", Why: "Provider-reported vulnerability severity; runtime exploitability was not verified."}
 		if id == finding.IDGitHubSecretScanningOpen {
 			j.Subject = Subject{Kind: "secret_location", Key: "secret-scanning:7:commit:" + strings.Repeat("a", 40) + ":config%2FProd.env:2:1", Label: "Secret alert 7 in config/Prod.env:2"}
 			j.Reads = []string{"secret-alerts", "secret-locations", "repository"}
-			j.Context = ""
-			j.Attributes = []string{"observed_public"}
+			j.Why = ""
+			j.Attributes = []finding.Attribute{{Name: "public_repository", Ref: finding.Ref{Observation: "repository", Excerpt: "Observed repository visibility: public"}}}
 			j.Excerpt = "Provider secret alert 7: open; validity unknown; config/Prod.env:2 at " + strings.Repeat("a", 40) + ". Credential usability was not tested."
 			j.Details = map[string]any{"redaction_marker": "[REDACTED:json-secret:31 bytes]", "provider_validity": "unknown", "repository_read": "repository"}
 		}
@@ -65,7 +65,7 @@ func githubAlertsDisprovedReport(t *testing.T) Input { return githubAlertsReport
 func githubAlertsAbstainedReport(t *testing.T) Input { return githubAlertsReport(t, verdictAbstained) }
 func TestGitHubAlertsSeveritySubjectsAndCoverage(t *testing.T) {
 	in := githubAlertsFiredReport(t)
-	r := Build(in)
+	r := build(in)
 	validate(t, schema(t), r)
 	wants := map[string]string{finding.IDGitHubOrgSecretAll: "medium", finding.IDGitHubDependabotHigh: "high", finding.IDGitHubDependabotMedium: "medium", finding.IDGitHubDependabotLow: "low", finding.IDGitHubSecretScanningOpen: "critical"}
 	for _, f := range r.Findings {
@@ -84,7 +84,7 @@ func TestGitHubAlertsSeveritySubjectsAndCoverage(t *testing.T) {
 		}
 	}
 	in.DataMattersMost = []string{in.Assets[0].ID}
-	r = Build(in)
+	r = build(in)
 	for _, f := range r.Findings {
 		if f.ID == finding.IDGitHubOrgSecretAll && f.Severity != "high" {
 			t.Fatal("important data adjustment lost")
@@ -102,7 +102,7 @@ func TestPartialAlertPopulationsKeepCoveragePartial(t *testing.T) {
 		}
 		a.Judged = append(a.Judged, Judgment{ID: id, Asset: a.ID, Verdict: verdictAbstained, Reason: "unavailable:github_evidence", Details: map[string]any{"population_gaps": []string{"page_limit"}}, Excerpt: "Owning provider population is incomplete; positives remain"})
 	}
-	r := Build(in)
+	r := build(in)
 	for _, row := range r.Coverage {
 		if row.Area != "secrets" {
 			continue
@@ -127,7 +127,7 @@ func TestPartialAlertPopulationsKeepCoveragePartial(t *testing.T) {
 	}
 }
 func TestPublicSecretAdjustmentCitesRepositoryVisibility(t *testing.T) {
-	r := Build(githubAlertsFiredReport(t))
+	r := build(githubAlertsFiredReport(t))
 	for _, f := range r.Findings {
 		if f.ID != finding.IDGitHubSecretScanningOpen {
 			continue
@@ -138,7 +138,7 @@ func TestPublicSecretAdjustmentCitesRepositoryVisibility(t *testing.T) {
 	}
 }
 func TestActiveClosedSecretFollowupAppearsBeforeRanking(t *testing.T) {
-	r := Build(githubAlertsAbstainedReport(t))
+	r := build(githubAlertsAbstainedReport(t))
 	var b strings.Builder
 	if err := WriteText(&b, r, Options{Width: 100}); err != nil {
 		t.Fatal(err)

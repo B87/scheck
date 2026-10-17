@@ -72,19 +72,22 @@ type OAuthEvidence struct {
 	Selected bool            `json:"selected"`
 	Accounts []AccountGrants `json:"accounts,omitempty"`
 	Complete bool            `json:"complete"`
+	// Selection names what chose the accounts read when a cap, the
+	// deadline or a rate limit cut the sequence; nil otherwise.
+	Selection *finding.Selection `json:"selection,omitempty"`
 }
 
 // collectGrants reads every admitted account's grants after the baseline,
 // highest-stakes and active accounts first. A result the gate says every
 // later account would repeat (the optional token refused, binding gone)
 // stops the sequence after it is recorded once.
-func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, view Context, views []accountView) {
+func (e *Evidence) collectGrants(ctx context.Context, sender Sender, target Target, views []accountView) {
 	e.OAuth.Selected = slices.Contains(e.Binding.Surfaces, gate.WorkspaceOAuthGrants)
 	if !e.OAuth.Selected {
 		return
 	}
 	complete := e.Users.Complete
-	all := readAccounts(views, view, func(v accountView) bool {
+	all := readAccounts(views, func(v accountView) bool {
 		r := sender.Send(ctx, gate.Request{Op: OpUserTokens, Asset: target.Asset, Stage: target.Stage, Exists: true, Params: map[string]string{"domain": e.Binding.Domain, "user": v.user.ID}})
 		account := grantsOf(v.user.ID, r)
 		e.OAuth.Accounts = append(e.OAuth.Accounts, account)
@@ -554,9 +557,9 @@ func appJudgment(app oauthApp, s oauthState, e Evidence, asset string) finding.J
 			if len(scopes) > 1 {
 				noun = "the scopes "
 			}
-			j.Attributes = []string{"admin_grantor"}
 			j.Details["admin_grant_read"] = admin.readID
-			j.Context = fmt.Sprintf("%s %s and granted this app %s%s%s: whoever controls the app can use those scopes as %s, %s.", who, what, noun, strings.Join(scopes, ", "), others, who, reach)
+			j.Why = fmt.Sprintf("%s %s and granted this app %s%s%s: whoever controls the app can use those scopes as %s, %s.", who, what, noun, strings.Join(scopes, ", "), others, who, reach)
+			j.Attributes = []finding.Attribute{{Name: "admin_grantor", Ref: finding.Ref{Observation: admin.readID, Excerpt: j.Why}}}
 		}
 		j.NotChecked = []string{"When each app was authorized or last used, and what it did with its access, were not checked."}
 	case appActivityUnknown:

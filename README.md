@@ -220,7 +220,8 @@ file that does is refused without the value being quoted.
 SSH uses strict host-key verification and key or agent authentication. Checks needing
 privileges are unavailable unless the session is root or authorized non-interactive
 sudo is enabled (`--sudo`, or `elevate: sudo` in the file); `scheck sudoers` prints the
-least-privilege fragment. scheck never asks for a password.
+least-privilege fragment. On Linux the listening-socket read is one of them, so the
+database rule `db.listens_unfiltered` needs `--sudo`. scheck never asks for a password.
 
 ## AI agents and automation
 

@@ -49,7 +49,7 @@ func JudgeCI(e Evidence, c Context) []Judgment {
 					j.Details["superseded_by"] = finding.IDGitHubMutableActionWrite
 				}
 				if rule.id == finding.IDGitHubPRTargetUnsafe {
-					j.Context = "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified."
+					j.Why = "Configuration requests only; runtime policy, checkout protection, approvals and actual execution were not verified."
 					productionCI(&j, c)
 				}
 				if inspected.Limit {
@@ -58,7 +58,10 @@ func JudgeCI(e Evidence, c Context) []Judgment {
 				out = append(out, j)
 			}
 		}
-		if len(ci.Workflows) == 0 {
+		// A repository the CI kind did not reach under the request budget has
+		// no workflow evidence: its coverage says sampled, and no rule over
+		// workflows is judged on it.
+		if len(ci.Workflows) == 0 && !ci.Sampled {
 			for _, id := range []string{finding.IDGitHubMutableAction, finding.IDGitHubMutableActionWrite, finding.IDGitHubPRTargetUnsafe} {
 				j = judgment(id, ci.Asset, nil, readIDs([]Read{ci.Directory, ci.Branch.Read}))
 				j.NotChecked = slices.Clone(ciLimits)
@@ -85,11 +88,13 @@ func defaultJudgment(id, asset string, subject *Subject, d DefaultEvidence) Judg
 	}
 	return j
 }
+
+// productionCI cites the repository's production declaration, which the
+// engagement's deploys_to:production step reads (docs/spec/engagement.md,
+// "Severity in context").
 func productionCI(j *Judgment, c Context) {
 	if production(c, j.Asset) {
-		j.Attributes = append(j.Attributes, "production")
 		j.Sources = append(j.Sources, c.RepositoryContexts[j.Asset].Source)
-		j.Context += " This repository is declared to deploy to production, so this rating rises one step."
 	}
 }
 

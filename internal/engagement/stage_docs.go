@@ -7,7 +7,6 @@ import (
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/collector/workspace"
-	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/report"
 )
 
@@ -27,10 +26,14 @@ type Header struct {
 // document.
 type ScopeDoc struct {
 	Header
-	Discovery string       `json:"discovery"`
-	Roots     []Ref        `json:"roots"`
-	Exclude   []Ref        `json:"exclude"`
-	Assets    []ScopeAsset `json:"assets"`
+	// CollectedAt is when the session that ran Scope started: a resume
+	// keeps the document only while it is fresh (docs/spec/runs.md, "Stop
+	// and resume").
+	CollectedAt time.Time    `json:"collected_at"`
+	Discovery   string       `json:"discovery"`
+	Roots       []Ref        `json:"roots"`
+	Exclude     []Ref        `json:"exclude"`
+	Assets      []ScopeAsset `json:"assets"`
 	// Resolver is the DNS resolver discovery asked; nil without a domain
 	// root.
 	Resolver *Resolver     `json:"resolver,omitempty"`
@@ -155,16 +158,19 @@ type ReconAsset struct {
 	Host         *report.Host                  `json:"host,omitempty"`
 	Facts        map[string]report.Fact        `json:"facts,omitempty"`
 	Observations map[string]report.Observation `json:"observations,omitempty"`
-	// Web is what the web collector read under a domain root, redacted by
-	// the gate (docs/spec/web-collector.md, "Reads"), and Judged its rules'
-	// verdicts on it.
+	// Workspace, GitHub and Web are what each network collector read,
+	// redacted by the gate (docs/spec/web-collector.md, "Reads"). They carry
+	// no verdict: Analyze judges them (docs/spec/runs.md, "Verdicts are not
+	// evidence").
 	Workspace *workspace.Evidence `json:"workspace,omitempty"`
 	GitHub    *githubc.Evidence   `json:"github,omitempty"`
 	Web       *web.Evidence       `json:"web,omitempty"`
-	Judged    []finding.Judgment  `json:"judged,omitempty"`
 }
 
-// PlanDoc is plan.json. Plan passes through empty until 0.0.2 E9.
+// PlanDoc is plan.json: each host's checks, the order each GitHub root's
+// repositories are read in, and the rules that will not be judged for
+// lack of a declaration (docs/spec/engagement.md, "Plan selection and
+// follow-ups").
 type PlanDoc struct {
 	Header
 	Method    string   `json:"method"`
@@ -172,6 +178,16 @@ type PlanDoc struct {
 	// Hosts lists each collected host's planned checks and the checks its
 	// disable_checks removed, so the plan reconciles with audit.jsonl.
 	Hosts []PlanHost `json:"hosts"`
+	// GitHub is each GitHub root's selection: its repositories in tier
+	// order, read by Check under the budget.
+	GitHub []githubc.Selection `json:"github"`
+	// Workspace is each Workspace tenant's account order, which Check reads
+	// OAuth grants in.
+	Workspace []workspace.UserSelection `json:"workspace"`
+	// NotJudged is the closed list of sentences naming a rule that will not
+	// decide, or a raise or order that cannot apply, for lack of a
+	// declaration.
+	NotJudged []string `json:"not_judged"`
 }
 
 // PlanHost is one host asset's baseline plan.
@@ -182,9 +198,35 @@ type PlanHost struct {
 	Disabled []string `json:"disabled"`
 }
 
-// CheckDoc is the Check stage's output: no follow-up is opened until 0.0.2
-// E9, so it writes no evidence and no file.
+// CheckDoc is check.json: what Check read of each GitHub root's selection
+// and of each Workspace tenant's accounts, and the pairs the follow-up
+// table opened.
 type CheckDoc struct {
 	Header
-	FollowUps []string `json:"follow_ups"`
+	// FollowUps are the pairs the follow-up table opened or cut.
+	FollowUps []FollowUp   `json:"follow_ups"`
+	Assets    []CheckAsset `json:"assets"`
+	// The people stanza again, after Check read repository collaborators:
+	// Recon's lists only the accounts its inventory showed.
+	Attribution              []Attribution             `json:"attribution,omitempty"`
+	PeopleCandidates         []PeopleCandidate         `json:"people_candidates,omitempty"`
+	PeopleInvitationComments []PeopleInvitationComment `json:"people_invitation_comments,omitempty"`
+	PeopleCandidatesPartial  bool                      `json:"people_candidates_partial,omitempty"`
+	PeopleSource             string                    `json:"people_source,omitempty"`
+	PeopleTenantOrder        []string                  `json:"people_tenant_order,omitempty"`
+}
+
+// CheckAsset is what Check read under one root.
+type CheckAsset struct {
+	Name      string                `json:"name"`
+	ID        string                `json:"id"`
+	GitHub    *githubc.Repositories `json:"github,omitempty"`
+	Workspace *WorkspaceCheck       `json:"workspace,omitempty"`
+}
+
+// WorkspaceCheck is what Check read of a Workspace tenant: each account's
+// OAuth grants and each readable mailbox's forwarding.
+type WorkspaceCheck struct {
+	OAuth workspace.OAuthEvidence `json:"oauth"`
+	Mail  workspace.MailEvidence  `json:"mail"`
 }

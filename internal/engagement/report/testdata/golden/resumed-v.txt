@@ -3,8 +3,9 @@ Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
 Trigger        not declared (one-host check)
 Resumed        this run was stopped and resumed: what an earlier session read completely was kept,
                and everything else was read again. Kept evidence was not read again and retains its
-               original observation date.
-Edited by hand evidence/deploy.collection.json: changed since scheck wrote it, and used as written.
+               original observation date. Readings older than 7 days were read again, never kept.
+               Oldest reading kept, per asset: ubuntu 2026-10-07 07:12 (3 days before this session).
+Edited by hand scope.json: changed since scheck wrote it, and used as written.
 Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
                nothing was probed, scanned, exploited or changed. Not a penetration test.
 Authorization  none recorded. This run only read, with access you already hold; scheck requires a
@@ -23,26 +24,33 @@ Not requested    A one-host check reads this host only. Your accounts, code, clo
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 33 checks gave no
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 34 checks gave no
   answer). Below: 0 low, 0 informational, 0 accepted.
 
-A short list is not a clean bill of health. scheck reports only what its rules could decide. Checked
-in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings named under
-Coverage; 6 have no rule in this version and 3 had no usable evidence. Nothing but this host was
-looked at. Anything not checked is unknown, not fine.
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings
+named under Coverage; 6 have no rule in this version and 3 had no usable evidence. Nothing but this
+host was looked at. Anything not checked is unknown, not fine.
 
 COVERAGE
 Hosts                    checked in part
+  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
+  services you declared; listening services you did not declare; who can become root or
+  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
+  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
+  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
+  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 33: 22 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+  checks 34: 23 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
     Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
                              scheck could not tell (this is not a finding) (mac.sestatus: exit 127:
                              bash: line 1: sestatus: command not found)
-    Firewall                 not judged: this version of scheck has no rule for it (not read:
-                             fw.firewalld, fw.nft, fw.ufw)
+    Firewall                 not judged: this version of scheck has no rule for it (read:
+                             /usr/sbin/xtables-nft-multi; not read: fw.firewalld, fw.nft, fw.ufw)
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
     SSH server               checked (password login, direct root login): nothing found by these
@@ -71,8 +79,8 @@ Outside scheck           Malware and stolen sessions: scheck reads the settings 
                          any of them, and laptops you did not list were not looked at.
                          Application logic: authenticated testing of access control and business
                          rules.
-                         Processes: whether offboarding, incident response and vendor reviews are
-                         done as written.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
                          Lookalike and typo domains: registrations of names you do not own.
 
 FINDINGS: 0 open, 0 informational, 0 accepted
@@ -145,6 +153,9 @@ System integrity         skipped  mac.sestatus            exit 127: bash: line 1
 Firewall                 skipped  fw.firewalld            exit 127: bash: line 1: firewall-cmd:
                                                           command not found
                                                           firewalld state
+Firewall                 ran      fw.iptables_backend     /usr/sbin/xtables-nft-multi
+                                                          iptables userspace backend (where
+                                                          /usr/sbin/iptables resolves; exit 1: none)
 Firewall                 skipped  fw.nft                  not found: nft
                                                           nftables ruleset
 Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem running iptables:
@@ -152,7 +163,7 @@ Firewall                 skipped  fw.ufw                  exit 1: ERROR: problem
                                                           fetch rule set generation id: Permission
                                                           denied (you must be root) [elevated]
                                                           ufw status and rules
-Network exposure         ran      net.listeners           2 listening sockets
+Network exposure         ran      net.listeners           2 listening sockets [elevated]
                                                           Listening TCP/UDP sockets with owning
                                                           process
 SSH server               ran      sshd.config             91 settings [elevated]

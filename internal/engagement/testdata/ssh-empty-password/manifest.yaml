@@ -1,0 +1,16 @@
+# The Ubuntu fixture with an account alice that has no password and a
+# login shell, and sshd set to accept an empty password over password
+# authentication
+# (docs/spec/engagement.md, R2).
+platform: linux
+base: ../../../../testdata/fixtures/ubuntu
+execs:
+  - argv: [sudo, -n, --, passwd, -S, -a]
+    stdout_file: passwd-status.stdout
+    code: 0
+  - argv: [cat, /etc/passwd]
+    stdout_file: passwd.stdout
+    code: 0
+  - argv: [sudo, -n, --, sshd, -T]
+    stdout_file: sshd.stdout
+    code: 0

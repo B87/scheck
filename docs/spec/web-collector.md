@@ -95,8 +95,8 @@ specific domain root that holds it, so nested roots never read it twice or give 
 SPF budgets. It keeps only the fields in the table above: no TXT record but `v=spf1`
 ones at a domain and in the include tree, each DMARC record's tags and whether `rua`
 has a value but never its address, each DKIM key's tags. What it read is in
-`recon.json`, under the asset's `web`. After all roots have been read, Recon judges it ("Rules", DNS in step 2b and
-email in step 3) and the root is `collected`. It is `limit_reached`
+`recon.json`, under the asset's `web`. The root is `collected`; Analyze judges it after all
+roots have been read ("Rules", DNS in step 2b and email in step 3). It is `limit_reached`
 when `limits.timeout` ends the engagement before the root is read (`not_collected`), or
 while it is: the deadline ended or refused one of its reads (`refused:deadline`,
 `unavailable:deadline`, or a `limit_reached` reason on a page), or ended the engagement
@@ -104,8 +104,10 @@ as `Collect` returned (`incomplete`). A declared `domain` asset under a root tha
 is read with it: it is recorded with the root's status and the detail "read with
 *root*", and its findings are those whose subject it holds ("Subjects").
 
-**Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. After
-DNS takeover judgments have suspended stale first-party confirmations, `Enrich`
+**Built in E7 step 4:** Recon also reads `url` roots and declared URL assets. Before
+`Enrich`, `Suspensions` suspends stale first-party confirmations. It is read selection, not
+a verdict: the names a provider fingerprint fired on, a wildcard match standing for every
+name with wildcard status. `Enrich`
 requests declared entries and the two well-known files through the typed `web.entry`
 op. A declared URL asset contained by a URL root contributes its exact entry path
 using the root's first-party evidence; a domain root alone does not grant it. URL
@@ -168,12 +170,12 @@ whether another account could claim its target was not assessed.
 **Built in E7 step 2b:** `dns.dangling_external`, `dns.dangling_internal` and
 `dns.private_address` (2b-i), and `dns.takeover_candidate` and
 `dns.unclaimed_at_provider` (2b-ii). `Judge` in `internal/collector/web` applies them
-to each domain root in Recon, right after `Collect`, over Scope's lookups and what `Collect` read; the
+to each domain root in Analyze (`internal/engagement/judge.go`), over Scope's lookups and what `Collect` read in Recon; the
 session's first `Collect` follows its own control lookup under `invalid.`
 ([scope.md](scope.md#discovery)), counted as a control. Each
 verdict is `fired`, `disproved` or `abstained` on one subject ("Subjects"), with the
-coverage reason of an abstention and the gate request ids it read, and is kept in
-`recon.json` under the asset's `judged`. One subject gets one verdict per rule: fired
+coverage reason of an abstention and the gate request ids it read, and is not part of
+`recon.json`; Analyze gives it, and `findings.json` keeps it as output only under the asset's `judged`. One subject gets one verdict per rule: fired
 stands over abstained, abstained over disproved, and the verdict keeps the reads of every
 verdict merged into it. A name Scope looked up is judged only under the most specific
 domain root holding it, as a mail domain is read, so nested roots never judge it twice.
@@ -333,7 +335,7 @@ separate finding.
 | Rule | Fires | Disproved | Abstains | Base | Area |
 |---|---|---|---|---|---|
 | `tls.certificate_invalid`: "The certificate for *name* is *expired / for another name / not from a trusted issuer / missing its intermediate*" | the gate's typed verification class | verified | no handshake; an unclassified error; an issuer on the TLS-interception list, worded "your network inspects TLS, so certificates were not judged"; the name is a takeover candidate, which subsumes it | low | external |
-| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at collection; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
+| `tls.certificate_expiring`: "The certificate for *name* expires in *n* days; confirm renewal is working" | valid, with 14 days or fewer left at the collection time of the TLS read, not the session start, and the excerpt dates both ("certificate expires 2026-10-20, 6 days after the TLS read of 2026-10-14"); no recorded collection time is undecided; proximity alone does not prove renewal is failing | more than 14 days left | as `tls.certificate_invalid` | info | external |
 | `tls.legacy_only`: "*name* did not negotiate TLS 1.2 or later" | the name's one handshake, at TLS 1.2 or later, gets a `protocol_version` alert | it succeeds | `handshake_failure` or any other alert (`unavailable:tls_handshake`); an issuer on the TLS-interception list. The handshake is never retried at a lower version | low | external |
 
 A missing intermediate is worded "browsers may recover, but clients that do not fetch
@@ -381,7 +383,7 @@ tag can supply a generator or password input.
 Secret findings use only detector hits with the gate's trusted redaction provenance,
 never marker-shaped text supplied by a page. A marked body blocks negative secret
 claims. `security.txt` must be HTTPS plain text with a usable Contact URI and a single
-parseable future Expires; Canonical, when present, must include the read URL.
+parseable Expires later than the collection time of the `security.txt` read (a read with no recorded collection time is undecided, never judged at the session start); Canonical, when present, must include the read URL.
 Malformed or unrecognized fields that prevent this judgment leave coverage unknown.
 A cleartext-signed file is parsed for its contact fields; signature trust and contact
 delivery are not checked. Malformed `mailto:` and `tel:` contacts never validate.
@@ -396,7 +398,7 @@ A trusted 404 is absence evidence both when sent and when reused on resume.
 | `web.security_headers`: one item per origin listing which are missing of `X-Content-Type-Options`, frame protection (`X-Frame-Options` or CSP `frame-ancestors`), `Referrer-Policy` and CSP | any missing | all present | as `web.hsts_missing` | info | web | no |
 | `web.version_disclosed`: "*url* reveals software versions (*what*)". Every read name; the subject is the URL | a version number in `server` or `x-powered-by`, in `<meta name="generator">`, or in a JSON body's top-level version, build or commit | none, or a product without a version (`nginx`, `cloudflare`, `AmazonS3`, `Vercel`) | blocked; 5xx; a body cut before `</head>` with no version in the headers | low | web | yes: to info |
 | `web.secret_in_response`: "A secret is published in the page at *url*". Every read name | a redaction hit from `private-key`, `github-token`, `slack-token`, `google-access-token`, `google-refresh-token`, `google-client-secret`, `stripe-key`, `npm-token` or `slack-webhook` | HTML read whole with no hit, for that HTML only | a truncated body fires on what it saw and is never disproved. Never fires on `google-api-key`, `jwt`, `bearer`, `kv-secret` or `json-secret`, an AWS key id alone, or `extra:*` | critical; a Slack webhook high | secrets | no |
-| `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` in the past; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
+| `web.security_txt`: "No current security contact at *origin*" | a 404; `Expires` earlier than the collection time of the `security.txt` read; no `Contact` | a valid file | blocked; 5xx; a redirect off the entry points | info | web | no |
 | `web.restricted_reachable`: "*url*, which you said is reachable only from *audience*, answered from the internet" | the vantage is `internet`, the declared audience is not, and the response is a 2xx, a 401, or a 3xx to a login page on the same site or an identity provider | refused or timed out from the `internet` vantage, worded "did not answer from here; scheck cannot tell a firewall from a server that is down" | the vantage is not `internet` or not given; 403, 404 or 429; blocked; 5xx; an invalid or intercepted certificate; policy refusal; unrecognized redirect | medium, +1 `contradiction`: high | external | no; validation also refuses one URL under both `intent` lists |
 
 **Restricted reachability (E7 step 5).** The subject is the exact canonical URL in

@@ -189,7 +189,7 @@ asks `crt.sh` once per domain root and the system's resolver for each name
    and equal redaction or truncation markers never establish a match. A nonempty
    dangling chain matching the control's chain, outcome and addresses is grouped
    the same way. `domains[].control` keeps the
-   concrete control name, chain, addresses, outcome and request id; Recon judges that
+   concrete control name, chain, addresses, outcome and request id; Analyze judges that
    answer once on `*.<root>` (E7 step 2b-ii,
    [web-collector.md](web-collector.md#takeover-fingerprints), "Wildcards"). The
    control names are random. A resolver that answers `.invalid`
@@ -564,6 +564,11 @@ rejects:
 - a placeholder in the URL's host or path that is not in the subject, so the subject
   admitted is the target sent to (only the query, a page or a cursor, varies outside
   it);
+- a parameter typed `CollaboratorLogin` anywhere but the `{username}` of the GitHub
+  repository permission read (`github.collaborator_permission`, GET, exact compiled path,
+  subject the repository, no query, not a list), where it names whose permission is asked
+  and never the target, and only on that op id with its retained fields equal to the
+  frozen list exactly;
 - a principal op or a credential exchange with any parameter, since only its asset
   scopes it.
 

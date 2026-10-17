@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
@@ -56,13 +55,17 @@ type Gap struct {
 	Reason, Detail string
 }
 
+// ReasonNoCollectionTime is a time-dependent rule's abstention when the read
+// it judges carries no collection time: it is never judged at the session's
+// time instead (docs/spec/engagement.md, "Severity in context").
+const ReasonNoCollectionTime = finding.ReasonNoCollectionTime
+
 // Input is what the rules judge under one domain root: the names Scope
 // looked up and what it could not list, whether the resolver answers names
 // that do not exist, and what Recon read.
 type Input struct {
 	Vantage      string
 	Restricted   []Restriction
-	Now          time.Time
 	URLAssets    []URLAsset
 	Asset, Root  string
 	MailPolicies []MailEvidence
@@ -149,7 +152,7 @@ func (j *judging) add(x Judgment) {
 		reason = x.Reason
 	}
 	rank := map[string]int{Disproved: 0, Abstained: 1, Fired: 2}
-	if rank[x.Verdict] > rank[j.out[i].Verdict] || x.Verdict == Fired && slices.Contains(x.Attributes, "password_form") && !slices.Contains(j.out[i].Attributes, "password_form") {
+	if rank[x.Verdict] > rank[j.out[i].Verdict] || x.Verdict == Fired && x.Has("password_form") && !j.out[i].Has("password_form") {
 		prior := reads
 		reads = slices.Clone(x.Reads)
 		for _, r := range prior {
@@ -375,7 +378,6 @@ func (j *judging) wildcard() {
 	for _, x := range sub.out {
 		x.Asset = j.in.Asset
 		x.Subject = Subject{Kind: SubjectDNSName, Key: "*." + j.in.Root, Label: "*." + j.in.Root}
-		x.Members = members
 		if len(members) > 0 {
 			x.Excerpt += "; names with matching DNS answers (their pages were not read): " + strings.Join(members, ", ")
 		}

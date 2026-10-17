@@ -7,17 +7,22 @@ import (
 
 	githubc "github.com/b87/scheck/internal/collector/github"
 	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // Readout notes consume declarations whose correctness cannot be decided by
 // GitHub reads (docs/spec/engagement.md, "People", "Admins", "2-step verification").
-func (r *run) githubPeopleNotes(asset string, e githubc.Evidence) []ereport.Note {
+func (r *run) githubPeopleNotes(asset string, e githubc.Evidence, judged []githubc.Judgment) []ereport.Note {
 	notes := []ereport.Note{}
 	add := func(kind, source, detail string) {
 		notes = append(notes, ereport.Note{Kind: kind, Source: source, Detail: detail})
 	}
-	today := r.session.In(r.zone).Format("2006-01-02")
-	passed := func(date string) bool { return date != "" && date < today }
+	// A declared date is judged at the reads that observed the account,
+	// as the leaver rule judges it (docs/spec/engagement.md, "Severity in
+	// context").
+	passed := func(date string) bool {
+		return finding.LeftAt(date, r.zone, githubc.ReadTimes(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads)) == finding.LeftPassed
+	}
 	owner := func(login string) bool {
 		return slices.ContainsFunc(e.Owners.Items, func(a githubc.Account) bool { return strings.EqualFold(a.Login, login) })
 	}
@@ -84,7 +89,7 @@ func (r *run) githubPeopleNotes(asset string, e githubc.Evidence) []ereport.Note
 		}
 	}
 	for _, repo := range e.RepositoriesAccess {
-		for _, j := range e.Judgments {
+		for _, j := range judged {
 			if j.Asset == repo.Asset && j.ID == "identity.unattributed_admin" && j.Subject != (githubc.Subject{}) {
 				add("github_inventory", repo.Asset, "Observed production repository administrator: "+j.Subject.Label+". Effective privilege may be inherited; its grant source was not assessed")
 			}

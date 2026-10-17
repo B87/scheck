@@ -4,16 +4,17 @@
   "title": "scheck engagement report",
   "description": "spec/report.md, \"The report\". New in 0.0.2 and free to change until 0.0.2 is published; after that, additions bump MINOR and renames, removals and type changes bump MAJOR. Enums a later collector extends (subject kinds, note kinds, adjustment rules, asset kinds, reason parameters) are open by design: a new value is a MINOR change, and a consumer must tolerate one. Written for the operator: it names people, accounts and internal topology (notice).",
   "type": "object",
-  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "excluded", "redaction", "egress", "assets", "notes"],
+  "required": ["schema_version", "scheck_version", "rules_version", "run", "engagement", "notice", "refused", "incomplete", "exit", "summary", "coverage", "findings", "assessments", "acceptances", "people_left", "excluded", "redaction", "egress", "assets", "notes"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
     "scheck_version": { "type": "string" },
     "rules_version": { "type": "string", "description": "Identifies the rule set, so a finding that disappears because a rule changed between versions is never read as fixed." },
     "run": {
-      "type": "object", "required": ["started", "directory", "resumed"], "additionalProperties": false,
+      "type": "object", "required": ["started", "directory", "resumed", "session_started"], "additionalProperties": false,
       "properties": {
         "started": { "type": "string", "format": "date-time" },
+        "session_started": { "type": "string", "format": "date-time", "description": "When this session started; a kept reading's age is counted to it (spec/runs.md, \"Stop and resume\")." },
         "directory": { "type": ["string", "null"], "description": "null under --no-persist." },
         "resumed": { "type": "boolean" },
         "vantage": { "enum": ["internet", "vpn", "lan"] },
@@ -78,7 +79,7 @@
           }
         },
         "principal_changes": { "type": "array", "items": { "type": "object", "required": ["asset", "from", "to"], "additionalProperties": false, "properties": { "asset": { "$ref": "#/$defs/asset_id" }, "from": { "type": "string" }, "to": { "type": "string" } } } },
-        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a kept host's collection record, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. An edited envelope is never used: the host is collected again." }
+        "edited_by_hand": { "type": "array", "items": { "type": "string" }, "description": "Files of the run directory (scope.json, a reused request's record under evidence/requests/) that a resume used although they changed since scheck wrote them. A host's edited envelope or collection record is never used: the host is collected again." }
       }
     },
     "notice": {
@@ -113,8 +114,26 @@
       }
     },
     "summary": {
-      "type": "object", "required": ["items", "more", "below", "areas", "rules"], "additionalProperties": false,
+      "type": "object", "required": ["items", "more", "below", "areas", "rules", "matters_most"], "additionalProperties": false,
       "properties": {
+        "matters_most": {
+          "type": "array",
+          "description": "One readout per data.matters_most entry, in file order. Only read means every check this answer raises decided and found nothing it raises.",
+          "items": {
+            "type": "object", "required": ["key", "asset", "name", "what", "outcome", "raised", "checks", "undecided", "reasons"], "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string", "pattern": "^data\\.matters_most\\[[0-9]+\\]$" },
+              "asset": { "type": "string" },
+              "name": { "type": "string" },
+              "what": { "type": "string" },
+              "outcome": { "enum": ["raised", "read", "partial", "not_judged", "not_read"] },
+              "raised": { "type": "integer", "minimum": 0, "description": "Open or accepted findings on the asset this answer raises." },
+              "checks": { "type": "integer", "minimum": 0, "description": "Rules this answer raises on the asset." },
+              "undecided": { "type": "integer", "minimum": 0, "description": "Of those, how many did not decide." },
+              "reasons": { "type": "array", "items": { "type": "string" }, "description": "Reason tokens: the undecided checks' (most common first), or why the asset was not read." }
+            }
+          }
+        },
         "items": {
           "type": "array", "maxItems": 5,
           "description": "Fix these first: a ranking of what was checked, not of all risks. Open, at medium or above, never padded.",
@@ -129,7 +148,8 @@
               "severity": { "$ref": "#/$defs/severity" },
               "keys": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key" } },
               "assets": { "type": "array", "items": { "$ref": "#/$defs/asset_id" } },
-              "rank_basis": { "type": "array", "items": { "type": "string" } }
+              "rank_basis": { "type": "array", "items": { "type": "string" } },
+              "other_people": { "type": "boolean", "description": "A finding_id item that lost instances to a person item and ranks on the rest: \"and other people\"." }
             }
           }
         },
@@ -176,6 +196,7 @@
           "caps": { "type": "array", "items": { "$ref": "#/$defs/cap" } },
           "narrowing": { "type": "array", "items": { "$ref": "#/$defs/narrowing" } },
           "declared_not_verified": { "type": "array", "items": { "$ref": "#/$defs/note" } },
+          "context_notes": { "type": "array", "items": { "$ref": "#/$defs/note" }, "description": "spec/engagement.md, \"Context notes\": evidence that contradicts this area's not_used." },
           "unattributed_members": { "type": "integer", "minimum": 0 },
           "sub_items": {
             "type": "array",
@@ -190,14 +211,33 @@
                 "population": { "$ref": "#/$defs/population" },
                 "rules": { "type": "array", "items": { "type": "string" } },
                 "judged": { "type": "array", "items": { "type": "string" }, "description": "What the rules that decided judge: an assessed area rests on these and nothing else." },
-                "read_not_judged": { "type": "array", "items": { "type": "string" }, "description": "What was read in the area that no rule judges." }
+                "read_not_judged": { "type": "array", "items": { "type": "string" }, "description": "What was read in the area that no rule judges." },
+                "detail": { "type": "string", "description": "How far the sub-item's follow-up reads got (spec/report.md, \"Coverage\"): the departed-people line of F1." }
               },
               "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
             }
           },
+          "not_judged": {
+            "type": "array", "minItems": 1,
+            "description": "A risk area's fixed list of sub-items this version does not judge, in print order. Every risk-area row carries it, not_applicable included, and no other row; a non-empty list keeps the row from assessed. A partial row whose reasons are only no_rule, or none, is partial only by this version's limits.",
+            "items": {
+              "type": "object", "required": ["id", "text"], "additionalProperties": false,
+              "properties": { "id": { "type": "string", "pattern": "^[a-z]+\\.[a-z_]+$" }, "text": { "type": "string" } }
+            }
+          },
           "planned_in": { "type": "string", "description": "For collector_not_built: the release that brings the collector. Never printed in text." }
         },
-        "allOf": [{ "$ref": "#/$defs/reasons_when_not_assessed" }]
+        "allOf": [
+          {
+            "if": { "properties": { "mark": { "enum": ["partial", "not_assessed"] } }, "required": ["mark"] },
+            "then": { "anyOf": [{ "properties": { "reasons": { "minItems": 1 } } }, { "required": ["not_judged"] }] }
+          },
+          {
+            "if": { "properties": { "area": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"] } }, "required": ["area"] },
+            "then": { "required": ["not_judged"], "properties": { "mark": { "not": { "const": "assessed" } } } },
+            "else": { "not": { "required": ["not_judged"] } }
+          }
+        ]
       }
     },
     "findings": {
@@ -238,6 +278,37 @@
           "outcome": { "enum": ["applied", "expired", "not_applied", "not_matched", "rule_not_decided", "subject_not_found"] },
           "why": { "type": "string" },
           "findings": { "type": "array", "items": { "$ref": "#/$defs/key" } }
+        }
+      }
+    },
+    "people_left": {
+      "type": "array",
+      "description": "spec/report.md, \"People who left\": every person with a declared leaving date and one line per tenant. It restates verdicts and decides nothing.",
+      "items": {
+        "type": "object", "required": ["handle", "left", "tenants"], "additionalProperties": false,
+        "properties": {
+          "handle": { "type": "string" },
+          "left": { "type": "string" },
+          "tenants": { "type": "array", "items": {
+            "type": "object", "required": ["asset", "provider", "state", "line", "accounts"], "additionalProperties": false,
+            "properties": {
+              "asset": { "oneOf": [{ "$ref": "#/$defs/asset_id" }, { "type": "null" }], "description": "null when no tenant of that provider is in scope." },
+              "provider": { "enum": ["workspace", "github"] },
+              "state": { "$ref": "#/$defs/person_state" },
+              "reason": { "type": "string" },
+              "line": { "type": "string" },
+              "accounts": { "type": "array", "items": {
+                "type": "object", "required": ["key", "state", "finding_keys"], "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string" },
+                  "state": { "$ref": "#/$defs/person_state" },
+                  "finding_keys": { "type": "array", "items": { "$ref": "#/$defs/key" } },
+                  "production_write": { "type": "object", "required": ["applied", "repositories"], "additionalProperties": false,
+                    "properties": { "applied": { "type": "boolean" }, "repositories": { "type": "array", "items": { "type": "string" } } } }
+                }
+              } }
+            }
+          } }
         }
       }
     },
@@ -325,7 +396,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "id", "bound_id", "kind", "root", "status", "trace"],
+        "required": ["name", "id", "bound_id", "kind", "root", "status", "oldest_collected_at", "trace"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string" },
@@ -342,6 +413,7 @@
           "collected": { "$ref": "#/$defs/span" },
           "evidence": { "type": ["string", "null"], "description": "Path of the asset's evidence file in the run directory; null under --no-persist." },
           "kept": { "type": "boolean", "description": "For a host on a resume: kept from the earlier session that collected it, not contacted by this one. Its captures were never stored, so --include-evidence adds no evidence to its envelope." },
+          "oldest_collected_at": { "type": ["string", "null"], "format": "date-time", "description": "The collection time of the oldest successful observation the asset rests on (a reused read at its original time); null when nothing was read for it. A resume keeps nothing older than 7 days (spec/runs.md, \"Stop and resume\")." },
           "checks": {
             "type": "object", "description": "For a host: its plan, what ran, what gave no usable answer, and what a cut collection never reached.",
             "required": ["planned", "ran", "unknown", "not_run"], "additionalProperties": false,
@@ -383,6 +455,7 @@
     }
   },
   "$defs": {
+    "person_state": { "enum": ["finding", "accepted", "no_access_observed", "not_proven", "not_judged", "not_checked", "not_in_scope", "no_login_declared"] },
     "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
     "asset_id": { "type": "string", "pattern": "^(domain|url|host|network|saas|repo|cloud):.+$" },
     "area": { "enum": ["identity", "secrets", "cloud", "data", "cicd", "external", "web", "hosts", "email", "logging"] },
@@ -390,7 +463,7 @@
     "mark": { "enum": ["assessed", "partial", "not_assessed", "not_applicable", "outside_scheck"] },
     "reason": {
       "type": "string",
-      "pattern": "^(no_credentials|insufficient_permission:.+|not_on_plan:.+|collector_not_built|refused|not_declared|excluded_by_operator|limit_reached|failed|sampled|unavailable:[a-z_]+|no_rule)$"
+      "pattern": "^(no_credentials|insufficient_permission:.+|not_on_plan:.+|collector_not_built|refused|not_declared|excluded_by_operator|limit_reached|failed|sampled|unavailable:[a-z_]+|no_rule|leaving_date_not_passed|left_date_within_collection|no_declared_github_login)$"
     },
     "reason_detail": {
       "type": "object", "required": ["reason"], "additionalProperties": false,
@@ -408,7 +481,23 @@
     "population": {
       "type": "object", "required": ["kind", "in_scope", "read"], "additionalProperties": false,
       "description": "What a mark counts: the in-scope assets, repositories, users or entry points of the kind it reads, and how many were read.",
-      "properties": { "kind": { "type": "string" }, "in_scope": { "type": "integer", "minimum": 0 }, "read": { "type": "integer", "minimum": 0 } }
+      "properties": { "kind": { "type": "string" }, "in_scope": { "type": "integer", "minimum": 0 }, "read": { "type": "integer", "minimum": 0 }, "selection": { "$ref": "#/$defs/selection" } }
+    },
+    "selection": {
+      "type": "object", "required": ["unit", "tiers", "read", "in_scope"], "additionalProperties": false,
+      "description": "spec/report.md, \"Coverage\": what chose the items read when a budget or cap could stop the reads short. Tier counts are among the items read; a tier without source is the fallback order's.",
+      "properties": {
+        "kind": { "type": "string", "description": "The kind of read this population counts, the collector's own word." },
+        "unit": { "type": "string" },
+        "tiers": { "type": "array", "items": { "type": "object", "required": ["basis", "count"], "additionalProperties": false,
+          "properties": { "basis": { "type": "string" }, "source": { "type": "string" }, "count": { "type": "integer", "minimum": 0 } } } },
+        "fallback": { "type": "string" },
+        "read": { "type": "integer", "minimum": 0 },
+        "in_scope": { "type": "integer", "minimum": 0 },
+        "in_scope_at_least": { "type": "boolean", "description": "The list the population was taken from was not complete: in_scope is a lower bound." },
+        "spent": { "type": "integer", "minimum": 0 },
+        "budget": { "type": "integer", "minimum": 0 }
+      }
     },
     "cap": {
       "type": "object", "required": ["what", "of", "cap", "selection"], "additionalProperties": false,
@@ -458,7 +547,7 @@
     "note": {
       "type": "object", "required": ["kind", "source", "detail"], "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup", "github_history_followup", "github_credential", "github_credential_warning", "workspace_inventory", "workspace_people", "workspace_credential", "workspace_credential_warning"] },
+        "kind": { "enum": ["acceptance_not_applied", "acceptance_not_matched", "acceptance_rule_not_decided", "acceptance_subject_not_found", "acceptance_expiring", "acceptance_without_expiry", "listed_admin_is_not", "declared_not_found", "declared_not_verified", "unattributed_members", "service_account", "break_glass_account", "principal_changed", "redact_extra_matches_name", "mail_context", "web_context", "github_inventory", "github_ci", "github_alerts", "github_alert_followup", "github_history_followup", "github_credential", "github_credential_warning", "workspace_inventory", "workspace_people", "workspace_credential", "workspace_credential_warning", "context_workspace_domain", "context_deploys_to", "context_not_used"] },
         "source": { "type": "string" },
         "detail": { "type": "string" }
       }
@@ -538,14 +627,15 @@
         },
         "status": { "enum": ["open", "accepted"] },
         "acceptance": {
-          "type": "object", "required": ["entry", "reason", "accepted_by", "expires", "expired", "covers_every_instance"], "additionalProperties": false,
+          "type": "object", "required": ["entry", "reason", "accepted_by", "expires", "expired", "covers_every_instance", "judged_at"], "additionalProperties": false,
           "properties": {
             "entry": { "type": "string" },
             "reason": { "type": "string" },
             "accepted_by": { "type": "string" },
             "expires": { "type": ["string", "null"], "format": "date" },
             "expired": { "type": "boolean" },
-            "covers_every_instance": { "type": "boolean" }
+            "covers_every_instance": { "type": "boolean" },
+            "judged_at": { "type": ["string", "null"], "format": "date-time", "description": "The collection time the expiry was read at: the latest read the finding cites, or for a host the start of the session that collected it; never the run's start or the time the report was rendered. Null for a finding no entry covers." }
           }
         },
         "rule": {

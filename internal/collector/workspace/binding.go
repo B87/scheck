@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/b87/scheck/internal/engagement/gate"
@@ -59,6 +60,10 @@ type Read struct {
 	Decision   string           `json:"decision"`
 	Reason     string           `json:"reason,omitempty"`
 	Detail     string           `json:"detail,omitempty"`
+	// CollectedAt is when the gate received the response, kept from the
+	// first session on a resume; time-dependent rules judge against it
+	// (docs/spec/engagement.md, "Severity in context").
+	CollectedAt time.Time `json:"collected_at,omitzero"`
 	// Repeats says the gate would end every later read of its kind alike,
 	// so the read stopped its sequence.
 	Repeats bool `json:"repeats,omitempty"`

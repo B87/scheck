@@ -51,6 +51,21 @@ func (a RepositoryAccess) Reads() []Read {
 // CollectAccess adds owner-only MFA lists and repository access facts. Recognized
 // active owner authority is required before sending either MFA filter request.
 func CollectAccess(ctx context.Context, g Sender, org Organization, e Evidence, targets []RepositoryTarget) Evidence {
+	e = collectMFA(ctx, g, org, e)
+	seen := map[string]bool{}
+	for _, target := range targets {
+		key := strings.ToLower(target.Owner + "/" + target.Name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		e.RepositoriesAccess = append(e.RepositoriesAccess, CollectRepository(ctx, g, target, org.Stage))
+	}
+	return e
+}
+
+// collectMFA reads the two MFA filter lists, organization inventory.
+func collectMFA(ctx context.Context, g Sender, org Organization, e Evidence) Evidence {
 	request := func(op string) gate.Request {
 		return gate.Request{Op: op, Asset: org.Asset, Stage: org.Stage, Exists: true, Params: map[string]string{"org": org.Name}}
 	}
@@ -64,26 +79,21 @@ func CollectAccess(ctx context.Context, g Sender, org Organization, e Evidence, 
 		}
 		e.MembersWithoutMFA, e.OwnersWithoutMFA = unknown(OpMembersWithoutMFA), unknown(OpOwnersWithoutMFA)
 	}
-	seen := map[string]bool{}
-	for _, target := range targets {
-		key := strings.ToLower(target.Owner + "/" + target.Name)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		e.RepositoriesAccess = append(e.RepositoriesAccess, CollectRepository(ctx, g, target, org.Stage))
-	}
 	return e
 }
 
 // CollectRepository requires an exact locator match. A moved repository does not
 // authorize reads at its new owner (docs/spec/github-collector.md, "Boundary").
 func CollectRepository(ctx context.Context, g Sender, target RepositoryTarget, stage string) RepositoryAccess {
+	a := repositoryObject(ctx, g, target, stage)
+	repositoryChildren(ctx, g, target, &a, stage)
+	return a
+}
+
+// repositoryObject reads the exact repository object.
+func repositoryObject(ctx context.Context, g Sender, target RepositoryTarget, stage string) RepositoryAccess {
 	a := RepositoryAccess{Asset: target.Asset}
-	request := func(op string) gate.Request {
-		return gate.Request{Op: op, Asset: target.Asset, Stage: stage, Exists: true, Params: map[string]string{"owner": target.Owner, "repo": target.Name}}
-	}
-	r := g.Send(ctx, request(OpRepository))
+	r := g.Send(ctx, gate.Request{Op: OpRepository, Asset: target.Asset, Stage: stage, Exists: true, Params: map[string]string{"owner": target.Owner, "repo": target.Name}})
 	a.RepositoryRead = readOf(OpRepository, r)
 	if usable(r) {
 		var repo Repository
@@ -94,10 +104,19 @@ func CollectRepository(ctx context.Context, g Sender, target RepositoryTarget, s
 			a.RepositoryRead.Gap = "unrecognized_repository"
 		}
 	}
+	return a
+}
+
+// repositoryChildren reads the collaborators and deploy keys of a
+// recognized repository object.
+func repositoryChildren(ctx context.Context, g Sender, target RepositoryTarget, a *RepositoryAccess, stage string) {
 	// Without a recognized object, do not use children to claim access to the
 	// requested repository; this also avoids following transfer evidence.
 	if a.Repository == nil {
-		return a
+		return
+	}
+	request := func(op string) gate.Request {
+		return gate.Request{Op: op, Asset: target.Asset, Stage: stage, Exists: true, Params: map[string]string{"owner": target.Owner, "repo": target.Name}}
 	}
 	a.Collaborators = population(ctx, g, request(OpCollaborators), func(c Collaborator) bool { return accountOK(c.Account) && c.Type != "Organization" })
 	a.DeployKeys = population(ctx, g, request(OpDeployKeys), func(k DeployKey) bool { return k.ID > 0 })
@@ -106,7 +125,6 @@ func CollectRepository(ctx context.Context, g Sender, target RepositoryTarget, s
 	a.Collaborators.VisibilityComplete = false
 	a.Collaborators.Gaps = append(a.Collaborators.Gaps, "repository_collaborator_visibility_unknown")
 	a.DeployKeys.VisibilityComplete = true
-	return a
 }
 
 func repositoryTargetOK(r Repository, target RepositoryTarget) bool {

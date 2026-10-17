@@ -18,6 +18,11 @@ const (
 	IDGitHubWritableDeployKey            = "github.writable_deploy_key"
 )
 
+// RemediationFormerPersonWorkspace is identity.former_person_has_access's
+// remediation on a Workspace account, where the shared definition's words
+// are GitHub's (docs/spec/workspace-collector.md, "Rules").
+const RemediationFormerPersonWorkspace = "Suspend the account now. Before deleting it, revoke its third-party app tokens and remove any forwarding or delegation; deleting the account does not tell you where its mail went."
+
 var githubDefs = []Def{
 	githubDef(IDGitHubMFANotRequired, "The organization does not require two-factor authentication", SevHigh, "", "An account can join or remain without the organization's second-factor requirement.", "Enable GitHub's organization two-factor requirement after checking users and automation; SAML or identity-provider MFA does not replace this GitHub control."),
 	githubDef(IDGitHubOwnerWithoutMFA, "An organization owner has no two-factor authentication", SevHigh, "account", "Compromise of this owner's password can grant organization administration.", "Enable strong GitHub two-factor authentication for this account, preferably security keys; check it even when SAML sign-in uses MFA."),
@@ -26,7 +31,7 @@ var githubDefs = []Def{
 	githubDef(IDIdentityUnattributedAdmin, "An administrator is not tied to a declared person", SevHigh, "account", "The operator cannot identify who controls this administrative access.", "Identify the account owner and declare their login, or remove the unnecessary administrative access."),
 	githubDef(IDIdentityExternalAdmin, "A contractor has full administrator access", SevMedium, "account", "An external person's account has full administrative control.", "Confirm the administrative need and use a narrower role when possible."),
 	githubDef(IDIdentitySharedAdmin, "A shared account has full administrator access", SevMedium, "account", "Administrative actions cannot reliably be attributed to one person.", "Use individually assigned administrator accounts and retain a separate recovery account."),
-	githubDef(IDIdentityFormerPersonHasAccess, "A departed person or retired account retains access", SevHigh, "account", "An account whose declared leaving date has passed retains observed access.", "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions."),
+	githubDef(IDIdentityFormerPersonHasAccess, "A departed person or retired account retains access", SevHigh, "account", "An account whose declared leaving date has passed retains observed access.", "Complete offboarding: suspend or remove the account or its access, and review credentials and sessions. If they could push to a repository that deploys to production, also rotate the secrets that repository's workflows can read and its deploy keys, and review its commits and workflow runs since their leaving date."),
 	githubDef(IDIdentityFormerPersonInvited, "A departed person retains a pending invitation", SevHigh, "invitation", "The invitation may restore access after the person's declared departure.", "Cancel the pending invitation and confirm the offboarding declaration."),
 	githubDef(IDGitHubTooManyOwners, "The organization has more owners than its size needs", SevMedium, "", "A larger owner population increases the number of accounts that can fully administer the organization.", "Reduce owner privileges to the people who need them while retaining at least two recovery-capable owners."),
 	githubDef(IDGitHubUndeclaredPublicRepository, "A repository is public without a public declaration", SevHigh, "repository", "The repository's contents are publicly available although the operator has not declared that intention.", "Confirm public visibility is intentional and declare public: true, or change the repository visibility."),

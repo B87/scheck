@@ -19,12 +19,21 @@ const (
 // Context carries explicit operator declarations; attribution never guesses from names.
 // docs/spec/github-collector.md, "Context and subjects".
 type Context struct {
-	OrganizationAsset, Today string
-	People                   []Person
-	ExpectedOwners           []string
-	OwnersDeclared           bool
-	MFA, MFASource           string
-	RepositoryContexts       map[string]RepositoryContext
+	OrganizationAsset string
+	// Zone is engagement.timezone, in which a declared date passes at
+	// 24:00; a date is judged at the collection time of the reads a rule
+	// rests on, never the session's start (docs/spec/engagement.md,
+	// "Severity in context").
+	Zone               *time.Location
+	People             []Person
+	ExpectedOwners     []string
+	OwnersDeclared     bool
+	MFA, MFASource     string
+	RepositoryContexts map[string]RepositoryContext
+	// SecretStores and MattersMost are the `secrets.production` and
+	// `data.matters_most` entries, by canonical asset id; only Select
+	// reads them, to order repositories.
+	SecretStores, MattersMost []Declared
 }
 type Person struct {
 	Handle, Kind, Left string
@@ -112,19 +121,70 @@ func settle(j *Judgment, fires bool, known bool, excerpt string) {
 		j.Verdict = Fired
 	}
 }
-func passed(left, today string) bool {
-	l, e := time.Parse("2006-01-02", left)
-	t, f := time.Parse("2006-01-02", today)
-	return e == nil && f == nil && l.Before(t)
+
+// ReadTimes are the collection times of the reads that returned a
+// response: a time-dependent rule is judged at them. A response with no
+// recorded time is a zero, which finding.LeftAt reads as unknown.
+func ReadTimes(rs ...[]Read) []time.Time {
+	var out []time.Time
+	for _, set := range rs {
+		for _, r := range set {
+			if r.Status != 0 {
+				out = append(out, r.ObservedAt)
+			}
+		}
+	}
+	return out
+}
+
+// leftAt is when a declared leaving date passed relative to the reads.
+func leftAt(left string, c Context, rs ...[]Read) finding.Leaving {
+	return finding.LeftAt(left, c.Zone, ReadTimes(rs...))
+}
+
+// leftReason is a leaver judgment's abstention when the date had not
+// passed at the earliest read it rests on; with nothing read, reason, the
+// judgment's own for missing evidence, stands.
+func leftReason(l finding.Leaving, reason string) string {
+	switch l {
+	case finding.LeftWithin:
+		return finding.ReasonLeftDuringCollection
+	case finding.LeftUnknown:
+		return finding.ReasonNoCollectionTime
+	case finding.LeftUnread:
+		return reason
+	}
+	return "leaving_date_not_passed"
+}
+
+// leftAmbiguous says a declared leaving date neither passed nor not-passed
+// at the reads: a rule that turns on it abstains rather than judge the
+// account as a current person's.
+func leftAmbiguous(l finding.Leaving) bool {
+	return l == finding.LeftWithin || l == finding.LeftUnknown
+}
+
+// asOf names the earliest read a leaver judgment rests on, in the zone.
+func asOf(c Context, rs ...[]Read) string {
+	first, _, _ := finding.Span(ReadTimes(rs...))
+	return finding.ReadDate(first, c.Zone)
 }
 func production(c Context, asset string) bool {
 	return c.RepositoryContexts[asset].DeploysTo == "production"
 }
 func describeAccount(a Account) string { return fmt.Sprintf("%s (GitHub account %d)", a.Login, a.ID) }
 
-// Judge reads only collected facts. Unknown and incomplete populations never
-// disprove a rule (docs/spec/github-collector.md, "Boundary", "Rules: evidence outcomes").
+// Judge is every rule family's verdicts over what was read: identity and
+// repository access, CI, provider alerts and history. Analyze calls it;
+// evidence carries no verdict (docs/spec/runs.md, "Verdicts are not
+// evidence").
 func Judge(e Evidence, c Context) []Judgment {
+	return slices.Concat(JudgeAccess(e, c), JudgeCI(e, c), JudgeAlerts(e, c), JudgeHistory(e))
+}
+
+// JudgeAccess reads only collected facts. Unknown and incomplete populations never
+// disprove a rule (docs/spec/github-collector.md, "Boundary", "Rules: evidence outcomes").
+func JudgeAccess(e Evidence, c Context) []Judgment {
 	var out []Judgment
 	// An owner-authorized disabled filter is affirmative membership/role evidence
 	// even when the unfiltered population stopped before reaching that account.
@@ -138,7 +198,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		b := *e.Organization.TwoFactorRequirementEnabled
 		settle(&j, !b, e.OwnerAuthority && usableRead(e.OrganizationRead), fmt.Sprintf("two_factor_requirement_enabled: %t", b))
 		if !b && (c.MFA == "everyone" || c.MFA == "some") {
-			j.Attributes = []string{"contradiction"}
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Sources = []string{c.MFASource}
 		}
 	}
@@ -166,7 +226,7 @@ func Judge(e Evidence, c Context) []Judgment {
 		positive := containsIdentity(e.MembersWithoutMFA.Items, a)
 		settle(&j, positive, e.OwnerAuthority && complete(e.Owners) && (positive || complete(e.Members) && complete(e.Owners) && complete(e.MembersWithoutMFA)), describeAccount(a)+" in member inventory; absence/presence in owner-authorized 2FA-disabled filter")
 		if positive && c.MFA == "everyone" {
-			j.Attributes = []string{"contradiction"}
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Sources = []string{c.MFASource}
 		}
 		out = append(out, j)
@@ -182,6 +242,7 @@ func Judge(e Evidence, c Context) []Judgment {
 	for _, r := range e.RepositoriesAccess {
 		out = append(out, repositoryJudgments(e, c, r)...)
 	}
+	out = append(out, inventoryPublic(e, c)...)
 	// Empty or unavailable populations still contribute an explicit abstention;
 	// they cannot silently disappear from coverage.
 	for _, id := range finding.GitHubIDs() {
@@ -198,7 +259,7 @@ func Judge(e Evidence, c Context) []Judgment {
 				settle(&gap, false, complete(e.Owners), "No organization owners observed in a complete trusted population")
 			case finding.IDIdentityUnattributedAdmin:
 				relevant := slices.ContainsFunc(c.People, func(p Person) bool { return len(p.GitHub) > 0 })
-				all := complete(e.Owners)
+				all := complete(e.Owners) && !e.RepositoriesUnread
 				for _, r := range e.RepositoriesAccess {
 					if production(c, r.Asset) {
 						all = all && complete(r.Collaborators)
@@ -218,13 +279,19 @@ func ownerJudgments(e Evidence, c Context, a Account) []Judgment {
 	positive := containsIdentity(e.OwnersWithoutMFA.Items, a)
 	settle(&m, positive, e.OwnerAuthority && (positive || complete(e.Owners) && complete(e.OwnersWithoutMFA)), describeAccount(a)+" in owner inventory; absence/presence in owner-authorized 2FA-disabled filter")
 	if positive && (c.MFA == "everyone" || c.MFA == "admins") {
-		m.Attributes = []string{"contradiction"}
+		m.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 		m.Sources = []string{c.MFASource}
 	}
 	out := []Judgment{m}
 	u := judgment(finding.IDIdentityUnexpectedAdmin, c.OrganizationAsset, accountSubject(a, c), reads)
-	if p != nil && passed(p.Left, c.Today) {
+	left := finding.LeftNotPassed
+	if p != nil && p.Left != "" {
+		left = leftAt(p.Left, c, e.Owners.Reads)
+	}
+	if left == finding.LeftPassed {
 		u.Reason = "departed_owner_reported_by_offboarding"
+	} else if leftAmbiguous(left) {
+		u.Reason = leftReason(left, u.Reason)
 	} else if p != nil && c.OwnersDeclared {
 		expected := slices.Contains(c.ExpectedOwners, p.Handle)
 		settle(&u, !expected, !expected || complete(e.Owners), describeAccount(a)+" is an organization owner")
@@ -282,7 +349,7 @@ func ownerCount(e Evidence, c Context) Judgment {
 	j.Listed = affected
 	j.Details = map[string]any{"owners": n, "members": humans, "complete": full}
 	if !full {
-		j.Context = "Counts are lower bounds. No owner-to-member ratio was evaluated."
+		j.Why = "Counts are lower bounds. No owner-to-member ratio was evaluated."
 	}
 	return j
 }
@@ -293,7 +360,10 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			continue
 		}
 		if len(p.GitHub) == 0 {
-			j := judgment(finding.IDIdentityFormerPersonHasAccess, c.OrganizationAsset, nil, nil)
+			// Attributed in every outcome, so the report's person lines
+			// read it rather than the declaration (docs/spec/report.md,
+			// "People who left").
+			j := judgment(finding.IDIdentityFormerPersonHasAccess, c.OrganizationAsset, &Subject{Kind: "account", Key: "declared:" + p.Handle, Label: p.Handle, Person: p.Handle}, nil)
 			j.Reason = "no_declared_github_login"
 			out = append(out, j)
 			continue
@@ -301,51 +371,148 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 		for _, login := range p.GitHub {
 			a := Account{Login: strings.ToLower(login)}
 			present := false
-			for _, pop := range [][]Account{e.Members.Items, e.Owners.Items, e.OutsideCollaborators.Items} {
-				for _, v := range pop {
+			// held are the reads of the populations that list the account.
+			var held [][]Read
+			for _, pop := range []Population[Account]{e.Members, e.Owners, e.OutsideCollaborators} {
+				for _, v := range pop.Items {
 					if strings.EqualFold(v.Login, login) {
 						a = v
 						present = true
+						held = append(held, pop.Reads)
+						break
 					}
 				}
 			}
 			source := []string{"people." + p.Handle + ".left"}
-			full := complete(e.Members) && complete(e.Owners) && complete(e.OutsideCollaborators) && complete(e.Invitations) && identifiableInvitations(e.Invitations)
+			full := complete(e.Members) && complete(e.Owners) && complete(e.OutsideCollaborators) && complete(e.Invitations) && identifiableInvitations(e.Invitations) && !e.RepositoriesUnread
 			for _, repo := range e.RepositoriesAccess {
 				full = full && complete(repo.Collaborators)
 			}
-			makeAccess := func(asset string, account Account, reads []string, present, admin bool) Judgment {
+			// A presence is judged at the reads that observed the account,
+			// an absence at the earliest of the whole population's: either
+			// needs the leaving date passed at the earliest of them
+			// (docs/spec/engagement.md, "Severity in context").
+			makeAccess := func(asset string, account Account, reads []string, present, admin bool, at ...[]Read) Judgment {
 				j := judgment(finding.IDIdentityFormerPersonHasAccess, asset, accountSubject(account, c), reads)
 				j.Sources = source
 				j.NotChecked = []string{"Accounts renamed after declaration; undeclared logins; credential or session usability"}
-				if passed(p.Left, c.Today) {
-					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left)
+				if l := leftAt(p.Left, c, at...); l == finding.LeftPassed {
+					seen := "; account observed in a read of " + asOf(c, at...)
+					if !present {
+						seen = "; no access observed as of " + asOf(c, at...) + " (earliest of the population's reads)"
+					}
+					settle(&j, present, present || full, describeAccount(account)+"; declared leaving date "+p.Left+seen)
 					if present && admin {
-						j.Attributes = []string{"admin"}
+						j.Attributes = []finding.Attribute{{Name: "admin"}}
 					}
 				} else {
-					j.Reason = "leaving_date_not_passed"
+					j.Reason = leftReason(l, j.Reason)
 				}
 				return j
 			}
+			owner := containsAccount(e.Owners.Items, login)
+			// carrier is the fired judgment that carries the login's R4
+			// facts: the organization's, else the first repository's.
+			carrier := -1
 			if present {
-				out = append(out, makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, containsAccount(e.Owners.Items, login)))
+				j := makeAccess(c.OrganizationAsset, a, readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads), true, owner, held...)
+				// How the login holds access, as the report's person line
+				// says it (docs/spec/report.md, "People who left").
+				j.Details = map[string]any{"membership": "outside_collaborator"}
+				switch {
+				case owner:
+					j.Details["membership"] = "owner"
+				case containsAccount(e.Members.Items, login):
+					j.Details["membership"] = "member"
+				}
+				out = append(out, j)
+				if out[len(out)-1].Verdict == Fired {
+					carrier = len(out) - 1
+				}
 			}
 			for _, repo := range e.RepositoriesAccess {
 				for _, collaborator := range repo.Collaborators.Items {
 					if strings.EqualFold(collaborator.Login, login) {
-						admin, known := EffectiveAdmin(collaborator)
-						out = append(out, makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, production(c, repo.Asset) && known && admin))
+						j := makeAccess(repo.Asset, collaborator.Account, readIDs(repo.Collaborators.Reads), true, false, repo.Collaborators.Reads)
+						j.Details = map[string]any{"membership": "collaborator"}
+						if j.Verdict == Fired {
+							// Facts only: whether the repository deploys to
+							// production is the severity table's to decide
+							// (docs/spec/engagement.md, R4).
+							admin, adminKnown := EffectiveAdmin(collaborator)
+							if adminKnown && admin {
+								j.Attributes = append(j.Attributes, finding.Attribute{Name: "repository_admin"})
+							}
+							if write, known := EffectiveWrite(collaborator); known && write && (!archived(repo) || adminKnown && admin) {
+								j.Attributes = append(j.Attributes, finding.Attribute{Name: "write",
+									Ref: finding.Ref{Observation: firstRead(readIDs(repo.Collaborators.Reads)), Excerpt: permissionExcerpt(collaborator)}})
+							}
+						}
+						out = append(out, j)
+						if j.Verdict == Fired && (carrier < 0 || out[carrier].Asset != c.OrganizationAsset && repo.Asset < out[carrier].Asset) {
+							carrier = len(out) - 1
+						}
 						present = true
 					}
 				}
 			}
+			// An owner is admin on every repository: attribute:admin already
+			// says it, and R4 has nothing to establish.
+			if carrier >= 0 && !owner {
+				out[carrier].Attributes = append(out[carrier].Attributes, productionWriteFacts(e, login)...)
+			}
+			// A login seen nowhere that GitHub itself reports with access to
+			// a repository F1 asked about is access observed; F1 never
+			// disproves (docs/spec/engagement.md, "Plan selection and
+			// follow-ups").
+			asked, none := 0, 0
 			if !present {
-				reads := readIDs(e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads)
 				for _, repo := range e.RepositoriesAccess {
-					reads = append(reads, readIDs(repo.Collaborators.Reads)...)
+					pr, ok := e.permissionFor(repo.Asset, login)
+					if !ok || pr.Read.RequestID == "" {
+						continue
+					}
+					asked++
+					perm := interpretPermission(pr, repo, e)
+					if perm.none && perm.access == accessNone {
+						none++
+					}
+					if perm.access != accessWrite && !perm.read {
+						continue
+					}
+					j := makePermissionAccess(p, c, repo, pr, perm, source)
+					out = append(out, j)
+					if j.Verdict == Fired {
+						present = true
+						if carrier < 0 || out[carrier].Asset != c.OrganizationAsset && repo.Asset < out[carrier].Asset {
+							carrier = len(out) - 1
+						}
+					}
 				}
-				out = append(out, makeAccess(c.OrganizationAsset, a, reads, false, false))
+				if present && !owner {
+					out[carrier].Attributes = append(out[carrier].Attributes, productionWriteFacts(e, login)...)
+				}
+			}
+			if !present {
+				population := [][]Read{e.Members.Reads, e.Owners.Reads, e.OutsideCollaborators.Reads, e.Invitations.Reads}
+				for _, repo := range e.RepositoriesAccess {
+					population = append(population, repo.Collaborators.Reads)
+				}
+				j := makeAccess(c.OrganizationAsset, a, readIDs(population...), false, false, population...)
+				j.Details = map[string]any{"membership": "none"}
+				if j.Verdict == Abstained && asked > 0 && none == asked {
+					noun := "production repositories"
+					if asked == 1 {
+						noun = "production repository"
+					}
+					j.NotChecked = append(j.NotChecked, fmt.Sprintf("GitHub reports no access for %s to the %d %s asked; other repositories were not asked.", login, asked, noun))
+					for _, pr := range e.Permissions {
+						if strings.EqualFold(pr.Login, login) && pr.Read.RequestID != "" {
+							j.Reads = append(j.Reads, pr.Read.RequestID)
+						}
+					}
+				}
+				out = append(out, j)
 			}
 			invitations := []Invitation{}
 			for _, i := range e.Invitations.Items {
@@ -356,10 +523,11 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 			if len(invitations) == 0 {
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, nil, readIDs(e.Invitations.Reads))
 				x.Sources = source
-				if passed(p.Left, c.Today) {
-					settle(&x, false, complete(e.Invitations) && identifiableInvitations(e.Invitations), "No matching pending invitation for "+login)
+				if l := leftAt(p.Left, c, e.Invitations.Reads); l == finding.LeftPassed {
+					settle(&x, false, complete(e.Invitations) && identifiableInvitations(e.Invitations),
+						"No matching pending invitation for "+login+" as of "+asOf(c, e.Invitations.Reads)+" (earliest of the invitation reads)")
 				} else {
-					x.Reason = "leaving_date_not_passed"
+					x.Reason = leftReason(l, x.Reason)
 				}
 				out = append(out, x)
 			}
@@ -367,10 +535,10 @@ func formerJudgments(e Evidence, c Context) []Judgment {
 				key := "invitation:" + strconv.FormatInt(i.ID, 10)
 				x := judgment(finding.IDIdentityFormerPersonInvited, c.OrganizationAsset, &Subject{Kind: "invitation", Key: key, Label: login + " (" + key + ")", ProviderID: strconv.FormatInt(i.ID, 10), Person: p.Handle}, readIDs(e.Invitations.Reads))
 				x.Sources = source
-				if passed(p.Left, c.Today) {
-					settle(&x, true, true, "Pending invitation for "+login+"; declared leaving date "+p.Left)
+				if l := leftAt(p.Left, c, e.Invitations.Reads); l == finding.LeftPassed {
+					settle(&x, true, true, "Pending invitation for "+login+"; declared leaving date "+p.Left+"; observed in an invitation read of "+asOf(c, e.Invitations.Reads))
 				} else {
-					x.Reason = "leaving_date_not_passed"
+					x.Reason = leftReason(l, x.Reason)
 				}
 				out = append(out, x)
 			}
@@ -406,7 +574,6 @@ func repositoryJudgments(e Evidence, c Context, r RepositoryAccess) []Judgment {
 		if k.ReadOnly != nil {
 			settle(&j, !*k.ReadOnly, !*k.ReadOnly || complete(r.DeployKeys), fmt.Sprintf("read_only: %t", *k.ReadOnly))
 			if !*k.ReadOnly && production(c, r.Asset) {
-				j.Attributes = []string{"production"}
 				j.Sources = []string{c.RepositoryContexts[r.Asset].Source}
 			}
 		}
@@ -476,6 +643,191 @@ func EffectiveAdmin(a Collaborator) (bool, bool) {
 	return false, false
 }
 
+// EffectiveWrite recognizes push access (push, maintain or admin) from
+// consistent provider fields; the booleans are GitHub's effective
+// permission across direct, team and base access, so a custom role with
+// push counts. The second result is false when missing or contradictory
+// evidence prevents a decision; role_name alone never establishes write
+// (docs/spec/github-collector.md, "Rule evidence").
+func EffectiveWrite(a Collaborator) (bool, bool) {
+	if a.RoleName != nil && (strings.Contains(*a.RoleName, "[REDACTED:") || strings.Contains(*a.RoleName, "[TRUNCATED:")) {
+		return false, false
+	}
+	if admin, known := EffectiveAdmin(a); known && admin {
+		return true, true
+	}
+	p := a.Permissions
+	if p == nil {
+		return false, false
+	}
+	isTrue := func(v *bool) bool { return v != nil && *v }
+	isFalse := func(v *bool) bool { return v != nil && !*v }
+	readOnly := a.RoleName != nil && slices.Contains([]string{"read", "pull", "triage"}, *a.RoleName)
+	if isTrue(p.Push) || isTrue(p.Maintain) {
+		if isFalse(p.Pull) || isTrue(p.Maintain) && isFalse(p.Push) || readOnly {
+			return false, false
+		}
+		return true, true
+	}
+	if isFalse(p.Admin) && isFalse(p.Push) && isFalse(p.Maintain) {
+		// A writing role with no write permission is a contradiction.
+		if a.RoleName != nil && slices.Contains([]string{"write", "push", "maintain", "admin"}, *a.RoleName) {
+			return false, false
+		}
+		return false, true
+	}
+	return false, false
+}
+
+// permissionExcerpt is a collaborator's role and permission fields as the
+// write attribute cites them.
+func permissionExcerpt(a Collaborator) string {
+	parts := []string{}
+	if a.RoleName != nil {
+		parts = append(parts, "role_name: "+*a.RoleName)
+	}
+	if p := a.Permissions; p != nil {
+		for _, f := range []struct {
+			name string
+			v    *bool
+		}{{"admin", p.Admin}, {"maintain", p.Maintain}, {"push", p.Push}, {"pull", p.Pull}} {
+			if f.v != nil {
+				parts = append(parts, fmt.Sprintf("%s: %t", f.name, *f.v))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "no permission fields returned"
+	}
+	return strings.Join(parts, "; ")
+}
+
+// repositoryName is a repository as the report names it, owner/name.
+func repositoryName(r RepositoryAccess) string {
+	if r.Repository != nil && r.Repository.FullName != "" && !strings.Contains(r.Repository.FullName, "[") {
+		return r.Repository.FullName
+	}
+	return strings.TrimPrefix(r.Asset, "repo:github:")
+}
+
+// unreadPhrase says why a population could not be read, for a cause.
+func unreadPhrase[T any](p Population[T]) string {
+	for _, r := range p.Reads {
+		if usableRead(r) {
+			continue
+		}
+		switch {
+		case r.Reason == "insufficient_permission":
+			return "the credential was not allowed to list them"
+		case r.Truncated:
+			return "the list was cut short"
+		case len(r.Redactions) > 0:
+			return "part of the list was redacted"
+		case r.Reason != "":
+			return strings.ReplaceAll(strings.TrimPrefix(r.Reason, "unavailable:"), "_", " ")
+		case r.Gap != "":
+			return InventoryGapText([]string{r.Gap})
+		}
+		return "the read did not succeed"
+	}
+	if len(p.Reads) == 0 {
+		return "not read"
+	}
+	return InventoryGapText(p.Gaps)
+}
+
+// makePermissionAccess is the leaver judgment F1's answer gives on the
+// repository it asked about: fired when the leaving date had passed at the
+// permission read, with write and repository_admin as the answer
+// establishes them.
+func makePermissionAccess(p Person, c Context, repo RepositoryAccess, pr PermissionRead, perm grant, source []string) Judgment {
+	subject := accountSubject(perm.account, c)
+	if perm.account.ID == 0 {
+		subject.ProviderID = ""
+	}
+	j := judgment(finding.IDIdentityFormerPersonHasAccess, repo.Asset, subject, []string{pr.Read.RequestID})
+	j.Sources = source
+	j.NotChecked = []string{"Accounts renamed after declaration; undeclared logins; credential or session usability"}
+	j.Details = map[string]any{"membership": "collaborator"}
+	l := leftAt(p.Left, c, []Read{pr.Read})
+	if l != finding.LeftPassed {
+		j.Reason = leftReason(l, j.Reason)
+		return j
+	}
+	a := pr.Answer
+	role := ""
+	if a.RoleName != nil && *a.RoleName != "" && *a.RoleName != "none" {
+		role = " (role " + *a.RoleName + ")"
+	}
+	settle(&j, true, true, fmt.Sprintf("%s: GitHub reports %s%s on %s, through a direct, team, base or enterprise grant (GitHub does not say which); declared leaving date %s; observed in a permission read of %s",
+		pr.Login, *a.Permission, role, repositoryName(repo), p.Left, asOf(c, []Read{pr.Read})))
+	ref := finding.Ref{Observation: pr.Read.RequestID, Excerpt: perm.excerpt}
+	if perm.admin {
+		j.Attributes = append(j.Attributes, finding.Attribute{Name: "repository_admin", Ref: ref})
+	}
+	if perm.access == accessWrite {
+		j.Attributes = append(j.Attributes, finding.Attribute{Name: "write", Ref: ref})
+	}
+	return j
+}
+
+// productionWriteFacts are what R4 reads on the judgment that carries a
+// left login's "not applied" step: each repository this run read where the
+// login's push access is established (write_held) or not settled
+// (write_unsettled, the cause in its excerpt). The severity table keeps the
+// production repositories among them (docs/spec/engagement.md, R4).
+func productionWriteFacts(e Evidence, login string) []finding.Attribute {
+	var out []finding.Attribute
+	for _, repo := range e.RepositoriesAccess {
+		name := repositoryName(repo)
+		unsettled := func(cause string) {
+			out = append(out, finding.Attribute{Name: "write_unsettled", Asset: repo.Asset, Ref: finding.Ref{Observation: firstRead(readIDs(repo.Collaborators.Reads)), Excerpt: cause}})
+		}
+		st := listState(repo, login)
+		switch st {
+		case listWrite:
+			out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset})
+			continue
+		case listNotWrite:
+			continue
+		case listArchived:
+			unsettled(name + " is archived")
+			continue
+		}
+		// The list did not settle the login: the permission follow-up's
+		// answer does, when F1 asked (docs/spec/engagement.md, R4).
+		if pr, asked := e.permissionFor(repo.Asset, login); asked {
+			switch p := interpretPermission(pr, repo, e); p.access {
+			case accessWrite:
+				out = append(out, finding.Attribute{Name: "write_held", Asset: repo.Asset, Ref: finding.Ref{Observation: pr.Read.RequestID, Excerpt: p.excerpt}})
+			case accessUnknown:
+				out = append(out, finding.Attribute{Name: "write_unsettled", Asset: repo.Asset, Ref: finding.Ref{Observation: pr.Read.RequestID, Excerpt: p.cause}})
+			}
+			continue
+		}
+		switch st {
+		case listUnknown:
+			unsettled("the permissions returned for " + login + " on " + name + " were missing or contradictory")
+		case listNotListed:
+			unsettled(login + " is not listed among the collaborators of " + name + ", and that list may not show everyone with access")
+		default:
+			unsettled("the collaborators of " + name + " could not be read: " + unreadPhrase(repo.Collaborators))
+		}
+	}
+	return out
+}
+
+func archived(r RepositoryAccess) bool {
+	return r.Repository != nil && r.Repository.Archived != nil && *r.Repository.Archived
+}
+
+func firstRead(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
 func withDisabledAccounts(base, disabled Population[Account]) Population[Account] {
 	base.Items = slices.Clone(base.Items)
 	for _, a := range disabled.Items {
@@ -490,4 +842,27 @@ func withDisabledAccounts(base, disabled Population[Account]) Population[Account
 
 func identifiableInvitations(p Population[Invitation]) bool {
 	return !slices.ContainsFunc(p.Items, func(i Invitation) bool { return i.Login == nil || *i.Login == "" })
+}
+
+// inventoryPublic fires the undeclared-public rule from the organization's
+// repository list for a public repository whose object Check did not read
+// (the budget or the deadline came first, or the read failed): its
+// inventory judgment stays. The list
+// only fires; a repository not shown public is never disproved from it
+// (docs/spec/engagement.md, "Plan selection and follow-ups").
+func inventoryPublic(e Evidence, c Context) []Judgment {
+	var out []Judgment
+	for _, repo := range e.Repositories.Items {
+		asset := "repo:github:" + strings.ToLower(repo.FullName)
+		if repo.Visibility == nil || *repo.Visibility != "public" || slices.ContainsFunc(e.RepositoriesAccess, func(r RepositoryAccess) bool { return strings.EqualFold(r.Asset, asset) && r.Repository != nil }) {
+			continue
+		}
+		if rc := c.RepositoryContexts[asset]; rc.Public != nil && *rc.Public {
+			continue
+		}
+		j := judgment(finding.IDGitHubUndeclaredPublicRepository, asset, &Subject{Kind: "repository", Key: strings.ToLower(repo.FullName), Label: repo.FullName, ProviderID: strconv.FormatInt(repo.ID, 10)}, readIDs(e.Repositories.Reads))
+		settle(&j, true, true, "visibility: public (organization repository list)")
+		out = append(out, j)
+	}
+	return out
 }

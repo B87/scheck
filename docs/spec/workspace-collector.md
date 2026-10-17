@@ -89,7 +89,15 @@ and caps provider expiry at one hour from request start before subtracting that
 margin. Returned scope evidence is known only when its explicit field is a usable
 string; absent, `null` or malformed scope is unknown. Requested scopes do not fill
 that gap. Tokens stay in session memory. Expiry or rejected authentication
-requires a fresh ordered bootstrap before a later tenant read.
+requires a fresh ordered bootstrap before a later tenant read. The session's token lives
+about an hour from Recon's bootstrap, so Workspace's Check reads run before GitHub's. A
+read stopped by that expiry (`unavailable:bootstrap_required`) counts as a limit: the
+tenant's outcome is `incomplete` with `limit_reached`, exit 2, and the detail "The
+Workspace session's token expired before every Workspace read was made; resume to read the
+rest."; a cut per-user population gains its selection. Once the token expired every later
+read in the session halts the same way (`unavailable:bootstrap_required`, repeating) until
+a new bootstrap is attempted, never as an unbound tenant. Expiry never preserves an
+authorization.
 
 `SCHECK_WORKSPACE_PROFILE` selects one compiled read profile:
 
@@ -419,8 +427,41 @@ Step 3 declares no tenant-wide direct-assignment, group or group-member reads.
 Per-user assignment reads include direct and indirect grants for current admitted
 users only; there is no claim of a tenant-wide assignment inventory. The optional
 group-context read in the table remains planned; it is not needed to interpret a
-per-user assignment returned by Directory. Fresh user details prioritize passed leavers, administrators
-and contractors before other accounts when a budget prevents reading everyone.
+per-user assignment returned by Directory. Fresh user details take accounts in the order of "Per-user read order under caps"
+below when a cap, the timeout or the rate limit prevents reading everyone.
+
+**Per-user read order under caps** (step 6b, built; `UserTiersVersion`,
+`internal/collector/workspace/selection.go`). Recon reads the users, roles and admin
+assignments (inventory) and the per-user assignment and detail reads; Plan orders the
+accounts (`Select`, `plan.json` `workspace[]`); Check, after Plan, reads the per-user
+OAuth grants and then Gmail forwarding (`CollectUsers`). `Collect`, in Recon, reads
+neither: when the profile reads them (`oauth.selected`, `mail.selected` in `recon.json`)
+it writes no grant or forwarding readout and notes "Third-party app grants and mail
+forwarding, which this profile reads, are read in Check, after Plan orders the accounts."
+Check rewrites the notes over everything read; credential warnings its reads raise (the
+OAuth token, `gmail.readonly`) are logged to stderr as Recon's are. Recon's per-user reads and Check's OAuth grants take accounts in
+the order of [engagement.md](engagement.md), "Plan selection and follow-ups": 1 a person
+who left, still active; 2 admin holders no `people` handle names; 3 super admins and
+holders of delegated roles a handle names; 4 declared `contractor` and `shared` accounts;
+5 `break_glass` and `service` accounts; 6 the rest. An admin holder, for ordering, has
+`isAdmin`, `isDelegatedAdmin` or an observed role assignment; the identity rules' own
+reading of an admin is unchanged. Recon orders before it has read any assignment, so
+its admin holders are those Google's flags name; Plan and Check also count an observed
+assignment. Within every tier: active first, then most recent sign-in, then
+`primaryEmail`, then the account id. Gmail forwarding keeps its own order, from the
+mailboxes Check reads: leavers still active first, then admin holders, then the rest,
+active first within each tier, then `primaryEmail`. The order replaces the one named for
+OAuth grants below; the sequence of reads (OAuth grants after every baseline read,
+forwarding after every other read) and the `Repeats` stop are unchanged. There is no
+Workspace request budget in 0.0.2. `OAuthEvidence.Selection` and `MailEvidence.Selection`
+(`finding.Selection`, unit `users`, kind `oauth_grants` or `mail_forwarding`) are set
+only when a read ended `limit_reached` (a cap, the timeout or the rate limit) before every
+account was read: the reason is kept (exit 2) and the selection gives the tiers of the
+accounts read; the session token's expiry is such a limit. Recon's per-user assignment cap
+carries no selection. A `Repeats` stop that is not a limit is a failure and has no
+selection. In
+the report the plan coverage gives the sub-item that population and marks it at most
+*partial*. A tenant Recon left `collected` becomes `incomplete` when Check's outcome is.
 
 A fresh `users.get` is required for every inactivity verdict: Google's list
 `lastLoginTime` can be inaccurate. Recognized 2-step flags in the current list suffice
@@ -429,8 +470,9 @@ list/detail identity or security values cause abstention and a diagnostic note.
 Flag-specific conflicts are in "Observed 2-step verification".
 
 Step 5 reads OAuth grants after every baseline read, for every admitted account,
-suspended and archived included: passed leavers, super admins, contractors, then the
-rest, active before inactive within each. A result the gate marks `Repeats` (every
+suspended and archived included, in Plan's order above (a suspended leaver does not rank
+first). Per-user OAuth and forwarding reads run in Check, after Plan; their requests carry
+the audit stage `check`. A result the gate marks `Repeats` (every
 later request of the kind would end the same way: a remembered optional failure, the
 profile not selecting the surface, an unverified principal, binding or authentication
 gone) is recorded once and stops the sequence; a per-account refusal does not. The gate
@@ -558,9 +600,11 @@ unknown sibling fields are discarded. Null, empty, unknown-only or malformed
 expiration structures remain unknown. Projection
 must preserve that distinction rather than turning an unreadable shape into absence.
 Unknown expiration metadata cannot establish current privilege or absence. A
-recognized expiry at or before the assessment instant is expired and is ignored;
-a future expiry preserves
-the supported assignment. Unknown roles or privileges block absence verdicts, but a
+recognized expiry at or before the collection time of the assignments read that
+carried it is expired and is ignored; a later expiry preserves the supported
+assignment. A read with no recorded collection time leaves the expiry unknown, and
+the session start is never the fallback (`engagement.md`, "Severity in context",
+"Time"). Unknown roles or privileges block absence verdicts, but a
 known supported privilege can still prove presence when an unknown sibling is also
 returned. `isAdmin:true` independently proves super-admin status even when role
 reads are unavailable. The exact service/name table above remains version
@@ -587,15 +631,33 @@ step 6 the forwarding rule.
 | `identity.unattributed_admin` | high / account | Observed super admin or supported privileged delegate, complete alias attribution finds no person, and tenant people context exists | Unambiguous attribution or known not-privileged | No people context, partial aliases or unknown roles |
 | `identity.external_admin` | medium / account | Declared contractor is a super admin | Known not-contractor or not-super-admin | Unknown kind, attribution or admin status |
 | `identity.shared_admin` | medium / account | Declared shared account is a super admin | Individual account or known not-super-admin | Unknown kind or admin status |
-| `identity.former_person_has_access` | high / account, `+1 attribute:admin` | Passed `left` date, exact primary match and active account | Positively suspended/archived, or recognized complete current-address absence with removed-rename caveat | Future date, unknown status, active alias-only match, missing identifier or partial population |
+| `identity.former_person_has_access` | high / account, `+1 attribute:admin` | `left` date passed at the collection time of the read that observed the account, exact primary match and active account | Positively suspended/archived, or recognized complete current-address absence as of the earliest read of the population, with removed-rename caveat | Future date at the observing read (`leaving_date_not_passed`), date within collection ("left date *d* falls within or after collection; re-run after *d*"), no recorded collection time, unknown status, active alias-only match, missing identifier or partial population. A person whose date had not passed, or whose users were not read, abstains once per declared address (or `declared:<handle>`) so the report's "People who left" line has a judgment to read. An abstained per-user judgment for an account read with the date passed says why in Not checked: "Declared account identity is missing or ambiguous." (alias-only active match), "The account was read, but its status or access evidence was not recognized." (conflicting evidence or unrecognized status), "The users were not read."; and, for a passed date, a declared address not found and an incomplete users list, "The users list was incomplete, so an address missing from it is not proven gone."; the line reads these, never the default reason |
 | `workspace.too_many_super_admins` | medium / none | Count above 3, or at least 3 and above a third of active humans | Complete populations below the threshold | Unknown exemptions or incomplete absence; partial population can fire only on the absolute lower bound above 3 |
-| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days ago | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence |
-| `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days ago | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence |
+| `workspace.stale_account` | medium / account | Eligible active account; fresh detail has a valid actual sign-in more than 90 calendar days before the collection time of the per-account detail read that returned it and the creation time | Suspended, archived, exempt or recent actual sign-in | Unknown/future/inconsistent dates or status, list-only evidence, a sign-in or creation later than the detail read's collection time plus 5 minutes (malformed), no recorded collection time |
+| `workspace.never_signed_in` | low / account | Eligible active account; fresh detail has exact epoch never marker and creation more than 30 calendar days before the detail read's collection time | Actual sign-in, creation at most 30 days ago, suspended, archived or exempt | Unknown creation/login or list-only evidence, a creation or sign-in later than the detail read's collection time plus 5 minutes (malformed), no recorded collection time |
 | `workspace.suspended_admin_assignment` | medium / account | Suspended account retains super flag or supported privileged direct/indirect assignment | Complete admin metadata proves no assignment | Unknown suspension or partial/uninterpreted roles |
 | `workspace.two_step_not_enforced` | high / org_unit | A known-active account in the unit explicitly has `isEnforcedIn2Sv:false`; fire wins inside a unit, "at least" with unknowns or a partial population | Complete users population, unit found exactly once in the unit tree, every account's activity known, every active account explicitly `true`, no conflicts | Otherwise; units with only inactive accounts or none produce no judgment; no active account at all gives one asset-level abstention |
 | `workspace.admin_without_two_step` | high / account | Known-active super admin or supported privileged delegate explicitly has `isEnrolledIn2Sv:false`, enforced or not | Explicit enrollment `true`, known inactive, or admin status known false | Unknown admin status, enrollment, activity, or a conflict |
 | `workspace.oauth_broad_scope` | medium / oauth_app, `+1 attribute:admin_grantor` when a known-active super admin's or declared break-glass account's own grant is broad | A known-active grantor's grant to the app holds a supported broad scope | On a complete grant population, the app holds only recognized sign-in scopes, or access beyond sign-in only through suspended or archived accounts | Broad only through accounts of unknown status, only unclassified scopes, or a partial population; asset-level outcomes in "OAuth grants" |
 | `workspace.external_forwarding` | medium / mail_forward, `+1 attribute:admin` when the mailbox is a known-active super admin's | A read mailbox has enabled auto-forwarding, or a filter that forwards, to an address outside the verified domains | Per mailbox, both reads usable and whole, and every forward goes to a verified domain or none exists; outcomes in "Forwarding interpretation" | A read that failed, was cut or was not recognized; an unplaceable destination; unknown mailbox activity; a subdomain of a verified domain |
+
+A fired `identity.former_person_has_access` names what was not read for that account
+(E9 step 7; [engagement.md](engagement.md), "Plan selection and follow-ups", on F2, which
+is not a follow-up row: the account's tier-1 reads are the answer). When the account's
+OAuth grants were not read, Not checked gains "Third-party app grants of *address* were
+not read: *reason*", and when its mail forwarding was not read, "Mail forwarding from
+*address* was not read: *reason*". The reasons:
+
+| Read | Reasons, in the order they are tried |
+|---|---|
+| OAuth grants | the profile is not selected: "the optional OAuth grants profile is not selected (`directory_oauth`)"; the account has no grants entry: "the run stopped first (*phrase*)"; its entry is not usable: "the read failed: *phrase*" |
+| Forwarding | the mailbox's forwarding was read and usable: no line; the tenant has no `authorization.mailboxes` entry for it: "`authorization.mailboxes` does not name this mailbox"; its entry is not current: "`authorization.mailboxes` is not current"; the profile does not select forwarding: no line, since the profile's own coverage line says it; the mailbox was never asked: "the run stopped first (*phrase*)"; otherwise "the read failed: *phrase*" |
+
+On a Workspace account the finding's remediation (`finding.RemediationFormerPersonWorkspace`,
+used by the report) is: "Suspend the account now. Before deleting it, revoke its
+third-party app tokens and remove any forwarding or delegation; deleting the account does
+not tell you where its mail went." A raise for a left person's forwarding mailbox on
+`workspace.external_forwarding` is deferred to the next severity-table change.
 
 Admin counts follow [engagement.md](engagement.md), "Admins": exclude declared service
 accounts and at most two break-glass accounts from the numerator; shared and
@@ -921,7 +983,7 @@ services, goes to that mailbox. A delegated administrator never raises and is ma
 the details. An account belonging to a declared leaver whose date has passed gets an
 excerpt cross-reference to that person and no further raise.
 
-**Readout notes** come from the same view as the rule:
+**Readout notes** come from the same view as the rule. A note about a departed person still observed uses the rule's clock and gating, is dated by the read that observed them, and is never emitted unless the left date had passed at that read (`engagement.md`, "Severity in context", "Time"):
 
 - not selected: what the check finds, that it needs a service account with domain-wide
   delegation for `gmail.readonly`, which can read every message and which most small

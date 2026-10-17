@@ -18,13 +18,14 @@ var (
 	_ report.Judgment                                          = finding.Judgment{}
 )
 
-// Recon documents written before the cleanup retain attribution, declaration
-// sources, wildcard members, gaps and optional asset-wide subjects on resume.
+// findings.json keeps a judgment's attribution, declaration sources, gaps
+// and optional asset-wide subject as Analyze gave them. It is output only:
+// nothing reads it back (docs/spec/runs.md, "Verdicts are not evidence").
 func TestPersistedJudgmentRoundTrip(t *testing.T) {
 	for name, raw := range map[string]string{
 		"github asset":   `{"id":"github.org_mfa_not_required","asset":"saas:github:acme","verdict":"abstained","reason":"insufficient_evidence","reads":[],"source":["access.mfa[0]"]}`,
-		"github account": `{"id":"identity.former_person_has_access","asset":"repo:github:acme/shop","subject":{"kind":"account","key":"alice","label":"Alice","provider_id":"42","person":"alice"},"verdict":"fired","reads":["members"],"excerpt":"redacted evidence","not_checked":["session usability"],"attributes":["admin"],"listed":["alice"],"details":{"role":"admin"},"context":"people.alice","source":["people.alice"]}`,
-		"web wildcard":   `{"id":"dns.takeover_candidate","asset":"domain:example.com","subject":{"kind":"dns_name","key":"*.example.com","label":"*.example.com"},"verdict":"fired","reads":["wildcard"],"members":["blog.example.com","docs.example.com"]}`,
+		"github account": `{"id":"identity.former_person_has_access","asset":"repo:github:acme/shop","subject":{"kind":"account","key":"alice","label":"Alice","provider_id":"42","person":"alice"},"verdict":"fired","reads":["members"],"excerpt":"redacted evidence","not_checked":["session usability"],"attributes":[{"name":"admin","ref":{"observation":"members","excerpt":"redacted evidence"}}],"listed":["alice"],"details":{"role":"admin"},"why":"Alice left and still holds admin.","source":["people.alice"]}`,
+		"web wildcard":   `{"id":"dns.takeover_candidate","asset":"domain:example.com","subject":{"kind":"dns_name","key":"*.example.com","label":"*.example.com"},"verdict":"fired","reads":["wildcard"],"excerpt":"names with matching DNS answers (their pages were not read): blog.example.com, docs.example.com"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			var j finding.Judgment

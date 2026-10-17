@@ -135,7 +135,7 @@ func TestProviderValidityResolutionAndMultipleLocations(t *testing.T) {
 		if j.ID == finding.IDGitHubSecretScanningOpen && j.Verdict == Fired {
 			n++
 			keys[j.Subject.Key] = true
-			if len(j.Attributes) != 1 || j.Attributes[0] != "observed_public" {
+			if len(j.Attributes) != 1 || j.Attributes[0].Name != "public_repository" {
 				t.Fatal("public context")
 			}
 		}

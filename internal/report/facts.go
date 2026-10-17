@@ -2,6 +2,12 @@
 package report
 
 import (
+	"cmp"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"time"
+
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/runner"
@@ -40,6 +46,55 @@ func FactsFrom(sheet *baseline.FactSheet) map[string]Fact {
 		out[id] = f
 	}
 	return out
+}
+
+// SheetFrom is the fact sheet a persisted envelope's facts were built
+// from, as far as a posture rule reads it: each fact's status, reason,
+// observation and parsed value in its parser's shape (check.Decode). The
+// raw output was never persisted, and no rule reads it. A fact this build
+// cannot read back is an error, so the caller collects the host again
+// rather than grade what it does not understand.
+func SheetFrom(env Envelope) (*baseline.FactSheet, error) {
+	p := check.Platform(env.Host.Platform)
+	if p != check.Linux && p != check.MacOS {
+		return nil, fmt.Errorf("platform %q", env.Host.Platform)
+	}
+	sheet := &baseline.FactSheet{Platform: p, Results: make(map[string]runner.Result, len(env.Facts))}
+	for id, f := range env.Facts {
+		r := runner.Result{CheckID: id, Observation: f.Observation, Status: runner.Status(f.Status), ReasonCode: f.ReasonCode,
+			Attempted: f.Attempted, Reason: f.Reason, Truncated: f.Truncated, Redactions: f.Redactions, Elevated: f.Elevated,
+			Duration: time.Duration(f.DurationMS) * time.Millisecond}
+		o, ok := env.Observations[f.Observation]
+		if !ok || o.Check != id {
+			return nil, fmt.Errorf("fact %s: observation %q is not its own", id, f.Observation)
+		}
+		r.RanAs, r.Params, r.Argv, r.Occurrence = o.RanAs, o.Params, o.Argv, o.Occurrence
+		switch r.Status {
+		case runner.StatusOK:
+			ran := cmp.Or(r.RanAs, id)
+			c, ok := check.Lookup(ran, p)
+			if !ok {
+				return nil, fmt.Errorf("fact %s: %s is not in this build's catalog", id, ran)
+			}
+			raw, err := json.Marshal(f.Parsed)
+			if err != nil {
+				return nil, fmt.Errorf("fact %s: %w", id, err)
+			}
+			if r.Parsed, err = check.Decode(c, raw); err != nil {
+				return nil, fmt.Errorf("fact %s: %w", id, err)
+			}
+		case runner.StatusUnavailable, runner.StatusDenied:
+		default:
+			return nil, fmt.Errorf("fact %s: status %q", id, f.Status)
+		}
+		sheet.Order = append(sheet.Order, id)
+		sheet.Results[id] = r
+	}
+	// The order checks ran in, as the observations number them.
+	slices.SortFunc(sheet.Order, func(a, b string) int {
+		return cmp.Compare(sheet.Results[a].Occurrence, sheet.Results[b].Occurrence)
+	})
+	return sheet, nil
 }
 
 // Summarize is the one-line reading of a fact: what the check observed, or

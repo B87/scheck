@@ -1,11 +1,13 @@
 package engagement
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	githubc "github.com/b87/scheck/internal/collector/github"
+	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/policy"
 )
 
@@ -27,7 +29,7 @@ func TestGitHubMFANotesRequireRecognizedReads(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := githubc.Evidence{OwnerAuthority: true, MembersWithoutMFA: githubc.Population[githubc.Account]{Reads: []githubc.Read{tc.read}, Complete: tc.complete, VisibilityComplete: tc.complete}}
 			var text string
-			for _, n := range r.githubPeopleNotes("saas:github:acme", e) {
+			for _, n := range r.githubPeopleNotes("saas:github:acme", e, nil) {
 				if n.Source == "access.mfa[0]" {
 					text += n.Detail + "\n"
 				}
@@ -39,9 +41,20 @@ func TestGitHubMFANotesRequireRecognizedReads(t *testing.T) {
 	}
 	res.Access.MFA[0].Enforced = "none"
 	e := githubc.Evidence{OwnerAuthority: true, Organization: &githubc.OrganizationObject{TwoFactorRequirementEnabled: new(true)}, OrganizationRead: githubc.Read{Decision: "sent", Status: 200, Redactions: []policy.Hit{{}}}}
-	for _, n := range r.githubPeopleNotes("saas:github:acme", e) {
+	for _, n := range r.githubPeopleNotes("saas:github:acme", e, nil) {
 		if strings.Contains(n.Detail, "observed organization requires") {
 			t.Fatal(n.Detail)
 		}
+	}
+}
+
+// The report words an abstention's reason for coverage; findings.json,
+// cloned before, keeps the evidence reason.
+func TestGitHubCoverageReasonsAreTheReportsEdge(t *testing.T) {
+	kept := []githubc.Judgment{{ID: "github.org_mfa_not_required", Verdict: "abstained", Reason: "insufficient_evidence"}}
+	assets := []ereport.AssetInput{{Collector: "github", Judged: kept}, {Collector: "web", Judged: slices.Clone(kept)}}
+	githubCoverageReasons(assets)
+	if kept[0].Reason != "insufficient_evidence" || assets[0].Judged[0].Reason != "unavailable:github_evidence" || assets[1].Judged[0].Reason != "insufficient_evidence" {
+		t.Fatal(kept, assets)
 	}
 }
