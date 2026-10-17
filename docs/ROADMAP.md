@@ -1877,9 +1877,10 @@ older than 7 days is collected again on resume; every risk area's row prints its
      mail-domain skip (checked by removing the fix); nit, "read" means attempted (the spec
      is reworded), and the `active()` filter is now tested. Step 5b is done. Step 5 is
      done.
-   - *Deferred, owner 0.0.3 or to be assigned:* `svc.expected_missing` has base medium,
-     which is mis-anchored against the base anchors; consider low or info
-     (`spec/host-collector.md`, where the finding is defined).
+   - *Resolved at the slice close (security-consultant):* `svc.expected_missing` moves
+     from medium to info: a declared service that is not listening weakens no control and
+     exposes nothing. It is stale context or downtime, which the info anchor covers, and
+     as a medium it would push real hardening findings out of "Fix these first".
 6. Plan selection: `pushed_at`, the tiers, the per-item reads moved from Recon to Check,
    breadth-first GitHub reads under the 4,000-request budget, the `selection` text and
    JSON, the Plan document's read and abstain lists, `--stop-after plan`. A fake server
@@ -2114,9 +2115,11 @@ older than 7 days is collected again on resume; every risk area's row prints its
      typed `service: 22 tcp MSP and Leo only, ssh`, a person where the audience goes. It
      is accepted as no audience, with the note, and kept as a test case
      (`TestBrightcartServiceAnswerKeepsWhatDaniTyped`); no wording change on one client's
-     misreading. Carried, not fixed: the SSH-exposure question is hard to map to
-     internet, vpn or lan; the Postgres example may be copied as a pattern; "hold data"
-     for a host is unclear. Code review (`code-reviewer`): no must-fix. Should-fix, all
+     misreading. Carried, not fixed, to 0.0.3 G4 (the next slice that
+     changes the interview): (1) whether SSH is internet-facing is hard to place as
+     internet, vpn or lan; (2) the Postgres example in the `context` question may be
+     copied as a pattern; (3) what "a host holds the data" means is unclear. The next
+     `client` interview run on the wording decides each. Code review (`code-reviewer`): no must-fix. Should-fix, all
      fixed with tests: the `repo:` line accepted an excluded repository (`init` then
      exited 3); the readout said "nothing found" over checks that never decided, and
      counted only moved findings; no test drove Analyze's host raise
@@ -2133,8 +2136,18 @@ older than 7 days is collected again on resume; every risk area's row prints its
      `host-matters-most` golden's sshd assessments now match its findings; a host chain's
      `base` is documented as the severity after the host table. Spec drift the re-review
      saw was already synced.
-   - *Status:* E9's build steps (1 to 9) are done, offline. The slice-closing audit and
-     the acceptance record are separate and not run.
+   - *Slice close (2026-10-17):* `spec-steward` audit: no drift in code, goldens or
+     schema; AGENTS.md's tables, step 9's carried owners and an example comment fixed.
+     Whole-slice `code-reviewer`: no must-fix. Should-fix, fixed with a test: the
+     `context` answer took the same port twice, which intake then refused after every
+     answer was lost; it is now refused in the interview, and a refused `context` answer
+     changes nothing. Nit, fixed: the F1 cap's sentence says permission requests, not
+     production repositories (`spec/engagement.md` agrees). The re-review of those fixes
+     found no must-fix or should-fix; its nits are fixed (`Apply` documents that its
+     caller restores on refusal, as `init` does). `svc.expected_missing` moved to info
+     (above).
+   - *Status:* E9 is done, offline, its slice-closing audit and review run. The
+     acceptance record is separate and not run.
 
 R3 may move out of E9 if the slice runs long; a deferral is recorded here with its owner.
 
@@ -2419,7 +2432,10 @@ project without workload identity federation; `deploys_to: production` repositor
 linked to the project they deploy to; declared admins and `people` against the
 project's IAM, with `group:` members expanded through Cloud Identity and
 `user:…@gmail.com` bindings a finding class of their own. `scheck init` asks about GCP
-and checks the credentials' scopes before the first run. Carried from E9 (2026-10-13): a
+and checks the credentials' scopes before the first run. Carried from E9 step 9
+(2026-10-16), client interview wording: the SSH audience is hard to place as internet,
+vpn or lan; the Postgres example may be copied as a pattern; "a host holds the data" is
+unclear. Carried from E9 (2026-10-13): a
 finding for a contractor who can push to a production repository, or naming the push
 holders and contractors on `github.default_branch_unprotected`, with "at least" framing.
 

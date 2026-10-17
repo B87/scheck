@@ -1824,7 +1824,7 @@ repository in canonical order:
 | permission read 404 (F1) | "GitHub has no account named *login* now (it may have been renamed or deleted), so its access to *owner/repo* could not be read" |
 | permission read failed (F1), including one sent and stopped by a limit | "*login*'s permission on *owner/repo* could not be read: *reason phrase*" |
 | account id differs (F1) | "the account now named *login* is not the one this run saw in *org*" |
-| cut by the F1 cap | "*login*'s permission on *owner/repo* was not asked: scheck asks GitHub about at most 20 production repositories per run" |
+| cut by the F1 cap | "*login*'s permission on *owner/repo* was not asked: scheck sends GitHub at most 20 permission requests per run" |
 | cut by a limit before it was sent, or left unsent after a 401 | "*login*'s permission on *owner/repo* was not asked: the run stopped first (*reason phrase*)" |
 
 The F1 causes take precedence, in the order of the table; "login not listed" survives only

@@ -361,7 +361,7 @@ func init() {
 var judgementDefs = map[string]Def{
 	IDExpectedMissing: {
 		ID: IDExpectedMissing, Title: "A declared service is not listening",
-		Category: CategoryNetwork, Area: AreaHosts, Exposure: NotExposure, Judges: "declared services listening", BaseSeverity: SevMedium,
+		Category: CategoryNetwork, Area: AreaHosts, Exposure: NotExposure, Judges: "declared services listening", BaseSeverity: SevInfo,
 		Impact: "Operator context declares a service on this port, but nothing is listening on it. Either " +
 			"the service is down, the context is stale, or the host is not the one the context describes.",
 		Remediation: Remediation{

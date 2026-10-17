@@ -509,6 +509,37 @@ func TestContextServiceAudience(t *testing.T) {
 	}
 }
 
+// The same port twice is refused in the interview, not later by intake
+// after every answer is lost, and the refused answer changes nothing, so
+// typing it again on one line is taken.
+func TestContextServiceDeclaredTwiceIsRefused(t *testing.T) {
+	f := &File{Roots: []Locator{{Host: "203.0.113.5"}}, Assets: map[string]Asset{"web": {Locator: Locator{Host: "203.0.113.5"}}}}
+	f.Engagement.Name, f.Engagement.Timezone, f.Engagement.Trigger = "acme", "Europe/Madrid", "routine"
+	twice := "name: web\nservice: 443 tcp internet the shop\nservice: 22 tcp lan ssh for the office\nservice: 22 tcp vpn ssh for the msp"
+	if _, err := Answer(f, "context", twice); err == nil || err.Error() != "22/tcp is declared twice on web; give one service line per port and put both audiences' words on it." {
+		t.Fatalf("refusal: %v", err)
+	}
+	if c := f.Assets["web"].Context; c != nil {
+		t.Fatalf("a refused answer changed the file: %+v", c)
+	}
+	if _, err := Answer(f, "context", "name: web\nservice: 443 tcp internet the shop\nservice: 22 tcp vpn ssh for the office and the msp"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Answer(f, "context", "name: web\nservice: 22 tcp lan ssh"); err == nil || !strings.HasPrefix(err.Error(), "22/tcp is declared twice on web;") {
+		t.Fatalf("a port already declared by an earlier answer: %v", err)
+	}
+	if got := f.Assets["web"].Context.ExpectedServices; len(got) != 2 {
+		t.Fatalf("a refused answer changed the services: %+v", got)
+	}
+	out, err := Encode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse("engagement.yaml", out, testOpts); err != nil {
+		t.Fatalf("intake refuses what the interview wrote: %v", err)
+	}
+}
+
 // Dani's answer from the client interview of 2026-10-16, kept as typed: a
 // person where an audience goes ("MSP and Leo only") is no audience, so the
 // line is kept with the whole rest as its purpose and the note says what

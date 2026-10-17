@@ -141,7 +141,7 @@ func interpretPermission(pr PermissionRead, repo RepositoryAccess, e Evidence) g
 	unknown := grant{cause: "the permissions returned for " + login + " on " + name + " were missing or contradictory"}
 	switch {
 	case r.Decision == "not_sent" && r.Reason == ReasonFollowUpCap:
-		return grant{cause: login + "'s permission on " + name + " was not asked: scheck asks GitHub about at most 20 production repositories per run"}
+		return grant{cause: login + "'s permission on " + name + " was not asked: scheck sends GitHub at most 20 permission requests per run"}
 	case PermissionNotSent(r) && r.Reason == ReasonLimitReached:
 		return grant{cause: login + "'s permission on " + name + " was not asked: the run stopped first (" + stopPhrase(r) + ")"}
 	case r.Reason == ReasonLimitReached:

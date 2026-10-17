@@ -3,6 +3,7 @@ package engagement
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -216,7 +217,9 @@ func Questions() []Question {
 
 // Apply merges answer into f for the question id. A blank answer changes
 // nothing. An answer shaped like a credential is refused by the same
-// detector as validation, and the value is not in the error.
+// detector as validation, and the value is not in the error. A refused
+// answer may leave f partly changed; the caller restores its own copy, as
+// init does.
 func Apply(f *File, id, answer string) error {
 	_, err := Answer(f, id, answer)
 	return err
@@ -702,15 +705,25 @@ func applyContext(f *File, answer string) error {
 		return err
 	}
 	services := servicesOf(answer)
+	// A refused answer changes nothing: each block works on a copy of its
+	// host's context, written back only once the whole answer is accepted,
+	// so the operator can type it again.
+	done := map[string]Asset{}
 	for i, block := range blocks {
 		name := block["name"]
-		a, ok := f.Assets[name]
+		a, ok := done[name]
+		if !ok {
+			a, ok = f.Assets[name]
+		}
 		if !ok || a.Host == "" {
 			return fmt.Errorf("%q is not a server you named", name)
 		}
-		if a.Context == nil {
-			a.Context = &HostContext{}
+		c := HostContext{}
+		if a.Context != nil {
+			c = *a.Context
+			c.ExpectedServices = slices.Clone(c.ExpectedServices)
 		}
+		a.Context = &c
 		if exp := block["exposure"]; exp != "" {
 			exp = normExposure(exp)
 			if !contains(Exposures, exp) {
@@ -733,10 +746,16 @@ func applyContext(f *File, answer string) error {
 			if err != nil {
 				return err
 			}
+			// Intake refuses a port declared twice (validate.go); say so
+			// here, before the answers are lost.
+			if slices.ContainsFunc(a.Context.ExpectedServices, func(e Service) bool { return e.Port == s.Port && e.Proto == s.Proto }) {
+				return refusef("%d/%s is declared twice on %s; give one service line per port and put both audiences' words on it.", s.Port, s.Proto, name)
+			}
 			a.Context.ExpectedServices = append(a.Context.ExpectedServices, s)
 		}
-		f.Assets[name] = a
+		done[name] = a
 	}
+	maps.Copy(f.Assets, done)
 	return nil
 }
 

@@ -79,7 +79,7 @@ func TestFollowUpLoopTerminatesUnderTheCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(fb), "was not asked: scheck asks GitHub about at most 20 production repositories per run") ||
+	if !strings.Contains(string(fb), "was not asked: scheck sends GitHub at most 20 permission requests per run") ||
 		!strings.Contains(string(fb), "could not be read: server error") {
 		t.Fatal("findings.json lacks the cap's or the failure's cause")
 	}
