@@ -3,6 +3,7 @@ package gate
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"slices"
@@ -303,16 +304,36 @@ func TestAuthorizationWindows(t *testing.T) {
 	t.Cleanup(func() { ceiling = Observe })
 	w := newWorld(t)
 	cert := w.leaf([]string{"shop.example.com"}, time.Now().Add(time.Hour), false)
+	var debugMu sync.Mutex
+	var debug []string
+	logf := func(format string, args ...any) {
+		debugMu.Lock()
+		defer debugMu.Unlock()
+		debug = append(debug, time.Now().Format("15:04:05.000000")+" "+fmt.Sprintf(format, args...))
+	}
 	srv := w.serve("shop.example.com", "198.51.100.30", 443, &cert, func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.git/HEAD" {
+			logf("server: %s %s proto=%s handler start", r.Method, r.URL.Path, r.Proto)
 			select {
 			case <-r.Context().Done():
+				logf("server: request context done: %v (cause %v)", r.Context().Err(), context.Cause(r.Context()))
 			case <-time.After(5 * time.Second):
+				logf("server: 5s timer")
 			}
 			return
 		}
 		_, _ = rw.Write([]byte("<html>"))
 	})
+	defer func() {
+		if t.Failed() {
+			debugMu.Lock()
+			defer debugMu.Unlock()
+			for _, l := range debug {
+				t.Log(l)
+			}
+			t.Log(w.audit.b.String())
+		}
+	}()
 	w.scope.sites = map[string]SitePaths{"https://shop.example.com": {Paths: []string{"/", "/.git/HEAD"}}}
 	probe := Request{Op: "web.probe", Asset: "domain:example.com", Params: map[string]string{"host": "shop.example.com"}}
 
@@ -337,9 +358,14 @@ func TestAuthorizationWindows(t *testing.T) {
 	w.windows = []Window{{From: now.Add(-2 * time.Hour), To: now.Add(-time.Hour)}, {From: now.Add(-time.Minute), To: time.Now().Add(300 * time.Millisecond)}}
 	w.audit.b.Reset()
 	start := time.Now()
+	logf("test: window ends %s", w.windows[1].To.Format("15:04:05.000000"))
 	res := w.gate().Send(context.Background(), probe)
+	logf("test: Send returned after %s", time.Since(start))
 	if res.Decision != "unavailable:window_ended" || res.Reason != "limit_reached" {
 		t.Errorf("inside a window: %+v", res)
+		if res.Response != nil {
+			t.Logf("response: %+v", *res.Response)
+		}
 	}
 	if d := time.Since(start); d > 3*time.Second {
 		t.Errorf("the window's end did not cut the request: %s", d)
