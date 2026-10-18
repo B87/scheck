@@ -300,6 +300,12 @@ func TestWindowEndsDuringThrottleWait(t *testing.T) {
 // observe are never checked (E4 test 21). The build admits no probe, so the
 // test raises the ceiling for a test-only op.
 func TestAuthorizationWindows(t *testing.T) {
+	for i := range 40 {
+		t.Run(fmt.Sprint(i), authorizationWindows)
+	}
+}
+
+func authorizationWindows(t *testing.T) {
 	ceiling = Probe
 	t.Cleanup(func() { ceiling = Observe })
 	w := newWorld(t)
