@@ -303,6 +303,11 @@ func (s *sending) finish(resp *Response, rt *retry) (Result, *retry) {
 // "Outcomes"); beforeResponse says nothing came back yet, the only case a
 // reset is retried in.
 func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result, *retry) {
+	// A failure at or after the window's end is the window's cut, before
+	// any TLS evidence is kept.
+	if res, ok := s.cutAtEnd(); ok {
+		return res, nil
+	}
 	var verr *tls.CertificateVerificationError
 	var nerr net.Error
 	var rt *retry
@@ -368,7 +373,33 @@ func (s *sending) handshake(ctx context.Context) (Result, *retry) {
 		return s.failed(err, true, nil)
 	}
 	defer func() { _ = conn.Close() }()
+	if res, ok := s.cutAtEnd(); ok {
+		return res, nil
+	}
 	return s.finish(&Response{TLS: s.tlsInfo(s.shook.Load(), nil)}, nil)
+}
+
+// cutAtEnd ends a read that completed at or after its window's end as in
+// flight: nothing of it is kept, no retry, and no provider reaction it led
+// to stays on the result (docs/spec/scope.md, "Authorization windows").
+// When limits.timeout has passed too, it reports the deadline, as failed
+// does. The handshake, the web read and every failure call it before
+// keeping anything; exchanges and Workspace bootstrap are never probes.
+func (s *sending) cutAtEnd() (Result, bool) {
+	now := s.g.now()
+	decision, detail := "", ""
+	switch {
+	case s.a.windowEnd.IsZero() || now.Before(s.a.windowEnd):
+		return Result{}, false
+	case s.g.pastDeadline(now):
+		decision, detail = "unavailable:deadline", "limits.timeout ended the request in flight"
+	default:
+		decision, detail = "unavailable:window_ended", "the authorization window ended with the request in flight"
+	}
+	s.res = Result{RequestID: s.e.RequestID}
+	s.res.end(decision, detail)
+	res, _ := s.finish(nil, nil)
+	return res, true
 }
 
 // roundTrip sends an HTTP request on one fresh connection and reads its
@@ -439,10 +470,15 @@ func (s *sending) roundTrip(ctx context.Context) (Result, *retry) {
 		s.e.Headers = 0
 		out.Redactions = nil
 	}
+	body, rt := g.pipeline(&s.res, out, a, s.r, resp, &s.e)
+	// After the body is read, before any of it is kept: a redirect from a
+	// cut response is not followed.
+	if res, ok := s.cutAtEnd(); ok {
+		return res, nil
+	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		g.noteRedirect(s.e.RequestID, s.r.Asset, a, req.URL, resp.Header.Get("Location"))
 	}
-	body, rt := g.pipeline(&s.res, out, a, s.r, resp, &s.e)
 	if body.kept {
 		g.keepPage(s.e.RequestID, s.r, body)
 	}
