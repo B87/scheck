@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/netip"
@@ -303,16 +304,22 @@ func TestAuthorizationWindows(t *testing.T) {
 	t.Cleanup(func() { ceiling = Observe })
 	w := newWorld(t)
 	cert := w.leaf([]string{"shop.example.com"}, time.Now().Add(time.Hour), false)
+	// The probe's path never answers while the test runs, whatever happens
+	// to the request on the server's side: only the gate's own cut can end
+	// it. Watching r.Context() let the handler answer when the server saw
+	// the request cancelled first, and a slow machine then got a response
+	// back as sent (issue #18).
+	hold := make(chan struct{})
 	srv := w.serve("shop.example.com", "198.51.100.30", 443, &cert, func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.git/HEAD" {
-			select {
-			case <-r.Context().Done():
-			case <-time.After(5 * time.Second):
-			}
+			<-hold
 			return
 		}
 		_, _ = rw.Write([]byte("<html>"))
 	})
+	// Registered after serve's Close, so it runs first: Close waits for
+	// the held handler.
+	t.Cleanup(func() { close(hold) })
 	w.scope.sites = map[string]SitePaths{"https://shop.example.com": {Paths: []string{"/", "/.git/HEAD"}}}
 	probe := Request{Op: "web.probe", Asset: "domain:example.com", Params: map[string]string{"host": "shop.example.com"}}
 
@@ -360,6 +367,91 @@ func TestAuthorizationWindows(t *testing.T) {
 	}
 	if !sent || probes != 1 {
 		t.Errorf("the probe was not sent once inside its window: %d probes", probes)
+	}
+}
+
+// A probe read that completes at or after its window's end is cut as the
+// window ends it in flight: no evidence, no redirect to follow, a result
+// line with no status or output. The gate's clock passes the end only once
+// the server has sent its body (or, for a TLS op, seen the handshake), so
+// the outcome does not rest on timing; the same read inside the window is
+// sent.
+func TestWindowEndsAResponseReadAfterIt(t *testing.T) {
+	ceiling = Probe
+	t.Cleanup(func() { ceiling = Observe })
+	certProbe := Op{ID: "web.certprobe", Provider: "web", Method: TLS, URL: "https://{host}/",
+		Params: []Param{{Name: "host", Type: Host}}, Level: Probe}
+	for _, tc := range []struct {
+		name      string
+		op        string
+		late, tls bool
+	}{
+		{"http inside", "web.probe", false, false}, {"http late", "web.probe", true, false},
+		{"tls inside", "web.certprobe", false, true}, {"tls late", "web.certprobe", true, true},
+		{"tls late, invalid", "web.certprobe", true, true}, {"http late, invalid", "web.probe", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t)
+			w.ops = append(slices.Clone(w.ops), certProbe)
+			var answered atomic.Bool
+			if tc.tls {
+				w.tlsConfig = func(c *tls.Config) {
+					c.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						answered.Store(true)
+						return nil, nil
+					}
+				}
+			}
+			notAfter := time.Now().Add(time.Hour)
+			if strings.HasSuffix(tc.name, "invalid") {
+				notAfter = time.Now().Add(-time.Minute) // expired: the handshake fails
+			}
+			cert := w.leaf([]string{"shop.example.com"}, notAfter, false)
+			w.serve("shop.example.com", "198.51.100.30", 443, &cert, func(rw http.ResponseWriter, r *http.Request) {
+				rw.Header().Set("Location", "https://shop.example.com/next")
+				rw.WriteHeader(http.StatusFound)
+				rw.(http.Flusher).Flush()
+				// The clock passes the end between the headers and the
+				// body: a check made before the body is read would miss it.
+				answered.Store(true)
+				_, _ = rw.Write([]byte("moved"))
+			})
+			w.scope.sites = map[string]SitePaths{"https://shop.example.com": {Paths: []string{"/", "/.git/HEAD"}}}
+			end := time.Now().Add(time.Hour)
+			w.windows = []Window{{From: time.Now().Add(-time.Minute), To: end}}
+			g := w.gate()
+			g.now = func() time.Time {
+				if tc.late && answered.Load() {
+					return end
+				}
+				return time.Now()
+			}
+			res := g.Send(context.Background(), Request{Op: tc.op, Asset: "domain:example.com", Params: map[string]string{"host": "shop.example.com"}})
+			if !tc.late {
+				if !res.OK() || res.Response == nil {
+					t.Fatalf("inside the window: %+v", res)
+				}
+				if !tc.tls && (res.Response.Status != http.StatusFound || len(g.redirects) != 1) {
+					t.Fatalf("inside the window: %+v, redirects %v", res.Response, g.redirects)
+				}
+				return
+			}
+			if res.Decision != "unavailable:window_ended" || res.Reason != "limit_reached" || res.Response != nil || !res.Sent || res.Kind != "" {
+				t.Fatalf("read at the window's end: %+v", res)
+			}
+			if len(g.redirects) != 0 {
+				t.Fatalf("a redirect from a cut response may be followed: %v", g.redirects)
+			}
+			var result string
+			for line := range strings.SplitSeq(w.audit.b.String(), "\n") {
+				if strings.Contains(line, `"event":"result"`) {
+					result = line
+				}
+			}
+			if !strings.Contains(result, `"decision":"unavailable:window_ended"`) || strings.Contains(result, `"status"`) || strings.Contains(result, `"output_sha256"`) || strings.Contains(result, `"bytes_stored"`) {
+				t.Fatalf("result line: %s", result)
+			}
+		})
 	}
 }
 

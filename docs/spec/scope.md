@@ -1419,7 +1419,9 @@ For probe and above, the time must be inside some `authorization.windows` entry,
 its `from` up to but not including its `to`. The check runs on every request, not once
 per run, and again after the throttle wait; a request outside every window is
 `refused:window`. A request's deadline is the earlier of 30 s and the window's end, and
-the window's end cancels requests in flight as `unavailable:window_ended`. Both are
+the window's end cancels requests in flight as `unavailable:window_ended`; a response
+whose read completes at or after the window's end was in flight, so nothing of it is
+kept and no redirect it names is followed. Both are
 `limit_reached`, as `limits.timeout` is. The audit line records the window's index.
 Passive and observe requests are never checked against windows. Validation rejects
 probe modes in 0.0.2 and the gate admits nothing above observe, so the window is tested
