@@ -6,7 +6,7 @@ binding and inventory through engagement Recon and report integration. Step 3
 implements identity and administrator rules, with offline checks and reviews
 completed on 2026-10-10. Step 4 implements observed 2-step verification offline on
 2026-10-11. Step 5 implements optional OAuth grant metadata offline on 2026-10-11.
-Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. Step 6 D3
+Step 6 implements optional Gmail forwarding metadata offline on 2026-10-11. The optional `access.mfa[].sign_in` declaration (federation) was built on 2026-10-18 (owner's decision). Step 6 D3
 implements the mailbox-authorization gate offline on 2026-10-11 (owner's decision): the
 profile alone does not admit a mailbox sign-in. The record is
 [eval/e6-mailbox-authorization-2026-10-11.md](../eval/e6-mailbox-authorization-2026-10-11.md).
@@ -686,7 +686,8 @@ read the clock. New and break-glass admins are not exempt from enrollment findin
 ### Observed 2-step verification
 
 Directory flags establish current per-account enforcement and enrollment, not unit
-policy, grace periods, configuration groups, IdP/SSO controls, methods or phishing
+policy, grace periods, configuration groups, IdP/SSO controls (only the operator's
+`sign_in` declaration speaks to them), methods or phishing
 resistance. Unit findings list affected accounts and lower bounds; they say Google
 reports accounts not currently required to use 2-step verification, never that the
 unit's policy is disabled. Disproval says Google reports every active account
@@ -731,17 +732,59 @@ The collector decides the comparison once per unit, for rules and notes alike:
 
 | `access.mfa` | Raises a fired unit |
 |---|---|
-| `everyone` | every fired unit |
+| `everyone` | every fired unit; with `sign_in: another_provider`, only a fired unit whose affected accounts include a known super admin (`isAdmin:true`, no security conflict) |
 | `admins` | a fired unit whose affected accounts include a known `isAdmin:true` account; delegates do not count |
-| `some` | every fired unit, only when a complete population has every active account explicitly off |
+| `some` | every fired unit, only when a complete population has every active account explicitly off; never with `sign_in: another_provider`, since every active account off is what a federated tenant looks like |
 | `none`, `unknown`, undeclared | never |
 
+`access.mfa[i].sign_in` (`google`, `another_provider`, `unknown`; absent is decided as
+`unknown`; [engagement.md](engagement.md), "2-step verification") changes only the
+`everyone` and `some` rows, as shown. Unknown administrator status and delegated admins
+do not keep an `everyone` raise under `another_provider`. Base severity, verdicts and
+the other steps of the severity table are unchanged, and no "not applied" chain row is
+written. A unit the comparison would have raised and `sign_in` stopped gets a "Not
+checked" line (`stoppedLine`) saying so. Raised and stopped instances carry
+`access.mfa[i]` as declared evidence, and `access.mfa[i].sign_in` too when it is present
+and `enforced` is `everyone` or `some`. The stopped line also:
+
+- names the affected super admins of the unit (possible only under `some`) as not
+  protected by the provider, since they can still sign in with a Google password and
+  Google's own requirement is their control;
+- under `everyone` only, names the accounts that might be an affected super admin but
+  could not be judged (unknown administrator status, activity or 2-step flags, or a
+  security conflict; an account known not to be a super admin, or whose flags read as
+  required, is left out), up to
+  three then "and N more", and says one that is would rank the unit higher. Under
+  `some` with `another_provider` nothing ranks higher, so the line claims no such
+  consequence.
+
+The Why of an `everyone` raise
+under `another_provider` names up to three super admins, then "and N more".
+
 A raised instance carries `contradiction`, cites the declaration, has a one-sentence
-"Why here" naming the contradicting fact, and carries the federation caveat under
-"Not checked": people who sign in through another identity provider that requires a
-second factor may make the raise inapplicable, and scheck read neither that service
-nor Google's single sign-on settings. Workspace enrollment alone never establishes an
-enforcement contradiction, even when the admin-without-two-step finding fires.
+"Why here" naming the contradicting fact, and carries a caveat under "Not checked"
+worded from `sign_in` (four wordings, `signInCaveat`):
+
+| `sign_in` | The caveat says |
+|---|---|
+| absent | people who sign in through another identity provider that requires a second factor may make the raise inapplicable; scheck read neither that service nor Google's single sign-on settings; if they do, add `sign_in: another_provider` at `access.mfa[i]` and run scheck again |
+| `unknown` | the operator answered that they do not know; the same possibility, for accounts other than super admins |
+| `google` | the operator declared Google passwords; scheck did not read single sign-on settings to confirm it |
+| `another_provider` | the raise ranks higher only because of the super admins in the unit, who can still sign in to Google with a Google password; for the other accounts a second factor at that provider may be the control |
+
+`workspace.admin_without_two_step` is unchanged in verdict and severity and never
+carries `contradiction`; under `another_provider` it gains a "Not checked" line on
+delegated (non-super) admins, who may sign in through the provider. Workspace
+enrollment alone never establishes an enforcement contradiction, even when the
+admin-without-two-step finding fires.
+
+**Pre-release live check (open).** Whether Google's own mandatory 2-step verification
+for super admins shows in `isEnforcedIn2Sv`. If it does not, a super admin raise under
+`another_provider` could be false. Recorded for the acceptance run
+([ROADMAP.md](../ROADMAP.md), E6 "Carried from step 4"); not decided here.
+
+**0.0.3 contract.** When the Cloud Identity SSO profile read lands, it takes precedence
+over `sign_in`: a unit observed with no SSO profile re-raises whatever `sign_in` says.
 
 **Readout notes.** The collector owns them (`workspace.Readout`):
 
@@ -762,7 +805,17 @@ enforcement contradiction, even when the admin-without-two-step finding fires.
   requirement but the list of users was incomplete, never "at least 0";
 - with `none`, a note when Google requires more than declared;
 - with `everyone`, `some` or `admins`, a matching note only on a complete population
-  with no unknowns, each adding "Required is not the same as enrolled".
+  with no unknowns, each adding "Required is not the same as enrolled";
+- with `sign_in: another_provider`, a note (`signInNote`) that the declaration was used and the provider
+  was not read, how many active accounts Google does not require 2-step verification
+  for ("at least" on a partial population), that whether the provider requires a second
+  factor is not assessed, and how many super admins Google requires it for ("K of the S
+  observed" on an incomplete user list, "K of S of them" on a complete one); for super
+  admins whose requirement could not be read it adds "For N super administrator(s) the
+  requirement could not be read.", for super admins of unknown activity "The
+  activity of N super administrator(s) was unknown.", and for accounts whose
+  administrator status is missing or in conflict "The administrative status of N
+  account(s) was unknown."
 
 Counts in notes say "at least" on a partial population. Remediation reviews current
 flags and console policy/grace settings, and enrolls admins using hardware keys where
@@ -1093,7 +1146,9 @@ enforces.
 
 The 2-step sub-item always carries a `no_rule` detail stating its limits
 (organizational-unit policy, grace periods, another identity provider, methods and
-phishing resistance not checked), whatever its mark. With no 2-step outcome it is
+phishing resistance not checked), whatever its mark. With `sign_in: another_provider` the
+limit adds that the declared provider was not read, so for those people Google's flags show
+only that Google does not require its own 2-step verification. With no 2-step outcome it is
 *not assessed* with `unavailable:workspace_evidence`, never `not_applicable`: unlike
 the general `not_applicable` rule in [report.md](report.md), "Coverage", every read account is judged for 2-step verification, so no outcome
 means none was recorded. An abstained judgment's reason

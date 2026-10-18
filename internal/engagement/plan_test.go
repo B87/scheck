@@ -1,7 +1,9 @@
 package engagement
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	githubc "github.com/b87/scheck/internal/collector/github"
@@ -40,6 +42,34 @@ access:
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("\n got %q\nwant %q", got, want)
+	}
+}
+
+// Plan says what the sign_in answer does to a Workspace tenant's raise.
+func TestPlanNamesTheSignInAnswer(t *testing.T) {
+	file := `schema: 1
+engagement: {name: plan, operator: alice, timezone: UTC, trigger: routine}
+roots: [{saas: "google-workspace:example.com"}]
+access:
+  mfa: [{where: "google-workspace:example.com", enforced: %s%s}]
+`
+	for _, tc := range []struct{ enforced, signIn, want string }{
+		{"everyone", ", sign_in: another_provider", "`access.mfa[0].sign_in` says people sign in to `saas:google-workspace:example.com` through another identity provider, which scheck does not read: a unit where Google does not require 2-step verification is still reported, but ranks higher for contradicting `access.mfa[0]` only when a super administrator is among its accounts."},
+		{"some", ", sign_in: another_provider", "`access.mfa[0].sign_in` says people sign in to `saas:google-workspace:example.com` through another identity provider, which scheck does not read: a unit where Google does not require 2-step verification is still reported, and never ranks higher for contradicting `access.mfa[0]`, since `some` does not say who must."},
+		{"everyone", "", "`access.mfa[0]` does not say whether people sign in to `saas:google-workspace:example.com` through another identity provider (`sign_in`): a unit where Google does not require 2-step verification ranks higher for contradicting `access.mfa[0]`, even if another service requires a second factor for those accounts."},
+		{"some", ", sign_in: unknown", "`access.mfa[0]` says you do not know whether people sign in to `saas:google-workspace:example.com` through another identity provider (`sign_in`): a unit where Google does not require 2-step verification ranks higher for contradicting `access.mfa[0]`, even if another service requires a second factor for those accounts."},
+		{"everyone", ", sign_in: google", ""},
+		{"admins", ", sign_in: another_provider", ""},
+	} {
+		res, err := Parse("engagement.yaml", []byte(fmt.Sprintf(file, tc.enforced, tc.signIn)), testOpts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := (&run{res: res, recon: &ReconDoc{}}).notJudged()
+		lines := slices.DeleteFunc(slices.Clone(got), func(s string) bool { return !strings.Contains(s, "another identity provider") })
+		if tc.want == "" && len(lines) != 0 || tc.want != "" && !slices.Equal(lines, []string{tc.want}) {
+			t.Errorf("%s%s: %q", tc.enforced, tc.signIn, lines)
+		}
 	}
 }
 

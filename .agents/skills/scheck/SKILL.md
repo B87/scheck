@@ -237,7 +237,10 @@ accounts in `affected`) and `workspace.admin_without_two_step` (per account).
 Organizational-unit policy, grace periods, another identity provider, methods and
 phishing resistance are not read, and the 2-step coverage sub-item's `no_rule`
 detail says so even when it is assessed. A raised (`contradiction`) instance compares
-the finding with `access.mfa`; relay its federation caveat with the severity.
+the finding with `access.mfa`; relay its caveat about another identity provider with the
+severity. `access.mfa[i].sign_in` (`google`, `another_provider`, `unknown`) is the
+operator's declaration of it: under `another_provider` only a unit with a super admin is
+raised for `everyone`, and the stopped units are still reported, with a "Not checked" line.
 Never treat an abstained, absent or disproved 2-step finding as 2-step verification
 being fine: disproval means only that Google reports every active account observed in
 that unit as required, and required is not enrolled. Units the readout lists as not

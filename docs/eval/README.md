@@ -30,6 +30,7 @@ contracts now live in `docs/spec/` (`host-collector.md`, `model.md`, `bounded.md
 | `e6-mailbox-authorization-2026-10-11.md` | E6 mailbox-authorization gate, offline only: fake servers and unit tests, green `make check`; release gate 11 not accepted; no live tenant and no independent acceptance |
 | `e6-decisions-2026-10-12.md` | Owner decisions of 2026-10-12: S7 is a coverage gap, not exit 2; `directory_oauth` needs no `authorization.mailboxes` entry. No code change, no acceptance pass, no live tenant |
 | `e6-closing-review-2026-10-12.md` | E6 step 7: offline reviews, documentation drift fixes, and attributed live measurements on one authorized tenant. Not acceptance; recall, false positives and the E3 seal were not passed |
+| `e6-federation-2026-10-18.md` | Owner decision to build option A of the E6 step 4 federation blocker (`access.mfa[i].sign_in`), the AI DEFINE and client interview pass, first adversarial review fixes; re-review pending; offline only, no live tenant, no acceptance |
 
 New releases add `acceptance-<version>.md` (see `../RELEASING.md`), and any model
 feature that becomes a default adds its frozen criteria and results here first.

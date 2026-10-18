@@ -39,6 +39,7 @@ func TestInitWritesBrightcartAndContactsNothing(t *testing.T) {
 		".",
 		".",
 		".",
+		".",
 		"cloud", ".",
 	}, "\n") + "\n"
 	// The script is one answer per asked question, in order. Blank answers
@@ -52,6 +53,9 @@ func TestInitWritesBrightcartAndContactsNothing(t *testing.T) {
 	err := root.Execute()
 	if err != nil {
 		t.Fatalf("exit: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "No sign_in given for google-workspace:brightcart.co.uk: ") {
+		t.Fatalf("the sign_in question was not asked:\n%s", stderr.String())
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {

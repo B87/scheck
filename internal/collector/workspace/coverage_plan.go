@@ -21,8 +21,8 @@ const (
 // (coverage_plan_test.go), worded here and marked by the engagement report
 // (docs/spec/workspace-collector.md, "Reporting and coverage"). judged are
 // Judge's verdicts on e, which Analyze gives: the unclassified apps fold
-// into one line.
-func (e Evidence) Coverage(judged []finding.Judgment) []finding.CoveragePlan {
+// into one line. c's sign-in declaration words the 2-step limit.
+func (e Evidence) Coverage(judged []finding.Judgment, c Context) []finding.CoveragePlan {
 	evidence := finding.CoverageReason{Reason: "unavailable:workspace_evidence"}
 	assignments := finding.CoverageGroup{Name: "Workspace administrator assignments and counts", Rules: []string{IDTooManySuperAdmins, IDSuspendedAdminAssignment}}
 	if !e.Access.AdministrationComplete {
@@ -31,6 +31,9 @@ func (e Evidence) Coverage(judged []finding.Judgment) []finding.CoveragePlan {
 		assignments.Gap = &gap
 	}
 	twoStep := finding.CoverageGroup{Name: "Workspace 2-step verification (Google's enforcement and enrollment flags)", Rules: []string{IDTwoStepNotEnforced, IDAdminWithoutTwoStep}, Always: true, Limit: twoStepLimit}
+	if c.SignIn == signInProvider {
+		twoStep.Limit += ". You declared that people sign in through another identity provider (`" + c.SignInSource + "`); scheck did not read it, so for those people Google's flags show only that Google does not require its own 2-step verification"
+	}
 	twoStep.Empty = evidence
 	twoStep.Empty.Detail = "No 2-step verification outcome was recorded for this tenant"
 	oauth := finding.CoverageGroup{Name: "Workspace OAuth grants (third-party app access)", Rules: []string{IDOAuthBroadScope}, Always: true, Limit: oauthLimit, Unassessed: "OAuth grants"}

@@ -41,6 +41,9 @@ type Question struct {
 	offer func(*File) string
 	// notes, when set, are lines printed after an accepted answer.
 	notes func(string) []string
+	// left, when set, are lines printed after a blank or accepted answer
+	// about what the file still leaves unanswered.
+	left func(*File) []string
 }
 
 // Text is the prompt as scheck init prints it for f.
@@ -154,10 +157,24 @@ func Questions() []Question {
 		{ID: "mfa", Prompt: "Who must use 2-step verification? One tenant per block.\n" +
 			"  where: google-workspace:example.com\n" +
 			"  enforced: everyone\n" +
-			"enforced is everyone (including shared and break-glass accounts), admins, some, none, or unknown. Yes and no are not answers. unknown is a real answer.",
+			"enforced is everyone (including shared and break-glass accounts), admins, some, none, or unknown. Yes and no are not answers. unknown is a real answer.\n" +
+			"For Google Workspace, a second factor that another sign-in service such as Okta or Microsoft Entra asks for counts; the next question asks about it.",
 			Consumers: []Consumer{{ID: "workspace.two_step_not_enforced", Slice: "E6"}, {ID: "github.mfa_not_required", Slice: "E5"}},
 			answered:  func(f *File) bool { return !hasSaaS(f) || len(f.Access.MFA) > 0 },
 			apply:     applyMFA},
+		{ID: "mfa_sign_in", Prompt: "When people sign in to Google Workspace, does Google send them to another sign-in service, such as Okta or Microsoft Entra, instead of asking for their Google password? One tenant per block.\n" +
+			"  where: google-workspace:example.com\n" +
+			"  sign_in: another_provider\n" +
+			"sign_in is google (people type their Google password on Google's sign-in page), another_provider (some or all people are sent to another service to sign in), or unknown. Yes and no are not answers.\n" +
+			"To tell: open mail.google.com in a private window and type your work address. If Google then asks for your password, that is google; if it jumps to your company's own login page, that is another_provider.\n" +
+			"This is not about using Google to sign in to other apps, such as Slack: that is google. If your other service sends people to Google to sign in, that is google too.\n" +
+			"With another_provider, scheck still reports every account Google does not require 2-step verification for, but no longer ranks it higher for contradicting your 2-step verification answer, except super administrators, who can still sign in with a Google password. scheck does not read the other service: check yourself that it asks everyone for a second factor.\n" +
+			"unknown and google keep those findings ranked higher.",
+			Consumers: []Consumer{{ID: "workspace.two_step_sign_in", Slice: "E6"}},
+			answered:  func(f *File) bool { return len(signInOffers(f)) == 0 },
+			apply:     applySignIn,
+			offer:     offerSignIn,
+			left:      signInLeft},
 		{ID: "exposed", Prompt: "Which exact web addresses are meant to be on the internet, and why? One per block. Naming one only changes a single low finding about a page that announces its software. It does not make other findings on that site less serious. If you have no such page, leave this blank.\n" +
 			"  url: https://shop.example.com/\n" +
 			"  audience: internet\n" +
@@ -233,19 +250,22 @@ func Answer(f *File, id, answer string) ([]string, error) {
 		return nil, fmt.Errorf("unknown question %q", id)
 	}
 	answer = strings.TrimSpace(answer)
-	if answer == "" || isSkip(answer) {
-		return nil, nil
+	var lines []string
+	if answer != "" && !isSkip(answer) {
+		if d, ok := policy.DetectCredential(answer); ok {
+			return nil, credentialRefusal(d)
+		}
+		if err := q.apply(f, answer); err != nil {
+			return nil, err
+		}
+		if q.notes != nil {
+			lines = q.notes(answer)
+		}
 	}
-	if d, ok := policy.DetectCredential(answer); ok {
-		return nil, credentialRefusal(d)
+	if q.left != nil {
+		lines = append(lines, q.left(f)...)
 	}
-	if err := q.apply(f, answer); err != nil {
-		return nil, err
-	}
-	if q.notes == nil {
-		return nil, nil
-	}
-	return q.notes(answer), nil
+	return lines, nil
 }
 
 // Explanations is what scheck init prints when the file names a Google
@@ -637,6 +657,67 @@ func applyMFA(f *File, answer string) error {
 	return nil
 }
 
+// signInOffers are the access.mfa entries the sign_in question asks
+// about: a Google Workspace tenant whose answer, everyone or some, a
+// sign_in answer changes, and that has none yet.
+func signInOffers(f *File) []int {
+	var out []int
+	for i, m := range f.Access.MFA {
+		if strings.HasPrefix(m.Where, "google-workspace:") && (m.Enforced == "everyone" || m.Enforced == "some") && m.SignIn == "" {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func offerSignIn(f *File) string {
+	lines := []string{}
+	for _, i := range signInOffers(f) {
+		m := f.Access.MFA[i]
+		lines = append(lines, fmt.Sprintf("Answer for: %s (access.mfa[%d], enforced: %s)", m.Where, i, m.Enforced))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func applySignIn(f *File, answer string) error {
+	blocks, err := blocksOf(answer)
+	if err != nil {
+		return err
+	}
+	offered := signInOffers(f)
+	for _, block := range blocks {
+		where := block["where"]
+		i := slices.IndexFunc(offered, func(i int) bool { return strings.EqualFold(f.Access.MFA[i].Where, where) })
+		if i < 0 {
+			names := []string{}
+			for _, j := range offered {
+				names = append(names, f.Access.MFA[j].Where)
+			}
+			return fmt.Errorf("answer only for the tenants listed: %s", strings.Join(names, ", "))
+		}
+		signIn, err := normSignIn(block["sign_in"])
+		if err != nil {
+			return err
+		}
+		f.Access.MFA[offered[i]].SignIn = signIn
+	}
+	return nil
+}
+
+// signInLeft is the line for each offered tenant still without a sign_in.
+func signInLeft(f *File) []string {
+	var out []string
+	for _, i := range signInOffers(f) {
+		m := f.Access.MFA[i]
+		what := "a unit where Google does not require 2-step verification will rank higher"
+		if m.Enforced == "some" {
+			what = "if the list of users is complete and Google reports every active account as not required to use 2-step verification, every unit with an active account will rank higher"
+		}
+		out = append(out, "No sign_in given for "+m.Where+": "+what+" for contradicting your answer, even if another sign-in service asks those accounts for a second factor.")
+	}
+	return out
+}
+
 func applyExposed(f *File, answer string) error {
 	return applyExposure(&f.Intent.ExposedOnPurpose, answer, true)
 }
@@ -901,6 +982,23 @@ func normKind(s string) (string, error) {
 		return "break_glass", nil
 	default:
 		return "", fmt.Errorf("kind must be employee, contractor, shared, service, or break_glass")
+	}
+}
+
+func normSignIn(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "google", "google password", "directly":
+		return "google", nil
+	case "another_provider", "another provider", "another identity provider", "okta", "entra", "microsoft entra", "azure ad", "jumpcloud", "onelogin":
+		return "another_provider", nil
+	case "unknown", "i do not know", "i don't know", "not sure":
+		return "unknown", nil
+	case "sso":
+		return "", fmt.Errorf("sso can mean either. Write another_provider if Google sends people to another service to sign in, or google if people sign in with Google, including when they use Google to sign in to other apps")
+	case "yes", "true", "no", "false":
+		return "", fmt.Errorf("%s is ambiguous. Write another_provider if some or all people sign in to Google through another service such as Okta or Microsoft Entra, google if everyone signs in with a Google password, or unknown", s)
+	default:
+		return "", fmt.Errorf("sign_in must be google, another_provider, or unknown")
 	}
 }
 

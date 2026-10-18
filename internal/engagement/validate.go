@@ -27,14 +27,17 @@ var (
 	// MFAEnforcements is who must use a second factor, as the operator
 	// believes it (docs/spec/engagement.md, "People").
 	MFAEnforcements = []string{"everyone", "admins", "some", "none", "unknown"}
-	Audiences       = []string{"internet", "vpn", "lan", "localhost", "airgapped"}
-	Exposures       = []string{"internet", "vpn", "lan", "airgapped"}
-	Environments    = []string{"prod", "staging", "dev"}
-	Protos          = []string{"tcp", "udp"}
-	Areas           = areaKeys() // finding.Areas: one list for not_used and the report
-	Profiles        = []string{"baseline", "hardened"}
-	Elevations      = []string{"none", "sudo"}
-	DeployTargets   = []string{"production", "staging", "development"}
+	// SignIns is how people sign in to a Google Workspace tenant, as the
+	// operator believes it: at Google, or sent to another provider.
+	SignIns       = []string{"google", "another_provider", "unknown"}
+	Audiences     = []string{"internet", "vpn", "lan", "localhost", "airgapped"}
+	Exposures     = []string{"internet", "vpn", "lan", "airgapped"}
+	Environments  = []string{"prod", "staging", "dev"}
+	Protos        = []string{"tcp", "udp"}
+	Areas         = areaKeys() // finding.Areas: one list for not_used and the report
+	Profiles      = []string{"baseline", "hardened"}
+	Elevations    = []string{"none", "sudo"}
+	DeployTargets = []string{"production", "staging", "development"}
 	// Modes are the probe and scan modes; this build runs only off.
 	Modes = []string{"off", "confirm", "auto", "all"}
 )
@@ -838,7 +841,8 @@ func (v *validator) access() {
 	whereSeen := map[string]int{} // canonical tenant id -> first index
 	for i, m := range v.f.Access.MFA {
 		key := fmt.Sprintf("access.mfa[%d]", i)
-		if id, ok := v.tenantRef(key+".where", m.Where); ok {
+		id, ok := v.tenantRef(key+".where", m.Where)
+		if ok {
 			if first, dup := whereSeen[id]; dup {
 				v.fail(key+".where", "%s is already declared at access.mfa[%d]", m.Where, first)
 			}
@@ -855,6 +859,28 @@ func (v *validator) access() {
 		default:
 			v.enum(key+".enforced", m.Enforced, MFAEnforcements)
 		}
+		v.signIn(key, id, m)
+	}
+}
+
+// signIn validates access.mfa[i].sign_in, read only for a Google Workspace
+// tenant: GitHub's single sign-on does not replace the requirement the
+// GitHub rule reads.
+func (v *validator) signIn(key, tenant string, m MFA) {
+	if m.SignIn == "" {
+		return
+	}
+	key += ".sign_in"
+	if tenant != "" && !strings.HasPrefix(tenant, "saas:google-workspace:") {
+		v.fail(key, "sign_in is read only for a Google Workspace tenant. On GitHub, single sign-on does not replace the two-factor requirement scheck reads, so remove sign_in from this entry")
+		return
+	}
+	switch m.SignIn {
+	case "true", "false", "yes", "no":
+		v.fail(key, "%s is ambiguous. Write another_provider if some or all people sign in to Google through another service such as Okta or Microsoft Entra, "+
+			"google if everyone signs in with a Google password, or unknown", m.SignIn)
+	default:
+		v.enum(key, m.SignIn, SignIns)
 	}
 }
 

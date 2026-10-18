@@ -151,7 +151,11 @@ access:
   admins:
     google-workspace:yourlab.example: [you]
   mfa:
-    - {where: google-workspace:yourlab.example, enforced: everyone}
+    # sign_in: does Google send people to another sign-in service (Okta,
+    # Microsoft Entra) instead of asking for their Google password?
+    # google | another_provider | unknown. Absent counts as unknown.
+    # docs/spec/engagement.md, "2-step verification".
+    - {where: google-workspace:yourlab.example, enforced: everyone, sign_in: google}
 
 # Required for directory_mail / directory_oauth_mail. Without a current entry
 # the run still reads the directory and reports mail forwarding as not checked.

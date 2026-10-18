@@ -120,6 +120,7 @@ func (r *run) workspaceView(a ResolvedAsset) workspace.Context {
 	}
 	view.ExpectedAdmins, view.AdminsDeclared = r.res.AdminsFor(a.ID)
 	view.MFA, view.MFASource = r.res.MFAFor(a.ID)
+	view.SignIn, view.SignInSource = r.res.SignInFor(a.ID)
 	for _, b := range r.res.Assets {
 		if b.Kind == KindDomain {
 			view.DeclaredDomains = append(view.DeclaredDomains, strings.TrimPrefix(b.ID, "domain:"))
@@ -138,7 +139,9 @@ func (r *run) workspaceReportInput(ra ReconAsset, judged []finding.Judgment, ai 
 	ai.Judged = judged
 	ai.InventoryRead = len(e.Users.Reads) > 0 && e.Users.Reads[0].Status == 200 && e.Users.Reads[0].Reason == ""
 	ai.PopulationIncomplete = !e.Users.Complete || !e.Units.Complete
-	ai.Coverage = e.Coverage(judged)
+	var c workspace.Context
+	c.SignIn, c.SignInSource = r.res.SignInFor(ra.ID)
+	ai.Coverage = e.Coverage(judged, c)
 	identity, source := "unknown", "unknown"
 	if e.DelegatedUser != nil {
 		identity = "delegated Workspace account " + e.DelegatedUser.Primary + " (id " + e.DelegatedUser.ID + ")"

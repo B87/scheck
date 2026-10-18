@@ -962,7 +962,8 @@ Unknown grants remain unknown; a successful read does not prove write capability
    disproved and abstained fixtures; fresh detail fills only missing list flags, and
    conflicting, malformed or refused detail makes only the 2-step rules abstain. The
    collector decides the `access.mfa` comparison once and owns the readout notes;
-   raised instances carry `contradiction` and the federation caveat. Coverage adds the
+   raised instances carry `contradiction` and a caveat about another identity provider
+   (worded from `sign_in` since 2026-10-18, see "Carried from step 4"). Coverage adds the
    2-step sub-item with explicit limits, *not assessed* when no 2-step outcome was
    recorded; OAuth grants and domain-wide delegation stay *not assessed*. Consultant,
    client and modularity reviews passed. The adversarial review found no must-fix; its
@@ -1085,11 +1086,25 @@ wording polish never expands what the collector observed.
 **Carried from step 4** (consultant DEFINE and REVIEW, client REPORT and modularity
 assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-step-verification-2026-10-11.md)):
 
-- *Release blocker, deferred 2026-10-12 (owner, E8):* no federation question. A
-  federated tenant (Okta, Entra) declaring `everyone` still gets a raised not-enforced
-  finding that may be a false critical. `contradiction`, `access.mfa` and the
-  federation caveat are unchanged. A Cloud Identity SSO profile read stays a 0.0.3
-  candidate. E9's "may a context raise reach critical?" is a separate question.
+- *Release blocker, done 2026-10-18 (owner's decision, option A, on a `security-consultant`
+  DEFINE of the same day):* the optional `access.mfa[i].sign_in` (`google`,
+  `another_provider`, `unknown`; Workspace only). Under `another_provider`, `everyone`
+  raises `contradiction` only on a fired unit with a known super admin, `some` never
+  raises, and a unit it stopped keeps its base severity with a "Not checked" line. The
+  caveat has four wordings, Plan names the effect, and the interview asks `mfa_sign_in`
+  (E8). Rules and wording: `spec/engagement.md`, "2-step verification" and
+  `spec/workspace-collector.md`, "Observed 2-step verification". GitHub Enterprise
+  Managed Users is a recorded known limit, not built. A 0.0.2 fix landing after E9, not a
+  new slice. Built offline with goldens (`workspace-two-step-sign-in*`); no live tenant
+  contacted.
+- *0.0.3 contract (SSO read):* a Cloud Identity SSO profile read takes precedence over
+  `sign_in`; a unit observed with no SSO profile re-raises whatever `sign_in` says, so
+  the declaration never becomes a permanent suppression.
+- *Pre-release live check, open (acceptance, not a decision):* whether Google's own
+  mandatory 2-step verification for super admins shows in `isEnforcedIn2Sv`. If it does
+  not, a super admin raise under `another_provider` could be false. Record the result in
+  `docs/eval/acceptance-0.0.2.md`. E9's "may a context raise reach critical?" is a
+  separate question.
 - *E9:* "Fix these first" collapses many unit instances of one finding into one line.
 - *Deferred limit:* a fresh detail refused because the account's unit changed leaves
   the account unknown in its list unit only, not in both units as the DEFINE asked.
@@ -1602,9 +1617,12 @@ items carried into this slice are closed by these decisions. `spec/engagement.md
   `date`, and at most 365 days after `date`. A past `expires` still validates; the
   report leaves the finding open. `scheck init` does not ask for accepted risks. The
   paste block writes `date` as the collection day.
-- *Deferred, not implemented (E6 step 4 release blocker):* no federation question.
-  `contradiction`, `access.mfa` and the federation caveat are unchanged. A Cloud
-  Identity SSO read stays a 0.0.3 candidate.
+- *E6 step 4 release blocker, done 2026-10-18:* the question `mfa_sign_in` follows `mfa`,
+  asked only for a `google-workspace:` `access.mfa` entry that is `everyone` or `some`
+  and has no `sign_in`. It offers those tenants, normalizes a named service to
+  `another_provider`, refuses `sso` and yes/no, and a blank answer prints "No
+  `sign_in` given for `<where>`". Consumer `workspace.two_step_sign_in` (E6). A Cloud
+  Identity SSO read stays a 0.0.3 candidate (E6, "Carried from step 4").
 - No "which apps do you use?" question. No "do you forward mail on purpose?"
   question. When the file names a Workspace tenant, `scheck init` explains
   `directory_oauth` (the environment variable, the credential stays out of the file,

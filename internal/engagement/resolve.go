@@ -136,6 +136,17 @@ func (r *Resolved) MFAFor(assetID string) (enforced, source string) {
 	return "", ""
 }
 
+// SignInFor is the access.mfa sign_in declaration for one tenant and its
+// key, or empty strings when the tenant's entry has none.
+func (r *Resolved) SignInFor(assetID string) (signIn, source string) {
+	for i, m := range r.Access.MFA {
+		if ref, ok := r.Lookup(m.Where); ok && ref.ID == assetID && m.SignIn != "" {
+			return m.SignIn, "access.mfa[" + strconv.Itoa(i) + "].sign_in"
+		}
+	}
+	return "", ""
+}
+
 // AdminsFor is the access.admins list for one tenant, and whether one was declared.
 func (r *Resolved) AdminsFor(assetID string) (handles []string, declared bool) {
 	for where, list := range r.Access.Admins {

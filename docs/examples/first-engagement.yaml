@@ -67,7 +67,11 @@ access:
     google-workspace:yourlab.example: [you, breakglass]
     github:yourlab: [you]
   mfa:
-    - {where: google-workspace:yourlab.example, enforced: everyone}
+    # sign_in: does Google send people to another sign-in service (Okta,
+    # Microsoft Entra) instead of asking for their Google password?
+    # google | another_provider | unknown. Absent counts as unknown.
+    # docs/spec/engagement.md, "2-step verification".
+    - {where: google-workspace:yourlab.example, enforced: everyone, sign_in: google}
     - {where: github:yourlab, enforced: everyone}
 
 tools:

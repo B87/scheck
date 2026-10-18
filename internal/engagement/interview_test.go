@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/collector/workspace"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/engagement/severity"
 	"github.com/b87/scheck/internal/finding"
@@ -94,6 +95,8 @@ func proveConsumer(t *testing.T, id string) {
 		if out.Severity != finding.SevLow {
 			t.Fatalf("dev did not lower password auth: %s", out.Severity)
 		}
+	case "workspace.two_step_sign_in":
+		proveSignIn(t)
 	case "severity.data_matters_most", "plan.github_tier4":
 		proveMattersMost(t, id)
 	case "report.rank_tiebreak", "report.matters_most_readout":
@@ -109,6 +112,48 @@ func proveConsumer(t *testing.T, id string) {
 		if _, ok := finding.Lookup(id); !ok {
 			t.Errorf("no consumer %s", id)
 		}
+	}
+}
+
+// proveSignIn resolves an answered sign_in into the Workspace context and
+// shows the 2-step rule reading it: another_provider withholds the raise
+// from a unit of non-administrators, and a super administrator keeps it.
+func proveSignIn(t *testing.T) {
+	t.Helper()
+	res, err := Parse("e.yaml", []byte(minimal+"  - saas: google-workspace:example.com\naccess:\n  mfa:\n    - {where: google-workspace:example.com, enforced: everyone, sign_in: another_provider}\n"), testOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &run{res: res, zone: time.UTC}
+	var tenant ResolvedAsset
+	for _, a := range res.Assets {
+		if a.ID == "saas:google-workspace:example.com" {
+			tenant = a
+		}
+	}
+	c := r.workspaceView(tenant)
+	if c.SignIn != "another_provider" || c.SignInSource != "access.mfa[0].sign_in" || c.MFASource != "access.mfa[0]" {
+		t.Fatalf("context %+v", c)
+	}
+	user := func(id string, admin bool) workspace.User {
+		return workspace.User{ID: id, Primary: id + "@example.com", Unit: "/", Suspended: new(false), Archived: new(false), IsAdmin: new(admin), Enforced: new(false), Enrolled: new(true)}
+	}
+	raised := func(users ...workspace.User) bool {
+		e := workspace.Evidence{Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}}},
+			Users: workspace.Population[workspace.User]{Complete: true, Items: users}}
+		for _, j := range workspace.Judge(e, tenant.ID, c) {
+			if j.ID == workspace.IDTwoStepNotEnforced && j.Subject.Key == "/" {
+				if j.Verdict != workspace.Fired {
+					t.Fatalf("unit not fired: %+v", j)
+				}
+				return j.Has("contradiction")
+			}
+		}
+		t.Fatal("no unit judgment")
+		return false
+	}
+	if raised(user("staff", false)) || !raised(user("staff", false), user("boss", true)) {
+		t.Fatal("sign_in did not decide the raise")
 	}
 }
 
@@ -566,5 +611,47 @@ func TestBrightcartServiceAnswerKeepsWhatDaniTyped(t *testing.T) {
 	}
 	if f.Data.MattersMost[0].Asset != "app" || f.Data.MattersMost[1].Asset != "google-workspace:brightcart.co.uk" {
 		t.Fatalf("%+v", f.Data.MattersMost)
+	}
+}
+
+// The sign_in question is asked only for a Workspace tenant whose answer it
+// moves, refuses sso and yes or no, and says what a blank leaves.
+func TestSignInQuestion(t *testing.T) {
+	q, _ := questionByID("mfa_sign_in")
+	f := &File{Roots: []Locator{{SaaS: "google-workspace:example.com"}, {SaaS: "github:example-org"}}}
+	if !q.Answered(f) {
+		t.Fatal("asked with no access.mfa entry")
+	}
+	if err := Apply(f, "mfa", "where: google-workspace:example.com\nenforced: everyone\n\nwhere: github:example-org\nenforced: everyone"); err != nil {
+		t.Fatal(err)
+	}
+	if q.Answered(f) || !strings.HasSuffix(q.Text(f), "\nAnswer for: google-workspace:example.com (access.mfa[0], enforced: everyone)") || strings.Contains(q.Text(f), "github:") && strings.Contains(q.Text(f), "access.mfa[1]") {
+		t.Fatalf("offer %q", q.Text(f))
+	}
+	for answer, want := range map[string]string{
+		"where: google-workspace:example.com\nsign_in: sso":    "sso can mean either",
+		"where: google-workspace:example.com\nsign_in: yes":    "yes is ambiguous",
+		"where: google-workspace:example.com\nsign_in: mostly": "sign_in must be google, another_provider, or unknown",
+		"where: github:example-org\nsign_in: another_provider": "answer only for the tenants listed: google-workspace:example.com",
+	} {
+		if _, err := Answer(f, "mfa_sign_in", answer); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v", answer, err)
+		}
+	}
+	lines, err := Answer(f, "mfa_sign_in", "")
+	if err != nil || len(lines) != 1 || !strings.HasPrefix(lines[0], "No sign_in given for google-workspace:example.com: a unit where Google does not require 2-step verification will rank higher") {
+		t.Fatalf("blank: %q %v", lines, err)
+	}
+	lines, err = Answer(f, "mfa_sign_in", "where: google-workspace:example.com\nsign_in: Okta")
+	if err != nil || len(lines) != 0 || f.Access.MFA[0].SignIn != "another_provider" || f.Access.MFA[1].SignIn != "" || !q.Answered(f) {
+		t.Fatalf("answer: %q %v %+v", lines, err, f.Access.MFA)
+	}
+	g := &File{Roots: f.Roots, Access: Access{MFA: []MFA{{Where: "google-workspace:example.com", Enforced: "admins"}}}}
+	if !q.Answered(g) {
+		t.Fatal("asked where sign_in moves nothing")
+	}
+	g.Access.MFA[0].Enforced = "some"
+	if lines := signInLeft(g); len(lines) != 1 || !strings.Contains(lines[0], ": if the list of users is complete and Google reports every active account as not required to use 2-step verification, every unit with an active account will rank higher for contradicting your answer") {
+		t.Fatalf("some: %q", lines)
 	}
 }

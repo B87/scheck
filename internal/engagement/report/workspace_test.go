@@ -17,12 +17,17 @@ import (
 // judgments: a bound tenant on the default profile with complete
 // administrative evidence unless change says otherwise.
 func workspacePlan(a *AssetInput, change func(*workspace.Evidence)) {
+	workspacePlanFor(a, change, workspace.Context{})
+}
+
+// workspacePlanFor is workspacePlan with the declarations c gives it.
+func workspacePlanFor(a *AssetInput, change func(*workspace.Evidence), c workspace.Context) {
 	e := workspace.Evidence{Binding: workspace.Binding{CustomerID: "C123", Profile: "directory"}}
 	e.Access.AdministrationComplete = true
 	if change != nil {
 		change(&e)
 	}
-	a.Coverage = e.Coverage(a.Judged)
+	a.Coverage = e.Coverage(a.Judged, c)
 }
 
 func workspaceInventoryReport(_ *testing.T) Input {
@@ -130,7 +135,14 @@ func TestWorkspaceIdentityCoverageAndSubjectAcceptances(t *testing.T) {
 
 // workspaceTwoStepReport renders what the collector judges for observed
 // 2-step flags, with an everyone declaration raising the unit findings.
-func workspaceTwoStepReport(t *testing.T) Input {
+func workspaceTwoStepReport(t *testing.T) Input { return workspaceTwoStepInput(t, "") }
+
+// workspaceSignInReport declares sign_in: another_provider and adds a root
+// unit of non-administrators without the requirement: /sales keeps its
+// raise for its super administrator, / is reported but not raised.
+func workspaceSignInReport(t *testing.T) Input { return workspaceTwoStepInput(t, "another_provider") }
+
+func workspaceTwoStepInput(t *testing.T, signIn string) Input {
 	in := workspaceInventoryReport(t)
 	a := &in.Assets[0]
 	a.Detail = "Workspace inventory, identity/administrator and 2-step verification checks collected; notes and coverage show any unresolved evidence."
@@ -141,6 +153,9 @@ func workspaceTwoStepReport(t *testing.T) Input {
 	admin := user("admin", "/Sales", new(false), new(false))
 	admin.IsAdmin = new(true)
 	users := []workspace.User{admin, user("carol", "/Sales", new(false), new(true)), user("dan", "/", new(true), new(true)), user("erin", "/Eng", nil, new(true)), user("new", "/", new(true), new(false))}
+	if signIn != "" {
+		users = append(users, user("gina", "/", new(false), new(true)))
+	}
 	read := []workspace.Read{{Op: workspace.OpUsers, RequestID: "g000008", Decision: "sent", Status: 200}}
 	e := workspace.Evidence{Users: workspace.Population[workspace.User]{Items: users, Complete: true, Reads: read}, Units: workspace.Population[workspace.Unit]{Complete: true, Items: []workspace.Unit{{ID: "root", Path: "/"}, {ID: "sales", Path: "/Sales"}, {ID: "eng", Path: "/Eng"}}}}
 	e.Access.Roles.Complete, e.Access.Privileges.Complete = true, true
@@ -148,6 +163,9 @@ func workspaceTwoStepReport(t *testing.T) Input {
 		e.Access.Accounts = append(e.Access.Accounts, workspace.AccountAccess{ID: u.ID, Assignments: workspace.Population[workspace.Assignment]{Complete: true, Items: []workspace.Assignment{}, Reads: []workspace.Read{{Op: workspace.OpUserAssignments, RequestID: fmt.Sprintf("g%06d", 10+i), Decision: "sent", Status: 200}}}})
 	}
 	c := workspace.Context{Zone: time.UTC, MFA: "everyone", MFASource: "access.mfa[0]"}
+	if signIn != "" {
+		c.SignIn, c.SignInSource = signIn, "access.mfa[0].sign_in"
+	}
 	for _, j := range workspace.Judge(e, a.ID, c) {
 		if j.ID == workspace.IDTwoStepNotEnforced || j.ID == workspace.IDAdminWithoutTwoStep {
 			a.Judged = append(a.Judged, j)
@@ -156,8 +174,35 @@ func workspaceTwoStepReport(t *testing.T) Input {
 	for _, n := range workspace.Readout(e, a.ID, c) {
 		a.InventoryNotes = append(a.InventoryNotes, Note{Kind: n.Kind, Source: n.Source, Detail: n.Detail})
 	}
-	workspacePlan(a, nil)
+	workspacePlanFor(a, nil, c)
 	return in
+}
+
+// Under another_provider the unit with a super administrator stays
+// critical and the unit without one stays high, with the declaration as
+// evidence on both (docs/spec/workspace-collector.md, "Observed 2-step
+// verification").
+func TestWorkspaceSignInWithholdsTheRaise(t *testing.T) {
+	r := build(workspaceSignInReport(t))
+	got := map[string]string{}
+	for _, f := range r.Findings {
+		if f.ID != "workspace.two_step_not_enforced" {
+			continue
+		}
+		got[f.Subject.Key] = f.Severity
+		declared := 0
+		for _, e := range f.Evidence {
+			if e.Kind == "declared" {
+				declared++
+			}
+		}
+		if declared != 2 || !slices.Contains(f.Rule.Reads, "declared:access.mfa[0].sign_in") {
+			t.Fatalf("declaration evidence %+v", f)
+		}
+	}
+	if got["/sales"] != "critical" || got["/"] != "high" {
+		t.Fatalf("severities %v", got)
+	}
 }
 
 func TestWorkspaceTwoStepContradictionAndCoverage(t *testing.T) {
