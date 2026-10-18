@@ -111,8 +111,12 @@ func (r *run) notJudged() []string {
 		out = append(out, "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it.")
 	}
 	for _, a := range identity {
-		if enforced, _ := r.res.MFAFor(a.ID); enforced == "" || enforced == "unknown" {
+		enforced, source := r.res.MFAFor(a.ID)
+		if enforced == "" || enforced == "unknown" {
 			out = append(out, fmt.Sprintf("`access.mfa` does not say who must use 2-step verification in `%s`: scheck reports what it reads, but cannot raise a gap as a contradiction of what you believe.", a.ID))
+		}
+		if line := signInPlanLine(r.res, a.ID, enforced, source); line != "" {
+			out = append(out, line)
 		}
 	}
 	if len(webRoots) > 0 && len(r.res.Intent.NotExposed) == 0 {
@@ -151,4 +155,27 @@ func cmpOr(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// signInPlanLine is what the sign_in answer does to a Workspace tenant's
+// contradiction raise, said before Check (docs/spec/engagement.md, "2-step
+// verification"). Only everyone and some are moved by it.
+func signInPlanLine(res *Resolved, id, enforced, source string) string {
+	if !strings.HasPrefix(id, "saas:google-workspace:") || enforced != "everyone" && enforced != "some" {
+		return ""
+	}
+	signIn, signInSource := res.SignInFor(id)
+	switch {
+	case signIn == "another_provider" && enforced == "everyone":
+		return fmt.Sprintf("`%s` says people sign in to `%s` through another identity provider, which scheck does not read: a unit where Google does not require 2-step verification is still reported, but ranks higher for contradicting `%s` only when a super administrator is among its accounts.", signInSource, id, source)
+	case signIn == "another_provider":
+		return fmt.Sprintf("`%s` says people sign in to `%s` through another identity provider, which scheck does not read: a unit where Google does not require 2-step verification is still reported, and never ranks higher for contradicting `%s`, since `some` does not say who must.", signInSource, id, source)
+	case signIn == "google":
+		return ""
+	}
+	says := "does not say"
+	if signIn == "unknown" {
+		says = "says you do not know"
+	}
+	return fmt.Sprintf("`%s` %s whether people sign in to `%s` through another identity provider (`sign_in`): a unit where Google does not require 2-step verification ranks higher for contradicting `%s`, even if another service requires a second factor for those accounts.", source, says, id, source)
 }

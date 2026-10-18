@@ -10,7 +10,7 @@ import (
 
 func oauthGroup(t *testing.T, e Evidence, judged ...finding.Judgment) finding.CoverageGroup {
 	t.Helper()
-	for _, g := range e.Coverage(judged)[0].Groups {
+	for _, g := range e.Coverage(judged, Context{})[0].Groups {
 		if slices.Contains(g.Rules, IDOAuthBroadScope) {
 			return g
 		}
@@ -23,7 +23,7 @@ func oauthGroup(t *testing.T, e Evidence, judged ...finding.Judgment) finding.Co
 // of exactly one plan (docs/spec/workspace-collector.md, "Reporting and
 // coverage").
 func TestEveryWorkspaceRuleHasOneCoverageGroup(t *testing.T) {
-	plans := Evidence{}.Coverage(nil)
+	plans := Evidence{}.Coverage(nil, Context{})
 	for _, id := range RuleIDs() {
 		n := 0
 		for _, p := range plans {
@@ -49,7 +49,7 @@ func TestCoverageGapsCollapseAndLimits(t *testing.T) {
 		t.Fatal(g)
 	}
 	e.Access.AdministrationComplete = false
-	for _, g := range e.Coverage(nil)[0].Groups {
+	for _, g := range e.Coverage(nil, Context{})[0].Groups {
 		if (g.Gap != nil) != slices.Contains(g.Rules, IDSuspendedAdminAssignment) {
 			t.Fatal("assignment gap on the wrong group", g)
 		}

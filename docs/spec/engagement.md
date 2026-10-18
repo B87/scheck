@@ -98,7 +98,8 @@ stubbed to pass.
 | People | Who has left recently, and when? | An account of that person still active, or still holding an admin role or group-granted access, is a finding. A suspended account is correct offboarding |
 | Access | Who is expected to be a super admin (Workspace) or an owner (GitHub) in each tenant? | A super admin or owner not listed is a finding; a listed person who is not one is a note for the readout, not a finding; one who cannot be tied to a named person is a finding. Too many of them is a finding whatever is listed ("Admins") |
 | Access | Which repositories deploy the live production environment, as opposed to a demo or a staging copy? | `deploys_to` is `production`, `staging` or `development`. `production` raises branch protection, workflow token, deploy key and `pull_request_target` findings on those repositories; from 0.0.3 G4 links them to the cloud project. The question does not ask which CI |
-| Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
+| Access | In each tenant, who must use 2-step verification: every account (service and break-glass accounts included), only admins, some, none, or you do not know? For Google Workspace, a second factor that another sign-in service such as Okta or Microsoft Entra asks for counts; the next question asks about it. | Compared with the enforcement the tenant reports ("2-step verification"); a declared enforcement the API disproves raises the finding for it as a contradiction; `unknown` raises nothing and prints what scheck read |
+| Access | For a Google Workspace tenant declared `everyone` or `some`: does Google send people to another sign-in service, such as Okta or Microsoft Entra, instead of asking for their Google password? | `access.mfa[].sign_in`: `google`, `another_provider` or `unknown` ("2-step verification"). Asked only for a tenant with such an entry and no `sign_in`; yes and no are refused. The prompt says how to tell: open mail.google.com in a private window and type the work address; Google asking for the password is `google`, a jump to the company login page is `another_provider`. With `another_provider` a not-enforced unit ranks higher for contradicting `everyone` only when a super admin is among its accounts. Consumer `workspace.two_step_sign_in` (E6) |
 | Intent | What is exposed on purpose, and to whom? | Exposure findings on that exact URL or service drop to *info*, attributed ("Severity in context") |
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
 | Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Asked after `context` and before `not_used`; rules below the table |
@@ -200,11 +201,17 @@ Not asked, and why. The keys below stay valid. The interview does not ask them.
   assessed* until a cloud collector can compare it with inventory (0.0.3).
 - **Host role.** `assets.<name>.context.role` stays valid. The interview does not ask
   it. Exposure, environment, expected services and how to reach the host are asked.
-- **Federation.** There is no question on whether people sign in to Google Workspace
-  through another identity provider. `access.mfa`, the contradiction raise and the
-  federation caveat are unchanged. A Cloud Identity SSO read stays a 0.0.3 candidate.
-  The E6 step 4 release blocker is deferred, not implemented (E8 in
-  [ROADMAP.md](../ROADMAP.md)).
+- **Federation.** The interview asks `mfa_sign_in` right after `mfa`, only for a
+  `google-workspace:` tenant whose `access.mfa` entry is `everyone` or `some` and has no
+  `sign_in` ("2-step verification"). It offers those tenants, writes `google`,
+  `another_provider` or `unknown`, normalizes a named service (Okta, Entra) to
+  `another_provider`, and refuses `sso`, yes and no. A blank or partly answered reply
+  prints "No sign_in given for `<where>`" and leaves the field absent; for `some` the
+  line says that if the list of users is complete and Google reports every active
+  account as not required to use 2-step verification, every unit with an active
+  account will rank higher for contradicting the answer. A Cloud Identity
+  SSO read stays a 0.0.3 candidate. GitHub Enterprise Managed Users is a known limit,
+  not built: `sign_in` on a GitHub tenant is refused.
 - **Which apps, and forwarding on purpose.** Neither is a question. When the file
   names a Workspace tenant, `scheck init` explains two optional checks and writes
   nothing from either. `directory_oauth`: set `SCHECK_WORKSPACE_PROFILE=directory_oauth`
@@ -290,7 +297,7 @@ access:
     google-workspace:example.com: [alice, breakglass]
     github:example-org: [alice]
   mfa:                                # who must use 2-step verification: everyone | admins | some | none | unknown
-    - {where: google-workspace:example.com, enforced: everyone}
+    - {where: google-workspace:example.com, enforced: everyone, sign_in: google}   # sign_in: google | another_provider | unknown; Workspace only
     - {where: github:example-org, enforced: everyone}
 
 tools:                                # valid, not asked; a name no collector reads is a coverage row
@@ -548,6 +555,30 @@ answer, and true or false is refused as ambiguous.
 | `none` | nothing is enforced | nothing; a note when the tenant does better |
 | `unknown` | the operator does not know | nothing; a readout note says what scheck read ("N of M accounts not required") |
 
+`access.mfa[].sign_in` says whether Google sends people to another identity provider to
+sign in. It is read only for a Google Workspace tenant and is optional; absent is
+decided as `unknown`. It is allowed with every `enforced` value. There is no `mixed`
+value: Google's single sign-on profiles are per unit or group and not readable, and
+whether all or some people are sent changes no decision. It never changes a verdict or a
+base severity; it changes only which fired units are raised as `contradiction`.
+
+| `sign_in` | Effect on the `contradiction` raise |
+|---|---|
+| `google`, `unknown`, absent | none; the raise is as the table above says, and the caveat words which of the four answers it follows |
+| `another_provider` with `everyone` | only a fired unit whose affected accounts include a known super admin (`isAdmin:true`, no security conflict) is raised; super admins can still sign in to Google with a Google password. Unknown administrator status and delegated admins do not keep the raise |
+| `another_provider` with `some` | never raised: every active account off is what a federated tenant looks like |
+| `another_provider` with `admins`, `none`, `unknown` | none |
+
+A unit the comparison would have raised and `sign_in` stopped is still reported, at its
+base severity, with a "Not checked" line saying so. Raised and stopped instances cite
+`access.mfa[i]` as declared evidence, and `access.mfa[i].sign_in` too when it is present
+and `enforced` is `everyone` or `some`. When
+the Cloud Identity SSO profile read lands (0.0.3), it takes precedence over the
+declaration: a unit observed with no SSO profile re-raises whatever `sign_in` says, so
+the answer never becomes a permanent suppression. Plan words the effect before Check
+("Plan selection and follow-ups"). On GitHub, single sign-on does not replace the
+two-factor requirement scheck reads, so `sign_in` there exits 3.
+
 Observed better than declared is never a finding. Workspace's Directory flags describe
 current per-account enforcement and enrollment, not organizational-unit policy or a
 readable enrollment grace window. Not-enforced findings group affected accounts by
@@ -742,6 +773,9 @@ it to that list, with none of the target's documented artefacts.
   A marker scheck printed in place of a hidden value is never accepted as a value.
 - `access.mfa[].enforced` is one of `everyone`, `admins`, `some`, `none` or `unknown`;
   `true` and `false` exit 3 as ambiguous; a tenant appears at most once.
+- `access.mfa[].sign_in` is one of `google`, `another_provider` or `unknown`; `yes`, `no`,
+  `true` and `false` exit 3 as ambiguous; a tenant that is not a Google Workspace
+  tenant exits 3.
 - `not_used` entries are area keys, each at most once. `identity`, `secrets` and
   `logging` exit 3: they cannot be marked not applicable. An area a declared root
   already covers exits 3: `email` beside a domain root; `web` beside a domain or url
@@ -1175,6 +1209,7 @@ Declarations that are absent and change what is raised or ranked:
 - "No repository declares `deploys_to: production`: no finding is raised for reaching production, a departed person's push to production cannot be raised, and no repository is read first for it."
 - "`data.matters_most` is empty: you named nothing as holding the data that would hurt most, so no finding is raised for it and nothing is read or ranked first for it."
 - Per tenant or organization with `access.mfa` absent or unknown: "`access.mfa` does not say who must use 2-step verification in `<asset>`: scheck reports what it reads, but cannot raise a gap as a contradiction of what you believe."
+- Per Google Workspace tenant with `access.mfa` `everyone` or `some`, from `sign_in`: with `another_provider` and `everyone`, "a unit where Google does not require 2-step verification is still reported, but ranks higher for contradicting `access.mfa` only when a super administrator is among its accounts"; with `another_provider` and `some`, "never ranks higher"; with `sign_in` absent or `unknown`, that such a unit "ranks higher ... even if another service requires a second factor for those accounts". Nothing for `google`, nor for `admins`, `none` or `unknown`.
 - When there are web roots and `intent.not_exposed` is empty: "`intent.not_exposed` lists no URL: nothing is checked for answering from the internet when it should not."
 
 `identity.external_admin`, `identity.shared_admin`, `exposed_on_purpose`, `public: true`,

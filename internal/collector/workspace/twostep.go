@@ -18,9 +18,64 @@ const (
 // (docs/spec/workspace-collector.md, "Client-facing wording").
 const twoStepParagraph = "For these accounts, Google reports that 2-step verification is not currently enforced. Enrollment, counted above, is a separate flag: a user who enrolled can still turn it off while Google does not require it. scheck did not assess organizational-unit policy, grace periods or protection provided by another sign-in service. Review these accounts and the current Admin console settings yourself, or with whoever administers your Workspace."
 
-// federationCaveat goes with every raised instance: a truthful declaration
-// can be met by another identity provider that scheck does not read.
-const federationCaveat = "Whether these people sign in to Google through another identity provider, for example Okta or Microsoft Entra, that requires a second factor; if so, Google not requiring its own 2-step verification may be expected for them, and the raise above may not apply. scheck did not read that service or Google's single sign-on settings. Super administrators normally sign in to Google directly and need Google's 2-step verification regardless."
+// signInProvider is the access.mfa sign_in answer that Google sends people
+// to another identity provider. Super administrators can still sign in
+// with a Google password, so only their accounts keep the contradiction
+// raise under it
+// (docs/spec/workspace-collector.md, "Observed 2-step verification").
+const signInProvider = "another_provider"
+
+// signInCaveat goes with every raised instance, worded from the sign_in
+// declaration: a truthful enforcement answer can be met by another
+// identity provider that scheck does not read.
+func signInCaveat(c Context) string {
+	switch c.SignIn {
+	case "unknown":
+		return "You answered that you do not know whether people sign in to Google through another identity provider (`" + c.SignInSource + "`). If they do, for example through Okta or Microsoft Entra, and it requires a second factor, Google not requiring its own 2-step verification may be expected for accounts other than super administrators, and the raise above may not apply to them. scheck did not read that service or Google's single sign-on settings."
+	case "google":
+		return "You declared that people sign in with their Google password, not through another identity provider (`" + c.SignInSource + "`). scheck did not read Google's single sign-on settings to confirm it."
+	case signInProvider:
+		return "You declared that people sign in to Google through another identity provider (`" + c.SignInSource + "`). This ranks higher only because of the super administrators in this unit, who can still sign in to Google with a Google password; for the other accounts listed, a second factor at that provider may be the control, and scheck did not read that service or Google's single sign-on settings."
+	}
+	return "Whether these people sign in to Google through another identity provider, for example Okta or Microsoft Entra, that requires a second factor: if so, Google not requiring its own 2-step verification may be expected for them, and the raise above may not apply. scheck did not read that service or Google's single sign-on settings. Super administrators can still sign in to Google with a Google password and need Google's 2-step verification regardless. If people do sign in through another provider, add `sign_in: another_provider` at `" + c.MFASource + "` and run scheck again."
+}
+
+// stoppedLine is the NotChecked line of a fired unit the sign_in answer
+// kept from being raised. It names what the provider cannot protect (an
+// affected super administrator, only under `some`) and, under `everyone`,
+// the accounts that might be one but whose state scheck could not read:
+// under `some` with another_provider nothing ranks higher.
+func stoppedLine(c Context, n unitCounts) string {
+	line := "Whether the other identity provider you declared (`" + c.SignInSource + "`) requires a second factor for these accounts: scheck did not read it, so this finding is not ranked higher for contradicting your 2-step verification answer (`" + c.MFASource + "`). Confirm in that provider that these accounts must use a second factor, and that none of them can sign in to Google with a password alone."
+	if len(n.superOff) > 0 {
+		them := "them"
+		if len(n.superOff) == 1 {
+			them = "it"
+		}
+		line += " " + superAdmins(n.superOff) + " in this unit can still sign in to Google with a Google password, so that provider does not protect " + them + ": Google's own 2-step verification requirement is the control there."
+	}
+	if c.MFA != "everyone" || len(n.undecided) == 0 {
+		return line
+	}
+	if len(n.undecided) == 1 {
+		return line + " scheck could not tell whether " + n.undecided[0] + " in this unit is a super administrator Google does not require 2-step verification for: its administrator status, activity or 2-step verification flags could not be read. If it is, this would rank higher."
+	}
+	return line + fmt.Sprintf(" scheck could not tell whether any of %d accounts in this unit (%s) is a super administrator Google does not require 2-step verification for: their administrator status, activity or 2-step verification flags could not be read. If one is, this would rank higher.", len(n.undecided), namesUpTo(n.undecided, 3))
+}
+
+// superAdmins names super administrators as prose, three at most.
+func superAdmins(names []string) string {
+	if len(names) == 1 {
+		return "Super administrator " + names[0]
+	}
+	return "Super administrators " + namesUpTo(names, 3)
+}
+
+// delegateSignInLine goes on a delegated administrator's finding under the
+// another_provider answer: its enrollment may not be the second factor.
+func delegateSignInLine(c Context) string {
+	return "You declared that people sign in to Google through another identity provider (`" + c.SignInSource + "`). If this administrator signs in through it, Google's 2-step verification enrollment is not the second factor that protects the account; confirm that provider requires one for it. scheck did not read that service."
+}
 
 func init() {
 	finding.Register(workspaceDef(IDTwoStepNotEnforced, "Google does not currently require 2-step verification for these accounts", finding.SevHigh, "org_unit",
@@ -51,8 +106,10 @@ type stepUnit struct {
 	key, label        string
 	inTree, ambiguous bool
 	accounts          []stepAccount
-	// raised is the declaration comparison for this unit, decided in twoStepView.
-	raised bool
+	// raised is the declaration comparison for this unit, decided in
+	// twoStepView; stopped is a unit the comparison would raise that the
+	// sign_in answer kept from it.
+	raised, stopped bool
 }
 
 // stepTally counts the tenant once for the declaration comparison and the
@@ -60,6 +117,9 @@ type stepUnit struct {
 type stepTally struct {
 	active, off, on, unknown int
 	superActive, superOn     int
+	// superOff counts active super administrators Google reports as not
+	// required.
+	superOff int
 	// superUnknown counts super administrators of unknown activity or flags,
 	// and accounts whose super-administrator flag is itself unknown.
 	superUnknown int
@@ -175,7 +235,9 @@ func twoStepView(e Evidence, asset string, c Context) stepState {
 			switch {
 			case v.protected():
 				t.superOn++
-			case !v.affected():
+			case v.affected():
+				t.superOff++
+			default:
 				t.superUnknown++
 			}
 		}
@@ -185,7 +247,12 @@ func twoStepView(e Evidence, asset string, c Context) stepState {
 		u := &s.units[i]
 		super := slices.ContainsFunc(u.accounts, func(v stepAccount) bool { return v.affected() && v.superUser })
 		off := slices.ContainsFunc(u.accounts, stepAccount.affected)
-		u.raised = off && c.MFASource != "" && (c.MFA == "everyone" || c.MFA == "admins" && super || c.MFA == "some" && s.allOff)
+		would := off && c.MFASource != "" && (c.MFA == "everyone" || c.MFA == "admins" && super || c.MFA == "some" && s.allOff)
+		// Under another_provider only a super administrator, who can still
+		// sign in with a Google password, contradicts the answer; `some`
+		// names no one.
+		u.raised = would && (c.SignIn != signInProvider || c.MFA != "some" && super)
+		u.stopped = would && !u.raised
 	}
 	return s
 }
@@ -215,7 +282,7 @@ func twoStepJudgments(e Evidence, asset string, c Context) []finding.Judgment {
 		out = append(out, j)
 	}
 	for _, v := range s.accounts {
-		out = append(out, adminTwoStep(v, asset))
+		out = append(out, adminTwoStep(v, asset, c))
 	}
 	return out
 }
@@ -227,7 +294,11 @@ func judgedUnit(u stepUnit) bool {
 
 type unitCounts struct {
 	notEnrolled, enrolled, enrollmentUnknown []string
-	active, unknown, superOff                int
+	// superOff are the affected super administrators; undecided are the accounts that may be an affected super
+	// administrator, but whose administrator status, activity or flags
+	// scheck could not read.
+	superOff, undecided []string
+	active, unknown     int
 }
 
 func countUnit(unit stepUnit) unitCounts {
@@ -239,7 +310,9 @@ func countUnit(unit stepUnit) unitCounts {
 		switch {
 		case v.affected():
 			if v.superUser {
-				n.superOff++
+				n.superOff = append(n.superOff, v.user.Primary)
+			} else if v.user.IsAdmin == nil {
+				n.undecided = append(n.undecided, v.user.Primary)
 			}
 			switch {
 			case no(v.enrolled):
@@ -252,9 +325,14 @@ func countUnit(unit stepUnit) unitCounts {
 		case v.protected(), v.inactive():
 		default:
 			n.unknown++
+			// Ruled out: an account known not to be a super administrator,
+			// and one whose flags read as required, which cannot be affected.
+			if (v.securityConflict || !no(v.user.IsAdmin)) && (!v.known() || !yes(v.enforced)) {
+				n.undecided = append(n.undecided, v.user.Primary)
+			}
 		}
 	}
-	for _, list := range [][]string{n.notEnrolled, n.enrolled, n.enrollmentUnknown} {
+	for _, list := range [][]string{n.notEnrolled, n.enrolled, n.enrollmentUnknown, n.superOff, n.undecided} {
 		slices.SortFunc(list, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	}
 	return n
@@ -307,11 +385,20 @@ func unitJudgment(unit stepUnit, s stepState, asset string, c Context) finding.J
 			why += " The list of users was incomplete."
 		}
 		decide(&j, true, true, fmt.Sprintf("Google reports that 2-step verification is not currently required for %s%s in %s (isEnforcedIn2Sv: false).%s Enrollment, as Google reports it: %d not enrolled, %d enrolled, %d unknown. %s %s", qualifier, plural(affected, "active account"), where, why, len(n.notEnrolled), len(n.enrolled), len(n.enrollmentUnknown), listAccounts(n.notEnrolled, n.enrolled, n.enrollmentUnknown), twoStepParagraph))
-		if unit.raised {
-			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
+		if unit.raised || unit.stopped {
 			j.Sources = []string{c.MFASource}
+			// sign_in decides only an everyone or some comparison.
+			if c.SignInSource != "" && (c.MFA == "everyone" || c.MFA == "some") {
+				j.Sources = append(j.Sources, c.SignInSource)
+			}
+		}
+		switch {
+		case unit.raised:
+			j.Attributes = []finding.Attribute{{Name: "contradiction", Ref: finding.Ref{Key: c.MFASource}}}
 			j.Why = raisedWhy(c, n.superOff)
-			j.NotChecked = []string{federationCaveat}
+			j.NotChecked = []string{signInCaveat(c)}
+		case unit.stopped:
+			j.NotChecked = []string{stoppedLine(c, n)}
 		}
 	case Disproved:
 		decide(&j, true, false, fmt.Sprintf("Google reports every active account observed in %s as currently required to use 2-step verification (%s).", where, plural(n.active, "active account")))
@@ -331,14 +418,29 @@ func unitJudgment(unit stepUnit, s stepState, asset string, c Context) finding.J
 }
 
 // raisedWhy is one sentence, so "Fix these first" can quote it whole.
-func raisedWhy(c Context, superOff int) string {
-	switch c.MFA {
-	case "admins":
-		return "You declared that every super administrator must use 2-step verification in this tenant, and Google does not require it for " + plural(superOff, "super administrator") + " in this unit, so this ranks one step higher."
-	case "some":
+// superOff are the unit's affected super administrators.
+func raisedWhy(c Context, superOff []string) string {
+	switch {
+	case c.MFA == "admins":
+		return "You declared that every super administrator must use 2-step verification in this tenant, and Google does not require it for " + plural(len(superOff), "super administrator") + " in this unit, so this ranks one step higher."
+	case c.MFA == "some":
 		return "You declared that some accounts must use 2-step verification in this tenant, but Google requires it for no active account in the tenant, so this ranks one step higher."
+	case c.SignIn == signInProvider:
+		who := "super administrator " + superOff[0] + " in this unit, who can"
+		if len(superOff) > 1 {
+			who = plural(len(superOff), "super administrator") + " in this unit, " + namesUpTo(superOff, 3) + ", who can"
+		}
+		return "You declared that every account must use 2-step verification in this tenant, and Google does not require it for " + who + " still sign in to Google with a Google password, whatever your other identity provider does, so this ranks one step higher."
 	}
 	return "You declared that every account must use 2-step verification in this tenant, so this ranks one step higher."
+}
+
+// namesUpTo joins at most n names as prose, then how many more there are.
+func namesUpTo(names []string, n int) string {
+	if len(names) > n {
+		return strings.Join(names[:n], ", ") + fmt.Sprintf(" and %d more", len(names)-n)
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 func sortedUnique(in []string) []string {
@@ -384,7 +486,7 @@ func listAccounts(groups ...[]string) string {
 	return strings.Join(parts, " ")
 }
 
-func adminTwoStep(v stepAccount, asset string) finding.Judgment {
+func adminTwoStep(v stepAccount, asset string, c Context) finding.Judgment {
 	j := newJudgment(IDAdminWithoutTwoStep, asset, subject(v.user, v.person), v.reads)
 	if v.admin {
 		j.Reads = sortedUnique(append(j.Reads, v.adminReads...))
@@ -416,6 +518,9 @@ func adminTwoStep(v stepAccount, asset string) finding.Judgment {
 			text += " Google requires 2-step verification for this account but reports it not yet enrolled; until it enrolls, a password alone may sign it in."
 		}
 		decide(&j, true, true, text)
+		if c.SignIn == signInProvider && !v.superUser {
+			j.NotChecked = []string{delegateSignInLine(c)}
+		}
 	default:
 		j.Excerpt = fmt.Sprintf("%s: %s; isEnrolledIn2Sv: %v; suspended: %v; archived: %v.", v.user.Primary, role, boolValue(v.enrolled), boolValue(v.user.Suspended), boolValue(v.user.Archived))
 	}
@@ -484,6 +589,9 @@ func twoStepNotes(e Evidence, asset string, c Context) []Note {
 		note(fmt.Sprintf("Google reports %s not enrolled in 2-step verification whose administrative status scheck could not establish: %s. If any of them is an administrator, it is an administrator without 2-step verification.", atLeast(len(unknownAdmin), "account"), strings.Join(unknownAdmin, ", ")))
 	}
 	t := s.tally
+	if c.SignIn == signInProvider {
+		note(signInNote(s, c))
+	}
 	required := " Required is not the same as enrolled: an account can be required and still sign in with a password alone during its enrollment period."
 	switch c.MFA {
 	case "", "unknown":
@@ -535,4 +643,61 @@ func twoStepNotes(e Evidence, asset string, c Context) []Note {
 		}
 	}
 	return out
+}
+
+// signInNote is the readout under the another_provider answer: how many
+// accounts rest on the provider scheck did not read, and the super
+// administrators, who can still sign in with a Google password.
+func signInNote(s stepState, c Context) string {
+	t := s.tally
+	text := "You declared that people sign in to Google through another identity provider (`" + c.SignInSource + "`), which scheck did not read. "
+	if s.complete {
+		text += fmt.Sprintf("Google does not require its own 2-step verification for %d of %s; ", t.off, plural(t.active, "active account"))
+	} else {
+		text += fmt.Sprintf("Google does not require its own 2-step verification for at least %s; %s observed and the list of users was incomplete; ", plural(t.off, "active account"), plural(t.active, "active account")+map[bool]string{true: " was", false: " were"}[t.active == 1])
+	}
+	text += "whether that provider requires a second factor for them is not assessed."
+	if t.superActive == 0 {
+		text += " scheck observed no active super administrator, so their 2-step verification is not assessed here."
+	} else {
+		of := fmt.Sprintf("%d of %d of them", t.superOn, t.superActive)
+		if !s.complete {
+			of = fmt.Sprintf("%d of the %d observed", t.superOn, t.superActive)
+		}
+		text += " Super administrators can still sign in to Google with a Google password, and Google requires 2-step verification for " + of + "."
+		if n := t.superActive - t.superOn - t.superOff; n > 0 {
+			text += " For " + plural(n, "super administrator") + " the requirement could not be read."
+		}
+	}
+	if n := s.superActivityUnknown(); n > 0 {
+		text += " The activity of " + plural(n, "super administrator") + " was unknown."
+	}
+	if n := s.adminUnknown(); n > 0 {
+		text += " The administrative status of " + plural(n, "account") + " was unknown."
+	}
+	return text
+}
+
+// adminUnknown counts the accounts, not known to be inactive, whose super
+// administrator status is missing or in conflict.
+func (s stepState) adminUnknown() int {
+	n := 0
+	for _, v := range s.accounts {
+		if !v.inactive() && (v.user.IsAdmin == nil || v.securityConflict) {
+			n++
+		}
+	}
+	return n
+}
+
+// superActivityUnknown counts super administrators whose activity, and so
+// whether the requirement matters, is unknown.
+func (s stepState) superActivityUnknown() int {
+	n := 0
+	for _, v := range s.accounts {
+		if v.superUser && !v.activeKnown {
+			n++
+		}
+	}
+	return n
 }

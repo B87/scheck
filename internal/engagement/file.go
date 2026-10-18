@@ -104,10 +104,14 @@ type Access struct {
 
 // MFA is one declared enforcement: who the operator believes must use a
 // second factor in that tenant, one of MFAEnforcements. `unknown` is an
-// answer, not a gap: the contradiction rule abstains on it.
+// answer, not a gap: the contradiction rule abstains on it. SignIn, one of
+// SignIns and only on a Google Workspace tenant, is whether Google sends
+// people to another sign-in service; absent is decided as unknown
+// (docs/spec/engagement.md, "2-step verification").
 type MFA struct {
 	Where    string `yaml:"where,omitempty" json:"where,omitempty"`
 	Enforced string `yaml:"enforced,omitempty" json:"enforced,omitempty"`
+	SignIn   string `yaml:"sign_in,omitempty" json:"sign_in,omitempty"`
 }
 
 // Tool is one declared SaaS tool or provider.

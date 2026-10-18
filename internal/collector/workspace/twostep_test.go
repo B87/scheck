@@ -299,7 +299,7 @@ func TestAdminWithoutTwoStepOutcomes(t *testing.T) {
 
 func TestTwoStepDeclarationComparison(t *testing.T) {
 	raised := func(j finding.Judgment) bool {
-		return j.Has("contradiction") && slices.Equal(j.Sources, []string{"access.mfa[0]"}) && strings.Contains(j.Why, "so this ranks one step higher") && slices.Equal(j.NotChecked, []string{federationCaveat})
+		return j.Has("contradiction") && slices.Equal(j.Sources, []string{"access.mfa[0]"}) && strings.Contains(j.Why, "so this ranks one step higher") && slices.Equal(j.NotChecked, []string{signInCaveat(Context{MFASource: "access.mfa[0]"})})
 	}
 	base := func() (Evidence, Context) {
 		admin := stepUser("boss", "/Eng", new(false), new(false))
@@ -550,5 +550,236 @@ func TestTwoStepReviewNits(t *testing.T) {
 	}
 	if j, _ := unitOutcome(t, out, "/"); j.Verdict != Abstained || !slices.Contains(j.Reads, "g000099") {
 		t.Fatal(j)
+	}
+}
+
+// The sign_in answer withholds only the contradiction raise, and only from
+// units without an affected super administrator
+// (docs/spec/workspace-collector.md, "Observed 2-step verification").
+func TestTwoStepSignInDeclaration(t *testing.T) {
+	fixture := func(mfa, signIn string) []finding.Judgment {
+		boss := stepUser("boss", "/Eng", new(false), new(false))
+		boss.IsAdmin = new(true)
+		help := stepUser("help", "/Sales", new(false), new(false))
+		maybe := stepUser("maybe", "/Sales", new(false), new(true))
+		maybe.IsAdmin = nil
+		e, c := stepFixture(boss, help, maybe, stepUser("staff", "/", new(false), new(true)), stepUser("ok", "/", new(true), new(true)))
+		e.Access.Roles.Items = []Role{{ID: "r", Privileges: []Privilege{{Service: "00haapch16h1ysv", Name: "USERS_ALL"}}}}
+		e.Access.Accounts[1].Assignments.Items = []Assignment{{ID: "x", Role: "r", Assignee: "help", Type: "USER", Scope: "CUSTOMER"}}
+		c.MFA, c.MFASource = mfa, "access.mfa[0]"
+		if mfa == "" {
+			c.MFASource = ""
+		}
+		if signIn != "" {
+			c.SignIn, c.SignInSource = signIn, "access.mfa[0].sign_in"
+		}
+		return Judge(e, "asset", c)
+	}
+	stopped := func(j finding.Judgment) bool {
+		return !j.Has("contradiction") && len(j.NotChecked) == 1 && strings.HasPrefix(j.NotChecked[0], "Whether the other identity provider you declared (`access.mfa[0].sign_in`)")
+	}
+	for _, mfa := range []string{"everyone", "admins", "some", "none", "unknown", ""} {
+		for _, signIn := range []string{"", "google", "unknown", "another_provider"} {
+			t.Run(mfa+"/"+signIn, func(t *testing.T) {
+				out := fixture(mfa, signIn)
+				eng, _ := unitOutcome(t, out, "/eng")
+				sales, _ := unitOutcome(t, out, "/sales")
+				root, _ := unitOutcome(t, out, "/")
+				for _, j := range []finding.Judgment{eng, sales, root} {
+					if j.Verdict != Fired {
+						t.Fatal("verdict moved", j)
+					}
+				}
+				provider := signIn == "another_provider"
+				wantEng := mfa == "everyone" || mfa == "admins"
+				wantOthers := mfa == "everyone" && !provider
+				if eng.Has("contradiction") != wantEng || sales.Has("contradiction") != wantOthers || root.Has("contradiction") != wantOthers {
+					t.Fatalf("raise: eng %v sales %v root %v", eng.Has("contradiction"), sales.Has("contradiction"), root.Has("contradiction"))
+				}
+				wantStopped := mfa == "everyone" && provider
+				if stopped(sales) != wantStopped || stopped(root) != wantStopped || stopped(eng) {
+					t.Fatalf("stopped: sales %+v root %+v", sales.NotChecked, root.NotChecked)
+				}
+				if wantStopped && (!strings.HasSuffix(sales.NotChecked[0], " scheck could not tell whether maybe@example.com in this unit is a super administrator Google does not require 2-step verification for: its administrator status, activity or 2-step verification flags could not be read. If it is, this would rank higher.") || strings.Contains(root.NotChecked[0], "could not tell")) {
+					t.Fatal("unknown admin count", sales.NotChecked, root.NotChecked)
+				}
+				for _, j := range []finding.Judgment{eng, sales, root} {
+					decided := j.Has("contradiction") || stopped(j)
+					want := []string(nil)
+					if decided {
+						want = []string{"access.mfa[0]"}
+						if signIn != "" && (mfa == "everyone" || mfa == "some") {
+							want = append(want, "access.mfa[0].sign_in")
+						}
+					}
+					if !slices.Equal(j.Sources, want) {
+						t.Fatalf("sources %v, want %v", j.Sources, want)
+					}
+					if !decided && (j.Why != "" || len(j.NotChecked) != 0) {
+						t.Fatal("wording on an instance the declaration did not decide", j)
+					}
+				}
+				if eng.Has("contradiction") {
+					c := Context{MFASource: "access.mfa[0]", SignIn: signIn}
+					if signIn != "" {
+						c.SignInSource = "access.mfa[0].sign_in"
+					}
+					if !slices.Equal(eng.NotChecked, []string{signInCaveat(c)}) {
+						t.Fatal("caveat", eng.NotChecked)
+					}
+					named := strings.Contains(eng.Why, "super administrator boss@example.com in this unit, who can still sign in to Google with a Google password, whatever your other identity provider does")
+					if named != (mfa == "everyone" && provider) || !strings.HasSuffix(eng.Why, "so this ranks one step higher.") {
+						t.Fatal("why", eng.Why)
+					}
+				}
+				line := accountOutcome(t, out, "help@example.com")
+				if line.Verdict != Fired || slices.ContainsFunc(line.NotChecked, func(s string) bool { return strings.Contains(s, "sign_in") }) != provider {
+					t.Fatal("delegate line", line)
+				}
+				if boss := accountOutcome(t, out, "boss@example.com"); boss.Verdict != Fired || len(boss.NotChecked) != 0 || boss.Has("contradiction") {
+					t.Fatal("super admin finding", boss)
+				}
+			})
+		}
+	}
+	// some with every active account off is exactly what a federated tenant
+	// looks like: another_provider stops it, super administrator or not.
+	e, c := stepFixture(stepUser("a", "/", new(false), new(false)), stepUser("b", "/Eng", new(false), new(true)))
+	e.Users.Items[0].IsAdmin = new(true)
+	c.MFA, c.MFASource, c.SignIn, c.SignInSource = "some", "access.mfa[0]", "another_provider", "access.mfa[0].sign_in"
+	for _, key := range []string{"/", "/eng"} {
+		if j := mustUnit(t, e, c, key, Fired); !stopped(j) {
+			t.Fatal("some under another_provider", key, j)
+		}
+	}
+	c.SignIn = "google"
+	if j := mustUnit(t, e, c, "/", Fired); !j.Has("contradiction") {
+		t.Fatal("some under google not raised", j)
+	}
+}
+
+func TestTwoStepSignInWording(t *testing.T) {
+	names := []string{"a@x", "b@x", "c@x", "d@x", "e@x"}
+	c := Context{MFA: "everyone", SignIn: "another_provider"}
+	for n, want := range map[int]string{
+		2: "for 2 super administrators in this unit, a@x and b@x, who can still sign in to Google with a Google password",
+		3: "for 3 super administrators in this unit, a@x, b@x and c@x, who can still sign in",
+		5: "for 5 super administrators in this unit, a@x, b@x, c@x and 2 more, who can still sign in",
+	} {
+		if why := raisedWhy(c, names[:n]); !strings.Contains(why, want) {
+			t.Fatalf("%d: %s", n, why)
+		}
+	}
+	if why := raisedWhy(Context{MFA: "admins", SignIn: "another_provider"}, names[:1]); why != raisedWhy(Context{MFA: "admins"}, names[:1]) {
+		t.Fatal("admins Why moved by sign_in", why)
+	}
+	if !strings.Contains(signInCaveat(Context{MFASource: "access.mfa[2]"}), "add `sign_in: another_provider` at `access.mfa[2]`") {
+		t.Fatal("absent caveat")
+	}
+
+	has := func(notes []Note, text string) bool {
+		return slices.ContainsFunc(notes, func(n Note) bool { return strings.Contains(n.Detail, text) })
+	}
+	boss := stepUser("boss", "/", new(true), new(true))
+	boss.IsAdmin = new(true)
+	maybe := stepUser("maybe", "/", new(false), new(true))
+	maybe.IsAdmin = nil
+	e, c := stepFixture(boss, maybe, stepUser("staff", "/", new(false), new(true)))
+	c.MFA, c.MFASource, c.SignIn, c.SignInSource = "everyone", "access.mfa[0]", "another_provider", "access.mfa[0].sign_in"
+	notes := twoStepNotes(e, "asset", c)
+	if !has(notes, "You declared that people sign in to Google through another identity provider (`access.mfa[0].sign_in`), which scheck did not read. Google does not require its own 2-step verification for 2 of 3 active accounts; whether that provider requires a second factor for them is not assessed. Super administrators can still sign in to Google with a Google password, and Google requires 2-step verification for 1 of 1 of them. The administrative status of 1 account was unknown.") {
+		t.Fatal("sign-in note", notes)
+	}
+	e.Users.Complete = false
+	e.Users.Items[0].IsAdmin = new(false)
+	notes = twoStepNotes(e, "asset", c)
+	if !has(notes, "for at least 2 active accounts; 3 active accounts were observed and the list of users was incomplete;") || !has(notes, "scheck observed no active super administrator, so their 2-step verification is not assessed here.") {
+		t.Fatal("partial sign-in note", notes)
+	}
+	for _, signIn := range []string{"", "google", "unknown"} {
+		c.SignIn = signIn
+		if has(twoStepNotes(e, "asset", c), "You declared that people sign in to Google through another identity provider") {
+			t.Fatal("sign-in note without another_provider", signIn)
+		}
+	}
+	plan := e.Coverage(nil, Context{SignIn: "another_provider", SignInSource: "access.mfa[0].sign_in"})[0]
+	if g := plan.Groups[4]; !strings.Contains(g.Limit, "You declared that people sign in through another identity provider (`access.mfa[0].sign_in`); scheck did not read it") {
+		t.Fatal("coverage limit", g.Limit)
+	}
+	if g := e.Coverage(nil, Context{SignIn: "google"})[0].Groups[4]; g.Limit != twoStepLimit {
+		t.Fatal("coverage limit moved", g.Limit)
+	}
+}
+
+// A stopped unit says what it could not judge: a super administrator with
+// unknown flags, an account in a status conflict, and, under some, the
+// affected super administrators the provider does not protect; the readout
+// counts unread super administrators apart and says "observed" on a
+// partial list.
+func TestTwoStepSignInUnknownStates(t *testing.T) {
+	declare := func(c *Context, mfa string) {
+		c.MFA, c.MFASource, c.SignIn, c.SignInSource = mfa, "access.mfa[0]", "another_provider", "access.mfa[0].sign_in"
+	}
+	has := func(notes []Note, text string) bool {
+		return slices.ContainsFunc(notes, func(n Note) bool { return strings.Contains(n.Detail, text) })
+	}
+	// Under everyone, every account that might be an affected super
+	// administrator but could not be read is named: unread flags, unknown
+	// activity, unknown administrator status with unknown flags, and a
+	// status conflict. A known non-administrator with unread flags is not.
+	boss := stepUser("boss", "/", nil, new(false))
+	boss.IsAdmin = new(true)
+	idle := stepUser("idle", "/", new(false), new(false))
+	idle.IsAdmin, idle.Suspended = new(true), nil
+	maybe := stepUser("maybe", "/", nil, new(true))
+	maybe.IsAdmin = nil
+	// Required with unknown activity: it cannot be affected, so it is not named.
+	safe := stepUser("safe", "/", new(true), new(true))
+	safe.IsAdmin, safe.Suspended = new(true), nil
+	e, c := stepFixture(boss, idle, maybe, stepUser("odd", "/", new(false), new(true)), stepUser("staff", "/", new(false), new(true)), stepUser("plain", "/", nil, new(true)), safe)
+	e.Access.Accounts[3].Conflict = true
+	declare(&c, "everyone")
+	j := mustUnit(t, e, c, "/", Fired)
+	if j.Has("contradiction") || len(j.NotChecked) != 1 ||
+		!strings.HasSuffix(j.NotChecked[0], " scheck could not tell whether any of 4 accounts in this unit (boss@example.com, idle@example.com, maybe@example.com and 1 more) is a super administrator Google does not require 2-step verification for: their administrator status, activity or 2-step verification flags could not be read. If one is, this would rank higher.") {
+		t.Fatalf("%+v", j.NotChecked)
+	}
+	notes := twoStepNotes(e, "asset", c)
+	if !has(notes, "Google requires 2-step verification for 0 of 1 of them. For 1 super administrator the requirement could not be read. The activity of 2 super administrators was unknown.") {
+		t.Fatal("unread super administrators in the note", notes)
+	}
+	e.Users.Complete = false
+	if !has(twoStepNotes(e, "asset", c), "requires 2-step verification for 0 of the 1 observed. For 1 super administrator") {
+		t.Fatal("partial note", twoStepNotes(e, "asset", c))
+	}
+	// One undecided account is named on its own.
+	e, c = stepFixture(maybe, stepUser("staff", "/", new(false), new(true)))
+	declare(&c, "everyone")
+	if j := mustUnit(t, e, c, "/", Fired); !strings.HasSuffix(j.NotChecked[0], " scheck could not tell whether maybe@example.com in this unit is a super administrator Google does not require 2-step verification for: its administrator status, activity or 2-step verification flags could not be read. If it is, this would rank higher.") {
+		t.Fatalf("%+v", j.NotChecked)
+	}
+	// Under some, the stopped unit names its super administrators as the
+	// ones the provider does not protect.
+	a, b := stepUser("a", "/", new(false), new(true)), stepUser("b", "/", new(false), new(true))
+	a.IsAdmin, b.IsAdmin = new(true), new(true)
+	e, c = stepFixture(a, b, stepUser("staff", "/", new(false), new(true)))
+	declare(&c, "some")
+	j = mustUnit(t, e, c, "/", Fired)
+	if j.Has("contradiction") || !strings.HasSuffix(j.NotChecked[0], " Super administrators a@example.com and b@example.com in this unit can still sign in to Google with a Google password, so that provider does not protect them: Google's own 2-step verification requirement is the control there.") {
+		t.Fatalf("%+v", j.NotChecked)
+	}
+	// Under some nothing ranks higher, so no account is said to.
+	odd := stepUser("odd", "/", new(false), new(true))
+	odd.IsAdmin = nil
+	e, c = stepFixture(odd, stepUser("staff", "/", new(false), new(true)))
+	declare(&c, "some")
+	if j := mustUnit(t, e, c, "/", Fired); j.Has("contradiction") || len(j.NotChecked) != 1 || strings.Contains(j.NotChecked[0], "rank higher") || strings.Contains(j.NotChecked[0], "could not tell") {
+		t.Fatalf("%+v", j.NotChecked)
+	}
+	// admins + google: sign_in decided nothing and is not cited.
+	e, c = stepFixture(a, stepUser("staff", "/", new(false), new(true)))
+	c.MFA, c.MFASource, c.SignIn, c.SignInSource = "admins", "access.mfa[0]", "google", "access.mfa[0].sign_in"
+	if j := mustUnit(t, e, c, "/", Fired); !j.Has("contradiction") || !slices.Equal(j.Sources, []string{"access.mfa[0]"}) {
+		t.Fatalf("%+v", j.Sources)
 	}
 }

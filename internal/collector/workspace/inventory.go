@@ -31,6 +31,9 @@ type Context struct {
 	// MFA is the tenant's access.mfa[i].enforced and MFASource its key;
 	// both are empty when the operator declared nothing for this tenant.
 	MFA, MFASource string
+	// SignIn is the tenant's access.mfa[i].sign_in and SignInSource its
+	// key; both are empty when the entry has none, decided as unknown.
+	SignIn, SignInSource string
 	// DeclaredDomains are the engagement's domain roots: never a reason to
 	// call a destination internal, only to say it was declared.
 	DeclaredDomains []string

@@ -81,6 +81,7 @@ func TestGoldenReports(t *testing.T) {
 		"workspace-inventory":            workspaceInventoryReport,
 		"workspace-inventory-partial":    workspacePartialInventoryReport,
 		"workspace-two-step":             workspaceTwoStepReport,
+		"workspace-two-step-sign-in":     workspaceSignInReport,
 		"workspace-oauth":                workspaceOAuthReport,
 		"workspace-mail":                 workspaceMailReport,
 		"workspace-mail-refused":         workspaceMailRefusal(workspace.Read{Decision: "unavailable:credential_exchange", Reason: "insufficient_permission:gmail.readonly", Repeats: true}, 0),

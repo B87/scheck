@@ -100,11 +100,13 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
    Why here      You declared that every account must use 2-step verification in this tenant, so
                  this ranks one step higher.
    Not checked   Whether these people sign in to Google through another identity provider, for
-                 example Okta or Microsoft Entra, that requires a second factor; if so, Google not
+                 example Okta or Microsoft Entra, that requires a second factor: if so, Google not
                  requiring its own 2-step verification may be expected for them, and the raise above
                  may not apply. scheck did not read that service or Google's single sign-on
-                 settings. Super administrators normally sign in to Google directly and need
-                 Google's 2-step verification regardless.
+                 settings. Super administrators can still sign in to Google with a Google password
+                 and need Google's 2-step verification regardless. If people do sign in through
+                 another provider, add `sign_in: another_provider` at `access.mfa[0]` and run scheck
+                 again.
    Fix           In the Admin console, open Security → Authentication → 2-step verification. Check
                  which setting applies to these accounts' organizational unit or groups, and turn on
                  enforcement with a short new-user enrollment period. Tell users before the
