@@ -1,0 +1,7 @@
+rpm-4.19.1.1-1.fc40.aarch64
+package php is not installed
+package php-fpm is not installed
+package php-cgi is not installed
+package nodejs is not installed
+package brotli is not installed
+libbrotli-1.1.0-3.fc40.aarch64

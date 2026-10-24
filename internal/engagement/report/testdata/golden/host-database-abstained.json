@@ -229,9 +229,9 @@
       "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 37,
-        "ran": 26,
-        "unknown": 11
+        "planned": 39,
+        "ran": 27,
+        "unknown": 12
       },
       "collected": {
         "from": "2026-10-07T07:12:03Z",
@@ -662,6 +662,17 @@
           "reasons": [],
           "rules": [
             "updates.pending"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Runtimes (PHP, Node.js)",
+          "reasons": [
+            {
+              "detail": "read: 0 installed packages; not read: pkg.rpm_runtimes",
+              "reason": "no_rule"
+            }
           ]
         },
         {

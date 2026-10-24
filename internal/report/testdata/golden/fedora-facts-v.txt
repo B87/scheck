@@ -1,6 +1,6 @@
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           ee5c1bcb518d
+Host identity            ran      host.hostname           e98c0b31f854
                                                           Hostname
 Host identity            ran      host.machine_id         cb80c459978742989ad33bef46e06e0f
                                                           Stable machine identifier (hashed into
@@ -19,6 +19,15 @@ Software updates         ran      pkg.dnf_check_update    37 updates available [
 Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1: zypper: command
                                                           not found
                                                           Pending patches (zypper)
+Runtimes (PHP, Node.js)  skipped  pkg.dpkg_runtimes       exit 127: bash: line 1: dpkg-query:
+                                                          command not found
+                                                          Installed PHP web packages and Node.js
+                                                          with its Brotli library (dpkg database;
+                                                          never runs the runtime)
+Runtimes (PHP, Node.js)  ran      pkg.rpm_runtimes        2 installed packages
+                                                          Installed PHP and Node.js packages with
+                                                          their Brotli library (rpm database; never
+                                                          runs the runtime)
 Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
                                                           or directory
                                                           Configured encrypted volumes
@@ -111,7 +120,7 @@ Session and shell        ran      sys.shell               /bin/bash
                                                           Login shell of the audit session
 Session and shell        ran      sys.uid                 1000
                                                           Effective uid of the audit session
-Session and shell        ran      sys.uname               Linux ee5c1bcb518d 7.2.12-orbstack-00394-g
+Session and shell        ran      sys.uname               Linux e98c0b31f854 7.2.12-orbstack-00394-g
                                                           becdd6130068 #1 SMP PREEMPT Thu Oct 22
                                                           22:17:17 UTC 2026 aarch64 GNU/Linux
                                                           Full kernel identification

@@ -110,6 +110,8 @@ func recordSummary(c Check, r Records) string {
 		s = fileModeSummary(r)
 	case ParseFindLS:
 		s = countOf(r.Len(), "listed files and folders")
+	case ParsePackages:
+		s = countOf(max(countField(r, FieldStatus, func(v string) bool { return v == PackageInstalled }), 0), "installed packages")
 	default:
 		s = countOf(r.Len(), unitOr(c, "records"))
 	}

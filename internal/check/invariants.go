@@ -62,12 +62,27 @@ var deniedBinaries = map[string]bool{
 	"setsebool": true, "semanage": true, "visudo": true, "usermod": true, "useradd": true,
 	"userdel": true, "kill": true, "pkill": true, "killall": true, "reboot": true,
 	"shutdown": true, "mount": true, "umount": true, "crontab": true,
+	// Language runtimes and the package manager that is itself a program run
+	// from a user-writable prefix: running one loads configuration and code the
+	// target controls (docs/spec/host-collector.md §1, G8). Versions are read
+	// from the package database, never from the runtime.
+	"php": true, "php-cgi": true, "phpdbg": true, "brew": true, "deno": true, "bun": true,
+	"nodejs": true, "npm": true, "npx": true, "dpkg": true, "dpkg-deb": true,
+	"rpmquery": true, "rpmverify": true, "rpmdb": true, "rpmkeys": true, "rpmsign": true,
 }
+
+// deniedRuntime matches the versioned names a runtime ships under (php8.3,
+// php-fpm8.3, php-cgi8.3, phpdbg8.3): none of them may be argv[0] either.
+var deniedRuntime = regexp.MustCompile(`^(php(-fpm|-cgi)?|phpdbg)[0-9.]*$`)
 
 // binaryRule constrains a binary that has both query and mutating modes.
 // verbs, when non-nil, is the allowlist for the first non-flag token (and it
 // must be present). denyTokens and denyPrefixes are rejected anywhere in argv.
 type binaryRule struct {
+	// namesOnly says every token after the verb is a package name: it may
+	// not start with a dash, so no option (a macro file, a pipe, a database
+	// path) can follow the verb.
+	namesOnly    bool
 	verbs        []string
 	denyTokens   []string
 	denyPrefixes []string
@@ -107,6 +122,10 @@ var binaryRules = map[string]binaryRule{
 	"lsblk":          {},
 	"ss":             {},
 	"lsof":           {},
+	// Package database queries: exact names, query mode only (G8).
+	"dpkg-query": {verbs: []string{"-s"}, namesOnly: true},
+	"rpm": {namesOnly: true, verbs: []string{"-q"}, denyTokens: []string{"-i", "-U", "-F", "-e", "-V", "--import", "--initdb", "--rebuilddb",
+		"--setperms", "--setugids", "--restore", "--install", "--upgrade", "--freshen", "--erase", "--addsign", "--resign"}},
 }
 
 // Validate applies every catalog invariant to cs and returns each failure.
@@ -226,7 +245,7 @@ func validateOne(c Check) []Violation {
 	}
 
 	bin := baseName(c.Argv[0])
-	if deniedBinaries[bin] {
+	if deniedBinaries[bin] || deniedRuntime.MatchString(bin) {
 		add(RuleDisallowedBinary, "%s is not a read-only binary", bin)
 	}
 	if bin == "sudo" || bin == "doas" {
@@ -248,6 +267,13 @@ func checkBinaryRule(c Check, bin string, rule binaryRule) []Violation {
 		for _, p := range rule.denyPrefixes {
 			if strings.HasPrefix(tok, p) {
 				vs = append(vs, Violation{c.ID, RuleMutatingFlag, fmt.Sprintf("%s %s (prefix %s)", bin, tok, p)})
+			}
+		}
+	}
+	if rule.namesOnly {
+		for i, tok := range args {
+			if i > 0 && strings.HasPrefix(tok, "-") {
+				vs = append(vs, Violation{c.ID, RuleVerbNotAllowed, fmt.Sprintf("%s %s: only package names may follow the verb", bin, tok)})
 			}
 		}
 	}

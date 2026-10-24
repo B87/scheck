@@ -1,0 +1,36 @@
+/etc/sudoers.d/README:#
+/etc/sudoers.d/README:# The default /etc/sudoers file created on installation of the
+/etc/sudoers.d/README:# sudo  package now includes the directive:
+/etc/sudoers.d/README:# 
+/etc/sudoers.d/README:# 	@includedir /etc/sudoers.d
+/etc/sudoers.d/README:# 
+/etc/sudoers.d/README:# This will cause sudo to read and parse any files in the /etc/sudoers.d 
+/etc/sudoers.d/README:# directory that do not end in '~' or contain a '.' character, if it
+/etc/sudoers.d/README:# exists. It is not an error if the directory does not exist.
+/etc/sudoers.d/README:# 
+/etc/sudoers.d/README:# Note also, that because sudoers contents can vary widely, no attempt is 
+/etc/sudoers.d/README:# made to add this directive to existing sudoers files on upgrade.  Feel free
+/etc/sudoers.d/README:# to add the above directive to the end of your /etc/sudoers file to enable 
+/etc/sudoers.d/README:# this functionality for existing installations if you wish!
+/etc/sudoers.d/README:# Sudo versions older than 1.9.1 will only support the old syntax
+/etc/sudoers.d/README:# #includedir. That means that the sudo versions in Debian bullseye (11)
+/etc/sudoers.d/README:# and later will happily accept both @includedir and #includedir.
+/etc/sudoers.d/README:#
+/etc/sudoers.d/README:# Finally, please note that using the visudo command is the recommended way
+/etc/sudoers.d/README:# to update sudoers content, since it protects against many failure modes.
+/etc/sudoers.d/README:# See the man page for visudo and sudoers for more information.
+/etc/sudoers.d/README:#
+/etc/sudoers.d/scheck:# scheck elevated checks for ops on linux — generated from the compiled catalog.
+/etc/sudoers.d/scheck:# Review, then install with: visudo -cf - < fragment && install -m 440 fragment /etc/sudoers.d/scheck
+/etc/sudoers.d/scheck:# Every line grants exactly one read-only command with fixed flags; scheck runs them as `sudo -n -- ...`.
+/etc/sudoers.d/scheck:Defaults:ops !requiretty
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/cat /etc/sudoers  # privesc.sudoers
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/find /root /home -xdev -maxdepth 4 -name node_modules -prune -o -name .git -prune -o -name .cache -prune -o -type d -not -perm -0011 -ls -o -type f -name id_rsa -ls -o -type l -name id_rsa -ls -o -type f -name id_ed25519 -ls -o -type l -name id_ed25519 -ls -o -type f -name id_ecdsa -ls -o -type l -name id_ecdsa -ls -o -type f -name id_dsa -ls -o -type l -name id_dsa -ls -o -type f -name id_ed25519_sk -ls -o -type l -name id_ed25519_sk -ls -o -type f -name id_ecdsa_sk -ls -o -type l -name id_ecdsa_sk -ls -o -type f -name credentials -ls -o -type l -name credentials -ls -o -type f -name credentials.db -ls -o -type l -name credentials.db -ls -o -type f -name application_default_credentials.json -ls -o -type l -name application_default_credentials.json -ls -o -type f -name access_tokens.db -ls -o -type l -name access_tokens.db -ls  # creds.home_files
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/grep -rH . /etc/sudoers.d  # privesc.sudoers_d
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/passwd -S -a  # accounts.passwd_status
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/bin/ss -tulpnH  # net.listeners
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/aa-status ""  # mac.aa_status
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/nft list ruleset  # fw.nft
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ss -tulpnH  # net.listeners
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/sshd -T  # sshd.config
+/etc/sudoers.d/scheck:ops ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose  # fw.ufw

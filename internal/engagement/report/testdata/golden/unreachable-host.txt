@@ -13,7 +13,7 @@ INCOMPLETE: deploy: could not connect from this machine (ssh: dial 203.0.113.5:2
   unreachable)). This does not tell you whether it is up for anyone else. Nothing was read.
 
 SUMMARY
-Checked in part  Hosts (ubuntu, 4 of 15 areas judged).
+Checked in part  Hosts (ubuntu, 4 of 16 areas judged).
 Not requested    Not part of this run: identity and access, secrets, cloud configuration, data
                  stores and backups, CI/CD and supply chain, external surface, web application,
                  email and domain, logging and incident readiness. To include one, list it under
@@ -21,13 +21,13 @@ Not requested    Not part of this run: identity and access, secrets, cloud confi
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 37 checks gave no
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 12 of 39 checks gave no
   answer). Below: 0 low, 0 informational, 0 accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
 is fully checked in this version; each area row under Coverage lists what this version does not
-judge. Checked in part: hosts. On ubuntu, 4 of 15 host areas were judged, each only on the settings
-named under Coverage; 6 have no rule in this version and 5 had no usable evidence. Not checked:
+judge. Checked in part: hosts. On ubuntu, 4 of 16 host areas were judged, each only on the settings
+named under Coverage; 7 have no rule in this version and 5 had no usable evidence. Not checked:
 identity and access, secrets, cloud configuration, data stores and backups, CI/CD and supply chain,
 external surface, web application, email and domain, logging and incident readiness. Anything not
 checked is unknown, not fine.
@@ -42,8 +42,10 @@ Hosts                    checked in part: 1 of 2 hosts read
   programs that run with root rights (SUID files); programs started at boot or on a schedule;
   credential files under other names or paths, their contents, and whether they are live.
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 37: 26 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
+  checks 39: 27 ran, 12 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
+    Runtimes (PHP, Node.js)  not judged: this version of scheck has no rule for it (read: 0
+                             installed packages; not read: pkg.rpm_runtimes)
     Disk encryption          not judged: this version of scheck has no rule for it (read: 10 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
@@ -100,11 +102,11 @@ NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
   On ubuntu, 5 checks did not give a usable answer: disk.crypttab, fw.ufw, log.auditd,
     persist.timers, time.timedatectl. `scheck explain <check-id>` prints each command; run it by
     hand to see why.
-  On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding;
+  On ubuntu, 7 checks need a tool this host does not have, so they could not tell (not a finding;
     listed with -v).
-  On ubuntu, this version of scheck has no rule for disk encryption, firewall, network exposure,
-    remote access, privilege escalation, startup and persistence. What was read is in the JSON
-    report (--format json) for a person to look at.
+  On ubuntu, this version of scheck has no rule for runtimes (PHP, Node.js), disk encryption,
+    firewall, network exposure, remote access, privilege escalation, startup and persistence. What
+    was read is in the JSON report (--format json) for a person to look at.
   To run again: scheck run engagement.yaml
 
 EXCLUDED, NARROWED AND NOT RUN

@@ -388,15 +388,70 @@ execs:
       stdout_file: 033-dnf.stdout
       code: 100
     - argv:
+        - dpkg-query
+        - -s
+        - php5.6-fpm
+        - php5.6-cgi
+        - libapache2-mod-php5.6
+        - php7.0-fpm
+        - php7.0-cgi
+        - libapache2-mod-php7.0
+        - php7.1-fpm
+        - php7.1-cgi
+        - libapache2-mod-php7.1
+        - php7.2-fpm
+        - php7.2-cgi
+        - libapache2-mod-php7.2
+        - php7.3-fpm
+        - php7.3-cgi
+        - libapache2-mod-php7.3
+        - php7.4-fpm
+        - php7.4-cgi
+        - libapache2-mod-php7.4
+        - php8.0-fpm
+        - php8.0-cgi
+        - libapache2-mod-php8.0
+        - php8.1-fpm
+        - php8.1-cgi
+        - libapache2-mod-php8.1
+        - php8.2-fpm
+        - php8.2-cgi
+        - libapache2-mod-php8.2
+        - php8.3-fpm
+        - php8.3-cgi
+        - libapache2-mod-php8.3
+        - php8.4-fpm
+        - php8.4-cgi
+        - libapache2-mod-php8.4
+        - php8.5-fpm
+        - php8.5-cgi
+        - libapache2-mod-php8.5
+        - nodejs
+        - libbrotli1
+      stderr_file: 034-dpkg-query.stderr
+      code: 127
+    - argv:
+        - rpm
+        - -q
+        - rpm
+        - php
+        - php-fpm
+        - php-cgi
+        - nodejs
+        - brotli
+        - libbrotli
+      stdout_file: 035-rpm.stdout
+      code: 5
+    - argv:
         - zypper
         - --non-interactive
         - lp
-      stderr_file: 034-zypper.stderr
+      stderr_file: 036-zypper.stderr
       code: 127
     - argv:
         - which
         - cat
-      stderr_file: 035-which.stderr
+      stderr_file: 037-which.stderr
       code: 127
     - argv:
         - sudo
@@ -404,12 +459,12 @@ execs:
         - --
         - cat
         - /etc/sudoers
-      stdout_file: 036-sudo.stdout
+      stdout_file: 038-sudo.stdout
       code: 0
     - argv:
         - which
         - grep
-      stderr_file: 037-which.stderr
+      stderr_file: 039-which.stderr
       code: 127
     - argv:
         - sudo
@@ -419,19 +474,19 @@ execs:
         - -rH
         - .
         - /etc/sudoers.d
-      stdout_file: 038-sudo.stdout
+      stdout_file: 040-sudo.stdout
       code: 0
     - argv:
         - systemctl
         - is-enabled
         - ssh
         - sshd
-      stdout_file: 039-systemctl.stdout
+      stdout_file: 041-systemctl.stdout
       code: 0
     - argv:
         - which
         - sshd
-      stderr_file: 040-which.stderr
+      stderr_file: 042-which.stderr
       code: 127
     - argv:
         - sudo
@@ -439,7 +494,7 @@ execs:
         - --
         - sshd
         - -T
-      stdout_file: 041-sudo.stdout
+      stdout_file: 043-sudo.stdout
       code: 0
     - argv:
         - grep
@@ -447,30 +502,30 @@ execs:
         - .
         - /sys/class/dmi/id/sys_vendor
         - /sys/class/dmi/id/product_name
-      stderr_file: 042-grep.stderr
+      stderr_file: 044-grep.stderr
       code: 2
     - argv:
         - uname
         - -s
-      stdout_file: 043-uname.stdout
+      stdout_file: 045-uname.stdout
       code: 0
     - argv:
         - printenv
         - SHELL
-      stdout_file: 044-printenv.stdout
+      stdout_file: 046-printenv.stdout
       code: 0
     - argv:
         - id
         - -u
-      stdout_file: 045-id.stdout
+      stdout_file: 047-id.stdout
       code: 0
     - argv:
         - uname
         - -a
-      stdout_file: 046-uname.stdout
+      stdout_file: 048-uname.stdout
       code: 0
     - argv:
         - timedatectl
         - show
-      stderr_file: 047-timedatectl.stderr
+      stderr_file: 049-timedatectl.stderr
       code: 1

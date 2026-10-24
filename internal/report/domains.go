@@ -14,6 +14,7 @@ var domainLabels = []struct {
 	{check.DomainHost, "Host identity"},
 	{check.DomainOS, "Operating system"},
 	{check.DomainUpdates, "Software updates"},
+	{check.DomainRuntimes, "Runtimes (PHP, Node.js)"},
 	{check.DomainDisk, "Disk encryption"},
 	{check.DomainIntegrity, "System integrity"},
 	{check.DomainFirewall, "Firewall"},
