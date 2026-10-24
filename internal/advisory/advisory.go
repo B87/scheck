@@ -36,8 +36,11 @@ type Component string
 // The components. PHPPackage is an RPM named php, which may carry the Apache
 // module or only a command line binary depending on the distribution.
 const (
-	FPM          Component = "fpm"
-	CGI          Component = "cgi"
+	FPM Component = "fpm"
+	CGI Component = "cgi"
+	// CLI is an rpm php-cli: on the Red Hat family and Fedora it also holds
+	// /usr/bin/php-cgi, so it may serve requests; whether it does is not read.
+	CLI          Component = "cli"
 	ApacheModule Component = "apache_module"
 	PHPPackage   Component = "php_package"
 	NodeRuntime  Component = "node"
@@ -76,6 +79,8 @@ const (
 	ReasonDistroNode = "distro_node_unfixed"
 	// ReasonOS: os-release was not read, so the distribution is not known.
 	ReasonOS = "os_release"
+	// ReasonCLI: an rpm php-cli, which may serve requests through php-cgi.
+	ReasonCLI = "php_cli"
 )
 
 // Runtime is one installed PHP or Node.js package and what the table says
@@ -105,7 +110,12 @@ type Runtime struct {
 	// ViaBrotli says the judgment rests on the Brotli library package a
 	// Node.js links, not on Node.js itself.
 	ViaBrotli bool
+	// Via is the Brotli library package a distribution Node.js was judged
+	// through, as the report cites it.
+	Via string
 	// EOLDate is the end-of-life date of the line, when the table has it.
+	// For a Node.js line that is still supported it is the date its
+	// support ends; a rule compares it with the time the package was read.
 	EOLDate string
 	// Detail is the sentence that says what the status means for this
 	// package; Excerpt the package as the report cites it.
@@ -147,11 +157,22 @@ func Assess(osRelease map[string]string, reads ...check.Records) Assessment {
 	for _, p := range pkgs {
 		if comp, line, ok := phpPackage(p); ok {
 			a.Runtimes = append(a.Runtimes, assessPHP(p, comp, line, osRelease))
-		} else if p.name == "nodejs" {
+		} else if isNodePackage(p) {
 			a.Runtimes = append(a.Runtimes, assessNode(p, pkgs, osRelease))
 		}
 	}
 	return a
+}
+
+var (
+	sclName      = regexp.MustCompile(`^php\d\d-php(-fpm|-cli)?$`)
+	nodeRPMNames = regexp.MustCompile(`^nodejs\d+$`)
+)
+
+// isNodePackage recognizes the Node.js runtime by name: nodejs, and a Red Hat
+// family distribution's versioned nodejs20 and the like.
+func isNodePackage(p pkg) bool {
+	return p.name == "nodejs" || p.manager == "rpm" && nodeRPMNames.MatchString(p.name)
 }
 
 // phpPackage recognizes a PHP package that serves requests, by name: the
@@ -164,10 +185,22 @@ func phpPackage(p pkg) (Component, string, bool) {
 			c = PHPPackage
 		case "php-fpm":
 			c = FPM
-		case "php-cgi":
-			c = CGI
+		case "php-cli":
+			c = CLI
 		default:
-			return "", "", false
+			// Remi's software collections: phpNN-php, phpNN-php-fpm and phpNN-php-cli.
+			m := sclName.FindStringSubmatch(p.name)
+			if m == nil {
+				return "", "", false
+			}
+			switch m[1] {
+			case "-fpm":
+				c = FPM
+			case "-cli":
+				c = CLI
+			default:
+				c = PHPPackage // the collection's Apache module and command line
+			}
 		}
 		core, ok := upstreamCore(p.version)
 		if !ok || len(core) < 2 {
@@ -261,6 +294,9 @@ func assessPHP(p pkg, comp Component, line string, osr map[string]string) Runtim
 		r.Status, r.Reason, r.Detail = Unknown, reason, detail
 		return r
 	}
+	if comp == CLI {
+		return unknown(ReasonCLI, fmt.Sprintf("%s %s is PHP's command line package; on the Red Hat family and Fedora it also holds the CGI program, so it may serve requests. Whether it does was not read, and it is not judged against the fix.", p.name, p.version))
+	}
 	switch src {
 	case srcSury, srcRemi:
 		fixed, ok := phpFixed[line]
@@ -336,6 +372,9 @@ func assessNode(p pkg, all []pkg, osr map[string]string) Runtime {
 		}
 		if fixed, ok := nodeFixed[r.Line]; ok {
 			want, _ := upstreamCore(fixed)
+			// The line is supported until its date: a rule that judges
+			// support compares it with the time the package was read.
+			r.EOLDate, _ = EOLDate("node", r.Line)
 			r.FixedIn = fixed
 			if compareCore(core, want) < 0 {
 				r.Status = Affected
@@ -378,11 +417,12 @@ func assessNode(p pkg, all []pkg, osr map[string]string) Runtime {
 		r.FixedIn, r.Ref = row.fixed, row.ref
 		if compareDpkg(lib.version, row.fixed) < 0 {
 			r.Status = Affected
-			r.ViaBrotli = true
+			r.ViaBrotli, r.Via = true, excerpt(lib)
 			r.Detail = fmt.Sprintf("nodejs %s decompresses Brotli through the system library, and libbrotli1 %s is below %s, %s's fix for %s. Updating nodejs does not fix this; updating the Brotli library and restarting your Node processes does.",
 				p.version, lib.version, row.fixed, row.name, NodeBrotliAdvisory)
 			return r
 		}
+		r.Via = excerpt(lib)
 		return unknown(ReasonDistroNode, fmt.Sprintf("nodejs %s decompresses Brotli through the system library, and libbrotli1 %s is at or above %s, %s's fix for %s; %s had published no fix for the other nine flaws of this release as of %s, so the package is not shown fixed.",
 			p.version, lib.version, row.fixed, row.name, NodeBrotliAdvisory, label, TableVersion))
 	}
@@ -402,6 +442,34 @@ func brotliOf(all []pkg) (pkg, bool) {
 	return pkg{}, false
 }
 
+// Covers says the table knows the package names of the distribution that
+// osRelease names for a package manager ("dpkg" or "rpm"): Debian and Ubuntu
+// for dpkg (Debian 9 and Ubuntu 16.04 or later), Fedora and the Red Hat
+// family 8 or later for rpm. On another distribution or an older release
+// (SUSE, Alpine, Arch, CentOS 7, Amazon Linux, Debian 8) a PHP or Node.js
+// package has names the reads never asked about, so finding none proves
+// nothing.
+func Covers(osRelease map[string]string, manager string) bool {
+	id := osRelease[osID]
+	ver, ok := upstreamCore(osRelease[osVersionID])
+	switch {
+	case manager == "rpm" && id == "fedora":
+		return true
+	case manager == "rpm":
+		// Red Hat family 7 and Amazon Linux name PHP otherwise (software
+		// collections, ius, webtatic, php8.N-fpm).
+		_, family := rpmDistros[id]
+		return family && id != "amzn" && ok && ver[0] >= 8
+	case id == "debian":
+		// Debian 8 and older: php5-fpm.
+		return ok && ver[0] >= 9
+	case id == "ubuntu":
+		// Ubuntu 14.04 and older: php5-fpm.
+		return ok && compareCore(ver, []int{16, 4}) >= 0
+	}
+	return false
+}
+
 // Recognizes says whether the table knows what a package name is: a PHP web
 // package, Node.js, or the Brotli library it links. The catalog test uses it
 // to keep the reads and the table the same list.
@@ -411,6 +479,9 @@ func Recognizes(name string) bool {
 		return true
 	}
 	if _, _, ok := phpPackage(pkg{name, "8.2.0", "dpkg"}); ok {
+		return true
+	}
+	if isNodePackage(pkg{name, "22.0.0-1", "rpm"}) {
 		return true
 	}
 	_, _, ok := phpPackage(pkg{name, "8.2.0-1", "rpm"})

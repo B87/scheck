@@ -24,14 +24,44 @@ func DpkgRuntimeArgv() []string {
 	return append(argv, "nodejs", "libbrotli1")
 }
 
-// RpmRuntimeArgv is rpm -q over the same families by their RPM names. A
+// sclLines are the Remi software collections' PHP lines, whose packages are
+// named phpNN-php (the Apache module), phpNN-php-fpm and phpNN-php-cli (no
+// dot in the line).
+var sclLines = []string{"56", "70", "71", "72", "73", "74", "80", "81", "82", "83", "84", "85"}
+
+// nodeMajors are the versioned Node.js package names a Red Hat family
+// distribution ships beside nodejs (nodejs20, nodejs22).
+var nodeMajors = []string{"18", "20", "22", "24", "26"}
+
+// RpmRuntimeArgv is rpm -q over the same families by their RPM names, with
+// Remi's software-collection PHP and the versioned Node.js packages. A
 // package that is not installed answers "package X is not installed". The
 // first name is rpm itself, which every host with an rpm database has: when
 // the database cannot be opened rpm prints the same sentence for every name
-// and exits like a host with none of them, so the read counts only when rpm
-// finds itself (parsePackages).
+// and gives the status of a host with none of them, so the read counts only
+// when rpm finds itself (parsePackages).
 func RpmRuntimeArgv() []string {
-	return []string{"rpm", "-q", "rpm", "php", "php-fpm", "php-cgi", "nodejs", "brotli", "libbrotli"}
+	// php-cli is asked about because /usr/bin/php-cgi is in it on these
+	// distributions (there is no php-cgi package), so it may serve requests.
+	argv := []string{"rpm", "-q", "rpm", "php", "php-fpm", "php-cli", "nodejs", "brotli", "libbrotli"}
+	for _, l := range sclLines {
+		argv = append(argv, "php"+l+"-php", "php"+l+"-php-fpm", "php"+l+"-php-cli")
+	}
+	for _, m := range nodeMajors {
+		argv = append(argv, "nodejs"+m)
+	}
+	return argv
+}
+
+// RpmRuntimeExitOK is every status rpm -q gives for these names: the number
+// of names not installed, never more than the names asked about. A signal
+// or a crash gives another code and the read is unavailable.
+func RpmRuntimeExitOK() []int {
+	var out []int
+	for i := 0; i <= len(RpmRuntimeArgv())-2; i++ {
+		out = append(out, i)
+	}
+	return out
 }
 
 // RuntimePackageNames are every package name the two reads ask about, for the

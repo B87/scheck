@@ -64,6 +64,8 @@ func TestGoldenReports(t *testing.T) {
 		"host-service-beyond":     hostServiceBeyondReport,
 		"host-sensitive-docker":   hostSensitiveDockerReport,
 		"host-sensitive-smb":      hostSensitiveSMBReport,
+		"host-php-fired":          hostPHPFiredReport,
+		"host-node-abstained":     hostNodeAbstainedReport,
 		"context-notes":           contextNotesReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.

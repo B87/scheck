@@ -209,6 +209,27 @@ func TestDpkgOrdering(t *testing.T) {
 	}
 }
 
+// The reads cover the package names of some releases only: finding nothing
+// proves nothing elsewhere.
+func TestCovers(t *testing.T) {
+	cases := []struct {
+		id, version, manager string
+		want                 bool
+	}{
+		{"ubuntu", "24.04", "dpkg", true}, {"ubuntu", "16.04", "dpkg", true}, {"ubuntu", "14.04", "dpkg", false},
+		{"debian", "12", "dpkg", true}, {"debian", "8", "dpkg", false}, {"debian", "", "dpkg", false},
+		{"raspbian", "12", "dpkg", false}, {"linuxmint", "21", "dpkg", false},
+		{"fedora", "40", "rpm", true}, {"rhel", "9.3", "rpm", true}, {"rocky", "8.9", "rpm", true}, {"almalinux", "9.3", "rpm", true},
+		{"centos", "7", "rpm", false}, {"amzn", "2023", "rpm", false}, {"opensuse-leap", "15.5", "rpm", false},
+		{"ubuntu", "24.04", "rpm", false}, {"rhel", "9", "dpkg", false},
+	}
+	for _, tc := range cases {
+		if got := Covers(os(tc.id, tc.version), tc.manager); got != tc.want {
+			t.Errorf("%s %s %s: %v, want %v", tc.id, tc.version, tc.manager, got, tc.want)
+		}
+	}
+}
+
 func TestEOLDates(t *testing.T) {
 	if d, ok := EOLDate("node", "20"); !ok || d != "2026-04-30" {
 		t.Errorf("%q %v", d, ok)

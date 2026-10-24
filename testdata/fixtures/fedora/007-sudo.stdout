@@ -1,4 +1,4 @@
    984326      0 dr-xr-x---   1 root     root            8 Oct 24 16:50 /root
    984327      0 drwx------   1 root     root            0 Oct 24 16:50 /root/.ssh
-  1139049      0 drwx------   1 ops      ops            72 Oct 24 20:40 /home/ops
-  1139053      0 drwx------   1 ops      ops            30 Oct 24 20:40 /home/ops/.ssh
+  1159190      0 drwx------   1 ops      ops            72 Oct 24 22:57 /home/ops
+  1159194      0 drwx------   1 ops      ops            30 Oct 24 22:57 /home/ops/.ssh

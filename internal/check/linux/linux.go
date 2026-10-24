@@ -40,7 +40,7 @@ func init() {
 		check.Check{ID: "pkg.dpkg_runtimes", Description: "Installed PHP web packages and Node.js with its Brotli library (dpkg database; never runs the runtime)",
 			Platform: check.Linux, Domain: check.DomainRuntimes, Parser: check.ParsePackages, Baseline: true, ExitOK: []int{0, 1}, Argv: check.DpkgRuntimeArgv()},
 		check.Check{ID: "pkg.rpm_runtimes", Description: "Installed PHP and Node.js packages with their Brotli library (rpm database; never runs the runtime)",
-			Platform: check.Linux, Domain: check.DomainRuntimes, Parser: check.ParsePackages, Baseline: true, ExitOK: []int{0, 1, 2, 3, 4, 5, 6, 7}, Argv: check.RpmRuntimeArgv()},
+			Platform: check.Linux, Domain: check.DomainRuntimes, Parser: check.ParsePackages, Baseline: true, ExitOK: check.RpmRuntimeExitOK(), Argv: check.RpmRuntimeArgv()},
 
 		// Disk encryption
 		unit(base("disk.lsblk", "Block devices, filesystems and crypt layers", check.DomainDisk, check.ParseLines, "lsblk", "-o", "NAME,TYPE,FSTYPE,MOUNTPOINT"), "block devices"),

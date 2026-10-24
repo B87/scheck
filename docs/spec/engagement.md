@@ -877,12 +877,13 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` | n/a |
 | `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below, and the findings in the secrets area | +1 | no: stops at high |
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
-| `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered`, `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3 G5) only | +1 | no: stops at high |
+| `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered`, `svc.listens_beyond_declared` (E9 step 5a), `svc.sensitive_listens_unfiltered` (0.0.3 G5) and `php.fix_missing` (0.0.3 G8) only | +1 | no: stops at high |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
 | `attribute:admin` | a fact, cited by observation and excerpt; on a GitHub repository, `repository_admin` counts only where the repository is declared production | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
 | `attribute:admin_grantor` | a fact, cited by observation and excerpt | `workspace.oauth_broad_scope`, when a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it | +1 | no: stops at high |
 | `attribute:public_repository` | the direct repository read, observed public visibility | `github.secret_scanning_open` and `github.history_credential` | +1 | yes |
 | `attribute:production_write` | people `left` passed, and effective write (push, maintain or admin) on a `deploys_to: production` repository, from the collaborators read (R4 below) | `identity.former_person_has_access` on GitHub | +1 | yes |
+| `attribute:serves_web` | the listener and firewall reads of R7: a web server from `rules.WebServersVersion` listens beyond loopback and the firewall leaves the port open | `php.fix_missing` (R7, 0.0.3 G8) | +1 | no: stops at high |
 | `attribute:<other>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute (`attribute:password_form`, web-collector.md) | +1 | no: stops at high |
 
 The table is data in Analyze (`internal/engagement/severity`, built in E9 step 1a): one
@@ -908,7 +909,7 @@ not named here does not exist.
   On a host asset, only definitions flagged `HostAccess` or in the secrets area move,
   whatever their other area: `sshd.password_auth_enabled`, `sshd.root_login_enabled`,
   `accounts.empty_password`, `accounts.empty_password_remote`, `db.listens_unfiltered`,
-  `svc.sensitive_listens_unfiltered` and `docker.socket_exposed` (flagged), and `creds.env_file_exposed`,
+  `svc.sensitive_listens_unfiltered`, `php.fix_missing` (0.0.3 G8) and `docker.socket_exposed` (flagged), and `creds.env_file_exposed`,
   `creds.ssh_key_exposed` and `creds.cloud_credentials_exposed` (secrets; 0.0.3 G5): a
   credential kept on the host that holds the data is the way to that data. Every other
   asset kind matches by area. The three credential findings are medium at base, so the
@@ -954,6 +955,7 @@ abstains. This list is complete; a rule that reads a date and is not here is a d
 | Stale and never-signed-in accounts | The per-account detail read that returned the compared sign-in and creation times, not the users read |
 | A Workspace role assignment's `expireTime` | The assignments read that carried it |
 | A certificate's expiry and its 14-day window | The TLS read |
+| `node.line_unsupported` (R9, 0.0.3 G8): a Node.js line the table holds a fix for (22, 24, 26) is supported until its table date (2027-04-30, 2028-04-30, 2029-04-30), the date compared as the left-person rule compares a `left` date (`finding.LeftAt`, in UTC). A line the table does not hold (18, 20, 21, 23, 25) is end of life with no clock | The host's collection: the start and the end of the session that read its packages (the kept envelope's `run.started` and `duration_ms`). Date not passed at the last read: disproved. Passed at the first read: fires. Within the read: abstains `unavailable:eol_within_collection`. No recorded time: abstains `unavailable:collection_time` |
 | `security.txt` `Expires` | The `security.txt` read |
 | `identity.unexpected_admin` for a person with a `left` date | The reads the left-person rule uses for that account (the owners reads on GitHub, the users reads on Workspace): handed to offboarding once the date has passed; while it falls within collection or a read has no recorded time, the rule abstains with the left-person rule's reason rather than judge the account as a current person's |
 | An acceptance's expiry | One time per acceptance, for its outcome and every instance it covers alike: the latest collection time among the reads its matched findings cite; for a host finding, the host's collection, the start of the session that collected it. Never the run's first start. When any matched finding's reads carry no recorded time, the acceptance is undecided (`rule_not_decided`) and every instance it covers stays open |
@@ -994,7 +996,7 @@ nothing older than 7 days ([runs.md](runs.md), "Stop and resume"; built, step 8)
 **Ceilings.** Critical is the anchor's definition: anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled. A step may take a finding past high only where the table's last column says yes: `contradiction`, `attribute:admin` on a left person's account, `attribute:production_write` and `attribute:public_repository`. No other step passes high: not the other rows of the table, not a collector's own steps declared on a definition (`Attributes`; none may pass high in 0.0.2), and not the host collector's own table (`host-collector.md §5.3`, which caps a finding left above high at high after the table). A declaration of stakes alone (`deploys_to:production`, `data_matters_most`, a host's `exposure: internet`) says neither that someone with no right to it can use the weakness now nor that the company believes it is handled. A finding definition may
 also carry a severity ceiling that no engagement rule passes: `db.listens_unfiltered`,
 `svc.listens_beyond_declared` and `svc.sensitive_listens_unfiltered` stop at high, since the cloud firewall and the
-database's own authentication were not read. A step stopped by a ceiling is recorded in
+database's own authentication were not read; `php.fix_missing`, `node.fix_missing` and `node.line_unsupported` stop at high too, since the cloud firewall and whether the web server passes requests to PHP were not read. A step stopped by a ceiling is recorded in
 the chain with the cap. For a table entry that stops at high: "capped at high by `<rule>`:
 critical means that anyone, or someone with no right to it, can use this now, or that you
 believe it is handled; `<rule>` says neither." For a definition's ceiling (R1, R3, R6):
@@ -1016,7 +1018,7 @@ against them:
 |---|---|---|
 | critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled (reached only by the raises the table marks, "Severity in context"). | a usable empty password: an account with an empty password that sshd accepts empty passwords for (`accounts.empty_password_remote`, a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
 | high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`, and +1 `attribute:production_write` when they can still push to a production repository); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
-| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`; +1 `exposure:internet`, +1 `contradiction`; ceiling high); a remote-administration service in R6's table listening the same way (`svc.sensitive_listens_unfiltered`, 0.0.3 G5; +1 `unauthenticated_default` for Docker's API without TLS and etcd, +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`; +1 `exposure:internet`, +1 `contradiction`; ceiling high); a remote-administration service in R6's table listening the same way (`svc.sensitive_listens_unfiltered`, 0.0.3 G5; +1 `unauthenticated_default` for Docker's API without TLS and etcd, +1 `exposure:internet`, +1 `contradiction`; ceiling high); a PHP web package below its source's fix for the October 2026 flaws (`php.fix_missing`, 0.0.3 G8; +1 `attribute:serves_web`, +1 `exposure:internet`; ceiling high) and the Node.js equivalents (`node.fix_missing`, `node.line_unsupported`; no raises) |
 | low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone; a declared service listening beyond its declared audience (`svc.listens_beyond_declared`, E9 step 5a; fires only against a declaration, so always +1 `contradiction`: medium, high on an internet host; ceiling high) |
 | info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
 
@@ -1542,7 +1544,7 @@ disproved and abstains on a fixture, and that an all-partial read never disprove
 
 ### The multi-fact rules of 0.0.2
 
-R1 (E9 step 3a), R2 (step 3b), R4 and R5 (step 4), R3 (step 5a) and R6 (0.0.3 G5 step 3) are contract; the rest
+R1 (E9 step 3a), R2 (step 3b), R4 and R5 (step 4), R3 (step 5a), R6 (0.0.3 G5 step 3) and R7 to R9 (0.0.3 G8 step 2) are contract; the rest
 is design that becomes contract when its step lands (`ROADMAP.md`). Already built
 and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
 `identity.unattributed_admin`, `identity.former_person_has_access`,
@@ -1936,6 +1938,126 @@ port could not be ruled out". The Hosts row's Firewall line reads "whether
 remote-administration ports are filtered only; see External surface" beside R1's and R3's.
 The fixed item `hosts.firewall_linux` reads "the firewall on Linux hosts, apart from
 database ports, remote-administration ports and the services you declared".
+
+**R7 `php.fix_missing`, R8 `node.fix_missing` and R9 `node.line_unsupported`** (built, 0.0.3
+G8 step 2). Area hosts, category updates, base medium, ceiling high, subject kind `package`
+(`key` and `label` the package name), never lowered by `exposed_on_purpose`. They judge the
+PHP and Node.js packages of a Linux host against the dated table of the disclosures of
+2026-10-21 (`advisory.TableVersion`, `2026-10-24`; the bar for an entry, and why `php` and
+`node` are never run, are in [host-collector.md](host-collector.md) §1 and §11). A rule here
+compares no version itself: the table's classifier compares a package only with the fix of
+its own source, by dpkg or rpm ordering, never by upstream version number. They read
+`pkg.dpkg_runtimes`, `pkg.rpm_runtimes` and `os.release` (the table row is chosen by its
+`ID`, never `ID_LIKE`); R7 also reads `net.listeners` and the firewall readings R1 reads. A
+macOS host gets no verdict, and its coverage plan names the groups unread: "this version of
+scheck reads PHP and Node.js packages on Linux only".
+
+| Id | Judges | Raises | `HostAccess` |
+|---|---|---|---|
+| `php.fix_missing` (R7) | a PHP web package (`php<L>-fpm`, `php<L>-cgi`, `libapache2-mod-php<L>`; rpm `php`, `php-fpm` and Remi's software-collection `phpNN-php`, `phpNN-php-fpm`; the collection's `phpNN-php` is judged as a PHP package, not as `mod_php`; an rpm `php-cli` or `phpNN-php-cli` is not judged, see `unavailable:php_cli`) below the fix of its source for CVE-2026-109618 and CVE-2026-109619 | `attribute:serves_web` +1, `exposure:internet` +1 | yes |
+| `node.fix_missing` (R8) | `nodejs` (rpm also `nodejs18`, `nodejs20`, `nodejs22`, `nodejs24`, `nodejs26`) below the fix of its source for the ten flaws of the Node.js release of 2026-10-21; for a distribution package, its Brotli library below the distribution's fix for CVE-2026-111497 | none | no |
+| `node.line_unsupported` (R9) | `nodejs` from a source that tracks the Node.js project, on a line the project no longer fixes | none | no |
+
+*Outcomes,* per package (the subject):
+
+| Outcome | When |
+|---|---|
+| fires | the installed version is below the fix of its own source: a distribution package below that release's fixed package; an upstream-tracking source (deb.sury.org for PHP 8.2 to 8.5, Remi, NodeSource) below the upstream fix; for R8, a distribution Node.js whose system Brotli library is below the distribution's fix (updating `nodejs` does not fix it). R9 fires for an upstream-tracking source on a line the table does not hold, or on one whose table date had passed at the first read of the host ("Severity in context", "Time") |
+| disproved | the version is at or above the fix of the same source, the read complete and the source recognized. Ubuntu 24.04's `8.3.6-0ubuntu0.24.04.13` is fixed, though its upstream number is far below 8.3.36 (the false-positive trap). R9 is disproved for a package on a line whose table date had not passed at the last read. A disproof needs a whole read: with any partial runtime read, every would-be disproof is an abstention (`unavailable:packages_partial`) |
+| insufficient evidence | `unavailable:packages` (neither package database could be read); `unavailable:os_release` (the distribution is unread or unknown); `unavailable:backport_unknown` (the table's fixed-package field for this distribution is empty, as for the Red Hat family, Fedora and Debian 11); `unavailable:source_unrecognized` (control-panel PHP, FrankenPHP, a local rebuild, any source the table does not know); `unavailable:unnumbered_backport` (PHP 7.4, 8.0 and 8.1 from deb.sury.org, fixed without a new version number); `unavailable:brotli_unread` (a distribution Node.js whose Brotli library was not found); `unavailable:distro_node_unfixed` (a distribution Node.js whose Brotli is already fixed: the distribution has published nothing for the other nine flaws); `unavailable:line_unsupported` (R8 on an end-of-life line, which R9 owns); `unavailable:distro_package` (R9 on a distribution package, whose support is the distribution's to give); `unavailable:php_cli` (R7: an rpm `php-cli` or `phpNN-php-cli`, whose `/usr/bin/php-cgi` may serve requests; the CGI program was not read, and while one is installed the host-level "no PHP web package" disproof is not said); `unavailable:php_without_package` (R7: a `php-fpm`, `php-cgi` or `frankenphp` listener on a host whose package databases show no PHP); `unavailable:packages_partial` (a would-be disproof, with a partial runtime read: see below); `unavailable:distribution` (no package of the product, on a distribution whose package names the reads do not cover); `unavailable:eol_within_collection` and `unavailable:collection_time` (R9, from the dates above) |
+
+A Debian or Ubuntu host with only `php<L>-cli` has no PHP subject (dpkg's `php<L>-cli` is not read). The host-level outcome, when no package
+of the product is installed, is a disproof only of "no PHP web package (or no Node.js
+package) is installed according to the package database", never of "no vulnerable PHP on
+this host". It is allowed only when `os.release` `id` is a distribution whose package names
+the reads cover, by release (`advisory.Covers`): `debian` 9 or later and `ubuntu` 16.04 or
+later for dpkg; `fedora` and the Red Hat family (`rhel`, `centos`, `rocky`, `almalinux`,
+`ol`) 8 or later for rpm. On SUSE, Alpine, Arch, CentOS or Red Hat 7, Amazon Linux, Debian 8
+and older, a derivative (`raspbian`, `linuxmint`), or with `os.release` unread, the rule
+abstains `unavailable:distribution` and says which distribution it saw. It also says, in
+"Not checked", that a PHP running outside the package databases is looked for only among
+listening sockets, and only when they are read with sudo. One usable package database
+is enough: a host has dpkg or rpm, and the other being unavailable is expected.
+
+*Partial reads.* The three rules set `Rule.OwnPartial`: the framework neither withdraws
+their disproofs because some fact they touched was partial nor marks the host's population
+incomplete for it, and the rules settle it themselves. A runtime read is partial when its
+output was cut, a dpkg package is half-installed, the rpm sentinel is missing, or lines were
+not recognized. A partial read counts unless the distribution is one the other manager covers (a partial rpm
+read is ignored only where dpkg covers the distribution, and the reverse): an rpm database that
+does not exist on a Debian host does not cancel the disproofs the dpkg read supports. On a
+distribution the reads do not know (Mint, Raspbian, Amazon Linux, CentOS 7, Debian 8) or with
+`os.release` unread, every partial read withdraws the disproofs. The host-level disproof cites
+the read whose manager covers the distribution. With any partial runtime read, every would-be disproof (a package at or
+above its fix, a line still supported, no package of the product) becomes an abstention
+`unavailable:packages_partial` whose "Not checked" names the read. A fired verdict stands:
+a partial read can show a package behind, never ahead. Every per-package verdict cites
+`os.release` (`ID=… VERSION_ID=…`), and a Node.js judged through the Brotli library also
+cites the library's record.
+
+*Standing gap.* Each rule declares the gap `unavailable:runtime_installs` ("PHP and Node.js
+installed outside the package database (containers, Homebrew, source builds, version
+managers, control panels) are not read"; `Rule.Gap`, carried as `CoverageGroup.Gap`). A group
+that decided is therefore at most *partial*, and the gap's reason prints with the mark
+([report.md](report.md), "The Hosts row"). The groups are "PHP security fix (October
+2026)", "Node.js security fixes (October 2026)" and "Node.js release line support", under
+the Hosts row's "Runtimes (PHP, Node.js)" sub-row.
+
+*Raises.* `attribute:serves_web` is declared on the definition (`Attributes`) and set only
+on a fired R7, only on Linux, when a program from the versioned list
+`rules.WebServersVersion` (`2026-10-24`) listens on a non-loopback address and R1's firewall
+reader leaves that port open to every source: `nginx`, `apache2`, `httpd`, `caddy`,
+`lighttpd`, `litespeed`, `lshttpd`, `openlitespeed`, `frankenphp`, `unitd`, `angie`, and
+`php-fpm*` or `php-cgi*` listening themselves. A reverse proxy that may front another
+machine (`haproxy`, `traefik`, `envoy`, `varnishd`) and PHP's built-in server are not
+counted. The chain cites the listener read. When the listeners or the firewall cannot be
+read, or no such web server is shown reachable, the finding stands at its base and its
+`why_here` says it is "rated at its base" and why; the raise has no "not applied" step. When
+no web server is seen and a container proxy (`docker-proxy` and the like) owns a port beyond
+localhost, the reason names the port and the container: "`docker-proxy` publishes
+`0.0.0.0:443/tcp`, a container: what it serves, and any PHP or Node.js inside it, was not
+read". Listener addresses are written as people write them, an IPv6 address in
+brackets (`[::]:80/tcp`).
+`exposure:internet` +1 when the host's `exposure` is `internet`; a host on
+`data.matters_most` raises R7 by +1 (`HostAccess`). R8 and R9 raise on neither, and Node.js
+has no listener join: `process.title` and process managers rename the program the kernel
+shows. The ceiling is high, and the chain's stop says (`finding.Def.CeilingWhy`, for
+`php.fix_missing`): "capped at high: whether the cloud firewall lets anyone reach this web
+server, and whether it passes requests to this PHP, were not read, so scheck cannot say
+anyone can reach this PHP now." The `serves_web` raise's own sentence is the shorter "A web
+server on this host listens beyond localhost and the host firewall lets any address in,
+which ranks one step higher."
+
+*Text.* A fired PHP judgment reads "*package version* on *host* is below *fixed*, the first
+*distribution release* package that fixes CVE-2026-109618 and CVE-2026-109619 (the PHP
+security release of 21 October 2026). These flaws let anyone who can send a request to PHP
+run code as the web server's account, before your application runs." On the Apache module
+it adds "Apache with mod_php is the setup the PHP project demonstrated a full exploit
+against." Ubuntu 18.04 and 20.04 add that the fix is published only through Ubuntu Pro.
+The remediation is to update from the source installed from and then restart every PHP
+process, because an installed update does not protect workers started before it; until
+then `session.upload_progress.enabled=0` and `post_max_size=8M` (32M if the site takes
+uploads) in `php.ini` or the FPM pool, not `.user.ini`, which reduce the risk and do not
+remove it. R8 for a Node.js project build names the fixed versions (22.23.4, 24.22.1,
+26.12.1); for a distribution package it names the Brotli library and says that updating
+`nodejs` alone does not fix it; its remediation also says that copies built into Docker
+images, single executable apps and snapshots must be rebuilt. R9's impact and remediation are line-generic, since it fires for a line after its table date
+as well as for lines the table never held: the line reached end of life, the project's
+release of 21 October 2026 fixes 22, 24 and 26 only, and later flaws will not be fixed on it. The
+words *vulnerable* and *exploited* are never used: a version does not show a host
+vulnerable, and that an exploit has been demonstrated is not that one was used.
+
+Not checked, always: "Read: PHP and Node.js packages from dpkg and rpm. Not read:
+containers and their images; Homebrew and installs from source; nvm, volta, asdf and fnm
+installs in home directories; control-panel PHP (cPanel, Plesk, CloudLinux); Node.js inside
+applications; other programs that bundle Brotli; whether running processes were restarted
+after an update. Advisories published after 2026-10-24, the date of this build's table, are
+not known to it." A distribution Node.js judgment adds "Debian had not published fixes for
+the other nine flaws of this release as of 2026-10-24" only when the source is Debian.
+
+*What it never claims.* That a host is vulnerable or exploited, that PHP is reachable (the
+web server may not pass requests to it, and the cloud firewall is not read), or anything
+about a runtime it did not read. It never runs `php`, `php-fpm`, `node` or `brew`.
 
 **R4 `attribute:production_write`** (built, E9 step 4). A raise on the GitHub
 `identity.former_person_has_access` finding. The GitHub collector states facts and the

@@ -9,6 +9,10 @@ const (
 	IDEmptyPasswordRemote = "accounts.empty_password_remote"
 	IDSvcListensBeyond    = "svc.listens_beyond_declared"
 	IDSensitiveListens    = "svc.sensitive_listens_unfiltered"
+	// The runtime-version rules over a host's package reads (G8, R7 to R9).
+	IDPHPFixMissing       = "php.fix_missing"
+	IDNodeFixMissing      = "node.fix_missing"
+	IDNodeLineUnsupported = "node.line_unsupported"
 )
 
 var multiFactDefs = []Def{
@@ -105,6 +109,60 @@ var multiFactDefs = []Def{
 				"# or allow its port only from the addresses that need it, with your host firewall",
 			},
 			Caveat: "If Docker publishes the port, its rules bypass ufw and firewalld: publish it on 127.0.0.1 instead.",
+		}},
+
+	{ID: IDPHPFixMissing, Title: "PHP is missing a security fix for a remote code execution flaw",
+		Category: "updates", Area: AreaHosts, Exposure: NotExposure, Subject: "package", MultiFact: true,
+		Judges: "whether the installed PHP web packages carry the fix for the October 2026 PHP flaws",
+		// Medium: a PHP that is behind is a pending fix. It ranks one step
+		// higher when a web server on the host is reachable, and the ceiling
+		// is high because the cloud firewall and whether the web server hands
+		// requests to this PHP were not read (docs/spec/engagement.md, R7).
+		BaseSeverity: SevMedium, Ceiling: SevHigh, HostAccess: true,
+		CeilingWhy: "capped at high: whether the cloud firewall lets anyone reach this web server, and whether it passes requests to this PHP, were not read, so scheck cannot say anyone can reach this PHP now.",
+		Attributes: []AttributeRaise{{Name: "serves_web", Delta: +1,
+			Why: "A web server on this host listens beyond localhost and the host firewall lets any address in, which ranks one step higher."}},
+		Impact: "The installed PHP is behind the release of 21 October 2026 that fixes CVE-2026-109618 and CVE-2026-109619, which the " +
+			"PHP project rates 9.2 out of 10 and says let anyone who can send a request to PHP run code as the web server's account, " +
+			"before your application runs. A complete exploit has been demonstrated against Apache with mod_php; the other ways of " +
+			"running PHP are less clearly affected. A distribution's package is compared with that distribution's own fixed package, " +
+			"never with PHP's version number. Whether the web server reaches the internet beyond this host's firewall was not assessed.",
+		Remediation: Remediation{
+			Summary: "Update PHP from the source you installed it from, then restart every PHP process: an installed update does not protect " +
+				"workers that were started before it.",
+			Commands: []string{
+				"sudo apt update && sudo apt upgrade   # Debian, Ubuntu",
+				"sudo dnf upgrade 'php*'   # Red Hat family, Fedora",
+				"sudo systemctl restart php8.3-fpm   # and Apache or the web server, if PHP runs inside it",
+			},
+			Caveat: "Until you can update: set session.upload_progress.enabled=0 and post_max_size=8M (32M if you accept uploads) in php.ini or " +
+				"the FPM pool, not in .user.ini. These reduce the risk; they do not remove it.",
+		}},
+	{ID: IDNodeFixMissing, Title: "Node.js is missing a security fix",
+		Category: "updates", Area: AreaHosts, Exposure: NotExposure, Subject: "package", MultiFact: true,
+		Judges:       "whether the installed Node.js carries the fixes of the October 2026 Node.js security release",
+		BaseSeverity: SevMedium, Ceiling: SevHigh,
+		Impact: "The installed Node.js is behind the security release of 21 October 2026, which fixed ten flaws. The worst, CVE-2026-111497, " +
+			"corrupts memory in the Brotli decoder: an application that decompresses Brotli data an attacker supplies (an HTTP client " +
+			"decompressing a response, or a server accepting compressed request bodies) can be crashed or made to run the attacker's code. " +
+			"Others weaken TLS hostname checks and DNS lookups. Whether any application on this host decompresses such data was not read.",
+		Remediation: Remediation{
+			Summary: "Builds from nodejs.org, NodeSource or nvm: install 22.23.4, 24.22.1 or 26.12.1 or later, then restart. Distribution or " +
+				"Homebrew Node.js: update the Brotli library (libbrotli1, brew upgrade brotli) and Node.js, then restart. Upgrading Node.js on " +
+				"the host does not fix copies built into other things: rebuild Docker images from a fixed base image, and rebuild single " +
+				"executable apps and snapshots with a fixed Node.js.",
+			Commands: []string{"sudo apt update && sudo apt upgrade   # Debian, Ubuntu: updates libbrotli1 and nodejs", "# restart every Node.js process afterwards"},
+		}},
+	{ID: IDNodeLineUnsupported, Title: "This Node.js release line no longer receives security fixes",
+		Category: "updates", Area: AreaHosts, Exposure: NotExposure, Subject: "package", MultiFact: true,
+		Judges:       "whether the installed Node.js release line is still fixed by the Node.js project",
+		BaseSeverity: SevMedium, Ceiling: SevHigh,
+		Impact: "The Node.js project no longer fixes this release line: it is past its end of life, and the project says end-of-life " +
+			"versions are always affected by the flaws it fixes on the lines it still supports (its release of 21 October 2026 fixed ten). " +
+			"Flaws found later will not be fixed on this line either.",
+		Remediation: Remediation{
+			Summary: "Move to a Node.js line the project still fixes (nodejs.org lists them), test your application, and restart it.",
+			Caveat:  "A distribution's package of an older line is fixed by the distribution, not by this rule's line.",
 		}},
 }
 

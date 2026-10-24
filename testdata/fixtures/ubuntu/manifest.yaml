@@ -420,10 +420,51 @@ execs:
         - rpm
         - php
         - php-fpm
-        - php-cgi
+        - php-cli
         - nodejs
         - brotli
         - libbrotli
+        - php56-php
+        - php56-php-fpm
+        - php56-php-cli
+        - php70-php
+        - php70-php-fpm
+        - php70-php-cli
+        - php71-php
+        - php71-php-fpm
+        - php71-php-cli
+        - php72-php
+        - php72-php-fpm
+        - php72-php-cli
+        - php73-php
+        - php73-php-fpm
+        - php73-php-cli
+        - php74-php
+        - php74-php-fpm
+        - php74-php-cli
+        - php80-php
+        - php80-php-fpm
+        - php80-php-cli
+        - php81-php
+        - php81-php-fpm
+        - php81-php-cli
+        - php82-php
+        - php82-php-fpm
+        - php82-php-cli
+        - php83-php
+        - php83-php-fpm
+        - php83-php-cli
+        - php84-php
+        - php84-php-fpm
+        - php84-php-cli
+        - php85-php
+        - php85-php-fpm
+        - php85-php-cli
+        - nodejs18
+        - nodejs20
+        - nodejs22
+        - nodejs24
+        - nodejs26
       stderr_file: 033-rpm.stderr
       code: 127
     - argv:

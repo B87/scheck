@@ -76,7 +76,7 @@ var productionIDs = []string{finding.IDGitHubWritableDeployKey, finding.IDGitHub
 	finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}
 
 // internetIDs are the findings a host's declared internet exposure raises.
-var internetIDs = []string{finding.IDDBListensUnfiltered, finding.IDSvcListensBeyond, finding.IDSensitiveListens}
+var internetIDs = []string{finding.IDDBListensUnfiltered, finding.IDSvcListensBeyond, finding.IDSensitiveListens, finding.IDPHPFixMissing}
 
 // rules is the table, in the order it is applied. A row it does not name
 // does not exist.
@@ -326,6 +326,9 @@ func step(c *finding.Chain, def finding.Def, m finding.Move, pastHigh bool) {
 	switch last.Stopped {
 	case finding.StoppedCeiling:
 		last.Why = whyCeiling
+		if def.CeilingWhy != "" {
+			last.Why = def.CeilingWhy
+		}
 	case finding.StoppedPastHigh:
 		last.Why = whyPastHigh(m.Rule)
 	case finding.StoppedScaleEnd:

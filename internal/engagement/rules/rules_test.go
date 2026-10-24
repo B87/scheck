@@ -197,7 +197,8 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 	if v := Validate(All()); len(v) > 0 {
 		t.Fatalf("the rule table breaks its invariants: %v", v)
 	}
-	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures, finding.IDSvcListensBeyond: svcFixtures, finding.IDSensitiveListens: sensitiveFixtures}
+	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures, finding.IDSvcListensBeyond: svcFixtures, finding.IDSensitiveListens: sensitiveFixtures,
+		finding.IDPHPFixMissing: phpFixtures, finding.IDNodeFixMissing: nodeFixFixtures, finding.IDNodeLineUnsupported: nodeLineFixtures}
 	for _, r := range All() {
 		fs := fixtures[r.ID]
 		used := map[Read]bool{}

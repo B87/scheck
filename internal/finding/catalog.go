@@ -39,6 +39,10 @@ type Def struct {
 	// limit of what was read, part of the definition like its base, never a
 	// setting (docs/spec/engagement.md, "Severity in context", "Ceilings").
 	Ceiling Severity
+	// CeilingWhy words the stop at the ceiling when the generic sentence
+	// (the cloud firewall and the service's sign-in were not read) is not
+	// what was left unread.
+	CeilingWhy string
 	// HostAccess marks a host finding about access to the host: on a host
 	// named in data.matters_most only these raise, whatever their area
 	// (docs/spec/engagement.md, "Severity in context").
@@ -82,7 +86,7 @@ type SubjectKind string
 var SubjectKinds = []SubjectKind{
 	"account", "org_unit", "group", "deploy_key", "token", "principal", "oauth_app", "service",
 	"dependency_alert", "repository", "workflow", "branch", "webhook", "invitation", "secret_location", "dns_name",
-	"url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism", "mail_forward",
+	"url", "declaration", "origin", "dns_record", "mail_domain", "dkim_selector", "spf_mechanism", "mail_forward", "package",
 }
 
 // SubjectOf returns the subject kind a finding id declares, or "" when the id

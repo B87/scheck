@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/engagement/rules"
@@ -63,15 +64,21 @@ func withHostFacts(t *testing.T, set map[string]finding.Fact, d severity.Declara
 	a := &in.Assets[0]
 	facts := hostFacts{
 		facts: map[string]finding.Fact{"fw.nft": {Parsed: ""},
-			"fw.iptables_backend": {Parsed: "/usr/sbin/xtables-nft-multi\n"}, "os.release": {Parsed: map[string]string{"ID": "ubuntu"}}},
-		why: map[string]string{"fw.ufw": "check-unavailable:command_missing", "fw.firewalld": "check-unavailable:command_missing"},
+			"fw.iptables_backend": {Parsed: "/usr/sbin/xtables-nft-multi\n"},
+			// As check's parser gives os-release (keys in lower case), and a
+			// dpkg read that found no PHP or Node.js, like the Ubuntu fixture.
+			"os.release": {Parsed: map[string]string{"id": "ubuntu", "version_id": "24.04"}}, "pkg.dpkg_runtimes": pkgFact("dpkg")},
+		why: map[string]string{"fw.ufw": "check-unavailable:command_missing", "fw.firewalld": "check-unavailable:command_missing",
+			"pkg.rpm_runtimes": "check-unavailable:command_missing"},
 	}
 	maps.Copy(facts.facts, set)
 	exposure := ""
 	if _, ok := d.Internet[a.ID]; ok {
 		exposure = "internet"
 	}
-	res := rules.Judge([]rules.Host{{Asset: a.ID, Name: a.Name, Facts: facts, Context: rules.Context{Services: services, Exposure: exposure}}})[a.ID]
+	read := time.Date(2026, 10, 7, 7, 12, 3, 0, time.UTC)
+	res := rules.Judge([]rules.Host{{Asset: a.ID, Name: a.Name, Facts: facts, Context: rules.Context{Services: services, Exposure: exposure},
+		Collected: []time.Time{read, read.Add(2 * time.Second)}}})[a.ID]
 	a.Judged, a.Coverage, a.PopulationIncomplete = res.Judged, res.Coverage, res.PopulationIncomplete
 	severity.GradeAll(a.Judged, a.ID, d)
 	return in
@@ -267,4 +274,65 @@ func contextNotesReport(t *testing.T) Input {
 		{Kind: NoteContextDeploysTo, Source: "assets.shop-repo.deploys_to", Detail: "`shop-repo` (`github:acme/shop`) is declared to deploy production, but GitHub shows it archived. If production now deploys from another repository, declare that one."},
 	}
 	return in
+}
+
+func pkgFact(manager string, lines ...string) finding.Fact {
+	recs := check.Records{Kind: check.ParsePackages, Items: []check.Record{}}
+	for _, l := range lines {
+		f := strings.Fields(l)
+		recs.Items = append(recs.Items, check.Record{check.FieldName: f[0], check.FieldVersion: f[1],
+			check.FieldStatus: check.PackageInstalled, check.FieldManager: manager})
+	}
+	return finding.Fact{Parsed: recs}
+}
+
+// R7 on an Ubuntu 24.04 PHP-FPM behind nginx on every address, on a host
+// declared internet-facing: the package is below Ubuntu's fixed one, a web
+// server is open, and the ceiling holds the rating at high.
+func hostPHPFiredReport(t *testing.T) Input {
+	return withHostFacts(t, map[string]finding.Fact{
+		"net.listeners":     listenRecs(listen("tcp", "0.0.0.0", "22", "sshd"), listen("tcp", "0.0.0.0", "443", "nginx")),
+		"os.release":        {Parsed: map[string]string{"id": "ubuntu", "version_id": "24.04"}},
+		"pkg.dpkg_runtimes": pkgFact("dpkg", "php8.3-fpm 8.3.6-0ubuntu0.24.04.9", "nodejs 22.23.4-1nodesource1"),
+	}, severity.Declarations{Internet: map[string]string{"host:ubuntu:22": "assets.ubuntu.context.exposure"}})
+}
+
+// R8 and R9 on an end-of-life NodeSource build: R8 has no fix to miss, and
+// R9 fires.
+func hostNodeAbstainedReport(t *testing.T) Input {
+	return withHostFacts(t, map[string]finding.Fact{
+		"net.listeners":     listenRecs(listen("tcp", "0.0.0.0", "22", "sshd")),
+		"os.release":        {Parsed: map[string]string{"id": "debian", "version_id": "12"}},
+		"pkg.dpkg_runtimes": pkgFact("dpkg", "nodejs 20.11.1-1nodesource1"),
+	}, severity.Declarations{})
+}
+
+// R7 reaches the report as a finding on the package with its chain and its
+// evidence, and R9's end-of-life line as a finding of its own.
+func TestRuntimeFindingsReachTheReport(t *testing.T) {
+	r := build(hostPHPFiredReport(t))
+	validate(t, schema(t), r)
+	var f *Finding
+	for i := range r.Findings {
+		if r.Findings[i].ID == finding.IDPHPFixMissing {
+			f = &r.Findings[i]
+		}
+	}
+	if f == nil || *f.Key.Subject != "php8.3-fpm" || f.Severity != "high" || f.Rule.Kind != "multi_fact" || !f.AcceptTemplate.BySubject {
+		t.Fatalf("finding %+v", f)
+	}
+	if len(r.Findings) != 1 {
+		t.Errorf("findings %+v", r.Findings)
+	}
+	r = build(hostNodeAbstainedReport(t))
+	validate(t, schema(t), r)
+	var line *Finding
+	for i := range r.Findings {
+		if r.Findings[i].ID == finding.IDNodeLineUnsupported {
+			line = &r.Findings[i]
+		}
+	}
+	if line == nil || line.Severity != "medium" {
+		t.Fatalf("end-of-life finding %+v", r.Findings)
+	}
 }

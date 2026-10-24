@@ -10,6 +10,7 @@ package rules
 
 import (
 	"slices"
+	"time"
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
@@ -68,6 +69,16 @@ type Rule struct {
 	// Incomplete words the coverage of a host whose read the rule could
 	// not complete.
 	Incomplete finding.CoverageReason
+	// OwnPartial says the rule settles what a partial read means for each of
+	// its verdicts itself: the framework neither withdraws its disproofs
+	// because some fact it touched was partial, nor marks the host's whole
+	// population incomplete for it. A rule that sets it must not disprove
+	// from a read it knows to be partial.
+	OwnPartial bool
+	// Gap, when set, is what the rule can never read of its population (a
+	// container, an install outside the package database): its group is at
+	// most partial, and says so (docs/spec/report.md, "Coverage").
+	Gap *finding.CoverageReason
 	// HostDomain is the host area whose Hosts-row line also says what the
 	// rule judged, in HostJudges words ("" for the definition's Judges).
 	HostDomain check.Domain
@@ -85,6 +96,11 @@ type Host struct {
 	Asset, Name string
 	Facts       Facts
 	Context     Context
+	// Collected are the times the host's facts were read: its collection's
+	// start and end. A rule that compares a date with the read judges it
+	// at these, never at the session's start or the report's time; with
+	// none it abstains.
+	Collected []time.Time
 }
 
 // Context is the host's declared context the rules may read.
@@ -178,6 +194,9 @@ func (v *View) Services() []Service {
 	return slices.Clone(v.host.Context.Services)
 }
 
+// Collected are the times the host's facts were read, nil when unknown.
+func (v *View) Collected() []time.Time { return slices.Clone(v.host.Collected) }
+
 // Exposure is the host's declared exposure, if the rule declared it.
 func (v *View) Exposure() string {
 	if !v.declares(ReadDeclared, DeclaredExposure) {
@@ -222,7 +241,7 @@ func judgeHost(h Host, rules []Rule) Result {
 		if judges == "" {
 			judges = def.Judges
 		}
-		plan.Groups = append(plan.Groups, finding.CoverageGroup{Name: r.Group, Rules: []string{r.ID}, HostDomain: r.HostDomain, HostJudges: judges})
+		plan.Groups = append(plan.Groups, finding.CoverageGroup{Name: r.Group, Rules: []string{r.ID}, HostDomain: r.HostDomain, HostJudges: judges, Gap: r.Gap})
 		js, incomplete := run(r, h)
 		res.Judged = append(res.Judged, js...)
 		res.PopulationIncomplete = res.PopulationIncomplete || incomplete
@@ -243,10 +262,10 @@ func run(r Rule, h Host) ([]finding.Judgment, bool) {
 	incomplete := false
 	var out []finding.Judgment
 	for _, o := range outcomes {
-		if o.Verdict == Disproved && partial {
+		if o.Verdict == Disproved && partial && !r.OwnPartial {
 			o.Verdict, o.Reason = Abstained, ReasonIncomplete
 		}
-		incomplete = incomplete || o.Incomplete || o.Reason == ReasonIncomplete
+		incomplete = incomplete || o.Incomplete || o.Reason == ReasonIncomplete && !r.OwnPartial
 		j := finding.Judgment{ID: r.ID, Asset: h.Asset, Subject: o.Subject, Verdict: o.Verdict, Reason: o.Reason,
 			Reads: []string{}, NotChecked: o.NotChecked, Attributes: o.Attributes, Why: o.Why, Details: o.Details, Listed: o.Listed}
 		for _, e := range o.Excerpts {

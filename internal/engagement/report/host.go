@@ -322,6 +322,7 @@ func (v *hostView) domains() []SubItem {
 			}
 			si.Reasons = appendReason(si.Reasons, v.reason(as))
 		}
+		gapDecided := false
 		for _, g := range dm.groups {
 			si.Rules = append(si.Rules, g.Rules...)
 			decided, undecided := 0, 0
@@ -343,13 +344,24 @@ func (v *hostView) domains() []SubItem {
 			if decided > 0 {
 				si.Judged = appendUnique(si.Judged, g.HostJudges)
 			}
-			if decided > 0 && undecided == 0 {
+			switch {
+			case decided > 0 && g.Gap != nil:
+				// What no read of this group can reach: decided, never whole.
+				gapDecided = true
+				if undecided == 0 {
+					n++
+				}
+				si.Reasons = appendReason(si.Reasons, ReasonDetail(*g.Gap))
+			case decided > 0 && undecided == 0:
 				n++
 			}
 		}
 		si.ReadNotJudged = notJudged
 		si.Population = &Population{Kind: "rules", InScope: len(dm.rules) + len(dm.groups), Read: n}
 		si.Mark = markOf(n, len(dm.rules)+len(dm.groups))
+		if gapDecided && si.Mark == "assessed" {
+			si.Mark = "partial"
+		}
 		out = append(out, si)
 	}
 	return out
