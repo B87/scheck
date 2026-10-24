@@ -115,7 +115,7 @@ func (v *hostView) reason(a finding.Assessment) ReasonDetail {
 		case "run_timeout", "canceled":
 			return ReasonDetail{"limit_reached", detail}
 		case "path_denied":
-			if strings.HasPrefix(fact.Reason, policy.RuleConfigDeny) {
+			if strings.HasPrefix(fact.Reason, policy.RuleConfigDeny) || strings.HasPrefix(fact.Reason, policy.RuleDenyInside) {
 				return ReasonDetail{"excluded_by_operator", detail}
 			}
 		case "":

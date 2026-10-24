@@ -2,7 +2,7 @@
   "schema_version": "1.7",
   "host": {
     "id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
-    "hostname": "86b5de66829d",
+    "hostname": "c8ebfdf3e96a",
     "platform": "linux",
     "os": "Ubuntu 24.04.5 LTS",
     "kernel": "7.2.12-orbstack-00394-gbecdd6130068",
@@ -591,8 +591,8 @@
       "observation": "host.hostname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "86b5de66829d",
-      "parsed": "86b5de66829d\n",
+      "summary": "c8ebfdf3e96a",
+      "parsed": "c8ebfdf3e96a\n",
       "duration_ms": 0
     },
     "host.machine_id": {
@@ -1037,6 +1037,14 @@
       "elevated": true,
       "duration_ms": 0
     },
+    "sys.dmi": {
+      "observation": "sys.dmi#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "no DMI data; cloud platform not identified",
+      "parsed": [],
+      "duration_ms": 0
+    },
     "sys.platform": {
       "observation": "sys.platform#1",
       "status": "ok",
@@ -1065,8 +1073,8 @@
       "observation": "sys.uname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "Linux 86b5de66829d 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
-      "parsed": "Linux 86b5de66829d 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux\n",
+      "summary": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
+      "parsed": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux\n",
       "duration_ms": 0
     },
     "time.timedatectl": {
@@ -1479,7 +1487,7 @@
       "observation": "host.hostname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "86b5de66829d",
+      "summary": "c8ebfdf3e96a",
       "duration_ms": 0,
       "check": "host.hostname",
       "ran_as": "host.hostname",
@@ -1770,6 +1778,23 @@
       ],
       "occurrence": 40
     },
+    "sys.dmi#1": {
+      "observation": "sys.dmi#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "no DMI data; cloud platform not identified",
+      "duration_ms": 0,
+      "check": "sys.dmi",
+      "ran_as": "sys.dmi",
+      "argv": [
+        "grep",
+        "-H",
+        ".",
+        "/sys/class/dmi/id/sys_vendor",
+        "/sys/class/dmi/id/product_name"
+      ],
+      "occurrence": 41
+    },
     "sys.platform#1": {
       "observation": "sys.platform#1",
       "status": "ok",
@@ -1782,7 +1807,7 @@
         "uname",
         "-s"
       ],
-      "occurrence": 41
+      "occurrence": 42
     },
     "sys.shell#1": {
       "observation": "sys.shell#1",
@@ -1796,7 +1821,7 @@
         "printenv",
         "SHELL"
       ],
-      "occurrence": 42
+      "occurrence": 43
     },
     "sys.uid#1": {
       "observation": "sys.uid#1",
@@ -1810,13 +1835,13 @@
         "id",
         "-u"
       ],
-      "occurrence": 43
+      "occurrence": 44
     },
     "sys.uname#1": {
       "observation": "sys.uname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "Linux 86b5de66829d 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
+      "summary": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
       "duration_ms": 0,
       "check": "sys.uname",
       "ran_as": "sys.uname",
@@ -1824,7 +1849,7 @@
         "uname",
         "-a"
       ],
-      "occurrence": 44
+      "occurrence": 45
     },
     "sys.which#1": {
       "observation": "sys.which#1",
@@ -1993,7 +2018,7 @@
         "timedatectl",
         "show"
       ],
-      "occurrence": 45
+      "occurrence": 46
     }
   }
 }

@@ -1,12 +1,20 @@
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           69b0fc1c1e38
+Host identity            ran      host.hostname           ee5c1bcb518d
                                                           Hostname
-  | 69b0fc1c1e38
+  | ee5c1bcb518d
 Host identity            ran      host.machine_id         cb80c459978742989ad33bef46e06e0f
                                                           Stable machine identifier (hashed into
                                                           host.id)
   | cb80c459978742989ad33bef46e06e0f
+Host identity            ran      sys.dmi                 no DMI data; cloud platform not identified
+                                                          Hardware vendor and product from DMI, to
+                                                          name a cloud platform (read-only sysfs)
+  |
+  | stderr:
+  | grep: /sys/class/dmi/id/sys_vendor: No such file or directory
+  | grep: /sys/class/dmi/id/product_name: No such file or directory
+  |
 Operating system         ran      os.release              22 settings
                                                           Distribution identification
   | NAME="Fedora Linux"
@@ -567,8 +575,8 @@ Credentials on disk      ran      creds.home_files        4 listed files and fol
                                                           capture also shows inode, size and time)
   |    984326      0 dr-xr-x---   1 root     root            8 Oct 24 16:50 /root
   |    984327      0 drwx------   1 root     root            0 Oct 24 16:50 /root/.ssh
-  |   1006362      0 drwx------   1 ops      ops            72 Oct 24 17:37 /home/ops
-  |   1006366      0 drwx------   1 ops      ops            30 Oct 24 17:37 /home/ops/.ssh
+  |   1013913      0 drwx------   1 ops      ops            72 Oct 24 17:42 /home/ops
+  |   1013917      0 drwx------   1 ops      ops            30 Oct 24 17:42 /home/ops/.ssh
 Container engine         ran      docker.sockets          0 listed files and folders
                                                           Container engine sockets under /run with
                                                           their owner and mode
@@ -613,9 +621,9 @@ Session and shell        ran      sys.shell               /bin/bash
 Session and shell        ran      sys.uid                 1000
                                                           Effective uid of the audit session
   | 1000
-Session and shell        ran      sys.uname               Linux 69b0fc1c1e38 7.2.12-orbstack-00394-g
+Session and shell        ran      sys.uname               Linux ee5c1bcb518d 7.2.12-orbstack-00394-g
                                                           becdd6130068 #1 SMP PREEMPT Thu Oct 22
                                                           22:17:17 UTC 2026 aarch64 GNU/Linux
                                                           Full kernel identification
-  | Linux 69b0fc1c1e38 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC
+  | Linux ee5c1bcb518d 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC
   | 2026 aarch64 GNU/Linux

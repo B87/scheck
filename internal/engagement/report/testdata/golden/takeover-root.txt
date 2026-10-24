@@ -61,12 +61,13 @@ Web application          not checked
   /admin); third-party scripts the site loads; which other sites may read the site's responses
   (CORS).
 Hosts                    checked in part
-  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
-  services you declared; listening services you did not declare; who can become root or
-  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
-  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
-  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
-  schedule; credential files under other names or paths, their contents, and whether they are live.
+  Not judged in this version: the firewall on Linux hosts, apart from database ports,
+  remote-administration ports and the services you declared; listening services you did not declare
+  (on Linux hosts, apart from remote-administration ports); who can become root or administrator,
+  and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings
+  inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts;
+  programs that run with root rights (SUID files); programs started at boot or on a schedule;
+  credential files under other names or paths, their contents, and whether they are live.
   macos  host:macos:22, macOS 26.6.2 (25G83), read as deploy, no elevation, 07:12-07:12
   checks 29: 23 ran, 6 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): 1 open finding (see Findings)

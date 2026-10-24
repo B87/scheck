@@ -211,6 +211,16 @@
       "reads": [],
       "reason": "unavailable:no_declaration",
       "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "svc.sensitive_listens_unfiltered",
+      "instances": 0,
+      "reads": [
+        "check:net.listeners"
+      ],
+      "status": "not_matched"
     }
   ],
   "assets": [
@@ -218,8 +228,8 @@
       "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 36,
-        "ran": 25,
+        "planned": 37,
+        "ran": 26,
         "unknown": 11
       },
       "collected": {
@@ -468,7 +478,7 @@
       "assets_covered": [
         "host:ubuntu:22"
       ],
-      "mark": "not_assessed",
+      "mark": "partial",
       "not_judged": [
         {
           "id": "external.open_ports",
@@ -508,6 +518,18 @@
           "rules": [
             "svc.listens_beyond_declared"
           ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "Remote-administration services listening beyond localhost"
+          ],
+          "mark": "assessed",
+          "name": "Remote-administration services listening beyond localhost",
+          "reasons": [],
+          "rules": [
+            "svc.sensitive_listens_unfiltered"
+          ]
         }
       ]
     },
@@ -543,11 +565,11 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+          "text": "the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
-          "text": "listening services you did not declare"
+          "text": "listening services you did not declare (on Linux hosts, apart from remote-administration ports)"
         },
         {
           "id": "hosts.admins_sudo",
@@ -664,14 +686,15 @@
         {
           "asset": "host:ubuntu:22",
           "judged": [
-            "whether database ports are filtered only; see Data stores"
+            "whether database ports are filtered only; see Data stores",
+            "whether remote-administration ports are filtered only; see External surface"
           ],
           "mark": "partial",
           "name": "Firewall",
           "population": {
-            "in_scope": 2,
+            "in_scope": 3,
             "kind": "rules",
-            "read": 1
+            "read": 2
           },
           "read_not_judged": [
             "/usr/sbin/xtables-nft-multi"
@@ -684,7 +707,8 @@
           ],
           "rules": [
             "db.listens_unfiltered",
-            "svc.listens_beyond_declared"
+            "svc.listens_beyond_declared",
+            "svc.sensitive_listens_unfiltered"
           ]
         },
         {
@@ -1044,8 +1068,8 @@
     "areas": {
       "assessed": 0,
       "not_applicable": 0,
-      "not_assessed": 8,
-      "partial": 2,
+      "not_assessed": 7,
+      "partial": 3,
       "total": 10
     },
     "below": {
@@ -1057,8 +1081,8 @@
     "matters_most": [],
     "more": 0,
     "rules": {
-      "decided": 7,
-      "selected": 16,
+      "decided": 8,
+      "selected": 17,
       "without_evidence": 9
     }
   }

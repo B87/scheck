@@ -72,8 +72,9 @@ func listensBeyondDeclared(v *View) []Outcome {
 				NotChecked: []string{"a listening socket's port could not be read, so whether this service listens could not be established", notCheckedSvc}})
 			continue
 		}
-		if !seen || r1Owns(g) {
-			// Not listening is svc.expected_missing's; a database's port is R1's.
+		if !seen || r1Owns(g) || r6Owns(g) {
+			// Not listening is svc.expected_missing's; a database's port is R1's and
+			// a remote-administration service's is R6's.
 			continue
 		}
 		out = append(out, judgeService(s, subject, g, exposure, fr))
@@ -82,7 +83,7 @@ func listensBeyondDeclared(v *View) []Outcome {
 		// Every declared port is a database's, which R1 judges, or has
 		// nothing listening, which svc.expected_missing reports.
 		out = append(out, Outcome{Verdict: Disproved, Excerpts: []Excerpt{{checkListeners,
-			"no service declared for localhost, lan or vpn listens here, other than on database ports R1 judges"}}})
+			"no service declared for localhost, lan or vpn listens here, other than on database and remote-administration ports R1 and R6 judge"}}})
 	}
 	return out
 }

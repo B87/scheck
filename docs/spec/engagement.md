@@ -103,7 +103,7 @@ stubbed to pass.
 | Intent | What is exposed on purpose, and to whom? | Exposure findings on that exact URL or service drop to *info*, attributed ("Severity in context") |
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
 | Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Asked after `context` and before `not_used`; rules below the table |
-| Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a) and `svc.listens_beyond_declared` (E9 step 5a); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
+| Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a), `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3 G5, for the audience it raises on); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
 | Hosts | Where is your application installed on each server? One block per server, one `path:` line per folder (`name: shop`, `path: /srv/shop`); on a laptop, the folder where you keep code. Leave blank if nothing is deployed there or you are not sure. | `assets.<host>.app_paths`: the folders `creds.app_env_N` lists `.env` files in (`creds.env_file_exposed`, G5). Asked after `context`; skipped when no host is declared or any host already has `app_paths`. A name that is not a declared host, a block with no `path:` line, and any path "Host settings" refuses, refuse the whole answer. With the answer blank, the report says `.env` files were not looked for (`unavailable:no_app_paths`) |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation"; `external` is refused beside a host already answered `internet`, by the same refusal as intake |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
@@ -657,7 +657,8 @@ host posture finding in 0.0.2, `accounts.empty_password` among them, whose accep
 covers every account on the host, including accounts added later. The two engagement
 rules over a host's listeners, `db.listens_unfiltered` and
 `svc.listens_beyond_declared`, are the first host-side findings to declare a subject
-kind, `service` (`<port>/<proto>`; E9), so an acceptance of either names it. A host
+kind, `service` (`<port>/<proto>`; E9), so an acceptance of either names it, and so does
+one of `svc.sensitive_listens_unfiltered` (R6, 0.0.3 G5). A host
 posture acceptance that names a subject is listed as not applied (the Recon paragraph under "Runs, state and
 configuration"); a `subject` on any other id without a subject kind exits 3 ("… is about
 the organization as a whole; remove subject"), since nothing could ever match it.
@@ -726,7 +727,10 @@ intake naming the entry; so does an unclean one (`/srv//shop`, `/srv/shop/../x`)
 neither intake nor the interview rewrites. The file picks a subtree the path policy
 already lets scheck list (`host-collector.md §4.1`); it never widens the policy, and
 `deny_paths` still applies: an entry that is equal to, inside or containing a
-`deny_paths` entry exits 3, since scheck walks a declared folder whole. A `.env` file
+`deny_paths` entry exits 3, since scheck walks a declared folder whole. Intake sees only
+the literal overlap; a folder whose resolved root contains a `deny_paths` entry (a symlinked
+parent) is refused by the runner at run time, `path.deny_inside`, and reads as excluded by
+the operator (`host-collector.md §3`, §4.1). A `.env` file
 under `/home`, `/root`, `/Users` or `/var/root` is listed but not judged
 (`host-collector.md §6.5`). Without `app_paths`, no `.env` file is looked for.
 
@@ -872,7 +876,7 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` | n/a |
 | `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below, and the findings in the secrets area | +1 | no: stops at high |
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
-| `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered` and `svc.listens_beyond_declared` (E9 step 5a) only | +1 | no: stops at high |
+| `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered`, `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3 G5) only | +1 | no: stops at high |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
 | `attribute:admin` | a fact, cited by observation and excerpt; on a GitHub repository, `repository_admin` counts only where the repository is declared production | `identity.former_person_has_access` on a left person's account; `workspace.external_forwarding` from a known-active super admin's mailbox | +1 | on a left person's account only |
 | `attribute:admin_grantor` | a fact, cited by observation and excerpt | `workspace.oauth_broad_scope`, when a known-active super admin or declared break-glass account gave a broad scope in its own grant; a delegated admin's grant never raises it | +1 | no: stops at high |
@@ -902,8 +906,8 @@ not named here does not exist.
   hardening) where they are. A finding's area is a required field of its definition.
   On a host asset, only definitions flagged `HostAccess` or in the secrets area move,
   whatever their other area: `sshd.password_auth_enabled`, `sshd.root_login_enabled`,
-  `accounts.empty_password`, `accounts.empty_password_remote`, `db.listens_unfiltered`
-  and `docker.socket_exposed` (flagged), and `creds.env_file_exposed`,
+  `accounts.empty_password`, `accounts.empty_password_remote`, `db.listens_unfiltered`,
+  `svc.sensitive_listens_unfiltered` and `docker.socket_exposed` (flagged), and `creds.env_file_exposed`,
   `creds.ssh_key_exposed` and `creds.cloud_credentials_exposed` (secrets; 0.0.3 G5): a
   credential kept on the host that holds the data is the way to that data. Every other
   asset kind matches by area. The three credential findings are medium at base, so the
@@ -987,12 +991,12 @@ A resume re-judges persisted evidence, so this holds from step 1d; a resume keep
 nothing older than 7 days ([runs.md](runs.md), "Stop and resume"; built, step 8).
 
 **Ceilings.** Critical is the anchor's definition: anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled. A step may take a finding past high only where the table's last column says yes: `contradiction`, `attribute:admin` on a left person's account, `attribute:production_write` and `attribute:public_repository`. No other step passes high: not the other rows of the table, not a collector's own steps declared on a definition (`Attributes`; none may pass high in 0.0.2), and not the host collector's own table (`host-collector.md §5.3`, which caps a finding left above high at high after the table). A declaration of stakes alone (`deploys_to:production`, `data_matters_most`, a host's `exposure: internet`) says neither that someone with no right to it can use the weakness now nor that the company believes it is handled. A finding definition may
-also carry a severity ceiling that no engagement rule passes: `db.listens_unfiltered`
-and `svc.listens_beyond_declared` stop at high, since the cloud firewall and the
+also carry a severity ceiling that no engagement rule passes: `db.listens_unfiltered`,
+`svc.listens_beyond_declared` and `svc.sensitive_listens_unfiltered` stop at high, since the cloud firewall and the
 database's own authentication were not read. A step stopped by a ceiling is recorded in
 the chain with the cap. For a table entry that stops at high: "capped at high by `<rule>`:
 critical means that anyone, or someone with no right to it, can use this now, or that you
-believe it is handled; `<rule>` says neither." For a definition's ceiling (R1, R3):
+believe it is handled; `<rule>` says neither." For a definition's ceiling (R1, R3, R6):
 "capped at high: the cloud firewall and the service's own sign-in were not read, so
 scheck cannot say anyone can use this now." A definition's ceiling binds every step, including the host collector's own
 `exposure:internet` step; the capped step is recorded with the definition-ceiling
@@ -1011,7 +1015,7 @@ against them:
 |---|---|---|
 | critical | Anyone on the internet can use it now, with no further step, and gets credentials, code execution or the tenant; or a high that someone with no right to it can use now, or that the company believes is handled (reached only by the raises the table marks, "Severity in context"). | a usable empty password: an account with an empty password that sshd accepts empty passwords for (`accounts.empty_password_remote`, a multi-fact rule, E9); a credential in a public repository or its history; a credential of a kind never meant for a browser (a private key, `sk_live_`, a GitHub or npm token, a Google refresh token or client secret) served in a public web response; a `pull_request_target` workflow that checks out the pull request's head with a write token, on a public repository, where anyone can open one |
 | high | One common attacker step away (a phished or stuffed password, an account at a provider, read access already given to someone) from accounts, data or the domain's name. | an empty password on an account with a login shell (usable locally under the distribution's default PAM; remote use not shown); 2-step verification not enforced at the identity provider; an admin without 2-step verification; a person who left still active (+1 `attribute:admin`, and +1 `attribute:production_write` when they can still push to a production repository); a super admin or owner nobody can name; a credential in a private repository or its history (scheck cannot tell whether it is live, and must not try); the GCP Owner role (`roles/owner`) on a service account; a bucket readable by anyone, not declared public; a write-all default workflow token with actions not pinned to a commit; a subdomain pointing at a provider that says nothing is set up there, where anyone can claim the name; SPF that authorizes any sender (`+all`, a bare `all`); a DKIM key short enough to factor (RSA under 1024 bits) |
-| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`; +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
+| medium | Weakens a control or widens what a compromise reaches; needs a further condition. | a write deploy key (+1 `deploys_to:production`); password SSH (+1 `exposure:internet` by the host collector); DMARC not enforced on a domain that sends or shows mail use; an OAuth app with a broad scope (+1 `attribute:admin_grantor`); a named person who is a super admin or owner but not listed under `access.admins`; a contractor or shared account that is one; more super admins or owners than the tenant needs; a human with the GCP Owner or Editor role not declared an admin; a write-all default workflow token, alone; a name pointing at an outside name that does not exist, at a provider with no takeover entry; a page declared reachable only from a VPN or LAN that answered from the internet (+1 `contradiction`); a database listening on a non-loopback address that the host firewall does not restrict (`db.listens_unfiltered`; +1 `exposure:internet`, +1 `contradiction`; ceiling high); a remote-administration service in R6's table listening the same way (`svc.sensitive_listens_unfiltered`, 0.0.3 G5; +1 `unauthenticated_default` for Docker's API without TLS and etcd, +1 `exposure:internet`, +1 `contradiction`; ceiling high) |
 | low | Hardening that matters mostly alongside another weakness. | missing HSTS; pending updates of unknown class; a certificate that fails verification; a version number disclosed (to `info` when exposed on purpose); a non-sending domain not locked down; a session cookie without `Secure` or `HttpOnly`; plain HTTP not redirected (+1 `attribute:password_form`); actions not pinned, alone; a declared service listening beyond its declared audience (`svc.listens_beyond_declared`, E9 step 5a; fires only against a declaration, so always +1 `contradiction`: medium, high on an internet host; ceiling high) |
 | info | Context or cleanup, not a weakness; listed apart, never ranked. | anything lowered by `exposed_on_purpose`; security-header hygiene beyond HSTS; a missing or expired `security.txt`; a 1024-bit DKIM key; a public name resolving to a private address; a stale record inside your own roots; a certificate expiring within 14 days |
 
@@ -1237,7 +1241,7 @@ Declarations that are absent and change what is raised or ranked:
 - When there are web roots and `intent.not_exposed` is empty: "`intent.not_exposed` lists no URL: nothing is checked for answering from the internet when it should not."
 
 `identity.external_admin`, `identity.shared_admin`, `exposed_on_purpose`, `public: true`,
-R1 and R2 are left off the list on purpose.
+R1, R2 and R6 are left off the list on purpose.
 
 The Plan document, `plan.json`, lists each host's planned and disabled checks, each GitHub
 root's repository order and each Workspace tenant's account order above, and the
@@ -1537,7 +1541,7 @@ disproved and abstains on a fixture, and that an all-partial read never disprove
 
 ### The multi-fact rules of 0.0.2
 
-R1 (E9 step 3a), R2 (step 3b), R4 and R5 (step 4) and R3 (step 5a) are contract; the rest
+R1 (E9 step 3a), R2 (step 3b), R4 and R5 (step 4), R3 (step 5a) and R6 (0.0.3 G5 step 3) are contract; the rest
 is design that becomes contract when its step lands (`ROADMAP.md`). Already built
 and only audited in E9, each with its three fixtures: `identity.unexpected_admin`,
 `identity.unattributed_admin`, `identity.former_person_has_access`,
@@ -1739,7 +1743,8 @@ vocabulary"); an audience the rule does not recognize that reaches it abstains,
 `unavailable:audience` ("a service's audience is localhost, lan, vpn or internet"), with the
 Not checked line "*audience* is not an audience a service can have". A port/proto on which R1 emitted any outcome (a database
 process, an unnamed owner on a table port, a container proxy on a table port) is R1's and
-never R3's; a table port held by a known process that is not a database is R3's. Nothing
+never R3's; a table port held by a known process that is not a database is R3's unless R6
+finds a remote-administration service on it (R6, below). Nothing
 listening on the declared port gives no verdict and no note: a declared service that is
 not there is `svc.expected_missing`'s ([host-collector.md](host-collector.md)). A declared
 port not seen on a `net.listeners` read known to be partial gives no verdict either. A
@@ -1821,16 +1826,113 @@ services on this platform". A host with no `localhost`, `lan` or `vpn` entry is 
 assessed* for it: a host-level abstention, reason `unavailable:no_declaration`, "no
 service on this host is declared for localhost, lan or vpn (`expected_services`); scheck
 judges a service's reach only against what you declared". A host that has such entries
-but none that yields a subject (every declared port is one R1 judges, or nothing listens
-there) gets one host-level disproval, "no service declared for localhost, lan or vpn
-listens here, other than on database ports R1 judges", which the framework withdraws on a
-partial listener read. The fixed item `external.beyond_declared` is gone from the
+but none that yields a subject (every declared port is one R1 judges or one on which R6 finds a
+service, or nothing listens there) gets one host-level disproval, "no service declared for
+localhost, lan or vpn listens here, other than on database and remote-administration ports
+R1 and R6 judge",
+which the framework withdraws on a partial listener read. The fixed item `external.beyond_declared` is gone from the
 not-judged list. The Hosts row's Firewall line reads "whether declared services listen
 beyond their audience only; see External surface" beside R1's.
 
-The interview's `expected_services` answers have two consumers: `db.listens_unfiltered`
-and `svc.listens_beyond_declared`. The interview's `context` question asks for them
-("Intake", the service line).
+The interview's `expected_services` answers have three consumers: `db.listens_unfiltered`,
+`svc.listens_beyond_declared` and `svc.sensitive_listens_unfiltered`. The interview's
+`context` question asks for them ("Intake", the service line).
+
+**R6 `svc.sensitive_listens_unfiltered`** (built, 0.0.3 G5 step 3). Area external surface,
+category network, base medium, ceiling high, `HostAccess`, never lowered by
+`exposed_on_purpose`, subject kind `service` (`port/proto`; the label is the process name
+when shown, else `port/proto`). It is R1's rule over a table of remote-administration
+services instead of databases, and it needs no declaration: a service in the table that
+listens beyond loopback with nothing in front of it is reported whatever
+`expected_services` says. It judges Linux hosts and reads what R1 reads (`net.listeners`,
+the four firewall readings, `os.release`, the host's `expected_services`); a macOS host
+gets no verdict. Its table is versioned data (`SensitiveServicesVersion`, `2026-10-24.2`;
+a change to it changes the version). A listener matches on the process name the kernel
+shows (cut at 15 characters) and, where the row lists ports, on the port:
+
+| Class | Process | Port | `unauthenticated_default` +1 |
+|---|---|---|---|
+| Docker Engine API without TLS | `dockerd`; `systemd` on 2375 only | 2375/tcp | yes |
+| Docker Engine API with TLS | `dockerd`; `systemd` on 2376 only | 2376/tcp | no |
+| etcd client | `etcd` | 2379/tcp | yes |
+| kubelet | `kubelet`, `k3s-server`, `kubelite` | 10250/tcp | no |
+| kubelet read-only port (no sign-in at all) | `kubelet`, `k3s-server`, `kubelite` | 10255/tcp | yes |
+| Telnet | `in.telnetd`, `telnetd` on any port; `systemd`, `inetd`, `xinetd` on 23 only | tcp | no |
+| FTP | `vsftpd`, `proftpd`, `pure-ftpd` on any port; the same activators on 21 only | tcp | no |
+| SMB | `smbd` | 445, 139/tcp | no |
+| RDP | `xrdp`, `gnome-remote-de` | 3389/tcp | no |
+| VNC | `Xvnc`, `Xtigervnc`, `x11vnc`, `wayvnc`, `vncserver-x11-c` | 5900 to 5909/tcp | no |
+| Jupyter | `jupyter-lab`, `jupyter-noteboo`, `jupyter-server` | any port, tcp | no |
+| SNMP | `snmpd` | 161/udp | no |
+| RabbitMQ management | `beam.smp` | 15672/tcp | no |
+
+*Outcomes.* The mechanics are R1's: the shared listener grouping, the firewall reader
+(ufw, firewalld, nft and the iptables backend, read once per host) and the bind and
+firewall order.
+
+| Outcome | When |
+|---|---|
+| fires | a table service listens on a non-loopback address and the host firewall is recognized as leaving that port open to every source in that family |
+| disproved | a loopback-only bind; a firewall that filters the port in every family that listens; or, for the host, a complete listener read (usable, not partial, every non-loopback listener named) with no table service beyond localhost |
+| insufficient evidence | listeners unavailable (`unavailable:listeners`, which includes no `--sudo`); a non-loopback listener whose owner is not shown on a port of the table (`unavailable:listener_owner`; elsewhere it keeps the host from being disproved); a named program that is not one of the row's processes on a table port (`unavailable:listener_owner` as well, never a host-level disproval); `docker-proxy`, `conmon` or a rootless proxy owning a table port (`unavailable:container_port`); a firewall read that did not run or parse, including `firewalld` running and a non-empty `nft` ruleset with `ufw` inactive (R1's reasons); a macOS host |
+
+A fact known to be partial never disproves (`unavailable:incomplete_read`, as R1). A
+port/proto on which every listener beyond loopback is a table service is R6's and never R3's.
+Where R6 only doubts the owner (an unnamed owner, a container proxy), or another program
+listens on the port beside a table service (the other address family, a second binding),
+R6 abstains (`unavailable:listener_owner` or `unavailable:container_port`: it never
+disproves a port it did not read whole) and the declared service stays R3's, so R3 still
+fires there with its own words (R3, above).
+
+*Raises.* `unauthenticated_default` +1 on the classes marked above (Docker's API without TLS, etcd and
+the kubelet's read-only port), declared on the definition (`Attributes`). The severity chain
+cites the listener read that showed the service. `exposure:internet` +1 when the host's `exposure` is
+`internet`. `contradiction` +1, citing `assets.<h>.context.expected_services[i]`, when
+that port and protocol is declared for `localhost`, `lan` or `vpn`; a service declared
+`internet` is no contradiction and stays at base, with the `why_here` "You declared it
+internet-facing; a remote-administration service open to every address is still
+reported. Restrict it to the addresses that need it." A host on `data.matters_most`
+raises it by +1 (`HostAccess`). `exposed_on_purpose` never lowers it. The ceiling is high:
+a capped step is recorded with the definition-ceiling wording, and nothing makes it
+critical.
+
+*Text.* Title "A remote-administration service listens beyond localhost and the host
+firewall does not restrict it". Otherwise the `why_here` is the class and its fix, for
+example "Docker Engine API without TLS. Never expose 2375; reach the engine through an
+ssh:// Docker context." Not checked, always: "Whether a cloud firewall or security group
+blocks it was not assessed; whether the service asks for a password, a key or a
+certificate was not read", then R1's ufw sentence or its no-firewall sentence.
+Remediation: "If you do not use it, stop and disable it. If only this host uses it, bind
+it to 127.0.0.1. Otherwise allow its port only from the addresses that need it, or reach
+it through SSH or a VPN. Check your cloud firewall rules too: scheck did not read them."
+Caveat: "If Docker publishes the port, its rules bypass ufw: publish it on 127.0.0.1
+instead."
+
+*What it never claims.* That the service is reachable from the internet (the cloud
+firewall is not read), that it accepts a connection without a credential (three classes
+have none by default; that is a default, not a reading), or that anything was sent to it.
+It never connects: it reads the listeners and firewall rules the host collector already
+collected.
+
+*Cloud metadata is not judged* (decided 2026-10-24). Whether a cloud VM's metadata
+service (`169.254.169.254`) is reachable from its processes is no finding before the
+cloud collectors. It cannot be judged without sending a request, which the host collector
+never does ([host-collector.md](host-collector.md) §11); on a cloud VM the service is
+reachable by every local process by design, and the absence of a firewall rule that
+restricts it by owner adds nothing; what matters is what the attached service account
+can do, which the GCP collector (0.0.3 G1) and the host-to-cloud link (G4) own. The fact
+sheet names the cloud platform from DMI only as a label (host-collector.md §3).
+
+*Coverage.* The host's coverage plan names the group "Remote-administration services
+listening beyond localhost" under the External surface row ([report.md](report.md),
+"Coverage"); on a host that is not Linux it is unread: "this version of scheck has no rule
+for remote-administration services on this platform". A read in which some listener's
+owner is not shown is *not assessed* with `unavailable:listener_owner`: "some listeners'
+owners are not shown to a read without sudo, so a remote-administration service on another
+port could not be ruled out". The Hosts row's Firewall line reads "whether
+remote-administration ports are filtered only; see External surface" beside R1's and R3's.
+The fixed item `hosts.firewall_linux` reads "the firewall on Linux hosts, apart from
+database ports, remote-administration ports and the services you declared".
 
 **R4 `attribute:production_write`** (built, E9 step 4). A raise on the GitHub
 `identity.former_person_has_access` finding. The GitHub collector states facts and the

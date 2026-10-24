@@ -144,7 +144,11 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 			continue
 		}
 		resolved := r.resolve(ctx, params[p.Name])
-		verdict := r.Paths.Decide(policy.Canonical(resolved, r.Target.Platform() == check.MacOS))
+		canon := policy.Canonical(resolved, r.Target.Platform() == check.MacOS)
+		verdict := r.Paths.Decide(canon)
+		if verdict.Decision != policy.PathDeny && c.Walk && r.Paths.DenyInside(canon, r.Target.Platform() == check.MacOS) {
+			verdict = policy.PathVerdict{Decision: policy.PathDeny, Rule: policy.RuleDenyInside}
+		}
 		res.PathRule = verdict.Rule
 		switch verdict.Decision {
 		case policy.PathDeny:

@@ -210,7 +210,7 @@ func Questions() []Question {
 			"A database only this server uses is localhost: it should be open, to this server. scheck reports a service that listens more widely than you said. " +
 			"If you do not know who should reach it, leave that word out. If you do not know the port, leave service out. Do not name a port you hope is closed.",
 			Consumers: []Consumer{{ID: "host.context.exposure", Slice: "E1b"}, {ID: "host.context.environment", Slice: "E1b"}, {ID: "svc.expected_missing", Slice: "E1b"},
-				{ID: finding.IDDBListensUnfiltered, Slice: "E9"}, {ID: finding.IDSvcListensBeyond, Slice: "E9"}},
+				{ID: finding.IDDBListensUnfiltered, Slice: "E9"}, {ID: finding.IDSvcListensBeyond, Slice: "E9"}, {ID: finding.IDSensitiveListens, Slice: "G5"}},
 			answered: func(f *File) bool { return !hostNeedsContext(f) },
 			apply:    applyContext,
 			notes:    contextNotes},

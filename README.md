@@ -221,7 +221,7 @@ SSH uses strict host-key verification and key or agent authentication. Checks ne
 privileges are unavailable unless the session is root or authorized non-interactive
 sudo is enabled (`--sudo`, or `elevate: sudo` in the file); `scheck sudoers` prints the
 least-privilege fragment. On Linux the listening-socket read is one of them, so the
-database rule `db.listens_unfiltered` needs `--sudo`. scheck never asks for a password.
+listener rules (`db.listens_unfiltered`, `svc.listens_beyond_declared`, `svc.sensitive_listens_unfiltered`) need `--sudo`. scheck never asks for a password.
 
 ## AI agents and automation
 

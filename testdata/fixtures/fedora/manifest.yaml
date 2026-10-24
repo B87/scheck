@@ -442,27 +442,35 @@ execs:
       stdout_file: 041-sudo.stdout
       code: 0
     - argv:
+        - grep
+        - -H
+        - .
+        - /sys/class/dmi/id/sys_vendor
+        - /sys/class/dmi/id/product_name
+      stderr_file: 042-grep.stderr
+      code: 2
+    - argv:
         - uname
         - -s
-      stdout_file: 042-uname.stdout
+      stdout_file: 043-uname.stdout
       code: 0
     - argv:
         - printenv
         - SHELL
-      stdout_file: 043-printenv.stdout
+      stdout_file: 044-printenv.stdout
       code: 0
     - argv:
         - id
         - -u
-      stdout_file: 044-id.stdout
+      stdout_file: 045-id.stdout
       code: 0
     - argv:
         - uname
         - -a
-      stdout_file: 045-uname.stdout
+      stdout_file: 046-uname.stdout
       code: 0
     - argv:
         - timedatectl
         - show
-      stderr_file: 046-timedatectl.stderr
+      stderr_file: 047-timedatectl.stderr
       code: 1

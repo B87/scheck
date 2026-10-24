@@ -24,7 +24,7 @@ func init() {
 	for n := 1; n <= check.AppEnvSlots; n++ {
 		check.Register(check.Check{
 			ID: check.AppEnvID(n), Description: ".env files in a declared application folder, with the folders that stop others reaching them (names, modes and owners only, never contents; the capture also shows inode, size and time)",
-			Platform: check.Any, Domain: check.DomainCreds, Parser: check.ParseFindLS, Sampled: true, ExitOK: []int{0, 1},
+			Platform: check.Any, Domain: check.DomainCreds, Parser: check.ParseFindLS, Sampled: true, Walk: true, ExitOK: []int{0, 1},
 			MinProfile: check.ProfileHardened, PathUse: check.PathMetadata,
 			Argv: check.EnvFindArgv(), Params: pathParam,
 		})

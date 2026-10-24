@@ -8,6 +8,7 @@ const (
 	IDDBListensUnfiltered = "db.listens_unfiltered"
 	IDEmptyPasswordRemote = "accounts.empty_password_remote"
 	IDSvcListensBeyond    = "svc.listens_beyond_declared"
+	IDSensitiveListens    = "svc.sensitive_listens_unfiltered"
 )
 
 var multiFactDefs = []Def{
@@ -79,6 +80,31 @@ var multiFactDefs = []Def{
 				"sudo ufw allow from 10.0.0.0/24 to any port 8080 proto tcp",
 				"# Docker: publish on loopback, -p 127.0.0.1:8080:8080",
 			},
+		}},
+	{ID: IDSensitiveListens, Title: "A remote-administration service listens beyond localhost and the host firewall does not restrict it",
+		Category: CategoryNetwork, Area: AreaExternal, Exposure: NotExposure, Subject: "service", MultiFact: true,
+		Judges: "remote-administration services listening beyond localhost with no host firewall rule in front",
+		// Medium: the service is reachable, not shown to be usable. Classes
+		// with no sign-in by default rank one step higher; the ceiling is
+		// high because the cloud firewall and the service's own sign-in were
+		// not read (docs/spec/engagement.md, R6).
+		BaseSeverity: SevMedium, Ceiling: SevHigh, HostAccess: true,
+		Attributes: []AttributeRaise{{Name: "unauthenticated_default", Delta: +1,
+			Why: "This kind of service has no sign-in by default, so it ranks one step higher."}},
+		Impact: "A service that gives control of the host or its data, or takes a login in clear text, listens on an address " +
+			"other than localhost, and the host firewall does not restrict its port, so anything that can reach the host on " +
+			"that port can try to use it. Whether a cloud firewall or security group blocks it was not assessed, and whether " +
+			"the service asks for a password, a key or a certificate was not read.",
+		Remediation: Remediation{
+			Summary: "If you do not use it, stop and disable it. If only this host uses it, bind it to 127.0.0.1. Otherwise allow " +
+				"its port only from the addresses that need it, or reach it through SSH or a VPN. Check your cloud firewall rules " +
+				"too: scheck did not read them.",
+			Commands: []string{
+				"# stop and disable it if you do not use it",
+				"# or bind it to 127.0.0.1 in its configuration, then restart it",
+				"# or allow its port only from the addresses that need it, with your host firewall",
+			},
+			Caveat: "If Docker publishes the port, its rules bypass ufw and firewalld: publish it on 127.0.0.1 instead.",
 		}},
 }
 

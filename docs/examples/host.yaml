@@ -24,8 +24,13 @@
 #  declaration never lowers it. svc.listens_beyond_declared: any other
 #  service declared for localhost, lan or vpn that listens beyond that
 #  audience with no host firewall rule in front is a finding of its own
-#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). Both need
-#  elevate: sudo below, since the listeners are read with sudo -n.
+#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). A third rule,
+#  svc.sensitive_listens_unfiltered, needs no declaration: a
+#  remote-administration service from its list (Docker's API, etcd, Telnet,
+#  VNC and others) that listens beyond localhost with no host firewall rule
+#  in front is reported, and declaring it for localhost, lan or vpn ranks it
+#  one step higher. All three need elevate: sudo below, since the listeners
+#  are read with sudo -n.
 #
 #  HOW TO READ THE RESULT
 #  ----------------------

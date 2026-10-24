@@ -37,6 +37,7 @@ type PathVerdict struct {
 // Rule names.
 const (
 	RuleConfigDeny     = "path.config_deny"
+	RuleDenyInside     = "path.deny_inside"
 	RuleNotAllowed     = "path.not_allowed"
 	RuleHomeMetadata   = "path.home_metadata"
 	RuleLogMetadata    = "path.log_metadata"
@@ -161,6 +162,23 @@ func NewPathPolicy(denyPaths []string) *PathPolicy {
 		}
 	}
 	return p
+}
+
+// DenyInside reports whether a deny_paths entry is p or lies under it: a
+// check that walks everything below p would list what the operator denied.
+//
+// p is the canonical form of the resolved root. On macOS an entry may be
+// written in the realpath form (/private/var/...) or the canonical one
+// (/var/...); both are compared. Case is not folded: an entry whose case
+// differs from the disk's is not matched (a stated limit).
+func (pp *PathPolicy) DenyInside(p string, macOS bool) bool {
+	p = path.Clean(p)
+	for _, d := range pp.extraDeny {
+		if underPrefix(d, p) || macOS && underPrefix(Canonical(d, true), p) {
+			return true
+		}
+	}
+	return false
 }
 
 // Decide classifies p, which must already be absolute and symlink-resolved on

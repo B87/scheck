@@ -52,14 +52,15 @@ External surface         checked in part
   does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
   when the domain expires; the DNS hosting account and who can change records.
 Hosts                    checked in part
-  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
-  services you declared; listening services you did not declare; who can become root or
-  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
-  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
-  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
-  schedule; credential files under other names or paths, their contents, and whether they are live.
+  Not judged in this version: the firewall on Linux hosts, apart from database ports,
+  remote-administration ports and the services you declared; listening services you did not declare
+  (on Linux hosts, apart from remote-administration ports); who can become root or administrator,
+  and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings
+  inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts;
+  programs that run with root rights (SUID files); programs started at boot or on a schedule;
+  credential files under other names or paths, their contents, and whether they are live.
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 36: 25 ran, 11 unknown, 0 not run. rules 11: 6 decided, 5 had no usable evidence.
+  checks 37: 26 ran, 11 unknown, 0 not run. rules 11: 6 decided, 5 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
     Disk encryption          not judged: this version of scheck has no rule for it (read: 10 block
                              devices; not read: disk.crypttab)
@@ -67,7 +68,8 @@ Hosts                    checked in part
                              scheck could not tell (this is not a finding)
     Firewall                 checked (whether database ports are filtered only; see Data stores,
                              whether declared services listen beyond their audience only; see
-                             External surface): 1 open finding (see Findings)
+                             External surface, whether remote-administration ports are filtered
+                             only; see External surface): 1 open finding (see Findings)
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
     SSH server               checked in part (password login, direct root login): nothing found by

@@ -9,28 +9,28 @@ Handle with care: this report names people, accounts, internal hosts and service
 weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
 customers.
 
-Read: ubuntu (checked only in part: ubuntu, 4 of 15 host areas judged). See Coverage for what was
-not checked.
+Read: ubuntu (checked only in part: external surface; ubuntu, 5 of 15 host areas judged). See
+Coverage for what was not checked.
 
 SUMMARY
-Checked in part  Hosts (ubuntu, 4 of 15 areas judged).
-Not checked      Data stores and backups, External surface: see Coverage.
+Checked in part  External surface, Hosts (ubuntu, 5 of 15 areas judged).
+Not checked      Data stores and backups: see Coverage.
 Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
                  supply chain, web application, email and domain, logging and incident readiness. To
                  include one, list it under roots in the engagement file.
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Fix these first: a ranking of what was checked, not of all your risks
-  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 36 checks gave no
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 37 checks gave no
   answer). Below: 0 low, 0 informational, 0 accepted.
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
 is fully checked in this version; each area row under Coverage lists what this version does not
-judge. Checked in part: hosts. On ubuntu, 4 of 15 host areas were judged, each only on the settings
-named under Coverage; 5 have no rule in this version and 6 had no usable evidence. Not checked: data
-stores and backups, external surface, identity and access, secrets, cloud configuration, CI/CD and
-supply chain, web application, email and domain, logging and incident readiness. Anything not
-checked is unknown, not fine.
+judge. Checked in part: external surface, hosts. On ubuntu, 5 of 15 host areas were judged, each
+only on the settings named under Coverage; 5 have no rule in this version and 5 had no usable
+evidence. Not checked: data stores and backups, identity and access, secrets, cloud configuration,
+CI/CD and supply chain, web application, email and domain, logging and incident readiness. Anything
+not checked is unknown, not fine.
 
 COVERAGE
 Data stores and backups  not checked
@@ -43,7 +43,7 @@ Data stores and backups  not checked
   bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
   RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
   link; whether backups exist, where they are kept, and who can delete them.
-External surface         not checked
+External surface         checked in part
   1 of 1 asset read.
   No service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a
   service's reach only against what you declared (Declared services listening beyond their
@@ -52,28 +52,31 @@ External surface         not checked
   does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
   when the domain expires; the DNS hosting account and who can change records.
 Hosts                    checked in part
-  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
-  services you declared; listening services you did not declare; who can become root or
-  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
-  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
-  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
-  schedule; credential files under other names or paths, their contents, and whether they are live.
+  Not judged in this version: the firewall on Linux hosts, apart from database ports,
+  remote-administration ports and the services you declared; listening services you did not declare
+  (on Linux hosts, apart from remote-administration ports); who can become root or administrator,
+  and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings
+  inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts;
+  programs that run with root rights (SUID files); programs started at boot or on a schedule;
+  credential files under other names or paths, their contents, and whether they are live.
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 36: 25 ran, 11 unknown, 0 not run. rules 11: 6 decided, 5 had no usable evidence.
+  checks 37: 26 ran, 11 unknown, 0 not run. rules 11: 6 decided, 5 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
     Disk encryption          not judged: this version of scheck has no rule for it (read: 10 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
                              scheck could not tell (this is not a finding) (mac.sestatus: exit 127:
                              bash: line 1: sestatus: command not found)
-    Firewall                 not checked: a container runtime publishes this port, and its rules
-                             bypass the host firewall (Docker publishes this port; its rules bypass
-                             ufw and firewalld, and scheck does not read them in this version); no
-                             service on this host is declared for localhost, lan or vpn
-                             (expected_services); scheck judges a service's reach only against what
-                             you declared (no service on this host is declared for localhost, lan or
-                             vpn (expected_services); scheck judges a service's reach only against
-                             what you declared); also read, not judged: /usr/sbin/xtables-nft-multi
+    Firewall                 checked in part (whether remote-administration ports are filtered only;
+                             see External surface): nothing found by these rules; a container
+                             runtime publishes this port, and its rules bypass the host firewall
+                             (Docker publishes this port; its rules bypass ufw and firewalld, and
+                             scheck does not read them in this version); no service on this host is
+                             declared for localhost, lan or vpn (expected_services); scheck judges a
+                             service's reach only against what you declared (no service on this host
+                             is declared for localhost, lan or vpn (expected_services); scheck
+                             judges a service's reach only against what you declared); also read,
+                             not judged: /usr/sbin/xtables-nft-multi
     Network exposure         not judged: this version of scheck has no rule for it (read: 2
                              listening sockets)
     SSH server               checked in part (password login, direct root login): nothing found by
@@ -153,11 +156,14 @@ WHAT LEFT THIS MACHINE
 FACTS READ ON UBUNTU
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           86b5de66829d
+Host identity            ran      host.hostname           c8ebfdf3e96a
                                                           Hostname
 Host identity            ran      host.machine_id         eb33da0b14664091bd914f344fde11f0
                                                           Stable machine identifier (hashed into
                                                           host.id)
+Host identity            ran      sys.dmi                 no DMI data; cloud platform not identified
+                                                          Hardware vendor and product from DMI, to
+                                                          name a cloud platform (read-only sysfs)
 Operating system         ran      os.release              13 settings
                                                           Distribution identification
 Software updates         ran      pkg.apt_upgradable      0 updates available
@@ -258,13 +264,13 @@ Session and shell        ran      sys.shell               /bin/bash
                                                           Login shell of the audit session
 Session and shell        ran      sys.uid                 1001
                                                           Effective uid of the audit session
-Session and shell        ran      sys.uname               Linux 86b5de66829d 7.2.12-orbstack-00394-g
+Session and shell        ran      sys.uname               Linux c8ebfdf3e96a 7.2.12-orbstack-00394-g
                                                           becdd6130068 #1 SMP PREEMPT Thu Oct 22
                                                           22:17:17 UTC 2026 aarch64 aarch64 aarch…
                                                           Full kernel identification
 
 FOR AUTOMATION
-Exit 0: no open finding at or above threshold among the 6 rules that could decide. That is not a
-clean result: 10 rules had no usable evidence, and 9 areas were not checked.
+Exit 0: no open finding at or above threshold among the 7 rules that could decide. That is not a
+clean result: 10 rules had no usable evidence, and 8 areas were not checked.
 --no-persist: no run directory or audit log was written; the command trace is in the JSON report
 (--format json).

@@ -372,8 +372,20 @@ restrict the port. It judges only what was declared and abstains without a decla
 (`unavailable:no_declaration`), on a `lan` or `vpn` service of a host not declared
 internet-facing (`unavailable:audience_network`), on a private bind of an internet-facing
 host (`unavailable:bind_network`) and for the cases above; a cloud firewall was not read.
-Database ports are the previous rule's. An area in `not_used` that holds a finding is
+Database ports are the previous rule's and remote-administration ports are the next one's. An area in `not_used` that holds a finding is
 still reported as checked.
+
+Remote-administration services on a Linux host: `svc.sensitive_listens_unfiltered`
+(area external surface, subject `port/proto`, base medium, never past high, needs no
+declaration) fires when a service in scheck's list (Docker's API, etcd, kubelet, Telnet,
+FTP, SMB, RDP, VNC, Jupyter, SNMP, RabbitMQ management) listens beyond localhost and the
+host firewall does not restrict the port. Docker's API without TLS, etcd and the kubelet's read-only port rank one step
+higher (`unauthenticated_default`). Like the database rule it needs `--sudo` and abstains
+the same ways (`unavailable:listeners`, `listener_owner`, `container_port`,
+`firewall_*`). A cloud firewall and the service's own sign-in were not read; never say a
+service is reachable from the internet or open without a password. The fact sheet's
+`cloud VM: <provider> (from DMI)` is a label; `cloud platform not identified` does not
+mean the host is not in the cloud, and scheck does not test the cloud metadata service.
 
 Empty password over SSH on a Linux host: `accounts.empty_password_remote` (critical, area
 hosts, one finding per host with the accounts under `affected`) fires when an account
@@ -399,7 +411,8 @@ folders deep, so no result is "no credential files". A symlinked file is
 `unavailable:home_ancestors_not_read`. With no `app_paths`, `.env` files are
 `unavailable:no_app_paths`. A `deny_paths` entry on a home tree turns `creds.home_files`
 off (excluded by `disable_checks`), and an `app_paths` entry that overlaps a `deny_paths`
-entry exits 3. A host in `data.matters_most` shows its readout as `partial`, since these
+entry exits 3; a symlinked `app_paths` parent that leads over a `deny_paths` entry is refused at run
+time and reads as excluded by the operator. On macOS a `.env` listing never disproves, it can only show an exposure. A host in `data.matters_most` shows its readout as `partial`, since these
 reads cannot fully decide. Tell the operator to rotate
 a credential another account could read; do not open the file yourself.
 

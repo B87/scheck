@@ -22,6 +22,10 @@ func init() {
 	check.Register(
 		// OS / host
 		unit(base("os.release", "Distribution identification", check.DomainOS, check.ParseKV, "cat", "/etc/os-release"), "settings"),
+		// The DMI vendor, to name a cloud VM on the fact sheet (G5); a label,
+		// never a verdict. No DMI tree (a container) is exit 2, an answer.
+		unit(exitOK(base("sys.dmi", "Hardware vendor and product from DMI, to name a cloud platform (read-only sysfs)", check.DomainHost, check.ParseLines,
+			"grep", "-H", ".", "/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name"), 0, 1, 2), "DMI fields"),
 		base("host.machine_id", "Stable machine identifier (hashed into host.id)", check.DomainHost, check.ParseRaw, "cat", "/etc/machine-id"),
 
 		// Pending updates: one check per package manager; the absent ones are unavailable.

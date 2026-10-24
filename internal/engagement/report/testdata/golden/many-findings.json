@@ -190,8 +190,8 @@
       "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 36,
-        "ran": 25,
+        "planned": 37,
+        "ran": 26,
         "unknown": 11
       },
       "collected": {
@@ -472,11 +472,11 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+          "text": "the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
-          "text": "listening services you did not declare"
+          "text": "listening services you did not declare (on Linux hosts, apart from remote-administration ports)"
         },
         {
           "id": "hosts.admins_sudo",
