@@ -415,6 +415,21 @@ func TestAWalkIsRefusedWhenADeniedPathLiesInside(t *testing.T) {
 	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/current"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
 		t.Fatalf("an unresolved path was walked: %+v", res)
 	}
+	// A resolution that was masked or cut is no resolution: the deny entry
+	// cannot be compared with it, so the walk does not run.
+	redWalk := &Runner{Paths: policy.NewPathPolicy([]string{"/data/acme/shop/keys"}), Budgets: policy.DefaultBudgets(),
+		Audit: policy.NewAudit(&audit), Log: t.Logf}
+	redWalk.Redactor, _ = policy.NewRedactor([]string{"acme"})
+	redWalk.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/srv/current/shop"}, Stdout: "/data/acme/shop\n"})
+	if res := redWalk.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/current/shop"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("a masked resolution was walked: %+v", res)
+	}
+	long := "/srv/" + strings.Repeat("a", 5000)
+	redWalk.Target = fixture.New(target.Linux, fixture.Exec{Argv: []string{"realpath", "/srv/long"}, Stdout: long + "\n"})
+	if res := redWalk.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/long"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("a truncated resolution was walked: %+v", res)
+	}
 	// On macOS an entry written in the realpath form (/private/var/...)
 	// denies the canonical root, and one above the root denies it outright.
 	mac := fixture.New(target.MacOS,

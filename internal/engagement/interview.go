@@ -220,8 +220,8 @@ func Questions() []Question {
 			"  path: /srv/shop\n" +
 			"  path: /var/www/api\n" +
 			"scheck lists files named .env up to 4 folders deep under each folder and reports who can read them. It never opens them. " +
-			"Folders must be under /srv, /var/www, /opt, /app or /data (others are refused), at most 5 per server. " +
-			"Folders under /home, /root or /Users are accepted, but a .env there is listed and not judged.",
+			"Folders must be under /srv, /var/www, /opt, /app, /data, /home, /root or /Users (others are refused), at most 5 per server. " +
+			"Under /home, /root and /Users a .env is listed and not judged.",
 			Consumers: []Consumer{{ID: finding.IDEnvFileExposed, Slice: "G5"}},
 			answered:  func(f *File) bool { return !hasHost(f) || anyAppPaths(f) },
 			apply:     applyAppPaths},

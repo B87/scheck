@@ -147,6 +147,19 @@ func Canonical(p string, macOS bool) string {
 	return p
 }
 
+// CanonicalForms are the forms of a deny entry the runner's canonical paths
+// can take on macOS, beyond the entry as written: the entry with /private
+// stripped, and for /private itself the three trees it holds.
+func CanonicalForms(d string) []string {
+	if d == "/private" {
+		return []string{"/etc", "/var", "/tmp"}
+	}
+	if c := Canonical(d, true); c != d {
+		return []string{c}
+	}
+	return nil
+}
+
 // PathPolicy decides whether a resolved absolute path may be read.
 type PathPolicy struct {
 	extraDeny []string
@@ -162,9 +175,7 @@ func NewPathPolicy(denyPaths []string) *PathPolicy {
 			// On macOS /etc, /var and /tmp resolve into /private, and the
 			// runner decides on the canonical form: an entry written in the
 			// realpath form is kept in that one too. It only adds denials.
-			if c := Canonical(d, true); c != d {
-				p.extraDeny = append(p.extraDeny, c)
-			}
+			p.extraDeny = append(p.extraDeny, CanonicalForms(d)...)
 		}
 	}
 	return p

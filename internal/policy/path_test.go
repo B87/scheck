@@ -90,6 +90,13 @@ func TestDenyEntriesInRealpathFormOnMacOS(t *testing.T) {
 	if v := pp.Decide("/var/www/other"); v.Decision == PathDeny {
 		t.Errorf("a sibling was denied: %+v", v)
 	}
+	// /private itself covers the three trees the runner canonicalises.
+	pp = NewPathPolicy([]string{"/private"})
+	for _, p := range []string{"/etc/ssh/sshd_config", "/var/www/app", "/tmp/x"} {
+		if v := pp.Decide(p); v.Decision != PathDeny {
+			t.Errorf("%s under a /private entry: %+v", p, v)
+		}
+	}
 	pp = NewPathPolicy([]string{"/private/var/www/app/keys"})
 	if !pp.DenyInside("/var/www/app") || pp.DenyInside("/var/www/app2") || pp.DenyInside("/var/www/app/keys/x") {
 		t.Error("DenyInside")

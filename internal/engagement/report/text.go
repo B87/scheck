@@ -843,6 +843,7 @@ func (t *text) reasonText(rd ReasonDetail) string {
 		}
 		if detail, ok := map[string]string{
 			"not_read":                      "the required read was not collected",
+			"path_unresolved":               "the declared folder could not be resolved on the host (it may not exist), so it was not listed: check app_paths",
 			"no_file_listed":                "no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at",
 			"home_ancestors_not_read":       "the .env file sits in a home directory, and the folders above the declared folder are not read, so a private home cannot be told from an open one",
 			"listing_not_trusted":           "on macOS any local user can forge a line of this listing, so it can show a file is exposed but never that it is not",

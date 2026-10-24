@@ -273,7 +273,11 @@ func (b *builder) narrowing(v *hostView) []Narrowing {
 		}
 		best := -1
 		for i, e := range v.h.DenyPaths {
-			if under(path, e.Value) && (best < 0 || len(e.Value) > len(v.h.DenyPaths[best].Value)) {
+			hit := under(path, e.Value)
+			for _, c := range policy.CanonicalForms(e.Value) {
+				hit = hit || under(path, c)
+			}
+			if hit && (best < 0 || len(e.Value) > len(v.h.DenyPaths[best].Value)) {
 				best = i
 			}
 		}

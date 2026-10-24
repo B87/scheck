@@ -387,7 +387,9 @@ func (r *Runner) resolve(ctx context.Context, p string) (string, bool) {
 	sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
 	sub = r.record(sub, "run", &sub.ExitCode)
 	resolved := strings.TrimSpace(sub.Raw)
-	if !strings.HasPrefix(resolved, "/") {
+	// A path that was cut or masked before it was read is not the real path:
+	// a deny entry cannot be compared with it.
+	if !strings.HasPrefix(resolved, "/") || sub.Truncated || sub.Redactions > 0 || check.HasMarker(resolved) {
 		return p, false
 	}
 	return resolved, true

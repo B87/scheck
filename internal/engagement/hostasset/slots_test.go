@@ -49,7 +49,7 @@ func TestGuardHomeWalk(t *testing.T) {
 		want bool
 	}{
 		{nil, false}, {[]string{"/srv/backups"}, false}, {[]string{"/home/ceo"}, true}, {[]string{"/home"}, true},
-		{[]string{"/Users/ana/private"}, true}, {[]string{"/private/var/root/secrets"}, true}, {[]string{"/private/var/www"}, false}, {[]string{"/homework"}, false}, {[]string{"/"}, true},
+		{[]string{"/Users/ana/private"}, true}, {[]string{"/private/var/root/secrets"}, true}, {[]string{"/private/var/www"}, false}, {[]string{"/private"}, true}, {[]string{"/homework"}, false}, {[]string{"/"}, true},
 	} {
 		if got := slices.Contains(guardWalks(nil, tc.deny), id); got != tc.want {
 			t.Errorf("deny %v: disabled=%v, want %v", tc.deny, got, tc.want)

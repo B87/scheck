@@ -559,7 +559,8 @@ func guardWalks(disabled, deny []string) []string {
 		for _, d := range deny {
 			// An entry written in macOS's realpath form (/private/var/...)
 			// overlaps a root named in its canonical one (/var/root).
-			for _, e := range []string{strings.TrimSuffix(d, "/"), policy.Canonical(strings.TrimSuffix(d, "/"), true)} {
+			d = strings.TrimSuffix(d, "/")
+			for _, e := range append([]string{d}, policy.CanonicalForms(d)...) {
 				for _, root := range roots {
 					if e == root || strings.HasPrefix(e, root+"/") || strings.HasPrefix(root, e+"/") {
 						disabled = append(slices.Clone(disabled), id)
