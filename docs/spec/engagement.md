@@ -104,6 +104,7 @@ stubbed to pass.
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
 | Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Asked after `context` and before `not_used`; rules below the table |
 | Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a) and `svc.listens_beyond_declared` (E9 step 5a); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
+| Hosts | Where is your application installed on each server? One block per server, one `path:` line per folder (`name: shop`, `path: /srv/shop`); on a laptop, the folder where you keep code. Leave blank if nothing is deployed there or you are not sure. | `assets.<host>.app_paths`: the folders `creds.app_env_N` lists `.env` files in (`creds.env_file_exposed`, G5). Asked after `context`; skipped when no host is declared or any host already has `app_paths`. A name that is not a declared host, a block with no `path:` line, and any path "Host settings" refuses, refuse the whole answer. With the answer blank, the report says `.env` files were not looked for (`unavailable:no_app_paths`) |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation"; `external` is refused beside a host already answered `internet`, by the same refusal as intake |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
 
@@ -363,6 +364,7 @@ assets:                               # per-asset settings; the key is the name 
     profile: hardened                 # overrides defaults.profile for this host
     disable_checks: [fs.suid]         # the client's rules of engagement: only narrow
     deny_paths: [/srv/backups]        # literal absolute prefixes, checked after realpath
+    app_paths: [/srv/shop]            # where the application lives: .env files are listed here (G5)
     context:                          # host-collector.md §5.2: only these four fields
       role: "web and database host"    # valid, not asked
       exposure: internet
@@ -416,7 +418,7 @@ an absolute path to the operator's `git clone --mirror` ([scope.md](scope.md#rep
 `^[a-z0-9][a-z0-9-]{0,62}$`. A throttle rate is `N/s` or `N/m`.
 
 **An asset's settings follow its kind.** `jump`, `identity`, `elevate`, `profile`,
-`disable_checks`, `deny_paths` and `context` are host settings; `first_party` is
+`disable_checks`, `deny_paths`, `app_paths` and `context` are host settings; `first_party` is
 taken by a domain, url or host; `deploys_to` (`production | staging | development`),
 `ci` (a tool named under `tools`) and `checkout` (an absolute mirror path) by a
 repository. The interview asks `deploys_to` and does not ask `ci`. `ci` stays valid.
@@ -708,7 +710,25 @@ needed any of them can be repeated from its file. Beside its reach settings and 
 (overriding `defaults.profile`, which only host assets read) and the narrowing lists
 `disable_checks` and `deny_paths`, with the semantics of `host-collector.md §8`: a
 check id that is not in the catalog exits 3, and so does a `deny_paths` entry that is
-relative or `/`.
+relative or `/`. A `deny_paths` entry that is, or lies under or over, `/home`, `/root`,
+`/Users` or `/var/root` disables `creds.home_files` for that host at run time, since its
+fixed walk cannot honour the denial (`host-collector.md §3`).
+
+`app_paths` (0.0.3 G5) lists the folders of the application the host runs, so
+`creds.app_env_1` to `creds.app_env_5` can list `.env` files in them, names and modes
+only (`host-collector.md §3`, §6.5). It is a host setting and part of the host's resume
+fingerprint, so a changed list collects the host again. Each entry is an absolute, clean
+path strictly under `/srv`, `/var/www`, `/opt`, `/app`, `/data`, `/home`, `/root` or
+`/Users`, in the charset `[A-Za-z0-9._/-]`, listed once; at most 5 entries; on any
+other kind of asset the key exits 3. A relative path, `/` itself, a path outside
+those trees, a character outside the charset, a duplicate or a sixth entry exits 3 at
+intake naming the entry; so does an unclean one (`/srv//shop`, `/srv/shop/../x`), which
+neither intake nor the interview rewrites. The file picks a subtree the path policy
+already lets scheck list (`host-collector.md §4.1`); it never widens the policy, and
+`deny_paths` still applies: an entry that is equal to, inside or containing a
+`deny_paths` entry exits 3, since scheck walks a declared folder whole. A `.env` file
+under `/home`, `/root`, `/Users` or `/var/root` is listed but not judged
+(`host-collector.md §6.5`). Without `app_paths`, no `.env` file is looked for.
 
 **Jump hosts (0.0.2 E1c).** `jump: user@address[:port]` on a host asset, or `--jump`
 with `--host`, reaches the host through one SSH hop, as `ssh -J` does: scheck
@@ -850,7 +870,7 @@ nobody listed, so the engagement's adjustments are a closed table:
 | Rule | Source | Moves | Step | Past high |
 |---|---|---|---|---|
 | `exposed_on_purpose` | the declaration, `intent.exposed_on_purpose[i]` | exposure findings on that exact URL or service | to `info` | n/a |
-| `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below | +1 | no: stops at high |
+| `data_matters_most` | the indexed declaration, `data.matters_most[i]`; the readout prints that entry's `what` | findings on that asset in the identity and access, secrets, data stores and external surface areas; on a Workspace tenant, its identity findings; on a host, the host access findings whose definitions carry the flag below, and the findings in the secrets area | +1 | no: stops at high |
 | `deploys_to:production` | the declaration, `assets.<repo>.deploys_to` | branch protection, workflow token, deploy key and `pull_request_target` findings on that repository | +1 | no: stops at high |
 | `exposure:internet` | the host's context, `assets.<host>.context.exposure: internet` | `db.listens_unfiltered` and `svc.listens_beyond_declared` (E9 step 5a) only | +1 | no: stops at high |
 | `contradiction` | the declaration the observation disproves (`access.mfa[i]`, an intent audience, `expected_services`) | the finding for the weakness declared absent | +1 | yes |
@@ -880,10 +900,14 @@ not named here does not exist.
   a host are governed by its `expected_services`, not by intent.
 - **Data that matters most** leaves findings in other areas (headers, email, host
   hardening) where they are. A finding's area is a required field of its definition.
-  On a host asset, only definitions flagged `HostAccess` move, whatever their area:
-  `sshd.password_auth_enabled`, `sshd.root_login_enabled`, `accounts.empty_password`,
-  `accounts.empty_password_remote` and `db.listens_unfiltered`; every other asset kind
-  matches by area. Time sync, auditd and pending updates never move. The step is applied
+  On a host asset, only definitions flagged `HostAccess` or in the secrets area move,
+  whatever their other area: `sshd.password_auth_enabled`, `sshd.root_login_enabled`,
+  `accounts.empty_password`, `accounts.empty_password_remote`, `db.listens_unfiltered`
+  and `docker.socket_exposed` (flagged), and `creds.env_file_exposed`,
+  `creds.ssh_key_exposed` and `creds.cloud_credentials_exposed` (secrets; 0.0.3 G5): a
+  credential kept on the host that holds the data is the way to that data. Every other
+  asset kind matches by area. The three credential findings are medium at base, so the
+  raise makes them high at most. Time sync, auditd and pending updates never move. The step is applied
   by the engagement (`by: engagement`) after the host collector's own table
   (`host-collector.md §5.3`, unchanged): the embedded host envelope keeps the
   collector's severity, and the engagement finding carries the step (built, E9 step 9).

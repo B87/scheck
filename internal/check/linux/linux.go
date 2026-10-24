@@ -77,6 +77,16 @@ func init() {
 		sampled(unit(exitOK(base("fs.world_writable", "World-writable files and directories without the sticky bit (depth-capped)", check.DomainFS, check.ParseLines,
 			"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths")),
 
+		// Credentials on disk and the container socket (G5). Elevated so a
+		// home the audit account cannot list is read, not silently skipped;
+		// Sampled because the walk is depth-capped.
+		elevated(sampled(check.Check{ID: "creds.home_files", Description: "Private keys and cloud credential files under home directories, with the folders that stop others reaching them (names, modes and owners only, never contents; the capture also shows inode, size and time)",
+			Platform: check.Linux, Domain: check.DomainCreds, Parser: check.ParseFindLS, Baseline: true, ExitOK: []int{0, 1}, PathUse: check.PathNone,
+			Argv: check.CredFindArgv([]string{"/root", "/home"}, []string{"node_modules", ".git", ".cache"})})),
+		sampled(check.Check{ID: "docker.sockets", Description: "Container engine sockets under /run with their owner and mode",
+			Platform: check.Linux, Domain: check.DomainDocker, Parser: check.ParseFindLS, Baseline: true, ExitOK: []int{0, 1},
+			Argv: []string{"find", "/run", "-maxdepth", "2", "-type", "s", "-name", "docker.sock", "-ls", "-o", "-type", "s", "-name", "podman.sock", "-ls", "-o", "-type", "s", "-name", "containerd.sock", "-ls"}}),
+
 		// Logging / audit
 		exitOK(base("log.auditd", "Whether auditd is active", check.DomainLogging, check.ParseRaw, "systemctl", "is-active", "auditd"), check.AnyExit...),
 		base("log.journal_usage", "Journal disk usage", check.DomainLogging, check.ParseRaw, "journalctl", "--disk-usage"),

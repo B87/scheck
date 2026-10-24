@@ -209,7 +209,7 @@ and it stays out of public repositories.
 
 An engagement file declares the roots to read, each host's reach (`identity`,
 `elevate`, `profile`, `timeout`), what to leave out (`exclude`, `disable_checks`,
-`deny_paths`, `redact_extra`), the host's context (`role`, `exposure`, `environment`,
+`deny_paths`, `app_paths`, `redact_extra`), the host's context (`role`, `exposure`, `environment`,
 `expected_services`) and the risks accepted at a readout (`intent.accepted_risks`).
 `--write-engagement` writes the one `--host` builds as a starting point. Each finding in
 the report carries a ready-to-paste `accepted_risks` entry for the risks you decide not

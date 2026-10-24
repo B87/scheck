@@ -204,12 +204,21 @@ score, grade, percentage or compliance claim.
 summary carries a readout block, one line per entry, in file order:
 
 Let M be the rules this answer raises on the asset (`finding.Def.MattersMostRaises`:
-the `HostAccess` definitions on a host, the identity, secrets, data and external areas
-elsewhere), D those of them that decided and U = M - D the rest. A check decided when
+the `HostAccess` definitions and the secrets area on a host, the identity, secrets, data
+and external areas elsewhere), D those of them that decided and U = M - D the rest. A check decided when
 it fired (`matched`) or was disproved over everything it had to read (`not_matched`
 and complete); a disproval over part of a read is undecided, with its own reason (a
 budget cut's `sampled`), or `unavailable:incomplete_read` when it has none. A rule that cannot apply on the asset
 (`not_applicable`, another platform's) is not one of the M. The outcomes:
+
+On a host, the credential-on-disk rules (`creds.env_file_exposed`,
+`creds.ssh_key_exposed`, `creds.cloud_credentials_exposed`) and `docker.socket_exposed`
+are among the M (0.0.3 G5). They read a depth-capped sample, and a listing that shows no
+file is undecided (`unavailable:no_file_listed`), so on a clean host with no application
+folder declared four of the nine host checks are undecided (the `.env` rule reads
+`unavailable:no_app_paths`; a `.env` under a home is `unavailable:home_ancestors_not_read`):
+a host's readout is `partial` rather than `read` until a later change lets a sample
+decide. The line says so; it never reads `read` over a check that did not decide.
 
 - `raised`: "*asset* (*what*): N findings on it that this answer raises." N counts
   every open or accepted finding on the asset that this answer raises, those already at
@@ -395,6 +404,16 @@ listed only under `-v`. Host domains that carry no rule (host identity, operatin
 system, session and shell, text utilities) are not coverage at all: they are absent
 from the table and its JSON, and their facts stay in the host's envelope.
 
+A host's coverage gains two domains in 0.0.3 G5, "Credentials on disk" (`creds.home_files`
+and the `.env` slots) and "Container engine" (`docker.sockets`, Linux). A `.env` slot
+past the folders the file declares is not planned. When a declared slot answered, the
+others are excused like a family's other members; when none was declared, each reads
+*not assessed* with `unavailable:no_app_paths`. A declared slot a timeout or a lost
+connection skipped reads `limit_reached` or `failed`. A listing that shows no file never
+disproves, on any platform: it reads `unavailable:no_file_listed`. When `deny_paths`
+touches the home trees `creds.home_files` reads as excluded by `disable_checks`
+(`host-collector.md §3`). Every read is depth-capped (`host-collector.md §6.5`).
+
 **A mark counts its population.** Each row and sub-item carries `population: {kind,
 in_scope, read}`: the assets (or repositories, users, entry points) of the kind it
 reads that are in scope, and how many were read. A row is *assessed* only when every
@@ -509,6 +528,11 @@ the target:
 | `unavailable:audience` | a service's audience is localhost, lan, vpn or internet |
 | `unavailable:audience_network` | on a host not declared internet-facing, scheck cannot tell which networks its addresses face |
 | `unavailable:bind_network` | the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall |
+| `unavailable:no_app_paths` | no application folder was declared for this host (`app_paths`), so `.env` files were not looked for |
+| `unavailable:listing_not_trusted` | on macOS any local user can forge a line of the listing, so it can show a file is exposed but never that it is not |
+| `unavailable:no_file_listed` | no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at |
+| `unavailable:home_ancestors_not_read` | the `.env` file sits in a home directory, and the folders above a declared folder are not read, so a private home cannot be told from an open one |
+| `unavailable:symlink_not_followed` | the only match was a symbolic link, and scheck does not follow links |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `leaving_date_not_passed` | the declared leaving date had not passed when it was read |
 | `left_date_within_collection` | the declared leaving date falls within or after collection; run again after that date |

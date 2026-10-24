@@ -1,8 +1,8 @@
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           21859b827686
+Host identity            ran      host.hostname           86b5de66829d
                                                           Hostname
-Host identity            ran      host.machine_id         ef671600129d4fc6813a00cba94421a5
+Host identity            ran      host.machine_id         eb33da0b14664091bd914f344fde11f0
                                                           Stable machine identifier (hashed into
                                                           host.id)
 Operating system         ran      os.release              13 settings
@@ -19,7 +19,7 @@ Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1
 Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
                                                           or directory
                                                           Configured encrypted volumes
-Disk encryption          ran      disk.lsblk              20 block devices
+Disk encryption          ran      disk.lsblk              10 block devices
                                                           Block devices, filesystems and crypt
                                                           layers
 System integrity         skipped  mac.aa_status           not found: aa-status
@@ -59,7 +59,7 @@ Accounts                 ran      accounts.shadow_meta    mode 640, owner root:s
                                                           never contents)
 Privilege escalation     ran      privesc.sudoers         41 sudoers lines [elevated]
                                                           sudoers policy
-Privilege escalation     ran      privesc.sudoers_d       33 sudoers.d lines [elevated]
+Privilege escalation     ran      privesc.sudoers_d       36 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
 Startup and persistence  ran      persist.cron            25 cron entries
@@ -77,6 +77,15 @@ Filesystem               ran      fs.suid                 9 SUID files
 Filesystem               ran      fs.world_writable       0 world-writable paths
                                                           World-writable files and directories
                                                           without the sticky bit (depth-capped)
+Credentials on disk      ran      creds.home_files        5 listed files and folders [elevated]
+                                                          Private keys and cloud credential files
+                                                          under home directories, with the folders
+                                                          that stop others reaching them (names,
+                                                          modes and owners only, never contents; the
+                                                          capture also shows inode, size and time)
+Container engine         ran      docker.sockets          0 listed files and folders
+                                                          Container engine sockets under /run with
+                                                          their owner and mode
 Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't
                                                           operate.
@@ -96,7 +105,7 @@ Session and shell        ran      sys.shell               /bin/bash
                                                           Login shell of the audit session
 Session and shell        ran      sys.uid                 1001
                                                           Effective uid of the audit session
-Session and shell        ran      sys.uname               Linux 21859b827686 7.0.12-linuxkit #1 SMP
-                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
-                                                          aarch64 aarch64 aarch64 GNU/Linux
+Session and shell        ran      sys.uname               Linux 86b5de66829d 7.2.12-orbstack-00394-g
+                                                          becdd6130068 #1 SMP PREEMPT Thu Oct 22
+                                                          22:17:17 UTC 2026 aarch64 aarch64 aarch…
                                                           Full kernel identification

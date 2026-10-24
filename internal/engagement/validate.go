@@ -18,6 +18,7 @@ import (
 
 	"github.com/b87/scheck/internal/engagement/gate"
 	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/policy"
 )
 
 // Vocabularies of the engagement file (docs/spec/engagement.md).
@@ -641,6 +642,7 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 	only("profile", a.Profile != "", KindHost)
 	only("disable_checks", a.DisableChecks != nil, KindHost)
 	only("deny_paths", a.DenyPaths != nil, KindHost)
+	only("app_paths", a.AppPaths != nil, KindHost)
 	only("context", a.Context != nil, KindHost)
 	only("first_party", a.FirstParty != nil, KindDomain, KindURL, KindHost)
 	only("deploys_to", a.DeploysTo != "", KindRepo)
@@ -730,6 +732,18 @@ func (v *validator) hostSettings(key string, r Ref, a Asset) {
 			v.fail(k, "/ would deny every path: disable the checks instead")
 		case c != p && c+"/" != p:
 			v.fail(k, "%q is not a clean path: write %s", p, c)
+		}
+	}
+	v.appPaths(key, a.AppPaths)
+	// deny_paths wins, and the .env walk under a declared folder cannot
+	// honour a denial inside it: refuse the pair instead of listing names
+	// the operator denied.
+	for i, p := range a.AppPaths {
+		for _, d := range a.DenyPaths {
+			d = strings.TrimSuffix(d, "/")
+			if c := strings.TrimSuffix(p, "/"); c == d || strings.HasPrefix(c, d+"/") || strings.HasPrefix(d, c+"/") {
+				v.fail(fmt.Sprintf("%s.app_paths[%d]", key, i), "%s overlaps deny_paths entry %s: scheck walks a declared folder whole, so declare a folder that holds none of the denied paths", p, d)
+			}
 		}
 	}
 	if c := a.Context; c != nil {
@@ -1298,3 +1312,64 @@ func identifiersOf(p Person, field string) []string {
 	}
 	return p.Workspace
 }
+
+// MaxAppPaths is how many application folders a host asset may declare: each
+// is one listing of the host.
+const MaxAppPaths = 5
+
+// appPathProblem is one refusal of a declared application folder: Index is
+// the entry, or -1 for the list.
+type appPathProblem struct {
+	Index int
+	Msg   string
+}
+
+// appPathProblems checks a host's declared application folders. They only
+// pick a subtree inside the trees the host collector's path policy already
+// lets it list (policy.AppPathPrefixes): the file never widens the policy
+// (docs/spec/host-collector.md §4.1; docs/spec/engagement.md, "Host
+// settings").
+func appPathProblems(paths []string) []appPathProblem {
+	var out []appPathProblem
+	if len(paths) > MaxAppPaths {
+		out = append(out, appPathProblem{-1, fmt.Sprintf("give at most %d folders", MaxAppPaths)})
+	}
+	seen := map[string]bool{}
+	for i, p := range paths {
+		c := path.Clean(p)
+		msg := ""
+		switch {
+		case !strings.HasPrefix(p, "/"):
+			msg = fmt.Sprintf("%q is not a full path: give the folder starting with /", p)
+		case c == "/":
+			msg = "/ is the whole machine: give the application's own folder"
+		case c != p:
+			msg = fmt.Sprintf("%q is not a clean path: write %s", p, c)
+		case !slices.ContainsFunc(policy.AppPathPrefixes, func(pre string) bool { return strings.HasPrefix(c, pre+"/") }):
+			msg = fmt.Sprintf("scheck lists files only under %s; %s is outside them, so its .env files would not be checked",
+				strings.Join(policy.AppPathPrefixes, ", "), p)
+		case !appPathCharset.MatchString(c):
+			msg = fmt.Sprintf("%q has characters scheck does not pass to a command: use letters, digits, . _ - and /", p)
+		case seen[c]:
+			msg = fmt.Sprintf("%s is listed twice", c)
+		}
+		seen[c] = true
+		if msg != "" {
+			out = append(out, appPathProblem{i, msg})
+		}
+	}
+	return out
+}
+
+func (v *validator) appPaths(key string, paths []string) {
+	for _, pr := range appPathProblems(paths) {
+		k := key + ".app_paths"
+		if pr.Index >= 0 {
+			k = fmt.Sprintf("%s[%d]", k, pr.Index)
+		}
+		v.fail(k, "%s", pr.Msg)
+	}
+}
+
+// appPathCharset is the charset of a Path parameter (docs/spec/host-collector.md §3).
+var appPathCharset = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)

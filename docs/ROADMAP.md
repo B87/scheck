@@ -2472,6 +2472,34 @@ collector's rules (`spec/host-collector.md`), with the golden trace change expla
 Carried from E9 (2026-10-13): host acceptance by subject, with `accounts.empty_password`
 keyed per account, as a candidate.
 
+**Build step 1 (built):** `creds.home_files` (Linux elevated, macOS not), `docker.sockets`
+and `creds.app_env_1` to `creds.app_env_5` (one per declared `app_paths` folder,
+unelevated by decision), the `find_ls` parser, and the findings `creds.env_file_exposed`,
+`creds.ssh_key_exposed`, `creds.cloud_credentials_exposed` (secrets, medium) and
+`docker.socket_exposed` (hosts, high, `HostAccess`), judged on mode bits and the folders
+above (`spec/host-collector.md §3`, §6.5); a listing that shows no file never disproves, and
+a `.env` under a home is not judged. The path policy gains the metadata-only
+entries and application trees of `§4.1`. The host asset gains `app_paths` and the
+interview its question, after `context` (`spec/engagement.md`, "Host settings"). A host
+named in `data.matters_most` raises on a credential kept on it, so its readout is
+`partial` until a sample can decide (`spec/report.md`, "Data that matters most"). The
+golden traces changed as `spec/host-collector.md §3` records, the Ubuntu and Fedora
+fixtures were re-recorded, and `test/integ/creds_test.go` seeds the cases.
+
+**Carried, not built in step 1** (each needs a decision or a later step):
+
+- `creds.authorized_keys_writable`, joined with sshd's `StrictModes` (deferred).
+- `group_grants_root`: a named group is a deliberate share and is not judged.
+- Host acceptance by subject: `creds.*` per file (candidate subject `secret_location`)
+  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Acceptance is
+  by id until decided.
+- Cloud metadata reachability (169.254.169.254): it cannot be judged without sending a
+  request, which the host collector never does; the security-consultant recommended a
+  cloud-vendor fact (`sys.dmi`) in step 2, with no finding.
+- The listener-exposure rule's cloud part, which needs G1's firewall rules.
+- A presence readout note for credential files on production or internet hosts (G4).
+- Elasticsearch and OpenSearch in R1's database table, with step 3.
+
 **Done when:** every new rule has its three fixtures; the integration diff is still the
 exact allowlist; the world-readable `.env` seeded on the lab host is found.
 

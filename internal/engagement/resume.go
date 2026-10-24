@@ -485,11 +485,11 @@ func hostInputs(o hostasset.Options, exclude []Ref, version string) string {
 		Host, User, Identity, KnownHosts, Elevate, Profile string
 		Port                                               int
 		Jump                                               *hostasset.Hop
-		DisableChecks, DenyPaths, RedactExtra              []string
+		DisableChecks, DenyPaths, AppPaths, RedactExtra    []string
 		RunTimeout                                         time.Duration
 		Exclude                                            []Ref
 	}{version, o.Local, o.Host, o.User, o.Identity, o.KnownHosts, o.Elevate, o.Profile, o.Port, o.Jump,
-		o.DisableChecks, o.DenyPaths, o.RedactExtra, o.RunTimeout, exclude})
+		o.DisableChecks, o.DenyPaths, o.AppPaths, o.RedactExtra, o.RunTimeout, exclude})
 }
 
 // keptHost is a host an earlier session collected completely, under the

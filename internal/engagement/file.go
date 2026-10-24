@@ -243,15 +243,19 @@ type Asset struct {
 	Scan     string    `yaml:"scan,omitempty" json:"scan,omitempty"`
 	Throttle *Throttle `yaml:"throttle,omitempty" json:"throttle,omitempty"`
 
-	Jump          string       `yaml:"jump,omitempty" json:"jump,omitempty"`
-	Identity      string       `yaml:"identity,omitempty" json:"identity,omitempty"`
-	KnownHosts    string       `yaml:"known_hosts,omitempty" json:"known_hosts,omitempty"`
-	Timeout       string       `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	Elevate       string       `yaml:"elevate,omitempty" json:"elevate,omitempty"`
-	Profile       string       `yaml:"profile,omitempty" json:"profile,omitempty"`
-	DisableChecks []string     `yaml:"disable_checks,omitempty" json:"disable_checks,omitempty"`
-	DenyPaths     []string     `yaml:"deny_paths,omitempty" json:"deny_paths,omitempty"`
-	Context       *HostContext `yaml:"context,omitempty" json:"context,omitempty"`
+	Jump          string   `yaml:"jump,omitempty" json:"jump,omitempty"`
+	Identity      string   `yaml:"identity,omitempty" json:"identity,omitempty"`
+	KnownHosts    string   `yaml:"known_hosts,omitempty" json:"known_hosts,omitempty"`
+	Timeout       string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Elevate       string   `yaml:"elevate,omitempty" json:"elevate,omitempty"`
+	Profile       string   `yaml:"profile,omitempty" json:"profile,omitempty"`
+	DisableChecks []string `yaml:"disable_checks,omitempty" json:"disable_checks,omitempty"`
+	DenyPaths     []string `yaml:"deny_paths,omitempty" json:"deny_paths,omitempty"`
+	// AppPaths are the folders an application is deployed to on a host: the
+	// .env files under them are listed by name and mode, never opened
+	// (docs/spec/engagement.md, "Host settings").
+	AppPaths []string     `yaml:"app_paths,omitempty" json:"app_paths,omitempty"`
+	Context  *HostContext `yaml:"context,omitempty" json:"context,omitempty"`
 
 	FirstParty *FirstParty `yaml:"first_party,omitempty" json:"first_party,omitempty"`
 

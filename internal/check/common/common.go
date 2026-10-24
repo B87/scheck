@@ -16,6 +16,19 @@ const CanaryString = `scheck canary: 'single' "double" $HOME ` + "`id`" + ` ;| *
 var pathParam = []check.Param{{Name: "path", Kind: check.KindPath}}
 
 func init() {
+	// One slot per declared application folder (docs/spec/host-collector.md
+	// §3, G5): a fact is keyed by check id, so each folder is its own id.
+	// On demand, hardened tier, run by the host asset with the operator's
+	// folder bound as the path; metadata only, and the folder is policy-
+	// checked like any path (metadata-only trees).
+	for n := 1; n <= check.AppEnvSlots; n++ {
+		check.Register(check.Check{
+			ID: check.AppEnvID(n), Description: ".env files in a declared application folder, with the folders that stop others reaching them (names, modes and owners only, never contents; the capture also shows inode, size and time)",
+			Platform: check.Any, Domain: check.DomainCreds, Parser: check.ParseFindLS, Sampled: true, ExitOK: []int{0, 1},
+			MinProfile: check.ProfileHardened, PathUse: check.PathMetadata,
+			Argv: check.EnvFindArgv(), Params: pathParam,
+		})
+	}
 	check.Register(
 		check.Check{
 			ID: "sys.canary", Description: "Round-trip a fixed string to verify remote quoting",

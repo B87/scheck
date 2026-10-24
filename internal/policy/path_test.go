@@ -38,7 +38,17 @@ func TestPathPolicyCorpus(t *testing.T) {
 		{"/usr/bin/id", PathDeny, RuleNotAllowed},
 		{"/proc/1/environ", PathDeny, RuleNotAllowed},
 		{"/tmp/x.key", PathDeny, RuleNotAllowed},
-		{"/opt/etc/x", PathDeny, RuleNotAllowed}, // /opt/*/etc needs a vendor segment
+		{"/opt/etc/x", PathMetadataOnly, RuleAppMetadata}, // /opt/*/etc needs a vendor segment for content; /opt lists
+		{"/srv/shop", PathMetadataOnly, RuleAppMetadata},
+		{"/srv/shop/.env", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/var/www/api/.env.production", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/etc/myapp/.env", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/home/ops/.config/gcloud/credentials.db", PathMetadataOnly, "path.sensitive:gcloud_dir"},
+		{"/home/ops/.kube/config", PathMetadataOnly, "path.sensitive:kube_dir"},
+		{"/home/ops/.docker/config.json", PathMetadataOnly, "path.sensitive:docker_dir"},
+		{"/home/ops/.pgpass", PathMetadataOnly, "path.sensitive:pgpass"},
+		{"/data", PathMetadataOnly, RuleAppMetadata},
+		{"/srvx/shop", PathDeny, RuleNotAllowed},
 		{"/etcetera/x", PathDeny, RuleNotAllowed},
 		{"/var/logs/x", PathDeny, RuleNotAllowed},
 		{"etc/passwd", PathDeny, RuleNotAllowed},

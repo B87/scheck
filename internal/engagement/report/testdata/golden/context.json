@@ -20,6 +20,49 @@
   "assessments": [
     {
       "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.cloud_credentials_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.env_file_exposed",
+      "instances": 0,
+      "reads": [
+        "check:creds.app_env_1",
+        "check:creds.app_env_2",
+        "check:creds.app_env_3",
+        "check:creds.app_env_4",
+        "check:creds.app_env_5"
+      ],
+      "reason": "unavailable:no_app_paths",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.ssh_key_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
       "complete": true,
       "id": "disk.filevault_off",
       "instances": 0,
@@ -158,8 +201,8 @@
       "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
       "checks": {
         "not_run": 0,
-        "planned": 28,
-        "ran": 22,
+        "planned": 29,
+        "ran": 23,
         "unknown": 6
       },
       "collected": {
@@ -487,7 +530,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "population": {
@@ -508,6 +551,12 @@
         },
         {
           "reason": "insufficient_permission:sudo"
+        },
+        {
+          "reason": "unavailable:no_file_listed"
+        },
+        {
+          "reason": "unavailable:no_app_paths"
         }
       ],
       "sub_items": [
@@ -689,6 +738,31 @@
           "reasons": [],
           "rules": [
             "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Credentials on disk",
+          "population": {
+            "in_scope": 7,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "creds.home_files: 1 listed files and folder",
+              "reason": "unavailable:no_file_listed"
+            },
+            {
+              "detail": ".env files",
+              "reason": "unavailable:no_app_paths"
+            }
+          ],
+          "rules": [
+            "creds.cloud_credentials_exposed",
+            "creds.env_file_exposed",
+            "creds.ssh_key_exposed"
           ]
         },
         {
@@ -1081,23 +1155,25 @@
     "matters_most": [
       {
         "asset": "host:macos:22",
-        "checks": 2,
+        "checks": 5,
         "key": "data.matters_most[0]",
         "name": "macos",
         "outcome": "not_judged",
         "raised": 0,
         "reasons": [
-          "insufficient_permission:sudo"
+          "unavailable:no_file_listed",
+          "insufficient_permission:sudo",
+          "unavailable:no_app_paths"
         ],
-        "undecided": 2,
+        "undecided": 5,
         "what": "customer orders and invoices"
       }
     ],
     "more": 0,
     "rules": {
       "decided": 6,
-      "selected": 10,
-      "without_evidence": 4
+      "selected": 13,
+      "without_evidence": 7
     }
   }
 }

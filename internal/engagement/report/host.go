@@ -3,6 +3,7 @@ package report
 import (
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,7 +66,15 @@ func answered(a finding.Assessment) bool {
 // family, and a package manager that is not installed does not lower the
 // mark when another one answered (docs/spec/report.md, "Coverage").
 func (v *hostView) excused(a finding.Assessment) bool {
-	if decided(a) || a.Reason != "check-unavailable:command_missing" {
+	if decided(a) {
+		return false
+	}
+	// A slot past the folders declared is no member of the family that
+	// should have answered, when a declared one did.
+	if v.undeclaredSlot(a.Check) {
+		return v.h.AppPaths > 0 || slices.ContainsFunc(v.byID[a.Finding], answered)
+	}
+	if a.Reason != "check-unavailable:command_missing" {
 		return false
 	}
 	return slices.ContainsFunc(v.byID[a.Finding], answered)
@@ -89,6 +98,12 @@ func (v *hostView) reason(a finding.Assessment) ReasonDetail {
 	case "check-disabled-by-config":
 		return ReasonDetail{"excluded_by_operator", a.Check + ": disable_checks"}
 	case "check-not-run":
+		// A slot for a folder the file never declared was not planned: say so
+		// instead of blaming the run's clock (docs/spec/engagement.md, "Host
+		// settings").
+		if v.undeclaredSlot(a.Check) {
+			return ReasonDetail{"unavailable:no_app_paths", ".env files"}
+		}
 		if v.h.Lost != "" {
 			return ReasonDetail{"failed", a.Check + ": not run, the connection was lost"}
 		}
@@ -587,4 +602,15 @@ type Checks struct {
 	Ran     int `json:"ran"`
 	Unknown int `json:"unknown"`
 	NotRun  int `json:"not_run"`
+}
+
+// undeclaredSlot says a check is a creds.app_env_N slot past the application
+// folders the asset declares (docs/spec/engagement.md, "Host settings").
+func (v *hostView) undeclaredSlot(id string) bool {
+	n, ok := strings.CutPrefix(id, "creds.app_env_")
+	if !ok {
+		return false
+	}
+	i, err := strconv.Atoi(n)
+	return err == nil && i > v.h.AppPaths
 }

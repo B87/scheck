@@ -488,7 +488,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "reasons": [

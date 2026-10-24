@@ -18,7 +18,7 @@ INCOMPLETE: gcp:acme-prod (cloud account): this version of scheck does not read 
 Findings are also open on ubuntu; see Findings below.
 
 SUMMARY
-Checked in part  Hosts (ubuntu, 4 of 13 areas judged).
+Checked in part  Hosts (ubuntu, 4 of 15 areas judged).
 Not checked      Cloud configuration, Data stores and backups, Logging and incident readiness: see
                  Coverage.
 Not requested    Not part of this run: identity and access, secrets, CI/CD and supply chain,
@@ -27,7 +27,10 @@ Not requested    Not part of this run: identity and access, secrets, CI/CD and s
 Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
 
 Data that matters most
-  ubuntu (customer orders): 3 findings on it that this answer raises.
+  ubuntu (customer orders): 3 findings on it that this answer raises; 4 of the 7 checks this answer
+    raises could not decide (no file by these names was listed; a read that stops 4 folders deep,
+    and does not follow links or enter other filesystems, cannot tell none from not looked at, and
+    other reasons; see Not checked).
   deploy (invoices): not read in this run (it could not be reached or read); nothing on it was
     checked or raised.
   gcp:acme-prod (backups): not read in this run (this version of scheck does not read cloud
@@ -45,8 +48,8 @@ Fix these first: a ranking of what was checked, not of all your risks
 
 A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
 is fully checked in this version; each area row under Coverage lists what this version does not
-judge. Checked in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings
-named under Coverage; 6 have no rule in this version and 3 had no usable evidence. Not checked:
+judge. Checked in part: hosts. On ubuntu, 4 of 15 host areas were judged, each only on the settings
+named under Coverage; 6 have no rule in this version and 5 had no usable evidence. Not checked:
 cloud configuration, data stores and backups, logging and incident readiness, identity and access,
 secrets, CI/CD and supply chain, external surface, web application, email and domain. Anything not
 checked is unknown, not fine.
@@ -75,11 +78,11 @@ Hosts                    checked in part: 1 of 3 hosts read
   administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
   SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
   Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
-  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
+  schedule; credential files under other names or paths, their contents, and whether they are live.
   ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
-  checks 34: 23 ran, 11 unknown, 0 not run. rules 9: 6 decided, 3 had no usable evidence.
+  checks 36: 25 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
     Software updates         checked (pending updates): nothing found by these rules
-    Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
+    Disk encryption          not judged: this version of scheck has no rule for it (read: 10 block
                              devices; not read: disk.crypttab)
     System integrity         not checked: the tool that would tell is not installed on the host, so
                              scheck could not tell (this is not a finding)
@@ -94,11 +97,18 @@ Hosts                    checked in part: 1 of 3 hosts read
     Accounts                 checked (accounts with no password and a login shell, the mode of
                              /etc/shadow): 2 open findings (see Findings)
     Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
-                             lines; 33 sudoers.d lines)
+                             lines; 36 sudoers.d lines)
     Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
                              entries; 13 units, all enabled; not read: persist.timers)
     Filesystem               checked (world-writable paths, depth-capped): 1 open finding (see
                              Findings); also read, not judged: 9 SUID files
+    Credentials on disk      not checked: no file by these names was listed; a read that stops 4
+                             folders deep, and does not follow links or enter other filesystems,
+                             cannot tell none from not looked at; no application folder was declared
+                             for this host (app_paths), so .env files were not looked for
+    Container engine         not checked: no file by these names was listed; a read that stops 4
+                             folders deep, and does not follow links or enter other filesystems,
+                             cannot tell none from not looked at
     Logging and audit        not checked: the command that reads it did not give a usable answer
                              (exit_error); also read, not judged: Archived and active journals take
                              up 0B in the file system.

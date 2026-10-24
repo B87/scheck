@@ -81,7 +81,7 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"hosts.disk_linux", "disk encryption on Linux hosts"},
 		{"hosts.suid", "programs that run with root rights (SUID files)"},
 		{"hosts.persistence", "programs started at boot or on a schedule"},
-		{"hosts.credential_files", "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"},
+		{"hosts.credential_files", "credential files under other names or paths, their contents, and whether they are live"},
 	},
 	finding.AreaEmail: {
 		{"email.forwarding_policy", "whether Workspace lets staff forward mail outside the company (the tenant setting)"},

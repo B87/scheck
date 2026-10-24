@@ -32,6 +32,63 @@
     {
       "asset": "host:ubuntu:22",
       "complete": false,
+      "id": "creds.cloud_credentials_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "creds.env_file_exposed",
+      "instances": 0,
+      "reads": [
+        "check:creds.app_env_1",
+        "check:creds.app_env_2",
+        "check:creds.app_env_3",
+        "check:creds.app_env_4",
+        "check:creds.app_env_5"
+      ],
+      "reason": "unavailable:no_app_paths",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "creds.ssh_key_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "docker.socket_exposed",
+      "instances": 0,
+      "observations": [
+        "docker.sockets#1"
+      ],
+      "reads": [
+        "check:docker.sockets"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
       "id": "fs.world_writable_present",
       "instances": 0,
       "observations": [
@@ -130,11 +187,11 @@
   ],
   "assets": [
     {
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 34,
-        "ran": 23,
+        "planned": 36,
+        "ran": 25,
         "unknown": 11
       },
       "collected": {
@@ -496,7 +553,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "population": {
@@ -517,6 +574,12 @@
         },
         {
           "reason": "unavailable:command_missing"
+        },
+        {
+          "reason": "unavailable:no_file_listed"
+        },
+        {
+          "reason": "unavailable:no_app_paths"
         },
         {
           "reason": "unavailable:exit_error"
@@ -550,7 +613,7 @@
           "name": "Disk encryption",
           "reasons": [
             {
-              "detail": "read: 20 block devices; not read: disk.crypttab",
+              "detail": "read: 10 block devices; not read: disk.crypttab",
               "reason": "no_rule"
             }
           ]
@@ -651,7 +714,7 @@
           "name": "Privilege escalation",
           "reasons": [
             {
-              "detail": "read: 41 sudoers lines; 33 sudoers.d lines",
+              "detail": "read: 41 sudoers lines; 36 sudoers.d lines",
               "reason": "no_rule"
             }
           ]
@@ -685,6 +748,50 @@
           "reasons": [],
           "rules": [
             "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Credentials on disk",
+          "population": {
+            "in_scope": 7,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "creds.home_files: 5 listed files and folders",
+              "reason": "unavailable:no_file_listed"
+            },
+            {
+              "detail": ".env files",
+              "reason": "unavailable:no_app_paths"
+            }
+          ],
+          "rules": [
+            "creds.cloud_credentials_exposed",
+            "creds.env_file_exposed",
+            "creds.ssh_key_exposed"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Container engine",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "docker.sockets: 0 listed files and folders",
+              "reason": "unavailable:no_file_listed"
+            }
+          ],
+          "rules": [
+            "docker.socket_exposed"
           ]
         },
         {
@@ -916,7 +1023,7 @@
       "adjustments": [],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "accounts",
       "evidence": [
         {
@@ -995,7 +1102,7 @@
       "adjustments": [],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "accounts",
       "evidence": [
         {
@@ -1063,7 +1170,7 @@
       ],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "remote-access",
       "evidence": [
         {
@@ -1125,7 +1232,7 @@
       "adjustments": [],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "remote-access",
       "evidence": [
         {
@@ -1185,7 +1292,7 @@
       "adjustments": [],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "fs",
       "evidence": [
         {
@@ -1244,7 +1351,7 @@
       "adjustments": [],
       "area": "hosts",
       "asset_name": "ubuntu",
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "category": "integrity",
       "evidence": [
         {
@@ -1477,13 +1584,16 @@
     "matters_most": [
       {
         "asset": "host:ubuntu:22",
-        "checks": 3,
+        "checks": 7,
         "key": "data.matters_most[0]",
         "name": "ubuntu",
         "outcome": "raised",
         "raised": 3,
-        "reasons": [],
-        "undecided": 0,
+        "reasons": [
+          "unavailable:no_file_listed",
+          "unavailable:no_app_paths"
+        ],
+        "undecided": 4,
         "what": "customer orders"
       },
       {
@@ -1516,8 +1626,8 @@
     "more": 1,
     "rules": {
       "decided": 6,
-      "selected": 9,
-      "without_evidence": 3
+      "selected": 13,
+      "without_evidence": 7
     }
   }
 }

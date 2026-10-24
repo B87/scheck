@@ -35,6 +35,14 @@
 #               under data stores; a cloud firewall was not read.
 #               `scheck catalog` lists the checks; the rules are in
 #               docs/spec/host-collector.md.
+#               With app_paths set (up to 5 folders under /srv, /var/www, /opt,
+#               /app, /data, /home, /root or /Users), creds.env_file_exposed
+#               says which .env files other accounts can read or change.
+#               scheck never opens them. A .env under /home, /root or /Users
+#               is listed but not judged, and a folder may not overlap a
+#               deny_paths entry. Without it, .env files are not looked
+#               for and the report says so (docs/spec/engagement.md,
+#               "Host settings").
 #    -v         the host's fact sheet, under the engagement report.
 #    exit       1 = an open finding at or above the asset's threshold,
 #               2 = the host was not read or a budget ended the run,
@@ -87,6 +95,7 @@ assets:
     profile: baseline                  # or hardened
     # disable_checks: [fs.suid]        # only narrows; scheck catalog lists ids
     # deny_paths: [/srv/backups]       # literal absolute prefixes, after realpath
+    # app_paths: [/srv/shop]           # where the app lives: .env files are listed here, names and modes only
     context:
       role: "web and database host"
       exposure: internet               # internet | vpn | lan | airgapped

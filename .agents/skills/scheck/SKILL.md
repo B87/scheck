@@ -324,7 +324,7 @@ key moves. Relay that message; do not delete or edit the user's file yourself.
 
 Context and narrowing live in the engagement file, never in flags: a host's `context`
 (`role`, `exposure`, `environment`, `expected_services`), `disable_checks`, `deny_paths`,
-`redact_extra`, and `intent.accepted_risks`. `scheck run --host … --write-engagement
+`app_paths` (up to 5 application folders, so `.env` files are listed there), `redact_extra`, and `intent.accepted_risks`. `scheck run --host … --write-engagement
 FILE` writes the one-host engagement as a starting point and contacts nothing.
 Placeholder files for a host, a domain, GitHub, Workspace and all four together are in
 `docs/examples/`. Validate one with `--stop-after intake` before a run that contacts
@@ -384,6 +384,24 @@ sign-in, no user or group list limits it, and sshd listens beyond loopback. It n
 inside `Match` blocks and whether PAM accepts an empty password were not read, and the
 finding says so. `accounts.empty_password` stays open beside it but is left out of "Fix
 these first" on that host: fix the accounts once.
+
+Credentials on disk and the container socket: `creds.env_file_exposed` (a `.env` file in a
+declared `app_paths` folder that every account, or a group everyone is in, can read or
+change), `creds.ssh_key_exposed`, `creds.cloud_credentials_exposed` (medium, area secrets;
+home directories) and `docker.socket_exposed` (high; Linux). They judge mode bits and the
+folders above, never contents or access lists, and one finding per host and id lists every file in its
+evidence. `creds.home_files` is elevated on Linux (`--sudo`; `scheck sudoers`
+grants `find`): without it that read is unavailable. On every platform a listing that
+shows no file is `unavailable:no_file_listed`, not a pass, and the only disproof is a
+listed file whose mode, or a folder above it, does not expose it. Every read stops 4
+folders deep, so no result is "no credential files". A symlinked file is
+`unavailable:symlink_not_followed`; a `.env` under a home directory is
+`unavailable:home_ancestors_not_read`. With no `app_paths`, `.env` files are
+`unavailable:no_app_paths`. A `deny_paths` entry on a home tree turns `creds.home_files`
+off (excluded by `disable_checks`), and an `app_paths` entry that overlaps a `deny_paths`
+entry exits 3. A host in `data.matters_most` shows its readout as `partial`, since these
+reads cannot fully decide. Tell the operator to rotate
+a credential another account could read; do not open the file yourself.
 
 Capture stdout, stderr and the exit code separately. With `--format json`, stdout is one
 document, the engagement report; stderr carries diagnostics and, on exit 1–3, a short
