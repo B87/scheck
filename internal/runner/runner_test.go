@@ -408,6 +408,28 @@ func TestAWalkIsRefusedWhenADeniedPathLiesInside(t *testing.T) {
 	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/data/app2"}); res.Status != StatusOK {
 		t.Fatalf("a prefix sibling was refused: %+v", res)
 	}
+	// A path that cannot be resolved is not walked: find would follow links
+	// in the middle of the name the policy never saw.
+	r.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/current"}, Stdout: "", Code: 1})
+	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/current"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("an unresolved path was walked: %+v", res)
+	}
+	// On macOS an entry written in the realpath form (/private/var/...)
+	// denies the canonical root, and one above the root denies it outright.
+	mac := fixture.New(target.MacOS,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/app"}, Stdout: "/private/var/www/app\n"})
+	rm := &Runner{Target: mac, Paths: policy.NewPathPolicy([]string{"/private/var/www/app/keys"}), Redactor: red, Budgets: policy.DefaultBudgets(),
+		Audit: policy.NewAudit(&audit), Log: t.Logf}
+	if res := rm.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/app"}); res.Status != StatusDenied || res.PathRule != policy.RuleDenyInside {
+		t.Fatalf("a macOS walk over a denied subtree ran: %+v", res)
+	}
+	mac = fixture.New(target.MacOS,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/app"}, Stdout: "/private/var/www/app\n"})
+	rm.Target, rm.Paths = mac, policy.NewPathPolicy([]string{"/private/var/www"})
+	if res := rm.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/app"}); res.Status != StatusDenied || res.PathRule != policy.RuleConfigDeny {
+		t.Fatalf("a macOS root under a denied entry ran: %+v", res)
+	}
 	// A sibling the denial does not touch is walked.
 	r.Target = fixture.New(target.Linux,
 		fixture.Exec{Argv: []string{"realpath", "/srv/data/other"}, Stdout: "/srv/data/other\n"},

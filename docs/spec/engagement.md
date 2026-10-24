@@ -104,7 +104,7 @@ stubbed to pass.
 | Intent | What must not be reachable, except from where? | A contradiction finding when it is reachable from a vantage outside the declared audience |
 | Intent | "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank." Offers hosts, Workspace tenants, GitHub organizations and repositories, url sites and cloud roots, not domain roots. Help: "Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. This answer alone never makes anything critical. Other findings, such as web headers or email settings, do not move. Leaving it blank changes no finding." | `data.matters_most[]`: the raise ("Severity in context"), Plan's repository tier 4 ("Plan selection and follow-ups") and the ranking tie-break. The words go to `what`, through the credential detector. Asked after `context` and before `not_used`; rules below the table |
 | Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a), `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3 G5, for the audience it raises on); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
-| Hosts | Where is your application installed on each server? One block per server, one `path:` line per folder (`name: shop`, `path: /srv/shop`); on a laptop, the folder where you keep code. Leave blank if nothing is deployed there or you are not sure. | `assets.<host>.app_paths`: the folders `creds.app_env_N` lists `.env` files in (`creds.env_file_exposed`, G5). Asked after `context`; skipped when no host is declared or any host already has `app_paths`. A name that is not a declared host, a block with no `path:` line, and any path "Host settings" refuses, refuse the whole answer. With the answer blank, the report says `.env` files were not looked for (`unavailable:no_app_paths`) |
+| Hosts | Is an application installed on a server you named, as files on its disk? If it runs only in containers or Kubernetes, or you do not know, leave this blank. Otherwise one block per server, one `path:` line per folder (`name: shop`, `path: /srv/shop`); folders under `/srv`, `/var/www`, `/opt`, `/app` or `/data` (others are refused); a folder under `/home`, `/root` or `/Users` is accepted, but a `.env` there is listed and not judged. | `assets.<host>.app_paths`: the folders `creds.app_env_N` lists `.env` files in (`creds.env_file_exposed`, G5). Asked after `context`; skipped when no host is declared or any host already has `app_paths`. A name that is not a declared host, a block with no `path:` line, and any path "Host settings" refuses, refuse the whole answer. With the answer blank, the report says `.env` files were not looked for (`unavailable:no_app_paths`) |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation"; `external` is refused beside a host already answered `internet`, by the same refusal as intake |
 | Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
 
@@ -712,7 +712,7 @@ needed any of them can be repeated from its file. Beside its reach settings and 
 `disable_checks` and `deny_paths`, with the semantics of `host-collector.md §8`: a
 check id that is not in the catalog exits 3, and so does a `deny_paths` entry that is
 relative or `/`. A `deny_paths` entry that is, or lies under or over, `/home`, `/root`,
-`/Users` or `/var/root` disables `creds.home_files` for that host at run time, since its
+`/Users` or `/var/root` (or whose canonical form is) disables `creds.home_files` for that host at run time, since its
 fixed walk cannot honour the denial (`host-collector.md §3`).
 
 `app_paths` (0.0.3 G5) lists the folders of the application the host runs, so
@@ -732,7 +732,8 @@ the literal overlap; a folder whose resolved root contains a `deny_paths` entry 
 parent) is refused by the runner at run time, `path.deny_inside`, and reads as excluded by
 the operator (`host-collector.md §3`, §4.1). A `.env` file
 under `/home`, `/root`, `/Users` or `/var/root` is listed but not judged
-(`host-collector.md §6.5`). Without `app_paths`, no `.env` file is looked for.
+(`host-collector.md §6.5`); the interview says so when it asks, offers `/srv`, `/var/www`, `/opt`,
+`/app` and `/data`, and does not suggest a laptop folder. Without `app_paths`, no `.env` file is looked for.
 
 **Jump hosts (0.0.2 E1c).** `jump: user@address[:port]` on a host asset, or `--jump`
 with `--host`, reaches the host through one SSH hop, as `ssh -J` does: scheck
@@ -1899,7 +1900,9 @@ critical.
 *Text.* Title "A remote-administration service listens beyond localhost and the host
 firewall does not restrict it". Otherwise the `why_here` is the class and its fix, for
 example "Docker Engine API without TLS. Never expose 2375; reach the engine through an
-ssh:// Docker context." Not checked, always: "Whether a cloud firewall or security group
+ssh:// Docker context." When the service is declared for `localhost`, `lan` or `vpn`, the `why_here` ends with
+"You declared it for <audience> only, but it listens beyond that and the host firewall lets any address in."
+Not checked, always: "Whether a cloud firewall or security group
 blocks it was not assessed; whether the service asks for a password, a key or a
 certificate was not read", then R1's ufw sentence or its no-firewall sentence.
 Remediation: "If you do not use it, stop and disable it. If only this host uses it, bind

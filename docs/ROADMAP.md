@@ -2478,7 +2478,7 @@ and `creds.app_env_1` to `creds.app_env_5` (one per declared `app_paths` folder,
 unelevated by decision), the `find_ls` parser, and the findings `creds.env_file_exposed`,
 `creds.ssh_key_exposed`, `creds.cloud_credentials_exposed` (secrets, medium) and
 `docker.socket_exposed` (hosts, high, `HostAccess`), judged on mode bits and the folders
-above (`spec/host-collector.md §3`, §6.5); a listing that shows no file never disproves, a macOS listing never disproves (the `.env` rules are `FireOnly`, enforced by `finding.ValidateRules`), the runner refuses a walking slot when a `deny_paths` entry lies inside its resolved root (`check.Check.Walk`, `path.deny_inside`), and
+above (`spec/host-collector.md §3`, §6.5); a listing that shows no file never disproves, a macOS listing never disproves (the `.env` rules are `FireOnly`, enforced by `finding.ValidateRules`), the runner refuses a walking slot when a `deny_paths` entry lies inside its resolved root (`check.Check.Walk`, `path.deny_inside`) and ends it `unavailable:path_unresolved` when `fs.realpath` cannot resolve the root (find never runs), a `find_ls` line whose path holds a redaction marker is unparsed so the set is partial, and
 a `.env` under a home is not judged. The path policy gains the metadata-only
 entries and application trees of `§4.1`. The host asset gains `app_paths` and the
 interview its question, after `context` (`spec/engagement.md`, "Host settings"). A host
@@ -2486,6 +2486,12 @@ named in `data.matters_most` raises on a credential kept on it, so its readout i
 `partial` until a sample can decide (`spec/report.md`, "Data that matters most"). The
 golden traces changed as `spec/host-collector.md §3` records, the Ubuntu and Fedora
 fixtures were re-recorded, and `test/integ/creds_test.go` seeds the cases.
+
+Fixes after step 3 review: `NewPathPolicy` also holds each `deny_paths` entry in its canonical form (adds
+denials only), `hostasset` compares that form when it disables `creds.home_files`, a `path.deny_inside` refusal
+is counted under `deny_paths` as a whole in the report, and the `app_paths` question no longer mentions a
+laptop and says a folder under `/home`, `/root` or `/Users` is accepted but its `.env` is listed and not
+judged (`spec/engagement.md`, "Host settings").
 
 **Build step 2 (built):** `sys.dmi` (Linux, unelevated, `ExitOK` 0, 1 and 2) and
 `check.CloudVendor` (`CloudVendorsVersion` 2026-10-24): the fact sheet prints `cloud VM:

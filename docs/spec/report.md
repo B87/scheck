@@ -266,7 +266,8 @@ narrowing entry, as "narrowed in the engagement file", and what it removed; reda
 counts, built-in rules by rule and `redact_extra` as rules and matches, never a
 pattern; for `deny_paths`, the reads each entry denied, each counted once under the
 longest entry its requested path falls under, and any none accounts for (a symlink
-into a denied prefix) under `deny_paths` as a whole; probes and scans (in 0.0.2: `none exist in this version; nothing beyond
+into a denied prefix) under `deny_paths` as a whole. A walk the runner refused because a denied entry lies inside its root
+(`path.deny_inside`) is counted the same way, under `deny_paths` as a whole, with no per-entry attribution; probes and scans (in 0.0.2: `none exist in this version; nothing beyond
 reading was attempted.`, and from 0.0.3 the probes that would have applied, as *not
 run*); acceptances not applied, with why.
 
@@ -485,6 +486,7 @@ does not. A host's `reason_code`s (`host-collector.md §6.4`) map as follows:
 | `path_denied` by the asset's `deny_paths`; a check in `disable_checks` | `excluded_by_operator` |
 | a check above the asset's profile | `not_on_plan:profile=<profile>` |
 | `path_denied` by compiled policy | `unavailable:path_denied` |
+| `path_unresolved` (a walk whose root `fs.realpath` could not resolve) | `unavailable:path_unresolved` |
 | `command_missing`, `check_timeout`, `exec_error`, `exit_error`, `parse_error`, `extract_error`, `metadata_unavailable` | `unavailable:<reason_code>` |
 | `unknown_check`, `invalid_params` | `unavailable:<reason_code>`; a defect, never expected in a report |
 | the check ran, but its rule could not read what it returned (`unrecognized-value`, `partial-output`, …, `host-collector.md §6.5`) | `unavailable:<reason>`, hyphens as underscores |

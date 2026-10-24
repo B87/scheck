@@ -282,7 +282,8 @@ later `sys.which` observations renumbered; the reason is recorded under release 
 **Credentials on disk and the container socket (0.0.3 G5 step 1, built).** Names and
 modes only; no check opens a credential file. All read `find ... -ls`, parsed by
 `find_ls`, which keeps each entry's type, symbolic mode, owner, group and path. A line
-that is not that shape makes the set `partial`. Every one is `Sampled` (depth 4, one
+that is not that shape, or whose path holds a redaction marker (a `redact_extra` match can make two
+folders look alike), is unparsed and makes the set `partial`: a rule may fire on it, never disprove. Every one is `Sampled` (depth 4, one
 device), so a clean listing is never a complete answer.
 
 | Check | Platform | Reads | Elevated |
@@ -318,12 +319,16 @@ grant. The folder is checked by the path policy like any `Path` (§4.1), so `den
 still wins. A slot is a walk (`check.Check.Walk`): the policy decides on the resolved root,
 not on what lies under it, so the runner refuses a walk, rule `path.deny_inside`, reason
 code `path_denied`, when a `deny_paths` entry is the resolved root or lies inside it. The
-slot reads as excluded by the operator. This closes a symlinked parent that would carry a
+slot reads as excluded by the operator. When `fs.realpath` fails for a walk's root, the run ends
+`unavailable` with reason code `path_unresolved` and find never runs, since find would follow a link in the
+name the policy never saw; a path check that is not a walk keeps its literal fallback. This closes a symlinked parent that would carry a
 denied subtree into a listing, which intake's literal overlap check cannot see. `creds.home_files` is a fixed walk of the home trees that the path policy does
 not see into, so it cannot honour a denial there: `hostasset` disables it (it reads as
 excluded by `disable_checks`) when a `deny_paths` entry is, or lies under or over,
 `/home`, `/root`, `/Users` or `/var/root`; `docker.sockets`, a fixed walk of `/run`, is
-disabled the same way for a `deny_paths` entry on or around `/run`. Intake refuses an `app_paths` entry that
+disabled the same way for a `deny_paths` entry on or around `/run`. The comparison also uses the
+canonical form of each entry, so on macOS `/private/var/root/secrets` disables `creds.home_files` like
+`/var/root/secrets`. Intake refuses an `app_paths` entry that
 overlaps a `deny_paths` entry (`engagement.md`, "Host settings"). The read-only statement of §1 is unchanged: no write, no new tolerance.
 The golden command trace of a Linux run gains `sys.which find`, `creds.home_files`
 (behind `sudo -n --`) and `docker.sockets`, and a macOS run gains `creds.home_files`; the
@@ -412,7 +417,10 @@ Applies to every `Path`-typed parameter in every check and to `read_file` identi
   resolved path (below). On macOS `/etc`, `/var` and `/tmp` resolve into
   `/private`, so the runner maps `/private/etc/...` back to `/etc/...` before the
   decision (`policy.Canonical`, macOS targets only): an allowed prefix still allows,
-  and a sensitive file cannot escape its pattern by its canonical spelling.
+  and a sensitive file cannot escape its pattern by its canonical spelling. A `deny_paths` entry
+  is held in the form written and in its canonical form, so on macOS an entry written as
+  `/private/var/...` is honoured against the canonical path the runner decides on, at, above or below a
+  walk's root; the second form only adds denials.
 
 The deny list is compiled in. Config may add to it (`deny_paths:`), never remove.
 
@@ -797,7 +805,7 @@ what was assessed is a field, not an inference. Facts expose `attempted` and opt
 independently of `status`. Codes are assigned by the runner: `requires_elevation`,
 `sudo_refused`, `command_missing`, `check_timeout`, `run_timeout`, `canceled`,
 `exec_error`, `exit_error`, `parse_error`, `extract_error`, `invalid_params`,
-`path_denied`, `unknown_check`, `metadata_unavailable`. Human `reason` text supplies
+`path_denied`, `path_unresolved`, `unknown_check`, `metadata_unavailable`. Human `reason` text supplies
 details. An attempted execution need not have started a process; prerequisite probes
 are not represented by this boolean. `--include-evidence` adds an optional `evidence`
 object (`stdout`, `stderr`) to attempted facts in JSON output only. Captures remain

@@ -1154,7 +1154,7 @@
       "title": "A remote-administration service listens beyond localhost and the host firewall does not restrict it",
       "why_here": [
         "This kind of service has no sign-in by default, so it ranks one step higher.",
-        "Docker Engine API without TLS. Never expose 2375; reach the engine through an ssh:// Docker context.",
+        "Docker Engine API without TLS. Never expose 2375; reach the engine through an ssh:// Docker context. You declared it for localhost only, but it listens beyond that and the host firewall lets any address in.",
         "capped at high: the cloud firewall and the service's own sign-in were not read, so scheck cannot say anyone can use this now."
       ]
     }

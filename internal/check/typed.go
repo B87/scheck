@@ -397,7 +397,9 @@ func parseFindLS(lines []string) ([]Record, int) {
 		if i := strings.Index(p, " -> "); i >= 0 {
 			p = p[:i]
 		}
-		if !strings.HasPrefix(p, "/") {
+		// A redaction marker inside a path (redact_extra) can make two
+		// different folders look alike: the line is not a record.
+		if !strings.HasPrefix(p, "/") || hasMarker(p) {
 			bad++
 			continue
 		}

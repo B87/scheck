@@ -143,10 +143,18 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		if p.Kind != check.KindPath {
 			continue
 		}
-		resolved := r.resolve(ctx, params[p.Name])
+		resolved, resolvedOK := r.resolve(ctx, params[p.Name])
+		if !resolvedOK && c.Walk {
+			// A walk follows links in the middle of the path: judging the name
+			// as written would let a link carry it into a denied tree.
+			res.Status, res.Reason = StatusUnavailable, "the path could not be resolved, so it was not walked"
+			res.ReasonCode = "path_unresolved"
+			res = r.record(res, "unavailable:path_unresolved", nil)
+			return res
+		}
 		canon := policy.Canonical(resolved, r.Target.Platform() == check.MacOS)
 		verdict := r.Paths.Decide(canon)
-		if verdict.Decision != policy.PathDeny && c.Walk && r.Paths.DenyInside(canon, r.Target.Platform() == check.MacOS) {
+		if verdict.Decision != policy.PathDeny && c.Walk && r.Paths.DenyInside(canon) {
 			verdict = policy.PathVerdict{Decision: policy.PathDeny, Rule: policy.RuleDenyInside}
 		}
 		res.PathRule = verdict.Rule
@@ -353,16 +361,17 @@ func (r *Runner) installed(ctx context.Context, bin string) (ok bool, lost error
 }
 
 // resolve returns the symlink-resolved form of p via the fs.realpath check,
-// or p itself when the check is missing or the path does not exist. Its
-// execution is audited like any other.
-func (r *Runner) resolve(ctx context.Context, p string) string {
+// or p itself, with ok false, when the check is missing or fails (the path
+// does not exist). A walk is not run on an unresolved path. Its execution is
+// audited like any other.
+func (r *Runner) resolve(ctx context.Context, p string) (string, bool) {
 	c, ok := check.Lookup(realpathCheck, r.Target.Platform())
 	if !ok {
-		return p
+		return p, false
 	}
 	argv, err := c.Bind(map[string]string{"path": p})
 	if err != nil {
-		return p
+		return p, false
 	}
 	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
 	defer cancel()
@@ -373,15 +382,15 @@ func (r *Runner) resolve(ctx context.Context, p string) string {
 	if execErr != nil || exec.Code != 0 {
 		sub.Status, sub.ReasonCode, sub.Reason = StatusUnavailable, "exec_error", "path resolution failed"
 		sub = r.record(sub, "unavailable:realpath", &sub.ExitCode)
-		return p
+		return p, false
 	}
 	sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
 	sub = r.record(sub, "run", &sub.ExitCode)
 	resolved := strings.TrimSpace(sub.Raw)
 	if !strings.HasPrefix(resolved, "/") {
-		return p
+		return p, false
 	}
-	return resolved
+	return resolved, true
 }
 
 // finish redacts b and then truncates it to capBytes with a marker.

@@ -214,13 +214,14 @@ func Questions() []Question {
 			answered: func(f *File) bool { return !hostNeedsContext(f) },
 			apply:    applyContext,
 			notes:    contextNotes},
-		{ID: "app_paths", Prompt: "Where is your application installed on each server? One block per server, one folder per line. On a laptop, give the folder where you keep code.\n" +
+		{ID: "app_paths", Prompt: "Is an application installed on a server you named, as files on its disk? If it runs only in containers or Kubernetes, or you do not know, leave this blank: .env files are then not looked for, and the report says so (not checked, not clean).\n" +
+			"Otherwise, one block per server: name is the server's name from your earlier answer, then one folder per line. Example:\n" +
 			"  name: shop\n" +
 			"  path: /srv/shop\n" +
 			"  path: /var/www/api\n" +
 			"scheck lists files named .env up to 4 folders deep under each folder and reports who can read them. It never opens them. " +
-			"Folders must be under /srv, /var/www, /opt, /app, /data, /home, /root or /Users, at most 5 per server. " +
-			"Leave this blank if nothing is deployed on the server or you are not sure: .env files are then not looked for.",
+			"Folders must be under /srv, /var/www, /opt, /app or /data (others are refused), at most 5 per server. " +
+			"Folders under /home, /root or /Users are accepted, but a .env there is listed and not judged.",
 			Consumers: []Consumer{{ID: finding.IDEnvFileExposed, Slice: "G5"}},
 			answered:  func(f *File) bool { return !hasHost(f) || anyAppPaths(f) },
 			apply:     applyAppPaths},

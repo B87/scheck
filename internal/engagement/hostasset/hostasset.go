@@ -557,11 +557,14 @@ func guardWalks(disabled, deny []string) []string {
 		}
 	overlap:
 		for _, d := range deny {
-			d = strings.TrimSuffix(d, "/")
-			for _, root := range roots {
-				if d == root || strings.HasPrefix(d, root+"/") || strings.HasPrefix(root, d+"/") {
-					disabled = append(slices.Clone(disabled), id)
-					break overlap
+			// An entry written in macOS's realpath form (/private/var/...)
+			// overlaps a root named in its canonical one (/var/root).
+			for _, e := range []string{strings.TrimSuffix(d, "/"), policy.Canonical(strings.TrimSuffix(d, "/"), true)} {
+				for _, root := range roots {
+					if e == root || strings.HasPrefix(e, root+"/") || strings.HasPrefix(root, e+"/") {
+						disabled = append(slices.Clone(disabled), id)
+						break overlap
+					}
 				}
 			}
 		}

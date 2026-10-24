@@ -159,6 +159,12 @@ func NewPathPolicy(denyPaths []string) *PathPolicy {
 	for _, d := range denyPaths {
 		if d = path.Clean(d); d != "/" && strings.HasPrefix(d, "/") {
 			p.extraDeny = append(p.extraDeny, d)
+			// On macOS /etc, /var and /tmp resolve into /private, and the
+			// runner decides on the canonical form: an entry written in the
+			// realpath form is kept in that one too. It only adds denials.
+			if c := Canonical(d, true); c != d {
+				p.extraDeny = append(p.extraDeny, c)
+			}
 		}
 	}
 	return p
@@ -167,14 +173,14 @@ func NewPathPolicy(denyPaths []string) *PathPolicy {
 // DenyInside reports whether a deny_paths entry is p or lies under it: a
 // check that walks everything below p would list what the operator denied.
 //
-// p is the canonical form of the resolved root. On macOS an entry may be
-// written in the realpath form (/private/var/...) or the canonical one
-// (/var/...); both are compared. Case is not folded: an entry whose case
-// differs from the disk's is not matched (a stated limit).
-func (pp *PathPolicy) DenyInside(p string, macOS bool) bool {
+// p is the canonical form of the resolved root; an entry is held in the
+// form it was written in and the canonical one (NewPathPolicy). Case is not
+// folded: an entry whose case differs from the disk's is not matched (a
+// stated limit).
+func (pp *PathPolicy) DenyInside(p string) bool {
 	p = path.Clean(p)
 	for _, d := range pp.extraDeny {
-		if underPrefix(d, p) || macOS && underPrefix(Canonical(d, true), p) {
+		if underPrefix(d, p) {
 			return true
 		}
 	}

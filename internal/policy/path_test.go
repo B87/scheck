@@ -80,6 +80,22 @@ func TestPathPolicyCleansButDoesNotResolve(t *testing.T) {
 // macOS spells /etc as /private/etc once resolved; the policy must judge the
 // canonical name, so an allowed prefix still allows and a sensitive file is
 // still metadata-only (docs/spec/host-collector.md §4.1).
+// A deny entry written in macOS's realpath form is honoured against the
+// canonical path the runner decides on, at, above or below a walk root.
+func TestDenyEntriesInRealpathFormOnMacOS(t *testing.T) {
+	pp := NewPathPolicy([]string{"/private/var/www/app"})
+	if v := pp.Decide("/var/www/app/.env"); v.Decision != PathDeny || v.Rule != RuleConfigDeny {
+		t.Errorf("canonical path under a /private entry: %+v", v)
+	}
+	if v := pp.Decide("/var/www/other"); v.Decision == PathDeny {
+		t.Errorf("a sibling was denied: %+v", v)
+	}
+	pp = NewPathPolicy([]string{"/private/var/www/app/keys"})
+	if !pp.DenyInside("/var/www/app") || pp.DenyInside("/var/www/app2") || pp.DenyInside("/var/www/app/keys/x") {
+		t.Error("DenyInside")
+	}
+}
+
 func TestCanonicalMacOSPrivate(t *testing.T) {
 	pp := NewPathPolicy(nil)
 	cases := map[string]PathDecision{

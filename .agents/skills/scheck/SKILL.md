@@ -412,7 +412,7 @@ folders deep, so no result is "no credential files". A symlinked file is
 `unavailable:no_app_paths`. A `deny_paths` entry on a home tree turns `creds.home_files`
 off (excluded by `disable_checks`), and an `app_paths` entry that overlaps a `deny_paths`
 entry exits 3; a symlinked `app_paths` parent that leads over a `deny_paths` entry is refused at run
-time and reads as excluded by the operator. On macOS a `.env` listing never disproves, it can only show an exposure. A host in `data.matters_most` shows its readout as `partial`, since these
+time and reads as excluded by the operator (counted under `deny_paths` as a whole in "Excluded, narrowed and not run"); a walk whose root cannot be resolved is `unavailable:path_unresolved`. On macOS a `.env` listing never disproves, it can only show an exposure. A host in `data.matters_most` shows its readout as `partial`, since these
 reads cannot fully decide. Tell the operator to rotate
 a credential another account could read; do not open the file yourself.
 

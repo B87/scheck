@@ -129,8 +129,9 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  Engine API without TLS on 2375/tcp)
    Why here      This kind of service has no sign-in by default, so it ranks one step higher. Docker
                  Engine API without TLS. Never expose 2375; reach the engine through an ssh://
-                 Docker context. capped at high: the cloud firewall and the service's own sign-in
-                 were not read, so scheck cannot say anyone can use this now.
+                 Docker context. You declared it for localhost only, but it listens beyond that and
+                 the host firewall lets any address in. capped at high: the cloud firewall and the
+                 service's own sign-in were not read, so scheck cannot say anyone can use this now.
    Not checked   Whether a cloud firewall or security group blocks it was not assessed; whether the
                  service asks for a password, a key or a certificate was not read; Filters outside
                  nftables (eBPF programs such as Cilium's) were not read

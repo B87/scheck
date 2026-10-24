@@ -2,6 +2,7 @@ package rules
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
@@ -211,6 +212,13 @@ func sensitiveSubject(v *View, g portGroup, group []listener, fr *firewallReader
 		o.Why = class.class + ". " + class.fix
 		if why != "" {
 			o.Why = whyInternetSensitive + " " + class.fix
+		}
+		// The collector's words win over the severity table's, so the
+		// contradiction step is worded here.
+		for _, s := range v.Services() {
+			if s.Port == g.port && strings.EqualFold(s.Proto, g.proto) && (s.Audience == "localhost" || s.Audience == "lan" || s.Audience == "vpn") {
+				o.Why += " You declared it for " + s.Audience + " only, but it listens beyond that and the host firewall lets any address in."
+			}
 		}
 		if class.unauthenticated {
 			o.Attributes = append(o.Attributes, finding.Attribute{Name: "unauthenticated_default",

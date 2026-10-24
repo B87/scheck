@@ -259,21 +259,21 @@ func (b *builder) narrowing(v *hostView) []Narrowing {
 	unattributed := 0
 	for _, o := range v.env.Observations {
 		path, ok := strings.CutPrefix(o.Reason, policy.RuleConfigDeny+": ")
-		inside := false
 		if !ok {
-			// A walk refused because a denied path lies inside its root.
-			path, inside = strings.CutPrefix(o.Reason, policy.RuleDenyInside+": ")
+			// A walk refused because a denied path lies inside its root: no
+			// one entry accounts for it, so it counts under deny_paths as a
+			// whole.
+			if _, inside := strings.CutPrefix(o.Reason, policy.RuleDenyInside+": "); inside && o.ReasonCode == "path_denied" {
+				unattributed++
+			}
+			continue
 		}
-		if o.ReasonCode != "path_denied" || (!ok && !inside) {
+		if o.ReasonCode != "path_denied" {
 			continue
 		}
 		best := -1
 		for i, e := range v.h.DenyPaths {
-			hit := under(path, e.Value)
-			if inside {
-				hit = under(e.Value, path)
-			}
-			if hit && (best < 0 || len(e.Value) > len(v.h.DenyPaths[best].Value)) {
+			if under(path, e.Value) && (best < 0 || len(e.Value) > len(v.h.DenyPaths[best].Value)) {
 				best = i
 			}
 		}

@@ -1538,7 +1538,7 @@ func (t *text) notChecked() {
 				sudo = append(sudo, id)
 			case "command_missing":
 				missing = append(missing, id)
-			case "path_denied", "run_timeout", "canceled":
+			case "path_denied", "path_unresolved", "run_timeout", "canceled":
 			default:
 				unusable = append(unusable, id)
 			}
