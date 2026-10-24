@@ -105,7 +105,7 @@ func TestParseEdgeCases(t *testing.T) {
 	}
 	// 1 MiB of garbage must parse (or fail) quickly and quietly.
 	big := []byte(strings.Repeat("\x00\xff=\n", 256<<10))
-	for _, k := range []ParserKind{ParseRaw, ParseLines, ParseKV, ParseJSON, ParseListeners, ParseUpdates, ParseUnits, ParseAccounts, ParsePasswdStatus, ParseLaunchd, ParseFileMode} {
+	for _, k := range []ParserKind{ParseRaw, ParseLines, ParseKV, ParseJSON, ParseListeners, ParseUpdates, ParseUnits, ParseAccounts, ParsePasswdStatus, ParseLaunchd, ParseFileMode, ParseFindLS} {
 		_, _ = Parse(ck(k, "ss"), big)
 	}
 }
@@ -251,5 +251,34 @@ func TestTypedShapesRecordIncompleteness(t *testing.T) {
 	header := records(t, ck(ParseUnits, "systemctl"), "UNIT FILE STATE PRESET\n")
 	if header.Len() != 0 || header.Partial {
 		t.Errorf("header-only output: %#v", header)
+	}
+}
+
+func TestParseFindLS(t *testing.T) {
+	in := "1048 4 drwx------ 2 ana ana 4096 Oct  3 10:11 /home/ana/.ssh\n" +
+		"1049 4 -rw-r--r--. 1 ana staff 411 Oct  3 10:11 /home/ana/.ssh/id_ed25519\n" +
+		"77 0 lrwxrwxrwx 1 root root 9 Jan  1  2024 /home/ana/.aws/credentials -> /x/y z\n" +
+		"5 0 srw-rw---- 1 root docker 0 Oct  3 10:11 /run/my docker.sock\n"
+	r := records(t, Check{ID: "x", Parser: ParseFindLS, Argv: []string{"find"}}, in)
+	if r.Partial || r.Len() != 4 {
+		t.Fatalf("got %+v", r)
+	}
+	k := r.Items[1]
+	if k[FieldPath] != "/home/ana/.ssh/id_ed25519" || k[FieldSymbolic] != "-rw-r--r--" || k[FieldGroup] != "staff" || k[FieldType] != "-" {
+		t.Errorf("record %v", k)
+	}
+	if r.Items[2][FieldPath] != "/home/ana/.aws/credentials" || r.Items[2][FieldType] != "l" {
+		t.Errorf("link %v", r.Items[2])
+	}
+	if r.Items[3][FieldPath] != "/run/my docker.sock" {
+		t.Errorf("spaces %v", r.Items[3])
+	}
+	bad := records(t, Check{ID: "x", Parser: ParseFindLS, Argv: []string{"find"}}, in+"find: '/root': Permission denied\nnot a line\n")
+	if !bad.Partial || bad.Len() != 4 {
+		t.Errorf("unrecognised lines must make the set partial: %+v", bad)
+	}
+	empty := records(t, Check{ID: "x", Parser: ParseFindLS, Argv: []string{"find"}}, "")
+	if empty.Partial || empty.Len() != 0 {
+		t.Errorf("empty: %+v", empty)
 	}
 }

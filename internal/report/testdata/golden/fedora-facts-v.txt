@@ -1,10 +1,13 @@
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           fbf2f7a11b33
+Host identity            ran      host.hostname           ee5c1bcb518d
                                                           Hostname
-Host identity            ran      host.machine_id         172d9b861de844f9a2a5182d371b0267
+Host identity            ran      host.machine_id         cb80c459978742989ad33bef46e06e0f
                                                           Stable machine identifier (hashed into
                                                           host.id)
+Host identity            ran      sys.dmi                 no DMI data; cloud platform not identified
+                                                          Hardware vendor and product from DMI, to
+                                                          name a cloud platform (read-only sysfs)
 Operating system         ran      os.release              22 settings
                                                           Distribution identification
 Software updates         skipped  pkg.apt_upgradable      exit 127: bash: line 1: apt: command not
@@ -19,7 +22,7 @@ Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1
 Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
                                                           or directory
                                                           Configured encrypted volumes
-Disk encryption          ran      disk.lsblk              20 block devices
+Disk encryption          ran      disk.lsblk              10 block devices
                                                           Block devices, filesystems and crypt
                                                           layers
 System integrity         skipped  mac.aa_status           sudo: sudo: a password is required (no
@@ -62,7 +65,7 @@ Accounts                 ran      accounts.shadow_meta    mode 0, owner root:roo
                                                           never contents)
 Privilege escalation     ran      privesc.sudoers         94 sudoers lines [elevated]
                                                           sudoers policy
-Privilege escalation     ran      privesc.sudoers_d       11 sudoers.d lines [elevated]
+Privilege escalation     ran      privesc.sudoers_d       14 sudoers.d lines [elevated]
                                                           sudoers.d drop-ins (file:line, non-empty
                                                           lines)
 Startup and persistence  ran      persist.cron            0 cron entries
@@ -80,6 +83,15 @@ Filesystem               ran      fs.suid                 12 SUID files
 Filesystem               ran      fs.world_writable       0 world-writable paths
                                                           World-writable files and directories
                                                           without the sticky bit (depth-capped)
+Credentials on disk      ran      creds.home_files        4 listed files and folders [elevated]
+                                                          Private keys and cloud credential files
+                                                          under home directories, with the folders
+                                                          that stop others reaching them (names,
+                                                          modes and owners only, never contents; the
+                                                          capture also shows inode, size and time)
+Container engine         ran      docker.sockets          0 listed files and folders
+                                                          Container engine sockets under /run with
+                                                          their owner and mode
 Logging and audit        skipped  log.auditd              exit 1: System has not been booted with
                                                           systemd as init system (PID 1). Can't
                                                           operate.
@@ -99,7 +111,7 @@ Session and shell        ran      sys.shell               /bin/bash
                                                           Login shell of the audit session
 Session and shell        ran      sys.uid                 1000
                                                           Effective uid of the audit session
-Session and shell        ran      sys.uname               Linux fbf2f7a11b33 7.0.12-linuxkit #1 SMP
-                                                          PREEMPT Thu Aug 27 14:02:21 UTC 2026
-                                                          aarch64 GNU/Linux
+Session and shell        ran      sys.uname               Linux ee5c1bcb518d 7.2.12-orbstack-00394-g
+                                                          becdd6130068 #1 SMP PREEMPT Thu Oct 22
+                                                          22:17:17 UTC 2026 aarch64 GNU/Linux
                                                           Full kernel identification

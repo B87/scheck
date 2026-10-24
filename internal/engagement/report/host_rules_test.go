@@ -218,6 +218,20 @@ func hostServiceBeyondReport(t *testing.T) Input {
 		rules.Service{Port: 8080, Proto: "tcp", Audience: "localhost", Purpose: "admin dashboard", Key: "assets.ubuntu.context.expected_services[0]"})
 }
 
+// R6 on the Docker API, declared for this host only on an internet-facing
+// host: the class with no sign-in by default and a contradicted declaration,
+// which the ceiling holds at high.
+func hostSensitiveDockerReport(t *testing.T) Input {
+	return withHostRules(t, listenRecs(listen("tcp", "0.0.0.0", "22", "sshd"), listen("tcp", "0.0.0.0", "2375", "dockerd")),
+		severity.Declarations{Internet: map[string]string{"host:ubuntu:22": "assets.ubuntu.context.exposure"}},
+		rules.Service{Port: 2375, Proto: "tcp", Audience: "localhost", Purpose: "docker", Key: "assets.ubuntu.context.expected_services[0]"})
+}
+
+// R6 on SMB with no declaration: the plain path, at base.
+func hostSensitiveSMBReport(t *testing.T) Input {
+	return withHostRules(t, listenRecs(listen("tcp", "0.0.0.0", "22", "sshd"), listen("tcp", "0.0.0.0", "445", "smbd")), severity.Declarations{})
+}
+
 // R3 reaches the report at high, citing the declaration it contradicts,
 // and an area marked not used never hides it.
 func TestAServiceBeyondItsAudienceReachesTheReport(t *testing.T) {

@@ -24,8 +24,13 @@
 #  declaration never lowers it. svc.listens_beyond_declared: any other
 #  service declared for localhost, lan or vpn that listens beyond that
 #  audience with no host firewall rule in front is a finding of its own
-#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). Both need
-#  elevate: sudo below, since the listeners are read with sudo -n.
+#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). A third rule,
+#  svc.sensitive_listens_unfiltered, needs no declaration: a
+#  remote-administration service from its list (Docker's API, etcd, Telnet,
+#  VNC and others) that listens beyond localhost with no host firewall rule
+#  in front is reported, and declaring it for localhost, lan or vpn ranks it
+#  one step higher. All three need elevate: sudo below, since the listeners
+#  are read with sudo -n.
 #
 #  HOW TO READ THE RESULT
 #  ----------------------
@@ -35,6 +40,14 @@
 #               under data stores; a cloud firewall was not read.
 #               `scheck catalog` lists the checks; the rules are in
 #               docs/spec/host-collector.md.
+#               With app_paths set (up to 5 folders under /srv, /var/www, /opt,
+#               /app, /data, /home, /root or /Users), creds.env_file_exposed
+#               says which .env files other accounts can read or change.
+#               scheck never opens them. A .env under /home, /root or /Users
+#               is listed but not judged, and a folder may not overlap a
+#               deny_paths entry. Without it, .env files are not looked
+#               for and the report says so (docs/spec/engagement.md,
+#               "Host settings").
 #    -v         the host's fact sheet, under the engagement report.
 #    exit       1 = an open finding at or above the asset's threshold,
 #               2 = the host was not read or a budget ended the run,
@@ -87,6 +100,7 @@ assets:
     profile: baseline                  # or hardened
     # disable_checks: [fs.suid]        # only narrows; scheck catalog lists ids
     # deny_paths: [/srv/backups]       # literal absolute prefixes, after realpath
+    # app_paths: [/srv/shop]           # where the app lives: .env files are listed here, names and modes only
     context:
       role: "web and database host"
       exposure: internet               # internet | vpn | lan | airgapped

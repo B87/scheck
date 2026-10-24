@@ -24,6 +24,8 @@ var domainLabels = []struct {
 	{check.DomainPrivesc, "Privilege escalation"},
 	{check.DomainPersistence, "Startup and persistence"},
 	{check.DomainFS, "Filesystem"},
+	{check.DomainCreds, "Credentials on disk"},
+	{check.DomainDocker, "Container engine"},
 	{check.DomainLogging, "Logging and audit"},
 	{check.DomainTime, "Time synchronisation"},
 	{check.DomainSys, "Session and shell"},

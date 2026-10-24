@@ -214,8 +214,12 @@ func TestDataMattersMostRaisesAHostsAccessFindings(t *testing.T) {
 	if !raised {
 		t.Fatal("no password auth finding")
 	}
+	// The three credential and container-socket rules (G5) read depth-capped
+	// listings, and no application folder is declared, so none can say "nothing
+	// here": four of the nine checks
+	// this answer raises are undecided, whatever the host holds.
 	mm := out.Report.Summary.MattersMost
-	if len(mm) != 1 || mm[0].Outcome != "raised" || mm[0].Raised != 3 || mm[0].Name != "db" || mm[0].Undecided != 0 {
+	if len(mm) != 1 || mm[0].Outcome != "raised" || mm[0].Raised != 3 || mm[0].Name != "db" || mm[0].Undecided != 4 {
 		t.Fatalf("readout %+v", mm)
 	}
 }

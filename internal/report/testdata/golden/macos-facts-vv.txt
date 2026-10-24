@@ -828,6 +828,14 @@ Filesystem               ran      fs.world_writable        0 world-writable path
                                                            World-writable entries without the sticky
                                                            bit under system prefixes (depth-capped)
   | (no output)
+Credentials on disk      ran      creds.home_files         1 listed files and folder
+                                                           Private keys and cloud credential files
+                                                           under home directories, with the folders
+                                                           that stop others reaching them (names,
+                                                           modes and owners only, never contents;
+                                                           the capture also shows inode, size and
+                                                           time)
+  | 1 0 drwx------ 12 user staff 384 Oct  3 10:11 /Users/user
 Logging and audit        skipped  log.status               requires elevated read
                                                            Unified logging configuration
 Time synchronisation     skipped  time.ntp                 requires elevated read

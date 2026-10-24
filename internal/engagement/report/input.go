@@ -200,6 +200,9 @@ type HostInput struct {
 	Planned []string
 	// Lost is the transport failure that cut the collection, "" if none.
 	Lost string
+	// AppPaths is how many application folders the asset declares; the
+	// creds.app_env_N slots past it were never meant to run.
+	AppPaths int
 	// Disabled and DenyPaths are the asset's narrowing, each with its entry
 	// in the file.
 	Disabled  []Entry

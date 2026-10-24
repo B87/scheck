@@ -193,7 +193,7 @@ metacharacter invariant (§4.3).
 shapes: `listeners` (protocol, state, address, port, pid, process), `accounts` (name,
 uid, shell, home), `passwd_status` (name, status), `units` (name, state), `updates`
 (name, version), `launchd` (label, pid, status), `file_mode` (symbolic, mode, user,
-group, size). A typed shape exists when something downstream needs fields: the summary
+group, size), `find_ls` (type, symbolic, user, group, path; 0.0.3 G5). A typed shape exists when something downstream needs fields: the summary
 line (§6.6), a posture rule (§6.5) or `scheck diff` (§6.4). Everything else stays
 `lines` or `kv`, and `Unit` names what one record is, so the summary reads "0 SUID
 files" and "13 settings" rather than "0 lines" and "13 keys"; the catalog test requires
@@ -279,6 +279,74 @@ the fixed flags (§7.1). The golden command traces of a Linux run change by exac
 later `sys.which` observations renumbered; the reason is recorded under release gate 8
 (`ROADMAP.md`, E9 decisions D3 and D3b). The macOS `lsof` check is unchanged.
 
+**Credentials on disk and the container socket (0.0.3 G5 step 1, built).** Names and
+modes only; no check opens a credential file. All read `find ... -ls`, parsed by
+`find_ls`, which keeps each entry's type, symbolic mode, owner, group and path. A line
+that is not that shape makes the set `partial`. Every one is `Sampled` (depth 4, one
+device), so a clean listing is never a complete answer.
+
+| Check | Platform | Reads | Elevated |
+|---|---|---|---|
+| `creds.home_files` | linux | `/root`, `/home`: SSH private keys, AWS and Google Cloud credential files by exact name | yes (`sudo -n --`), so a home the audit account cannot list is read, not skipped |
+| `creds.home_files` | macos | `/Users`, `/var/root`, pruning `Library`, `Documents`, `Desktop`, `Downloads`, `Pictures`, `Movies`, `Music`, `.Trash`, `node_modules`, `.git` | no |
+| `docker.sockets` | linux | `docker.sock`, `podman.sock`, `containerd.sock` under `/run`, depth 2 | no |
+| `creds.app_env_1` to `creds.app_env_5` | any | `.env` files in one declared application folder (`app_paths`, `engagement.md`, "Host settings") | no |
+
+Each find lists, besides the files it names, every directory without group or other
+execute permission. A directory is listed before its contents, so a listed file always
+has the folders above it listed too; the rules need them (§6.5). Names are literal
+tokens, one `-name` branch each: the catalog admits no glob and no parenthesis (the
+invariants above). The `.env` names are `.env`, `.env.local`, `.env.production`,
+`.env.production.local`, `.env.prod`, `.env.staging`, `.env.development` and
+`.env.development.local`; templates such as `.env.example` are left out on purpose.
+No find follows a symbolic link: a folder given as a start point that is itself a link
+(an application folder such as `/var/www/app/current`) lists nothing and reads as not
+assessed, because following it would walk a tree the path policy and `deny_paths` did not
+decide on (the policy decides on the resolved path, find lists the name it was given).
+Declare the real folder. Each name has a `-type l` branch, so a symlinked `.env` or key is
+listed and the rule says so (§6.5). A macOS listing is never a disproof, the `.env` slots'
+rules included: BSD find prints a newline inside a name raw, so a local user can forge a
+line (`listing_not_trusted`); it can still show an exposure. Those rules are `FireOnly`, and
+`finding.ValidateRules` enforces it (`macos-find-listing-must-be-fire-only`).
+`creds.home_files` and `docker.sockets` are `Baseline: true`; the five `creds.app_env_N`
+slots are `MinProfile: hardened`, on demand, and one per declared folder because a fact
+is keyed by check id. `internal/engagement/hostasset` runs a slot after the baseline,
+through the same runner, with the operator's folder as its `path`; a slot with no folder
+is not planned. A slot is not elevated by decision: a sudoers rule for a find with a path
+wildcard would let the sudo holder append `-exec`, which `scheck sudoers` must never
+grant. The folder is checked by the path policy like any `Path` (§4.1), so `deny_paths`
+still wins. A slot is a walk (`check.Check.Walk`): the policy decides on the resolved root,
+not on what lies under it, so the runner refuses a walk, rule `path.deny_inside`, reason
+code `path_denied`, when a `deny_paths` entry is the resolved root or lies inside it. The
+slot reads as excluded by the operator. This closes a symlinked parent that would carry a
+denied subtree into a listing, which intake's literal overlap check cannot see. `creds.home_files` is a fixed walk of the home trees that the path policy does
+not see into, so it cannot honour a denial there: `hostasset` disables it (it reads as
+excluded by `disable_checks`) when a `deny_paths` entry is, or lies under or over,
+`/home`, `/root`, `/Users` or `/var/root`; `docker.sockets`, a fixed walk of `/run`, is
+disabled the same way for a `deny_paths` entry on or around `/run`. Intake refuses an `app_paths` entry that
+overlaps a `deny_paths` entry (`engagement.md`, "Host settings"). The read-only statement of §1 is unchanged: no write, no new tolerance.
+The golden command trace of a Linux run gains `sys.which find`, `creds.home_files`
+(behind `sudo -n --`) and `docker.sockets`, and a macOS run gains `creds.home_files`; the
+Ubuntu and Fedora fixtures were re-recorded from the containers, so every Linux output
+hash changed, and the macOS entry was added by hand with one scrubbed folder. The
+Ubuntu fixture plans 36 host checks, up from 34.
+
+**`sys.dmi` (0.0.3 G5 step 2, built).** Linux, literal argv `grep -H . /sys/class/dmi/id/sys_vendor
+/sys/class/dmi/id/product_name`, not elevated, `ExitOK` 0, 1 and 2 (no DMI tree, as in a
+container, is exit 2: an answer), `Baseline: true`, domain host, parser `lines`, `Unit`
+"DMI fields". It is plumbing: no coverage row, no posture rule, no finding. Its one
+consumer is the fact sheet, which prints `cloud VM: <provider> (from DMI)` when
+`check.CloudVendor` matches the vendor and product exactly (case-insensitively) against a
+versioned table (`CloudVendorsVersion`, `2026-10-24`: Google Compute Engine, Amazon EC2,
+DigitalOcean, Hetzner Cloud, OpenStack, Azure or Hyper-V), and `cloud platform not
+identified` otherwise (`no DMI data; cloud platform not identified` when nothing was
+read). An unknown vendor is never read as "not a cloud VM": QEMU, Xen and a missing DMI
+tree say nothing either way. The label proves nothing about the host's network. The golden
+command trace of a Linux run gains one `sys.dmi` line and the Ubuntu fixture plans 37
+host checks, up from 36; the fixtures were re-recorded, and the reason is recorded under
+release gate 8 (`ROADMAP.md`). No new write and no new tolerance (§1). Cloud metadata
+reachability is not a check or a finding (§11).
+
 **On-demand checks** (`Baseline: false`, callable by the model) are parameterised
 variants: `fs.stat {path}`, `fs.list {path}`, `text.head {path} {lines}`,
 `svc.show {unit}`, `proc.cmdline {pid}`, `net.who_listens {port}`, and so on.
@@ -332,6 +400,14 @@ Applies to every `Path`-typed parameter in every check and to `read_file` identi
 - **Sensitive paths** return *metadata* (mode, owner, size, derived booleans) instead of
   contents: `/etc/shadow`, `/etc/gshadow`, `**/id_*`, `**/*.key`, `**/*.pem` (private),
   `~/.aws/**`, `~/.ssh/**`, `/etc/ssh/ssh_host_*_key`.
+- **Credential and application paths (0.0.3 G5).** Metadata only: a file whose basename
+  is `.env` or `.env.*`, `.pgpass` or `.npmrc`, and any path with a `gcloud`, `.kube` or
+  `.docker` directory component. The trees an application is deployed to, `/srv`,
+  `/var/www`, `/opt`, `/app` and `/data`, are metadata-only prefixes (rule
+  `path.app_metadata`), like the home directories. A host asset's `app_paths` may name
+  a folder only under those trees or `/home`, `/root`, `/Users`
+  (`policy.AppPathPrefixes`): the engagement file picks a subtree the policy already lets
+  be listed and never widens it. This extends the list above on purpose.
 - Traversal (`..`) is rejected at the charset level, and the decision is made on the
   resolved path (below). On macOS `/etc`, `/var` and `/tmp` resolve into
   `/private`, so the runner maps `/private/etc/...` back to `/etc/...` before the
@@ -610,7 +686,7 @@ type Def struct {
     ID           string   // "sshd.password_auth_enabled"
     Title        string   // "sshd accepts password authentication"
     Category     string   // remote-access | network | accounts | privesc | integrity | updates | persistence | logging | fs | disk | time
-    Area         Area     // the engagement report's risk area; every host finding is hosts
+    Area         Area     // the engagement report's risk area; hosts, except the credentials-on-disk findings (§6.5), which are secrets
     Exposure     Exposure // NotExposure | IsExposure; every host finding is NotExposure
     BaseSeverity Severity // critical | high | medium | low | info
     Impact       string   // one sentence; used verbatim by a rule finding, the model may sharpen it in phase 2
@@ -787,6 +863,7 @@ type Rule struct {
                             //   Recognize}, AnyRecord{} over a typed shape
                             // StatusWithLoginShell{Field, Value, Known} over a typed
                             //   shape, joined per account with With (accounts)
+                            // CredFiles{Kind} over find_ls (credential files, below)
 }
 ```
 
@@ -872,6 +949,48 @@ Seed table. Base severities are the §6.1 table entries for these ids:
 | `time.ntp_unsynced` | linux | `time.timedatectl` | `ntpsynchronized` = `no` | low |
 | `updates.pending` | any | `pkg.*` | any `updates` record | low |
 | `fs.world_writable_present` | any | `fs.world_writable` | any line | medium |
+| `creds.env_file_exposed` | any | `creds.app_env_1` to `creds.app_env_5` | a `.env` file the world, or a group everyone is in, can read or write, with every folder above it letting that reader through | medium |
+| `creds.ssh_key_exposed` | any | `creds.home_files` | a private key the world, or a group everyone is in, can read, same reach | medium |
+| `creds.cloud_credentials_exposed` | any | `creds.home_files` | `~/.aws/credentials` or `~/.config/gcloud/` `credentials.db`, `application_default_credentials.json` or `access_tokens.db`, readable the same way | medium |
+| `docker.socket_exposed` | linux | `docker.sockets` | a container socket writable by the world or by a group other than `docker`, `podman`, `root` or `wheel` | high |
+
+**Credentials on disk and the container socket (0.0.3 G5 step 1, built).** The four
+rules above read one `find_ls` fact each through the `CredFiles` predicate
+(`internal/finding/credfiles.go`; its name and group tables are versioned data,
+`CredFileTablesVersion`, and a change to one changes the version). They file on mode bits
+and where the file sits, not on content:
+
+- A file is exposed when the world, or a group every ordinary account is in (`users`,
+  `staff`, `everyone`), can read it (write, for a `.env` file and the socket), and every
+  listed folder above it lets that class of reader through. A mode of 644 inside a 750
+  home is not exposed. Any other named group is a deliberate share and is not judged.
+- Symbolic links are not followed: a link's own mode says nothing, and a listing whose
+  only match is a link is `not_assessed` (`unavailable:symlink_not_followed`). Access
+  lists are not read; the finding says mode bits only.
+- The rule fires on a recognised exposed file even from a partial listing, since folders
+  are listed before their contents. It is never disproved from a partial one.
+- A `.env` file under `/home`, `/root`, `/Users` or `/var/root` is not judged
+  (`unavailable:home_ancestors_not_read`): the folders above a declared folder are not
+  read, so a private home cannot be told from an open one. Folders above a declared
+  folder under `/srv`, `/var/www`, `/opt`, `/app` or `/data` are assumed open; this is a
+  stated limit, and the finding's evidence says mode bits of the file and the listed
+  folders only.
+- The only disproof (`not_matched`) is a recognised listed file whose mode, or a listed
+  folder above it, does not expose it. A listing that shows no such file is always
+  `not_assessed` (`unavailable:no_file_listed`) on every platform, the elevated Linux
+  `creds.home_files` included: a home on its own filesystem, a link or a folder the
+  account could not enter leaves a walk short without a trace. `docker.sockets` with no
+  socket listed is `not_assessed` too, since the unelevated find may have been denied
+  some directories. A `not_matched` still means only the names and depth searched;
+  neither claims a clean host.
+- A run files one finding per host per id, the files listed in its evidence. Acceptance
+  is by id; an acceptance by subject (one per file) is not built (carried, ROADMAP G5).
+- `docker.socket_exposed` is flagged `HostAccess`, so a host
+  named in `data.matters_most` raises it (`engagement.md`, "Severity in context").
+  The three credential findings are area `secrets`, which a host also raises on.
+
+Not read: the contents of any file, the `authorized_keys` files and their `StrictModes`
+reach and whether a credential is live.
 
 The shadow rule reports an unexpected mode, not proven access by an unauthorized
 user; its title, impact and remediation must preserve that distinction. Missing or
@@ -1392,3 +1511,5 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` are aliases for 0.0.2 and go in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
 | An empty password on an account that cannot log in? | Not a finding. `accounts.empty_password` joins `passwd -S -a` with `/etc/passwd` and fires only on an account with a login shell, at high; critical is for an empty password sshd accepts, an engagement multi-fact rule (E9). Libuser's `PS` and `LK` are recognized, and an empty status listing is a broken read, not a pass (E5a). | The 0.0.1 rule fired critical on `NP` alone, so a system account with `/usr/sbin/nologin` topped the first report a reader saw: a false critical costs trust in the whole report. Host facts show local use only; Debian's and RHEL's default PAM accept an empty password locally, so high, not lower. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |
+| Credential files on disk (0.0.3 G5 step 1, decided 2026-10-24). | `find ... -ls` by exact name over home directories and the application folders a host declares in `app_paths`; four findings (§6.5); modes and owners only, never contents. `creds.home_files` is elevated on Linux; the `.env` slots are not. The path policy gains metadata-only entries for `.env*`, `.pgpass`, `.npmrc`, `gcloud`, `.kube`, `.docker` and the application trees (§4.1). A host that holds `data.matters_most` raises on a credential kept on it. | A leaked `.env` or key is what an attacker with any foothold reads first, and the fact is a mode, which scheck can read without opening the file. A find with a path wildcard under sudo would let the holder append `-exec`, so the declared folder is read without root. A credential on the host that holds the data is the link to that data. Cloud metadata reachability (169.254.169.254) is not built: it cannot be judged without sending a request, which the host collector never does. |
+| Cloud metadata reachability, `169.254.169.254` (0.0.3 G5 step 2, decided 2026-10-24)? | Not a check and not a finding. The fact sheet names the cloud platform from DMI (`sys.dmi`, §3) as a label only. | It cannot be judged without sending a request, which the catalog has no command for (`AGENTS.md`, non-negotiable 1). On a cloud VM the metadata service is reachable by every local process by design, and no firewall owner-match rule being present proves nothing new. What matters is what the attached service account can do, which the GCP collector (G1) and the host-to-cloud link (G4) own. An unknown DMI vendor is "not identified", never "not a cloud VM". |

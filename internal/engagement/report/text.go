@@ -843,6 +843,11 @@ func (t *text) reasonText(rd ReasonDetail) string {
 		}
 		if detail, ok := map[string]string{
 			"not_read":                      "the required read was not collected",
+			"no_file_listed":                "no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at",
+			"home_ancestors_not_read":       "the .env file sits in a home directory, and the folders above the declared folder are not read, so a private home cannot be told from an open one",
+			"listing_not_trusted":           "on macOS any local user can forge a line of this listing, so it can show a file is exposed but never that it is not",
+			"symlink_not_followed":          "the only match was a symbolic link, and scheck does not follow links",
+			"no_app_paths":                  "no application folder was declared for this host (app_paths), so .env files were not looked for",
 			"vantage_unknown":               "restricted pages were not checked for outside reachability: no --vantage given",
 			"vantage_inside":                "restricted pages were not checked for outside reachability: you declared this run came from inside your network",
 			"audience_internet":             "the declared audience is internet, so no restriction contradiction was judged",

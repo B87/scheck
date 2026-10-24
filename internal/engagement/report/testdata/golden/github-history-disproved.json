@@ -527,11 +527,11 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+          "text": "the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
-          "text": "listening services you did not declare"
+          "text": "listening services you did not declare (on Linux hosts, apart from remote-administration ports)"
         },
         {
           "id": "hosts.admins_sudo",
@@ -559,7 +559,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "reasons": [

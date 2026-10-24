@@ -197,7 +197,7 @@ func TestRulesFireDisproveAndAbstain(t *testing.T) {
 	if v := Validate(All()); len(v) > 0 {
 		t.Fatalf("the rule table breaks its invariants: %v", v)
 	}
-	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures, finding.IDSvcListensBeyond: svcFixtures}
+	fixtures := map[string][]fixture{finding.IDDBListensUnfiltered: dbFixtures, finding.IDEmptyPasswordRemote: sshFixtures, finding.IDSvcListensBeyond: svcFixtures, finding.IDSensitiveListens: sensitiveFixtures}
 	for _, r := range All() {
 		fs := fixtures[r.ID]
 		used := map[Read]bool{}
@@ -307,7 +307,7 @@ func TestAFiredDatabaseCitesWhatItRestsOn(t *testing.T) {
 // it was not judged.
 func TestAMacOSHostIsNotJudged(t *testing.T) {
 	res := Judge([]Host{{Asset: "host:mac:22", Name: "mac", Facts: fakeFacts{platform: check.MacOS}}})["host:mac:22"]
-	if len(res.Judged) != 0 || len(res.Coverage) != 3 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[2].Unread) != 1 ||
+	if len(res.Judged) != 0 || len(res.Coverage) != 3 || len(res.Coverage[0].Unread) != 1 || len(res.Coverage[2].Unread) != 2 ||
 		len(res.Coverage[0].Groups) != 0 || len(res.Coverage[1].Groups) != 0 || len(res.Coverage[2].Groups) != 0 {
 		t.Errorf("a macOS host was judged: %+v", res)
 	}

@@ -258,7 +258,14 @@ func run(r Rule, h Host) ([]finding.Judgment, bool) {
 			}
 			j.Facts = append(j.Facts, finding.FactRead{Check: e.Check, Observation: obs, Excerpt: e.Text})
 		}
-		for _, a := range o.Attributes {
+		for i, a := range o.Attributes {
+			// An attribute may cite a read by its check id; the observation
+			// is the one this run's fact has.
+			for _, t := range v.touched {
+				if a.Ref.Key == "" && a.Ref.Observation == t.Check {
+					o.Attributes[i].Ref.Observation = t.Observation
+				}
+			}
 			if a.Ref.Key != "" && !slices.Contains(j.Sources, a.Ref.Key) {
 				j.Sources = append(j.Sources, a.Ref.Key)
 			}

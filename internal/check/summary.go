@@ -22,6 +22,9 @@ func Summary(c Check, parsed any) string {
 	case string:
 		return rawSummary(v)
 	case []string:
+		if c.ID == "sys.dmi" {
+			return dmiSummary(v)
+		}
 		return countOf(len(v), unitOr(c, "lines")) + inlineLines(v)
 	case map[string]string:
 		return countOf(len(v), unitOr(c, "settings"))
@@ -105,6 +108,8 @@ func recordSummary(c Check, r Records) string {
 		}
 	case ParseFileMode:
 		s = fileModeSummary(r)
+	case ParseFindLS:
+		s = countOf(r.Len(), "listed files and folders")
 	default:
 		s = countOf(r.Len(), unitOr(c, "records"))
 	}

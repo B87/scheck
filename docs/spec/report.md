@@ -204,12 +204,21 @@ score, grade, percentage or compliance claim.
 summary carries a readout block, one line per entry, in file order:
 
 Let M be the rules this answer raises on the asset (`finding.Def.MattersMostRaises`:
-the `HostAccess` definitions on a host, the identity, secrets, data and external areas
-elsewhere), D those of them that decided and U = M - D the rest. A check decided when
+the `HostAccess` definitions and the secrets area on a host, the identity, secrets, data
+and external areas elsewhere), D those of them that decided and U = M - D the rest. A check decided when
 it fired (`matched`) or was disproved over everything it had to read (`not_matched`
 and complete); a disproval over part of a read is undecided, with its own reason (a
 budget cut's `sampled`), or `unavailable:incomplete_read` when it has none. A rule that cannot apply on the asset
 (`not_applicable`, another platform's) is not one of the M. The outcomes:
+
+On a host, the credential-on-disk rules (`creds.env_file_exposed`,
+`creds.ssh_key_exposed`, `creds.cloud_credentials_exposed`) and `docker.socket_exposed`
+are among the M (0.0.3 G5). They read a depth-capped sample, and a listing that shows no
+file is undecided (`unavailable:no_file_listed`), so on a clean host with no application
+folder declared four of the nine host checks are undecided (the `.env` rule reads
+`unavailable:no_app_paths`; a `.env` under a home is `unavailable:home_ancestors_not_read`):
+a host's readout is `partial` rather than `read` until a later change lets a sample
+decide. The line says so; it never reads `read` over a check that did not decide.
 
 - `raised`: "*asset* (*what*): N findings on it that this answer raises." N counts
   every open or accepted finding on the asset that this answer raises, those already at
@@ -395,6 +404,16 @@ listed only under `-v`. Host domains that carry no rule (host identity, operatin
 system, session and shell, text utilities) are not coverage at all: they are absent
 from the table and its JSON, and their facts stay in the host's envelope.
 
+A host's coverage gains two domains in 0.0.3 G5, "Credentials on disk" (`creds.home_files`
+and the `.env` slots) and "Container engine" (`docker.sockets`, Linux). A `.env` slot
+past the folders the file declares is not planned. When a declared slot answered, the
+others are excused like a family's other members; when none was declared, each reads
+*not assessed* with `unavailable:no_app_paths`. A declared slot a timeout or a lost
+connection skipped reads `limit_reached` or `failed`. A listing that shows no file never
+disproves, on any platform: it reads `unavailable:no_file_listed`. When `deny_paths`
+touches the home trees `creds.home_files` reads as excluded by `disable_checks`
+(`host-collector.md §3`). Every read is depth-capped (`host-collector.md §6.5`).
+
 **A mark counts its population.** Each row and sub-item carries `population: {kind,
 in_scope, read}`: the assets (or repositories, users, entry points) of the kind it
 reads that are in scope, and how many were read. A row is *assessed* only when every
@@ -509,6 +528,11 @@ the target:
 | `unavailable:audience` | a service's audience is localhost, lan, vpn or internet |
 | `unavailable:audience_network` | on a host not declared internet-facing, scheck cannot tell which networks its addresses face |
 | `unavailable:bind_network` | the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall |
+| `unavailable:no_app_paths` | no application folder was declared for this host (`app_paths`), so `.env` files were not looked for |
+| `unavailable:listing_not_trusted` | on macOS any local user can forge a line of the listing, so it can show a file is exposed but never that it is not |
+| `unavailable:no_file_listed` | no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at |
+| `unavailable:home_ancestors_not_read` | the `.env` file sits in a home directory, and the folders above a declared folder are not read, so a private home cannot be told from an open one |
+| `unavailable:symlink_not_followed` | the only match was a symbolic link, and scheck does not follow links |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `leaving_date_not_passed` | the declared leaving date had not passed when it was read |
 | `left_date_within_collection` | the declared leaving date falls within or after collection; run again after that date |
@@ -581,9 +605,9 @@ finding in it, open or accepted, is not *not applicable*: its row is built as if
 | Cloud configuration | none: no cloud collector (`collector_not_built`) | storage buckets and disk snapshots anyone can read; administrator roles (such as Owner or Editor) held by people; administrator roles held by service accounts, including the default ones; long-lived keys for service accounts and users, and their age; databases with a public address or authorized networks open to anyone; network firewall rules open to the whole internet; organization-wide guardrails (organization policies) |
 | Data stores and backups | databases on Linux hosts listening beyond localhost with no host firewall rule in front (`db.listens_unfiltered`; a host's coverage plan, sub-item "Databases listening beyond localhost") | who can sign in to each database (pg_hba.conf, database users and their passwords); databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the link; whether backups exist, where they are kept, and who can delete them (declared, not verified) |
 | CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | who can push to repositories that deploy to production, contractors included; review rules on the production deployment environment; approval before workflows run on pull requests from forks; self-hosted runners that public repositories can use; which third-party actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where they send data |
-| External surface | dangling records; subdomain takeover; private addresses; TLS and certificates. The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
+| External surface | dangling records; subdomain takeover; private addresses; TLS and certificates; on Linux hosts, remote-administration services (Docker's API, etcd, kubelet, Telnet, FTP, SMB, RDP, VNC, Jupyter, SNMP, RabbitMQ management) listening beyond localhost with no host firewall rule in front (`svc.sensitive_listens_unfiltered`; a host's coverage plan, group "Remote-administration services listening beyond localhost"). The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | whether a cloud firewall lets those services in; services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
 | Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files, debug pages and admin panels (such as /.git, /.env or /admin); third-party scripts the site loads; which other sites may read the site's responses (CORS) |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports and the services you declared; listening services you did not declare; who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared; listening services you did not declare (on Linux hosts, apart from remote-administration ports); who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
 | Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | whether Workspace lets staff forward mail outside the company (the tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in transit (MTA-STS and TLS reporting) |
 | Logging and incident readiness | none in 0.0.2: the row prints "not checked" | alerts on administrator changes and suspicious sign-ins in Workspace; GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere off the host |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
@@ -653,12 +677,13 @@ SSH lets in)`, and the Firewall line reads `checked (whether database ports are 
 only; see Data stores)`, or `not checked: <reason>` when R1 abstained. The host-area
 counts include these groups. From E9 step 5a the Firewall
 line also reads "whether declared services listen beyond their audience only; see
-External surface" (R3), and `expected_services` is read by R3 as well as R1, so the
-"Declared, not verified" line names both. The
+External surface" (R3), and "whether remote-administration ports are filtered only; see
+External surface" (R6, 0.0.3 G5). `expected_services` is read by R3 and R6 as well as R1,
+so the "Declared, not verified" line names all three. The
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
-no rule fully consumes in this version (`expected_services`, which `db.listens_unfiltered` and `svc.listens_beyond_declared` read, and which never lowers a finding). The row's "Not judged in this version" line prints once under the mark. With more than three
+no rule fully consumes in this version (`expected_services`, which `db.listens_unfiltered`, `svc.listens_beyond_declared` and `svc.sensitive_listens_unfiltered` read, and which never lowers a finding). The row's "Not judged in this version" line prints once under the mark. With more than three
 hosts, each block collapses to its identity and counts lines and the domains that are
 not *assessed*.
 
@@ -904,9 +929,10 @@ a day, so retained evidence is not presented as newly collected.
 
 **Subjects.** Host posture findings carry no subject in 0.0.2, and the host grader
 accepts a whole id. The first host-side subject is a listener's, `{kind: service, key:
-"<port>/<proto>"}`, declared by the engagement rules `db.listens_unfiltered` (built, E9 step 3a) and
-`svc.listens_beyond_declared` (E9 step 5a; [engagement.md](engagement.md), "The multi-fact
-rules of 0.0.2"); an acceptance of either names it, and it is applied to the judgment
+"<port>/<proto>"}`, declared by the engagement rules `db.listens_unfiltered` (built, E9 step 3a),
+`svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3
+G5; [engagement.md](engagement.md), "The multi-fact rules of 0.0.2"); an acceptance of any
+of them names it, and it is applied to the judgment
 like a network collector's, never by the host grader. Host posture acceptance by subject stays
 unbuilt. A person's account is keyed by the address rules match
 people by, with the provider's id beside it. A token is keyed by its credential id and

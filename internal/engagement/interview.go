@@ -64,7 +64,7 @@ func (q Question) Answered(f *File) bool {
 
 // MergedSlices are the slices whose consumers must already exist. E9
 // joins at its step 9 (docs/ROADMAP.md, E9).
-var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7", "E9"}
+var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7", "E9", "G5"}
 
 // Questions is the interview, in the order scheck init asks.
 // It asks the Intake questions that have a consumer in a merged slice
@@ -210,10 +210,20 @@ func Questions() []Question {
 			"A database only this server uses is localhost: it should be open, to this server. scheck reports a service that listens more widely than you said. " +
 			"If you do not know who should reach it, leave that word out. If you do not know the port, leave service out. Do not name a port you hope is closed.",
 			Consumers: []Consumer{{ID: "host.context.exposure", Slice: "E1b"}, {ID: "host.context.environment", Slice: "E1b"}, {ID: "svc.expected_missing", Slice: "E1b"},
-				{ID: finding.IDDBListensUnfiltered, Slice: "E9"}, {ID: finding.IDSvcListensBeyond, Slice: "E9"}},
+				{ID: finding.IDDBListensUnfiltered, Slice: "E9"}, {ID: finding.IDSvcListensBeyond, Slice: "E9"}, {ID: finding.IDSensitiveListens, Slice: "G5"}},
 			answered: func(f *File) bool { return !hostNeedsContext(f) },
 			apply:    applyContext,
 			notes:    contextNotes},
+		{ID: "app_paths", Prompt: "Where is your application installed on each server? One block per server, one folder per line. On a laptop, give the folder where you keep code.\n" +
+			"  name: shop\n" +
+			"  path: /srv/shop\n" +
+			"  path: /var/www/api\n" +
+			"scheck lists files named .env up to 4 folders deep under each folder and reports who can read them. It never opens them. " +
+			"Folders must be under /srv, /var/www, /opt, /app, /data, /home, /root or /Users, at most 5 per server. " +
+			"Leave this blank if nothing is deployed on the server or you are not sure: .env files are then not looked for.",
+			Consumers: []Consumer{{ID: finding.IDEnvFileExposed, Slice: "G5"}},
+			answered:  func(f *File) bool { return !hasHost(f) || anyAppPaths(f) },
+			apply:     applyAppPaths},
 		{ID: "matters_most", Prompt: "Which of these hold the data that would hurt the company most if it leaked or was lost, such as customer records, payment details, source code or contracts? " +
 			"Give the number of each, and a few words on what the data is, one per line (for example `2: customer orders and invoices`). If you are not sure, leave this blank.\n" +
 			"Problems found on what you pick rank higher. Account and access problems, exposed secrets and open databases there move up one step. " +
@@ -840,6 +850,50 @@ func applyContext(f *File, answer string) error {
 	return nil
 }
 
+func applyAppPaths(f *File, answer string) error {
+	blocks, err := blocksOf(answer)
+	if err != nil {
+		return err
+	}
+	paths := repeatedOf(answer, "path")
+	done := map[string]Asset{}
+	for i, block := range blocks {
+		name := block["name"]
+		a, ok := done[name]
+		if !ok {
+			a, ok = f.Assets[name]
+		}
+		if !ok || a.Host == "" {
+			return fmt.Errorf("%q is not a server you named", name)
+		}
+		a.AppPaths = slices.Clone(a.AppPaths)
+		for _, p := range paths[i] {
+			if !slices.Contains(a.AppPaths, p) {
+				a.AppPaths = append(a.AppPaths, p)
+			}
+		}
+		if len(a.AppPaths) == 0 {
+			return fmt.Errorf("%s: give at least one path: line, or leave the answer blank", name)
+		}
+		// Refuse here what intake would, before the answers are lost.
+		if pr := appPathProblems(a.AppPaths); len(pr) > 0 {
+			return fmt.Errorf("%s: %s", name, pr[0].Msg)
+		}
+		done[name] = a
+	}
+	maps.Copy(f.Assets, done)
+	return nil
+}
+
+func anyAppPaths(f *File) bool {
+	for _, a := range f.Assets {
+		if a.Host != "" && len(a.AppPaths) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func applyNotUsed(f *File, answer string) error {
 	roots, err := rootRefs(f)
 	if err != nil {
@@ -941,7 +995,11 @@ func contextNotes(answer string) []string {
 
 // servicesOf is every service: line of each block, in the order blocksOf
 // returns the blocks: a host may declare several.
-func servicesOf(s string) [][]string {
+func servicesOf(s string) [][]string { return repeatedOf(s, "service") }
+
+// repeatedOf is every line of the key in each block, in the order blocksOf
+// returns the blocks.
+func repeatedOf(s, key string) [][]string {
 	var out [][]string
 	var cur []string
 	open := false
@@ -958,7 +1016,7 @@ func servicesOf(s string) [][]string {
 			continue
 		}
 		open = true
-		if k == "service" {
+		if k == key {
 			cur = append(cur, v)
 		}
 	}

@@ -1,0 +1,2 @@
+grep: /sys/class/dmi/id/sys_vendor: No such file or directory
+grep: /sys/class/dmi/id/product_name: No such file or directory

@@ -37,9 +37,11 @@ type PathVerdict struct {
 // Rule names.
 const (
 	RuleConfigDeny     = "path.config_deny"
+	RuleDenyInside     = "path.deny_inside"
 	RuleNotAllowed     = "path.not_allowed"
 	RuleHomeMetadata   = "path.home_metadata"
 	RuleLogMetadata    = "path.log_metadata"
+	RuleAppMetadata    = "path.app_metadata"
 	RuleSensitivePrefx = "path.sensitive:"
 )
 
@@ -67,7 +69,22 @@ var metadataPrefixes = map[string]string{
 	"/root":     RuleHomeMetadata,
 	"/Users":    RuleHomeMetadata,
 	"/var/root": RuleHomeMetadata,
+	// Where an application is deployed: a host asset's app_paths may name a
+	// folder under these and nowhere else, so the engagement file picks a
+	// subtree the policy already allows to be listed and never widens it
+	// (docs/spec/host-collector.md §4.1, G5).
+	"/srv":     RuleAppMetadata,
+	"/var/www": RuleAppMetadata,
+	"/opt":     RuleAppMetadata,
+	"/app":     RuleAppMetadata,
+	"/data":    RuleAppMetadata,
 }
+
+// AppPathPrefixes are the trees a host asset's app_paths entry must fall
+// under (docs/spec/engagement.md, "Host settings"): the metadata-only trees
+// an application is deployed to, and the home directories where code lives
+// on a laptop.
+var AppPathPrefixes = []string{"/srv", "/var/www", "/opt", "/app", "/data", "/home", "/root", "/Users"}
 
 // sensitiveRule downgrades an otherwise allowed path to metadata-only.
 type sensitiveRule struct {
@@ -99,7 +116,14 @@ var sensitiveRules = []sensitiveRule{
 	{"keytab", matchBase, "*.keytab"},
 	{"netrc", matchBase, ".netrc"},
 	{"git_credentials", matchBase, ".git-credentials"},
+	{"dotenv", matchBase, ".env"},
+	{"dotenv", matchBase, ".env.*"},
+	{"pgpass", matchBase, ".pgpass"},
+	{"npmrc", matchBase, ".npmrc"},
 	{"ssh_dir", matchComponent, ".ssh"},
+	{"gcloud_dir", matchComponent, "gcloud"},
+	{"kube_dir", matchComponent, ".kube"},
+	{"docker_dir", matchComponent, ".docker"},
 	{"aws_dir", matchComponent, ".aws"},
 	{"gnupg_dir", matchComponent, ".gnupg"},
 	{"wireguard", matchFull, "/etc/wireguard/*"},
@@ -138,6 +162,23 @@ func NewPathPolicy(denyPaths []string) *PathPolicy {
 		}
 	}
 	return p
+}
+
+// DenyInside reports whether a deny_paths entry is p or lies under it: a
+// check that walks everything below p would list what the operator denied.
+//
+// p is the canonical form of the resolved root. On macOS an entry may be
+// written in the realpath form (/private/var/...) or the canonical one
+// (/var/...); both are compared. Case is not folded: an entry whose case
+// differs from the disk's is not matched (a stated limit).
+func (pp *PathPolicy) DenyInside(p string, macOS bool) bool {
+	p = path.Clean(p)
+	for _, d := range pp.extraDeny {
+		if underPrefix(d, p) || macOS && underPrefix(Canonical(d, true), p) {
+			return true
+		}
+	}
+	return false
 }
 
 // Decide classifies p, which must already be absolute and symlink-resolved on

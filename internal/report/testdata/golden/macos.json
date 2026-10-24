@@ -37,6 +37,50 @@
   },
   "assessments": [
     {
+      "observation": "creds.home_files#1",
+      "finding": "creds.cloud_credentials_exposed",
+      "check": "creds.home_files",
+      "status": "not_assessed",
+      "reason": "no-file-listed"
+    },
+    {
+      "finding": "creds.env_file_exposed",
+      "check": "creds.app_env_1",
+      "status": "not_assessed",
+      "reason": "check-not-run"
+    },
+    {
+      "finding": "creds.env_file_exposed",
+      "check": "creds.app_env_2",
+      "status": "not_assessed",
+      "reason": "check-not-run"
+    },
+    {
+      "finding": "creds.env_file_exposed",
+      "check": "creds.app_env_3",
+      "status": "not_assessed",
+      "reason": "check-not-run"
+    },
+    {
+      "finding": "creds.env_file_exposed",
+      "check": "creds.app_env_4",
+      "status": "not_assessed",
+      "reason": "check-not-run"
+    },
+    {
+      "finding": "creds.env_file_exposed",
+      "check": "creds.app_env_5",
+      "status": "not_assessed",
+      "reason": "check-not-run"
+    },
+    {
+      "observation": "creds.home_files#1",
+      "finding": "creds.ssh_key_exposed",
+      "check": "creds.home_files",
+      "status": "not_assessed",
+      "reason": "no-file-listed"
+    },
+    {
       "observation": "disk.fdesetup#1",
       "finding": "disk.filevault_off",
       "check": "disk.fdesetup",
@@ -715,6 +759,26 @@
           {
             "name": "start9",
             "uid": "502"
+          }
+        ],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "creds.home_files": {
+      "observation": "creds.home_files#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "1 listed files and folder",
+      "parsed": {
+        "kind": "find_ls",
+        "items": [
+          {
+            "group": "staff",
+            "path": "/Users/user",
+            "symbolic": "drwx------",
+            "type": "d",
+            "user": "user"
           }
         ],
         "partial": false
@@ -3976,6 +4040,190 @@
       ],
       "occurrence": 2
     },
+    "creds.home_files#1": {
+      "observation": "creds.home_files#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "1 listed files and folder",
+      "duration_ms": 0,
+      "check": "creds.home_files",
+      "ran_as": "creds.home_files",
+      "argv": [
+        "find",
+        "/Users",
+        "/var/root",
+        "-xdev",
+        "-maxdepth",
+        "4",
+        "-name",
+        "Library",
+        "-prune",
+        "-o",
+        "-name",
+        "Documents",
+        "-prune",
+        "-o",
+        "-name",
+        "Desktop",
+        "-prune",
+        "-o",
+        "-name",
+        "Downloads",
+        "-prune",
+        "-o",
+        "-name",
+        "Pictures",
+        "-prune",
+        "-o",
+        "-name",
+        "Movies",
+        "-prune",
+        "-o",
+        "-name",
+        "Music",
+        "-prune",
+        "-o",
+        "-name",
+        ".Trash",
+        "-prune",
+        "-o",
+        "-name",
+        "node_modules",
+        "-prune",
+        "-o",
+        "-name",
+        ".git",
+        "-prune",
+        "-o",
+        "-type",
+        "d",
+        "-not",
+        "-perm",
+        "-0011",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_rsa",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_rsa",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_ed25519",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_ed25519",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_ecdsa",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_ecdsa",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_dsa",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_dsa",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_ed25519_sk",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_ed25519_sk",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "id_ecdsa_sk",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "id_ecdsa_sk",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "credentials",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "credentials",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "credentials.db",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "credentials.db",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "application_default_credentials.json",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "application_default_credentials.json",
+        "-ls",
+        "-o",
+        "-type",
+        "f",
+        "-name",
+        "access_tokens.db",
+        "-ls",
+        "-o",
+        "-type",
+        "l",
+        "-name",
+        "access_tokens.db",
+        "-ls"
+      ],
+      "occurrence": 3
+    },
     "disk.fdesetup#1": {
       "observation": "disk.fdesetup#1",
       "status": "ok",
@@ -3988,7 +4236,7 @@
         "fdesetup",
         "status"
       ],
-      "occurrence": 3
+      "occurrence": 4
     },
     "fs.suid#1": {
       "observation": "fs.suid#1",
@@ -4010,7 +4258,7 @@
         "-perm",
         "-4000"
       ],
-      "occurrence": 4
+      "occurrence": 5
     },
     "fs.world_writable#1": {
       "observation": "fs.world_writable#1",
@@ -4039,7 +4287,7 @@
         "-type",
         "l"
       ],
-      "occurrence": 5
+      "occurrence": 6
     },
     "fw.blockall#1": {
       "observation": "fw.blockall#1",
@@ -4053,7 +4301,7 @@
         "/usr/libexec/ApplicationFirewall/socketfilterfw",
         "--getblockall"
       ],
-      "occurrence": 6
+      "occurrence": 7
     },
     "fw.global#1": {
       "observation": "fw.global#1",
@@ -4067,7 +4315,7 @@
         "/usr/libexec/ApplicationFirewall/socketfilterfw",
         "--getglobalstate"
       ],
-      "occurrence": 7
+      "occurrence": 8
     },
     "fw.stealth#1": {
       "observation": "fw.stealth#1",
@@ -4081,7 +4329,7 @@
         "/usr/libexec/ApplicationFirewall/socketfilterfw",
         "--getstealthmode"
       ],
-      "occurrence": 8
+      "occurrence": 9
     },
     "host.hostname#1": {
       "observation": "host.hostname#1",
@@ -4095,7 +4343,7 @@
         "uname",
         "-n"
       ],
-      "occurrence": 9
+      "occurrence": 10
     },
     "host.platform_uuid#1": {
       "observation": "host.platform_uuid#1",
@@ -4111,7 +4359,7 @@
         "-c",
         "IOPlatformExpertDevice"
       ],
-      "occurrence": 10
+      "occurrence": 11
     },
     "integrity.csrutil#1": {
       "observation": "integrity.csrutil#1",
@@ -4125,7 +4373,7 @@
         "csrutil",
         "status"
       ],
-      "occurrence": 11
+      "occurrence": 12
     },
     "integrity.spctl#1": {
       "observation": "integrity.spctl#1",
@@ -4139,7 +4387,7 @@
         "spctl",
         "--status"
       ],
-      "occurrence": 12
+      "occurrence": 13
     },
     "log.status#1": {
       "observation": "log.status#1",
@@ -4156,7 +4404,7 @@
         "config",
         "--status"
       ],
-      "occurrence": 13
+      "occurrence": 14
     },
     "net.listeners#1": {
       "observation": "net.listeners#1",
@@ -4174,7 +4422,7 @@
         "-iTCP",
         "-sTCP:LISTEN"
       ],
-      "occurrence": 14
+      "occurrence": 15
     },
     "os.release#1": {
       "observation": "os.release#1",
@@ -4187,7 +4435,7 @@
       "argv": [
         "sw_vers"
       ],
-      "occurrence": 15
+      "occurrence": 16
     },
     "persist.launch_dirs#1": {
       "observation": "persist.launch_dirs#1",
@@ -4206,7 +4454,7 @@
         "-type",
         "f"
       ],
-      "occurrence": 16
+      "occurrence": 17
     },
     "persist.launchctl#1": {
       "observation": "persist.launchctl#1",
@@ -4220,7 +4468,7 @@
         "launchctl",
         "list"
       ],
-      "occurrence": 17
+      "occurrence": 18
     },
     "pkg.softwareupdate#1": {
       "observation": "pkg.softwareupdate#1",
@@ -4235,7 +4483,7 @@
         "-l",
         "--no-scan"
       ],
-      "occurrence": 18
+      "occurrence": 19
     },
     "privesc.sudoers#1": {
       "observation": "privesc.sudoers#1",
@@ -4251,7 +4499,7 @@
         "cat",
         "/etc/sudoers"
       ],
-      "occurrence": 19
+      "occurrence": 20
     },
     "privesc.sudoers_d#1": {
       "observation": "privesc.sudoers_d#1",
@@ -4269,7 +4517,7 @@
         ".",
         "/etc/sudoers.d"
       ],
-      "occurrence": 20
+      "occurrence": 21
     },
     "remote.launchd_disabled#1": {
       "observation": "remote.launchd_disabled#1",
@@ -4284,7 +4532,7 @@
         "print-disabled",
         "system"
       ],
-      "occurrence": 21
+      "occurrence": 22
     },
     "remote.login#1": {
       "observation": "remote.login#1",
@@ -4300,7 +4548,7 @@
         "systemsetup",
         "-getremotelogin"
       ],
-      "occurrence": 22
+      "occurrence": 23
     },
     "sshd.config#1": {
       "observation": "sshd.config#1",
@@ -4316,7 +4564,7 @@
         "sshd",
         "-T"
       ],
-      "occurrence": 23
+      "occurrence": 24
     },
     "sys.platform#1": {
       "observation": "sys.platform#1",
@@ -4330,7 +4578,7 @@
         "uname",
         "-s"
       ],
-      "occurrence": 24
+      "occurrence": 25
     },
     "sys.shell#1": {
       "observation": "sys.shell#1",
@@ -4344,7 +4592,7 @@
         "printenv",
         "SHELL"
       ],
-      "occurrence": 25
+      "occurrence": 26
     },
     "sys.uid#1": {
       "observation": "sys.uid#1",
@@ -4358,7 +4606,7 @@
         "id",
         "-u"
       ],
-      "occurrence": 26
+      "occurrence": 27
     },
     "sys.uname#1": {
       "observation": "sys.uname#1",
@@ -4372,7 +4620,7 @@
         "uname",
         "-a"
       ],
-      "occurrence": 27
+      "occurrence": 28
     },
     "time.ntp#1": {
       "observation": "time.ntp#1",
@@ -4388,7 +4636,7 @@
         "systemsetup",
         "-getusingnetworktime"
       ],
-      "occurrence": 28
+      "occurrence": 29
     }
   }
 }
