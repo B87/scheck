@@ -38,7 +38,17 @@ func TestPathPolicyCorpus(t *testing.T) {
 		{"/usr/bin/id", PathDeny, RuleNotAllowed},
 		{"/proc/1/environ", PathDeny, RuleNotAllowed},
 		{"/tmp/x.key", PathDeny, RuleNotAllowed},
-		{"/opt/etc/x", PathDeny, RuleNotAllowed}, // /opt/*/etc needs a vendor segment
+		{"/opt/etc/x", PathMetadataOnly, RuleAppMetadata}, // /opt/*/etc needs a vendor segment for content; /opt lists
+		{"/srv/shop", PathMetadataOnly, RuleAppMetadata},
+		{"/srv/shop/.env", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/var/www/api/.env.production", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/etc/myapp/.env", PathMetadataOnly, "path.sensitive:dotenv"},
+		{"/home/ops/.config/gcloud/credentials.db", PathMetadataOnly, "path.sensitive:gcloud_dir"},
+		{"/home/ops/.kube/config", PathMetadataOnly, "path.sensitive:kube_dir"},
+		{"/home/ops/.docker/config.json", PathMetadataOnly, "path.sensitive:docker_dir"},
+		{"/home/ops/.pgpass", PathMetadataOnly, "path.sensitive:pgpass"},
+		{"/data", PathMetadataOnly, RuleAppMetadata},
+		{"/srvx/shop", PathDeny, RuleNotAllowed},
 		{"/etcetera/x", PathDeny, RuleNotAllowed},
 		{"/var/logs/x", PathDeny, RuleNotAllowed},
 		{"etc/passwd", PathDeny, RuleNotAllowed},
@@ -70,6 +80,29 @@ func TestPathPolicyCleansButDoesNotResolve(t *testing.T) {
 // macOS spells /etc as /private/etc once resolved; the policy must judge the
 // canonical name, so an allowed prefix still allows and a sensitive file is
 // still metadata-only (docs/spec/host-collector.md §4.1).
+// A deny entry written in macOS's realpath form is honoured against the
+// canonical path the runner decides on, at, above or below a walk root.
+func TestDenyEntriesInRealpathFormOnMacOS(t *testing.T) {
+	pp := NewPathPolicy([]string{"/private/var/www/app"})
+	if v := pp.Decide("/var/www/app/.env"); v.Decision != PathDeny || v.Rule != RuleConfigDeny {
+		t.Errorf("canonical path under a /private entry: %+v", v)
+	}
+	if v := pp.Decide("/var/www/other"); v.Decision == PathDeny {
+		t.Errorf("a sibling was denied: %+v", v)
+	}
+	// /private itself covers the three trees the runner canonicalises.
+	pp = NewPathPolicy([]string{"/private"})
+	for _, p := range []string{"/etc/ssh/sshd_config", "/var/www/app", "/tmp/x"} {
+		if v := pp.Decide(p); v.Decision != PathDeny {
+			t.Errorf("%s under a /private entry: %+v", p, v)
+		}
+	}
+	pp = NewPathPolicy([]string{"/private/var/www/app/keys"})
+	if !pp.DenyInside("/var/www/app") || pp.DenyInside("/var/www/app2") || pp.DenyInside("/var/www/app/keys/x") {
+		t.Error("DenyInside")
+	}
+}
+
 func TestCanonicalMacOSPrivate(t *testing.T) {
 	pp := NewPathPolicy(nil)
 	cases := map[string]PathDecision{

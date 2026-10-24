@@ -34,6 +34,7 @@ const (
 	RuleDefJudges      = "finding-def-judges-missing"
 	RuleDefSubject     = "finding-def-unknown-subject-kind"
 	RuleWithCheck      = "rule-with-check-invalid"
+	RuleFireOnly       = "macos-find-listing-must-be-fire-only"
 )
 
 // Categories a Def may carry (docs/spec/host-collector.md §6.1), plus the two the grader
@@ -127,6 +128,12 @@ func ValidateRules() []Violation {
 				out = append(out, Violation{name, RuleUnknownCheck,
 					fmt.Sprintf("%s is not a catalog id on %s", r.Check, p)})
 				continue
+			}
+			// BSD find prints a newline in a name raw, so a macOS listing can be
+			// forged by a local user: it may show an exposure, never clear one.
+			if cf, ok := r.When.(CredFiles); p == check.MacOS && c.Parser == check.ParseFindLS && (!ok || !cf.FireOnly) {
+				out = append(out, Violation{name, RuleFireOnly,
+					"a macOS find listing can be forged by a local user; the predicate must be FireOnly"})
 			}
 			if !r.When.Accepts(c.Parser) {
 				out = append(out, Violation{name, RuleParserMismatch,

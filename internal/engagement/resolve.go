@@ -54,6 +54,7 @@ type ResolvedAsset struct {
 	Profile       string       `json:"profile,omitempty" yaml:"profile,omitempty"`
 	DisableChecks []string     `json:"disable_checks,omitempty" yaml:"disable_checks,omitempty"`
 	DenyPaths     []string     `json:"deny_paths,omitempty" yaml:"deny_paths,omitempty"`
+	AppPaths      []string     `json:"app_paths,omitempty" yaml:"app_paths,omitempty"`
 	Context       *HostContext `json:"context,omitempty" yaml:"context,omitempty"`
 
 	FirstParty *FirstParty `json:"first_party,omitempty" yaml:"first_party,omitempty"`
@@ -321,6 +322,7 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 		out.Profile = or(a.Profile, d.Profile)
 		out.DisableChecks = a.DisableChecks
 		out.DenyPaths = a.DenyPaths
+		out.AppPaths = a.AppPaths
 		out.Context = a.Context
 	}
 	return out

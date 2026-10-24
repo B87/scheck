@@ -757,7 +757,7 @@ func (r *run) hostOptions(a ResolvedAsset, audit *policy.Audit) hostasset.Option
 	o := hostasset.Options{
 		Local: a.Local(), Host: a.Address(), Port: a.Port, User: a.User, Identity: a.Identity,
 		KnownHosts: a.KnownHosts, Elevate: a.Elevate, Profile: a.Profile,
-		DisableChecks: a.DisableChecks, DenyPaths: a.DenyPaths, RedactExtra: r.res.RedactExtra(),
+		DisableChecks: a.DisableChecks, DenyPaths: a.DenyPaths, AppPaths: a.AppPaths, RedactExtra: r.res.RedactExtra(),
 		Audit: audit, Version: r.o.Version, RecordFixtures: r.o.RecordFixtures,
 		Log: func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
 	}
@@ -1431,7 +1431,7 @@ func (r *run) hostLocator() string {
 func (r *run) hostInput(a ResolvedAsset, c *hostasset.Collection, evidence string) *ereport.HostInput {
 	src := r.res.Source.Path + " assets." + a.Name
 	h := &ereport.HostInput{Envelope: r.assessed[a.Name], User: a.User, Planned: c.Planned(), Lost: c.Lost(),
-		Evidence: evidence}
+		Evidence: evidence, AppPaths: len(a.AppPaths)}
 	if a.Local() {
 		h.User = "the user running scheck"
 		if u, err := user.Current(); err == nil && u.Username != "" {

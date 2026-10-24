@@ -374,3 +374,82 @@ func TestDiagnosticTimeoutScope(t *testing.T) {
 		})
 	}
 }
+
+// A check that walks everything below its path is refused when a deny_paths
+// entry lies inside that tree, on the resolved path: scheck cannot honour a
+// denial entry by entry, and must not list what the operator denied.
+func TestAWalkIsRefusedWhenADeniedPathLiesInside(t *testing.T) {
+	testCatalog(t)
+	check.Register(check.Check{ID: "fs.walk", Platform: check.Any, Domain: check.DomainFS, Parser: check.ParseLines, Unit: "entries",
+		PathUse: check.PathMetadata, Walk: true, ExitOK: []int{0, 1}, Argv: []string{"find", "{path}", "-ls"},
+		Params: []check.Param{{Name: "path", Kind: check.KindPath}}})
+	fx := fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/srv/data/app"}, Stdout: "/srv/data/app\n"},
+		fixture.Exec{Argv: []string{"find", "/srv/data/app", "-ls"}, Stdout: ""})
+	red, _ := policy.NewRedactor(nil)
+	var audit bytes.Buffer
+	r := &Runner{Target: fx, Paths: policy.NewPathPolicy([]string{"/srv/data/app/keys"}), Redactor: red, Budgets: policy.DefaultBudgets(),
+		Audit: policy.NewAudit(&audit), Log: t.Logf}
+	res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/data/app"})
+	if res.Status != StatusDenied || res.ReasonCode != "path_denied" || res.PathRule != policy.RuleDenyInside {
+		t.Fatalf("a walk over a denied subtree ran: %+v", res)
+	}
+	// The root is the resolved path: a link whose target holds a denied path
+	// is refused whatever it was called, and a prefix sibling is not touched.
+	r.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/current"}, Stdout: "/srv/data/app\n"})
+	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/current"}); res.Status != StatusDenied || res.PathRule != policy.RuleDenyInside {
+		t.Fatalf("a link into a tree holding a denied path ran: %+v", res)
+	}
+	r.Paths = policy.NewPathPolicy([]string{"/srv/data/app/keys"})
+	r.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/srv/data/app2"}, Stdout: "/srv/data/app2\n"},
+		fixture.Exec{Argv: []string{"find", "/srv/data/app2", "-ls"}, Stdout: ""})
+	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/data/app2"}); res.Status != StatusOK {
+		t.Fatalf("a prefix sibling was refused: %+v", res)
+	}
+	// A path that cannot be resolved is not walked: find would follow links
+	// in the middle of the name the policy never saw.
+	r.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/current"}, Stdout: "", Code: 1})
+	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/current"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("an unresolved path was walked: %+v", res)
+	}
+	// A resolution that was masked or cut is no resolution: the deny entry
+	// cannot be compared with it, so the walk does not run.
+	redWalk := &Runner{Paths: policy.NewPathPolicy([]string{"/data/acme/shop/keys"}), Budgets: policy.DefaultBudgets(),
+		Audit: policy.NewAudit(&audit), Log: t.Logf}
+	redWalk.Redactor, _ = policy.NewRedactor([]string{"acme"})
+	redWalk.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/srv/current/shop"}, Stdout: "/data/acme/shop\n"})
+	if res := redWalk.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/current/shop"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("a masked resolution was walked: %+v", res)
+	}
+	long := "/srv/" + strings.Repeat("a", 5000)
+	redWalk.Target = fixture.New(target.Linux, fixture.Exec{Argv: []string{"realpath", "/srv/long"}, Stdout: long + "\n"})
+	if res := redWalk.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/long"}); res.Status != StatusUnavailable || res.ReasonCode != "path_unresolved" || res.Attempted {
+		t.Fatalf("a truncated resolution was walked: %+v", res)
+	}
+	// On macOS an entry written in the realpath form (/private/var/...)
+	// denies the canonical root, and one above the root denies it outright.
+	mac := fixture.New(target.MacOS,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/app"}, Stdout: "/private/var/www/app\n"})
+	rm := &Runner{Target: mac, Paths: policy.NewPathPolicy([]string{"/private/var/www/app/keys"}), Redactor: red, Budgets: policy.DefaultBudgets(),
+		Audit: policy.NewAudit(&audit), Log: t.Logf}
+	if res := rm.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/app"}); res.Status != StatusDenied || res.PathRule != policy.RuleDenyInside {
+		t.Fatalf("a macOS walk over a denied subtree ran: %+v", res)
+	}
+	mac = fixture.New(target.MacOS,
+		fixture.Exec{Argv: []string{"realpath", "/var/www/app"}, Stdout: "/private/var/www/app\n"})
+	rm.Target, rm.Paths = mac, policy.NewPathPolicy([]string{"/private/var/www"})
+	if res := rm.Run(t.Context(), "fs.walk", map[string]string{"path": "/var/www/app"}); res.Status != StatusDenied || res.PathRule != policy.RuleConfigDeny {
+		t.Fatalf("a macOS root under a denied entry ran: %+v", res)
+	}
+	// A sibling the denial does not touch is walked.
+	r.Target = fixture.New(target.Linux,
+		fixture.Exec{Argv: []string{"realpath", "/srv/data/other"}, Stdout: "/srv/data/other\n"},
+		fixture.Exec{Argv: []string{"find", "/srv/data/other", "-ls"}, Stdout: ""})
+	if res := r.Run(t.Context(), "fs.walk", map[string]string{"path": "/srv/data/other"}); res.Status != StatusOK {
+		t.Fatalf("an unrelated walk was refused: %+v", res)
+	}
+}

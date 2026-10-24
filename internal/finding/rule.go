@@ -368,6 +368,23 @@ var rules = []Rule{
 	{Finding: IDUpdatesPending, Check: "pkg.zypper_lp", Platform: check.Linux, When: AnyRecord{}},
 	{Finding: IDUpdatesPending, Check: "pkg.softwareupdate", Platform: check.MacOS, When: AnyRecord{}},
 	{Finding: IDWorldWritablePresent, Check: "fs.world_writable", Platform: check.Any, When: AnyLine{Regexp: `\S`}},
+	// Credentials on disk and the container socket (G5): the rules judge
+	// mode bits and the folders above, from one find listing.
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_1", Platform: check.Linux, When: CredFiles{Kind: CredEnv}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_1", Platform: check.MacOS, When: CredFiles{Kind: CredEnv, FireOnly: true}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_2", Platform: check.Linux, When: CredFiles{Kind: CredEnv}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_2", Platform: check.MacOS, When: CredFiles{Kind: CredEnv, FireOnly: true}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_3", Platform: check.Linux, When: CredFiles{Kind: CredEnv}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_3", Platform: check.MacOS, When: CredFiles{Kind: CredEnv, FireOnly: true}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_4", Platform: check.Linux, When: CredFiles{Kind: CredEnv}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_4", Platform: check.MacOS, When: CredFiles{Kind: CredEnv, FireOnly: true}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_5", Platform: check.Linux, When: CredFiles{Kind: CredEnv}},
+	{Finding: IDEnvFileExposed, Check: "creds.app_env_5", Platform: check.MacOS, When: CredFiles{Kind: CredEnv, FireOnly: true}},
+	{Finding: IDSSHKeyExposed, Check: "creds.home_files", Platform: check.Linux, When: CredFiles{Kind: CredSSHKey}},
+	{Finding: IDSSHKeyExposed, Check: "creds.home_files", Platform: check.MacOS, When: CredFiles{Kind: CredSSHKey, FireOnly: true}},
+	{Finding: IDCloudCredentialExposed, Check: "creds.home_files", Platform: check.Linux, When: CredFiles{Kind: CredCloud}},
+	{Finding: IDCloudCredentialExposed, Check: "creds.home_files", Platform: check.MacOS, When: CredFiles{Kind: CredCloud, FireOnly: true}},
+	{Finding: IDDockerSocketExposed, Check: "docker.sockets", Platform: check.Linux, When: CredFiles{Kind: CredContSock}},
 }
 
 // Rules returns the posture rule table, sorted by (finding, check) so a

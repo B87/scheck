@@ -17,6 +17,7 @@ const (
 	ParseUpdates      ParserKind = "updates"
 	ParseLaunchd      ParserKind = "launchd"
 	ParseFileMode     ParserKind = "file_mode"
+	ParseFindLS       ParserKind = "find_ls"
 )
 
 // Field names of the typed shapes. A rule predicate names one of these
@@ -40,6 +41,10 @@ const (
 	FieldUser     = "user"
 	FieldGroup    = "group"
 	FieldSize     = "size"
+	// FieldPath is the path of a find_ls entry; FieldType its first mode
+	// character (- file, d directory, l link, s socket).
+	FieldPath = "path"
+	FieldType = "type"
 )
 
 // Record is one row of a typed shape: named fields, so a posture rule reads a
@@ -65,7 +70,7 @@ func (r Records) Len() int { return len(r.Items) }
 // IsTyped reports whether kind is one of the typed shapes.
 func IsTyped(kind ParserKind) bool {
 	switch kind {
-	case ParseListeners, ParseAccounts, ParsePasswdStatus, ParseUnits, ParseUpdates, ParseLaunchd, ParseFileMode:
+	case ParseListeners, ParseAccounts, ParsePasswdStatus, ParseUnits, ParseUpdates, ParseLaunchd, ParseFileMode, ParseFindLS:
 		return true
 	}
 	return false
@@ -110,6 +115,8 @@ func parseRecords(c Check, raw []byte) (Records, error) {
 		items, unparsed = parseLaunchd(body)
 	case ParseFileMode:
 		items, err = parseFileMode(body)
+	case ParseFindLS:
+		items, unparsed = parseFindLS(body)
 	default:
 		return recs, fmt.Errorf("unknown typed shape %q", c.Parser)
 	}
@@ -364,6 +371,41 @@ func parseFileMode(lines []string) ([]Record, error) {
 		rec[FieldName] = f[6]
 	}
 	return []Record{rec}, nil
+}
+
+var findLSMode = regexp.MustCompile(`^([-dlcbsp])[-rwxsStT]{9}[.+@]?$`)
+
+// parseFindLS reads `find ... -ls`, which GNU and BSD find print alike:
+// inode, blocks, mode, links, owner, group, size, three date words, then the
+// path (docs/spec/host-collector.md §3, G5). The mode loses a trailing
+// SELinux or ACL mark; a symlink loses its " -> target". A line that is not
+// that shape is counted, so the set is partial rather than silently short.
+func parseFindLS(lines []string) ([]Record, int) {
+	out, bad := []Record{}, 0
+	for _, l := range lines {
+		f := strings.Fields(l)
+		if len(f) < 11 {
+			bad++
+			continue
+		}
+		m := findLSMode.FindStringSubmatch(f[2])
+		if m == nil {
+			bad++
+			continue
+		}
+		p := strings.Join(f[10:], " ")
+		if i := strings.Index(p, " -> "); i >= 0 {
+			p = p[:i]
+		}
+		// A redaction marker inside a path (redact_extra) can make two
+		// different folders look alike: the line is not a record.
+		if !strings.HasPrefix(p, "/") || hasMarker(p) {
+			bad++
+			continue
+		}
+		out = append(out, Record{FieldType: m[1], FieldSymbolic: f[2][:10], FieldUser: f[4], FieldGroup: f[5], FieldPath: p})
+	}
+	return out, bad
 }
 
 // IsMarkerLine reports whether a line is *only* a redaction or truncation

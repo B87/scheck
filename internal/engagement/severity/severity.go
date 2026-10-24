@@ -76,7 +76,7 @@ var productionIDs = []string{finding.IDGitHubWritableDeployKey, finding.IDGitHub
 	finding.IDGitHubDefaultBranchUnprotected, finding.IDGitHubPRTargetUnsafe}
 
 // internetIDs are the findings a host's declared internet exposure raises.
-var internetIDs = []string{finding.IDDBListensUnfiltered, finding.IDSvcListensBeyond}
+var internetIDs = []string{finding.IDDBListensUnfiltered, finding.IDSvcListensBeyond, finding.IDSensitiveListens}
 
 // rules is the table, in the order it is applied. A row it does not name
 // does not exist.

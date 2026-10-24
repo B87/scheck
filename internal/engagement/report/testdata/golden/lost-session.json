@@ -3,6 +3,49 @@
   "assessments": [
     {
       "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.cloud_credentials_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.env_file_exposed",
+      "instances": 0,
+      "reads": [
+        "check:creds.app_env_1",
+        "check:creds.app_env_2",
+        "check:creds.app_env_3",
+        "check:creds.app_env_4",
+        "check:creds.app_env_5"
+      ],
+      "reason": "unavailable:no_app_paths",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
+      "complete": false,
+      "id": "creds.ssh_key_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:macos:22",
       "complete": true,
       "id": "disk.filevault_off",
       "instances": 0,
@@ -142,8 +185,8 @@
       "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
       "checks": {
         "not_run": 2,
-        "planned": 28,
-        "ran": 21,
+        "planned": 29,
+        "ran": 22,
         "unknown": 5
       },
       "collected": {
@@ -426,11 +469,11 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+          "text": "the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
-          "text": "listening services you did not declare"
+          "text": "listening services you did not declare (on Linux hosts, apart from remote-administration ports)"
         },
         {
           "id": "hosts.admins_sudo",
@@ -458,7 +501,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "population": {
@@ -483,6 +526,12 @@
         },
         {
           "reason": "insufficient_permission:sudo"
+        },
+        {
+          "reason": "unavailable:no_file_listed"
+        },
+        {
+          "reason": "unavailable:no_app_paths"
         }
       ],
       "sub_items": [
@@ -666,6 +715,31 @@
           ],
           "rules": [
             "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:macos:22",
+          "mark": "not_assessed",
+          "name": "Credentials on disk",
+          "population": {
+            "in_scope": 7,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "creds.home_files: 1 listed files and folder",
+              "reason": "unavailable:no_file_listed"
+            },
+            {
+              "detail": ".env files",
+              "reason": "unavailable:no_app_paths"
+            }
+          ],
+          "rules": [
+            "creds.cloud_credentials_exposed",
+            "creds.env_file_exposed",
+            "creds.ssh_key_exposed"
           ]
         },
         {
@@ -964,7 +1038,7 @@
       "detail": "the connection was lost before every baseline check ran: EOF",
       "effect": {
         "checks_not_run": 2,
-        "checks_run": 21,
+        "checks_run": 22,
         "checks_unknown": 5,
         "kept": true
       },
@@ -1039,8 +1113,8 @@
     "more": 0,
     "rules": {
       "decided": 5,
-      "selected": 10,
-      "without_evidence": 5
+      "selected": 13,
+      "without_evidence": 8
     }
   }
 }

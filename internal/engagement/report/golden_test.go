@@ -62,6 +62,8 @@ func TestGoldenReports(t *testing.T) {
 		"host-database-abstained": hostDatabaseAbstainedReport,
 		"host-ssh-empty-password": hostSSHFiredReport,
 		"host-service-beyond":     hostServiceBeyondReport,
+		"host-sensitive-docker":   hostSensitiveDockerReport,
+		"host-sensitive-smb":      hostSensitiveSMBReport,
 		"context-notes":           contextNotesReport,
 		"host-macos": func(t *testing.T) Input {
 			// A host written as a name: SSH asked the system's resolver.
@@ -416,7 +418,10 @@ func TestMattersMostReadoutCountsOnlyWholeDecisions(t *testing.T) {
 		}
 	}
 	readout := func(in Input) MattersMost { return Build(in).Summary.MattersMost[0] }
-	if m := readout(in); m.Outcome != "read" || m.Checks != 3 || m.Undecided != 0 {
+	// The credential and container-socket rules (G5) read depth-capped
+	// listings: they never decide "nothing here", so they are undecided with
+	// limit_reached on a clean host. The rest are the whole disprovals.
+	if m := readout(in); m.Outcome != "partial" || m.Checks != 7 || m.Undecided != 4 {
 		t.Fatalf("whole disprovals: %+v", m)
 	}
 	// sshd.config's capture was cut: its two rules answered from part of it.
@@ -424,7 +429,7 @@ func TestMattersMostReadoutCountsOnlyWholeDecisions(t *testing.T) {
 	f.Truncated = true
 	h.Envelope.Facts["sshd.config"] = f
 	m := readout(in)
-	if m.Outcome != "partial" || m.Checks != 3 || m.Undecided != 2 || len(m.Reasons) != 1 || m.Reasons[0] != "unavailable:incomplete_read" {
+	if m.Outcome != "partial" || m.Checks != 7 || m.Undecided != 6 || len(m.Reasons) != 3 || m.Reasons[0] != "unavailable:incomplete_read" {
 		t.Fatalf("partial disprovals: %+v", m)
 	}
 }

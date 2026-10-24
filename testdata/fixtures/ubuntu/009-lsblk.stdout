@@ -1,0 +1,10 @@
+NAME   TYPE FSTYPE MOUNTPOINT
+nbd0   disk        
+nbd1   disk        
+nbd2   disk        
+nbd3   disk        
+zram0  disk        [SWAP]
+vda    disk        
+vdb    disk        
+`-vdb1 part        /etc/resolv.conf
+vdc    disk        [SWAP]

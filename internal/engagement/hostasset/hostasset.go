@@ -70,7 +70,10 @@ type Options struct {
 	Profile       string // baseline | hardened
 	DisableChecks []string
 	DenyPaths     []string
-	RedactExtra   []string
+	// AppPaths are the application folders whose .env files are listed
+	// (creds.app_env_N, one slot per folder, in order).
+	AppPaths    []string
+	RedactExtra []string
 	// RunTimeout is the host collector's run timeout
 	// (docs/spec/host-collector.md §4.4); 0 keeps the policy default.
 	RunTimeout time.Duration
@@ -195,6 +198,7 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 		logf = func(string, ...any) {}
 	}
 	started := time.Now()
+	o.DisableChecks = guardWalks(o.DisableChecks, o.DenyPaths)
 	r := &runner.Runner{Paths: policy.NewPathPolicy(o.DenyPaths), Redactor: redactor, Budgets: budgets,
 		Audit: o.Audit, Elevate: elevate, Log: logf}
 	canary := "n/a"
@@ -273,6 +277,27 @@ func Collect(ctx context.Context, o Options) (*Collection, error) {
 	planned := make([]string, len(plan))
 	for i, c := range plan {
 		planned[i] = c.ID
+	}
+	// The declared application folders: one catalog slot each, run through
+	// the same runner after the baseline, so path policy, redaction and the
+	// audit log apply (docs/spec/host-collector.md §3, G5).
+	for i, p := range o.AppPaths {
+		id := check.AppEnvID(i + 1)
+		if slices.Contains(o.DisableChecks, id) {
+			continue
+		}
+		if sheet.Incomplete || runCtx.Err() != nil {
+			planned = append(planned, id) // cut by the clock or the connection: counted as not run
+			continue
+		}
+		res := r.Run(runCtx, id, map[string]string{"path": p})
+		sheet.Order = append(sheet.Order, id)
+		sheet.Results[id] = res
+		planned = append(planned, id)
+		logf("%-28s %-12s %6dms %s", res.CheckID, res.Status, res.Duration.Milliseconds(), report.Sanitize(res.Reason))
+		if res.TransportLost {
+			sheet.Incomplete, sheet.Lost = true, res.Reason
+		}
 	}
 	return &Collection{sheet: sheet, planned: planned, profile: profile, meta: report.Meta{
 		Started:   started,
@@ -515,4 +540,35 @@ func merged(s *operator.Structured, source string) *operator.Merged {
 	m.Sources = []operator.Source{{Name: source, Kind: "config", SHA256: hex.EncodeToString(sum[:]), Bytes: len(raw)}}
 	m.Used = len(raw)
 	return m
+}
+
+// guardWalks disables a fixed walk of the filesystem when a deny_paths entry
+// is, or lies under or over, a place it walks: its argv is literal and path
+// policy does not see into it, so a denial there could not be honoured
+// (docs/spec/host-collector.md §3, G5). It only narrows.
+func guardWalks(disabled, deny []string) []string {
+	walks := map[string][]string{
+		"creds.home_files": {"/home", "/root", "/Users", "/var/root"},
+		"docker.sockets":   {"/run"},
+	}
+	for id, roots := range walks {
+		if slices.Contains(disabled, id) {
+			continue
+		}
+	overlap:
+		for _, d := range deny {
+			// An entry written in macOS's realpath form (/private/var/...)
+			// overlaps a root named in its canonical one (/var/root).
+			d = strings.TrimSuffix(d, "/")
+			for _, e := range append([]string{d}, policy.CanonicalForms(d)...) {
+				for _, root := range roots {
+					if e == root || strings.HasPrefix(e, root+"/") || strings.HasPrefix(root, e+"/") {
+						disabled = append(slices.Clone(disabled), id)
+						break overlap
+					}
+				}
+			}
+		}
+	}
+	return disabled
 }

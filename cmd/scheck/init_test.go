@@ -101,8 +101,8 @@ func TestInitAsksOnlyWhatTheHostFileDoesNotAnswer(t *testing.T) {
 	if _, _, code := runEngagement(t, "--host", "deploy@203.0.113.5", "--write-engagement", path); code != exitOK {
 		t.Fatal(code)
 	}
-	// operator, exclude, people, exposed, restricted, context, matters_most, not_used.
-	script := "platform-team\n.\n.\n.\n.\n.\nname: host-203-0-113-5\nexposure: lan\nenvironment: prod\nservice: 22 tcp\nservice: 5432 tcp localhost postgres\n.\n" +
+	// operator, exclude, people, exposed, restricted, context, app_paths, matters_most, not_used.
+	script := "platform-team\n.\n.\n.\n.\n.\nname: host-203-0-113-5\nexposure: lan\nenvironment: prod\nservice: 22 tcp\nservice: 5432 tcp localhost postgres\n.\n.\n" +
 		"1: customer orders and invoices\n.\ncloud\n.\n"
 	root := newRootCmd()
 	var stderr bytes.Buffer

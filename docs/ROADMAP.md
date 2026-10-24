@@ -2465,12 +2465,78 @@ over-broad credentials before any target contact.
 **Delivers:** catalog checks and rules for what an attacker on a small company's server
 or laptop looks for first: mode and ownership of `.env` files under the application
 paths a host asset declares (`app_paths`, asked by the interview from this slice, when
-it gains its consumer), `~/.ssh`, `~/.aws`, `~/.config/gcloud` and the docker socket; cloud
-metadata reachability; a listener-exposure multi-fact rule (listener, host firewall,
-and for a cloud host the firewall rule from G1). Each is a catalog entry under the host
+it gains its consumer), `~/.ssh`, `~/.aws`, `~/.config/gcloud` and the docker socket; a
+cloud-vendor label from DMI (metadata reachability is not built, step 2); a
+listener-exposure multi-fact rule (listener, host firewall, and for a cloud host the
+firewall rule from G1, which waits for G1). Each is a catalog entry under the host
 collector's rules (`spec/host-collector.md`), with the golden trace change explained.
 Carried from E9 (2026-10-13): host acceptance by subject, with `accounts.empty_password`
 keyed per account, as a candidate.
+
+**Build step 1 (built):** `creds.home_files` (Linux elevated, macOS not), `docker.sockets`
+and `creds.app_env_1` to `creds.app_env_5` (one per declared `app_paths` folder,
+unelevated by decision), the `find_ls` parser, and the findings `creds.env_file_exposed`,
+`creds.ssh_key_exposed`, `creds.cloud_credentials_exposed` (secrets, medium) and
+`docker.socket_exposed` (hosts, high, `HostAccess`), judged on mode bits and the folders
+above (`spec/host-collector.md §3`, §6.5); a listing that shows no file never disproves, a macOS listing never disproves (the `.env` rules are `FireOnly`, enforced by `finding.ValidateRules`), the runner refuses a walking slot when a `deny_paths` entry lies inside its resolved root (`check.Check.Walk`, `path.deny_inside`) and ends it `unavailable:path_unresolved` when `fs.realpath` cannot resolve the root (find never runs), a `find_ls` line whose path holds a redaction marker is unparsed so the set is partial, and
+a `.env` under a home is not judged. The path policy gains the metadata-only
+entries and application trees of `§4.1`. The host asset gains `app_paths` and the
+interview its question, after `context` (`spec/engagement.md`, "Host settings"). A host
+named in `data.matters_most` raises on a credential kept on it, so its readout is
+`partial` until a sample can decide (`spec/report.md`, "Data that matters most"). The
+golden traces changed as `spec/host-collector.md §3` records, the Ubuntu and Fedora
+fixtures were re-recorded, and `test/integ/creds_test.go` seeds the cases.
+
+Fixes after step 3 review: `NewPathPolicy` also holds each `deny_paths` entry in its canonical form (adds
+denials only), `hostasset` compares that form when it disables `creds.home_files`, a `path.deny_inside` refusal
+is counted under `deny_paths` as a whole in the report, and the `app_paths` question no longer mentions a
+laptop and says a folder under `/home`, `/root` or `/Users` is accepted but its `.env` is listed and not
+judged (`spec/engagement.md`, "Host settings").
+
+**Build step 2 (built):** `sys.dmi` (Linux, unelevated, `ExitOK` 0, 1 and 2) and
+`check.CloudVendor` (`CloudVendorsVersion` 2026-10-24): the fact sheet prints `cloud VM:
+<provider> (from DMI)` or `cloud platform not identified`. It is plumbing in the host
+domain: no coverage row and no finding. The golden Linux trace gains one `sys.dmi` line,
+the fixtures were re-recorded and the Ubuntu fixture plans 37 host checks
+(`spec/host-collector.md §3`). Decided 2026-10-24: cloud metadata reachability
+(169.254.169.254) is not built as a finding. It cannot be judged without sending a request
+(non-negotiable 1); on a cloud VM every local process reaches it by design, a missing
+firewall owner-match rule proves nothing new, and what the attached service account can
+do belongs to the GCP collector (G1) and the G4 link (`spec/host-collector.md §11`).
+
+**Build step 3 (built):** the multi-fact rule R6 `svc.sensitive_listens_unfiltered`
+(`internal/engagement/rules/svc_sensitive.go`, its definition in
+`internal/finding/multifact.go`, table version `SensitiveServicesVersion` 2026-10-24.2).
+Linux only; area external surface, base medium, ceiling high, `HostAccess`, subject
+`service`. It fires on a remote-administration service in its table (Docker's API,
+etcd, kubelet, Telnet, FTP, SMB, RDP, VNC, Jupyter, SNMP, RabbitMQ management) that listens
+beyond loopback with nothing in the host firewall in front, with R1's mechanics and
+abstentions. The three classes with no sign-in by default (Docker's API without TLS, etcd, the
+kubelet's read-only port) rank one step higher; a declared audience of `localhost`, `lan` or `vpn` adds the
+`contradiction` step; an `internet` declaration fires at base; `exposed_on_purpose` never
+lowers it. It joins the `exposure:internet` row, and R3 leaves a port to R6 where R6 finds a
+table service on it, as it leaves a database port to R1; where R6 only doubts the owner, the
+declared service stays R3's. A named program outside a row's processes on a table port is an
+abstention, never a host-level disproof. Goldens `host-sensitive-docker` and
+`host-sensitive-smb` pin a fired R6. The interview's `context` question lists R6 as a consumer,
+and the fixed not-judged item `hosts.firewall_linux` reads "apart from database ports,
+remote-administration ports and the services you declared" (`spec/engagement.md`, R6).
+
+**Carried, not built in steps 1 to 3** (each needs a decision or a later step):
+
+- `creds.authorized_keys_writable`, joined with sshd's `StrictModes` (deferred).
+- `group_grants_root`: a named group is a deliberate share and is not judged.
+- A rule for membership of the `docker` group (deferred).
+- Host acceptance by subject: `creds.*` per file (candidate subject `secret_location`)
+  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Acceptance is
+  by id until decided.
+- The listener-exposure rule's cloud part, which needs G1's firewall rules.
+- A presence readout note for credential files on production or internet hosts (G4).
+- Elasticsearch and OpenSearch in R1's database table: recommended by the
+  security-consultant, not decided or built.
+- DMI-driven wording: where the cloud platform is identified, the "Not checked" lines of
+  R1, R3 and R6 could name that provider's firewall instead of "a cloud firewall"
+  (undecided).
 
 **Done when:** every new rule has its three fixtures; the integration diff is still the
 exact allowlist; the world-readable `.env` seeded on the lab host is found.

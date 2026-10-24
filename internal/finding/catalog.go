@@ -123,6 +123,13 @@ const (
 	IDUpdatesPending       = "updates.pending"
 	IDWorldWritablePresent = "fs.world_writable_present"
 
+	// Credentials on disk and the container socket (G5,
+	// docs/spec/host-collector.md §6.5).
+	IDEnvFileExposed         = "creds.env_file_exposed"
+	IDSSHKeyExposed          = "creds.ssh_key_exposed"
+	IDCloudCredentialExposed = "creds.cloud_credentials_exposed" //nolint:gosec // a finding id, not a credential
+	IDDockerSocketExposed    = "docker.socket_exposed"
+
 	// Context-derived findings (docs/spec/host-collector.md §5.3), produced by the grader.
 	IDExpectedMissing   = "svc.expected_missing"
 	IDAcceptanceExpired = "risk.acceptance_expired"
@@ -349,6 +356,67 @@ var defs = map[string]Def{
 			Caveat:   "Shared directories that are world-writable by design (/tmp, /var/tmp) carry the sticky bit and are already excluded from this check.",
 		},
 	},
+	IDEnvFileExposed: {
+		ID: IDEnvFileExposed, Title: "An application's .env file is open to every account, or to a group everyone belongs to",
+		Category: "fs", Area: AreaSecrets, Exposure: NotExposure, Judges: "who can read .env files in the declared application folders", BaseSeverity: SevMedium,
+		Impact: "The .env files listed as evidence are readable (or writable) by any local account or service, not only the " +
+			"application that uses them. A .env file usually holds database passwords, API keys and signing secrets. " +
+			"Anyone who gets a foothold as another user, such as a compromised web process, a CI job or another " +
+			"person's login, can read them and reach the systems they open, or change them so the application runs " +
+			"their code at its next restart. Mode bits and the folders above were read; access lists were not.",
+		Remediation: Remediation{
+			Summary: "Make each file readable only by the account the application runs as.",
+			Commands: []string{
+				"ls -l <path>",
+				"sudo chown <app-user>:<app-group> <path>",
+				"sudo chmod 640 <path>   # or 600 if no other process needs it",
+			},
+			Caveat: "Check which account the application runs as before changing the owner, or it will fail to start. " +
+				"Then rotate any secret in the file if other people have had accounts on this host.",
+		},
+	},
+	IDSSHKeyExposed: {
+		ID: IDSSHKeyExposed, Title: "An SSH private key is readable by every account, or by a group everyone belongs to",
+		Category: "fs", Area: AreaSecrets, Exposure: NotExposure, Judges: "who can read SSH private keys under home directories", BaseSeverity: SevMedium,
+		Impact: "The private key listed as evidence is readable by any local account. Whoever reads it can log in " +
+			"wherever this key is accepted (other servers, GitHub, a deploy target) as its owner, without a " +
+			"password, unless the key has a passphrase. scheck did not open the key and cannot tell whether it has one.",
+		Remediation: Remediation{
+			Summary:  "Make the key readable only by its owner, and replace it if others may already have read it.",
+			Commands: []string{"chmod 600 <path>", "chmod 700 <dir>/.ssh"},
+			Caveat: "If other people or services have had accounts here, treat the key as copied: create a new one, add " +
+				"its public half where the old one was used, and remove the old one from every authorized_keys and from GitHub.",
+		},
+	},
+	IDCloudCredentialExposed: {
+		ID: IDCloudCredentialExposed, Title: "Cloud command-line credentials are readable by every account, or by a group everyone belongs to",
+		Category: "fs", Area: AreaSecrets, Exposure: NotExposure, Judges: "who can read AWS and Google Cloud credential files under home directories", BaseSeverity: SevMedium,
+		Impact: "The file listed as evidence holds credentials for AWS or Google Cloud (an access key, a person's " +
+			"sign-in token or a service-account key) and any local account can read it. Whoever reads it acts in your " +
+			"cloud account with that identity's permissions, often an administrator's, from anywhere, until the " +
+			"credential is revoked. scheck did not open the file and cannot tell which identity or which permissions.",
+		Remediation: Remediation{
+			Summary:  "Make the file readable only by its owner. On a server, stop storing cloud credentials in files.",
+			Commands: []string{"chmod 600 <path>", "chmod 700 <dir>"},
+			Caveat: "On a cloud VM use the instance's attached service account or role instead of a key file. If others " +
+				"had accounts here, revoke the credential (gcloud auth revoke; delete the access key in AWS IAM) and create a new one.",
+		},
+	},
+	IDDockerSocketExposed: {
+		ID: IDDockerSocketExposed, Title: "The container engine's socket is writable beyond the engine's own group, which is root on this host",
+		Category: "privesc", Area: AreaHosts, Exposure: NotExposure, Judges: "who can write to the container engine's socket", BaseSeverity: SevHigh, HostAccess: true,
+		Impact: "The container engine's socket listed as evidence is writable by every local account, or by a group " +
+			"that is not the engine's own. Talking to it is the same as root: anyone can start a container that " +
+			"mounts the host's disk and change any file.",
+		Remediation: Remediation{
+			Summary: "Restore the socket's default owner and mode.",
+			Commands: []string{
+				"sudo systemctl edit docker.socket   # SocketMode=0660, SocketGroup=docker",
+				"sudo systemctl restart docker.socket docker",
+			},
+			Caveat: "A chmod on the socket itself is lost when the engine restarts; fix it in the unit.",
+		},
+	},
 }
 
 func init() {
@@ -485,7 +553,9 @@ func Known(id string) bool {
 // applies it and the report's readout counts the checks it names.
 func (d Def) MattersMostRaises(owner string) bool {
 	if strings.HasPrefix(owner, "host:") {
-		return d.HostAccess
+		// A credential kept on the host that holds the data is the link to
+		// that data, as much as a way in (G5, docs/spec/engagement.md).
+		return d.HostAccess || d.Area == AreaSecrets
 	}
 	return d.Area == AreaIdentity || d.Area == AreaSecrets || d.Area == AreaData || d.Area == AreaExternal
 }

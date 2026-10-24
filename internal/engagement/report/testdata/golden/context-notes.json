@@ -32,6 +32,63 @@
     {
       "asset": "host:ubuntu:22",
       "complete": false,
+      "id": "creds.cloud_credentials_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "creds.env_file_exposed",
+      "instances": 0,
+      "reads": [
+        "check:creds.app_env_1",
+        "check:creds.app_env_2",
+        "check:creds.app_env_3",
+        "check:creds.app_env_4",
+        "check:creds.app_env_5"
+      ],
+      "reason": "unavailable:no_app_paths",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "creds.ssh_key_exposed",
+      "instances": 0,
+      "observations": [
+        "creds.home_files#1"
+      ],
+      "reads": [
+        "check:creds.home_files"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
+      "id": "docker.socket_exposed",
+      "instances": 0,
+      "observations": [
+        "docker.sockets#1"
+      ],
+      "reads": [
+        "check:docker.sockets"
+      ],
+      "reason": "unavailable:no_file_listed",
+      "status": "not_assessed"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": false,
       "id": "fs.world_writable_present",
       "instances": 0,
       "observations": [
@@ -159,15 +216,25 @@
         "check:net.listeners"
       ],
       "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "svc.sensitive_listens_unfiltered",
+      "instances": 0,
+      "reads": [
+        "check:net.listeners"
+      ],
+      "status": "not_matched"
     }
   ],
   "assets": [
     {
-      "bound_id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
+      "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 34,
-        "ran": 23,
+        "planned": 37,
+        "ran": 26,
         "unknown": 11
       },
       "collected": {
@@ -456,6 +523,18 @@
           "rules": [
             "svc.listens_beyond_declared"
           ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "Remote-administration services listening beyond localhost"
+          ],
+          "mark": "assessed",
+          "name": "Remote-administration services listening beyond localhost",
+          "reasons": [],
+          "rules": [
+            "svc.sensitive_listens_unfiltered"
+          ]
         }
       ]
     },
@@ -491,11 +570,11 @@
       "not_judged": [
         {
           "id": "hosts.firewall_linux",
-          "text": "the firewall on Linux hosts, apart from database ports and the services you declared"
+          "text": "the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared"
         },
         {
           "id": "hosts.listeners",
-          "text": "listening services you did not declare"
+          "text": "listening services you did not declare (on Linux hosts, apart from remote-administration ports)"
         },
         {
           "id": "hosts.admins_sudo",
@@ -523,7 +602,7 @@
         },
         {
           "id": "hosts.credential_files",
-          "text": "credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins)"
+          "text": "credential files under other names or paths, their contents, and whether they are live"
         }
       ],
       "population": {
@@ -547,6 +626,12 @@
         },
         {
           "reason": "unavailable:accounts"
+        },
+        {
+          "reason": "unavailable:no_file_listed"
+        },
+        {
+          "reason": "unavailable:no_app_paths"
         },
         {
           "reason": "unavailable:exit_error"
@@ -576,7 +661,7 @@
           "name": "Disk encryption",
           "reasons": [
             {
-              "detail": "read: 20 block devices; not read: disk.crypttab",
+              "detail": "read: 10 block devices; not read: disk.crypttab",
               "reason": "no_rule"
             }
           ]
@@ -604,19 +689,21 @@
           "asset": "host:ubuntu:22",
           "judged": [
             "whether database ports are filtered only; see Data stores",
-            "whether declared services listen beyond their audience only; see External surface"
+            "whether declared services listen beyond their audience only; see External surface",
+            "whether remote-administration ports are filtered only; see External surface"
           ],
           "mark": "assessed",
           "name": "Firewall",
           "population": {
-            "in_scope": 2,
+            "in_scope": 3,
             "kind": "rules",
-            "read": 2
+            "read": 3
           },
           "reasons": [],
           "rules": [
             "db.listens_unfiltered",
-            "svc.listens_beyond_declared"
+            "svc.listens_beyond_declared",
+            "svc.sensitive_listens_unfiltered"
           ]
         },
         {
@@ -691,7 +778,7 @@
           "name": "Privilege escalation",
           "reasons": [
             {
-              "detail": "read: 41 sudoers lines; 33 sudoers.d lines",
+              "detail": "read: 41 sudoers lines; 36 sudoers.d lines",
               "reason": "no_rule"
             }
           ]
@@ -725,6 +812,50 @@
           "reasons": [],
           "rules": [
             "fs.world_writable_present"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Credentials on disk",
+          "population": {
+            "in_scope": 7,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "creds.home_files: 5 listed files and folders",
+              "reason": "unavailable:no_file_listed"
+            },
+            {
+              "detail": ".env files",
+              "reason": "unavailable:no_app_paths"
+            }
+          ],
+          "rules": [
+            "creds.cloud_credentials_exposed",
+            "creds.env_file_exposed",
+            "creds.ssh_key_exposed"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "mark": "not_assessed",
+          "name": "Container engine",
+          "population": {
+            "in_scope": 1,
+            "kind": "rules",
+            "read": 0
+          },
+          "reasons": [
+            {
+              "detail": "docker.sockets: 0 listed files and folders",
+              "reason": "unavailable:no_file_listed"
+            }
+          ],
+          "rules": [
+            "docker.socket_exposed"
           ]
         },
         {
@@ -1117,9 +1248,9 @@
     "matters_most": [],
     "more": 0,
     "rules": {
-      "decided": 8,
-      "selected": 12,
-      "without_evidence": 4
+      "decided": 9,
+      "selected": 17,
+      "without_evidence": 8
     }
   }
 }

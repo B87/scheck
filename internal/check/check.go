@@ -126,6 +126,8 @@ const (
 	DomainLogging      Domain = "logging"
 	DomainTime         Domain = "time"
 	DomainText         Domain = "text"
+	DomainCreds        Domain = "creds"
+	DomainDocker       Domain = "docker"
 )
 
 // Check is one catalog entry. See docs/spec/host-collector.md §3 for field semantics.
@@ -163,6 +165,10 @@ type Check struct {
 	// prefix-capped): an absence in its output is not an absence on the
 	// host, so a rule over it never decides on complete evidence.
 	Sampled bool
+	// Walk marks a check that lists everything below its path parameter, so
+	// a deny_paths entry inside that tree cannot be honoured entry by entry:
+	// the runner refuses the walk (docs/spec/host-collector.md §4.1).
+	Walk bool
 }
 
 // AnyExit is the ExitOK value meaning "any exit code is a valid result".

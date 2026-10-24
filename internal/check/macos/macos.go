@@ -74,6 +74,13 @@ func init() {
 		sampled(unit(exitOK(base("fs.world_writable", "World-writable entries without the sticky bit under system prefixes (depth-capped)", check.DomainFS, check.ParseLines,
 			"find", "/usr/local", "/opt", "/etc", "/Library/LaunchDaemons", "/Library/LaunchAgents", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths")),
 
+		// Credentials on disk (G5). Not elevated: the operator's own home is
+		// what matters on a laptop; the pruned folders are the ones whose
+		// walk raises privacy prompts.
+		sampled(check.Check{ID: "creds.home_files", Description: "Private keys and cloud credential files under home directories, with the folders that stop others reaching them (names, modes and owners only, never contents; the capture also shows inode, size and time)",
+			Platform: check.MacOS, Domain: check.DomainCreds, Parser: check.ParseFindLS, Baseline: true, ExitOK: []int{0, 1},
+			Argv: check.CredFindArgv([]string{"/Users", "/var/root"}, []string{"Library", "Documents", "Desktop", "Downloads", "Pictures", "Movies", "Music", ".Trash", "node_modules", ".git"})}),
+
 		// Logging
 		elevated(base("log.status", "Unified logging configuration", check.DomainLogging, check.ParseRaw, "log", "config", "--status")),
 
