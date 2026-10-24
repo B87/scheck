@@ -1,0 +1,73 @@
+
+DOMAIN                   STATUS   CHECK                    READING
+Host identity            ran      host.hostname            mac-fixture.local
+                                                           Hostname
+Host identity            ran      host.platform_uuid       AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
+                                                           IOPlatformUUID (hashed into host.id)
+Operating system         ran      os.release               3 settings
+                                                           macOS product name, version and build
+Software updates         ran      pkg.softwareupdate       3 updates available [finding: low]
+                                                           Pending macOS software updates (cached
+                                                           scan)
+Disk encryption          ran      disk.fdesetup            FileVault is On.
+                                                           FileVault status
+System integrity         ran      integrity.csrutil        System Integrity Protection status:
+                                                           enabled.
+                                                           System Integrity Protection status
+System integrity         ran      integrity.spctl          assessments enabled
+                                                           Gatekeeper assessment status
+Firewall                 ran      fw.blockall              Firewall has block all state set to
+                                                           disabled.
+                                                           Application firewall block-all-incoming
+                                                           state
+Firewall                 ran      fw.global                Firewall is disabled. (State = 0)
+                                                           [finding: medium]
+                                                           Application firewall global state
+Firewall                 ran      fw.stealth               Firewall stealth mode is off
+                                                           Application firewall stealth mode
+Network exposure         ran      net.listeners            23 listening sockets
+                                                           Listening TCP sockets with owning process
+SSH server               skipped  sshd.config              requires elevated read
+                                                           Effective sshd configuration
+Remote access            ran      remote.launchd_disabled  10 service overrides
+                                                           launchd service overrides in the system
+                                                           domain (screensharing, RemoteDesktop,
+                                                           ftpd, smbd ...)
+Remote access            skipped  remote.login             requires elevated read
+                                                           Remote Login (sshd) setting
+Accounts                 ran      accounts.admins          GroupMembership: root alice
+                                                           Members of the admin group
+Accounts                 ran      accounts.users           134 accounts
+                                                           Local accounts with their UniqueID
+Privilege escalation     skipped  privesc.sudoers          requires elevated read
+                                                           sudoers policy
+Privilege escalation     skipped  privesc.sudoers_d        requires elevated read
+                                                           sudoers.d drop-ins (file:line, non-empty
+                                                           lines)
+Startup and persistence  ran      persist.launch_dirs      3 launchd plists
+                                                           Third-party LaunchDaemons and
+                                                           LaunchAgents
+Startup and persistence  ran      persist.launchctl        555 launchd jobs, 284 running
+                                                           Loaded launchd jobs in the session domain
+Filesystem               ran      fs.suid                  0 SUID files
+                                                           SUID binaries under local prefixes
+                                                           (depth-capped)
+Filesystem               ran      fs.world_writable        0 world-writable paths
+                                                           World-writable entries without the sticky
+                                                           bit under system prefixes (depth-capped)
+Logging and audit        skipped  log.status               requires elevated read
+                                                           Unified logging configuration
+Time synchronisation     skipped  time.ntp                 requires elevated read
+                                                           Network time synchronisation setting
+Session and shell        ran      sys.platform             Darwin
+                                                           Kernel name (uname -s), used for platform
+                                                           detection
+Session and shell        ran      sys.shell                /bin/zsh
+                                                           Login shell of the audit session
+Session and shell        ran      sys.uid                  501
+                                                           Effective uid of the audit session
+Session and shell        ran      sys.uname                Darwin mac-fixture.local 25.6.0 Darwin
+                                                           Kernel Version 25.6.0: Fri Jul 31
+                                                           19:16:36 PDT 2026; root:xnu-12377.161.14~
+                                                           5/RELE…
+                                                           Full kernel identification

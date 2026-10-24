@@ -7,7 +7,7 @@ import (
 )
 
 // Config is what a provider needs to be built: the operator's selection
-// (docs/SPEC.md §5.2, §9). Credentials are never here; an adapter reads
+// (docs/spec/model.md §3, docs/spec/host-collector.md §8). Credentials are never here; an adapter reads
 // them from the environment itself.
 type Config struct {
 	Model      string
@@ -64,18 +64,23 @@ func Providers() []Info {
 	return out
 }
 
-// Lookup returns the registration for name.
-func Lookup(name string) (Info, Factory, bool) {
+// Lookup returns the description of the provider registered as name. The
+// factory stays here: Build is the only way to construct a provider, so
+// scripts/depcheck.sh can pin who constructs one.
+func Lookup(name string) (Info, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	e, ok := registry[name]
-	return e.info, e.factory, ok
+	return e.info, ok
 }
 
 // Build constructs the named provider. A deferred provider fails here with
-// the usage message the CLI prints (docs/SPEC.md §5.2).
+// the usage message the CLI prints (docs/spec/model.md §3).
 func Build(name string, cfg Config) (Provider, error) {
-	info, f, ok := Lookup(name)
+	mu.RLock()
+	e, ok := registry[name]
+	mu.RUnlock()
+	info, f := e.info, e.factory
 	if !ok {
 		return nil, fmt.Errorf("unknown provider %q", name)
 	}

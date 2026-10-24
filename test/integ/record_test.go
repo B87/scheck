@@ -34,8 +34,8 @@ func TestRecordFixtures(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, errOut, code := containers.Run(t, bin, "ssh", "ops@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-				"--sudo", "--stop-after", "facts", "--out", filepath.Join(t.TempDir(), "facts.json"), "--record-fixtures", dir, "-v")
-			if code != 0 {
+				"--sudo", "--stop-after", "facts", "--out", filepath.Join(t.TempDir(), "facts.json"), "--no-persist", "--record-fixtures", dir, "-v")
+			if code > 1 {
 				t.Fatalf("record: %d\n%s", code, errOut)
 			}
 			t.Log(errOut)

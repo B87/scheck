@@ -12,8 +12,8 @@ import (
 	"github.com/b87/scheck/internal/runner"
 )
 
-// Store owns every finding of a run and the merge contract of docs/SPEC.md
-// §7.2 and §7.5. Phase 1 seeds it with the posture rules' findings; phase 2
+// Store owns every finding of a run and the merge contract of docs/spec/host-collector.md
+// docs/spec/host-collector.md §6.2 and §6.5. Phase 1 seeds it with the posture rules' findings; phase 2
 // hands it candidates through Report. The store validates, merges and
 // grades; the agent loop never edits a finding, which is what keeps the
 // loop one path and severity in code.
@@ -31,7 +31,7 @@ type Store struct {
 	ruledOut    []RuledOut
 }
 
-// Verdicts a report_finding call may carry (§5.7).
+// Verdicts a report_finding call may carry (docs/spec/model.md §8).
 const (
 	VerdictOpen     = "open"
 	VerdictRuledOut = "ruled_out"
@@ -47,13 +47,13 @@ func NewStore(in Input) *Store {
 	return s
 }
 
-// Candidate is what report_finding carries (§5.7, §7.3): the model
+// Candidate is what report_finding carries (docs/spec/model.md §8, docs/spec/host-collector.md §6.3): the model
 // classifies and supplies evidence; it never supplies severity, and one it
 // sends anyway is ignored, not rejected.
 type Candidate struct {
 	ID string `json:"id"`
 	// Verdict is open (the default) or ruled_out; a ruled-out candidate goes
-	// through RuleOut and is never a finding (§5.7).
+	// through RuleOut and is never a finding (docs/spec/model.md §8).
 	Verdict          string       `json:"verdict,omitempty"`
 	Note             string       `json:"note,omitempty"` // ruled_out: why the id does not apply
 	Title            string       `json:"title,omitempty"`
@@ -67,7 +67,7 @@ type Candidate struct {
 }
 
 // ServiceRef names the listener a network finding is about, so the
-// expected_services table can grade it (§6.3).
+// expected_services table can grade it (docs/spec/host-collector.md §5.3).
 type ServiceRef struct {
 	Port  int    `json:"port"`
 	Proto string `json:"proto"`
@@ -81,6 +81,17 @@ var customSlug = regexp.MustCompile(`^custom:[a-z0-9][a-z0-9_-]{2,63}$`)
 // ErrInvalid is wrapped by every validation failure Report returns, so the
 // tool can send the message back to the model as an error result.
 var ErrInvalid = errors.New("invalid finding")
+
+// hostIDs lists the catalog ids of host findings, sorted.
+func hostIDs() []string {
+	var out []string
+	for _, id := range IDs() {
+		if defs[id].Area == AreaHosts && !defs[id].MultiFact {
+			out = append(out, id)
+		}
+	}
+	return out
+}
 
 // Report validates a candidate and either merges it into an existing finding
 // with the same id or adds it as a model finding. The returned finding is
@@ -143,7 +154,7 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 			return f, fmt.Errorf("%w: a custom finding needs proposed_severity critical|high|medium|low|info", ErrInvalid)
 		}
 		if sev.Rank() > SevMedium.Rank() {
-			sev = SevMedium // capped at medium (§7.1); the grader records the cap
+			sev = SevMedium // capped at medium (docs/spec/host-collector.md §6.1); the grader records the cap
 		}
 		if c.Title == "" || c.Impact == "" || c.Remediation == nil || c.Remediation.Summary == "" {
 			return f, fmt.Errorf("%w: a custom finding needs title, impact and remediation.summary", ErrInvalid)
@@ -154,8 +165,10 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 		return f, nil
 	}
 	def, ok := Lookup(c.ID)
-	if !ok {
-		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
+	// The model reads a host: another collector's findings are not its to
+	// report, and are not offered to it.
+	if !ok || def.Area != AreaHosts || def.MultiFact {
+		return f, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if err := s.ruleAllows(def); err != nil {
 		return f, err
@@ -163,7 +176,7 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 	f.Title, f.Category, f.SeverityBase, f.Severity = def.Title, def.Category, def.BaseSeverity, def.BaseSeverity
 	f.Impact, f.Remediation = def.Impact, def.Remediation
 	// For a model-only finding the Def's text is the default and the
-	// model's, when present, replaces impact and remediation (§7.1). A rule
+	// model's, when present, replaces impact and remediation (docs/spec/host-collector.md §6.1). A rule
 	// finding keeps its curated text: merge decides that.
 	if c.Impact != "" {
 		f.Impact = c.Impact
@@ -175,7 +188,7 @@ func (s *Store) validate(c Candidate) (Finding, error) {
 }
 
 // evidence validates every cited excerpt against the exact observation it
-// names (§5.7): the observation must exist in this run with a successful
+// names (docs/spec/model.md §8): the observation must exist in this run with a successful
 // capture, and the excerpt must appear in that capture, whitespace folded.
 func (s *Store) evidence(in []Evidence) ([]Evidence, error) {
 	var out []Evidence
@@ -198,7 +211,7 @@ func (s *Store) evidence(in []Evidence) ([]Evidence, error) {
 	return out, nil
 }
 
-// RuleOut records a hypothesis the model checked and closed (§5.7). It
+// RuleOut records a hypothesis the model checked and closed (docs/spec/model.md §8). It
 // files nothing: the id must be a catalog id or a well-formed custom slug,
 // must not be a finding of this run (a rule finding is the floor and a
 // reported one is the model's own claim; a context_note is the way to
@@ -211,8 +224,8 @@ func (s *Store) RuleOut(c Candidate) (RuledOut, error) {
 		if !customSlug.MatchString(c.ID) {
 			return r, fmt.Errorf("%w: a custom id is custom:<slug> with [a-z0-9_-], 3..64 characters", ErrInvalid)
 		}
-	} else if _, ok := Lookup(c.ID); !ok {
-		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(IDs(), ", "))
+	} else if def, ok := Lookup(c.ID); !ok || def.Area != AreaHosts || def.MultiFact {
+		return r, fmt.Errorf("%w: unknown finding id %q; use a catalog id (%s) or custom:<slug>", ErrInvalid, c.ID, strings.Join(hostIDs(), ", "))
 	}
 	if i, seen := s.byID[c.ID]; seen {
 		return r, fmt.Errorf("%w: %s is a %s finding of this run and cannot be ruled out; report it with a context_note to qualify it", ErrInvalid, c.ID, s.findings[i].Source)
@@ -242,7 +255,7 @@ func (s *Store) RuleOut(c Candidate) (RuledOut, error) {
 }
 
 // ruleAllows applies what the posture rules already know to a catalog id the
-// model wants to report (docs/SPEC.md §7.5). A rule-covered id belongs to
+// model wants to report (docs/spec/host-collector.md §6.5). A rule-covered id belongs to
 // the rule on its platform: an id whose rules are all bound to another
 // platform does not exist on this host; an id whose rule read complete
 // evidence and found it not matched cannot be re-raised by the model from
@@ -290,7 +303,7 @@ func (s *Store) disproved(id string) (Assessment, bool) {
 	return Assessment{}, false
 }
 
-// merge folds a validated model candidate into an existing finding (§7.5):
+// merge folds a validated model candidate into an existing finding (docs/spec/host-collector.md §6.5):
 // a rule finding keeps source, title, impact, remediation and confidence;
 // validated evidence and an attributed note append without duplicates.
 // A model finding merging into a model finding keeps the first text and
@@ -373,7 +386,7 @@ func (s *Store) Findings() []Finding {
 const listenersCheck = "net.listeners"
 
 // expectedMissing compares the declared services with the listeners fact
-// (§6.3). It is a negative claim, so it needs complete evidence: an
+// (docs/spec/host-collector.md §5.3). It is a negative claim, so it needs complete evidence: an
 // unavailable or partial listeners fact leaves it not assessed.
 func (s *Store) expectedMissing() ([]Finding, *Assessment) {
 	ctx := s.Grader.Context

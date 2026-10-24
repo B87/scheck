@@ -11,10 +11,11 @@ import (
 	"github.com/b87/scheck/internal/version"
 )
 
-// globalOpts holds every flag from docs/SPEC.md §8. Flags that belong to a later
+// globalOpts holds every flag from docs/spec/host-collector.md §7. Flags that belong to a later
 // milestone, or to a stage this build does not run, are registered so the
 // surface is stable, and rejected at run time.
 type globalOpts struct {
+	Vantage         string
 	IncludeEvidence bool
 	Format          string
 	Out             string
@@ -44,12 +45,12 @@ type globalOpts struct {
 }
 
 // unavailableFlags lists the flags that exist for surface stability but
-// have no implementation in this build (docs/SPEC.md §8). Setting any of
+// have no implementation in this build (docs/spec/host-collector.md §7). Setting any of
 // them is a usage error, never a silent no-op.
 var unavailableFlags = []string{"only", "local-only"}
 
 // modelFlags select and configure an inference provider. The model-assessed
-// pass did not earn its place in 0.0.1 (docs/SPEC.md §2.1, recorded in
+// pass did not earn its place in 0.0.1 (docs/spec/host-collector.md §2.1, recorded in
 // docs/eval/phase2-results.md), so `local` and `ssh` assess with the posture
 // rules alone and reject these flags rather than accepting them and
 // quietly ignoring them. They still configure `scheck providers` and the
@@ -80,7 +81,7 @@ func newRootCmd() *cobra.Command {
 	opts := &globalOpts{}
 	root := &cobra.Command{
 		Use:           "scheck",
-		Short:         "Read-only security posture check of a macOS or Linux host",
+		Short:         "A security consultant in a CLI: read-only engagements, starting with hosts",
 		Version:       version.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -102,11 +103,11 @@ func newRootCmd() *cobra.Command {
 	pf.IntVar(&opts.MaxContext, "max-context", 0, "declare the model's context window in tokens when the adapter cannot know it")
 	pf.StringArrayVar(&opts.Context, "context", nil, "operator context: FILE | DIR | note:TEXT | target[:PATH] (repeatable)")
 	pf.BoolVar(&opts.IgnoreCtx, "ignore-context", false, "read no operator context: no severity adjustment")
-	pf.StringVar(&opts.StopAfter, "stop-after", "", "context|plan|facts: print that stage and exit")
+	pf.StringVar(&opts.StopAfter, "stop-after", "", "run: intake|scope|recon|plan|check|analyze|report; print that stage and exit")
 	pf.StringVar(&opts.AuditLog, "audit-log", "", "append a JSONL audit line per attempted check to PATH")
-	pf.StringVar(&opts.StateDir, "state-dir", "", "where run artifacts are persisted")
-	pf.BoolVar(&opts.NoPersist, "no-persist", false, "do not persist the run envelope")
-	pf.DurationVar(&opts.Timeout, "timeout", 0, "whole-run timeout (default 5m)")
+	pf.StringVar(&opts.StateDir, "state-dir", "", "where run directories are kept")
+	pf.BoolVar(&opts.NoPersist, "no-persist", false, "write no run directory; the report goes to stdout only")
+	pf.DurationVar(&opts.Timeout, "timeout", 0, "with --host: the host collector's run timeout (default 5m)")
 	pf.CountVarP(&opts.Verbose, "verbose", "v", "verbose output (-v, -vv)")
 	pf.StringVar(&opts.RecordFixtures, "record-fixtures", "", "developer: record every exec into DIR as a fixture")
 	_ = pf.MarkHidden("record-fixtures")
@@ -118,14 +119,16 @@ func newRootCmd() *cobra.Command {
 		pf.Lookup(name).Usage += " (providers and the evaluation harness only in this build)"
 	}
 	pf.Lookup("format").Usage = "output format: text|json (sarif not available in this build)"
-	pf.Lookup("stop-after").Usage = "context|plan|facts: print that stage and exit"
-	root.Long = "Read-only host evidence collection, assessed by the compiled-in posture rules.\n" +
-		"No model assesses a host in this build, so no API key is needed and nothing a check\n" +
-		"observed leaves the machine (docs/SPEC.md §2.1).\n" +
-		"Exit codes: 0 no finding at or above the profile threshold (not a claim of full\n" +
-		"coverage — read the assessments and skipped checks), 1 findings, 2 incomplete run,\n" +
-		"3 usage/policy error. JSON goes to stdout; diagnostics to stderr."
-	root.Example = "  scheck local --format json --no-persist\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
+	root.Long = "scheck init interviews the operator and writes an engagement file. scheck run takes\n" +
+		"that file, or --host for one host, and reports what was checked, what was not, and what to\n" +
+		"fix first. It only reads: nothing is probed, scanned or changed, and no model assesses\n" +
+		"anything in this build, so no API key is needed (docs/spec/engagement.md). scheck local and\n" +
+		"scheck ssh are deprecated aliases of scheck run --host, removed in 0.0.3.\n" +
+		"Exit codes: 0 no open finding at or above threshold (not a clean result: read what\n" +
+		"was not checked), 1 findings, 2 incomplete run, 3 usage/policy/canary error.\n" +
+		"The report goes to stdout; diagnostics to stderr. scheck init contacts nothing and exits 0\n" +
+		"when it has written the file, or 3 when an answer or the file is refused."
+	root.Example = "  scheck init\n  scheck run --host local\n  scheck run engagement.yaml --format json\n  scheck catalog --format json\n  scheck explain sshd.config --format json"
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if opts.Format != "text" && opts.Format != "json" {
 			return usageErr("--format must be text|json; sarif is not available in this build")
@@ -135,19 +138,27 @@ func newRootCmd() *cobra.Command {
 		}
 		// The default run and --stop-after facts collect the same facts, so
 		// both may carry the optional diagnostics; plan and context have none.
-		if opts.IncludeEvidence && (opts.Format != "json" || (opts.StopAfter != "" && opts.StopAfter != "facts") || (cmd.Name() != "local" && cmd.Name() != "ssh")) {
-			return usageErr("--include-evidence requires local or ssh with --format json, and no --stop-after other than facts")
+		// On run, the report embeds each host's envelope and carries them there.
+		switch {
+		case !opts.IncludeEvidence:
+		case cmd.Name() == "run":
+			if opts.Format != "json" || (opts.StopAfter != "" && opts.StopAfter != "report") {
+				return usageErr("--include-evidence on run requires --format json and no --stop-after other than report")
+			}
+		case opts.Format != "json" || (opts.StopAfter != "" && opts.StopAfter != "facts") || (cmd.Name() != "local" && cmd.Name() != "ssh"):
+			return usageErr("--include-evidence requires scheck run (or its local and ssh aliases) with --format json")
 		}
 		return nil
 	}
 	root.AddCommand(
 		newLocalCmd(opts),
 		newSSHCmd(opts),
+		newRunCmd(opts),
+		newInitCmd(opts),
 		newCatalogCmd(opts),
 		newExplainCmd(opts),
 		newSudoersCmd(opts),
 		newProvidersCmd(opts),
-		newConfigCmd(opts),
 		newEvalCmd(opts),
 	)
 	return root

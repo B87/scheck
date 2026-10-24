@@ -3,13 +3,13 @@ package report
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
-	"github.com/b87/scheck/internal/llm"
 	"github.com/b87/scheck/internal/operator"
 )
 
@@ -18,12 +18,12 @@ import (
 // coverage array; 1.2 fills `run.context_sources` from operator context;
 // 1.3 grades findings through operator context (adjustments, accepted
 // status, context-derived findings); 1.4 fills the provider block and
-// `run.agent` from phase 2 and carries model findings (docs/SPEC.md §7.4).
+// `run.agent` from phase 2 and carries model findings (docs/spec/host-collector.md §6.4).
 // 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.6"
+const SchemaVersion = "1.7"
 
-// Envelope is the JSON report (docs/SPEC.md §7.4), shaped so a fleet tool can
+// Envelope is the JSON report (docs/spec/host-collector.md §6.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
 type Envelope struct {
 	SchemaVersion string                 `json:"schema_version"`
@@ -33,13 +33,13 @@ type Envelope struct {
 	Observations  map[string]Observation `json:"observations"`
 	// Assessments is one entry per selected posture rule, findings or not:
 	// coverage is reported separately from findings, because "no finding"
-	// and "not assessed" are different answers (docs/SPEC.md §7.5).
+	// and "not assessed" are different answers (docs/spec/host-collector.md §6.5).
 	Assessments []finding.Assessment `json:"assessments"`
 	Findings    []finding.Finding    `json:"findings"`
 }
 
 // OpenFindings counts the open findings at or above the profile threshold:
-// the number that makes the run exit 1 (docs/SPEC.md §8).
+// the number that makes the run exit 1 (docs/spec/host-collector.md §7).
 func (e Envelope) OpenFindings(p check.Profile) int {
 	return finding.OpenAtOrAbove(e.Findings, finding.Threshold(p))
 }
@@ -81,9 +81,9 @@ type Run struct {
 	Provider       *string           `json:"provider"`
 	Model          *string           `json:"model"`
 	Effort         *string           `json:"effort"`
-	Native         *llm.Native       `json:"native"`
-	Limits         *llm.Limits       `json:"limits"`
-	Usage          llm.Usage         `json:"usage"`
+	Native         *ModelNative      `json:"native"`
+	Limits         *ModelLimits      `json:"limits"`
+	Usage          ModelUsage        `json:"usage"`
 	PromptVersion  string            `json:"prompt_version,omitempty"`
 	Agent          *AgentRun         `json:"agent,omitempty"`
 	ContextSources []operator.Source `json:"context_sources"`
@@ -92,7 +92,7 @@ type Run struct {
 	Version        string            `json:"scheck_version"`
 }
 
-// AgentRun is how phase 2 ended (docs/SPEC.md §5.6): a pass that hit any
+// AgentRun is how phase 2 ended (docs/spec/model.md §7): a pass that hit any
 // budget is incomplete and says which one.
 type AgentRun struct {
 	Iterations int    `json:"iterations"`
@@ -103,20 +103,45 @@ type AgentRun struct {
 	// through the same escaping as target output.
 	Text string `json:"text,omitempty"`
 	// RuledOut lists the ids the model checked and closed with
-	// report_finding's ruled_out verdict (docs/SPEC.md §5.7). None is a
+	// report_finding's ruled_out verdict (docs/spec/model.md §8). None is a
 	// finding; they are shown with the summary so a reader sees what was
 	// looked at and dismissed.
 	RuledOut []finding.RuledOut `json:"ruled_out,omitempty"`
 }
+
+// ModelNative, ModelLimits and ModelUsage are llm.Native, llm.Limits and
+// llm.Usage field for field, so a caller converts with ModelNative(p.Native()).
+// The envelope declares them itself because the engagement embeds it, and
+// nothing under internal/engagement may have the model path in its
+// dependency graph (AGENTS.md, "Layout").
+type (
+	ModelNative struct {
+		ToolCalling       bool `json:"tool_calling"`
+		ParallelToolCalls bool `json:"parallel_tool_calls"`
+		PromptCaching     bool `json:"prompt_caching"`
+		Reasoning         bool `json:"reasoning"`
+	}
+	ModelLimits struct {
+		MaxContext int  `json:"max_context"`
+		Local      bool `json:"local"`
+	}
+	ModelUsage struct {
+		Input      int      `json:"input"`
+		Output     int      `json:"output"`
+		CacheRead  int      `json:"cache_read"`
+		CacheWrite int      `json:"cache_write"`
+		CostUSD    *float64 `json:"cost_usd"`
+	}
+)
 
 // Phase2 is what the caller knows after the agent ran.
 type Phase2 struct {
 	Provider      string
 	Model         string
 	Effort        string
-	Native        llm.Native
-	Limits        llm.Limits
-	Usage         llm.Usage
+	Native        ModelNative
+	Limits        ModelLimits
+	Usage         ModelUsage
 	Mode          string // agent | single-pass
 	PromptVersion string
 	Agent         AgentRun
@@ -134,10 +159,10 @@ type Meta struct {
 	Profile   string
 	Version   string
 	// Disabled is config `disable_checks`: a rule whose check was disabled is
-	// not assessed, and says so (docs/SPEC.md §7.5).
+	// not assessed, and says so (docs/spec/host-collector.md §6.5).
 	Disabled []string
 	// Context is the merged operator context, or nil under --ignore-context
-	// or when none was supplied (docs/SPEC.md §6).
+	// or when none was supplied (docs/spec/host-collector.md §5).
 	Context *operator.Merged
 	// Result, when set, is the finding store's graded outcome (phase 2 adds
 	// model findings to it). When nil, Build grades the posture rules'
@@ -145,13 +170,13 @@ type Meta struct {
 	Result *finding.Result
 	// Now is the grader's clock for accepted-risk expiry; zero means now.
 	Now time.Time
-	// Phase2 is set after the agentic pass ran (docs/SPEC.md §7.4).
+	// Phase2 is set after the agentic pass ran (docs/spec/host-collector.md §6.4).
 	Phase2 *Phase2
 }
 
-// Grader builds the severity chain from the meta's context (docs/SPEC.md
-// §7.2): nil context means unadjusted, which under --ignore-context is a
-// precise claim (§6.4).
+// Grader builds the severity chain from the meta's context (docs/spec/host-collector.md
+// docs/spec/host-collector.md §6.2): nil context means unadjusted, which under --ignore-context is a
+// precise claim (docs/spec/host-collector.md §5.4).
 func (m Meta) Grader() finding.Grader {
 	g := finding.Grader{Now: m.Now}
 	if m.Context != nil && !m.Context.Structured.IsZero() {
@@ -163,14 +188,47 @@ func (m Meta) Grader() finding.Grader {
 
 // Build assembles the envelope from a fact sheet.
 func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
-	prof, _ := check.ParseProfile(meta.Profile)
 	assessed := meta.Result
 	if assessed == nil {
-		store := finding.NewStore(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
-		store.Grader = meta.Grader()
-		r := store.Result()
+		r := assess(sheet, meta)
 		assessed = &r
 	}
+	return build(sheet, meta, assessed)
+}
+
+// Evidence is the envelope of what was read, assessed by nothing: facts,
+// observations, host and run, with no assessment, finding or context. The
+// engagement keeps it and grades it in Analyze (docs/spec/runs.md,
+// "Verdicts are not evidence"). Assess(Evidence(s, m), s, m) is Build(s, m)
+// for a run with no phase 2.
+func Evidence(sheet *baseline.FactSheet, meta Meta) Envelope {
+	meta.Context, meta.Phase2 = nil, nil
+	return build(sheet, meta, &finding.Result{Findings: []finding.Finding{}, Assessments: []finding.Assessment{}})
+}
+
+// Assess is env with the posture rules evaluated over sheet, its facts, and
+// graded through meta's context, whose sources and warnings it records.
+// Every other field of env is kept as it was.
+func Assess(env Envelope, sheet *baseline.FactSheet, meta Meta) Envelope {
+	r := assess(sheet, meta)
+	env.Assessments, env.Findings = r.Assessments, r.Findings
+	env.Run.ContextSources = []operator.Source{}
+	if meta.Context != nil {
+		env.Run.ContextSources = append(env.Run.ContextSources, meta.Context.Sources...)
+		// Context warnings come first, as Build orders them.
+		env.Run.Warnings = append(slices.Clone(meta.Context.Warnings), env.Run.Warnings...)
+	}
+	return env
+}
+
+func assess(sheet *baseline.FactSheet, meta Meta) finding.Result {
+	prof, _ := check.ParseProfile(meta.Profile)
+	store := finding.NewStore(finding.Input{Sheet: sheet, Profile: prof, Disabled: meta.Disabled})
+	store.Grader = meta.Grader()
+	return store.Result()
+}
+
+func build(sheet *baseline.FactSheet, meta Meta, assessed *finding.Result) Envelope {
 	env := Envelope{
 		SchemaVersion: SchemaVersion,
 		Facts:         FactsFrom(sheet),
@@ -193,7 +251,11 @@ func Build(sheet *baseline.FactSheet, meta Meta) Envelope {
 		env.Run.ContextSources = append(env.Run.ContextSources, meta.Context.Sources...)
 		env.Run.Warnings = append(env.Run.Warnings, meta.Context.Warnings...)
 	}
-	if sheet.Incomplete {
+	switch {
+	case sheet.Lost != "":
+		env.Run.Status = "incomplete"
+		env.Run.Warnings = append(env.Run.Warnings, "the connection was lost before every baseline check ran: "+sheet.Lost)
+	case sheet.Incomplete:
 		env.Run.Status = "incomplete"
 		env.Run.Warnings = append(env.Run.Warnings, "run timed out before every baseline check ran")
 	}

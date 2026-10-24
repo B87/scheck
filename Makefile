@@ -19,7 +19,7 @@ lint:
 	golangci-lint run ./...
 
 # agent, policy, check, finding and report must not depend on any provider
-# adapter or SDK (docs/SPEC.md §5.1).
+# adapter or SDK (docs/spec/model.md §2).
 depcheck:
 	./scripts/depcheck.sh
 
@@ -34,7 +34,7 @@ integ:
 live:
 	SCHECK_LIVE=1 go test -tags live -count=1 -v ./test/live/
 
-# The R3 pre-flight recall probe (docs/ROADMAP-RESEARCH.md): needs
+# The Jev recall probe (docs/spec/bounded.md): needs
 # TYPESAFE_API_KEY, spends a fraction of a cent, sends recorded fixture data only.
 probe:
 	SCHECK_LIVE=1 go test -tags live -count=1 -v -run TestJevVendorRecallProbe ./test/live/

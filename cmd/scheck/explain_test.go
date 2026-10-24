@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/b87/scheck/internal/check"
-	_ "github.com/b87/scheck/internal/check/all" // the complete catalog
 	"github.com/b87/scheck/internal/report"
 )
 
@@ -27,7 +26,7 @@ func explain(t *testing.T, args ...string) (string, error) {
 }
 
 // explain prints one catalog entry verbatim: the literal argv, the parser,
-// the elevation and the typed parameters (docs/SPEC.md §8).
+// the elevation and the typed parameters (docs/spec/host-collector.md §7).
 func TestExplainShowsTheWholeEntry(t *testing.T) {
 	out, err := explain(t, "sshd.config")
 	if err != nil {

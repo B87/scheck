@@ -1,67 +1,153 @@
 # scheck
 
-A read-only security posture checker for one macOS or Linux host, locally or over
-SSH. Every target command comes from a compiled catalog and runs through the same
-policy, redaction and audit path. scheck never applies hardening changes: it changes
-no configuration, package, unit, credential or security state. Three of its commands
-leave a record of their own invocation — `dnf check-update` writes a package-manager
-cache, `sudo -n --` writes its timestamp directory, and `ufw status` takes a lock file.
-They are listed in [docs/SPEC.md §1](docs/SPEC.md) and the integration suite asserts
-that nothing else on the target changes.
+A security consultant in a CLI, starting with hosts. `scheck run` takes an engagement
+file, or `--host` for one machine, reads what it is allowed to read, and writes a
+report that says what was checked, what was not and why, and what to fix first. It only
+reads: every command on a host comes from a compiled catalog and runs through the same
+policy, redaction and audit path, and scheck changes no configuration, package, unit,
+credential or security state. Three of its commands leave a record of their own
+invocation — `dnf check-update` writes a package-manager cache, `sudo -n --` writes its
+timestamp directory, and `ufw status` takes a lock file. They are listed in
+[docs/spec/host-collector.md §1](docs/spec/host-collector.md) and the integration suite
+asserts that nothing else on the target changes.
 
-**Current build:** collects facts, assesses them with compiled-in posture rules and
-grades findings through operator context. A rule reads one fact, so exit 0 and an empty
-findings list mean no rule fired — not that the host is secure; read the `assessments`
-coverage and the skipped checks. **No model assesses a host:** a model-assessed pass
-exists in the codebase and was measured against criteria frozen before it was built,
-did not earn its cost, and is therefore not part of this build — the evaluation and the
-reasoning are recorded in
-[docs/eval/phase2-results.md](docs/eval/phase2-results.md). A run needs no API key and
-sends nothing a check observed off the machine. This project is unreleased; interfaces
-may change before the first GitHub release.
+**This build (0.0.2, in development):** the engagement runs its stages (intake, scope,
+recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
+of an unbuilt kind (such as GCP) is recorded as *not read by this
+version* and makes the run exit 2; its collectors arrive with the
+[roadmap](docs/ROADMAP.md). Scope lists the names under a `domain` root from
+certificate transparency (`crt.sh`) and DNS, contacting no server of yours. Recon then
+reads the root's DNS and mail records and, for each name Scope chose, the certificate
+and the front page over https and http. Its DNS rules judge what was read: a record
+pointing at a name that does not exist, a public name publishing a private address,
+and provider fingerprints for possible subdomain takeover or an unconfigured service
+with an ownership-verification policy. Wildcards are filed once, with matching
+undeclared names grouped; declared names keep their own reads and judgments.
+A takeover candidate is not proof that someone can claim the name; provider caveats
+and services with no fingerprint are listed. Email rules judge published DMARC and SPF
+policies, compare recognized SPF services with declared senders, and check declared
+DKIM keys. The report shows mail context and missing evidence; DNS does not establish
+actual delivery, alignment or whether a selector signs current mail. DMARC uses legacy
+organizational-domain fallback and sampling; current receiver tree walking is not
+assessed. TLS rules judge the one observed negotiation and certificate. Declared
+and first-party sites also get entry-point, header, cookie, HTTP and security-contact
+rules; version and secret rules cover every read name. URL roots are read, with the
+two well-known files and one admitted same-host redirect, without crawling. Declared
+URL assets contained by a URL root are exact entry points using its authority and
+count as read with that root. URL-only TLS and response judgments use captured
+evidence without requiring a domain-discovery resolver control. Coverage
+preserves unknown evidence and the unread login flow; browser HTTPS-only exceptions
+use a pinned whole-TLD list. `--vantage internet|vpn|lan` declares this invocation's
+network position; `internet` means outside every permitted source, including office
+allowlists and VPN. Restricted URL findings require that declaration and observed
+reachability; they do not establish an authentication bypass. The report's "What left this machine" says what was sent where.
+GitHub organization roots get principal, organization, membership, member/owner,
+collaborator, invitation and repository inventory through compiled GET reads, using
+`GITHUB_TOKEN` or `GH_TOKEN`. Counts describe what the token revealed; permissions
+and repository visibility can leave gaps even after every page is read. GitHub
+identity and repository-access rules judge recognized evidence, including owner/MFA
+gaps, departed access, public intent, production outside admins and writable deploy
+keys. CI configuration rules assess organization/repository token defaults,
+default-branch protection presence, dependency pinning and requested privileged
+execution at the default-branch commit. Unsupported syntax and missing evidence
+remain gaps. Secret metadata identifies organization sharing policy; Dependabot
+and secret-scanning rules assess provider-reported alerts without testing deployed
+exploitability or credential usability. Values are omitted before persistence.
+An absolute repository `checkout` selects an operator-provided SHA-1 bare mirror.
+The confined reader scans supported history without invoking Git or modifying it,
+retains only detector markers and locations, and compares fresh GitHub branch/pull
+refs. Missing mirrors, unsupported data and partial reads remain coverage gaps.
+Runtime enforcement and runner access remain unassessed. Recon prints unattributed accounts
+with empty kinds for the operator to complete. A changed principal on resume is reported;
+unknown principals, including installation tokens, reuse no authenticated results.
+Google Workspace roots get verified tenant binding, domain and alias inventory,
+organizational units and customer-bound user inventory. Unit exclusions are applied
+before evidence is retained. The supported credential types are local Google
+`authorized_user` or `service_account` ADC files; service accounts require an existing
+approved delegated subject in `SCHECK_WORKSPACE_SUBJECT`. No delegation is configured
+by scheck. Identity and administrator rules cover declared administrators, account
+attribution, departed accounts and reported sign-in inactivity, super-admin counts
+and suspended
+accounts retaining assignments. Supported direct and indirect grants are read per
+admitted user; group membership paths and effective permissions are not tested.
+2-step verification is judged from Google's current per-account enforcement and
+enrollment flags, never from unit policy, grace periods or another identity provider.
+With `SCHECK_WORKSPACE_PROFILE=directory_oauth` or `directory_oauth_mail`, and an approved
+`admin.directory.user.security` permission, a separate one-scope token reads each
+account's OAuth grants and reports apps holding broad scopes; the default profile does
+not read them. With `SCHECK_WORKSPACE_PROFILE=directory_mail` (or `directory_oauth_mail`), a service
+account whose domain-wide delegation includes `gmail.readonly`, and a current
+`authorization.mailboxes` entry in the engagement file for that tenant, scheck signs in as
+each active mailbox in turn and reads only its automatic forwarding setting and forwarding
+filters, never a message, and reports forwarding to addresses outside the verified domains.
+The entry records who approved it and when it expires; it holds no credential. Without a
+current entry, no mailbox is signed in as and the report says so.
+A personal sign-in cannot do this. Domain-wide delegation and the Admin console's forwarding
+setting remain unassessed. Unknown callers and verified
+delegated callers reuse no authenticated Workspace reads on resume.
+Findings come from compiled-in rules: a host's posture rules, graded through the
+context the engagement declares, the GitHub collector's identity, repository-access, CI configuration, provider-alert and mirror credential
+rules, the Workspace collector's identity, administrator, 2-step verification, OAuth grant and mail forwarding rules, and the web
+collector's DNS, email, TLS and response rules. They judge the
+collected evidence, so a short list of findings and exit 0 mean no rule fired — not
+that anything is secure; the
+report's coverage says what was not checked. **No model assesses anything:** a
+model-assessed pass exists in the codebase, was measured against criteria frozen
+before it was built, did not earn its cost, and is not part of this build
+([docs/eval/phase2-results.md](docs/eval/phase2-results.md)). A run needs no API key and
+sends nothing it read off the machine. v0.0.1, the host checker, is released; see
+[Installation](#installation).
+
+`scheck local` and `scheck ssh` are the 0.0.1 commands. In this build they are
+deprecated aliases of `scheck run --host local` and `scheck run --host user@host`,
+removed in 0.0.3, and scheck reads no configuration file: a 0.0.1 `scheck.yaml` makes a
+run exit 3, naming where each of its keys now lives
+([docs/spec/engagement.md](docs/spec/engagement.md), "One command, one file").
+
+See [docs/VISION.md](docs/VISION.md) for where scheck is going: an engagement across
+cloud accounts, SaaS tools, repositories, hosts and websites, driven by what you tell it
+about your setup.
 
 ## How a run works
 
-`scheck local` and `scheck ssh` build one session and then follow the same path.
-The catalog is the only command surface, and the runner is the only code that
-executes a check. Posture rules read the fact sheet the run produces and do not
-execute anything. Operator context grades the findings. No model is on this path.
-
 ```mermaid
 flowchart TD
-  cli["scheck local or scheck ssh"] --> config["config<br/>narrows checks, paths and redaction"]
+  input["engagement.yaml, or --host"] --> intake["intake<br/>validate; no credential in the file"]
+  intake --> scope["scope<br/>the declared roots, minus exclude;<br/>domain names from crt.sh and DNS"]
+  scope --> recon["recon<br/>one collector per asset"]
 
-  config --> transport{"target"}
-  transport -->|this machine| local["local<br/>os/exec, argv only, no shell"]
-  transport -->|over SSH| ssh["ssh<br/>strict host key, then sys.canary"]
+  recon -->|host| host["host collector<br/>local, or SSH: strict host key, then sys.canary"]
+  recon -->|domain root| web["web collector, through the scope gate<br/>DNS rules: dangling records, private addresses, takeover"]
+  recon -->|any other kind| none["not read by this version<br/>collector_not_built"]
 
-  catalog["catalog<br/>compiled checks, literal argv"] --> plan["baseline plan<br/>this platform, minus disabled checks"]
-  local --> plan
-  ssh --> plan
-
-  plan --> bind
-
+  catalog["catalog<br/>compiled checks, literal argv"] --> host
   subgraph runner ["runner: the only exec path"]
     bind["bind typed arguments"] --> pathpol["path policy"]
     pathpol --> elevate["elevation<br/>none, sudo -n, or already root"]
     elevate --> execn["budgeted exec on the target"]
     execn --> redact["redact, then truncate"]
-    redact --> parsed["extract and parse"]
-    parsed --> audit["audit log"]
+    redact --> audit["audit log"]
   end
+  host --> bind
 
-  audit --> sheet["fact sheet"]
-  sheet --> rules["posture rules<br/>one fact each, no execution"]
-  context["operator context<br/>role, exposure, accepted risks"] --> grade["grader"]
-  rules --> grade
-  grade --> report["report<br/>facts, assessments, findings"]
-  report --> rendered["text or JSON"]
-  report --> state["state directory"]
+  audit --> analyze["analyze<br/>posture rules, one fact each;<br/>graded through the asset's context"]
+  none --> report
+  web --> report
+  analyze --> report["report<br/>coverage, fix these first, findings,<br/>what was not checked, exit code"]
+  report --> out["stdout: text or JSON"]
+  report --> rundir["run directory<br/>report.txt, report.json, audit.jsonl, evidence/"]
 ```
 
-A context file that lives on the target is read before the baseline, through the
-runner, as the `text.cat` check. The state directory copy is skipped with
-`--no-persist`. An SSH canary mismatch stops the run before any other command.
+An SSH canary mismatch stops that host before any other command; the other assets are
+still read and the run exits 3. Every stage writes its document into the run directory
+(`<state-dir>/engagements/<name>/<started>/`, created 0700 and locked);
+`--no-persist` writes nothing and the report goes to stdout only; it is for host runs
+only, since the audit log is the record of what was sent. `scheck run` on that
+directory resumes a stopped run: what an earlier session read completely is kept, and
+everything else is read again. Changed mail declarations refresh their DNS records
+and dependent follow-ups; changed intent role or audience refreshes the exact URL.
+Unchanged successes retain their observation time. Give `--vantage` on each invocation,
+including resume; changing it refreshes web and DNS evidence, without recollecting hosts.
 
 ## Installation
 
@@ -102,56 +188,86 @@ With the Go toolchain required by [go.mod](go.mod):
 
 ```sh
 make build
-bin/scheck local --no-persist                                # facts + posture rules; no model, no key
-bin/scheck ssh user@host --no-persist
-bin/scheck local --context hosts/gateway.yaml                # grade the findings through context
-bin/scheck local --stop-after plan                           # what it would run, without running it
-bin/scheck config show                                       # effective settings with provenance
+bin/scheck run --host local                                  # this machine; the engagement report
+bin/scheck run --host deploy@203.0.113.5 --identity ~/.ssh/deploy --sudo
+bin/scheck run --host deploy@10.0.4.12 --jump ops@bastion.example.com   # through one SSH hop; nothing runs on it
+bin/scheck run --host local -v                               # plus the host's fact sheet
+bin/scheck run --host deploy@203.0.113.5 --write-engagement engagement.yaml   # contacts nothing
+bin/scheck init                                              # interview; writes engagement.yaml; contacts nothing
+bin/scheck init engagement.yaml                              # asks only what that file does not answer
+bin/scheck run engagement.yaml --stop-after intake           # validate and print it resolved
+bin/scheck run engagement.yaml                               # every stage, through the report
+bin/scheck run ~/.local/state/scheck/engagements/<name>/<started>   # resume that run
+bin/scheck catalog --profile hardened                        # every check, without running any
 ```
 
-Operator context (`--context FILE|DIR|note:TEXT|target[:PATH]`, a `context:` block in
-`scheck.yaml`, files under `.scheck/context/`) declares the host's role, exposure,
-expected services and accepted risks; findings are graded through it with every
-change attributed, and `scheck explain FINDING-ID --exposure internet` shows the
-chain. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and the annotated
-[scheck.example.yaml](scheck.example.yaml).
+`scheck init` writes an engagement file from an interview and contacts nothing. It reads no
+flags. With a path, it asks only what the file does not answer, and a file from
+`--write-engagement` is a valid start. End each answer with a line that contains
+only a dot. The file names people, people who have left, and accepted weaknesses,
+and it stays out of public repositories.
 
-SSH uses strict host-key verification and key/agent authentication. Checks needing
+An engagement file declares the roots to read, each host's reach (`identity`,
+`elevate`, `profile`, `timeout`), what to leave out (`exclude`, `disable_checks`,
+`deny_paths`, `redact_extra`), the host's context (`role`, `exposure`, `environment`,
+`expected_services`) and the risks accepted at a readout (`intent.accepted_risks`).
+`--write-engagement` writes the one `--host` builds as a starting point. Each finding in
+the report carries a ready-to-paste `accepted_risks` entry for the risks you decide not
+to fix. The file's schema and every key are in
+[docs/spec/engagement.md](docs/spec/engagement.md); it never holds a credential, and a
+file that does is refused without the value being quoted.
+
+SSH uses strict host-key verification and key or agent authentication. Checks needing
 privileges are unavailable unless the session is root or authorized non-interactive
-sudo is enabled with `--sudo`. scheck never asks for a password.
+sudo is enabled (`--sudo`, or `elevate: sudo` in the file); `scheck sudoers` prints the
+least-privilege fragment. On Linux the listening-socket read is one of them, so the
+database rule `db.listens_unfiltered` needs `--sudo`. scheck never asks for a password.
 
 ## AI agents and automation
 
 ```sh
-bin/scheck local --format json --no-persist
-bin/scheck local --format json --include-evidence --no-persist
+bin/scheck run --host local --format json
+bin/scheck run --host local --format json --include-evidence --no-persist   # captures on stdout, nothing kept
+bin/scheck run engagement.yaml --format json
 bin/scheck catalog --platform linux --format json
 bin/scheck explain sshd.config --format json
-bin/scheck local --stop-after plan --format json
+bin/scheck explain sshd.password_auth_enabled --exposure internet --format json
 ```
 
-Read stdout, stderr and the exit code separately. Exit 1 means a posture rule found
-something at or above the profile threshold; the report is still written. JSON declares
-`run.assessment: "rules"` and carries `findings` plus an `assessments` entry per
-selected rule (`matched`, `not_matched`, `not_applicable`, `not_assessed`); each fact
-includes a one-line `summary`, its status and whether execution was attempted. A typed
-fact's records are at `parsed.items`, with `parsed.partial` when the output was
-incomplete. Optional evidence is redacted, bounded and extraction-filtered.
-Use `--out report.json` to save the report. `--no-persist` disables the additional
-state-directory artifact, not an explicit output file or audit log.
+Read stdout, stderr and the exit code separately. With `--format json`, stdout is the
+engagement report ([docs/engagement-report-schema.json](docs/engagement-report-schema.json)),
+the same bytes as the run directory's `report.json`. `exit.code` and `exit.reasons` say
+why the run exits as it does: 3 when a host refused us (host key, access, canary), 2
+when a declared root was not read or a collection was cut short, 1 when an open finding
+is at or above its asset's threshold, in that precedence; exit 0 is not a clean result.
+`coverage` marks each risk area `assessed`, `partial`, `not_assessed`, `not_applicable`
+or `outside_scheck` with reasons from a closed list; `findings` holds one record per
+instance keyed `{id, asset, subject}` with its severity chain and evidence;
+`assessments` says for every rule whether it decided on `complete` evidence. Each
+host's own report is embedded whole at `assets[i].envelope`
+([docs/report-schema.json](docs/report-schema.json)), with its facts, and
+`assets[i].trace` is every command sent to it, in order, under `--no-persist` too.
+`--include-evidence` adds the redacted captures to stdout only; a host a resume kept
+from an earlier session (`kept: true`) has none to add, since no run directory keeps them.
 
-Use the repository-local [$scheck skill](.agents/skills/scheck/SKILL.md) to collect
-and interpret evidence. It covers JSON discovery, exit codes, diagnostics, elevation
-and partial results. For interactive inspection,
-`-v` adds descriptions and `-vv` adds available redacted diagnostics.
+Use the repository-local [scheck skill](.agents/skills/scheck/SKILL.md) to run scheck
+and interpret its report; it covers exit codes, coverage, partial results and
+elevation. In text, `-v` adds each host's fact sheet and `-vv` its redacted captures.
 
 ## Project documentation
 
-- [Specification](docs/SPEC.md): security boundaries and current/planned contracts.
-- [Roadmap](docs/ROADMAP-0.0.1.md): implementation status. M0 through M2, M4.5 and M4.6 are done; M4.7 is rehearsed and unpublished.
-- [Configuration walkthrough](docs/CONFIGURATION.md): preferences, restrictions and context.
+- [Engagement examples](docs/examples/README.md): files to copy for a host, a domain,
+  GitHub, Workspace and all four together. Placeholders only; no credential.
+- [Vision](docs/VISION.md): what scheck is becoming and the principles behind it.
+- [Roadmap](docs/ROADMAP.md): 0.0.2, 0.0.3 and 0.0.4.
+- [Specifications](docs/spec/): [engagement](docs/spec/engagement.md) (the file, the
+  stages), [report](docs/spec/report.md), [runs and state](docs/spec/runs.md) and [scope](docs/spec/scope.md), [host collector](docs/spec/host-collector.md)
+  (what a host asset reads and its guarantees), [domain, email and web
+  collector](docs/spec/web-collector.md) (0.0.2 E7), [GitHub collector](docs/spec/github-collector.md) (E5 identity, repository access, CI, alerts and confined history), [model path](docs/spec/model.md) and
+  [bounded assessment](docs/spec/bounded.md) (kept offline).
 - [Phase 2 criteria](docs/eval/phase2-criteria.md) and [results](docs/eval/phase2-results.md): the frozen gate, its record, and why no model assesses a host in this build.
-- [Run report schema](docs/report-schema.json): implemented JSON report shape.
+- [Engagement report schema](docs/engagement-report-schema.json) and the
+  [host report schema](docs/report-schema.json) it embeds per host.
 - [Contributor instructions](AGENTS.md): development workflow and required checks.
 - [Release runbook](docs/RELEASING.md): GoReleaser, validation evidence and manual publication.
 

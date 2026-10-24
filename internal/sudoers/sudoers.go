@@ -1,5 +1,5 @@
 // Package sudoers generates the least-privilege NOPASSWD fragment for the
-// catalog's elevated checks (docs/SPEC.md §8.1). The fragment is derived from the
+// catalog's elevated checks (docs/spec/host-collector.md §7.1). The fragment is derived from the
 // catalog, so it cannot drift from what scheck actually runs; scheck prints
 // it and never installs it.
 package sudoers
@@ -31,6 +31,7 @@ var binaryPaths = map[check.Platform]map[string]string{
 		"iptables":     "/usr/sbin/iptables",
 		"auditctl":     "/usr/sbin/auditctl",
 		"journalctl":   "/usr/bin/journalctl",
+		"ss":           "/usr/bin/ss",
 	},
 	check.MacOS: {
 		"sshd":                "/usr/sbin/sshd",
@@ -55,6 +56,13 @@ var binaryPaths = map[check.Platform]map[string]string{
 		"kextstat":            "/usr/sbin/kextstat",
 		"systemextensionsctl": "/usr/bin/systemextensionsctl",
 	},
+}
+
+// alsoAt are further paths a binary is installed at on some distributions
+// of a platform (ss: /usr/bin on Debian and Ubuntu, /usr/sbin on Fedora):
+// each gets its own line, with the same fixed arguments.
+var alsoAt = map[check.Platform]map[string][]string{
+	check.Linux: {"ss": {"/usr/sbin/ss"}},
 }
 
 // Generate renders the fragment for user on platform p. It fails when an
@@ -87,13 +95,15 @@ func Generate(p check.Platform, user string) (string, error) {
 			}
 			args = append(args, escape(tok))
 		}
-		cmd := abs
-		if len(args) > 0 {
-			cmd += " " + strings.Join(args, " ")
-		} else {
-			cmd += ` ""` // no arguments allowed at all
+		for _, path := range append([]string{abs}, alsoAt[p][bin]...) {
+			cmd := path
+			if len(args) > 0 {
+				cmd += " " + strings.Join(args, " ")
+			} else {
+				cmd += ` ""` // no arguments allowed at all
+			}
+			lines = append(lines, fmt.Sprintf("%s ALL=(root) NOPASSWD: %s  # %s", user, cmd, c.ID))
 		}
-		lines = append(lines, fmt.Sprintf("%s ALL=(root) NOPASSWD: %s  # %s", user, cmd, c.ID))
 	}
 	sort.Strings(lines)
 	var b strings.Builder

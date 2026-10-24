@@ -1,4 +1,4 @@
-// Package macos registers the macOS check catalog (docs/SPEC.md §3 baseline table).
+// Package macos registers the macOS check catalog (docs/spec/host-collector.md §3 baseline table).
 package macos
 
 import "github.com/b87/scheck/internal/check"
@@ -18,8 +18,11 @@ func extract(c check.Check, re string) check.Check { c.Extract = re; return c }
 func output(c check.Check, n int) check.Check { c.Budget.Output = n; return c }
 
 // unit names what one line or key of a check means, so the fact's reading is
-// "3 launchd plists" rather than "3 lines" (docs/SPEC.md §3).
+// "3 launchd plists" rather than "3 lines" (docs/spec/host-collector.md §3).
 func unit(c check.Check, noun string) check.Check { c.Unit = noun; return c }
+
+// sampled marks a depth- or prefix-capped read (check.Check.Sampled).
+func sampled(c check.Check) check.Check { c.Sampled = true; return c }
 
 func init() {
 	check.Register(
@@ -66,10 +69,10 @@ func init() {
 		unit(exitOK(base("persist.launch_dirs", "Third-party LaunchDaemons and LaunchAgents", check.DomainPersistence, check.ParseLines, "find", "/Library/LaunchDaemons", "/Library/LaunchAgents", "-maxdepth", "1", "-type", "f"), 0, 1), "launchd plists"),
 
 		// SUID / world-writable
-		unit(exitOK(base("fs.suid", "SUID binaries under local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files"),
-		unit(exitOK(base("fs.world_writable", "World-writable entries without the sticky bit under system prefixes (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "/etc", "/Library/LaunchDaemons", "/Library/LaunchAgents", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths"),
+		sampled(unit(exitOK(base("fs.suid", "SUID binaries under local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files")),
+		sampled(unit(exitOK(base("fs.world_writable", "World-writable entries without the sticky bit under system prefixes (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "/etc", "/Library/LaunchDaemons", "/Library/LaunchAgents", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths")),
 
 		// Logging
 		elevated(base("log.status", "Unified logging configuration", check.DomainLogging, check.ParseRaw, "log", "config", "--status")),

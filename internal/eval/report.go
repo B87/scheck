@@ -273,13 +273,13 @@ var boundedIDs = []string{finding.IDUnexpectedListener, finding.IDUnexpectedPers
 
 // boundedSection renders the research arm's own record: what code
 // enumerated, what it read, what it asked and what it decided
-// (docs/ROADMAP-RESEARCH.md R1).
+// (docs/spec/bounded.md R1).
 func (r *Results) boundedSection() string {
 	if !r.ranArm(ArmBounded) {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("\n## Bounded arm (research, docs/SPEC.md §5.9)\n\n")
+	b.WriteString("\n## Bounded arm (research, docs/spec/bounded.md)\n\n")
 	fmt.Fprintf(&b, "answer source `%s`, questions `%s`. Code enumerates the candidates, runs the fixed follow-up reads and decides; the source answers one item at a time.\n\n", r.BoundedSource, r.BoundedQuestions)
 	if r.BoundedSource == "scripted" {
 		b.WriteString("> Scripted answers: this exercises enumeration, filters, follow-up reads, state, decision and filing. It is **not** a quality claim about any model.\n\n")
@@ -294,7 +294,7 @@ func (r *Results) boundedSection() string {
 	}
 	if len(scope) > 0 {
 		sort.Strings(scope)
-		fmt.Fprintf(&b, "Outside this arm's design, and counted as missed above: %s. These are deterministic correlations across two checks, not context judgements; docs/ROADMAP-RESEARCH.md proposes them as a rules change, not as a question.\n\n", strings.Join(scope, ", "))
+		fmt.Fprintf(&b, "Outside this arm's design, and counted as missed above: %s. These are deterministic correlations across two checks, not context judgements; docs/spec/bounded.md proposes them as a rules change, not as a question.\n\n", strings.Join(scope, ", "))
 	}
 	b.WriteString("| case | repeat | items | judged | filtered | insufficient | no answer | follow-ups | requests | filed |\n|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, run := range r.Runs {

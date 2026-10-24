@@ -38,12 +38,12 @@ const (
 )
 
 // BaselineTierCap is the maximum number of on-demand checks visible under the
-// baseline profile (docs/SPEC.md §3, tiers).
+// baseline profile (docs/spec/host-collector.md §3, tiers).
 const BaselineTierCap = 40
 
 // literalRe is the whole character set a literal token may use. Everything
 // the POSIX shell treats specially is outside it, which is what keeps the SSH
-// quoter's input domain small (docs/SPEC.md §4.3). An empty literal is allowed
+// quoter's input domain small (docs/spec/host-collector.md §4.3). An empty literal is allowed
 // (`grep -rH "" dir`).
 var literalRe = regexp.MustCompile(`^[A-Za-z0-9._/,:=+%@-]*$`)
 
@@ -146,7 +146,7 @@ func validateOne(c Check) []Violation {
 	switch {
 	case c.Parser == ParseLines || c.Parser == ParseKV:
 		// A record count is only a reading when the records have a name
-		// (docs/SPEC.md §3): "9 SUID files", never "9 lines".
+		// (docs/spec/host-collector.md §3): "9 SUID files", never "9 lines".
 		if c.Unit == "" {
 			add(RuleMissingUnit, "parser %q needs Unit, the plural noun for one record", c.Parser)
 		}

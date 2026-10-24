@@ -2,6 +2,7 @@ package finding
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func base(id string) Finding {
 		Evidence: []Evidence{{Check: "x", Excerpt: "y"}}, Impact: def.Impact, Remediation: def.Remediation}
 }
 
-// The §11 severity table: (finding id, structured context) → severity,
+// The docs/spec/host-collector.md §9 severity table: (finding id, structured context) → severity,
 // adjustments and status. Every adjustment is attributed to its source.
 func TestSeverityTable(t *testing.T) {
 	origins := map[string]string{"exposure": "hosts/gw.yaml", "environment": "scheck.yaml#context", "expected_services": "hosts/gw.yaml", "accepted_risks": "hosts/gw.yaml"}
@@ -40,7 +41,7 @@ func TestSeverityTable(t *testing.T) {
 		{"internet escalates remote-access", IDPasswordAuthEnabled, &operator.Structured{Exposure: "internet"}, nil, SevHigh, []string{"exposure:internet from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"internet escalates network", IDAppFirewallDisabled, &operator.Structured{Exposure: "internet"}, nil, SevHigh, []string{"exposure:internet from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"internet leaves disk alone", IDFileVaultOff, &operator.Structured{Exposure: "internet"}, nil, SevHigh, nil, StatusOpen},
-		{"critical stays critical", IDEmptyPassword, &operator.Structured{Exposure: "internet"}, nil, SevCritical, nil, StatusOpen},
+		{"internet leaves accounts alone", IDEmptyPassword, &operator.Structured{Exposure: "internet"}, nil, SevHigh, nil, StatusOpen},
 		{"dev de-escalates everything", IDFileVaultOff, &operator.Structured{Environment: "dev"}, nil, SevMedium, []string{"environment:dev from scheck.yaml#context.environment"}, StatusOpen},
 		{"airgapped de-escalates remote-access two", IDRootLoginEnabled, &operator.Structured{Exposure: "airgapped"}, nil, SevLow, []string{"exposure:airgapped from hosts/gw.yaml#context.exposure"}, StatusOpen},
 		{"airgapped leaves network alone", IDAppFirewallDisabled, &operator.Structured{Exposure: "airgapped"}, nil, SevMedium, nil, StatusOpen},
@@ -83,13 +84,13 @@ func TestSeverityTable(t *testing.T) {
 }
 
 // The delta strings in the report are signed and the accepted reason is
-// carried; JSON shows base and final side by side (§6.4).
+// carried; JSON shows base and final side by side (docs/spec/host-collector.md §5.4).
 func TestAdjustmentAttributionInJSON(t *testing.T) {
-	g := Grader{Context: &operator.Structured{Exposure: "internet", AcceptedRisks: []operator.Risk{{ID: IDRootLoginEnabled, Reason: "jump host only", Source: "gw.yaml"}}},
+	g := Grader{Context: &operator.Structured{Exposure: "internet", AcceptedRisks: []operator.Risk{{ID: IDPasswordAuthEnabled, Reason: "jump host only", Source: "gw.yaml"}}},
 		Origins: map[string]string{"exposure": "scheck.yaml#context"}, Now: now}
-	got, _ := g.Grade(base(IDRootLoginEnabled))
+	got, _ := g.Grade(base(IDPasswordAuthEnabled))
 	raw, _ := json.Marshal(got)
-	for _, want := range []string{`"severity_base":"high"`, `"severity":"critical"`, `"delta":"+1"`, `"source":"scheck.yaml#context.exposure"`, `"status":"accepted"`, `"accepted_reason":"jump host only"`} {
+	for _, want := range []string{`"severity_base":"medium"`, `"severity":"high"`, `"delta":"+1"`, `"source":"scheck.yaml#context.exposure"`, `"status":"accepted"`, `"accepted_reason":"jump host only"`} {
 		if !strings.Contains(string(raw), want) {
 			t.Errorf("missing %s in %s", want, raw)
 		}
@@ -100,7 +101,7 @@ func TestAdjustmentAttributionInJSON(t *testing.T) {
 }
 
 // --ignore-context is a nil Context: grading reproduces the base severity
-// exactly, with no adjustments and no acceptance (§6.4).
+// exactly, with no adjustments and no acceptance (docs/spec/host-collector.md §5.4).
 func TestNilContextIsUnadjusted(t *testing.T) {
 	g := Grader{Now: now}
 	for _, d := range Defs() {
@@ -111,7 +112,7 @@ func TestNilContextIsUnadjusted(t *testing.T) {
 	}
 }
 
-// Custom findings are capped at medium and never escalated (§7.1).
+// Custom findings are capped at medium and never escalated (docs/spec/host-collector.md §6.1).
 func TestCustomFindingCaps(t *testing.T) {
 	f := Finding{ID: "custom:vendor-agent", Custom: true, Category: CategoryNetwork, SeverityBase: SevMedium, Severity: SevMedium,
 		Source: SourceModel, Confidence: ConfidenceHigh, Status: StatusOpen}
@@ -136,7 +137,7 @@ func TestCustomFindingCaps(t *testing.T) {
 }
 
 // Emulated tool calling caps a model finding's confidence at medium, never
-// a rule finding's (§5.3).
+// a rule finding's (docs/spec/model.md §4).
 func TestConfidenceCap(t *testing.T) {
 	g := Grader{EmulatedToolCalling: true, Now: now}
 	model := base(IDPasswordAuthEnabled)
@@ -153,7 +154,7 @@ func TestConfidenceCap(t *testing.T) {
 }
 
 // An expired acceptance is a finding in its own right and does not
-// suppress the finding it named (§6.3).
+// suppress the finding it named (docs/spec/host-collector.md §5.3).
 func TestExpiredAcceptanceFinding(t *testing.T) {
 	g := Grader{Context: &operator.Structured{AcceptedRisks: []operator.Risk{
 		{ID: IDPasswordAuthEnabled, Reason: "old", Expires: "2026-01-01", Source: "gw.yaml"},
@@ -183,5 +184,51 @@ func TestRuleAndModelFindingGradeAlike(t *testing.T) {
 	gm, _ := g.Grade(model)
 	if gr.Severity != gm.Severity || len(gr.Adjustments) != len(gm.Adjustments) || gr.Adjustments[0] != gm.Adjustments[0] {
 		t.Errorf("rule %+v vs model %+v", gr, gm)
+	}
+}
+
+// No host finding has a critical base since E5a, so the cap is tested on a
+// remote-access finding given one: internet exposure cannot raise it further.
+func TestCriticalStaysCritical(t *testing.T) {
+	g := Grader{Context: &operator.Structured{Exposure: "internet"}, Origins: map[string]string{"exposure": "hosts/gw.yaml"}, Now: now}
+	f := base(IDRootLoginEnabled)
+	f.SeverityBase, f.Severity = SevCritical, SevCritical
+	if got, steps := g.Grade(f); got.Severity != SevCritical {
+		t.Fatalf("severity %s, want critical; steps %+v", got.Severity, steps)
+	}
+}
+
+// No step of the host table passes high: after the whole table, a finding
+// left above high is capped there, so a lowering step counts from the
+// uncapped value (docs/spec/engagement.md, "Severity in context",
+// "Ceilings").
+func TestHostTableStopsAtHigh(t *testing.T) {
+	network := func() Finding {
+		f := base(IDRootLoginEnabled)
+		f.Category, f.Service = CategoryNetwork, &ServiceRef{Port: 5432, Proto: "tcp"}
+		return f
+	}
+	services := []operator.Service{{Port: 22, Proto: "tcp"}}
+	for _, c := range []struct {
+		name   string
+		ctx    operator.Structured
+		f      Finding
+		want   Severity
+		capped string
+	}{
+		{"internet", operator.Structured{Exposure: "internet"}, base(IDRootLoginEnabled), SevHigh, "exposure:internet"},
+		{"internet and dev", operator.Structured{Exposure: "internet", Environment: "dev"}, base(IDRootLoginEnabled), SevHigh, ""},
+		{"dev", operator.Structured{Environment: "dev"}, base(IDRootLoginEnabled), SevMedium, ""},
+		{"unexpected service and internet", operator.Structured{Exposure: "internet", ExpectedServices: services}, network(), SevHigh, "unexpected_service:5432/tcp"},
+		{"unexpected service, internet and dev", operator.Structured{Exposure: "internet", Environment: "dev", ExpectedServices: services}, network(), SevHigh, ""},
+	} {
+		g := Grader{Context: &c.ctx, Now: now}
+		got, steps := g.Grade(c.f)
+		capStep := slices.ContainsFunc(steps, func(s Step) bool {
+			return s.Stage == "cap" && s.To == "high" && strings.HasPrefix(s.Reason, "capped at high by "+c.capped+":")
+		})
+		if got.Severity != c.want || got.CappedBy != c.capped || capStep != (c.capped != "") {
+			t.Errorf("%s: %s capped by %q, steps %+v", c.name, got.Severity, got.CappedBy, steps)
+		}
 	}
 }

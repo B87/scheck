@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "host": {
     "id": "63abf18d8e833cab8bd31f2d08dca971e0d43494a8cf11eb5211134623b687b0",
     "hostname": "21859b827686",
@@ -40,6 +40,8 @@
       "observation": "accounts.passwd_status#1",
       "finding": "accounts.empty_password",
       "check": "accounts.passwd_status",
+      "with": "accounts.passwd",
+      "with_observation": "accounts.passwd#1",
       "status": "not_matched",
       "reason": "no-matching-record"
     },
@@ -120,7 +122,7 @@
       "observation": "accounts.passwd#1",
       "status": "ok",
       "attempted": true,
-      "summary": "22 accounts, 4 with a login shell",
+      "summary": "22 accounts, 3 with a login shell",
       "parsed": {
         "kind": "accounts",
         "items": [
@@ -456,6 +458,14 @@
       "summary": "exit 127: bash: line 1: firewall-cmd: command not found",
       "duration_ms": 0
     },
+    "fw.iptables_backend": {
+      "observation": "fw.iptables_backend#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/sbin/xtables-nft-multi",
+      "parsed": "/usr/sbin/xtables-nft-multi\n",
+      "duration_ms": 0
+    },
     "fw.nft": {
       "observation": "fw.nft#1",
       "status": "unavailable",
@@ -536,19 +546,24 @@
         "items": [
           {
             "address": "0.0.0.0",
+            "pid": "11",
             "port": "22",
+            "process": "sshd",
             "protocol": "tcp",
             "state": "LISTEN"
           },
           {
             "address": "::",
+            "pid": "11",
             "port": "22",
+            "process": "sshd",
             "protocol": "tcp",
             "state": "LISTEN"
           }
         ],
         "partial": false
       },
+      "elevated": true,
       "duration_ms": 0
     },
     "os.release": {
@@ -964,7 +979,7 @@
       "observation": "accounts.passwd#1",
       "status": "ok",
       "attempted": true,
-      "summary": "22 accounts, 4 with a login shell",
+      "summary": "22 accounts, 3 with a login shell",
       "duration_ms": 0,
       "check": "accounts.passwd",
       "ran_as": "accounts.passwd",
@@ -1109,6 +1124,21 @@
       ],
       "occurrence": 9
     },
+    "fw.iptables_backend#1": {
+      "observation": "fw.iptables_backend#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/sbin/xtables-nft-multi",
+      "duration_ms": 0,
+      "check": "fw.iptables_backend",
+      "ran_as": "fw.iptables_backend",
+      "argv": [
+        "realpath",
+        "-e",
+        "/usr/sbin/iptables"
+      ],
+      "occurrence": 10
+    },
     "fw.nft#1": {
       "observation": "fw.nft#1",
       "status": "unavailable",
@@ -1124,7 +1154,7 @@
         "list",
         "ruleset"
       ],
-      "occurrence": 11
+      "occurrence": 12
     },
     "fw.ufw#1": {
       "observation": "fw.ufw#1",
@@ -1145,7 +1175,7 @@
         "status",
         "verbose"
       ],
-      "occurrence": 13
+      "occurrence": 14
     },
     "host.hostname#1": {
       "observation": "host.hostname#1",
@@ -1159,7 +1189,7 @@
         "uname",
         "-n"
       ],
-      "occurrence": 14
+      "occurrence": 15
     },
     "host.machine_id#1": {
       "observation": "host.machine_id#1",
@@ -1173,7 +1203,7 @@
         "cat",
         "/etc/machine-id"
       ],
-      "occurrence": 15
+      "occurrence": 16
     },
     "log.auditd#1": {
       "observation": "log.auditd#1",
@@ -1190,7 +1220,7 @@
         "is-active",
         "auditd"
       ],
-      "occurrence": 16
+      "occurrence": 17
     },
     "log.journal_usage#1": {
       "observation": "log.journal_usage#1",
@@ -1204,7 +1234,7 @@
         "journalctl",
         "--disk-usage"
       ],
-      "occurrence": 17
+      "occurrence": 18
     },
     "mac.aa_status#1": {
       "observation": "mac.aa_status#1",
@@ -1219,7 +1249,7 @@
       "argv": [
         "aa-status"
       ],
-      "occurrence": 19
+      "occurrence": 20
     },
     "mac.sestatus#1": {
       "observation": "mac.sestatus#1",
@@ -1234,21 +1264,25 @@
       "argv": [
         "sestatus"
       ],
-      "occurrence": 20
+      "occurrence": 21
     },
     "net.listeners#1": {
       "observation": "net.listeners#1",
       "status": "ok",
       "attempted": true,
       "summary": "2 listening sockets",
+      "elevated": true,
       "duration_ms": 0,
       "check": "net.listeners",
       "ran_as": "net.listeners",
       "argv": [
+        "sudo",
+        "-n",
+        "--",
         "ss",
         "-tulpnH"
       ],
-      "occurrence": 21
+      "occurrence": 23
     },
     "os.release#1": {
       "observation": "os.release#1",
@@ -1262,7 +1296,7 @@
         "cat",
         "/etc/os-release"
       ],
-      "occurrence": 22
+      "occurrence": 24
     },
     "persist.cron#1": {
       "observation": "persist.cron#1",
@@ -1279,7 +1313,7 @@
         "/etc/crontab",
         "/etc/cron.d"
       ],
-      "occurrence": 23
+      "occurrence": 25
     },
     "persist.timers#1": {
       "observation": "persist.timers#1",
@@ -1298,7 +1332,7 @@
         "--no-pager",
         "--plain"
       ],
-      "occurrence": 24
+      "occurrence": 26
     },
     "persist.units#1": {
       "observation": "persist.units#1",
@@ -1315,7 +1349,7 @@
         "--no-pager",
         "--plain"
       ],
-      "occurrence": 25
+      "occurrence": 27
     },
     "pkg.apt_upgradable#1": {
       "observation": "pkg.apt_upgradable#1",
@@ -1330,7 +1364,7 @@
         "list",
         "--upgradable"
       ],
-      "occurrence": 26
+      "occurrence": 28
     },
     "pkg.dnf_check_update#1": {
       "observation": "pkg.dnf_check_update#1",
@@ -1347,7 +1381,7 @@
         "-q",
         "check-update"
       ],
-      "occurrence": 27
+      "occurrence": 29
     },
     "pkg.zypper_lp#1": {
       "observation": "pkg.zypper_lp#1",
@@ -1364,7 +1398,7 @@
         "--non-interactive",
         "lp"
       ],
-      "occurrence": 28
+      "occurrence": 30
     },
     "privesc.sudoers#1": {
       "observation": "privesc.sudoers#1",
@@ -1382,7 +1416,7 @@
         "cat",
         "/etc/sudoers"
       ],
-      "occurrence": 30
+      "occurrence": 32
     },
     "privesc.sudoers_d#1": {
       "observation": "privesc.sudoers_d#1",
@@ -1402,7 +1436,7 @@
         ".",
         "/etc/sudoers.d"
       ],
-      "occurrence": 32
+      "occurrence": 34
     },
     "remote.sshd_enabled#1": {
       "observation": "remote.sshd_enabled#1",
@@ -1418,7 +1452,7 @@
         "ssh",
         "sshd"
       ],
-      "occurrence": 33
+      "occurrence": 35
     },
     "sshd.config#1": {
       "observation": "sshd.config#1",
@@ -1436,7 +1470,7 @@
         "sshd",
         "-T"
       ],
-      "occurrence": 35
+      "occurrence": 37
     },
     "sys.platform#1": {
       "observation": "sys.platform#1",
@@ -1450,7 +1484,7 @@
         "uname",
         "-s"
       ],
-      "occurrence": 36
+      "occurrence": 38
     },
     "sys.shell#1": {
       "observation": "sys.shell#1",
@@ -1464,7 +1498,7 @@
         "printenv",
         "SHELL"
       ],
-      "occurrence": 37
+      "occurrence": 39
     },
     "sys.uid#1": {
       "observation": "sys.uid#1",
@@ -1478,7 +1512,7 @@
         "id",
         "-u"
       ],
-      "occurrence": 38
+      "occurrence": 40
     },
     "sys.uname#1": {
       "observation": "sys.uname#1",
@@ -1492,7 +1526,7 @@
         "uname",
         "-a"
       ],
-      "occurrence": 39
+      "occurrence": 41
     },
     "sys.which#1": {
       "observation": "sys.which#1",
@@ -1526,7 +1560,7 @@
         "which",
         "nft"
       ],
-      "occurrence": 10
+      "occurrence": 11
     },
     "sys.which#3": {
       "observation": "sys.which#3",
@@ -1543,7 +1577,7 @@
         "which",
         "ufw"
       ],
-      "occurrence": 12
+      "occurrence": 13
     },
     "sys.which#4": {
       "observation": "sys.which#4",
@@ -1560,10 +1594,27 @@
         "which",
         "aa-status"
       ],
-      "occurrence": 18
+      "occurrence": 19
     },
     "sys.which#5": {
       "observation": "sys.which#5",
+      "status": "ok",
+      "attempted": true,
+      "summary": "/usr/bin/ss",
+      "duration_ms": 0,
+      "check": "sys.which",
+      "ran_as": "sys.which",
+      "params": {
+        "name": "ss"
+      },
+      "argv": [
+        "which",
+        "ss"
+      ],
+      "occurrence": 22
+    },
+    "sys.which#6": {
+      "observation": "sys.which#6",
       "status": "ok",
       "attempted": true,
       "summary": "/usr/bin/cat",
@@ -1577,10 +1628,10 @@
         "which",
         "cat"
       ],
-      "occurrence": 29
+      "occurrence": 31
     },
-    "sys.which#6": {
-      "observation": "sys.which#6",
+    "sys.which#7": {
+      "observation": "sys.which#7",
       "status": "ok",
       "attempted": true,
       "summary": "/usr/bin/grep",
@@ -1594,10 +1645,10 @@
         "which",
         "grep"
       ],
-      "occurrence": 31
+      "occurrence": 33
     },
-    "sys.which#7": {
-      "observation": "sys.which#7",
+    "sys.which#8": {
+      "observation": "sys.which#8",
       "status": "ok",
       "attempted": true,
       "summary": "/usr/sbin/sshd",
@@ -1611,7 +1662,7 @@
         "which",
         "sshd"
       ],
-      "occurrence": 34
+      "occurrence": 36
     },
     "time.timedatectl#1": {
       "observation": "time.timedatectl#1",
@@ -1627,7 +1678,7 @@
         "timedatectl",
         "show"
       ],
-      "occurrence": 40
+      "occurrence": 42
     }
   }
 }

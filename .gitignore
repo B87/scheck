@@ -9,3 +9,4 @@ coverage.*
 /scripts/__pycache__/
 .*.rswp
 scheck.yaml
+.engagements/

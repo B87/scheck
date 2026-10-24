@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// AuditEntry is one attempted check (docs/SPEC.md §4.5). A denied call is a logged
+// AuditEntry is one attempted check (docs/spec/host-collector.md §4.5). A denied call is a logged
 // line, never a silent drop.
 type AuditEntry struct {
 	Observation string            `json:"observation,omitempty"`
@@ -24,16 +24,31 @@ type AuditEntry struct {
 	DurationMS  int64             `json:"duration_ms"`
 	OutputHash  string            `json:"output_sha256,omitempty"` // of the redacted output
 	Elevated    bool              `json:"elevated,omitempty"`
-	Tool        string            `json:"tool,omitempty"`      // run_check | read_file for a model-initiated call, phase 2
-	Rationale   string            `json:"rationale,omitempty"` // model-supplied, phase 2
+	// Via is the jump host the command went through, when there was one
+	// (docs/ROADMAP.md, E1c): the hop is never audited as a target.
+	Via       string `json:"via,omitempty"`
+	Tool      string `json:"tool,omitempty"`      // run_check | read_file for a model-initiated call, phase 2
+	Rationale string `json:"rationale,omitempty"` // model-supplied, phase 2
 }
 
 // Audit writes JSONL entries. A nil *Audit is valid and discards everything,
 // so callers never branch on whether a log was requested.
 type Audit struct {
-	mu sync.Mutex
-	w  io.Writer
-	c  io.Closer
+	mu  sync.Mutex
+	w   io.Writer
+	c   io.Closer
+	via string
+}
+
+// SetVia stamps every later entry with the jump host its commands go
+// through.
+func (a *Audit) SetVia(hop string) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.via = hop
+	a.mu.Unlock()
 }
 
 // NewAudit logs to w.
@@ -57,7 +72,27 @@ func (a *Audit) Log(e AuditEntry) error {
 	if e.Time.IsZero() {
 		e.Time = time.Now().UTC()
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if e.Via == "" {
+		e.Via = a.via
+	}
 	line, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	_, err = a.w.Write(append(line, '\n'))
+	return err
+}
+
+// Record writes one line of another shape: the scope gate's requests share
+// the run's audit log with the host's commands (docs/spec/scope.md, "Audit").
+// The caller passes only redacted values.
+func (a *Audit) Record(v any) error {
+	if a == nil {
+		return nil
+	}
+	line, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
@@ -65,6 +100,12 @@ func (a *Audit) Log(e AuditEntry) error {
 	defer a.mu.Unlock()
 	_, err = a.w.Write(append(line, '\n'))
 	return err
+}
+
+// Keeps reports whether the log writes somewhere: false for a nil log or
+// one on io.Discard, which a sender that must leave a record refuses.
+func (a *Audit) Keeps() bool {
+	return a != nil && a.w != nil && a.w != io.Discard
 }
 
 // Close releases the underlying file, if any.

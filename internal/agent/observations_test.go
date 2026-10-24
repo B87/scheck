@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/b87/scheck/internal/finding"
 	"github.com/b87/scheck/internal/llm/mock"
 	"github.com/b87/scheck/internal/report"
-	"github.com/b87/scheck/internal/state"
 )
 
 // Offline M2.6a demo: two file reads remain independently citable after both
@@ -72,14 +70,7 @@ func TestObservationCitationsEndToEnd(t *testing.T) {
 	if err := report.WriteJSONEvidence(&full, env, true); err != nil {
 		t.Fatal(err)
 	}
-	path, err := state.Write(t.TempDir(), &env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	persisted, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	persisted := compact.Bytes()
 	var saved report.Envelope
 	if err := json.Unmarshal(persisted, &saved); err != nil {
 		t.Fatal(err)

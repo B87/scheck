@@ -10,7 +10,7 @@ import (
 	"github.com/b87/scheck/internal/runner"
 )
 
-// The closed tool surface of docs/SPEC.md §5.7.
+// The closed tool surface of docs/spec/model.md §8.
 const (
 	toolRunCheck      = "run_check"
 	toolReadFile      = "read_file"
@@ -50,7 +50,7 @@ type toolError struct {
 }
 
 // Static tool descriptions. They are part of what the model is told, so
-// PromptVersion hashes them with the system prompt (§5.8); the run_check
+// PromptVersion hashes them with the system prompt (docs/spec/model.md §9); the run_check
 // menu is per platform and profile and is not.
 const (
 	readFileDesc = "Read one file by absolute path. Only files under the allowed prefixes (/etc, /usr/local/etc, /opt/*/etc, systemd unit directories, /Library/Launch*) can be read; a sensitive file (shadow, keys, ~/.ssh) answers with its metadata instead of its contents; anything else is denied. Identical to run_check with text.cat."
@@ -58,7 +58,7 @@ const (
 	// a hypothesis it had ruled out ("UFW is active", filed under
 	// fw.no_firewall_active) whatever the prose said. The tool now has a
 	// verdict for that: ruled_out files nothing and is shown with the
-	// model's summary (docs/SPEC.md §5.7).
+	// model's summary (docs/spec/model.md §8).
 	reportFindingDesc = "Record the verdict on one finding id. verdict: open (the default) files a problem that is present on the host. verdict: ruled_out records that you checked the id and it does not apply (an active firewall under fw.no_firewall_active, a narrow sudo grant under privesc.sudo_nopasswd_broad): nothing is filed, the note is shown with your summary, and the same id can still be reported open later on new evidence. Never file something you found in order as open. Choose a catalog finding id (see <finding_catalog>) or custom:<slug> only when no catalog id fits. Cite evidence with the exact observation reference and a verbatim excerpt of its output; a ruled-out verdict needs a note and may cite evidence the same way. Different invocations of a check have different references. Do not send a severity: scheck grades. Reporting an id open that a posture rule already produced adds your evidence and context note to it; a rule finding cannot be ruled out."
 )
 
@@ -112,7 +112,7 @@ func (s *Session) tools() []llm.Tool {
 
 // call executes one tool call and returns the result the model sees. Every
 // execution goes through runner.RunAs; the tool is a caller of the one
-// enforcement point, never a second path (docs/SPEC.md §4, §5.7).
+// enforcement point, never a second path (docs/spec/host-collector.md §4, docs/spec/model.md §8).
 func (s *Session) call(c llm.ToolCall) llm.ToolResult {
 	switch c.Name {
 	case toolRunCheck:
@@ -184,11 +184,11 @@ func (s *Session) execute(callID, id string, params map[string]string, o runner.
 }
 
 // report validates and stores a candidate through finding.Store, which owns
-// the merge contract (docs/SPEC.md §7.5). The loop never edits a finding.
+// the merge contract (docs/spec/host-collector.md §6.5). The loop never edits a finding.
 func (s *Session) report(c llm.ToolCall) llm.ToolResult {
 	var cand finding.Candidate
 	// Unknown fields — a `severity` the model sends anyway — are ignored,
-	// not rejected (§7.2).
+	// not rejected (docs/spec/host-collector.md §6.2).
 	if err := json.Unmarshal(c.Input, &cand); err != nil {
 		return s.errorResult(c.ID, "report_finding input must be an object: "+err.Error(), nil)
 	}

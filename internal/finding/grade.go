@@ -8,25 +8,25 @@ import (
 	"github.com/b87/scheck/internal/operator"
 )
 
-// Grader is the deterministic severity chain (docs/SPEC.md §7.2): base
-// severity → structured-context adjustments (§6.3) → confidence cap (§5.3)
+// Grader is the deterministic severity chain (docs/spec/host-collector.md §6.2): base
+// severity → structured-context adjustments (docs/spec/host-collector.md §5.3) → confidence cap (docs/spec/model.md §4)
 // → accepted-risk status → final severity. It is a table and a test; the
 // model never touches it. A zero Grader grades every finding to its base.
 type Grader struct {
 	// Context is the merged structured context, or nil under
 	// --ignore-context, in which case no adjustment is applied and
-	// "unadjusted" is a precise claim (§6.4).
+	// "unadjusted" is a precise claim (docs/spec/host-collector.md §5.4).
 	Context *operator.Structured
 	// Origins attributes each adjustment to the source that set the key.
 	Origins map[string]string
 	// EmulatedToolCalling caps a model finding's confidence at medium: a
-	// parsed-from-text call is more error-prone (§5.3). Read from
+	// parsed-from-text call is more error-prone (docs/spec/model.md §4). Read from
 	// Native.ToolCalling by the caller; the loop never branches on it.
 	EmulatedToolCalling bool
 	Now                 time.Time
 }
 
-// Step is one link of the chain, for `scheck explain FINDING-ID` (§8).
+// Step is one link of the chain, for `scheck explain FINDING-ID` (docs/spec/host-collector.md §7).
 type Step struct {
 	Stage  string `json:"stage"` // base | adjustment | cap | status | final
 	From   string `json:"from"`
@@ -34,7 +34,7 @@ type Step struct {
 	Reason string `json:"reason"`
 }
 
-// Categories the exposure table applies to (§6.3).
+// Categories the exposure table applies to (docs/spec/host-collector.md §5.3).
 const (
 	CategoryRemoteAccess = "remote-access"
 	CategoryNetwork      = "network"
@@ -48,11 +48,14 @@ func (g Grader) Grade(f Finding) (Finding, []Step) {
 	f.Status = StatusOpen
 	f.AcceptedReason = ""
 	steps := []Step{{Stage: "base", From: "", To: string(f.Severity), Reason: baseReason(f)}}
+	// raisedBy is the last raise that took the finding past high.
+	raisedBy := ""
+	f.CappedBy = ""
 	if g.Context != nil {
 		for _, adj := range g.adjustments(f) {
-			next := shift(f.Severity, adj.delta)
+			next := f.Severity.Shift(adj.delta)
 			if f.Custom && next.Rank() > f.Severity.Rank() {
-				// A custom finding is never adjusted upward (§7.1).
+				// A custom finding is never adjusted upward (docs/spec/host-collector.md §6.1).
 				steps = append(steps, Step{Stage: "adjustment", From: string(f.Severity), To: string(f.Severity),
 					Reason: adj.rule + " ignored: custom findings are never escalated"})
 				continue
@@ -63,8 +66,20 @@ func (g Grader) Grade(f Finding) (Finding, []Step) {
 			}
 			f.Adjustments = append(f.Adjustments, Adjustment{Rule: adj.rule, Source: adj.source, Delta: deltaString(adj.delta)})
 			steps = append(steps, Step{Stage: "adjustment", From: string(f.Severity), To: string(next), Reason: adj.rule + " from " + adj.source})
+			if next.Rank() > SevHigh.Rank() && f.Severity.Rank() <= SevHigh.Rank() {
+				raisedBy = adj.rule
+			}
 			f.Severity = next
 		}
+	}
+	// No step of the table passes high: after the whole table, a finding
+	// left above high is capped there, so a lowering step counts from the
+	// uncapped value (docs/spec/host-collector.md §5.3; docs/spec/engagement.md,
+	// "Severity in context", "Ceilings").
+	if raisedBy != "" && f.Severity.Rank() > SevHigh.Rank() {
+		steps = append(steps, Step{Stage: "cap", From: string(f.Severity), To: string(SevHigh), Reason: WhyPastHigh(raisedBy)})
+		f.Severity = SevHigh
+		f.CappedBy = raisedBy
 	}
 	if f.Custom && f.Severity.Rank() > SevMedium.Rank() {
 		steps = append(steps, Step{Stage: "cap", From: string(f.Severity), To: string(SevMedium), Reason: "custom findings are capped at medium"})
@@ -97,6 +112,12 @@ func (g Grader) now() time.Time {
 	return g.Now
 }
 
+// WhyPastHigh is the wording of a step stopped at high because it may not
+// pass it (docs/spec/engagement.md, "Severity in context", "Ceilings").
+func WhyPastHigh(rule string) string {
+	return fmt.Sprintf("capped at high by %s: critical means that anyone, or someone with no right to it, can use this now, or that you believe it is handled; %s says neither.", rule, rule)
+}
+
 func baseReason(f Finding) string {
 	if f.Custom {
 		return "proposed by the model for a custom finding, capped at medium"
@@ -110,7 +131,7 @@ type adjustment struct {
 	delta  int
 }
 
-// adjustments is the fixed table of docs/SPEC.md §6.3, in the order it is
+// adjustments is the fixed table of docs/spec/host-collector.md §5.3, in the order it is
 // applied: expected services first (they decide what a listener means),
 // then exposure, then environment.
 func (g Grader) adjustments(f Finding) []adjustment {
@@ -158,7 +179,7 @@ func (g Grader) acceptance(id string) (operator.Risk, bool) {
 	return operator.Risk{}, false
 }
 
-// source attributes an adjustment: "<source>#context.<key>" (§6.4).
+// source attributes an adjustment: "<source>#context.<key>" (docs/spec/host-collector.md §5.4).
 func (g Grader) source(key, entrySource string) string {
 	src := entrySource
 	if src == "" {
@@ -176,14 +197,6 @@ func (g Grader) source(key, entrySource string) string {
 	return src + "#context." + key
 }
 
-// shift moves a severity by delta steps, clamped to the scale.
-func shift(s Severity, delta int) Severity {
-	scale := []Severity{SevInfo, SevLow, SevMedium, SevHigh, SevCritical}
-	r := s.Rank() + delta
-	r = max(0, min(len(scale)-1, r))
-	return scale[r]
-}
-
 func deltaString(d int) string {
 	if d > 0 {
 		return fmt.Sprintf("+%d", d)
@@ -192,7 +205,7 @@ func deltaString(d int) string {
 }
 
 // ExpiredAcceptances turns every lapsed accepted_risks entry into a
-// finding of its own (§6.3): the operator's record is out of date and the
+// finding of its own (docs/spec/host-collector.md §5.3): the operator's record is out of date and the
 // finding it named is no longer suppressed.
 func (g Grader) ExpiredAcceptances(platform string) []Finding {
 	if g.Context == nil {

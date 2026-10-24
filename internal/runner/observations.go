@@ -10,7 +10,7 @@ import (
 	"github.com/b87/scheck/internal/check"
 )
 
-// Observations retains every policy-processed invocation for one run (§3, §7.4).
+// Observations retains every policy-processed invocation for one run (docs/spec/host-collector.md §3, §6.4).
 // Callers receive copies: neither a later call nor a consumer can change evidence.
 // Collection is bounded by the baseline plan and the existing agent check budgets.
 type Observations struct {
@@ -52,7 +52,7 @@ func (s *Observations) All() []Result {
 }
 
 func (r *Runner) retain(res Result) Result {
-	// Request metadata is untrusted too. Redact before audit, storage, or return (§4.2).
+	// Request metadata is untrusted too. Redact before audit, storage, or return (docs/spec/host-collector.md §4.2).
 	redact := func(s string) string { v, _ := r.Redactor.RedactString(s); return v }
 	res.CheckID, res.RanAs = redact(res.CheckID), redact(res.RanAs)
 	// Other reasons are static or derived from already-filtered captures. Applying
@@ -100,7 +100,7 @@ func cloneResult(r Result) Result {
 	return r
 }
 
-// The parser's closed output shapes (§3); JSON recursively uses maps and slices.
+// The parser's closed output shapes (docs/spec/host-collector.md §3); JSON recursively uses maps and slices.
 func cloneParsed(v any) any {
 	switch v := v.(type) {
 	case check.Records:

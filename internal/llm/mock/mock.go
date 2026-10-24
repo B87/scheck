@@ -1,5 +1,5 @@
-// Package mock is the llm.Provider every non-live test uses (docs/SPEC.md
-// §5.2): it replays a recorded transcript, one scripted turn per model call,
+// Package mock is the llm.Provider every non-live test uses (docs/spec/host-collector.md
+// docs/spec/model.md §3): it replays a recorded transcript, one scripted turn per model call,
 // and records every request it was given so a test can assert what the
 // loop sent. It never touches the network.
 package mock

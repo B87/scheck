@@ -1,0 +1,10 @@
+# The Ubuntu fixture with a listeners capture that names no owning process,
+# as ss prints it to a session that may not see other users' sockets.
+platform: linux
+base: ../../../../testdata/fixtures/ubuntu
+execs:
+  - argv: [sudo, -n, --, ss, -tulpnH]
+    stdout: |
+      tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*
+      tcp LISTEN 0      128       [::]:22    [::]:*
+    code: 0

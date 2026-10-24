@@ -1,0 +1,1504 @@
+package engagement
+
+import (
+	"bufio"
+	"bytes"
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
+	"os/user"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+
+	githubc "github.com/b87/scheck/internal/collector/github"
+	"github.com/b87/scheck/internal/collector/web"
+	"github.com/b87/scheck/internal/engagement/gate"
+	"github.com/b87/scheck/internal/engagement/hostasset"
+	ereport "github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/finding"
+	"github.com/b87/scheck/internal/operator"
+	"github.com/b87/scheck/internal/policy"
+	"github.com/b87/scheck/internal/report"
+)
+
+// Stages are the engagement's stages in order (docs/spec/engagement.md,
+// "Stages").
+var Stages = []string{"intake", "scope", "recon", "plan", "check", "analyze", "report"}
+
+// LastStage is the last stage: Report writes report.json and report.txt
+// (docs/spec/report.md, "The report").
+const LastStage = "report"
+
+// Reasons an asset was not collected, as coverage names them
+// (docs/spec/report.md, "The report", "Coverage").
+const (
+	ReasonCollectorNotBuilt = "collector_not_built"
+	ReasonFailed            = "failed"
+	ReasonLimitReached      = "limit_reached"
+)
+
+// ReasonRefused is a host that refused us for a reason on the positive
+// list of docs/spec/scope.md, "Exit codes" (host key, authentication,
+// identity, canary): the run goes on and exits 3.
+const ReasonRefused = "refused"
+
+// Asset statuses after Recon.
+const (
+	StatusCollected    = "collected"
+	StatusIncomplete   = "incomplete"
+	StatusFailed       = "failed"
+	StatusRefused      = "refused"
+	StatusNotCollected = "not_collected"
+)
+
+// RunOptions are a run's inputs besides the resolved file: the flags of
+// "One command, one file" that are run settings, never file keys.
+type RunOptions struct {
+	// Raw is the engagement file as read, or as --host built it.
+	Raw []byte
+	// Dir is the run directory; nil under --no-persist.
+	Dir *RunDir
+	// StopAfter ends the run after that stage; "" runs through LastStage.
+	StopAfter string
+	Vantage   string
+	Started   time.Time
+	Version   string
+	Log       func(format string, args ...any)
+	// RecordFixtures records every host exec into that directory (the
+	// hidden --record-fixtures flag).
+	RecordFixtures string
+	// Collect reaches a host asset; nil is hostasset.Collect. Tests replace
+	// it to collect from a fixture.
+	Collect func(context.Context, hostasset.Options) (*hostasset.Collection, error)
+	// NewGate builds the run's scope gate; nil is gate.New. Tests replace
+	// it to reach fake servers through the gate's own test seams.
+	NewGate func(gate.Config) (*gate.Gate, error)
+	// Resume is what the run directory's earlier sessions left; nil for a
+	// new run. Started is then the run's first start.
+	Resume *Prior
+	// Session is when this session started: the time scope, confirmations
+	// and accepted risks are read at. Zero is Started, or now on a resume.
+	Session time.Time
+}
+
+// Refusal is a run stopped for a reason the operator has to fix before any
+// target is contacted, or by the policy while one is: exit 3.
+type Refusal struct{ Err error }
+
+func (r *Refusal) Error() string { return r.Err.Error() }
+func (r *Refusal) Unwrap() error { return r.Err }
+
+func refuse(format string, args ...any) error {
+	return &Refusal{Err: fmt.Errorf(format, args...)}
+}
+
+// FindingsDoc is findings.json: each rule's outcome per asset, and what was
+// refused or left incomplete, as the report carries them.
+type FindingsDoc struct {
+	Header
+	Refused    []ereport.Shortfall `json:"refused"`
+	Incomplete []ereport.Shortfall `json:"incomplete"`
+	Assets     []AssessedAsset     `json:"assets"`
+	// Open counts open findings at or above their asset's threshold: the
+	// number that makes the run exit 1.
+	Open int `json:"open_at_or_above_threshold"`
+	// AcceptancesNotApplied names each intent.accepted_risks entry the
+	// host grader could not apply, and why.
+	AcceptancesNotApplied []string `json:"acceptances_not_applied,omitempty"`
+}
+
+// AssessedAsset is Analyze's outcome for one asset.
+type AssessedAsset struct {
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	// Evidence is the host collector's envelope, relative to the run
+	// directory.
+	Evidence    string               `json:"evidence,omitempty"`
+	Threshold   string               `json:"threshold,omitempty"`
+	Open        int                  `json:"open_at_or_above_threshold"`
+	Assessments []finding.Assessment `json:"assessments,omitempty"`
+	Findings    []finding.Finding    `json:"findings,omitempty"`
+	// Judged are the network collectors' verdicts on the asset, each fired
+	// one with its severity chain. findings.json is output only: a resume
+	// judges again from the evidence (docs/spec/runs.md, "Verdicts are not
+	// evidence").
+	Judged []finding.Judgment `json:"judged,omitempty"`
+	// HostChains are the engagement's steps on a host posture finding after
+	// the host collector's table, by finding id: Findings keep the
+	// collector's severity, and a chain's severity is the one the report
+	// and Open count (docs/spec/engagement.md, "Stacking").
+	HostChains map[string]*finding.Chain `json:"host_chains,omitempty"`
+}
+
+// Outcome is how a run ended.
+type Outcome struct {
+	// Stage is the last stage run, and Document its output: the report
+	// itself once Report ran.
+	Stage    string
+	Document any
+	// Refused names each host that refused us (exit 3); the run went on
+	// past them.
+	Refused []ereport.Shortfall
+	// Incomplete says why the run is incomplete (exit 2); empty when it
+	// is not.
+	Incomplete []ereport.Shortfall
+	// Warnings are for the operator, on stderr.
+	Warnings []string
+	// Open counts the open findings at or above their asset's threshold
+	// once Analyze ran (exit 1).
+	Open int
+	// Report is the engagement report once Analyze ran.
+	Report *ereport.Report
+}
+
+// ExitCode is the run's exit code, in the precedence 3, 2, 1, 0
+// (docs/spec/scope.md, "Exit codes").
+func (o *Outcome) ExitCode() int {
+	switch {
+	case o.Report != nil:
+		return o.Report.Exit.Code
+	case len(o.Refused) > 0:
+		return 3
+	case len(o.Incomplete) > 0:
+		return 2
+	case o.Open > 0:
+		return 1
+	}
+	return 0
+}
+
+// Describe is a shortfall as one line for stderr: who, why and the detail.
+func Describe(s ereport.Shortfall) string {
+	out := s.AssetName + ": " + s.Reason
+	if s.Reason == ReasonRefused {
+		out = s.AssetName
+	}
+	if s.Detail != "" && s.Reason != ReasonCollectorNotBuilt {
+		out += ": " + s.Detail
+	}
+	return out
+}
+
+// run is one run in progress.
+type run struct {
+	res    *Resolved
+	o      RunOptions
+	header func(stage string) Header
+	// hosts holds each collected host asset by name.
+	hosts map[string]*hostasset.Collection
+	// notApplied names the accepted risks the host grader cannot apply.
+	notApplied []string
+	// assessed holds each collected host's graded envelope, by name, from
+	// Analyze.
+	assessed map[string]report.Envelope
+	// traces holds each host asset's audit entries, by name.
+	traces map[string][]policy.AuditEntry
+	zone   *time.Location
+	recon  *ReconDoc
+	// planned is Plan's document, which Check reads; checked is Check's.
+	planned *PlanDoc
+	checked *CheckDoc
+	out     Outcome
+	// auditFile is the run directory's audit.jsonl, or io.Discard.
+	auditFile io.Writer
+	// gate is the run's scope gate, built when something sends through
+	// it.
+	gate     *gate.Gate
+	webScope *scope
+	// scoped is what the Scope stage found; reconResolver what this
+	// session's control lookup found of the resolver Recon reads through.
+	scoped        *ScopeDoc
+	reconResolver *Resolver
+	// session is when this session started.
+	session time.Time
+	// manifest is run.json, nil under --no-persist.
+	manifest *Manifest
+	// edited are the files an earlier session wrote that the resume used
+	// although they changed since.
+	edited []string
+	// graded is when each host's accepted risks were graded, by name.
+	graded map[string]time.Time
+	// kept names the hosts an earlier session collected, which this one
+	// did not contact.
+	kept map[string]bool
+}
+
+// Run runs the stages of a resolved engagement up to StopAfter, writing
+// each stage's output into the run directory as it goes
+// (docs/spec/engagement.md, "Stages"; docs/spec/runs.md, "Runs, state and configuration").
+// It returns a *Refusal for exit 3 before any target is contacted; a host
+// that refuses us later is recorded in Outcome.Refused and the run goes on.
+// Any other error leaves the run incomplete.
+func Run(ctx context.Context, res *Resolved, o RunOptions) (*Outcome, error) {
+	stop := o.StopAfter
+	if stop == "" {
+		stop = LastStage
+	}
+	last := slices.Index(Stages, stop)
+	if last < 0 || last > slices.Index(Stages, LastStage) {
+		return nil, refuse("--stop-after must be one of %s", strings.Join(Stages, "|"))
+	}
+	if !ValidVantage(o.Vantage) {
+		return nil, refuse("--vantage must be internet|vpn|lan")
+	}
+	if o.Log == nil {
+		o.Log = func(string, ...any) {}
+	}
+	if o.Collect == nil {
+		o.Collect = hostasset.Collect
+	}
+	if o.Started.IsZero() {
+		o.Started = time.Now()
+	}
+	if t := res.Timeout(); t > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, t)
+		defer cancel()
+	}
+	if err := Preflight(res, o.Dir != nil || last < slices.Index(Stages, "scope")); err != nil {
+		return nil, err
+	}
+	r := &run{res: res, o: o, hosts: map[string]*hostasset.Collection{}, traces: map[string][]policy.AuditEntry{}, zone: time.UTC,
+		auditFile: io.Discard, session: o.Session, graded: map[string]time.Time{}, kept: map[string]bool{}}
+	if r.session.IsZero() {
+		r.session = o.Started
+		if o.Resume != nil {
+			r.session = time.Now()
+		}
+	}
+	if o.Dir != nil {
+		if err := r.openManifest(); err != nil {
+			return nil, err
+		}
+		// What this session sent is recorded once it ends, however it
+		// ends, so a later session's report can count it.
+		defer r.closeSession()
+	}
+	if o.Dir != nil && last >= slices.Index(Stages, "scope") {
+		f, err := o.Dir.OpenAppend("audit.jsonl")
+		if err != nil {
+			return nil, fmt.Errorf("run directory: audit log: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		r.auditFile = f
+	}
+	if z, err := time.LoadLocation(res.Engagement.Timezone); err == nil {
+		r.zone = z
+	}
+	r.header = func(stage string) Header {
+		return Header{Stage: stage, Engagement: res.Engagement.Name, Started: o.Started.UTC(), Source: res.Source}
+	}
+	steps := []func(context.Context) (any, error){r.intake, r.scope, r.reconStage, r.plan, r.check, r.analyze, r.reportStage}
+	for i, step := range steps[:last+1] {
+		doc, err := step(ctx)
+		if err != nil {
+			return nil, err
+		}
+		r.out.Stage, r.out.Document = Stages[i], doc
+		if err := r.keepRequests(); err != nil {
+			return nil, err
+		}
+		o.Log("stage %s done", Stages[i])
+	}
+	return &r.out, nil
+}
+
+// write stores a stage's file and records its hash in run.json, so a resume
+// can tell the file was edited by hand.
+func (r *run) write(name string, doc any) error {
+	if r.o.Dir == nil {
+		return nil
+	}
+	raw, ok := doc.([]byte)
+	if !ok {
+		b, err := json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			return fmt.Errorf("run directory: %s: %w", name, err)
+		}
+		raw = append(b, '\n')
+	}
+	err := r.o.Dir.Write(name, raw)
+	if err == nil {
+		r.manifest.Files[name] = sha(raw)
+		err = r.saveManifest()
+	}
+	if err != nil {
+		return fmt.Errorf("run directory: %s: %w", name, err)
+	}
+	return nil
+}
+
+// Preflight refuses, before any target is contacted or any run directory
+// created, a host asset this build cannot reach, and a run that would send
+// through the gate without keeping its audit log (persist is false under
+// --no-persist).
+func Preflight(res *Resolved, persist bool) error {
+	// The gate's audit log is the record of what was sent, and only a run
+	// directory keeps it: a root or asset the gate would send for is
+	// refused by its kind, whether or not its collector is built yet; a url
+	// asset may sit under a host root (docs/spec/scope.md, "Audit").
+	if !persist {
+		kinds := make([]Kind, 0, len(res.Roots)+len(res.Assets))
+		for _, root := range res.Roots {
+			kinds = append(kinds, root.Kind)
+		}
+		for _, a := range res.Assets {
+			kinds = append(kinds, a.Kind)
+		}
+		for _, k := range kinds {
+			if k != KindHost {
+				return refuse("--no-persist cannot be used when scheck sends network requests: the audit log is the " +
+					"record of what was sent. Use --state-dir to keep the run somewhere disposable.")
+			}
+		}
+	}
+	for _, a := range res.Assets {
+		if a.Kind != KindHost {
+			continue
+		}
+		if !a.Local() && a.User == "" {
+			return refuse("assets %s: %s has no SSH user: write it into the locator as user@%s", a.Name, a.ID, a.Address())
+		}
+		if j, ok := jumpOf(a); ok && j.User == "" {
+			return refuse("assets %s: jump %s has no SSH user: write it as user@%s", a.Name, j.Host, j.Host)
+		}
+	}
+	return nil
+}
+
+// intake keeps the file as read. Validation guarantees it holds no
+// credential, but it holds the redact_extra patterns, which are often the
+// very strings they hide: those are masked in the copy, and the header
+// names the original by path and hash.
+func (r *run) intake(context.Context) (any, error) {
+	if r.o.Dir == nil {
+		return r.res, nil
+	}
+	raw, err := maskRedactExtra(r.o.Raw, r.res)
+	if err != nil {
+		return nil, fmt.Errorf("engagement.yaml: %w", err)
+	}
+	return r.res, r.write("engagement.yaml", raw)
+}
+
+// maskRedactExtra returns raw with every redact_extra entry replaced by a
+// marker and every remaining match of a pattern (in a comment, a name)
+// redacted; the result is still a valid engagement file. A file with no
+// redact_extra is returned as read.
+func maskRedactExtra(raw []byte, res *Resolved) ([]byte, error) {
+	patterns := res.RedactExtra()
+	if len(patterns) == 0 {
+		return raw, nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) == 0 {
+		return nil, errors.New("the file as read is empty")
+	}
+	if root := doc.Content[0]; root.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(root.Content); i += 2 {
+			if root.Content[i].Value != "redact_extra" {
+				continue
+			}
+			for _, item := range root.Content[i+1].Content {
+				item.Value = fmt.Sprintf("[REDACTED:redact_extra:%d bytes]", len(item.Value))
+				item.Style = 0
+			}
+		}
+	}
+	var buf bytes.Buffer
+	// The original's hash is in every stage document's source; written
+	// here, 64 hex digits would read as a credential to the file's own
+	// validation.
+	fmt.Fprintf(&buf, "# %s, with its redact_extra masked; its sha256 is in each stage document's source.\n", res.Source.Path)
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	red, err := policy.NewRedactor(patterns)
+	if err != nil {
+		return nil, errors.New("redact_extra: a pattern does not compile")
+	}
+	out, _ := red.Redact(buf.Bytes())
+	return out, nil
+}
+
+// scope lists the declared roots and assets entries with their first-party
+// evidence, and expands each domain root by passive discovery through the
+// gate (docs/spec/scope.md, "Discovery"). It contacts no server of the
+// company's: only crt.sh and the DNS resolver.
+func (r *run) scope(ctx context.Context) (any, error) {
+	// A resume keeps Scope's document while what Scope read from the file
+	// is unchanged and it found no gap to close; the gate still decides
+	// every request from the file (docs/spec/runs.md, "Stop and
+	// resume").
+	inputs := scopeInputs(r.res, r.o.Version, r.session, r.o.Vantage)
+	if p := r.o.Resume; p != nil && p.Scope != nil && inputs != "" && inputs == p.Manifest.ScopeInputs && p.Scope.complete() && r.fresh("scope: discovery", "running Scope again", p.Scope.CollectedAt) {
+		r.o.Log("scope: kept from an earlier session")
+		r.used("scope.json")
+		r.scoped = p.Scope
+		return p.Scope, nil
+	}
+	if r.manifest != nil {
+		r.manifest.ScopeInputs = inputs
+	}
+	doc := &ScopeDoc{Header: r.header("scope"), CollectedAt: r.session.UTC(), Roots: r.res.Roots, Exclude: r.res.Exclude,
+		Discovery: "none: no domain root"}
+	if doc.Exclude == nil {
+		doc.Exclude = []Ref{}
+	}
+	for _, a := range r.res.Assets {
+		sa := ScopeAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root, FirstParty: r.res.firstParty(a, r.session)}
+		if a.Kind == KindHost {
+			sa.Collector = "host"
+		} else if (a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:")) || (a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:")) {
+			sa.Collector = "github"
+		} else if a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:google-workspace:") {
+			sa.Collector = "workspace"
+		}
+		doc.Assets = append(doc.Assets, sa)
+	}
+	if slices.ContainsFunc(r.res.Roots, func(x Ref) bool { return x.Kind == KindDomain }) {
+		g, err := r.gateFor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		d := &discovery{res: r.res, g: g, at: r.session, log: r.o.Log}
+		doc.Domains, doc.Resolver, doc.PointsAt = d.run(ctx)
+		doc.Discovery = "certificate transparency (crt.sh) and DNS"
+	}
+	if err := redactEvidence(doc, r.res.RedactExtra()); err != nil {
+		return nil, err
+	}
+	r.scoped = doc
+	return doc, r.write("scope.json", doc)
+}
+
+// redactEvidence redacts each confirmation's target in scope.json as the
+// gate redacts the chain it is compared with: the gate compares the
+// target as written, and only the document is redacted (AGENTS.md rule 5).
+func redactEvidence(doc *ScopeDoc, extra []string) error {
+	red, err := policy.NewRedactor(extra)
+	if err != nil {
+		return err
+	}
+	redact := func(ev *Evidence) {
+		if ev != nil && ev.Target != "" {
+			ev.Target, _ = red.RedactString(ev.Target)
+		}
+	}
+	for i := range doc.Assets {
+		redact(doc.Assets[i].FirstParty)
+	}
+	for i := range doc.Domains {
+		for j := range doc.Domains[i].Names {
+			redact(doc.Domains[i].Names[j].FirstParty)
+		}
+	}
+	return nil
+}
+
+// defaultGate builds a run's gate when RunOptions.NewGate is nil; this
+// package's tests replace it with one that reaches nothing.
+var defaultGate = gate.New
+
+// gateFor builds the run's gate on first use: the engagement file's scope
+// measured at the run's start, its redact_extra, the run's audit log and
+// the deadline limits.timeout put on ctx (docs/spec/scope.md, "The scope
+// gate").
+func (r *run) gateFor(ctx context.Context) (*gate.Gate, error) {
+	if r.gate != nil {
+		return r.gate, nil
+	}
+	reg, err := gate.NewRegistry(gateOps...)
+	if err != nil {
+		return nil, err
+	}
+	r.webScope = r.res.GateScope(r.session).(*scope)
+	cfg := gate.Config{Registry: reg, Scope: r.webScope, RedactExtra: r.res.RedactExtra(),
+		Audit: policy.NewAudit(r.auditFile), Version: r.o.Version, Session: 1, Vantage: r.o.Vantage,
+		DNSInputs: mailInputs(r.res), WebInputs: intentInputs(r.res)}
+	if p := r.o.Resume; p != nil {
+		cfg.Prior, cfg.Session = r.freshRequests(p.Requests), len(r.manifest.Sessions)
+	}
+	if d, ok := ctx.Deadline(); ok {
+		cfg.Deadline = d
+	}
+	if a := r.res.Authorization; a != nil {
+		// Validation parsed every window, so neither time is zero.
+		for _, w := range a.Windows {
+			from, _ := time.Parse(time.RFC3339, w.From)
+			to, _ := time.Parse(time.RFC3339, w.To)
+			cfg.Windows = append(cfg.Windows, gate.Window{From: from, To: to})
+		}
+		for _, m := range a.Mailboxes {
+			from, until := mailboxSpan(m.Date, m.Expires, r.res.loc)
+			cfg.MailboxApprovals = append(cfg.MailboxApprovals, gate.MailboxApproval{
+				Asset: m.ID(), By: m.By, Date: m.Date, Expires: m.Expires, From: from, Until: until,
+			})
+		}
+	}
+	newGate := r.o.NewGate
+	if newGate == nil {
+		newGate = defaultGate
+	}
+	if r.gate, err = newGate(cfg); err != nil {
+		return nil, err
+	}
+	for _, n := range r.gate.Notes() {
+		r.o.Log("%s", n)
+	}
+	return r.gate, nil
+}
+
+// reconStage runs every declared read per asset: the host collector on
+// host assets and the web collector on domain roots. A root of a kind with
+// no collector yet is recorded as not collected and makes the run
+// incomplete.
+func (r *run) reconStage(ctx context.Context) (any, error) {
+	doc := &ReconDoc{Header: r.header("recon")}
+	// What the session reached is on record as each host ends, so a stage
+	// error after one still counts its contact when the session closes.
+	r.recon = doc
+	// Every asset's commands go to audit.jsonl and are also kept per asset,
+	// so the report carries each asset's trace even under --no-persist
+	// (docs/spec/report.md, "Text and JSON").
+	isRoot := func(a ResolvedAsset) bool { return a.Root == a.ID }
+	// A transport error quotes what the target or a resolver said (an
+	// address a name resolved to, a jump host's refusal): redacted before
+	// it is stored or printed (AGENTS.md rule 5).
+	red, err := policy.NewRedactor(r.res.RedactExtra())
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range r.res.Assets {
+		ra := ReconAsset{Name: a.Name, ID: a.ID, Kind: a.Kind, Root: a.Root}
+		switch {
+		case a.Kind == KindDomain && isRoot(a):
+			ra = r.collectDomain(ctx, a, ra)
+		case a.Kind == KindURL && isRoot(a):
+			ra = r.collectURL(ctx, a, ra)
+		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:google-workspace:") && isRoot(a):
+			ra = r.collectWorkspace(ctx, a, ra)
+		case a.Kind == KindSaaS && strings.HasPrefix(a.ID, "saas:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.ID, "repo:github:") && isRoot(a):
+			ra = r.collectGitHub(ctx, a, ra)
+		case a.Kind == KindRepo && strings.HasPrefix(a.Root, "saas:github:"):
+			// Check reads it with its root, in Plan's order; until then
+			// nothing of it has been read.
+			ra.Status = StatusNotCollected
+			ra.Detail = "read with " + a.Root + " in Check, after Plan"
+		case a.Kind != KindHost:
+			ra.Status, ra.Reason = StatusNotCollected, ReasonCollectorNotBuilt
+			ra.Detail = "no collector reads " + string(a.Kind) + " assets in this build"
+			if isRoot(a) {
+				r.incomplete(a, ra)
+			}
+		default:
+			var trace bytes.Buffer
+			audit := policy.NewAudit(io.MultiWriter(&trace, r.auditFile))
+			opts := r.hostOptions(a, audit)
+			inputs := hostInputs(opts, r.res.Exclude, r.o.Version)
+			if kept, ok := r.keptHost(a, inputs); ok {
+				ra = kept
+				break
+			}
+			if ctx.Err() != nil {
+				ra.Status, ra.Reason = StatusNotCollected, ReasonLimitReached
+				ra.Detail = "limits.timeout ended the engagement before this asset was read"
+				r.incomplete(a, ra)
+				break
+			}
+			r.o.Log("recon: %s (%s)", a.Name, a.ID)
+			var reach hostasset.Reach
+			opts.Reach = &reach
+			c, err := r.o.Collect(ctx, opts)
+			r.traces[a.Name] = readTrace(&trace)
+			ra.ResolvedHere, ra.ResolvedByJump = reach.Resolved, reach.ByJump
+			ra.Contact, ra.JumpContact = contact(reach.Dialled, reach.Connected), contact(reach.JumpDialled, reach.JumpConnected)
+			if err != nil {
+				he, ok := errors.AsType[*hostasset.Error](err)
+				detail, _ := red.RedactString(err.Error())
+				switch {
+				case !ok:
+					doc.Assets = append(doc.Assets, ra)
+					return nil, err
+				case ctx.Err() != nil:
+					// limits.timeout ended the engagement while this host
+					// was reached: whatever the error says, the cause is
+					// the limit, never a refusal.
+					ra.Status, ra.Reason, ra.Detail = StatusNotCollected, ReasonLimitReached,
+						"limits.timeout ended the engagement while it was reached: "+detail
+					r.incomplete(a, ra)
+				case he.Usage:
+					// Refused on the positive list: the host is not
+					// reached, the others still are, and the run exits 3
+					// with what it collected written.
+					ra.Status, ra.Reason, ra.Detail, ra.Echo, ra.Refusal = StatusRefused, ReasonRefused, detail, he.Echo, he.Kind
+					r.out.Refused = append(r.out.Refused, ereport.Shortfall{Asset: a.ID, AssetName: a.Name,
+						Reason: ReasonRefused, Detail: ra.Detail, Echo: ra.Echo, Kind: ra.Refusal})
+				default:
+					ra.Status, ra.Reason, ra.Detail = StatusFailed, ReasonFailed, detail
+					r.incomplete(a, ra)
+				}
+				break
+			}
+			r.hosts[a.Name] = c
+			env := c.Evidence()
+			ra.Status = StatusCollected
+			if !c.Complete() {
+				// Say which limit cut it: a lost session, the engagement's
+				// limits.timeout, or the host collector's own run timeout
+				// (docs/spec/report.md, "Incompleteness and refusals").
+				ra.Status, ra.Reason = StatusIncomplete, ReasonLimitReached
+				switch {
+				case c.Lost() != "":
+					ra.Reason, ra.Detail = ReasonFailed, strings.Join(env.Run.Warnings, "; ")
+				case ctx.Err() != nil:
+					ra.Detail = fmt.Sprintf("limits.timeout (%s) ended the engagement while it was read", r.res.Limits.Timeout)
+				default:
+					ra.Detail = "the host collector's timeout (" + hostTimeout(a) + ") stopped it"
+				}
+				r.incomplete(a, ra)
+			}
+			ra.Host, ra.Facts, ra.Observations = &env.Host, env.Facts, env.Observations
+			r.graded[a.Name] = r.session
+			if err := r.recordHost(a, c, inputs, ra); err != nil {
+				doc.Assets = append(doc.Assets, ra)
+				return nil, err
+			}
+		}
+		doc.Assets = append(doc.Assets, ra)
+	}
+	// A declared domain under a root the web collector read was read with
+	// it: its names were among the root's.
+	for i, ra := range doc.Assets {
+		if (ra.Kind != KindDomain && ra.Kind != KindURL) || ra.Root == ra.ID {
+			continue
+		}
+		for _, root := range doc.Assets {
+			if root.ID == ra.Root && root.Web != nil {
+				doc.Assets[i].Status, doc.Assets[i].Reason = root.Status, root.Reason
+				doc.Assets[i].Detail = "read with " + root.Name
+			}
+		}
+	}
+	if r.scoped != nil {
+		if err := r.write("scope.json", r.scoped); err != nil {
+			return nil, err
+		}
+	}
+	r.populateGitHubPeople(doc)
+	populateWorkspacePeople(doc)
+	return doc, r.write("recon.json", doc)
+}
+
+// jumpOf is a host asset's jump host, parsed (validated at load).
+func jumpOf(a ResolvedAsset) (hostasset.Hop, bool) {
+	if a.Jump == "" {
+		return hostasset.Hop{}, false
+	}
+	j, err := parseLocator(KindHost, a.Jump)
+	if err != nil {
+		return hostasset.Hop{}, false
+	}
+	return hostasset.Hop{User: j.User, Host: j.Address(), Port: j.Port}, true
+}
+
+// hostTimeout names a host's run timeout and where it was set.
+func hostTimeout(a ResolvedAsset) string {
+	if a.Timeout != "" {
+		return a.Timeout + ", assets." + a.Name + ".timeout"
+	}
+	return policy.DefaultBudgets().RunTimeout.String() + ", the default"
+}
+
+func (r *run) incomplete(a ResolvedAsset, ra ReconAsset) {
+	r.out.Incomplete = append(r.out.Incomplete, ereport.Shortfall{Asset: a.ID, AssetName: a.Name, Reason: ra.Reason, Detail: ra.Detail})
+}
+
+// readTrace reads back the audit entries one asset's collection wrote.
+func readTrace(buf *bytes.Buffer) []policy.AuditEntry {
+	var out []policy.AuditEntry
+	sc := bufio.NewScanner(buf)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		var e policy.AuditEntry
+		if json.Unmarshal(sc.Bytes(), &e) == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// hostOptions is everything the host collector receives for an asset: its
+// reach, profile, elevation and narrowing, and the engagement's
+// redact_extra. Nothing else reaches it; its context is read in Analyze
+// (hostGrading).
+func (r *run) hostOptions(a ResolvedAsset, audit *policy.Audit) hostasset.Options {
+	o := hostasset.Options{
+		Local: a.Local(), Host: a.Address(), Port: a.Port, User: a.User, Identity: a.Identity,
+		KnownHosts: a.KnownHosts, Elevate: a.Elevate, Profile: a.Profile,
+		DisableChecks: a.DisableChecks, DenyPaths: a.DenyPaths, RedactExtra: r.res.RedactExtra(),
+		Audit: audit, Version: r.o.Version, RecordFixtures: r.o.RecordFixtures,
+		Log: func(f string, args ...any) { r.o.Log(a.Name+": "+f, args...) },
+	}
+	o.RunTimeout, _ = time.ParseDuration(a.Timeout) // validated; "" keeps the default
+	o.Allow = r.res.allowAddress
+	if j, ok := jumpOf(a); ok {
+		o.Jump = &j
+	}
+	return o
+}
+
+// hostGrading is what a host's posture rules are graded through in
+// Analyze: its context and the accepted risks that name it, attributed to
+// the engagement file, read at the start of the session that collected the
+// host, which a resume may have kept (docs/spec/runs.md, "Verdicts are not
+// evidence").
+func (r *run) hostGrading(a ResolvedAsset) hostasset.Grading {
+	return hostasset.Grading{Context: r.hostContext(a), Source: r.res.Source.Path + " assets." + a.Name,
+		Now: cmp.Or(r.graded[a.Name], r.session)}
+}
+
+// hostContext is the asset's context and the accepted risks that name it,
+// in the host collector's shape (docs/spec/host-collector.md §5.2), each
+// risk attributed to its own entry, a later entry for the same id winning.
+// An acceptance with a subject is not passed: the host grader accepts a
+// whole finding id, and a narrower acceptance must not widen into that.
+// When host findings carry instance keys it becomes applicable; until then
+// it is named in findings.json and on stderr, never dropped silently.
+func (r *run) hostContext(a ResolvedAsset) *operator.Structured {
+	var s operator.Structured
+	if c := a.Context; c != nil {
+		s.Role, s.Exposure, s.Environment = c.Role, c.Exposure, c.Environment
+		for _, svc := range c.ExpectedServices {
+			s.ExpectedServices = append(s.ExpectedServices, operator.Service{Port: svc.Port, Proto: svc.Proto,
+				Purpose: svc.Purpose, Audience: svc.Audience})
+		}
+	}
+	for i, risk := range r.res.Intent.AcceptedRisks {
+		id, ok := r.res.AssetID(risk.Asset)
+		if !ok || id != a.ID || strings.HasPrefix(risk.ID, "custom:") {
+			continue
+		}
+		// A multi-fact rule's finding is accepted as a network collector's
+		// is, by the report, subject and all: never the host grader's.
+		if def, known := finding.Lookup(risk.ID); known && def.MultiFact {
+			continue
+		}
+		key := fmt.Sprintf("intent.accepted_risks[%d]", i)
+		if risk.Subject != "" {
+			r.notApplied = append(r.notApplied, fmt.Sprintf("%s (%s on %s, subject %s) not applied: host findings carry no instance key in this build, and accepting the whole id would widen it",
+				key, risk.ID, a.Name, risk.Subject))
+			continue
+		}
+		s.AcceptedRisks = slices.DeleteFunc(s.AcceptedRisks, func(have operator.Risk) bool { return have.ID == risk.ID })
+		s.AcceptedRisks = append(s.AcceptedRisks, operator.Risk{ID: risk.ID, Reason: risk.Reason, Expires: risk.Expires,
+			Source: r.res.Source.Path + " " + key, Zone: r.zone})
+	}
+	if s.IsZero() {
+		return nil
+	}
+	return &s
+}
+
+// plan lists each host's checks, orders each GitHub root's repositories
+// for Check and names what will not be judged for lack of a declaration
+// (docs/spec/engagement.md, "Plan selection and follow-ups"). It sends
+// nothing.
+func (r *run) plan(context.Context) (any, error) {
+	doc := &PlanDoc{Header: r.header("plan"), Method: "rules only; repositories and Workspace accounts in tier order", Checklist: []string{}, Hosts: []PlanHost{}}
+	for _, a := range r.res.Assets {
+		c, ok := r.hosts[a.Name]
+		if !ok {
+			continue
+		}
+		disabled := a.DisableChecks
+		if disabled == nil {
+			disabled = []string{}
+		}
+		doc.Hosts = append(doc.Hosts, PlanHost{Name: a.Name, ID: a.ID, Planned: c.Planned(), Disabled: disabled})
+	}
+	doc.GitHub = r.planGitHub()
+	doc.Workspace = r.planWorkspace()
+	doc.NotJudged = r.notJudged()
+	r.planned = doc
+	return doc, r.write("plan.json", doc)
+}
+
+// check reads each GitHub root's repositories and each Workspace tenant's
+// per-user OAuth grants and forwarding, in Plan's order, then the
+// follow-up table's reads.
+func (r *run) check(ctx context.Context) (any, error) {
+	doc := &CheckDoc{Header: r.header("check"), FollowUps: []FollowUp{}, Assets: []CheckAsset{}}
+	// Workspace first: its session's token lives about an hour from
+	// Recon's bootstrap, and GitHub's budgeted reads can take long.
+	if err := r.checkWorkspace(ctx, doc); err != nil {
+		return nil, err
+	}
+	if err := r.checkGitHub(ctx, doc); err != nil {
+		return nil, err
+	}
+	// Then the follow-up reads the rules name (docs/spec/engagement.md,
+	// "Plan selection and follow-ups").
+	r.followUps(ctx, doc)
+	r.checked = doc
+	return doc, r.write("check.json", doc)
+}
+
+// analyze assesses each host asset's posture rules over its facts, from the
+// host collector's evidence Recon wrote under evidence/ or kept, graded
+// through the context the engagement file declares now
+// (docs/spec/runs.md, "Runs, state and configuration"), judges what each
+// network collector read, grades every fired verdict, and builds the
+// report from them.
+func (r *run) analyze(context.Context) (any, error) {
+	doc := &FindingsDoc{Header: r.header("analyze")}
+	evidence := map[string]string{}
+	r.assessed = map[string]report.Envelope{}
+	for _, ra := range r.recon.Assets {
+		aa := AssessedAsset{Name: ra.Name, ID: ra.ID, Status: ra.Status, Reason: ra.Reason}
+		var grading hostasset.Grading
+		if a, ok := r.asset(ra.Name); ok && a.Kind == KindHost {
+			// Every host's, collected or not: an acceptance it cannot
+			// apply is named either way.
+			grading = r.hostGrading(a)
+		}
+		if c, ok := r.hosts[ra.Name]; ok {
+			env := c.Grade(grading)
+			r.assessed[ra.Name] = env
+			aa.Threshold = string(c.Threshold())
+			aa.Assessments, aa.Findings = env.Assessments, env.Findings
+			if r.o.Dir != nil {
+				// Recon wrote it, or an earlier session did for a kept host.
+				aa.Evidence = "evidence/" + fileName(ra.Name) + ".json"
+				evidence[ra.Name] = aa.Evidence
+			}
+		}
+		doc.Assets = append(doc.Assets, aa)
+	}
+	in := r.reportInput(evidence, r.judge())
+	for i := range doc.Assets {
+		for _, ai := range in.Assets {
+			if ai.ID == doc.Assets[i].ID {
+				doc.Assets[i].Judged = slices.Clone(ai.Judged)
+				if ai.Host != nil {
+					doc.Assets[i].HostChains = ai.Host.Chains
+				}
+			}
+		}
+	}
+	githubCoverageReasons(in.Assets)
+	r.out.Report = ereport.Build(in)
+	doc.Refused, doc.Incomplete = r.out.Report.Refused, r.out.Report.Incomplete
+	// The counts are the report's, so findings.json, the report and the
+	// exit code agree per asset and in total.
+	for i := range doc.Assets {
+		doc.Assets[i].Open = 0
+	}
+	for _, f := range r.out.Report.Findings {
+		if th, ok := r.out.Report.Exit.Thresholds[f.Key.Asset]; ok && f.Status == finding.StatusOpen &&
+			finding.Severity(f.Severity).AtLeast(finding.Severity(th.Severity)) {
+			doc.Open++
+			for i := range doc.Assets {
+				if doc.Assets[i].ID == f.Key.Asset {
+					doc.Assets[i].Open++
+				}
+			}
+		}
+	}
+	r.out.Open = doc.Open
+	doc.AcceptancesNotApplied = r.notApplied
+	r.out.Warnings = append(r.out.Warnings, r.notApplied...)
+	return doc, r.write("findings.json", doc)
+}
+
+// reportStage writes the engagement report, JSON and text; the text is
+// always at default verbosity (docs/spec/report.md, "What never
+// appears").
+func (r *run) reportStage(context.Context) (any, error) {
+	if r.o.Dir == nil {
+		return r.out.Report, nil
+	}
+	var js, txt bytes.Buffer
+	if err := ereport.WriteJSON(&js, r.out.Report, false); err != nil {
+		return nil, err
+	}
+	if err := ereport.WriteText(&txt, r.out.Report, ereport.Options{}); err != nil {
+		return nil, err
+	}
+	if err := r.write("report.json", js.Bytes()); err != nil {
+		return nil, err
+	}
+	return r.out.Report, r.write("report.txt", txt.Bytes())
+}
+
+// reportInput is everything the report reads, in its own terms: the
+// engagement as resolved and what each asset's collection produced.
+func (r *run) reportInput(evidence map[string]string, judged map[string][]finding.Judgment) ereport.Input {
+	res := r.res
+	in := ereport.Input{
+		Version: r.o.Version, Name: res.Engagement.Name, Operator: res.Engagement.Operator,
+		Trigger: res.Engagement.Trigger, Zone: r.zone, FromHost: res.fromHost,
+		Path: res.Source.Path, SHA256: res.Source.SHA256, Started: r.o.Started, Finished: time.Now(),
+		NotUsed: res.NotUsed, People: len(res.People) > 0, RedactExtra: res.RedactPatterns,
+		ContextNotes: r.contextNotes(judged),
+	}
+	for _, h := range slices.Sorted(maps.Keys(res.People)) {
+		p := res.People[h]
+		if p.Left == "" {
+			continue
+		}
+		d := ereport.Departure{Handle: h, Left: p.Left}
+		if len(p.Workspace) > 0 {
+			d.Providers = append(d.Providers, "workspace")
+		}
+		if len(p.GitHub) > 0 {
+			d.Providers = append(d.Providers, "github")
+		}
+		in.Departed = append(in.Departed, d)
+	}
+	// A resume names the file by the absolute path it read: the path the
+	// first session typed is relative to that session's directory. A path
+	// that starts with "-" would read as a flag.
+	file := res.Source.Path
+	if r.o.Resume != nil && r.manifest != nil && r.manifest.File != "" {
+		file = r.manifest.File
+	}
+	if strings.HasPrefix(file, "-") {
+		file = "./" + file
+	}
+	in.Observations = map[string]ereport.Observation{}
+	if r.scoped != nil {
+		for _, d := range r.scoped.Domains {
+			names := slices.Clone(d.Names)
+			if d.Control != nil {
+				names = append(names, *d.Control)
+			}
+			for _, n := range names {
+				in.Observations[n.RequestID] = ereport.Observation{CollectedAt: n.CollectedAt, Vantage: n.Vantage}
+			}
+		}
+	}
+	if r.gate != nil {
+		for id, meta := range r.gate.Observations() {
+			in.Observations[id] = ereport.Observation{CollectedAt: meta.CollectedAt, Vantage: meta.Vantage}
+		}
+	}
+	if r.gate != nil {
+		for _, e := range r.gate.Entries() {
+			if e.Event == "dns" && !slices.Contains(in.LevelsUsed, "passive") {
+				in.LevelsUsed = append(in.LevelsUsed, "passive")
+			}
+			if e.Event == "send" && e.Level != "" && !slices.Contains(in.LevelsUsed, e.Level) {
+				in.LevelsUsed = append(in.LevelsUsed, e.Level)
+			}
+		}
+	}
+	in.Vantage = r.o.Vantage
+	for _, ra := range r.recon.Assets {
+		if ra.GitHub != nil {
+			for _, history := range ra.GitHub.RepositoriesHistory {
+				if history.Read.Op != "" {
+					in.Observations[history.Read.RequestID] = ereport.Observation{CollectedAt: history.Read.ObservedAt, Principal: "local mirror reader"}
+				}
+			}
+		}
+	}
+	in.Rerun = "scheck run " + file
+	if r.o.Vantage != "" {
+		in.Rerun += " --vantage " + r.o.Vantage
+	}
+	if in.FromHost {
+		// --host writes a trigger only so the file it builds validates; the
+		// operator declared none.
+		in.Path, in.Trigger = "", ""
+		in.Rerun = "scheck run --host " + r.hostLocator() + " (with the same flags)"
+	}
+	if r.o.Dir != nil {
+		in.Directory = r.o.Dir.Path
+	}
+	in.PrincipalChanges = r.githubPrincipalChanges()
+	in.Resumed, in.EditedByHand, in.Session = r.o.Resume != nil, slices.Clone(r.edited), r.session
+	if a := res.Authorization; a != nil {
+		auth := &ereport.Authorization{By: a.By, Date: a.Date, Source: a.Source, Note: a.Note}
+		for _, w := range a.Windows {
+			from, _ := time.Parse(time.RFC3339, w.From)
+			to, _ := time.Parse(time.RFC3339, w.To)
+			auth.Windows = append(auth.Windows, ereport.Span{From: from, To: to})
+		}
+		now := time.Now()
+		for _, m := range a.Mailboxes {
+			from, until := mailboxSpan(m.Date, m.Expires, r.res.loc)
+			current := !now.Before(from) && now.Before(until)
+			line := ereport.MailboxReport{Asset: m.ID(), By: m.By, Date: m.Date, Expires: m.Expires}
+			selected, known, signedIn := r.mailSignedIn(m.ID())
+			line.SignedIn = signedIn
+			line.Used = selected && (current || signedIn > 0)
+			line.Unused = known && !selected && current
+			// A current entry whose profile was never observed is not ended.
+			switch {
+			case line.Used || line.Unused:
+			case now.Before(from):
+				line.NotYet = true
+			case !current:
+				line.Ended = true
+			default:
+				line.Unobserved = true
+			}
+			auth.Mailboxes = append(auth.Mailboxes, line)
+		}
+		in.Authorization = auth
+	}
+	hostRules := r.hostRules()
+	for _, ra := range r.recon.Assets {
+		asset, _ := r.asset(ra.Name)
+		ai := ereport.AssetInput{Name: ra.Name, ID: ra.ID, Kind: string(ra.Kind), Root: ra.Root == ra.ID, Profile: asset.Profile,
+			Status: ra.Status, Reason: ra.Reason, Detail: ra.Detail, Echo: ra.Echo, Refusal: ra.Refusal,
+			Contact: ra.Contact, JumpContact: ra.JumpContact, Trace: r.traces[ra.Name], Kept: r.kept[ra.Name]}
+		if j, ok := jumpOf(asset); ok {
+			ai.Via = j.String()
+		}
+		if c, ok := r.hosts[ra.Name]; ok {
+			ai.Host = r.hostInput(asset, c, evidence[ra.Name])
+			ai.Host.Graded = r.graded[ra.Name]
+			res := hostRules[ra.ID]
+			ai.Judged, ai.Coverage, ai.PopulationIncomplete = res.Judged, res.Coverage, res.PopulationIncomplete
+		}
+		if (ra.Kind == KindDomain || ra.Kind == KindURL) && ra.Web == nil && strings.HasPrefix(ra.Detail, "read with ") {
+			ai.ReadWith = ra.Root
+		}
+		if ra.Kind == KindRepo && strings.HasPrefix(ra.Root, "saas:github:") && ra.GitHub == nil {
+			ai.Collector = "github"
+			ai.ReadWith = ra.Root
+			for _, root := range r.recon.Assets {
+				if root.GitHub != nil {
+					for _, access := range root.GitHub.RepositoriesAccess {
+						if access.Asset == ra.ID {
+							ai.InventoryRead = githubReadOK(access.RepositoryRead)
+						}
+					}
+				}
+			}
+		}
+		if ra.GitHub != nil {
+			r.githubReportInput(ra, judged[ra.ID], &ai)
+		}
+		if ra.Workspace != nil {
+			r.workspaceReportInput(ra, judged[ra.ID], &ai)
+		}
+		if ra.Web != nil {
+			ai.Collector = "web"
+			ai.WebShortfalls = r.webShortfalls(asset, *ra.Web)
+			if r.gate != nil {
+				for _, e := range r.gate.Entries() {
+					if e.Asset == ra.ID {
+						ai.NetworkTrace = append(ai.NetworkTrace, ereport.Trace{Request: e.RequestID, Params: e.Params, At: e.Time, Decision: e.Decision, OutputSHA256: e.OutputHash})
+					}
+				}
+			}
+			in.RulesVersion = r.o.Version + ":web:" + web.BrowserDataVersion + ":preload:" + web.PreloadVersion + ":takeover:" + web.TakeoverVersion + ":senders:" + web.SenderTableVersion + ":login-redirect:" + web.LoginRedirectVersion
+			wi := r.webInput(asset, *ra.Web)
+			ai.PopulationIncomplete = len(wi.Gaps) > 0 || ra.Web.Cut() || slices.ContainsFunc(wi.Names, func(n web.Name) bool { return n.Status == web.StatusNotChecked || n.Status == web.StatusInsufficient })
+			if len(wi.Restricted) > 0 {
+				for _, warn := range VantageWarnings(res, r.o.Vantage) {
+					ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: ra.ID, Detail: warn})
+				}
+			}
+			if r.reconResolver != nil && ra.Kind == KindDomain {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: ra.ID, Detail: fmt.Sprintf("Recon resolver control: %s at %s. A reserved-name control is a heuristic; it does not prove the resolver never rewrites other missing names.", r.reconResolver.Control, r.reconResolver.Address)})
+			}
+			ai.Redactions = web.RedactionHits(*ra.Web)
+			ai.Unfingerprinted = web.Unfingerprinted(wi)
+			for _, n := range web.SiteNotes(wi) {
+				ai.WebNotes = append(ai.WebNotes, ereport.Note{Kind: "web_context", Source: n.Source, Detail: n.Detail})
+			}
+			for _, n := range web.MailNotes(wi) {
+				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
+			}
+			ai.Judged = append(ai.Judged, judged[ra.ID]...)
+		}
+		in.Assets = append(in.Assets, ai)
+	}
+	for i, t := range res.Tools {
+		if r.toolIsRoot(t.Name) {
+			continue
+		}
+		in.OtherTools = append(in.OtherTools, t.Name)
+		// A tool in an area's category with no root of its own
+		// half-declares that area: its row is kept, never folded
+		// (docs/spec/report.md, "The fold line").
+		if area, ok := toolAreas[t.Category]; ok {
+			in.Declarations = append(in.Declarations, ereport.Declaration{Area: area,
+				Source: fmt.Sprintf("%s tools[%d]", res.Source.Path, i),
+				Detail: t.Name + " is declared under tools, but no root names it, so it was not read"})
+		}
+	}
+	for i, b := range res.Data.Backups {
+		detail := "backups declared in " + b.Where
+		if b.Account != "" {
+			detail += " (" + b.Account + ")"
+		}
+		in.Declarations = append(in.Declarations, ereport.Declaration{Area: "data",
+			Source: fmt.Sprintf("%s data.backups[%d]", res.Source.Path, i), Detail: detail + ", not verified"})
+	}
+	for i, st := range res.Secrets.Production {
+		in.Declarations = append(in.Declarations, ereport.Declaration{Area: "secrets",
+			Source: fmt.Sprintf("%s secrets.production[%d]", res.Source.Path, i),
+			Detail: "production secrets declared in " + st.Store + " on " + st.Asset + ", not read"})
+	}
+	for i, d := range res.Data.MattersMost {
+		if id, ok := res.AssetID(d.Asset); ok {
+			in.DataMattersMost = append(in.DataMattersMost, id)
+			in.MattersMost = append(in.MattersMost, ereport.MatterInput{Key: fmt.Sprintf("data.matters_most[%d]", i), Asset: id, What: d.What})
+		}
+	}
+	for i, risk := range res.Intent.AcceptedRisks {
+		id, _ := res.AssetID(risk.Asset)
+		in.Acceptances = append(in.Acceptances, ereport.AcceptanceInput{
+			Entry: fmt.Sprintf("%s intent.accepted_risks[%d]", res.Source.Path, i), ID: risk.ID,
+			Asset: risk.Asset, AssetID: id, Subject: risk.Subject, Reason: risk.Reason,
+			AcceptedBy: risk.AcceptedBy, Expires: risk.Expires})
+	}
+	for _, x := range res.Exclude {
+		in.Excludes = append(in.Excludes, x.ID)
+	}
+	if r.scoped != nil && len(r.scoped.Domains) > 0 {
+		in.ExcludeMatches = r.excludeMatches()
+	}
+	in.Egress = r.egress()
+	// Levels describe the whole retained run, like egress, not only this session.
+	for _, source := range in.Egress.Sources {
+		if source.Requests > 0 && !slices.Contains(in.LevelsUsed, "passive") {
+			in.LevelsUsed = append(in.LevelsUsed, "passive")
+		}
+	}
+	for _, site := range in.Egress.Sites {
+		if site.Requests > 0 && !slices.Contains(in.LevelsUsed, "observe") {
+			in.LevelsUsed = append(in.LevelsUsed, "observe")
+		}
+	}
+	slices.SortFunc(in.LevelsUsed, func(a, b string) int {
+		levels := []string{"passive", "observe", "probe", "scan"}
+		return cmp.Compare(slices.Index(levels, a), slices.Index(levels, b))
+	})
+	handles := make([]string, 0, len(res.People))
+	for h, p := range res.People {
+		if p.Kind == "employee" && p.Left == "" {
+			handles = append(handles, h)
+		}
+	}
+	sort.Strings(handles)
+	for _, h := range handles {
+		in.Candidates = append(in.Candidates, ereport.Candidate{Handle: h, Why: "employee"})
+	}
+	for _, asset := range r.recon.Assets {
+		if asset.GitHub != nil {
+			if in.RulesVersion == "" {
+				in.RulesVersion = r.o.Version
+			}
+			in.RulesVersion += ":github-access:2026-10-10:" + githubc.WorkflowSyntaxVersion + ":" + githubc.WorkflowExecutionVersion + ":" + githubc.AlertRulesVersion + ":" + githubc.HistoryVersion
+			break
+		}
+	}
+	// C3's table decides which notes a network report carries, whatever
+	// collector read the evidence.
+	if in.RulesVersion != "" || len(in.ContextNotes) > 0 {
+		in.RulesVersion = cmp.Or(in.RulesVersion, r.o.Version) + ":context:" + ContextTableVersion
+	}
+	partitionGitHubJudgments(in.Assets)
+	r.oldestCollected(in.Assets)
+	r.gradeAssets(in.Assets)
+	return in
+}
+
+// answered are the requests whose audit lines record a reading, decided
+// per request: a ledger answer; for a request that sent, only its result,
+// a response of 200 to 499 other than 401, 403, 407 and 429 the gate did
+// not end as unavailable (the DNS lookup of its host shares its id and is
+// no reading of it); for a DNS read, its answer, no such name included.
+// A send line alone, a request the gate refused at any step, a failed read,
+// a Workspace token exchange or the local mirror's line is none.
+func answered(entries []gate.Entry) map[string]bool {
+	type lines struct{ reused, sent, result, ok, dns, refused bool }
+	by := map[string]*lines{}
+	for _, e := range entries {
+		// A Workspace token exchange reads nothing of the tenant.
+		if strings.HasPrefix(e.Op, "workspace.credential_exchange") {
+			continue
+		}
+		l := by[e.RequestID]
+		if l == nil {
+			l = &lines{}
+			by[e.RequestID] = l
+		}
+		switch e.Event {
+		case gate.DecisionReused:
+			l.reused = true
+		case "send":
+			l.sent = true
+		case "result":
+			l.result = true
+			l.ok = l.ok || e.Status >= 200 && e.Status < 500 && !slices.Contains([]int{401, 403, 407, 429}, e.Status) && !strings.HasPrefix(e.Decision, "unavailable:")
+		case "dns_answer":
+			l.dns = l.dns || !strings.HasPrefix(e.Decision, "unavailable:") || e.Decision == "unavailable:nxdomain"
+		case "refused":
+			l.refused = true
+		}
+	}
+	out := map[string]bool{}
+	for id, l := range by {
+		switch {
+		case l.reused:
+			out[id] = true
+		case l.refused:
+			// Stopped after the lookup of its host, or never answered.
+		case l.sent || l.result:
+			out[id] = l.ok
+		default:
+			out[id] = l.dns
+		}
+	}
+	return out
+}
+
+// oldestCollected gives each asset the collection time of the oldest
+// successful observation it rests on, after partition moved each read to
+// its repository: a host's collection start, a network asset's earliest
+// gate read, a reused one at its first time, and for a domain or url asset
+// Scope's discovery (docs/spec/report.md, "Coverage"). An asset nothing
+// was read for has none.
+func (r *run) oldestCollected(assets []ereport.AssetInput) {
+	var observed map[string]gate.Observation
+	read := map[string]bool{}
+	if r.gate != nil {
+		observed = r.gate.Observations()
+		read = answered(r.gate.Entries())
+	}
+	for i := range assets {
+		a := &assets[i]
+		var times []time.Time
+		if c, ok := r.hosts[a.Name]; ok {
+			times = append(times, c.Evidence().Run.Started)
+		}
+		for _, tr := range a.NetworkTrace {
+			if read[tr.Request] {
+				times = append(times, observed[tr.Request].CollectedAt)
+			}
+		}
+		if (a.Kind == string(KindDomain) || a.Kind == string(KindURL)) && r.scoped != nil {
+			times = append(times, r.scoped.CollectedAt)
+		}
+		for _, t := range times {
+			if !t.IsZero() && (a.OldestCollectedAt.IsZero() || t.Before(a.OldestCollectedAt)) {
+				a.OldestCollectedAt = t
+			}
+		}
+	}
+}
+
+// excludeMatches counts, by exclude, the names discovery dropped for it:
+// from certificate transparency, and names it or whose chain it covered.
+func (r *run) excludeMatches() map[string]int {
+	out := map[string]int{}
+	for i, x := range r.res.Exclude {
+		entry := excludeEntry(i)
+		n := 0
+		for _, d := range r.scoped.Domains {
+			for _, dr := range d.Dropped {
+				if dr.Rule == entry {
+					n += dr.Count
+				}
+			}
+			for _, name := range d.Names {
+				if name.ExcludedBy == entry {
+					n++
+				}
+			}
+		}
+		out[x.ID] += n
+	}
+	return out
+}
+
+// egress is what left this machine through the gate and the host
+// collector (docs/spec/report.md, "What left this machine"), in this
+// session and every earlier one of the run, an earlier one that did not
+// end named as unrecorded.
+func (r *run) egress() *ereport.EgressInput {
+	e := r.sessionEgress()
+	// The report counts this session's contacts from the assets.
+	e.Contacts = nil
+	if r.manifest != nil {
+		for _, sess := range r.manifest.Sessions[:len(r.manifest.Sessions)-1] {
+			mergeEgress(e, sess.Egress)
+			if !sess.Ended {
+				e.Unrecorded = append(e.Unrecorded, sess.Started)
+			}
+		}
+	}
+	return e
+}
+
+// sessionEgress is what this session sent.
+func (r *run) sessionEgress() *ereport.EgressInput {
+	e := &ereport.EgressInput{UserAgent: gate.UserAgent(r.o.Version)}
+	if r.gate != nil {
+		uses, sites := r.gate.Egress()
+		for _, u := range uses {
+			e.Sources = append(e.Sources, ereport.SourceInput{Source: u.Source, Operator: u.Operator, Host: u.Host,
+				Sent: u.Subjects, Requests: u.Requests, Credentials: u.Credentials, RootControls: u.RootControls,
+				InvalidQueries: u.InvalidQueries, InvalidControl: u.InvalidControl, ScopedResolversIgnored: u.ScopedResolversIgnored})
+		}
+		e.Sites = sessionSites(sites)
+	}
+	// The names SSH resolved, as the transport recorded them: a host's
+	// own or its jump host's here, a host's behind a jump host there.
+	if r.recon != nil {
+		for _, ra := range r.recon.Assets {
+			if r.kept[ra.Name] {
+				// An earlier session reached it, and recorded so.
+				continue
+			}
+			if ra.Kind == KindHost {
+				hc := ereport.HostContact{ID: ra.ID, Status: ra.Status, Contact: ra.Contact, JumpContact: ra.JumpContact,
+					SideEffects: ereport.SideEffects(ra.Observations)}
+				if a, ok := r.asset(ra.Name); ok {
+					if j, ok := jumpOf(a); ok {
+						hc.Via = j.String()
+					}
+				}
+				e.Contacts = append(e.Contacts, hc)
+			}
+			e.SSHResolved = append(e.SSHResolved, ra.ResolvedHere...)
+			if ra.ResolvedByJump != "" {
+				e.SSHResolvedByJump = append(e.SSHResolvedByJump, ra.ResolvedByJump)
+			}
+		}
+	}
+	for _, l := range []*[]string{&e.SSHResolved, &e.SSHResolvedByJump} {
+		slices.Sort(*l)
+		*l = slices.Compact(*l)
+	}
+	return e
+}
+
+// hostLocator is the --host locator of a one-host engagement, as a rerun
+// command names it.
+func (r *run) hostLocator() string {
+	for _, a := range r.res.Assets {
+		if a.Kind != KindHost {
+			continue
+		}
+		if a.Local() {
+			return "local"
+		}
+		loc := a.Address()
+		if strings.Contains(loc, ":") {
+			loc = "[" + loc + "]"
+		}
+		if a.User != "" {
+			loc = a.User + "@" + loc
+		}
+		if a.Port != 0 && a.Port != 22 {
+			loc += ":" + strconv.Itoa(a.Port)
+		}
+		return loc
+	}
+	return ""
+}
+
+// hostInput is a collected host asset as the report reads it.
+func (r *run) hostInput(a ResolvedAsset, c *hostasset.Collection, evidence string) *ereport.HostInput {
+	src := r.res.Source.Path + " assets." + a.Name
+	h := &ereport.HostInput{Envelope: r.assessed[a.Name], User: a.User, Planned: c.Planned(), Lost: c.Lost(),
+		Evidence: evidence}
+	if a.Local() {
+		h.User = "the user running scheck"
+		if u, err := user.Current(); err == nil && u.Username != "" {
+			h.User = u.Username
+		}
+	}
+	for i, id := range a.DisableChecks {
+		h.Disabled = append(h.Disabled, ereport.Entry{Value: id, Source: fmt.Sprintf("%s.disable_checks[%d]", src, i)})
+	}
+	for i, p := range a.DenyPaths {
+		h.DenyPaths = append(h.DenyPaths, ereport.Entry{Value: p, Source: fmt.Sprintf("%s.deny_paths[%d]", src, i)})
+	}
+	if a.Context != nil && len(a.Context.ExpectedServices) > 0 {
+		h.ExpectedServices = len(a.Context.ExpectedServices)
+		h.ExpectedSource = src + ".context.expected_services"
+	}
+	return h
+}
+
+func (r *run) asset(name string) (ResolvedAsset, bool) {
+	for _, a := range r.res.Assets {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return ResolvedAsset{}, false
+}
+
+// toolAreas maps a tool's declared category to the area its collector
+// would read.
+var toolAreas = map[string]string{
+	"identity": "identity", "idp": "identity", "code": "cicd", "ci": "cicd", "cloud": "cloud",
+	"email": "email", "dns": "email", "logging": "logging", "monitoring": "logging",
+}
+
+// toolIsRoot reports whether a declared tool is also a declared root (a
+// google-workspace tool and its tenant), so it gets no row of its own.
+func (r *run) toolIsRoot(tool string) bool {
+	return slices.ContainsFunc(r.res.Roots, func(root Ref) bool { return strings.HasPrefix(root.ID, "saas:"+tool+":") })
+}
+
+// fileName makes an asset name, which may be a canonical id, safe as a file
+// name.
+func fileName(name string) string {
+	return strings.Map(func(c rune) rune {
+		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '.' {
+			return c
+		}
+		return '_'
+	}, name)
+}
+
+func sessionSites(sites []gate.Site) []ereport.SiteInput {
+	var out []ereport.SiteInput
+	byName := map[[2]string]int{}
+	for _, st := range sites {
+		key := [2]string{st.Name, strconv.FormatBool(st.FirstParty)}
+		i, ok := byName[key]
+		if !ok {
+			i = len(out)
+			byName[key] = i
+			out = append(out, ereport.SiteInput{Name: st.Name, FirstParty: st.FirstParty})
+		}
+		out[i].Requests += st.Requests
+	}
+	slices.SortFunc(out, func(a, b ereport.SiteInput) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(strconv.FormatBool(a.FirstParty), strconv.FormatBool(b.FirstParty)))
+	})
+	return out
+}

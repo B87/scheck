@@ -68,6 +68,9 @@ execs:
     \ .ssh/authorized_keys .ssh/authorized_keys2\nhostkey /etc/ssh/ssh_host_rsa_key\nhostkey /etc/ssh/ssh_host_ecdsa_key\nhostkey /etc/ssh/ssh_host_ed25519_key\nacceptenv LANG\nacceptenv LC_*\nauthenticationmethods any\nchanneltimeout none\nsubsystem sftp /usr/lib/openssh/sftp-server \nmaxstartups 10:30:100\npersourcemaxstartups none\npersourcenetblocksize 32:128\npermittunnel no\nipqos lowdelay throughput\nrekeylimit 0 0\npermitopen any\npermitlisten any\npermituserenvironment no\npubkeyauthoptions none\n"
   code: 0
 - argv:
+  - sudo
+  - -n
+  - --
   - ss
   - -tulpnH
   stdout: 'tcp LISTEN 0      128    127.0.0.1:22 0.0.0.0:* users:(("sshd",pid=612,fd=3))

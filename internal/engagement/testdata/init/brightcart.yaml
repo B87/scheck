@@ -1,0 +1,141 @@
+# This file names people, people who have left, and accepted weaknesses.
+# Keep it out of public repositories.
+
+schema: 1
+name: brightcart-2026-q4
+operator: "Dani, IT and operations"
+timezone: Europe/London
+trigger: incident
+# About three weeks ago someone paid a fake invoice that came from a domain that looked like ours. Sam asked if we're safe now.
+
+scope:
+  domains:
+    - brightcart.co.uk # the shop and the email
+    - brightcart.com
+    - bright-cart.co.uk
+    # About eight others, brand names and typos, on a spreadsheet. I don't trust the spreadsheet, it may be out of date, and I don't have the other names in my head. They're mostly at GoDaddy.
+  workspace: brightcart.co.uk
+  github: brightcart-dev # I'm not sure if that's ours or the agency's.
+  cloud: none # I don't run one.
+  hosts: # not this computer. Two Linux servers at the hosting company. I don't know the addresses. The MSP handles them.
+    - user: ""
+      address: "I don't know the addresses"
+      key: "" # I don't have a key file. I am not pasting a key.
+      known_hosts: "I don't know what a known_hosts file is"
+      jump: "We don't connect through a jump machine, not that I've ever done"
+      # SSH is only the MSP and Leo. The MSP handles the servers.
+
+exclude: none
+# The GitHub might belong to the agency rather than us. I don't know. I'm not saying don't read it. I just don't want to find out we weren't allowed to.
+
+mail:
+  - domain: brightcart.co.uk
+    sends: true
+    via:
+      - Google Workspace # staff mail
+      - Mailchimp # marketing newsletters
+      - "the server, I think" # order emails from the shop
+    selector: "I do not know" # for any of those. I was not going to invent one.
+    # The MSP set up DMARC after the fake invoice. I don't know what the policy is.
+  - domain: brightcart.com
+    sends: false # as far as I know
+  - domain: bright-cart.co.uk
+    sends: false # as far as I know
+  # The other brand and typo ones, I don't think they send mail either. I would not swear to that without the spreadsheet and GoDaddy.
+
+people:
+  - handle: dani
+    kind: employee
+    google: dani@brightcart.co.uk # improvised
+    github: "no GitHub that I know of"
+  - handle: sam
+    kind: employee # the owner
+    google: sam@brightcart.co.uk # improvised
+    github: "I don't know a GitHub username"
+  - handle: leo
+    kind: employee # part-time, the only developer we have
+    google: leo@brightcart.co.uk # improvised
+    github: "I don't know his GitHub"
+  - handle: bookkeeper
+    kind: contractor
+    company: "freelance, they work for themselves, I don't have a company name"
+    google: "" # they have a Workspace account. I am not typing an address in case I get the name wrong.
+    github: "no GitHub"
+  - handle: warehouse
+    kind: shared login
+    uses: "the warehouse team, on the one PC in the warehouse"
+    google: warehouse@brightcart.co.uk # improvised
+    github: "no GitHub"
+  - handle: orders
+    kind: "I think this is a Google group, not a login"
+    uses: "customer service use the mail"
+    google: orders@brightcart.co.uk
+  - handle: info
+    kind: "I think a Google group"
+    google: info@brightcart.co.uk
+    # I'm not sure who is actually in it.
+  - handle: returns
+    kind: "I think a Google group"
+    google: returns@brightcart.co.uk
+  - handle: msp
+    kind: "the MSP has a login, I think, from when they set Google up"
+    google: "" # I don't know the address. I don't know if it is still active.
+    github: "no GitHub"
+    # Two engineers at the MSP as well. I know their names. I'm not typing them from memory in case I misspell them. They are contractors. Our MSP. I don't think they have GitHub with us.
+  - handle: agency
+    kind: contractor
+    company: "the web agency that builds the shop"
+    google: "" # three or four people. I don't know their names or their Google addresses.
+    github: "" # I don't know any GitHub usernames. I don't know the company's exact legal name off the top of my head.
+  # Break-glass: I don't know what that is. I don't think we have one.
+
+left:
+  - who: customer service manager # I know the name. I'm not guessing the spelling.
+    date: "July 2026" # improvised
+    # I don't know the day. I suspended the account the day they left. I can get the dates from the Google admin console.
+  - who: marketing intern # I know the name. I'm not guessing the spelling.
+    date: "September 2026" # improvised
+    # I don't know the day. End of summer. I suspended that one straight away as well.
+
+expect:
+  workspace_super_admins:
+    - dani
+    - sam
+    # The MSP one as well, if that account is still there. I'm not sure it is.
+  github_owners: skip # I can't name an owner.
+
+repositories: skip
+# I don't know the repository names. The agency has the code. There is a live shop and they have a staging copy. I don't know the staging address either.
+
+twostep:
+  workspace: some accounts
+  # Office staff have it. The warehouse shared account does not, because that PC is shared. I'm not sure about the bookkeeper or the MSP login.
+  github: "I do not know"
+
+public_web:
+  - url: https://www.brightcart.co.uk # improvised
+    why: "the shop, customers buy there"
+  - url: https://brightcart.co.uk # improvised
+    why: "I think this is the same shop"
+  # I don't have another page we mean to publish. The other domains are not the shop.
+
+restricted_web: "none that I can give an address for"
+# There is a staging copy of the shop the agency uses. I don't know the address. I don't think it should be on the internet. I don't know if it is on a VPN or only at the agency. I'm not picking a place.
+
+servers:
+  - which: both servers
+    reach: "Customers on the internet have to be able to open the shop. I don't know about a VPN. The MSP locked the servers down. SSH is only the MSP and Leo."
+    environment: live # Not staging and not a development machine. Staging is the agency's other copy and I don't have it as a server.
+    ports:
+      - port: 443 # improvised
+        protocol: "" # I don't know what tcp or udp means, so I won't pick one. I'm guessing on 443.
+        for: the website
+    # The MSP handles this.
+
+not_operated:
+  - cloud
+# I'm not saying no servers. We have two. The MSP operates them, but I already said they should be checked.
+# I'm not saying no GitHub. brightcart-dev is a name I have, even if the agency owns it.
+# I'm not saying no domains.
+# I'm not ticking data. I don't run a database myself and I don't know if that counts.
+# I'm not saying identity, secrets or logging don't apply. I don't know what "secrets" is supposed to mean here.

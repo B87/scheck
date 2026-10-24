@@ -5,7 +5,10 @@ execs:
   - argv: [uname, -s]
     stdout: "Linux\n"
     code: 0
-  - argv: [ss, -tulpnH]
+  - argv: [which, ss]
+    stdout: "/usr/bin/ss\n"
+    code: 0
+  - argv: [sudo, -n, --, ss, -tulpnH]
     stdout: |
       tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=700,fd=3))
       tcp LISTEN 0      128    0.0.0.0:9999 0.0.0.0:* users:(("unknown-agent",pid=901,fd=7))

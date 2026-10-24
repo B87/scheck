@@ -11,7 +11,7 @@ import (
 )
 
 // The reference adapter passes the same table mock has passed since M2.1
-// (docs/SPEC.md §11, acceptance criterion 8).
+// (docs/spec/host-collector.md §9, acceptance criterion 8).
 func TestConformance(t *testing.T) { conformance.Run(t, Name, harness) }
 
 func provider(t *testing.T, f *fakeServer, url string, cfg llm.Config) *Provider {
@@ -45,7 +45,7 @@ func TestNewValidatesConfiguration(t *testing.T) {
 	if _, err := New(llm.Config{Model: "gpt-4o", Env: noKey}); err == nil || !strings.Contains(err.Error(), keyVar) {
 		t.Errorf("no key on the default endpoint: %v", err)
 	}
-	if _, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", Env: noKey}); err == nil || !strings.Contains(err.Error(), "max_context") {
+	if _, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", Env: noKey}); err == nil || !strings.Contains(err.Error(), "--max-context") {
 		t.Errorf("unknown window: %v", err)
 	}
 	p, err := New(llm.Config{Model: "mystery-7b", BaseURL: "http://localhost:8000/v1", MaxContext: 8192, Env: noKey})
@@ -124,7 +124,7 @@ func TestRequestEncoding(t *testing.T) {
 // Capability differences are absorbed by the adapter, never by the loop:
 // an endpoint that only knows max_tokens gets it; one that rejects
 // reasoning_effort loses it and Native records that; one that rejects tools
-// fails as unsupported (docs/SPEC.md §5.3).
+// fails as unsupported (docs/spec/model.md §4).
 func TestAdapterAbsorbsCapabilityDifferences(t *testing.T) {
 	f, srv := newFake(t, []conformance.Turn{{Text: "ok"}, {Text: "ok"}})
 	defer srv.Close()

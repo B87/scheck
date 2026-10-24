@@ -1,0 +1,96 @@
+# =============================================================================
+#  host.yaml: one host over SSH
+# =============================================================================
+#
+#  The other surfaces are in docs/examples/README.md.
+#
+#  WHAT THIS CHECKS
+#  ----------------
+#  The host collector, read-only: the catalog for this platform at the
+#  asset's profile (baseline here; hardened is the other tier). It does not
+#  write. Elevation is `sudo -n --` as a prefix, never a password; without
+#  root or that sudo, checks that need privileges are unavailable and the
+#  report says so.
+#
+#  The first command on the session is the canary. A mismatch exits 3 before
+#  anything else runs.
+#
+#  context.exposure is what can move a finding that exposure applies to. A
+#  password login on an internet host is not graded like one on a private
+#  host. expected_services names the listeners you intend. The host posture
+#  rules do not file from that list. Two rules read it. db.listens_unfiltered:
+#  a database port declared for localhost, lan or vpn that listens beyond
+#  localhost with no host firewall rule in front ranks one step higher; the
+#  declaration never lowers it. svc.listens_beyond_declared: any other
+#  service declared for localhost, lan or vpn that listens beyond that
+#  audience with no host firewall rule in front is a finding of its own
+#  (docs/spec/engagement.md, "The multi-fact rules of 0.0.2"). Both need
+#  elevate: sudo below, since the listeners are read with sudo -n.
+#
+#  HOW TO READ THE RESULT
+#  ----------------------
+#    findings   the host posture rules. Two that are easy to recognize:
+#               sshd.password_auth_enabled, sshd.root_login_enabled. A
+#               database open to every address is db.listens_unfiltered,
+#               under data stores; a cloud firewall was not read.
+#               `scheck catalog` lists the checks; the rules are in
+#               docs/spec/host-collector.md.
+#    -v         the host's fact sheet, under the engagement report.
+#    exit       1 = an open finding at or above the asset's threshold,
+#               2 = the host was not read or a budget ended the run,
+#               3 = usage, policy, or the canary. Exit 0 is not a verdict
+#               that the host is fine.
+#
+#  To check the machine scheck is running on, the root is `host: local` and
+#  the asset drops jump, identity and known_hosts. Or generate a starting
+#  file and edit it (this contacts nothing):
+#
+#    scheck run --host local --write-engagement host.yaml
+#
+#  RUN
+#  ---
+#  Replace 203.0.113.5. The address is documentation range (TEST-NET-3); a
+#  real run against it connects nowhere useful.
+#
+#    scheck run docs/examples/host.yaml --stop-after intake   # contacts nothing
+#    scheck run docs/examples/host.yaml
+#    scheck run docs/examples/host.yaml -v
+#    scheck run docs/examples/host.yaml --format json
+#
+#  SSH uses strict host-key verification. The key or the agent authenticates;
+#  this file holds a path, never a key.
+# =============================================================================
+
+schema: 1
+engagement:
+  name: host-lab
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  - host: deploy@203.0.113.5
+
+# Accounts in an excluded address are never contacted. A jump host is
+# contacted too, so an exclude covers it as well.
+# exclude:
+#   - host: 203.0.113.9
+
+assets:
+  deploy:
+    host: deploy@203.0.113.5
+    # jump: ops@198.51.100.7          # one hop; nothing runs on it
+    identity: ~/.ssh/deploy            # a path, never a key; else ssh-agent
+    known_hosts: ~/.ssh/known_hosts
+    timeout: 10m                       # this host's run, not limits.timeout
+    elevate: sudo                      # sudo -n --; never a password
+    profile: baseline                  # or hardened
+    # disable_checks: [fs.suid]        # only narrows; scheck catalog lists ids
+    # deny_paths: [/srv/backups]       # literal absolute prefixes, after realpath
+    context:
+      role: "web and database host"
+      exposure: internet               # internet | vpn | lan | airgapped
+      environment: prod                # prod | staging | dev
+      expected_services:
+        - {port: 443, proto: tcp, purpose: "public TLS", audience: internet}
+        - {port: 5432, proto: tcp, purpose: "postgres", audience: localhost}

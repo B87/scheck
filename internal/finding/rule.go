@@ -10,16 +10,21 @@ import (
 )
 
 // Rule turns one fact into one finding when the fact's meaning needs no
-// judgement (docs/SPEC.md §7.5). One rule reads one check: a conclusion that
-// needs two facts is the model's job in phase 2.
+// judgement (docs/spec/host-collector.md §6.5). A rule reads one check, or
+// one check and a With check of the same host joined per account, when the
+// first alone cannot tell a weakness from a harmless state (an empty password
+// on an account that cannot log in). Wider conclusions are the engagement's
+// multi-fact rules (docs/spec/engagement.md, "Multi-fact rules").
 type Rule struct {
 	Finding  string         // finding id; the Def supplies title, severity, impact, remediation
-	Check    string         // the one check whose fact this rule reads
+	Check    string         // the check whose fact this rule reads
 	Platform check.Platform // macos | linux | any
 	When     Predicate
+	// With is a second check of the same host, read only by a JoinPredicate.
+	With string
 }
 
-// Assessment statuses (docs/SPEC.md §7.5). Only Matched emits a finding, and
+// Assessment statuses (docs/spec/host-collector.md §6.5). Only Matched emits a finding, and
 // NotMatched means this predicate was disproved by sufficient evidence — not
 // that the host or the domain is secure.
 const (
@@ -35,15 +40,26 @@ type Assessment struct {
 	Observation string `json:"observation,omitempty"`
 	Finding     string `json:"finding"`
 	Check       string `json:"check"`
-	Status      string `json:"status"`
-	Reason      string `json:"reason"`
+	// With is the rule's second check and WithObservation its capture, for a
+	// rule that joins two (docs/spec/host-collector.md §6.5). A Reason that
+	// starts with "with-" is that check's, not Check's.
+	With            string `json:"with,omitempty"`
+	WithObservation string `json:"with_observation,omitempty"`
+	Status          string `json:"status"`
+	Reason          string `json:"reason"`
 }
+
+// ReasonWith prefixes a reason that belongs to a rule's With check.
+const ReasonWith = "with-"
 
 // Verdict is a predicate's reading of one fact.
 type Verdict struct {
 	Status  string
 	Reason  string
 	Excerpt string
+	// WithExcerpt is the With check's part of the evidence, for a rule that
+	// reads two checks.
+	WithExcerpt string
 }
 
 func matched(reason, excerpt string) Verdict {
@@ -59,7 +75,7 @@ func notAssessed(reason string) Verdict { return Verdict{Status: NotAssessed, Re
 // recognized value proving its condition, and may report "not matched" only
 // when the evidence disproves it. Unknown output, a missing field, a redacted
 // value or a truncated capture is `not_assessed` — never a pass
-// (docs/SPEC.md §7.5).
+// (docs/spec/host-collector.md §6.5).
 type Predicate interface {
 	Eval(parsed any) Verdict
 	// Accepts reports whether this predicate can read a check parsed that
@@ -214,7 +230,9 @@ func (p FieldEquals) Eval(parsed any) Verdict {
 }
 
 // AnyRecord fires when a typed shape produced any record at all: the
-// existence of the record is the condition ("updates are pending").
+// existence of the record is the condition ("updates are pending"). Over a
+// partial population it fires on what it saw, is never disproved, and its
+// count is a lower bound (docs/spec/scope.md, "Responses").
 type AnyRecord struct{}
 
 func (p AnyRecord) Accepts(k check.ParserKind) bool { return check.IsTyped(k) }
@@ -227,7 +245,10 @@ func (p AnyRecord) Eval(parsed any) Verdict {
 	}
 	if recs.Len() > 0 {
 		excerpt := recordExcerpt(recs.Items[0])
-		if recs.Len() > 1 {
+		switch {
+		case recs.Partial:
+			excerpt += fmt.Sprintf(" (at least %d)", recs.Len())
+		case recs.Len() > 1:
 			excerpt += fmt.Sprintf(" (+%d more)", recs.Len()-1)
 		}
 		return matched("records-present", excerpt)
@@ -305,7 +326,7 @@ func recordExcerpt(rec check.Record) string {
 	return strings.Join(parts, " ")
 }
 
-// rules is the compiled-in posture rule table (docs/SPEC.md §7.5 seed table).
+// rules is the compiled-in posture rule table (docs/spec/host-collector.md §6.5 seed table).
 // Every entry is validated against the check catalog and the finding catalog
 // by ValidateRules.
 var rules = []Rule{
@@ -326,8 +347,10 @@ var rules = []Rule{
 	{Finding: IDRootLoginEnabled, Check: "sshd.config", Platform: check.Any,
 		When: KeyEquals{Key: "permitrootlogin", Value: "yes",
 			Known: []string{"yes", "no", "without-password", "prohibit-password", "forced-commands-only"}}},
-	{Finding: IDEmptyPassword, Check: "accounts.passwd_status", Platform: check.Linux,
-		When: FieldEquals{Field: check.FieldStatus, Value: "NP", Known: []string{"p", "l", "np"}}},
+	// `PS` and `LK` are libuser's spellings (RHEL); an empty password is a
+	// weakness only on an account with a login shell.
+	{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd", Platform: check.Linux,
+		When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP", Known: []string{"p", "l", "np", "ps", "lk"}}},
 	{Finding: IDShadowPermissions, Check: "accounts.shadow_meta", Platform: check.Linux,
 		When: FieldOutside{Field: check.FieldMode, Allowed: []string{"0", "600", "640"}, Recognize: `^[0-7]{1,4}$`}},
 	{Finding: IDSELinuxDisabled, Check: "mac.sestatus", Platform: check.Linux,
@@ -372,11 +395,13 @@ func rulesFor(findingID string) []Rule {
 	return out
 }
 
-// RulesFor returns the rules that read a given check id, for `scheck explain`.
+// RulesFor returns the rules that read a given check id, as their check or
+// their With check, for `scheck explain`: skipping either leaves the rule
+// not assessed.
 func RulesFor(checkID string) []Rule {
 	var out []Rule
 	for _, r := range Rules() {
-		if r.Check == checkID {
+		if r.Check == checkID || r.With == checkID {
 			out = append(out, r)
 		}
 	}

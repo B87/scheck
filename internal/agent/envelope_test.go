@@ -40,7 +40,7 @@ func schemaFor(t *testing.T) *jsonschema.Schema {
 }
 
 // envelope builds the report a phase 2 pass produces, the way the harness
-// does. No CLI path reaches this in 0.0.1 (docs/SPEC.md §2.1); the envelope
+// does. No CLI path reaches this in 0.0.1 (docs/spec/host-collector.md §2.1); the envelope
 // contract still has to hold for the evaluation harness and for whatever
 // revives the loop, so it is pinned here rather than in cmd/scheck.
 func envelope(t *testing.T, h *harness, out Outcome) report.Envelope {
@@ -55,7 +55,7 @@ func envelope(t *testing.T, h *harness, out Outcome) report.Envelope {
 		Started: time.Now(), Profile: "baseline", Transport: "fixture", Elevation: "root", Canary: "n/a",
 		Result: &res,
 		Phase2: &report.Phase2{
-			Provider: p.Name(), Model: "mock-model", Native: p.Native(), Limits: p.Limits(), Usage: out.Usage,
+			Provider: p.Name(), Model: "mock-model", Native: report.ModelNative(p.Native()), Limits: report.ModelLimits(p.Limits()), Usage: report.ModelUsage(out.Usage),
 			Mode: h.sess.Mode(), PromptVersion: PromptVersion, Complete: out.Complete(), Reason: out.Reason,
 			Agent: report.AgentRun{Iterations: out.Iterations, Checks: out.Checks, Reported: out.Reported,
 				Ended: ended, Text: out.Text, RuledOut: res.RuledOut},
@@ -109,21 +109,20 @@ func TestAgentEnvelopeValidatesAgainstSchema(t *testing.T) {
 	if model == nil || model.ID != finding.IDUnexpectedListener || model.Severity != finding.SevMedium || model.Service == nil {
 		t.Fatalf("model finding: %+v", model)
 	}
-	var text bytes.Buffer
-	if err := report.WriteText(&text, env, report.Options{}); err != nil {
+	var js bytes.Buffer
+	if err := report.WriteJSON(&js, env); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"net.unexpected_listener", "Model summary", "sshd is the only listener",
-		"agent pass (mock, mock-model; 3 turns, 1 model-initiated check", "Model findings carry code-assigned severity"} {
-		if !strings.Contains(text.String(), want) {
-			t.Errorf("text lacks %q:\n%s", want, text.String())
+	for _, want := range []string{"net.unexpected_listener", "sshd is the only listener", `"provider": "mock"`} {
+		if !strings.Contains(js.String(), want) {
+			t.Errorf("JSON lacks %q:\n%s", want, js.String())
 		}
 	}
 }
 
 // A pass that hits a context limit leaves an incomplete report that keeps
 // the facts and the rule findings and says what happened, without dropping
-// evidence to make the request fit (docs/SPEC.md §5.3).
+// evidence to make the request fit (docs/spec/model.md §4).
 func TestIncompleteAgentEnvelopeKeepsFacts(t *testing.T) {
 	h := newHarness(t, mock.Transcript{Limits: llm.Limits{MaxContext: 500}, Turns: []mock.Turn{{Text: "never"}}}, nil)
 	out := h.sess.Run(context.Background())

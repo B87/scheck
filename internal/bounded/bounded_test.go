@@ -50,6 +50,12 @@ func ubuntu(t *testing.T) *harness {
 	return newHarness(t, filepath.Join("..", "..", "testdata", "fixtures", "ubuntu"), runner.ElevateSudo)
 }
 
+// unnamed is the Ubuntu fixture whose listeners capture names no owning
+// process.
+func unnamed(t *testing.T) *harness {
+	return newHarness(t, filepath.Join("testdata", "unnamed-listeners"), runner.ElevateSudo)
+}
+
 // recorder answers with a fixed map and keeps every request, so a test can
 // assert what would have been sent to a model.
 type recorder struct {
@@ -98,7 +104,7 @@ func find(items []Item, key string) (Item, bool) {
 // The deterministic filters are the point of the design: what code can
 // settle is settled by code and never becomes a question.
 func TestFiltersSettleWhatCodeKnows(t *testing.T) {
-	h := ubuntu(t)
+	h := unnamed(t)
 	items := Enumerate(h.sheet, nil)
 	for _, tc := range []struct{ key, status, reason string }{
 		{"listener:22/tcp", StatusInsufficient, "the capture does not name the owning process"},
@@ -118,7 +124,7 @@ func TestFiltersSettleWhatCodeKnows(t *testing.T) {
 	}
 }
 
-// A declared service is §6.3's answer, in code. Asking about it produced a
+// A declared service is docs/spec/host-collector.md §5.3's answer, in code. Asking about it produced a
 // phase 2 false positive (docs/eval/phase2-results.md).
 func TestDeclaredServiceIsNeverAsked(t *testing.T) {
 	h := ubuntu(t)
@@ -142,7 +148,7 @@ func TestDeclaredServiceIsNeverAsked(t *testing.T) {
 // Truncated or redacted evidence is insufficient: it is never sent and
 // never filed, however the questions would have been answered.
 func TestInsufficientEvidenceIsNeverSentOrFiled(t *testing.T) {
-	h := newHarness(t, filepath.Join("testdata", "truncated"), runner.ElevateNone)
+	h := newHarness(t, filepath.Join("testdata", "truncated"), runner.ElevateSudo)
 	// An answer set that would file every kind if it were ever asked.
 	damning := map[string]float64{QExplained: 0, QVendor: 0, QHallmarks: 1, QSensitive: 1, QPerson: 0}
 	rec := &recorder{answers: damning}
@@ -169,7 +175,7 @@ func TestInsufficientEvidenceIsNeverSentOrFiled(t *testing.T) {
 // which is the phase 2 false positive (sshd on 0.0.0.0:22) refiled by a
 // different route. Found by the R3 probe's dry run, 2026-09-21.
 func TestListenerWithoutAProcessIsNotJudged(t *testing.T) {
-	h := ubuntu(t)
+	h := unnamed(t)
 	damning := map[string]float64{QExplained: 0, QVendor: 0, QHallmarks: 1, QSensitive: 1, QPerson: 0}
 	rec := &recorder{answers: damning}
 	res := run(t, h, rec, nil)
@@ -360,7 +366,7 @@ func TestSilenceAloneFilesNothing(t *testing.T) {
 
 // A filed finding carries evidence the store validated against the exact
 // observation, and the severity the catalog assigns — never one a model
-// proposed (docs/SPEC.md §7.1).
+// proposed (docs/spec/host-collector.md §6.1).
 func TestFiledFindingIsValidatedAndGradedByCode(t *testing.T) {
 	h := newHarness(t, filepath.Join("..", "..", "testdata", "eval", "cases", "macos-filevault-off"), runner.ElevateNone)
 	plist := "launchd:/Library/LaunchDaemons/com.nordvpn.macos.helper.plist"

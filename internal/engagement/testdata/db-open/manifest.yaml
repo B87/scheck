@@ -1,0 +1,19 @@
+# The Ubuntu fixture with postgres listening on every address and no host
+# firewall: ufw not installed, firewalld absent, an empty nftables ruleset
+# and the nf_tables iptables backend (docs/spec/engagement.md, R1).
+platform: linux
+base: ../../../../testdata/fixtures/ubuntu
+execs:
+  - argv: [sudo, -n, --, ss, -tulpnH]
+    stdout: |
+      tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=11,fd=3))
+      tcp LISTEN 0      244    0.0.0.0:5432 0.0.0.0:* users:(("postgres",pid=812,fd=6))
+      tcp LISTEN 0      244       [::]:5432    [::]:* users:(("postgres",pid=812,fd=7))
+    code: 0
+  - argv: [which, ufw]
+    code: 1
+  - argv: [which, nft]
+    stdout: "/usr/sbin/nft\n"
+    code: 0
+  - argv: [sudo, -n, --, nft, list, ruleset]
+    code: 0

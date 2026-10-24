@@ -1,6 +1,10 @@
 package finding
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,7 +15,7 @@ import (
 // The compiled-in rule table is validated against the compiled-in check
 // catalog: a rule can only name a check that exists on its platform, a
 // finding that has a definition, and a predicate that can read that check's
-// parser (docs/SPEC.md §7.5).
+// parser (docs/spec/host-collector.md §6.5).
 func TestRuleTableInvariants(t *testing.T) {
 	if vs := ValidateRules(); len(vs) != 0 {
 		for _, v := range vs {
@@ -44,6 +48,16 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 			RuleNoPredicate},
 		{"bad regexp", Rule{Finding: IDFileVaultOff, Check: "disk.fdesetup", Platform: check.MacOS,
 			When: RawMatch{Regexp: "("}}, RuleBadRegexp},
+		{"second check without a join predicate", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd",
+			Platform: check.Linux, When: FieldEquals{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate without a second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check is the first", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.passwd_status",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"second check not in the catalog", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "nope.invented",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
+		{"join predicate cannot read the second check", Rule{Finding: IDEmptyPassword, Check: "accounts.passwd_status", With: "accounts.shadow_meta",
+			Platform: check.Linux, When: StatusWithLoginShell{Field: check.FieldStatus, Value: "NP"}}, RuleWithCheck},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -62,8 +76,41 @@ func TestValidateRulesCatchesEachClass(t *testing.T) {
 	}
 }
 
+// A definition without a risk area or an exposure declaration is caught by
+// name: the engagement report cannot place or adjust it (docs/spec/engagement.md,
+// "Severity in context").
+func TestValidateRulesCatchesIncompleteDefs(t *testing.T) {
+	saved := defs
+	defer func() { defs = saved }()
+	base := saved[IDPasswordAuthEnabled]
+	cases := []struct {
+		name string
+		edit func(*Def)
+		want string
+	}{
+		{"no area", func(d *Def) { d.Area = "" }, RuleDefArea},
+		{"unknown area", func(d *Def) { d.Area = "network" }, RuleDefArea},
+		{"exposure undeclared", func(d *Def) { d.Exposure = exposureUndeclared }, RuleDefExposure},
+		{"judges missing", func(d *Def) { d.Judges = "" }, RuleDefJudges},
+		{"unknown subject kind", func(d *Def) { d.Subject = "listener" }, RuleDefSubject},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := base
+			tc.edit(&d)
+			defs = map[string]Def{d.ID: d}
+			for _, v := range ValidateRules() {
+				if v.Subject == d.ID && v.Rule == tc.want {
+					return
+				}
+			}
+			t.Fatalf("want %s for %s", tc.want, tc.name)
+		})
+	}
+}
+
 // A rule finding has no model to write its text, so every definition carries
-// its own title, impact and remediation (docs/SPEC.md §7.1).
+// its own title, impact and remediation (docs/spec/host-collector.md §6.1).
 func TestEveryDefIsComplete(t *testing.T) {
 	for _, d := range Defs() {
 		if d.BaseSeverity.Rank() < 0 || d.Title == "" || d.Impact == "" || d.Remediation.Summary == "" {
@@ -83,9 +130,58 @@ func TestEveryDefIsComplete(t *testing.T) {
 	for id := range judgementDefs {
 		reachable[id] = true
 	}
+	// The web collector's own rules raise these; its tests prove each one
+	// fires, is disproved and abstains (internal/collector/web).
+	for _, d := range webDefs {
+		reachable[d.ID] = true
+	}
+	for _, d := range githubDefs {
+		reachable[d.ID] = true
+	}
+	// The engagement's multi-fact rules raise these; their tests prove each
+	// fires, is disproved and abstains (internal/engagement/rules).
+	for _, d := range multiFactDefs {
+		reachable[d.ID] = true
+	}
+	for _, id := range append(append(GitHubCIIDs(), GitHubAlertIDs()...), GitHubHistoryIDs()...) {
+		reachable[id] = true
+	}
 	for _, d := range Defs() {
 		if !reachable[d.ID] {
 			t.Errorf("%s has no rule, grader or model path that can raise it", d.ID)
 		}
+	}
+}
+
+// The subject kinds a definition may declare are the engagement report
+// schema's enum, so a finding can never carry a kind the report rejects.
+func TestSubjectKindsMatchTheReportSchema(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "engagement-report-schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Defs struct {
+			Subject struct {
+				Properties struct {
+					Kind struct {
+						Enum []string `json:"enum"`
+					} `json:"kind"`
+				} `json:"properties"`
+			} `json:"subject"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := doc.Defs.Subject.Properties.Kind.Enum
+	got := make([]string, len(SubjectKinds))
+	for i, k := range SubjectKinds {
+		got[i] = string(k)
+	}
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("SubjectKinds %v, schema enum %v", got, want)
 	}
 }

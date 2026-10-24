@@ -1,6 +1,6 @@
 // Package runner is the single code path through which any check reaches a
 // target. Phase 1 (baseline) and phase 2 (run_check / read_file) both call
-// Run; there is no second command surface (docs/SPEC.md §2.1, §3).
+// Run; there is no second command surface (docs/spec/host-collector.md §2.1, §3).
 //
 // Run performs, in order: catalog lookup, typed parameter binding, symlink
 // resolution and path policy for every Path param, elevation gating, budget-
@@ -8,7 +8,6 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,7 +20,7 @@ import (
 	"github.com/b87/scheck/internal/target"
 )
 
-// Elevation is how elevated checks are run (docs/SPEC.md §8.1).
+// Elevation is how elevated checks are run (docs/spec/host-collector.md §7.1).
 type Elevation string
 
 // Elevation modes. Root means the session already runs as uid 0.
@@ -69,7 +68,10 @@ type Result struct {
 	Duration   time.Duration
 	Elevated   bool
 	PathRule   string
-	origin     Origin
+	// TransportLost marks an exec_error caused by the session failing, not
+	// the command: nothing later in the run can reach the target either.
+	TransportLost bool
+	origin        Origin
 }
 
 // Runner composes a target with the policy. All fields but Log and Audit are
@@ -96,7 +98,7 @@ const (
 // initiated call (phase 2's run_check / read_file) names its tool and
 // carries the model's rationale into the audit log, and is gated to the
 // checks the model may see: the active profile's tier, never the canary
-// (docs/SPEC.md §3 tiers, §4.3). The gate lives here, in the one
+// (docs/spec/host-collector.md §3 tiers, docs/spec/host-collector.md §4.3). The gate lives here, in the one
 // enforcement point, not in the tool.
 type Origin struct {
 	Tool      string
@@ -180,10 +182,15 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		case ElevateSudo:
 			// sudo answers "a password is required" for a binary it cannot
 			// find, which would misreport a missing tool as a policy refusal.
-			if !r.installed(ctx, argv[0]) {
+			if ok, lost := r.installed(ctx, argv[0]); !ok {
 				res.Argv = argv
 				res.Status, res.Reason = StatusUnavailable, "not found: "+argv[0]
 				res.ReasonCode = "command_missing"
+				if lost != nil {
+					// The probe found the session gone, not the binary.
+					res.Reason, res.ReasonCode = "exec error: "+lost.Error(), "exec_error"
+					res.TransportLost = true
+				}
 				res = r.record(res, "unavailable:"+res.Reason, nil)
 				return res
 			}
@@ -222,7 +229,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 	res.Stderr = stderr
 	res.Redactions += n
 
-	// Extract is also an output minimization boundary (docs/SPEC.md §3). Failed commands
+	// Extract is also an output minimization boundary (docs/spec/host-collector.md §3). Failed commands
 	// must not expose the full capture just because verbose diagnostics are enabled.
 	if c.Extract != "" && (execErr != nil || !c.ExitAllowed(exec.Code)) {
 		res.Raw = ""
@@ -245,6 +252,7 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 		default:
 			res.Reason = "exec error: " + execErr.Error()
 			res.ReasonCode = "exec_error"
+			res.TransportLost = errors.Is(execErr, target.ErrTransport)
 		}
 		res = r.record(res, "unavailable:"+res.Reason, &res.ExitCode)
 		return res
@@ -302,18 +310,19 @@ func (r *Runner) runCheck(ctx context.Context, c check.Check, params map[string]
 
 // installed reports whether bin is on the target's PATH, via the sys.which
 // check; a path-qualified binary or a missing sys.which is assumed present
-// and left for the exec itself to report.
-func (r *Runner) installed(ctx context.Context, bin string) bool {
+// and left for the exec itself to report. lost is the probe's error when the
+// session, not the binary, was missing.
+func (r *Runner) installed(ctx context.Context, bin string) (ok bool, lost error) {
 	if strings.HasPrefix(bin, "/") {
-		return true
+		return true, nil
 	}
-	c, ok := check.Lookup("sys.which", r.Target.Platform())
-	if !ok {
-		return true
+	c, found := check.Lookup("sys.which", r.Target.Platform())
+	if !found {
+		return true, nil
 	}
 	argv, err := c.Bind(map[string]string{"name": bin})
 	if err != nil {
-		return true
+		return true, nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, r.Budgets.PerCheckHard)
 	defer cancel()
@@ -328,12 +337,15 @@ func (r *Runner) installed(ctx context.Context, bin string) bool {
 		sub.Parsed, _ = check.Parse(c, []byte(sub.Raw))
 		sub = r.record(sub, "run", &sub.ExitCode)
 	}
+	if errors.Is(execErr, target.ErrTransport) {
+		return false, execErr
+	}
 	if errors.Is(execErr, target.ErrNotFound) || exec.Code == target.CodeNotFound {
 		// No `which` on this host (minimal images): assume present and let
 		// sudo report; the sudo failure message carries the caveat.
-		return true
+		return true, nil
 	}
-	return execErr == nil && exec.Code == 0
+	return execErr == nil && exec.Code == 0, nil
 }
 
 // resolve returns the symlink-resolved form of p via the fs.realpath check,
@@ -370,28 +382,7 @@ func (r *Runner) resolve(ctx context.Context, p string) string {
 
 // finish redacts b and then truncates it to capBytes with a marker.
 func (r *Runner) finish(b []byte, targetTruncated bool, capBytes int) (string, bool, int) {
-	red, hits := r.Redactor.Redact(b)
-	truncated := targetTruncated
-	if len(red) > capBytes {
-		cut := capBytes
-		// Never cut inside a redaction marker: the marker is what tells the
-		// model something was there, so it stays whole even past the cap.
-		if i := bytes.LastIndex(red[:cut], []byte("[REDACTED:")); i >= 0 && bytes.IndexByte(red[i:cut], ']') < 0 {
-			if j := bytes.IndexByte(red[i:], ']'); j >= 0 {
-				cut = i + j + 1
-			}
-		}
-		dropped := len(red) - cut
-		red = red[:cut]
-		marker := fmt.Sprintf("\n[TRUNCATED:%d bytes]", dropped)
-		if targetTruncated {
-			marker = fmt.Sprintf("\n[TRUNCATED:%d+ bytes]", dropped)
-		}
-		red = append(red, marker...)
-		truncated = true
-	} else if targetTruncated {
-		red = append(red, "\n[TRUNCATED:unknown bytes]"...)
-	}
+	red, truncated, hits := r.Redactor.Finish(b, targetTruncated, capBytes)
 	return string(red), truncated, len(hits)
 }
 

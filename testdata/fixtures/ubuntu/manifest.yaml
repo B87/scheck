@@ -131,9 +131,17 @@ execs:
       stderr_file: 019-sestatus.stderr
       code: 127
     - argv:
+        - sudo
+        - -n
+        - --
         - ss
         - -tulpnH
-      stdout_file: 020-ss.stdout
+      stdout_file: 020-sudo.stdout
+      code: 0
+    - argv:
+        - which
+        - ss
+      stdout_file: 040-which.stdout
       code: 0
     - argv:
         - cat
@@ -256,3 +264,9 @@ execs:
         - show
       stderr_file: 039-timedatectl.stderr
       code: 1
+    - argv:
+        - realpath
+        - -e
+        - /usr/sbin/iptables
+      stdout_file: 039-realpath.stdout
+      code: 0

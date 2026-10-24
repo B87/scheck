@@ -1,0 +1,199 @@
+scheck engagement report: Workspace inventory review
+For Dani. Read 2026-10-10 12:00 to 12:01 (UTC). scheck test.
+Trigger        routine
+Credential     saas:google-workspace:example.com: Returned credential permissions are unknown;
+               effective permissions were not tested.
+Warning        saas:google-workspace:example.com: The separate token scheck used for the app check
+               holds admin.directory.user.security, which also lets it revoke app access and app
+               passwords, read or create backup codes, sign people out and turn off 2-step
+               verification. scheck sent only the declared reads; effective access was not tested.
+               If you will not run the app check again, remove that permission from the credential's
+               domain-wide delegation entry or consent.
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record for probes, scans and signing in as staff mailboxes.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: Workspace (checked only in part: identity and access). See Coverage for what was not checked.
+
+SUMMARY
+Checked in part  Identity and access.
+Not checked      Email and domain, Logging and incident readiness: see Coverage.
+Not requested    Not part of this run: secrets, cloud configuration, data stores and backups, CI/CD
+                 and supply chain, external surface, web application, hosts. To include one, list it
+                 under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  1  high      A third-party app holds broad access to Workspace data (Workspace)
+             base medium, raised: admin@example.com is a super administrator and granted this app
+             the scope drive: whoever controls the app can use those scopes as admin@example.com,
+             though not that account's other administrator rights
+Nothing else open ranks at medium or above among what was checked. Below: 0 low, 0 informational, 0
+accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: identity and access. Not checked: email and domain, logging and incident
+readiness, secrets, cloud configuration, data stores and backups, CI/CD and supply chain, external
+surface, web application, hosts. Anything not checked is unknown, not fine.
+
+COVERAGE
+Identity and access      checked in part
+  1 of 1 asset read.
+  Some apps hold scopes this version of scheck does not classify, and none it classifies as broad
+  (Workspace OAuth grants (third-party app access)).
+  Not judged in this version: sign-in through another identity provider (SSO), and that provider's
+  2-step verification; which kind of 2-step verification people use (security key, app or text
+  message); app passwords and other sign-ins that skip 2-step verification; service accounts allowed
+  to act as any Workspace user (domain-wide delegation); which third-party apps staff may connect to
+  Workspace (app access control); administrators' recovery email and phone; GitHub Apps installed on
+  the organization and what they can reach; GitHub's rules for personal access tokens; GitHub
+  members' SSH keys; access to repositories not declared `deploys_to: production` by a departed
+  person not listed among their collaborators; deploy keys, GitHub App authorizations and
+  self-hosted runners a departed person added; what a departed person did after leaving (audit log
+  not read). Also not judged on the assets read: 2-step verification policy, grace periods and other
+  sign-in services were not assessed.
+Email and domain         not checked
+  0 of 1 asset read.
+  Workspace mail forwarding: not in the checks you chose (profile directory_oauth); Domain email
+  settings (SPF, DKIM and DMARC): not part of this engagement; to include it, list it under roots in
+  engagement.yaml.
+  Not judged in this version: whether Workspace lets staff forward mail outside the company (the
+  tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in
+  transit (MTA-STS and TLS reporting).
+Logging and incident readiness not checked
+  1 of 1 asset read.
+  Not judged in this version: alerts on administrator changes and suspicious sign-ins in Workspace;
+  GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere
+  off the host.
+Not requested            Not part of this run: secrets, cloud configuration, data stores and
+                         backups, CI/CD and supply chain, external surface, web application, hosts.
+                         To include one, list it under roots in the engagement file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 1 open (1 high), 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING after the findings.
+
+1  high  A third-party app holds broad access to Workspace data (Workspace)
+   [workspace.oauth_broad_scope]
+   Subject       "Shiny \x1b[31mDocs" (oauth_app
+                 123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com)
+   Observed      g000008 (12:00, as unknown): App "Shiny \x1b[31mDocs" (client id
+                 123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com) holds
+                 access that can read drive.readonly and can change drive through grants from 2
+                 active accounts: admin@example.com (super administrator), carol@example.com. The
+                 name is chosen by whoever registered the app; it does not show who made it.
+   Observed      g000020 (12:00, as unknown): App "Shiny \x1b[31mDocs" (client id
+                 123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com) holds
+                 access that can read drive.readonly and can change drive through grants from 2
+                 active accounts: admin@example.com (super administrator), carol@example.com. The
+                 name is chosen by whoever registered the app; it does not show who made it.
+   Observed      g000021 (12:00, as unknown): App "Shiny \x1b[31mDocs" (client id
+                 123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com) holds
+                 access that can read drive.readonly and can change drive through grants from 2
+                 active accounts: admin@example.com (super administrator), carol@example.com. The
+                 name is chosen by whoever registered the app; it does not show who made it.
+   Severity      high: base medium, +1 attribute admin grantor (g000020: admin@example.com is a
+                 super administrator and granted this app the scope drive: whoever controls the app
+                 can use those scopes as admin@example.com, though not that account's other
+                 administrator rights.)
+   Why here      admin@example.com is a super administrator and granted this app the scope drive:
+                 whoever controls the app can use those scopes as admin@example.com, though not that
+                 account's other administrator rights.
+   Not checked   When each app was authorized or last used, and what it did with its access, were
+                 not checked.
+   Fix           Confirm someone in the company chose this app and still needs it. If not, remove
+                 its access: an administrator can block it under Security → Access and data control
+                 → API controls → Manage Third-Party App Access, and each person can remove it at
+                 myaccount.google.com/permissions. If it is needed, configure it deliberately on
+                 that page: Limited or Specific Google data where it still works, Trusted only if it
+                 must reach services you restricted. Trusted widens what the app may reach; it does
+                 not limit it, and this finding stays open either way. Prefer a version that asks
+                 for less (for example, access to its own files instead of all of Drive). To keep it
+                 as it is, accept it by its client id.
+
+IF YOU DECIDE NOT TO FIX A FINDING
+Only for a risk you decide not to fix, and decided by whoever owns it: write the engagement to a
+file (--write-engagement FILE), add yourself under people, paste the entry under
+intent.accepted_risks in that file and write the reason, then run `scheck run FILE` from then on.
+
+  # A third-party app holds broad access to Workspace data (Workspace)
+  # high: accept only with whoever owns the business, never to quiet the report
+    - id: workspace.oauth_broad_scope
+      asset: Workspace
+      subject: 123456789012-k3v9qz7x2m4n8p1r5t6w0y3b7d9f2h4j.apps.googleusercontent.com # required: this entry accepts this one only
+      reason: ""                   # why this is acceptable here; required
+      accepted_by: ""              # your handle under people
+      date: 2026-10-10             # the day this acceptance is written
+      expires: 2027-01-08          # after this date the finding counts again
+                                   # until someone re-reviews it
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    admin.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 7 requests.
+    oauth2.googleapis.com: google-workspace:example.com, using the credential in
+      GOOGLE_APPLICATION_CREDENTIALS (the variable's name; its value appears nowhere); 1 request.
+  Your own systems:
+    none
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+NOTES FOR THE READOUT
+  saas:google-workspace:example.com: Returned credential permissions are unknown; effective
+    permissions were not tested.
+  saas:google-workspace:example.com: domains: observed 2; organizational units: observed 3;
+    accounts: observed 6. Inventory alone does not assess account security or administrator access.
+  saas:google-workspace:example.com: scheck could not identify the Google account used for this run.
+    Information from earlier Workspace reads was not used in this report.
+  saas:google-workspace:example.com: The separate token scheck used for the app check holds
+    admin.directory.user.security, which also lets it revoke app access and app passwords, read or
+    create backup codes, sign people out and turn off 2-step verification. scheck sent only the
+    declared reads; effective access was not tested. If you will not run the app check again, remove
+    that permission from the credential's domain-wide delegation entry or consent.
+  saas:google-workspace:example.com: Checked: the apps each account authorized with its Google
+    account and the access Google reports they hold. Not checked: domain-wide delegation,
+    service-account keys, apps an administrator installed for everyone from Marketplace (they may
+    not appear as a person's grant), app passwords, when each app was authorized or last used, and
+    what any app did with its access.
+  saas:google-workspace:example.com: 1 app holds scopes scheck does not classify and none it
+    classifies as broad, so it was not judged: "Google Chrome"
+    (77185425430.apps.googleusercontent.com). Its name is chosen by whoever registered it. Check
+    under Security → Access and data control → API controls → Manage Third-Party App Access in the
+    Admin console that someone chose it.
+  saas:google-workspace:example.com: Mail forwarding was not checked. It finds mailboxes that send
+    copies of mail to outside addresses, a common way an attacker keeps reading someone's mail after
+    the password is changed. It needs a Google service account with domain-wide delegation for
+    gmail.readonly, which can read every message; most small companies do not have one, and whoever
+    manages your Google setup (often your IT provider) would create it. scheck signs in as each
+    active mailbox and reads only its forwarding settings and filters, never a message. Whoever
+    approves access to staff mailboxes must approve it and add authorization.mailboxes (asset, by,
+    date, expires) to the engagement file first, then run with that service account's key file and
+    SCHECK_WORKSPACE_PROFILE=directory_oauth_mail.
+
+FOR AUTOMATION
+Exit 1: 1 open finding at or above its asset's threshold (every asset: medium). Exit 0 would not
+have meant a clean result either.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

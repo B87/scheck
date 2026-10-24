@@ -31,7 +31,7 @@ var loginNoise = map[string]bool{
 var homeNoise = regexp.MustCompile(`^[CA] (/root|/home/[^/]+)(/\.cache(/motd\.legal-displayed)?)?$`)
 
 // runtimeArtifacts matches every write scheck itself is known to cause: the
-// documented exceptions to "it never modifies the target" (docs/SPEC.md §1).
+// documented exceptions to "it never modifies the target" (docs/spec/host-collector.md §1).
 // All of them are a tool's record of its own invocation in runtime or cache
 // state; none is configuration, a package, a unit or a credential. They are
 // named exactly, so any other write fails the assertion.
@@ -47,10 +47,11 @@ var runtimeArtifacts = regexp.MustCompile(`^[CA] (` +
 	`|/run/ufw\.lock` +
 	`)$`)
 
-// M1 exit demo: `scheck ssh … --stop-after facts` against Ubuntu and Fedora
-// produces a schema-valid, persisted report with no API key, the audit log
-// names only catalog argv, and the target's filesystem is untouched
-// (acceptance criteria 2, 3 and 4).
+// M1 exit demo, through the 0.0.2 alias: `scheck ssh … --stop-after facts`
+// against Ubuntu and Fedora runs the one-host engagement, whose report embeds
+// a schema-valid host envelope persisted as the asset's evidence file, with
+// no API key; the run directory's audit log names only catalog argv, and the
+// target's filesystem is untouched (acceptance criteria 2, 3 and 4).
 func TestSSHFactsReport(t *testing.T) {
 	bin := containers.BuildScheck(t)
 	schema := loadSchema(t)
@@ -59,16 +60,12 @@ func TestSSHFactsReport(t *testing.T) {
 			c := containers.Start(t, name)
 			before := c.Diff(t)
 			stateDir := t.TempDir()
-			audit := filepath.Join(t.TempDir(), "audit.jsonl")
 			out, errOut, code := containers.Run(t, bin, "ssh", "ops@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-				"--stop-after", "facts", "--format", "json", "--state-dir", stateDir, "--audit-log", audit)
+				"--stop-after", "facts", "--format", "json", "--state-dir", stateDir)
 			if code != 0 {
 				t.Fatalf("exit %d\n%s", code, errOut)
 			}
-			var doc map[string]any
-			if err := json.Unmarshal([]byte(out), &doc); err != nil {
-				t.Fatal(err)
-			}
+			doc := envelopeOf(t, out)
 			if err := schema.Validate(doc); err != nil {
 				t.Fatalf("schema: %v", err)
 			}
@@ -77,15 +74,27 @@ func TestSSHFactsReport(t *testing.T) {
 				t.Errorf("host block: %v", host)
 			}
 			run := doc["run"].(map[string]any)
-			if run["status"] != "complete" || run["persisted"] == nil {
+			if run["status"] != "complete" {
 				t.Errorf("run block: %v", run)
 			}
-			if _, err := os.Stat(run["persisted"].(string)); err != nil {
-				t.Errorf("persisted file missing: %v", err)
+			// The envelope is persisted as the asset's evidence file in the
+			// run directory, and nothing under runs/<host.id>/ any more.
+			dirs, _ := filepath.Glob(filepath.Join(stateDir, "engagements", "*", "*"))
+			if len(dirs) != 1 {
+				t.Fatalf("run directories: %q", dirs)
+			}
+			// Beside it, the record a resume keeps the host by.
+			ev, _ := filepath.Glob(filepath.Join(dirs[0], "evidence", "*.json"))
+			if len(ev) != 2 || !strings.HasSuffix(ev[0], ".collection.json") || strings.HasSuffix(ev[1], ".collection.json") ||
+				strings.TrimSuffix(ev[0], ".collection.json") != strings.TrimSuffix(ev[1], ".json") {
+				t.Errorf("evidence files: %q", ev)
+			}
+			if old, _ := filepath.Glob(filepath.Join(stateDir, "runs", "*")); len(old) != 0 {
+				t.Errorf("0.0.1 persistence still written: %q", old)
 			}
 			// Audit log: every line is a catalog check that either ran, was
 			// unavailable, or was the canary; nothing else reached the host.
-			raw, err := os.ReadFile(audit)
+			raw, err := os.ReadFile(filepath.Join(dirs[0], "audit.jsonl"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,46 +114,72 @@ func TestSSHFactsReport(t *testing.T) {
 					t.Errorf("audit line without check/argv: %s", line)
 				}
 			}
-			// Criterion 3: nothing modified on the target beyond the noise an
-			// ssh login itself produces, plus the one write scheck is known to
-			// cause and documents (docs/SPEC.md §1). Both sets are exact: an
-			// earlier prefix match on /run, /var and /home tolerated whole
-			// trees, so a check writing into one of them would have passed
-			// unnoticed — which is how the dnf cache reached the M4.6 pass as
-			// a reading of the log rather than a test failure. The classified
-			// lines are logged so the acceptance record can show what a
-			// read-only run leaves behind
-			// (docs/SPEC.md §12, docs/eval/acceptance-0.0.1.md).
-			var noise, documented []string
-			for _, line := range strings.Split(strings.TrimSpace(c.Diff(t)), "\n") {
-				if line == "" || strings.Contains(before, line) {
-					continue
-				}
-				switch {
-				case runtimeArtifacts.MatchString(line):
-					documented = append(documented, line)
-				case loginNoise[line] || homeNoise.MatchString(line):
-					noise = append(noise, line)
-				default:
-					t.Errorf("target modified outside the login noise and the one documented exception: %s", line)
-				}
-			}
-			t.Logf("post-run docker diff: %d login-noise lines, %d documented-exception lines: %s",
-				len(noise), len(documented), strings.Join(append(append([]string{}, noise...), documented...), " | "))
-			// Without --sudo neither the elevation timestamp nor ufw's lock
-			// exists, so Ubuntu's only possible artefact source is apt, which
-			// writes nothing. A match here would mean the pattern is picking
-			// up something other than what it names.
-			if name != "fedora" && len(documented) > 0 {
-				t.Errorf("%s: runtime-artifact pattern matched on a distribution that runs none of the commands that cause them: %v", name, documented)
-			}
+			assertReadOnly(t, c, before, name)
 		})
 	}
 }
 
-func loadSchema(t *testing.T) *jsonschema.Schema {
+// assertReadOnly is criterion 3: nothing modified on the target beyond the
+// noise an ssh login itself produces, plus the writes scheck is known to
+// cause and documents (docs/spec/host-collector.md §1). Both sets are
+// exact: an earlier prefix match on /run, /var and /home tolerated whole
+// trees, so a check writing into one of them would have passed unnoticed —
+// which is how the dnf cache reached the M4.6 pass as a reading of the log
+// rather than a test failure. The classified lines are logged so the
+// acceptance record can show what a read-only run leaves behind
+// (docs/spec/host-collector.md §10, docs/eval/acceptance-0.0.1.md). Every
+// command that reaches a host, `scheck ssh` and `scheck run --host` alike,
+// is held to this one allowlist.
+func assertReadOnly(t *testing.T, c *containers.Container, before, name string) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "report-schema.json"))
+	var noise, documented []string
+	for _, line := range strings.Split(strings.TrimSpace(c.Diff(t)), "\n") {
+		if line == "" || strings.Contains(before, line) {
+			continue
+		}
+		switch {
+		case runtimeArtifacts.MatchString(line):
+			documented = append(documented, line)
+		case loginNoise[line] || homeNoise.MatchString(line):
+			noise = append(noise, line)
+		default:
+			t.Errorf("target modified outside the login noise and the documented exceptions: %s", line)
+		}
+	}
+	t.Logf("post-run docker diff: %d login-noise lines, %d documented-exception lines: %s",
+		len(noise), len(documented), strings.Join(append(append([]string{}, noise...), documented...), " | "))
+	// Without --sudo neither the elevation timestamp nor ufw's lock exists,
+	// so Ubuntu's only possible artefact source is apt, which writes
+	// nothing. A match here would mean the pattern is picking up something
+	// other than what it names.
+	if name != "fedora" && len(documented) > 0 {
+		t.Errorf("%s: runtime-artifact pattern matched on a distribution that runs none of the commands that cause them: %v", name, documented)
+	}
+}
+
+func loadSchema(t *testing.T) *jsonschema.Schema { return loadSchemaFile(t, "report-schema.json") }
+
+// envelopeOf is the one host's collector envelope inside an engagement
+// report printed with --format json.
+func envelopeOf(t *testing.T, out string) map[string]any {
+	t.Helper()
+	var rep struct {
+		Assets []struct {
+			Envelope map[string]any `json:"envelope"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("not an engagement report: %v\n%s", err, out)
+	}
+	if len(rep.Assets) != 1 || rep.Assets[0].Envelope == nil {
+		t.Fatalf("want one host with an envelope:\n%s", out)
+	}
+	return rep.Assets[0].Envelope
+}
+
+func loadSchemaFile(t *testing.T, name string) *jsonschema.Schema {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,10 +188,10 @@ func loadSchema(t *testing.T) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("report-schema.json", doc); err != nil {
+	if err := c.AddResource(name, doc); err != nil {
 		t.Fatal(err)
 	}
-	s, err := c.Compile("report-schema.json")
+	s, err := c.Compile(name)
 	if err != nil {
 		t.Fatal(err)
 	}

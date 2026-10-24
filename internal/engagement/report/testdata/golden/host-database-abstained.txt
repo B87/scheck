@@ -1,0 +1,138 @@
+scheck engagement report: host-ubuntu
+Read 2026-10-07 07:12 to 07:19 (UTC). scheck test.
+Trigger        routine
+Method         rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only:
+               nothing was probed, scanned, exploited or changed. Not a penetration test.
+Authorization  none recorded. This run only read, with access you already hold; scheck requires a
+               record for probes, scans and signing in as staff mailboxes.
+Handle with care: this report names people, accounts, internal hosts and services, and says where
+weaknesses are. Keep it as private as a list of passwords. It is written for you, not for your
+customers.
+
+Read: ubuntu (checked only in part: ubuntu, 4 of 13 host areas judged). See Coverage for what was
+not checked.
+
+SUMMARY
+Checked in part  Hosts (ubuntu, 4 of 13 areas judged).
+Not checked      Data stores and backups, External surface: see Coverage.
+Not requested    Not part of this run: identity and access, secrets, cloud configuration, CI/CD and
+                 supply chain, web application, email and domain, logging and incident readiness. To
+                 include one, list it under roots in the engagement file.
+Outside scheck   Malware on any machine, application logic, processes, lookalike domains.
+
+Fix these first: a ranking of what was checked, not of all your risks
+  Nothing open ranks at medium or above among what was checked (on ubuntu, 11 of 34 checks gave no
+  answer). Below: 0 low, 0 informational, 0 accepted.
+
+A short list is not a clean bill of health. scheck reports only what its rules could decide. No area
+is fully checked in this version; each area row under Coverage lists what this version does not
+judge. Checked in part: hosts. On ubuntu, 4 of 13 host areas were judged, each only on the settings
+named under Coverage; 5 have no rule in this version and 4 had no usable evidence. Not checked: data
+stores and backups, external surface, identity and access, secrets, cloud configuration, CI/CD and
+supply chain, web application, email and domain, logging and incident readiness. Anything not
+checked is unknown, not fine.
+
+COVERAGE
+Data stores and backups  not checked
+  1 of 1 asset read.
+  A container runtime publishes this port, and its rules bypass the host firewall.
+  Not judged in this version: who can sign in to each database (pg_hba.conf, database users and
+  their passwords); databases on hosts that filter with firewalld or their own nftables rules
+  (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules
+  bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
+  RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
+  link; whether backups exist, where they are kept, and who can delete them.
+External surface         not checked
+  1 of 1 asset read.
+  No service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a
+  service's reach only against what you declared.
+  Not judged in this version: which ports and services answer from the internet (scheck reads; it
+  does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and
+  when the domain expires; the DNS hosting account and who can change records.
+Hosts                    checked in part
+  Not judged in this version: the firewall on Linux hosts, apart from database ports and the
+  services you declared; listening services you did not declare; who can become root or
+  administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys);
+  SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on
+  Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a
+  schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins).
+  ubuntu  host:ubuntu:22, Ubuntu 24.04.5 LTS, read as deploy with sudo -n, 07:12-07:12
+  checks 34: 23 ran, 11 unknown, 0 not run. rules 10: 6 decided, 4 had no usable evidence.
+    Software updates         checked (pending updates): nothing found by these rules
+    Disk encryption          not judged: this version of scheck has no rule for it (read: 20 block
+                             devices; not read: disk.crypttab)
+    System integrity         not checked: the tool that would tell is not installed on the host, so
+                             scheck could not tell (this is not a finding)
+    Firewall                 not checked: a container runtime publishes this port, and its rules
+                             bypass the host firewall; no service on this host is declared for
+                             localhost, lan or vpn (expected_services); scheck judges a service's
+                             reach only against what you declared; also read, not judged:
+                             /usr/sbin/xtables-nft-multi
+    Network exposure         not judged: this version of scheck has no rule for it (read: 2
+                             listening sockets)
+    SSH server               checked in part (password login, direct root login): nothing found by
+                             these rules; which accounts have no password and can log in was not
+                             established
+    Remote access            not judged: this version of scheck has no rule for it (read: 2 service
+                             states: disabled, not-found)
+    Accounts                 checked (accounts with no password and a login shell, the mode of
+                             /etc/shadow): nothing found by these rules
+    Privilege escalation     not judged: this version of scheck has no rule for it (read: 41 sudoers
+                             lines; 33 sudoers.d lines)
+    Startup and persistence  not judged: this version of scheck has no rule for it (read: 25 cron
+                             entries; 13 units, all enabled; not read: persist.timers)
+    Filesystem               checked (world-writable paths, depth-capped): nothing found by these
+                             rules; also read, not judged: 9 SUID files
+    Logging and audit        not checked: the command that reads it did not give a usable answer
+                             (exit_error); also read, not judged: Archived and active journals take
+                             up 0B in the file system.
+    Time synchronisation     not checked: the command that reads it did not give a usable answer
+                             (exit_error)
+Not requested            Not part of this run: identity and access, secrets, cloud configuration,
+                         CI/CD and supply chain, web application, email and domain, logging and
+                         incident readiness. To include one, list it under roots in the engagement
+                         file.
+Outside scheck           Malware and stolen sessions: scheck reads the settings of the hosts you
+                         list; it does not look for malware, infostealers or signs of compromise on
+                         any of them, and laptops you did not list were not looked at.
+                         Application logic: authenticated testing of access control and business
+                         rules.
+                         Processes: whether offboarding, incident response, backup restore tests and
+                         vendor reviews are done as written.
+                         Lookalike and typo domains: registrations of names you do not own.
+
+FINDINGS: 0 open, 0 informational, 0 accepted
+Ranked by severity in your context, among what scheck checked. Areas not checked may hold worse
+problems than anything here.
+
+NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
+  On ubuntu, 5 checks did not give a usable answer: disk.crypttab, fw.ufw, log.auditd,
+    persist.timers, time.timedatectl. `scheck explain <check-id>` prints each command; run it by
+    hand to see why.
+  On ubuntu, 6 checks need a tool this host does not have, so they could not tell (not a finding;
+    listed with -v).
+  On ubuntu, this version of scheck has no rule for disk encryption, network exposure, remote
+    access, privilege escalation, startup and persistence. What was read is in the JSON report
+    (--format json) for a person to look at.
+
+EXCLUDED, NARROWED AND NOT RUN
+  Redacted              built-in rules: 0 values.
+  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+
+WHAT LEFT THIS MACHINE
+  Third-party services:
+    none
+  Your own systems:
+    servers: 1 SSH session.
+  Names under your domains not shown to be yours:
+    none
+  AI models:
+    Nothing was sent to an AI model provider.
+  Nothing was sent to the makers of scheck: no telemetry, no update check.
+  What scheck read is stored nowhere; the report is on stdout.
+
+FOR AUTOMATION
+Exit 0: no open finding at or above threshold among the 6 rules that could decide. That is not a
+clean result: 6 rules had no usable evidence, and 9 areas were not checked.
+--no-persist: no run directory or audit log was written; the command trace is in the JSON report
+(--format json).

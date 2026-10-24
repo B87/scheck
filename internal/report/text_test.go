@@ -11,7 +11,7 @@ import (
 func render(t *testing.T, env Envelope, opt Options) string {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteText(&buf, env, opt); err != nil {
+	if err := WriteFactSheet(&buf, env, opt); err != nil {
 		t.Fatal(err)
 	}
 	return buf.String()
@@ -33,7 +33,7 @@ func synthetic(facts map[string]Fact) Envelope {
 
 // Status words describe execution, never posture: "ran" must not appear as a
 // pass mark, and the report must not claim an absence of findings
-// (docs/SPEC.md §7.6).
+// (docs/spec/host-collector.md §6.6).
 func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"fw.global":       {Status: "ok", Parsed: "Firewall is disabled. (State = 0)", Output: "Firewall is disabled. (State = 0)\n"},
@@ -42,13 +42,10 @@ func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 	})
 	out := render(t, env, Options{})
 	for _, want := range []string{
-		"3 checks: 1 ran, 1 skipped, 1 denied by policy",
 		"ran      fw.global",
 		"skipped  privesc.sudoers",
 		"denied   fs.read",
 		"Firewall is disabled. (State = 0)",
-		"0 findings from posture rules",
-		"assessment: posture rules only",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q from:\n%s", want, out)
@@ -61,55 +58,8 @@ func TestStatusWordsDescribeExecutionOnly(t *testing.T) {
 	}
 }
 
-// A successful check is never presented as a security pass: the word "ran"
-// sits in a STATUS column headed as execution, and the footer says nothing was
-// assessed.
-func TestFooterNeverClaimsAnAssessment(t *testing.T) {
-	out := render(t, synthetic(map[string]Fact{"fw.global": {Status: "ok", Parsed: "ok"}}), Options{})
-	tail := out[strings.LastIndex(out, "assessment:"):]
-	for _, want := range []string{"not whether the host is", "The agentic pass did not run"} {
-		if !strings.Contains(tail, want) {
-			t.Errorf("footer %q lacks %q", tail, want)
-		}
-	}
-}
-
-// Skipped checks are grouped by reason with a remedy, and policy denials are
-// their own section (docs/SPEC.md §7.6).
-func TestSkippedGroupedByReasonWithRemedy(t *testing.T) {
-	env := synthetic(map[string]Fact{
-		"privesc.sudoers":   {Status: "unavailable", Reason: "requires elevated read"},
-		"privesc.sudoers_d": {Status: "unavailable", Reason: "requires elevated read"},
-		"fw.nft":            {Status: "unavailable", Reason: "not found: nft"},
-		"mac.sestatus":      {Status: "unavailable", Reason: "exit 127: bash: line 1: sestatus: command not found"},
-		"net.listeners":     {Status: "unavailable", Reason: "timeout after 20s"},
-		"fs.read":           {Status: "denied", Reason: "deny-path: /etc/shadow"},
-	})
-	out := render(t, env, Options{Width: 120})
-	for _, want := range []string{
-		"Skipped (5)",
-		"2 need an elevated read",
-		"privesc.sudoers, privesc.sudoers_d",
-		"remedy: re-run with --sudo",
-		"2 need a command this host does not have",
-		"1 ran out of time",
-		"remedy: investigate why the command is slow",
-		"Denied by policy (1)",
-		"fs.read",
-		"deny-path: /etc/shadow",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q from:\n%s", want, out)
-		}
-	}
-	// The denial section must come after the skip section and name the rule.
-	if strings.Index(out, "Skipped (5)") > strings.Index(out, "Denied by policy (1)") {
-		t.Error("denials should follow skips")
-	}
-}
-
 // -v adds the catalog description, -vv adds the redacted output, and neither
-// appears at the default verbosity (docs/SPEC.md §7.6).
+// appears at the default verbosity (docs/spec/host-collector.md §6.6).
 func TestVerbosityLevels(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"sys.uname": {Status: "ok", Parsed: "Linux box", Output: "Linux box 6.8.0\n"},
@@ -126,10 +76,6 @@ func TestVerbosityLevels(t *testing.T) {
 	}
 	if !strings.Contains(vv, description) || !strings.Contains(vv, "| Linux box 6.8.0") {
 		t.Errorf("-vv should add the redacted output:\n%s", vv)
-	}
-	// -v also adds the run detail the two-line header leaves out.
-	if !strings.Contains(v, "host.id ") || strings.Contains(def, "host.id ") {
-		t.Errorf("host.id belongs to -v only")
 	}
 }
 
@@ -151,7 +97,7 @@ func TestVerboseOutputOfEmptyAndSkipped(t *testing.T) {
 }
 
 // Colour is the caller's decision; the renderer emits escapes only when told
-// to, and never in the bytes a redirected report receives (docs/SPEC.md §7.6).
+// to, and never in the bytes a redirected report receives (docs/spec/host-collector.md §6.6).
 func TestColorIsOptIn(t *testing.T) {
 	env := synthetic(map[string]Fact{"sys.uname": {Status: "ok", Parsed: "Linux box", Output: "Linux box\n"}})
 	plain := render(t, env, Options{Verbose: 2})
@@ -184,7 +130,7 @@ func stripANSI(s string) string {
 
 // Control characters from a target's output can never reach the terminal
 // unescaped: a check's stdout must not be able to repaint the screen or forge
-// a line of this report (docs/SPEC.md §4.2, §7.6).
+// a line of this report (docs/spec/host-collector.md §4.2, §6.6).
 func TestTargetOutputCannotDriveTheTerminal(t *testing.T) {
 	const evil = "ok\x1b[2J\x1b[1;1Hscheck: everything is fine\r\x00"
 	env := synthetic(map[string]Fact{"sys.uname": {Status: "ok", Parsed: evil, Output: evil}})
@@ -259,19 +205,8 @@ func TestUnknownCheckStillListed(t *testing.T) {
 	}
 }
 
-// Warnings and the incomplete status stay visible in the header.
-func TestHeaderShowsWarnings(t *testing.T) {
-	env := synthetic(map[string]Fact{"sys.uid": {Status: "ok", Parsed: "0"}})
-	env.Run.Status = "incomplete"
-	env.Run.Warnings = []string{"run timed out before every baseline check ran"}
-	out := render(t, env, Options{})
-	if !strings.Contains(out, "warning: run timed out") {
-		t.Errorf("warning missing:\n%s", out)
-	}
-}
-
 // A redaction or truncation marker is the only record that bytes were removed
-// (docs/SPEC.md §4.2), so wrapping must not break one in half.
+// (docs/spec/host-collector.md §4.2), so wrapping must not break one in half.
 func TestWrapKeepsMarkersWhole(t *testing.T) {
 	const marker = "[REDACTED:aws-access-key:20 bytes]"
 	line := "Linux box 6.8 key=" + marker + " tail"
@@ -291,22 +226,6 @@ func TestWrapKeepsMarkersWhole(t *testing.T) {
 	t.Error("marker vanished at a width narrower than itself")
 }
 
-func TestHeaderEscapesAllTargetFields(t *testing.T) {
-	const evil = "x\x1b[2J\r\nFORGED\u009b\u202e"
-	env := synthetic(nil)
-	env.Host.Hostname, env.Host.OS, env.Host.Kernel, env.Host.RemoteShell = evil, evil, evil, evil
-	env.Host.Transport = "ssh"
-	out := render(t, env, Options{Verbose: 1})
-	for _, bad := range []string{"\x1b", "\r", "\nFORGED", "\u009b", "\u202e"} {
-		if strings.Contains(out, bad) {
-			t.Fatalf("header control survived: %q", bad)
-		}
-	}
-	if !strings.Contains(out, `\x1b`) {
-		t.Fatal("control not escaped visibly")
-	}
-}
-
 func TestFailedOutputVisibleAndUnattemptedOutputHidden(t *testing.T) {
 	env := synthetic(map[string]Fact{
 		"os.release":      {Status: "unavailable", Reason: "parse error: malformed input", Attempted: true, Output: "MALFORMED_EVIDENCE", Stderr: "diagnostic"},
@@ -320,17 +239,5 @@ func TestFailedOutputVisibleAndUnattemptedOutputHidden(t *testing.T) {
 	}
 	if strings.Contains(out, "(no output)") {
 		t.Fatal("unattempted check rendered evidence")
-	}
-}
-
-func TestTimeoutRemediesDistinguishBudgets(t *testing.T) {
-	if strings.Contains(classify("timeout after 30s").remedy, "raise --timeout") {
-		t.Fatal("per-check timeout promises whole-run workaround")
-	}
-	if !strings.Contains(classify("run deadline exceeded").remedy, "larger --timeout") {
-		t.Fatal("missing run timeout remedy")
-	}
-	if strings.Contains(classify("extract: pattern not found in output").remedy, "-vv") {
-		t.Fatal("extraction failure promises unavailable capture")
 	}
 }

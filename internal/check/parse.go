@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -13,7 +14,7 @@ import (
 // as `unavailable: parse error`, never as a panic; the raw text is kept.
 //
 // The whole check is the input, not just its ParserKind, because a typed
-// shape (docs/SPEC.md §3) is produced from several tools' output formats and
+// shape (docs/spec/host-collector.md §3) is produced from several tools' output formats and
 // the catalog's own argv is what says which one to expect.
 func Parse(c Check, raw []byte) (any, error) {
 	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // BOM
@@ -36,6 +37,67 @@ func Parse(c Check, raw []byte) (any, error) {
 			return nil, fmt.Errorf("json: %w", err)
 		}
 		return v, nil
+	default:
+		return nil, fmt.Errorf("unknown parser %q", c.Parser)
+	}
+}
+
+// Decode is Parse's inverse over JSON: the value a fact's `parsed` holds in
+// a persisted envelope, read back into the shape c's parser produced, so a
+// posture rule reads a kept host's facts as it read them when collected
+// (docs/spec/runs.md, "Verdicts are not evidence"). A value that is not the
+// parser's shape is an error, never a guess.
+func Decode(c Check, raw json.RawMessage) (any, error) {
+	if c.Parser == ParseJSON {
+		var v any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", c.ID, err)
+		}
+		return v, nil
+	}
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, fmt.Errorf("%s: no parsed value", c.ID)
+	}
+	strict := func(v any) error {
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.DisallowUnknownFields()
+		if err := d.Decode(v); err != nil {
+			return fmt.Errorf("%s: %w", c.ID, err)
+		}
+		if d.More() {
+			return fmt.Errorf("%s: trailing data", c.ID)
+		}
+		return nil
+	}
+	if IsTyped(c.Parser) {
+		var recs Records
+		if err := strict(&recs); err != nil {
+			return nil, err
+		}
+		if recs.Kind != c.Parser || recs.Items == nil || slices.ContainsFunc(recs.Items, func(r Record) bool { return r == nil }) {
+			return nil, fmt.Errorf("%s: not a %s record set", c.ID, c.Parser)
+		}
+		return recs, nil
+	}
+	switch c.Parser {
+	case ParseRaw:
+		var s string
+		if err := strict(&s); err != nil {
+			return nil, err
+		}
+		return s, nil
+	case ParseLines:
+		var lines []string
+		if err := strict(&lines); err != nil {
+			return nil, err
+		}
+		return lines, nil
+	case ParseKV:
+		var kv map[string]string
+		if err := strict(&kv); err != nil {
+			return nil, err
+		}
+		return kv, nil
 	default:
 		return nil, fmt.Errorf("unknown parser %q", c.Parser)
 	}

@@ -28,7 +28,7 @@ var traceElevation = map[string]runner.Elevation{
 }
 
 // The command trace is the run's own audit log, pinned per fixture (M4.5,
-// docs/SPEC.md §11): one line per attempted check in execution order, with the
+// docs/spec/host-collector.md §9): one line per attempted check in execution order, with the
 // observation reference, the bound parameters, the actual argv, the decision,
 // the exit code, the elevation and the SHA-256 of the redacted output. The
 // report goldens say what an operator reads; this one says what reached the

@@ -9,7 +9,7 @@ import (
 )
 
 // Colour is for a terminal only, and NO_COLOR wins even there. A redirected
-// report and a --out file are always plain (docs/SPEC.md §7.6).
+// report and a --out file are always plain (docs/spec/host-collector.md §6.6).
 func TestTextOptionsColorAndWidth(t *testing.T) {
 	o := &globalOpts{Verbose: 2}
 
@@ -27,14 +27,6 @@ func TestTextOptionsColorAndWidth(t *testing.T) {
 	defer func() { _ = f.Close() }()
 	if opt := o.textOptions(f); opt.Color {
 		t.Errorf("colour written to a file: %+v", opt)
-	}
-	if opt := o.textOptions(nopCloser{f}); opt.Color {
-		t.Errorf("colour written through nopCloser: %+v", opt)
-	}
-
-	// nopCloser must expose the descriptor, or the terminal is never found.
-	if _, ok := any(nopCloser{os.Stdout}).(interface{ Fd() uintptr }); !ok {
-		t.Error("nopCloser hides Fd(), so stdout can never be detected as a terminal")
 	}
 
 	// NO_COLOR is honoured whatever the descriptor says.

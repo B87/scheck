@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"os"
 
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/finding"
@@ -10,7 +11,7 @@ import (
 )
 
 // Discovery uses argv arrays and explicit parameter types so callers never
-// reconstruct commands from the human explanation (docs/SPEC.md §8).
+// reconstruct commands from the human explanation (docs/spec/host-collector.md §7).
 type checkDescription struct {
 	ID          string             `json:"id"`
 	Description string             `json:"description"`
@@ -31,7 +32,7 @@ type checkDescription struct {
 	Unit        string             `json:"unit,omitempty"`
 	// Rules names the posture rules that read this check's fact, so a caller
 	// that sees the check skipped knows which conclusions went unassessed
-	// (docs/SPEC.md §7.5).
+	// (docs/spec/host-collector.md §6.5).
 	Rules []ruleDescription `json:"posture_rules"`
 }
 
@@ -104,9 +105,9 @@ func (o *globalOpts) commandOutput(fallback io.Writer) (io.Writer, func(), error
 	if o.Out == "" {
 		return fallback, func() {}, nil
 	}
-	w, err := o.output()
+	f, err := os.OpenFile(o.Out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, usageErr("--out: %v", err)
 	}
-	return w, func() { _ = w.Close() }, nil
+	return f, func() { _ = f.Close() }, nil
 }

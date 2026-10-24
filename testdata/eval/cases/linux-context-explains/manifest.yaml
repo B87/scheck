@@ -56,6 +56,9 @@ execs:
     '
   code: 0
 - argv:
+  - sudo
+  - -n
+  - --
   - ss
   - -tulpnH
   stdout: 'tcp LISTEN 0      128    0.0.0.0:22 0.0.0.0:*

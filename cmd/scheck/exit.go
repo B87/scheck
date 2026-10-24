@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-// Exit codes per docs/SPEC.md §8.
+// Exit codes per docs/spec/host-collector.md §7.
 const (
 	exitOK         = 0 // no open finding at or above the profile threshold
 	exitFindings   = 1 // findings present
@@ -28,9 +28,16 @@ func incompleteErr(format string, args ...any) error {
 }
 
 // findingsErr ends a run that completed and found something at or above the
-// profile threshold (docs/SPEC.md §8). The report is already written; this
+// profile threshold (docs/spec/host-collector.md §7). The report is already written; this
 // only carries the code, and its message goes to stderr, never into the
 // report on stdout.
 func findingsErr(format string, args ...any) error {
 	return &exitError{Code: exitFindings, Err: fmt.Errorf(format, args...)}
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return noun
+	}
+	return noun + "s"
 }

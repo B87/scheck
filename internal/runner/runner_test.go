@@ -291,6 +291,26 @@ func TestRunRedactsBeforeAuditAndTruncates(t *testing.T) {
 	}
 }
 
+// The shapes the scope gate added redact host output too
+// (docs/spec/scope.md, "Responses"): a JSON member and a provider token in
+// a command's output never reach the result or the audit log. The values
+// are built at run time so no file holds a string a secret scanner flags.
+func TestRunRedactsJSONMembersAndProviderTokens(t *testing.T) {
+	member := "opaque" + strings.Repeat("Q7", 12)
+	stripe := "sk_" + "live_" + strings.Repeat("a1B2", 6)
+	out := `{"client_secret": "` + member + `", "note": "` + stripe + `"}`
+	h := newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"uname", "-a"}, Stdout: out})
+	res := h.r.Run(context.Background(), "sys.uname", nil)
+	for _, secret := range []string{member, stripe} {
+		if strings.Contains(res.Raw, secret) || strings.Contains(h.audit.String(), secret) {
+			t.Fatalf("secret leaked: %q", res.Raw)
+		}
+	}
+	if !strings.Contains(res.Raw, "[REDACTED:json-secret:") || !strings.Contains(res.Raw, "[REDACTED:stripe-key:") {
+		t.Fatalf("markers missing: %q", res.Raw)
+	}
+}
+
 func TestRunParseErrorKeepsRaw(t *testing.T) {
 	h := newHarness(t, ElevateNone, fixture.Exec{Argv: []string{"pkgjson"}, Stdout: "{not json"})
 	res := h.r.Run(context.Background(), "pkg.json", nil)

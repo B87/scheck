@@ -2,7 +2,7 @@ package policy
 
 import "testing"
 
-// The hostile-path corpus (docs/SPEC.md §11). Every row is a path as it would
+// The hostile-path corpus (docs/spec/host-collector.md §9). Every row is a path as it would
 // arrive after charset validation and symlink resolution.
 func TestPathPolicyCorpus(t *testing.T) {
 	pp := NewPathPolicy([]string{"/etc/corp-secrets", "relative/ignored"})
@@ -69,7 +69,7 @@ func TestPathPolicyCleansButDoesNotResolve(t *testing.T) {
 
 // macOS spells /etc as /private/etc once resolved; the policy must judge the
 // canonical name, so an allowed prefix still allows and a sensitive file is
-// still metadata-only (docs/SPEC.md §4.1).
+// still metadata-only (docs/spec/host-collector.md §4.1).
 func TestCanonicalMacOSPrivate(t *testing.T) {
 	pp := NewPathPolicy(nil)
 	cases := map[string]PathDecision{

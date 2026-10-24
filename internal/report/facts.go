@@ -1,7 +1,13 @@
-// Package report holds the run envelope (docs/SPEC.md §7.4) and its renderers.
+// Package report holds the run envelope (docs/spec/host-collector.md §6.4) and its renderers.
 package report
 
 import (
+	"cmp"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"time"
+
 	"github.com/b87/scheck/internal/baseline"
 	"github.com/b87/scheck/internal/check"
 	"github.com/b87/scheck/internal/runner"
@@ -17,7 +23,7 @@ type Fact struct {
 	Reason      string `json:"reason,omitempty"`
 	// Summary is the one-line human reading of this fact: the same string on
 	// the screen, in the JSON and (from phase 2) in the model's prompt
-	// (docs/SPEC.md §7.4, §7.6).
+	// (docs/spec/host-collector.md §6.4, §6.6).
 	Summary    string `json:"summary"`
 	Parsed     any    `json:"parsed,omitempty"`
 	Truncated  bool   `json:"truncated,omitempty"`
@@ -25,8 +31,8 @@ type Fact struct {
 	Elevated   bool   `json:"elevated,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
 	// Output is the check's stdout after redaction and truncation
-	// (docs/SPEC.md §4.2). It is deliberately not part of the JSON envelope,
-	// which carries `parsed`, not raw bytes (§7.4); it exists so the text
+	// (docs/spec/host-collector.md §4.2). It is deliberately not part of the JSON envelope,
+	// which carries `parsed`, not raw bytes (docs/spec/host-collector.md §6.4); it exists so the text
 	// renderer can show evidence at -vv or with --include-evidence. Default
 	// JSON and persistence omit it. Extraction still minimizes this value.
 	Output string `json:"-"`
@@ -42,9 +48,58 @@ func FactsFrom(sheet *baseline.FactSheet) map[string]Fact {
 	return out
 }
 
+// SheetFrom is the fact sheet a persisted envelope's facts were built
+// from, as far as a posture rule reads it: each fact's status, reason,
+// observation and parsed value in its parser's shape (check.Decode). The
+// raw output was never persisted, and no rule reads it. A fact this build
+// cannot read back is an error, so the caller collects the host again
+// rather than grade what it does not understand.
+func SheetFrom(env Envelope) (*baseline.FactSheet, error) {
+	p := check.Platform(env.Host.Platform)
+	if p != check.Linux && p != check.MacOS {
+		return nil, fmt.Errorf("platform %q", env.Host.Platform)
+	}
+	sheet := &baseline.FactSheet{Platform: p, Results: make(map[string]runner.Result, len(env.Facts))}
+	for id, f := range env.Facts {
+		r := runner.Result{CheckID: id, Observation: f.Observation, Status: runner.Status(f.Status), ReasonCode: f.ReasonCode,
+			Attempted: f.Attempted, Reason: f.Reason, Truncated: f.Truncated, Redactions: f.Redactions, Elevated: f.Elevated,
+			Duration: time.Duration(f.DurationMS) * time.Millisecond}
+		o, ok := env.Observations[f.Observation]
+		if !ok || o.Check != id {
+			return nil, fmt.Errorf("fact %s: observation %q is not its own", id, f.Observation)
+		}
+		r.RanAs, r.Params, r.Argv, r.Occurrence = o.RanAs, o.Params, o.Argv, o.Occurrence
+		switch r.Status {
+		case runner.StatusOK:
+			ran := cmp.Or(r.RanAs, id)
+			c, ok := check.Lookup(ran, p)
+			if !ok {
+				return nil, fmt.Errorf("fact %s: %s is not in this build's catalog", id, ran)
+			}
+			raw, err := json.Marshal(f.Parsed)
+			if err != nil {
+				return nil, fmt.Errorf("fact %s: %w", id, err)
+			}
+			if r.Parsed, err = check.Decode(c, raw); err != nil {
+				return nil, fmt.Errorf("fact %s: %w", id, err)
+			}
+		case runner.StatusUnavailable, runner.StatusDenied:
+		default:
+			return nil, fmt.Errorf("fact %s: status %q", id, f.Status)
+		}
+		sheet.Order = append(sheet.Order, id)
+		sheet.Results[id] = r
+	}
+	// The order checks ran in, as the observations number them.
+	slices.SortFunc(sheet.Order, func(a, b string) int {
+		return cmp.Compare(sheet.Results[a].Occurrence, sheet.Results[b].Occurrence)
+	})
+	return sheet, nil
+}
+
 // Summarize is the one-line reading of a fact: what the check observed, or
 // why it observed nothing. It is never a verdict — posture is the rules' job
-// (docs/SPEC.md §7.5, §7.6).
+// (docs/spec/host-collector.md §6.5, §6.6).
 func Summarize(c check.Check, f Fact) string {
 	if f.Status != "ok" {
 		if f.Reason == "" {
@@ -71,7 +126,7 @@ type Observation struct {
 // each invocation's metadata, outcome and summary, not its parsed value:
 // for a baseline check that would duplicate `facts`, and for a file read
 // (a raw parser) it would be the whole capture, which default JSON and
-// persistence omit by policy (docs/SPEC.md §7.4). Output stays on the
+// persistence omit by policy (docs/spec/host-collector.md §6.4). Output stays on the
 // struct for the opt-in evidence writer.
 func observationsFrom(sheet *baseline.FactSheet) map[string]Observation {
 	out := map[string]Observation{}

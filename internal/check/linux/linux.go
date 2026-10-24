@@ -1,4 +1,4 @@
-// Package linux registers the Linux check catalog (docs/SPEC.md §3 baseline table).
+// Package linux registers the Linux check catalog (docs/spec/host-collector.md §3 baseline table).
 package linux
 
 import "github.com/b87/scheck/internal/check"
@@ -12,8 +12,11 @@ func elevated(c check.Check) check.Check { c.Elevated = true; return c }
 func exitOK(c check.Check, codes ...int) check.Check { c.ExitOK = codes; return c }
 
 // unit names what one line or key of a check means, so the fact's reading is
-// "9 SUID files" rather than "9 lines" (docs/SPEC.md §3).
+// "9 SUID files" rather than "9 lines" (docs/spec/host-collector.md §3).
 func unit(c check.Check, noun string) check.Check { c.Unit = noun; return c }
+
+// sampled marks a depth- or prefix-capped read (check.Check.Sampled).
+func sampled(c check.Check) check.Check { c.Sampled = true; return c }
 
 func init() {
 	check.Register(
@@ -38,9 +41,15 @@ func init() {
 		elevated(unit(base("fw.ufw", "ufw status and rules", check.DomainFirewall, check.ParseLines, "ufw", "status", "verbose"), "ufw report lines")),
 		exitOK(base("fw.firewalld", "firewalld state", check.DomainFirewall, check.ParseRaw, "firewall-cmd", "--state"), check.AnyExit...),
 		elevated(base("fw.nft", "nftables ruleset", check.DomainFirewall, check.ParseRaw, "nft", "list", "ruleset")),
+		// Which backend the iptables userspace drives, so an empty nftables
+		// ruleset can be read as no filtering (docs/ROADMAP.md, E9, D3): exit 1
+		// means no iptables userspace at all. iptables itself stays denied.
+		exitOK(base("fw.iptables_backend", "iptables userspace backend (where /usr/sbin/iptables resolves; exit 1: none)", check.DomainFirewall, check.ParseRaw, "realpath", "-e", "/usr/sbin/iptables"), 0, 1),
 
 		// Listening sockets
-		base("net.listeners", "Listening TCP/UDP sockets with owning process", check.DomainNetwork, check.ParseListeners, "ss", "-tulpnH"),
+		// Elevated: ss names only the caller's own sockets' owners, and a database
+		// runs as its own user (docs/ROADMAP.md, E9, D3b).
+		elevated(base("net.listeners", "Listening TCP/UDP sockets with owning process", check.DomainNetwork, check.ParseListeners, "ss", "-tulpnH")),
 
 		// sshd
 		elevated(unit(base("sshd.config", "Effective sshd configuration", check.DomainSSHD, check.ParseKV, "sshd", "-T"), "settings")),
@@ -63,10 +72,10 @@ func init() {
 		exitOK(unit(base("persist.cron", "System crontab and cron.d entries (file:line, non-empty lines)", check.DomainPersistence, check.ParseLines, "grep", "-rH", ".", "/etc/crontab", "/etc/cron.d"), "cron entries"), 0, 1, 2),
 
 		// SUID / world-writable
-		unit(exitOK(base("fs.suid", "SUID binaries under system and local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "/usr/bin", "/usr/sbin", "/bin", "/sbin", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files"),
-		unit(exitOK(base("fs.world_writable", "World-writable files and directories without the sticky bit (depth-capped)", check.DomainFS, check.ParseLines,
-			"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths"),
+		sampled(unit(exitOK(base("fs.suid", "SUID binaries under system and local prefixes (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "/usr/bin", "/usr/sbin", "/bin", "/sbin", "-xdev", "-maxdepth", "4", "-type", "f", "-perm", "-4000"), 0, 1), "SUID files")),
+		sampled(unit(exitOK(base("fs.world_writable", "World-writable files and directories without the sticky bit (depth-capped)", check.DomainFS, check.ParseLines,
+			"find", "/usr/local", "/opt", "/etc", "-xdev", "-maxdepth", "4", "-perm", "-0002", "-not", "-perm", "-1000", "-not", "-type", "l"), 0, 1), "world-writable paths")),
 
 		// Logging / audit
 		exitOK(base("log.auditd", "Whether auditd is active", check.DomainLogging, check.ParseRaw, "systemctl", "is-active", "auditd"), check.AnyExit...),

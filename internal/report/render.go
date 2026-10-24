@@ -9,7 +9,7 @@ import (
 func WriteJSON(w io.Writer, env Envelope) error { return WriteJSONEvidence(w, env, false) }
 
 // WriteJSONEvidence adds only runner-filtered diagnostics to the rendered copy.
-// Persisted envelopes remain compact; extraction and redaction still apply (§4.2).
+// Persisted envelopes remain compact; extraction and redaction still apply (docs/spec/host-collector.md §4.2).
 func WriteJSONEvidence(w io.Writer, env Envelope, include bool) error {
 	facts := make(map[string]any, len(env.Facts))
 	type evidence struct {
@@ -44,11 +44,4 @@ func WriteJSONEvidence(w io.Writer, env Envelope, include bool) error {
 		Facts        map[string]any `json:"facts"`
 		Observations map[string]any `json:"observations"`
 	}{env, facts, observations})
-}
-
-func short(id string) string {
-	if len(id) > 12 {
-		return id[:12] + "…"
-	}
-	return id
 }

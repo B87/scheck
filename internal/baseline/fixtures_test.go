@@ -35,7 +35,7 @@ func TestFixtureReplay(t *testing.T) {
 			t.Errorf("%s: no lines", r.CheckID)
 		}
 	}
-	// Typed shapes (docs/SPEC.md §3) must survive a real recorded capture,
+	// Typed shapes (docs/spec/host-collector.md §3) must survive a real recorded capture,
 	// not just a hand-written line: atLeast asserts the record count and that
 	// the named field is populated on every record.
 	atLeast := func(n int, field string) func(*testing.T, runner.Result) {

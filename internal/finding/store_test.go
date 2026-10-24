@@ -226,7 +226,7 @@ func TestStoreReportRejects(t *testing.T) {
 	}
 }
 
-// verdict: ruled_out (docs/SPEC.md §5.7): a checked-and-closed hypothesis is
+// verdict: ruled_out (docs/spec/model.md §8): a checked-and-closed hypothesis is
 // recorded with its note and validated evidence, never as a finding; a
 // finding of this run cannot be ruled out; an open report of the same id
 // later supersedes the ruling-out.

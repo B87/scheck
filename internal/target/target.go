@@ -3,7 +3,7 @@
 // A Target never receives a shell command line: it receives argv tokens that
 // come from the compiled check catalog. On the local target that contract is
 // honoured by os/exec; on SSH it is honoured by a quoter plus a canary check
-// (docs/SPEC.md §4.3). Nothing in this package decides what may run — that is the
+// (docs/spec/host-collector.md §4.3). Nothing in this package decides what may run — that is the
 // catalog's and the policy's job; this package only runs it and captures the
 // result within a byte cap.
 package target
@@ -53,6 +53,34 @@ var (
 	ErrNotFound = errors.New("binary not found")
 	ErrTimeout  = errors.New("timed out")
 	ErrCanary   = errors.New("ssh canary mismatch")
+	// ErrAccess marks a connection refused by the operator's own
+	// configuration or by the host's answer to it: an unknown or changed
+	// host key, an unreadable identity or known_hosts file, failed
+	// authentication. It is a usage error; every other failure to connect
+	// is ErrUnreachable, a transport failure (docs/spec/scope.md,
+	// "Exit codes").
+	ErrAccess = errors.New("access refused")
+	// ErrHostKeyUnknown and ErrHostKeyChanged say which host-key refusal an
+	// ErrAccess is, so a report can tell an unverified host from a changed
+	// key, which can mean an interception (docs/spec/report.md,
+	// "Incompleteness and refusals").
+	ErrHostKeyUnknown = errors.New("host key unknown")
+	ErrHostKeyChanged = errors.New("host key changed")
+	// ErrJumpHost marks a failure on the jump host itself, before the
+	// target was contacted, so a refusal names the hop and not the target.
+	ErrJumpHost = errors.New("jump host")
+	// ErrExcluded marks a host or jump host whose address an exclude in the
+	// engagement file covers: refused before the connection opens
+	// (docs/spec/scope.md, "The scope gate"). It is an ErrAccess.
+	ErrExcluded = errors.New("address excluded")
+	// ErrUnreachable marks a connection that never reached a working
+	// session for any reason other than ErrAccess: a name that does not
+	// resolve, TCP refused or timed out, a handshake reset or cut off.
+	ErrUnreachable = errors.New("host unreachable")
+	// ErrTransport marks a session lost after it worked: an Exec whose
+	// command could not be sent or whose answer never came back. The run
+	// stops there, incomplete (docs/spec/host-collector.md §7).
+	ErrTransport = errors.New("transport lost")
 )
 
 // CodeNotFound is the exit code reported when argv[0] cannot be found.

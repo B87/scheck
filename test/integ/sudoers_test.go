@@ -3,7 +3,6 @@
 package integ
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -25,20 +24,19 @@ func TestSudoersFragmentOnUbuntu(t *testing.T) {
 
 	sshArgs := func(extra ...string) []string {
 		return append([]string{"ssh", "ops@" + c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-			"--stop-after", "facts", "--format", "json"}, extra...)
+			"--stop-after", "facts", "--format", "json", "--no-persist"}, extra...)
 	}
 	facts := func(args []string) map[string]map[string]any {
 		out, errOut, code := containers.Run(t, bin, args...)
-		if code != 0 {
+		if code > 1 {
 			t.Fatalf("scheck ssh: %d\n%s", code, errOut)
 		}
-		var doc struct {
-			Facts map[string]map[string]any `json:"facts"`
+		env := envelopeOf(t, out)
+		facts := map[string]map[string]any{}
+		for id, f := range env["facts"].(map[string]any) {
+			facts[id] = f.(map[string]any)
 		}
-		if err := json.Unmarshal([]byte(out), &doc); err != nil {
-			t.Fatalf("json: %v\n%s", err, out)
-		}
-		return doc.Facts
+		return facts
 	}
 
 	// Without the fragment: sudo -n is refused and the check degrades.
