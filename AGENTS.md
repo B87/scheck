@@ -161,7 +161,8 @@ For the practitioner's view of what to build, use the `security-consultant` suba
 ([.agents/agents/security-consultant.md](.agents/agents/security-consultant.md)): the
 consultant whose work scheck automates. Ask it in *define* mode before a slice's checks,
 rules, interview questions or report wording are fixed, and in *review* mode on the
-result. Its *seed* and *rank* modes are blind and run only in a session that has not
+result. Skip it for a slice that adds no check, rule, severity, question or wording (a
+refactor, a reader, a table refresh by the `advisory-refresh` skill). Its *seed* and *rank* modes are blind and run only in a session that has not
 read the collector code; never run them as a subagent of an implementing session.
 
 For the operator's view, use the `client` subagent
@@ -185,18 +186,39 @@ finding before reporting it. Run it **without being asked**:
   `internal/engagement/hostasset`, the engagement file's validation and locators,
   credential handling, exit codes, the report contract (goldens, schemas, what never
   appears), `scripts/depcheck.sh`, and `test/integ` tolerances.
-- **On any large change**: a new package, each build step of a slice, or a few hundred
-  changed non-test lines anywhere.
+- **On any large change**: a new package or a few hundred changed non-test lines anywhere,
+  within the review budget below.
 - **Before the commit or pull request that closes a slice**, on the whole slice.
 
 When it runs: after `make check` is green and before committing, on a fresh subagent
 each time (never one that wrote the code). Tell it what the change implements, which
 spec sections and roadmap entry govern it, and what is deliberately left for a later
 step. It never edits; the implementing session fixes. Fix every *must-fix* before
-committing and run the reviewer once more on those fixes when they touch the boundary;
-bring *should-fix* and *nits* to the user with a recommendation, and record what is
-deferred in the slice's roadmap entry. Skip it for documentation-only changes (the
+committing; bring *should-fix* and *nits* to the user with a recommendation, and record
+what is deferred in the slice's roadmap entry. Skip it for documentation-only changes (the
 `security-consultant` reviews specs) and for comments, typos and test-only renames.
+
+**Review budget.** A reviewer told to attack code will always find something, so reviews
+have a stop rule, and a brief to a delegated agent must repeat it:
+
+- One review per slice, on the whole slice, once `make check` is green. One further round
+  only when the first found a *must-fix* in the security boundary above (a send, reveal,
+  write or false "fixed"/"clean" claim that is reproduced), and only on those fixes. Never
+  a third round: what a second round finds that is not such a *must-fix* goes to the
+  slice's roadmap carried list, not into the pull request.
+- A finding is a *must-fix* only if the reviewer reproduced it with a concrete input, the
+  input is one an operator or a target can realistically produce, and the failure breaks a
+  non-negotiable or makes a report claim what was not observed. A crafted file that costs
+  memory, a race that needs local write access to a directory the operator owns, or an
+  edge case that needs several unlikely settings together is a *should-fix* at most.
+- Reviews are not run per build step of a slice unless the step is itself a new package or
+  a change to the runner, policy, gate or redaction; the slice-closing review covers the
+  rest.
+
+Match the process to the risk: a small or purely additive slice needs the `code-reviewer`
+once and the `spec-steward` sync, not the consultant, modularity and client passes as well.
+Use `modularity` only for a new package or interface, and `client` only for new interview
+or report wording.
 
 For module shape, use the `modularity` subagent
 ([.agents/agents/modularity.md](.agents/agents/modularity.md)). It reads
