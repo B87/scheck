@@ -535,6 +535,22 @@ the target:
 | `unavailable:no_file_listed` | no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at |
 | `unavailable:home_ancestors_not_read` | the `.env` file sits in a home directory, and the folders above a declared folder are not read, so a private home cannot be told from an open one |
 | `unavailable:symlink_not_followed` | the only match was a symbolic link, and scheck does not follow links |
+| `unavailable:packages` | neither the dpkg nor the rpm package database could be read |
+| `unavailable:backport_unknown` | the package comes from a distribution whose fixed package is not in scheck's table, so its version cannot be judged |
+| `unavailable:source_unrecognized` | the package came from a source scheck does not recognize |
+| `unavailable:unnumbered_backport` | the fix for this PHP line was published without a new version number, so the version cannot say whether it is in |
+| `unavailable:brotli_unread` | the Brotli library this Node.js links was not found |
+| `unavailable:distro_node_unfixed` | the distribution has published no fix for the other flaws of the Node.js release |
+| `unavailable:os_release` | the operating system was not identified, so the package's source is not known |
+| `unavailable:line_unsupported` | the Node.js project publishes no fix for this line |
+| `unavailable:distro_package` | a distribution package: its fixes come from the distribution |
+| `unavailable:php_without_package` | PHP is running here, but no package of it was found, so its version was not read |
+| `unavailable:packages_partial` | the package read was cut short or held a half-installed package, so it cannot show a package absent or fixed |
+| `unavailable:php_cli` | an rpm `php-cli` may serve requests through its CGI program, which was not read, so it is not judged against the fix |
+| `unavailable:distribution` | this distribution (or this release of it) was not identified or names PHP and Node.js packages otherwise, so finding none proves nothing |
+| `unavailable:eol_within_collection` | the release line's support ended while the host was being read |
+| `unavailable:collection_time` | the time the packages were read was not recorded, and the judgment depends on a date |
+| `unavailable:runtime_installs` | PHP and Node.js installed some way the package databases do not show are not read (the JSON `detail` names them: containers, Homebrew, source builds, version managers, control panels) |
 | `unavailable:<other>` | the command or request that reads it did not give a usable answer (`<code>`) |
 | `leaving_date_not_passed` | the declared leaving date had not passed when it was read |
 | `left_date_within_collection` | the declared leaving date falls within or after collection; run again after that date |
@@ -609,7 +625,7 @@ finding in it, open or accepted, is not *not applicable*: its row is built as if
 | CI/CD and supply chain | default-branch protection; the workflow token default; action pinning; `pull_request_target`; write deploy keys; dependency alerts | who can push to repositories that deploy to production, contractors included; review rules on the production deployment environment; approval before workflows run on pull requests from forks; self-hosted runners that public repositories can use; which third-party actions the organization allows; trust from workflows to cloud accounts (OIDC); webhooks and where they send data |
 | External surface | dangling records; subdomain takeover; private addresses; TLS and certificates; on Linux hosts, remote-administration services (Docker's API, etcd, kubelet, Telnet, FTP, SMB, RDP, VNC, Jupyter, SNMP, RabbitMQ management) listening beyond localhost with no host firewall rule in front (`svc.sensitive_listens_unfiltered`; a host's coverage plan, group "Remote-administration services listening beyond localhost"). The row names what was not checked ([web-collector.md](web-collector.md#not-assessed)) | whether a cloud firewall lets those services in; services on hosts reachable beyond the audience you declared for them; which ports and services answer from the internet (scheck reads; it does not scan); the registrar account: who can sign in, its 2-step verification, auto-renew and when the domain expires; the DNS hosting account and who can change records |
 | Web application | HSTS; plain HTTP; security headers; cookies; version disclosure; `security.txt`; restricted pages reachable. On every run with a domain or url root the row says: `Only whole domain endings (such as .page, .dev, .app) were looked up in browsers' built-in HTTPS-only list; whether your own domain is on it was not checked.` | exposed files, debug pages and admin panels (such as /.git, /.env or /admin); third-party scripts the site loads; which other sites may read the site's responses (CORS) |
-| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts) | the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared; listening services you did not declare (on Linux hosts, apart from remote-administration ports); who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
+| Hosts | the host collector's catalog (`host-collector.md`), expanded below, including `log.auditd_inactive` and `accounts.empty_password_remote` (an empty password that SSH accepts); on Linux hosts, PHP and Node.js packages against the fixes of the 2026-10-21 disclosures (`php.fix_missing`, `node.fix_missing`, `node.line_unsupported`; 0.0.3 G8; always *partial*, see "The Hosts row") | PHP and Node.js in containers, from Homebrew or source, under version managers or control panels, and whether processes were restarted after an update; the firewall on Linux hosts, apart from database ports, remote-administration ports and the services you declared; listening services you did not declare (on Linux hosts, apart from remote-administration ports); who can become root or administrator, and sudo rules that need no password; SSH keys allowed to log in (authorized_keys); SSH settings inside Match blocks, and whether PAM accepts an empty password; disk encryption on Linux hosts; programs that run with root rights (SUID files); programs started at boot or on a schedule; credential files (.env files, ~/.aws, ~/.ssh, cloud CLI logins) |
 | Email and domain | SPF; DKIM per declared selector; DMARC; non-sending domains; forwarding to an outside address (optional) | whether Workspace lets staff forward mail outside the company (the tenant setting); Workspace protection against spoofed and lookalike senders; encryption of mail in transit (MTA-STS and TLS reporting) |
 | Logging and incident readiness | none in 0.0.2: the row prints "not checked" | alerts on administrator changes and suspicious sign-ins in Workspace; GitHub audit log retention and streaming; cloud audit logs; whether host logs are kept anywhere off the host |
 | Malware and stolen sessions | *outside scheck*: scheck reads the settings of the hosts you list; it does not look for malware, infostealers or signs of compromise on any of them, and laptops you did not list were not looked at. Without the row a report on a laptop reads as covering what happens on it |
@@ -681,7 +697,14 @@ counts include these groups. From E9 step 5a the Firewall
 line also reads "whether declared services listen beyond their audience only; see
 External surface" (R3), and "whether remote-administration ports are filtered only; see
 External surface" (R6, 0.0.3 G5). `expected_services` is read by R3 and R6 as well as R1,
-so the "Declared, not verified" line names all three. The
+so the "Declared, not verified" line names all three. A rule group with a standing gap
+(`CoverageGroup.Gap`: R7 to R9, `unavailable:runtime_installs`, 0.0.3 G8) counts as
+decided when it decided but leaves its sub-row *partial* and prints the gap's reason
+beside the mark: what the rule can never read is not hidden by what it read. The
+"Runtimes (PHP, Node.js)" sub-row reads `checked in part (PHP web packages against the
+October 2026 fix, ...)` with that reason. A partial package read does not mark the host's
+population incomplete: these rules turn each would-be disproof into an abstention
+(`unavailable:packages_partial`) themselves (`engagement.md`, R7 to R9). The
 JSON carries the same as `judged` and `read_not_judged` per sub-item. The Hosts mark
 adds `N of M hosts read` when a host was not read; `Narrowed in the engagement file:` when narrowing removed
 anything, a check with no rule included; and `Declared, not verified:` for host context
@@ -903,7 +926,7 @@ one id graded differently.
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
 | `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
-| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `mail_forward`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
+| `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `mail_forward`, `package`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
 | `category` | the collector's own grouping |
@@ -934,7 +957,8 @@ accepts a whole id. The first host-side subject is a listener's, `{kind: service
 "<port>/<proto>"}`, declared by the engagement rules `db.listens_unfiltered` (built, E9 step 3a),
 `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3
 G5; [engagement.md](engagement.md), "The multi-fact rules of 0.0.2"); an acceptance of any
-of them names it, and it is applied to the judgment
+of them names it. `php.fix_missing`, `node.fix_missing` and `node.line_unsupported` (0.0.3
+G8) have the subject `{kind: package, key: "<package name>"}`. An acceptance is applied to the judgment
 like a network collector's, never by the host grader. Host posture acceptance by subject stays
 unbuilt. A person's account is keyed by the address rules match
 people by, with the provider's id beside it. A token is keyed by its credential id and

@@ -18,6 +18,7 @@ const (
 	ParseLaunchd      ParserKind = "launchd"
 	ParseFileMode     ParserKind = "file_mode"
 	ParseFindLS       ParserKind = "find_ls"
+	ParsePackages     ParserKind = "packages"
 )
 
 // Field names of the typed shapes. A rule predicate names one of these
@@ -40,7 +41,9 @@ const (
 	FieldSymbolic = "symbolic"
 	FieldUser     = "user"
 	FieldGroup    = "group"
-	FieldSize     = "size"
+	// FieldManager is the package manager a packages record came from.
+	FieldManager = "manager"
+	FieldSize    = "size"
 	// FieldPath is the path of a find_ls entry; FieldType its first mode
 	// character (- file, d directory, l link, s socket).
 	FieldPath = "path"
@@ -70,7 +73,7 @@ func (r Records) Len() int { return len(r.Items) }
 // IsTyped reports whether kind is one of the typed shapes.
 func IsTyped(kind ParserKind) bool {
 	switch kind {
-	case ParseListeners, ParseAccounts, ParsePasswdStatus, ParseUnits, ParseUpdates, ParseLaunchd, ParseFileMode, ParseFindLS:
+	case ParseListeners, ParseAccounts, ParsePasswdStatus, ParseUnits, ParseUpdates, ParseLaunchd, ParseFileMode, ParseFindLS, ParsePackages:
 		return true
 	}
 	return false
@@ -117,6 +120,8 @@ func parseRecords(c Check, raw []byte) (Records, error) {
 		items, err = parseFileMode(body)
 	case ParseFindLS:
 		items, unparsed = parseFindLS(body)
+	case ParsePackages:
+		items, unparsed = parsePackages(baseName(c.Argv[0]), body, markers > 0)
 	default:
 		return recs, fmt.Errorf("unknown typed shape %q", c.Parser)
 	}

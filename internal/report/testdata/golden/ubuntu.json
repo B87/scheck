@@ -2,7 +2,7 @@
   "schema_version": "1.7",
   "host": {
     "id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
-    "hostname": "c8ebfdf3e96a",
+    "hostname": "ec11fbf6c8e8",
     "platform": "linux",
     "os": "Ubuntu 24.04.5 LTS",
     "kernel": "7.2.12-orbstack-00394-gbecdd6130068",
@@ -591,8 +591,8 @@
       "observation": "host.hostname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "c8ebfdf3e96a",
-      "parsed": "c8ebfdf3e96a\n",
+      "summary": "ec11fbf6c8e8",
+      "parsed": "ec11fbf6c8e8\n",
       "duration_ms": 0
     },
     "host.machine_id": {
@@ -817,6 +817,27 @@
       "attempted": true,
       "reason": "exit 127: bash: line 1: dnf: command not found",
       "summary": "exit 127: bash: line 1: dnf: command not found",
+      "duration_ms": 0
+    },
+    "pkg.dpkg_runtimes": {
+      "observation": "pkg.dpkg_runtimes#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 installed packages",
+      "parsed": {
+        "kind": "packages",
+        "items": [],
+        "partial": false
+      },
+      "duration_ms": 0
+    },
+    "pkg.rpm_runtimes": {
+      "observation": "pkg.rpm_runtimes#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: rpm: command not found",
+      "summary": "exit 127: bash: line 1: rpm: command not found",
       "duration_ms": 0
     },
     "pkg.zypper_lp": {
@@ -1073,8 +1094,8 @@
       "observation": "sys.uname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
-      "parsed": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux\n",
+      "summary": "Linux ec11fbf6c8e8 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
+      "parsed": "Linux ec11fbf6c8e8 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux\n",
       "duration_ms": 0
     },
     "time.timedatectl": {
@@ -1487,7 +1508,7 @@
       "observation": "host.hostname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "c8ebfdf3e96a",
+      "summary": "ec11fbf6c8e8",
       "duration_ms": 0,
       "check": "host.hostname",
       "ran_as": "host.hostname",
@@ -1689,6 +1710,122 @@
       ],
       "occurrence": 32
     },
+    "pkg.dpkg_runtimes#1": {
+      "observation": "pkg.dpkg_runtimes#1",
+      "status": "ok",
+      "attempted": true,
+      "summary": "0 installed packages",
+      "duration_ms": 0,
+      "check": "pkg.dpkg_runtimes",
+      "ran_as": "pkg.dpkg_runtimes",
+      "argv": [
+        "dpkg-query",
+        "-s",
+        "php5.6-fpm",
+        "php5.6-cgi",
+        "libapache2-mod-php5.6",
+        "php7.0-fpm",
+        "php7.0-cgi",
+        "libapache2-mod-php7.0",
+        "php7.1-fpm",
+        "php7.1-cgi",
+        "libapache2-mod-php7.1",
+        "php7.2-fpm",
+        "php7.2-cgi",
+        "libapache2-mod-php7.2",
+        "php7.3-fpm",
+        "php7.3-cgi",
+        "libapache2-mod-php7.3",
+        "php7.4-fpm",
+        "php7.4-cgi",
+        "libapache2-mod-php7.4",
+        "php8.0-fpm",
+        "php8.0-cgi",
+        "libapache2-mod-php8.0",
+        "php8.1-fpm",
+        "php8.1-cgi",
+        "libapache2-mod-php8.1",
+        "php8.2-fpm",
+        "php8.2-cgi",
+        "libapache2-mod-php8.2",
+        "php8.3-fpm",
+        "php8.3-cgi",
+        "libapache2-mod-php8.3",
+        "php8.4-fpm",
+        "php8.4-cgi",
+        "libapache2-mod-php8.4",
+        "php8.5-fpm",
+        "php8.5-cgi",
+        "libapache2-mod-php8.5",
+        "nodejs",
+        "libbrotli1"
+      ],
+      "occurrence": 33
+    },
+    "pkg.rpm_runtimes#1": {
+      "observation": "pkg.rpm_runtimes#1",
+      "status": "unavailable",
+      "reason_code": "command_missing",
+      "attempted": true,
+      "reason": "exit 127: bash: line 1: rpm: command not found",
+      "summary": "exit 127: bash: line 1: rpm: command not found",
+      "duration_ms": 0,
+      "check": "pkg.rpm_runtimes",
+      "ran_as": "pkg.rpm_runtimes",
+      "argv": [
+        "rpm",
+        "-q",
+        "rpm",
+        "php",
+        "php-fpm",
+        "php-cli",
+        "nodejs",
+        "brotli",
+        "libbrotli",
+        "php56-php",
+        "php56-php-fpm",
+        "php56-php-cli",
+        "php70-php",
+        "php70-php-fpm",
+        "php70-php-cli",
+        "php71-php",
+        "php71-php-fpm",
+        "php71-php-cli",
+        "php72-php",
+        "php72-php-fpm",
+        "php72-php-cli",
+        "php73-php",
+        "php73-php-fpm",
+        "php73-php-cli",
+        "php74-php",
+        "php74-php-fpm",
+        "php74-php-cli",
+        "php80-php",
+        "php80-php-fpm",
+        "php80-php-cli",
+        "php81-php",
+        "php81-php-fpm",
+        "php81-php-cli",
+        "php82-php",
+        "php82-php-fpm",
+        "php82-php-cli",
+        "php83-php",
+        "php83-php-fpm",
+        "php83-php-cli",
+        "php84-php",
+        "php84-php-fpm",
+        "php84-php-cli",
+        "php85-php",
+        "php85-php-fpm",
+        "php85-php-cli",
+        "nodejs18",
+        "nodejs20",
+        "nodejs22",
+        "nodejs24",
+        "nodejs26"
+      ],
+      "occurrence": 34
+    },
     "pkg.zypper_lp#1": {
       "observation": "pkg.zypper_lp#1",
       "status": "unavailable",
@@ -1704,7 +1841,7 @@
         "--non-interactive",
         "lp"
       ],
-      "occurrence": 33
+      "occurrence": 35
     },
     "privesc.sudoers#1": {
       "observation": "privesc.sudoers#1",
@@ -1722,7 +1859,7 @@
         "cat",
         "/etc/sudoers"
       ],
-      "occurrence": 35
+      "occurrence": 37
     },
     "privesc.sudoers_d#1": {
       "observation": "privesc.sudoers_d#1",
@@ -1742,7 +1879,7 @@
         ".",
         "/etc/sudoers.d"
       ],
-      "occurrence": 37
+      "occurrence": 39
     },
     "remote.sshd_enabled#1": {
       "observation": "remote.sshd_enabled#1",
@@ -1758,7 +1895,7 @@
         "ssh",
         "sshd"
       ],
-      "occurrence": 38
+      "occurrence": 40
     },
     "sshd.config#1": {
       "observation": "sshd.config#1",
@@ -1776,7 +1913,7 @@
         "sshd",
         "-T"
       ],
-      "occurrence": 40
+      "occurrence": 42
     },
     "sys.dmi#1": {
       "observation": "sys.dmi#1",
@@ -1793,7 +1930,7 @@
         "/sys/class/dmi/id/sys_vendor",
         "/sys/class/dmi/id/product_name"
       ],
-      "occurrence": 41
+      "occurrence": 43
     },
     "sys.platform#1": {
       "observation": "sys.platform#1",
@@ -1807,7 +1944,7 @@
         "uname",
         "-s"
       ],
-      "occurrence": 42
+      "occurrence": 44
     },
     "sys.shell#1": {
       "observation": "sys.shell#1",
@@ -1821,7 +1958,7 @@
         "printenv",
         "SHELL"
       ],
-      "occurrence": 43
+      "occurrence": 45
     },
     "sys.uid#1": {
       "observation": "sys.uid#1",
@@ -1835,13 +1972,13 @@
         "id",
         "-u"
       ],
-      "occurrence": 44
+      "occurrence": 46
     },
     "sys.uname#1": {
       "observation": "sys.uname#1",
       "status": "ok",
       "attempted": true,
-      "summary": "Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
+      "summary": "Linux ec11fbf6c8e8 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch…",
       "duration_ms": 0,
       "check": "sys.uname",
       "ran_as": "sys.uname",
@@ -1849,7 +1986,7 @@
         "uname",
         "-a"
       ],
-      "occurrence": 45
+      "occurrence": 47
     },
     "sys.which#1": {
       "observation": "sys.which#1",
@@ -1968,7 +2105,7 @@
         "which",
         "cat"
       ],
-      "occurrence": 34
+      "occurrence": 36
     },
     "sys.which#8": {
       "observation": "sys.which#8",
@@ -1985,7 +2122,7 @@
         "which",
         "grep"
       ],
-      "occurrence": 36
+      "occurrence": 38
     },
     "sys.which#9": {
       "observation": "sys.which#9",
@@ -2002,7 +2139,7 @@
         "which",
         "sshd"
       ],
-      "occurrence": 39
+      "occurrence": 41
     },
     "time.timedatectl#1": {
       "observation": "time.timedatectl#1",
@@ -2018,7 +2155,7 @@
         "timedatectl",
         "show"
       ],
-      "occurrence": 46
+      "occurrence": 48
     }
   }
 }

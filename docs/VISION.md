@@ -91,8 +91,8 @@ production, and that repository holds the payment provider's key.* Assets are:
 
 - Offensive work: exploitation, credential attacks, anything outside declared scope.
 - Authenticated testing of application logic (access control, business rules).
-- Replacing a vulnerability scanner. scheck may call one; its job is prioritization and
-  judgement.
+- Replacing a vulnerability scanner: not a scanner; a dated table of named runtime
+  disclosures. scheck may call one; its job is prioritization and judgement.
 - Remediation. It says what to fix and how; it changes nothing.
 - Continuous monitoring or fleets. One engagement at a time; comparing two is fine.
 

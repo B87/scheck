@@ -33,6 +33,15 @@ func init() {
 		exitOK(base("pkg.dnf_check_update", "Packages with pending upgrades (dnf; exit 100 means updates exist)", check.DomainUpdates, check.ParseUpdates, "dnf", "-q", "check-update"), 0, 100),
 		base("pkg.zypper_lp", "Pending patches (zypper)", check.DomainUpdates, check.ParseUpdates, "zypper", "--non-interactive", "lp"),
 
+		// PHP and Node.js packages from the package database, by exact name: the
+		// version of the package that serves, read without running the runtime
+		// (docs/spec/host-collector.md §3, G8). A package that is not installed
+		// is exit 1 (dpkg-query) or a count (rpm).
+		check.Check{ID: "pkg.dpkg_runtimes", Description: "Installed PHP web packages and Node.js with its Brotli library (dpkg database; never runs the runtime)",
+			Platform: check.Linux, Domain: check.DomainRuntimes, Parser: check.ParsePackages, Baseline: true, ExitOK: []int{0, 1}, Argv: check.DpkgRuntimeArgv()},
+		check.Check{ID: "pkg.rpm_runtimes", Description: "Installed PHP and Node.js packages with their Brotli library (rpm database; never runs the runtime)",
+			Platform: check.Linux, Domain: check.DomainRuntimes, Parser: check.ParsePackages, Baseline: true, ExitOK: check.RpmRuntimeExitOK(), Argv: check.RpmRuntimeArgv()},
+
 		// Disk encryption
 		unit(base("disk.lsblk", "Block devices, filesystems and crypt layers", check.DomainDisk, check.ParseLines, "lsblk", "-o", "NAME,TYPE,FSTYPE,MOUNTPOINT"), "block devices"),
 		unit(base("disk.crypttab", "Configured encrypted volumes", check.DomainDisk, check.ParseLines, "cat", "/etc/crypttab"), "crypttab entries"),

@@ -387,6 +387,26 @@ service is reachable from the internet or open without a password. The fact shee
 `cloud VM: <provider> (from DMI)` is a label; `cloud platform not identified` does not
 mean the host is not in the cloud, and scheck does not test the cloud metadata service.
 
+PHP and Node.js packages on a Linux host: `php.fix_missing`, `node.fix_missing` and
+`node.line_unsupported` (area hosts, subject kind `package` keyed by the package name,
+base medium, never past high). They read the dpkg or rpm package database and
+`os.release`; scheck never runs `php`, `php-fpm`, `node` or `brew`. A package is compared
+only with the fix of the source it came from, so a distribution PHP such as Ubuntu 24.04's
+`8.3.6-0ubuntu0.24.04.13` is fixed although 8.3.6 is below 8.3.36. `php.fix_missing` ranks
+one step higher when a web server on the host listens beyond localhost and the host
+firewall leaves the port open, and on a `data.matters_most` host; when the listeners or
+the firewall were not read it says it is "rated at its base". `node.line_unsupported` compares a line's end-of-support date with the time the host was
+read, not the date of the report. Trust "below the fixed
+package of its source", the fixed version it names and the table date (2026-10-24).
+Never turn it into "vulnerable" or "exploited": the version does not show either, an
+exploit has been demonstrated for Apache with mod_php only, the cloud firewall was not read
+and PHP may not receive requests. Abstentions (`unavailable:backport_unknown`,
+`source_unrecognized`, `unnumbered_backport`, `os_release`, `distro_package`,
+`packages_partial`, `distribution`, `eol_within_collection` and the others in
+`docs/spec/report.md`) are not a pass, and the Hosts row's "Runtimes (PHP,
+Node.js)" is always `partial`: containers, Homebrew, source builds, version managers,
+control-panel PHP and restarts after an update are not read.
+
 Empty password over SSH on a Linux host: `accounts.empty_password_remote` (critical, area
 hosts, one finding per host with the accounts under `affected`) fires when an account
 with no password and a login shell exists, sshd accepts empty passwords and a password

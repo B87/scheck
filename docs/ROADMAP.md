@@ -2504,6 +2504,47 @@ the fixtures were re-recorded and the Ubuntu fixture plans 37 host checks
 firewall owner-match rule proves nothing new, and what the attached service account can
 do belongs to the GCP collector (G1) and the G4 link (`spec/host-collector.md §11`).
 
+Fixes after step 2 review (`Rule.OwnPartial`, collection time, coverage of the names):
+
+- The framework no longer withdraws a runtime rule's disproofs for a partial fact nor marks
+  the host's population incomplete (`Rule.OwnPartial`). Any partial runtime read (cut
+  output, a half-installed dpkg package, the rpm sentinel missing, unrecognized lines)
+  turns every would-be disproof into `unavailable:packages_partial`, naming the read;
+  fired verdicts stand.
+- A host-level "no PHP web package / no Node.js package" disproof needs an `os.release`
+  `id` and release the reads cover (`advisory.Covers`: Debian 9+ and Ubuntu 16.04+ for dpkg;
+  Fedora and the Red Hat family `rhel`, `centos`, `rocky`, `almalinux`, `ol` 8 or later for
+  rpm); SUSE, Alpine, Arch, CentOS/RHEL 7, Amazon Linux, Debian 8 and older, derivatives
+  (`raspbian`, `linuxmint`) and an unread `os.release` abstain `unavailable:distribution`.
+  The rpm read also asks for Remi's `phpNN-php`, `phpNN-php-fpm` and `phpNN-php-cli` (the
+  first judged as a PHP package, not as `mod_php`) and for `nodejs18/20/22/24/26`; its
+  `ExitOK` is 0 to the number of names (`check.RpmRuntimeExitOK`).
+- A partial read counts for the runtime rules unless the distribution is one the other manager
+  covers (rpm partial ignored only where dpkg covers, and the reverse), so an rpm database that
+  does not exist on a Debian host no longer cancels dpkg-based disproofs; on a distribution the
+  reads do not know, or with `os.release` unread, every partial read withdraws disproofs. The host-level "no PHP package" disproof says in Not
+  checked that a PHP running outside the package databases is looked for only among
+  listening sockets, and only when read with sudo. `php_without_package` reads "no package of
+  it was found"; the `runtime_installs` report text is shorter and the JSON detail keeps the
+  examples. `node.line_unsupported`'s impact and remediation are line-generic (it fires for
+  22, 24 and 26 after their dates).
+- R9 is a dated rule, judged at collection time (`rules.Host.Collected`, `View.Collected()`,
+  `finding.LeftAt`, from the kept envelope's `run.started` and `duration_ms`): not passed
+  at the last read, disproved; passed at the first, fired; within the read,
+  `unavailable:eol_within_collection`; no recorded time, `unavailable:collection_time`.
+  The earlier "reads no clock" wording was false and is gone.
+- Every per-package verdict cites `os.release`; a Node.js judged through the Brotli library
+  cites the library's record. `finding.Def.CeilingWhy` words `php.fix_missing`'s stop at
+  high (the cloud firewall and whether the web server passes requests to this PHP were not
+  read); the `serves_web` sentence is shorter. A container proxy owning a port beyond
+  localhost with no web server seen names the port and the container (`docker-proxy
+  publishes 0.0.0.0:443/tcp, a container: what it serves, and any PHP or Node.js inside it,
+  was not read`). The Debian "other nine flaws" line appears on Debian sources only;
+  IPv6 listeners are written in brackets.
+- The report tests' fake host carries lower-case `os.release` keys as the parser gives them
+  and a dpkg read with no PHP, so the shared goldens show the Runtimes line as judged and
+  partial.
+
 **Build step 3 (built):** the multi-fact rule R6 `svc.sensitive_listens_unfiltered`
 (`internal/engagement/rules/svc_sensitive.go`, its definition in
 `internal/finding/multifact.go`, table version `SensitiveServicesVersion` 2026-10-24.2).
@@ -2540,6 +2581,157 @@ remote-administration ports and the services you declared" (`spec/engagement.md`
 
 **Done when:** every new rule has its three fixtures; the integration diff is still the
 exact allowlist; the world-readable `.env` seeded on the lab host is found.
+
+### G8 — runtime security fixes (PHP, Node.js)
+
+**Named G8 because G6 is taken** ("comparing two engagements") and G7 follows it; the
+slice sits after G5 because it extends the host collector's depth. The user has not
+decided between a slice of its own and a "G5 step 4".
+
+**Delivers:** a host that runs a PHP or Node.js package older than the fix of the
+2026-10-21 disclosures is named, with the package and the fix of its own source. An
+exception to the host collector's "No CVE database" non-goal, bounded by the written bar
+in `spec/host-collector.md §1` and §11: a dated constant table of named disclosures
+(`advisory.TableVersion` 2026-10-24), not a feed. PHP: CVE-2026-109618 and
+CVE-2026-109619, fixed in 8.5.12, 8.4.27, 8.3.36 and 8.2.35; an exploit has been
+demonstrated against Apache with mod_php. Node.js: ten CVEs fixed in 22.23.4, 24.22.1
+and 26.12.1, among them CVE-2026-111497, the Brotli decoder write. scheck never runs
+`php`, `php-fpm`, `node` or `brew`: the version is package metadata (§11).
+
+**Build step 1 (built):** the catalog checks `pkg.dpkg_runtimes` (`dpkg-query -s` over
+exact names) and `pkg.rpm_runtimes` (`rpm -q`), both unelevated, in a new domain
+`runtimes` (fact sheet label "Runtimes (PHP, Node.js)"); the typed parser `packages` (`check.ParsePackages`: name, version, status,
+manager); `php`, `php-cgi`, `phpdbg`, `brew`, `deno` and `bun` added to the denied
+binaries, and `rpm` limited to a first token of `-q`; the leaf package `internal/advisory`
+(standard library and `internal/check` only), which owns the table and its classifier.
+`os.release` chooses the table row by `ID`, never `ID_LIKE`. The table (`TableVersion`
+2026-10-24) holds the PHP and Node.js fixes, the dpkg ordering and `Assess`, which the
+rules of step 2 call; every end-of-life date in it was read on 2026-10-24 from
+php.net/supported-versions (PHP 8.2 2026-12-31, 8.3 2027-12-31, 8.4 2028-12-31, 8.5
+2029-12-31) and the Node.js release schedule (20 2026-04-30, 22 2027-04-30, 24 2028-04-30,
+25 2026-06-01, 26 2029-04-30). The golden Linux traces
+gain the two package reads, the fixtures were re-recorded (every Linux output hash
+changed: hostname, kernel, home-folder timestamps) and the Ubuntu fixture plans 39 host
+checks, up from 37 (`spec/host-collector.md §3`). Nothing reads the advisory table yet:
+no finding, no report line.
+
+Fixes after step 1 review: `pkg.dpkg_runtimes` runs `dpkg-query -s`, not `-l`: one field
+per line, which no terminal width cuts (the columns of `-l` are cut by `COLUMNS`); the
+parser reads stanzas (`Package`, `Status`, `Version`), and a record's status is the third
+word of dpkg's `Status`. A held package (`hold ok installed`) counts as installed;
+`config-files` and `not-installed` give no record; the half states (`half-*`, `unpacked`,
+`triggers-*`), a marker of redaction or truncation in a field and a stanza without name,
+version or status make the read partial. rpm records are always installed
+(`check.PackageInstalled` is the constant). The invariants hold `dpkg-query` to the verb
+`-s` and `rpm` to `-q`, both names-only: no token after the verb may start with a dash, so
+`--pipe`, `--rcfile`, `--dbpath` and `--admindir` cannot be added; the `rpm` denied tokens
+stay as a second layer. In the advisory, Ubuntu and Debian provenance is anchored to each
+distribution's own revision shape, not a substring; `.gbp` alone no longer means
+deb.sury.org; an unread `os.release` gives the reason `os_release`; and the Node.js
+end-of-life sentence stops at "says end-of-life versions are always affected. Its Brotli
+decoder flaw is CVE-2026-111497."
+
+Fixes after the second step 1 review: `pkg.rpm_runtimes` asks `rpm` first (the argv is in
+`spec/host-collector.md` §3). The first name is a sentinel: when the rpm database cannot be
+opened rpm prints "package X is not installed" for every name and exits like a host with
+none, so the parser counts the read as whole only when a record for `rpm` is present, and
+otherwise partial. `ExitOK` is 0 to the number of names (`check.RpmRuntimeExitOK`), not `check.AnyExit`, so a signal or crash is
+unavailable. The parser drops the last record or open stanza of truncated output and counts
+it unparsed; a purged or removed dpkg stanza (`config-files`, `not-installed`) has no
+version and is no longer partial. The denied binaries gain `nodejs`, `npm`, `npx`, `dpkg`,
+`dpkg-deb`, `rpmquery`, `rpmverify`, `rpmdb`, `rpmkeys`, `rpmsign` and any versioned `php`,
+`php-fpm`, `php-cgi` or `phpdbg` name. `internal/advisory` reads the `os.release` keys as
+the key-value parser lowercases them (`id`, `version_id`). Provenance shapes: Ubuntu
+revisions `ubuntu`, `build` and `maysync` (a plain Debian-style revision on Ubuntu is not
+Ubuntu's); Debian `+bN` binNMU; rpm `[.+]el9`-style module builds. A PHP line older than
+7.4 on deb.sury.org or Remi gets the reason `backport_unknown` with its own wording (only
+7.4, 8.0 and 8.1 are "unnumbered"). The end-of-life table gains Node.js 26 (2029-04-30).
+
+Fixes after the third review: `pkg.rpm_runtimes` no longer asks for `php-cgi` or
+`phpNN-php-cgi`, which are no packages on the Red Hat family or Remi (`/usr/bin/php-cgi` is
+inside `php-cli`); it asks `php-cli` and `phpNN-php-cli` (48 names with `nodejs18` to
+`nodejs26`). An rpm php-cli is not judged against the fix: it abstains `unavailable:php_cli`,
+and while one is installed the host-level "no PHP web package" disproof is not said. dpkg's
+`php<L>-cli` is still not read. A partial read counts unless the other manager covers the
+distribution. The host-level disproof cites the read whose manager covers the distribution.
+The Ubuntu integration test seeds Node.js 24, so it does not depend on the 2027-04-30 end date,
+and `node.line_unsupported`'s impact no longer lists lines.
+
+**Build step 2 (built):** three multi-fact rules in `internal/engagement/rules`, subject
+kind `package`, risk area hosts, ceiling high, `exposed_on_purpose` never lowering them:
+
+| Id | Base | Moves |
+|---|---|---|
+| `php.fix_missing` | medium | +1 `attribute:serves_web`, +1 `exposure:internet`, +1 `data_matters_most` (`HostAccess`); stops at high |
+| `node.fix_missing` | medium | none; not `HostAccess` |
+| `node.line_unsupported` | medium | none; time-dependent, judged at the host's collection time: a line the table holds a fix for (22, 24, 26) is supported until its table date, a line outside the table is end of life with no clock, and a distribution package abstains (`distro_package`); listed in `spec/engagement.md`, "Severity in context", "Time" |
+
+R7 `php.fix_missing`, R8 `node.fix_missing`, R9 `node.line_unsupported`. No version-only
+single-fact finding exists. `attribute:serves_web` is declared on the definition and set
+only on Linux when a web-server process listens beyond loopback and R1's firewall reader
+leaves the port open to every source; when listeners or the firewall cannot be read, the
+finding fires at base and its `why_here` says it is rated at its base, with the reason (no
+"not applied" chain step exists for this raise, decided 2026-10-24). The versioned list of
+web servers is `rules.WebServersVersion` (`2026-10-24`). Node.js has no listener join.
+Each rule fires when the installed version is below the fix of its own source, is disproved
+per subject at or above it, and abstains when the distribution field is empty (the Red Hat
+family and Fedora rows are empty; Alpine is unsupported), when the source is not
+recognized, when `os.release` or the package read is missing or unparseable, or when the
+read is partial (a would-be disproof only; see the fixes below).
+The three coverage groups carry the standing gap `unavailable:runtime_installs`
+(`Rule.Gap`, `CoverageGroup.Gap`), so a decided group is at most partial and the Hosts row
+prints the reason (`spec/report.md`, "The Hosts row"). The report words each fired and
+abstained judgment and the "Not checked" line as decided in the consultant's output of
+2026-10-24 (`spec/engagement.md`, R7 to R9). The subject kind `package` joins the closed
+list (`finding.SubjectKinds`, `docs/engagement-report-schema.json`), and `php.fix_missing`
+joins the `exposure:internet` row of the severity table.
+
+**Build step 3 (built):** `test/integ/runtimes_test.go` (`TestRuntimePackagesOnUbuntu`,
+`TestRuntimePackagesOnFedora`). Ubuntu: stub dpkg packages seeded as root with `dpkg-deb`
+before the diff snapshot, and a real nginx; PHP below the distribution's fix gives
+`php.fix_missing` at medium, because the container cannot run ufw, the firewall is unknown
+and the report says the rating is at its base; Ubuntu 24.04's `8.3.6-0ubuntu0.24.04.13`, the
+fixed-package trap, is not reported. Fedora: rpm is read whole and shows no PHP or Node.js,
+so nothing is reported. The Ubuntu test also asserts the PHP rule decided in the fixed-package
+case and that no persisted audit record shows an attempt to run `php`, `node`, `npm` or
+`brew`. Both hold the read-only diff to the exact allowlist, unchanged. The
+`scheck` skill names the findings. No example is added: the runs are `docs/examples/host.yaml`
+with no new key. The Ubuntu test uses `assertReadOnly` with `ubuntu`, and its guard against
+a runtime being executed also catches a `sudo`-prefixed one. Known limitation: it runs
+`apt-get install nginx` at test time, so it needs the network. The test does not seed a stale apt cache, so whether a `pkg.*` check
+rewrites it when scheck connects as root stays a question for the `code-reviewer`.
+
+**Carried, not built in this slice** (each needs a decision or a later step):
+
+- Homebrew Cellar reads and `/usr/local` header reads (`php_version.h`, `node_version.h`).
+  macOS gets no rule and says so.
+- `php.line_unsupported`: not built; unreachable until a source tracking upstream for PHP
+  8.1 and older is read, so it is carried with the Homebrew and source reads.
+- A `php.ini` check for `session.upload_progress`: not built, by decision; CVE-2026-115560
+  (no fix; needs application code that sets `session.serialize_handler`) appears in the
+  remediation text only.
+- R6 table additions: the PHP-FPM FastCGI port beyond loopback as unauthenticated, and the
+  Node inspector on 9229/tcp. Outside the version rules.
+- Installs under home directories (nvm, volta, asdf, fnm).
+- Restart detection: process start against package install time.
+- Tables for Alpine, SUSE, Arch, cPanel and Plesk (the rules abstain `unavailable:distribution` on the first three).
+- Containers and their images.
+- Lockfile dependencies (see "Later").
+- The E7 `X-Powered-By` header must never become a vulnerability finding.
+- Who refreshes the table and on what trigger (open question).
+- A defect found in review of step 1, outside G8 and not fixed in this slice:
+  `alpine()` in `internal/engagement/rules/firewall.go` reads the `os.release` key `ID`,
+  but the key-value parser lowercases keys, so Alpine detection never matches. Needs an
+  owner (open decision).
+- Whether an rpm `php-cli` should be judged as CGI instead of abstaining `unavailable:php_cli`
+  (open decision for the security-consultant).
+- Whether "Fix these first" ranks a serving `php.fix_missing` above other highs (the base
+  table is assumed enough).
+
+**Done when:** each of the three rules has fired, disproved and abstained fixtures, and
+the table-trap host does not fire; scheck runs no `php`, `node` or `brew` (the golden
+trace shows package reads only); the integration diff is still the exact allowlist; the
+report says the table's date and what it did not read.
 
 ### G6 — comparing two engagements
 

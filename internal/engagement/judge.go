@@ -3,6 +3,7 @@ package engagement
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	githubc "github.com/b87/scheck/internal/collector/github"
 	"github.com/b87/scheck/internal/collector/web"
@@ -49,6 +50,9 @@ func (r *run) hostRules() map[string]rules.Result {
 			continue
 		}
 		h := rules.Host{Asset: ra.ID, Name: ra.Name, Facts: c.Facts()}
+		if run := c.Evidence().Run; !run.Started.IsZero() {
+			h.Collected = []time.Time{run.Started, run.Started.Add(time.Duration(run.DurationMS) * time.Millisecond)}
+		}
 		if a.Context != nil {
 			h.Context.Exposure = a.Context.Exposure
 			for i, s := range a.Context.ExpectedServices {

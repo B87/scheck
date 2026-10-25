@@ -1,8 +1,8 @@
 
 DOMAIN                   STATUS   CHECK                   READING
-Host identity            ran      host.hostname           c8ebfdf3e96a
+Host identity            ran      host.hostname           ec11fbf6c8e8
                                                           Hostname
-  | c8ebfdf3e96a
+  | ec11fbf6c8e8
 Host identity            ran      host.machine_id         eb33da0b14664091bd914f344fde11f0
                                                           Stable machine identifier (hashed into
                                                           host.id)
@@ -52,6 +52,46 @@ Software updates         skipped  pkg.zypper_lp           exit 127: bash: line 1
   |
   | stderr:
   | bash: line 1: zypper: command not found
+  |
+Runtimes (PHP, Node.js)  ran      pkg.dpkg_runtimes       0 installed packages
+                                                          Installed PHP web packages and Node.js
+                                                          with its Brotli library (dpkg database;
+                                                          never runs the runtime)
+  |
+  | stderr:
+  | dpkg-query: package 'php5.6-fpm' is not installed and no information is available
+  | dpkg-query: package 'php5.6-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php5.6' is not installed and no information is available
+  | dpkg-query: package 'php7.0-fpm' is not installed and no information is available
+  | dpkg-query: package 'php7.0-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php7.0' is not installed and no information is available
+  | dpkg-query: package 'php7.1-fpm' is not installed and no information is available
+  | dpkg-query: package 'php7.1-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php7.1' is not installed and no information is available
+  | dpkg-query: package 'php7.2-fpm' is not installed and no information is available
+  | dpkg-query: package 'php7.2-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php7.2' is not installed and no information is available
+  | dpkg-query: package 'php7.3-fpm' is not installed and no information is available
+  | dpkg-query: package 'php7.3-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php7.3' is not installed and no information is available
+  | dpkg-query: package 'php7.4-fpm' is not installed and no information is available
+  | dpkg-query: package 'php7.4-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php7.4' is not installed and no information is available
+  | dpkg-query: package 'php8.0-fpm' is not installed and no information is available
+  | dpkg-query: package 'php8.0-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php8.0' is not installed and no information is available
+  | dpkg-query: package 'php8.1-fpm' is not installed and no information is available
+  | dpkg-query: package 'php8.1-cgi' is not installed and no information is available
+  | dpkg-query: package 'libapache2-mod-php8.1' is not installed and no information is av
+  | [TRUNCATED:1258 bytes]
+Runtimes (PHP, Node.js)  skipped  pkg.rpm_runtimes        exit 127: bash: line 1: rpm: command not
+                                                          found
+                                                          Installed PHP and Node.js packages with
+                                                          their Brotli library (rpm database; never
+                                                          runs the runtime)
+  |
+  | stderr:
+  | bash: line 1: rpm: command not found
   |
 Disk encryption          skipped  disk.crypttab           exit 1: cat: /etc/crypttab: No such file
                                                           or directory
@@ -497,8 +537,8 @@ Credentials on disk      ran      creds.home_files        5 listed files and fol
   |   1010102      0 drwx------   1 root     root            8 Oct 24 16:50 /root
   |   1010103      0 drwx------   1 root     root            0 Oct 24 16:50 /root/.ssh
   |    954200      0 drwxr-x---   1 ubuntu   ubuntu         54 Sep 30 14:26 /home/ubuntu
-  |   1013716      0 drwxr-x---   1 ops      ops            12 Oct 24 17:42 /home/ops
-  |   1013720      0 drwx------   1 ops      ops            30 Oct 24 17:42 /home/ops/.ssh
+  |   1158993      0 drwxr-x---   1 ops      ops            12 Oct 24 22:57 /home/ops
+  |   1158997      0 drwx------   1 ops      ops            30 Oct 24 22:57 /home/ops/.ssh
 Container engine         ran      docker.sockets          0 listed files and folders
                                                           Container engine sockets under /run with
                                                           their owner and mode
@@ -542,9 +582,9 @@ Session and shell        ran      sys.shell               /bin/bash
 Session and shell        ran      sys.uid                 1001
                                                           Effective uid of the audit session
   | 1001
-Session and shell        ran      sys.uname               Linux c8ebfdf3e96a 7.2.12-orbstack-00394-g
+Session and shell        ran      sys.uname               Linux ec11fbf6c8e8 7.2.12-orbstack-00394-g
                                                           becdd6130068 #1 SMP PREEMPT Thu Oct 22
                                                           22:17:17 UTC 2026 aarch64 aarch64 aarch…
                                                           Full kernel identification
-  | Linux c8ebfdf3e96a 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC
+  | Linux ec11fbf6c8e8 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC
   | 2026 aarch64 aarch64 aarch64 GNU/Linux

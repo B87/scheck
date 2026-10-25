@@ -205,6 +205,36 @@
     },
     {
       "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "node.fix_missing",
+      "instances": 0,
+      "reads": [
+        "check:pkg.dpkg_runtimes"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "node.line_unsupported",
+      "instances": 0,
+      "reads": [
+        "check:pkg.dpkg_runtimes"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
+      "complete": true,
+      "id": "php.fix_missing",
+      "instances": 0,
+      "reads": [
+        "check:pkg.dpkg_runtimes"
+      ],
+      "status": "not_matched"
+    },
+    {
+      "asset": "host:ubuntu:22",
       "complete": false,
       "id": "svc.listens_beyond_declared",
       "instances": 0,
@@ -228,9 +258,9 @@
       "bound_id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
       "checks": {
         "not_run": 0,
-        "planned": 37,
-        "ran": 26,
-        "unknown": 11
+        "planned": 39,
+        "ran": 27,
+        "unknown": 12
       },
       "collected": {
         "from": "2026-10-07T07:12:03Z",
@@ -614,6 +644,9 @@
       ],
       "reasons": [
         {
+          "reason": "unavailable:runtime_installs"
+        },
+        {
           "reason": "no_rule"
         },
         {
@@ -651,6 +684,32 @@
           "reasons": [],
           "rules": [
             "updates.pending"
+          ]
+        },
+        {
+          "asset": "host:ubuntu:22",
+          "judged": [
+            "PHP web packages against the October 2026 fix",
+            "Node.js packages against the October 2026 fixes",
+            "whether the Node.js release line is still fixed by its project"
+          ],
+          "mark": "partial",
+          "name": "Runtimes (PHP, Node.js)",
+          "population": {
+            "in_scope": 3,
+            "kind": "rules",
+            "read": 3
+          },
+          "reasons": [
+            {
+              "detail": "PHP and Node.js installed outside the package database (containers, Homebrew, source builds, version managers, control panels) are not read",
+              "reason": "unavailable:runtime_installs"
+            }
+          ],
+          "rules": [
+            "php.fix_missing",
+            "node.fix_missing",
+            "node.line_unsupported"
           ]
         },
         {
@@ -1081,8 +1140,8 @@
     "matters_most": [],
     "more": 0,
     "rules": {
-      "decided": 8,
-      "selected": 17,
+      "decided": 11,
+      "selected": 20,
       "without_evidence": 9
     }
   }

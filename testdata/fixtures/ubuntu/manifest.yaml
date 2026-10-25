@@ -371,15 +371,112 @@ execs:
       stderr_file: 031-dnf.stderr
       code: 127
     - argv:
+        - dpkg-query
+        - -s
+        - php5.6-fpm
+        - php5.6-cgi
+        - libapache2-mod-php5.6
+        - php7.0-fpm
+        - php7.0-cgi
+        - libapache2-mod-php7.0
+        - php7.1-fpm
+        - php7.1-cgi
+        - libapache2-mod-php7.1
+        - php7.2-fpm
+        - php7.2-cgi
+        - libapache2-mod-php7.2
+        - php7.3-fpm
+        - php7.3-cgi
+        - libapache2-mod-php7.3
+        - php7.4-fpm
+        - php7.4-cgi
+        - libapache2-mod-php7.4
+        - php8.0-fpm
+        - php8.0-cgi
+        - libapache2-mod-php8.0
+        - php8.1-fpm
+        - php8.1-cgi
+        - libapache2-mod-php8.1
+        - php8.2-fpm
+        - php8.2-cgi
+        - libapache2-mod-php8.2
+        - php8.3-fpm
+        - php8.3-cgi
+        - libapache2-mod-php8.3
+        - php8.4-fpm
+        - php8.4-cgi
+        - libapache2-mod-php8.4
+        - php8.5-fpm
+        - php8.5-cgi
+        - libapache2-mod-php8.5
+        - nodejs
+        - libbrotli1
+      stdout_file: 032-dpkg-query.stdout
+      stderr_file: 032-dpkg-query.stderr
+      code: 1
+    - argv:
+        - rpm
+        - -q
+        - rpm
+        - php
+        - php-fpm
+        - php-cli
+        - nodejs
+        - brotli
+        - libbrotli
+        - php56-php
+        - php56-php-fpm
+        - php56-php-cli
+        - php70-php
+        - php70-php-fpm
+        - php70-php-cli
+        - php71-php
+        - php71-php-fpm
+        - php71-php-cli
+        - php72-php
+        - php72-php-fpm
+        - php72-php-cli
+        - php73-php
+        - php73-php-fpm
+        - php73-php-cli
+        - php74-php
+        - php74-php-fpm
+        - php74-php-cli
+        - php80-php
+        - php80-php-fpm
+        - php80-php-cli
+        - php81-php
+        - php81-php-fpm
+        - php81-php-cli
+        - php82-php
+        - php82-php-fpm
+        - php82-php-cli
+        - php83-php
+        - php83-php-fpm
+        - php83-php-cli
+        - php84-php
+        - php84-php-fpm
+        - php84-php-cli
+        - php85-php
+        - php85-php-fpm
+        - php85-php-cli
+        - nodejs18
+        - nodejs20
+        - nodejs22
+        - nodejs24
+        - nodejs26
+      stderr_file: 033-rpm.stderr
+      code: 127
+    - argv:
         - zypper
         - --non-interactive
         - lp
-      stderr_file: 032-zypper.stderr
+      stderr_file: 034-zypper.stderr
       code: 127
     - argv:
         - which
         - cat
-      stdout_file: 033-which.stdout
+      stdout_file: 035-which.stdout
       code: 0
     - argv:
         - sudo
@@ -387,12 +484,12 @@ execs:
         - --
         - cat
         - /etc/sudoers
-      stdout_file: 034-sudo.stdout
+      stdout_file: 036-sudo.stdout
       code: 0
     - argv:
         - which
         - grep
-      stdout_file: 035-which.stdout
+      stdout_file: 037-which.stdout
       code: 0
     - argv:
         - sudo
@@ -402,19 +499,19 @@ execs:
         - -rH
         - .
         - /etc/sudoers.d
-      stdout_file: 036-sudo.stdout
+      stdout_file: 038-sudo.stdout
       code: 0
     - argv:
         - systemctl
         - is-enabled
         - ssh
         - sshd
-      stdout_file: 037-systemctl.stdout
+      stdout_file: 039-systemctl.stdout
       code: 1
     - argv:
         - which
         - sshd
-      stdout_file: 038-which.stdout
+      stdout_file: 040-which.stdout
       code: 0
     - argv:
         - sudo
@@ -422,7 +519,7 @@ execs:
         - --
         - sshd
         - -T
-      stdout_file: 039-sudo.stdout
+      stdout_file: 041-sudo.stdout
       code: 0
     - argv:
         - grep
@@ -430,30 +527,30 @@ execs:
         - .
         - /sys/class/dmi/id/sys_vendor
         - /sys/class/dmi/id/product_name
-      stderr_file: 040-grep.stderr
+      stderr_file: 042-grep.stderr
       code: 2
     - argv:
         - uname
         - -s
-      stdout_file: 041-uname.stdout
+      stdout_file: 043-uname.stdout
       code: 0
     - argv:
         - printenv
         - SHELL
-      stdout_file: 042-printenv.stdout
+      stdout_file: 044-printenv.stdout
       code: 0
     - argv:
         - id
         - -u
-      stdout_file: 043-id.stdout
+      stdout_file: 045-id.stdout
       code: 0
     - argv:
         - uname
         - -a
-      stdout_file: 044-uname.stdout
+      stdout_file: 046-uname.stdout
       code: 0
     - argv:
         - timedatectl
         - show
-      stderr_file: 045-timedatectl.stderr
+      stderr_file: 047-timedatectl.stderr
       code: 1

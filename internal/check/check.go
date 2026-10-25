@@ -128,6 +128,7 @@ const (
 	DomainText         Domain = "text"
 	DomainCreds        Domain = "creds"
 	DomainDocker       Domain = "docker"
+	DomainRuntimes     Domain = "runtimes"
 )
 
 // Check is one catalog entry. See docs/spec/host-collector.md §3 for field semantics.

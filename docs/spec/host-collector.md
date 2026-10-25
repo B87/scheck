@@ -54,7 +54,7 @@ active checks are in [../VISION.md](../VISION.md) and [scope.md](scope.md).
 - No network/perimeter scanning of *other* hosts (no nmap-style behaviour). Web,
   domain, cloud and SaaS assessment belong to other collectors under [scope.md](scope.md).
 - No CVE database or vulnerability-scanner replacement. `scheck` reports "23 security
-  updates pending", not per-CVE analysis.
+  updates pending", not per-CVE analysis. One exception, 0.0.3 G8: a dated table of named runtime disclosures, bounded by the bar in §11. Steps 1 (the package reads and the table), 2 (the rules R7 to R9, `engagement.md`, "The multi-fact rules of 0.0.2") and 3 (the integration test) are built.
 - No fleet orchestration, no server, no agent daemon. One host per invocation.
 - No Windows.
 - No fine-tuning, no bundled model weights, no embedded vector store.
@@ -193,7 +193,8 @@ metacharacter invariant (§4.3).
 shapes: `listeners` (protocol, state, address, port, pid, process), `accounts` (name,
 uid, shell, home), `passwd_status` (name, status), `units` (name, state), `updates`
 (name, version), `launchd` (label, pid, status), `file_mode` (symbolic, mode, user,
-group, size), `find_ls` (type, symbolic, user, group, path; 0.0.3 G5). A typed shape exists when something downstream needs fields: the summary
+group, size), `find_ls` (type, symbolic, user, group, path; 0.0.3 G5), `packages` (name, version, status,
+manager; 0.0.3 G8). A typed shape exists when something downstream needs fields: the summary
 line (§6.6), a posture rule (§6.5) or `scheck diff` (§6.4). Everything else stays
 `lines` or `kv`, and `Unit` names what one record is, so the summary reads "0 SUID
 files" and "13 settings" rather than "0 lines" and "13 keys"; the catalog test requires
@@ -351,6 +352,43 @@ command trace of a Linux run gains one `sys.dmi` line and the Ubuntu fixture pla
 host checks, up from 36; the fixtures were re-recorded, and the reason is recorded under
 release gate 8 (`ROADMAP.md`). No new write and no new tolerance (§1). Cloud metadata
 reachability is not a check or a finding (§11).
+
+**Runtime packages (0.0.3 G8 step 1, built).** Two Linux checks read the PHP web packages
+and Node.js from the package database, by exact name, and never run the runtime.
+
+| Check | Platform | Reads |
+|---|---|---|
+| `pkg.dpkg_runtimes` | linux | `dpkg-query -s` over `php<L>-fpm`, `php<L>-cgi` and `libapache2-mod-php<L>` for each line 5.6 to 8.5, `nodejs` and `libbrotli1`; `ExitOK` 0 and 1 (a name not installed is exit 1); one field per line, so no terminal width cuts it |
+| `pkg.rpm_runtimes` | linux | `rpm -q rpm php php-fpm php-cli nodejs brotli libbrotli`, then Remi's software-collection `phpNN-php`, `phpNN-php-fpm` and `phpNN-php-cli` (NN the line without its dot, 56 to 85) and the versioned `nodejs18`, `nodejs20`, `nodejs22`, `nodejs24`, `nodejs26` (48 names; `php-cgi` is no package on the Red Hat family or Remi, its binary is inside `php-cli`); `ExitOK` 0 to the number of names asked about (`check.RpmRuntimeExitOK`: the status is the count of names not installed; a signal or crash is another code and is unavailable). The first name, `rpm`, is a sentinel: when the rpm database cannot be opened rpm prints "package X is not installed" for every name and exits like a host with none, so the read counts as whole only when a record for `rpm` is present, and is otherwise partial |
+
+Both are `Baseline: true`, domain `runtimes` (fact sheet label "Runtimes (PHP, Node.js)"),
+parser `packages`, which reads dpkg's stanzas (`Package`, `Status`, `Version`) and keeps each
+installed package's name, version, status and manager. The status is the third word of
+dpkg's `Status`: a held package (`hold ok installed`) is installed, `config-files` and
+`not-installed` give no record, and the half states (`half-*`, `unpacked`, `triggers-*`), a
+redaction or truncation marker in a field and a stanza without name, version or status make
+the read partial. rpm records are always installed (`check.PackageInstalled`). The rules treat a partial read
+as `engagement.md` R7 to R9 say: never a disproof, and a host-level "no package" only on a distribution whose package names these reads cover. Neither is
+elevated: the package database is world-readable, and a sudoers entry would add nothing.
+`php`, `php-cgi`, `phpdbg`, `brew`, `deno`, `bun`, `nodejs`, `npm`, `npx`, `dpkg`, `dpkg-deb`, `rpmquery`, `rpmverify`, `rpmdb`, `rpmkeys`, `rpmsign` and any versioned `php`, `php-fpm`, `php-cgi` or `phpdbg` name (`^(php(-fpm|-cgi)?|phpdbg)[0-9.]*$`) join the denied binaries (`node` already
+is), `dpkg-query` accepts the verb `-s` and `rpm` the verb `-q`, each names-only (no token after the verb may start with a dash, so `--pipe`, `--rcfile`, `--dbpath` and `--admindir` cannot be added), and `rpm` keeps its mutating flags denied as a second layer; each only narrows (§11). `internal/advisory`, a leaf package (standard
+library and `internal/check`), owns the dated table (`TableVersion`, `2026-10-24`), the dpkg
+version ordering and `Assess`, which compares a version only with the fix of its own source;
+the multi-fact rules `php.fix_missing`, `node.fix_missing` and `node.line_unsupported` call it
+(`engagement.md`, R7 to R9; step 2). As `Baseline: true` entries they do not count
+toward the cap of 40 on-demand entries at baseline (`BaselineTierCap`). The golden command
+trace of a Linux run gains the two package lines, and the fixtures were re-recorded from the
+containers, so other output hashes changed (hostname, kernel, home-folder timestamps); the
+Ubuntu fixture plans 39 host checks, up from 37. The reason is recorded under release gate 8
+(`ROADMAP.md`). No new write and no new tolerance (§1). Whether the `pkg.*` checks are
+write-free when scheck connects as root is settled by integration (G8 step 3): `TestRuntimePackagesOnUbuntu`
+and `TestRuntimePackagesOnFedora` (`test/integ/runtimes_test.go`) run with `--sudo` and
+hold the diff to the exact allowlist of §1, unchanged. The Ubuntu test seeds stub dpkg packages as root with
+`dpkg-deb` before the diff snapshot (a stub is a package record; nothing runs) and a real
+nginx. PHP below the distribution's fix gives `php.fix_missing` at medium, because the
+container cannot run ufw, the firewall is unknown and the report says it is rated at its
+base; PHP at Ubuntu 24.04's fixed package `8.3.6-0ubuntu0.24.04.13` is not reported, and the test asserts the PHP rule decided (a disproof) and that no persisted audit record shows an attempt to run `php`, `node`, `npm` or `brew`. On
+Fedora rpm is read whole and shows no PHP or Node.js, so nothing is reported.
 
 **On-demand checks** (`Baseline: false`, callable by the model) are parameterised
 variants: `fs.stat {path}`, `fs.list {path}`, `text.head {path} {lines}`,
@@ -1521,3 +1559,5 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |
 | Credential files on disk (0.0.3 G5 step 1, decided 2026-10-24). | `find ... -ls` by exact name over home directories and the application folders a host declares in `app_paths`; four findings (§6.5); modes and owners only, never contents. `creds.home_files` is elevated on Linux; the `.env` slots are not. The path policy gains metadata-only entries for `.env*`, `.pgpass`, `.npmrc`, `gcloud`, `.kube`, `.docker` and the application trees (§4.1). A host that holds `data.matters_most` raises on a credential kept on it. | A leaked `.env` or key is what an attacker with any foothold reads first, and the fact is a mode, which scheck can read without opening the file. A find with a path wildcard under sudo would let the holder append `-exec`, so the declared folder is read without root. A credential on the host that holds the data is the link to that data. Cloud metadata reachability (169.254.169.254) is not built: it cannot be judged without sending a request, which the host collector never does. |
 | Cloud metadata reachability, `169.254.169.254` (0.0.3 G5 step 2, decided 2026-10-24)? | Not a check and not a finding. The fact sheet names the cloud platform from DMI (`sys.dmi`, §3) as a label only. | It cannot be judged without sending a request, which the catalog has no command for (`AGENTS.md`, non-negotiable 1). On a cloud VM the metadata service is reachable by every local process by design, and no firewall owner-match rule being present proves nothing new. What matters is what the attached service account can do, which the GCP collector (G1) and the host-to-cloud link (G4) own. An unknown DMI vendor is "not identified", never "not a cloud VM". |
+| Named runtime disclosures: an exception to "No CVE database" (§1) (0.0.3 G8, decided 2026-10-24; steps 1 to 3 built). | A disclosure enters the table only if it meets all of: it is named; it is in a web runtime small companies expose; it is remote and needs no sign-in; a fixed version exists for each line; and for each distribution there is either a verified fixed-package row or an explicitly empty field. The table is a dated constant (`advisory.TableVersion`), not a feed, and nothing is fetched at run time. The first entries are the PHP and Node.js disclosures of 2026-10-21. Advisories published after the table's date are not known to a build and the report says so. | The non-goal protects against a scanner that claims completeness from a version number. A short table whose every row was checked against a primary source, that abstains where a distribution gives no fixed package, and that states its date claims only what it read. A version alone never yields "vulnerable": a distribution package backports fixes without changing the upstream version (Ubuntu 24.04's PHP 8.3.6 is fixed). |
+| Running `php`, `php-fpm`, `node` or `brew` to read a version (0.0.3 G8 step 1, decided 2026-10-24, built). | Never. The version comes from package metadata only: `dpkg-query -s` and `rpm -q` over exact package names, unelevated catalog entries, plus `os.release` (`ID` exact, never `ID_LIKE`) to choose the table row. `php` (and its versioned names), `php-cgi`, `phpdbg`, `brew`, `deno`, `bun`, `nodejs`, `npm`, `npx`, `dpkg`, `dpkg-deb`, `rpmquery`, `rpmverify`, `rpmdb`, `rpmkeys` and `rpmsign` are added to the denied binaries (`node` already is), which only narrows. For `rpm`, only a first token of `-q` is accepted. | `php -v` loads `php.ini` and every `extension=` shared object, so under `sudo` a writable ini or extension directory becomes a way to run code as root. A shim on `PATH` (asdf, phpenv, volta) is not the binary that serves. A distribution-patched PHP prints the upstream number, so the CLI version proves nothing about the serving package. |
