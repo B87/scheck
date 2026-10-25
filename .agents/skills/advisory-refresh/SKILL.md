@@ -9,8 +9,8 @@ description: Refresh scheck's runtime advisory table (internal/advisory, G8) whe
 (`docs/spec/host-collector.md` §1 and §11, `docs/ROADMAP.md` G8). Nothing is fetched at run
 time; a disclosure published after `advisory.TableVersion` is unknown to scheck, so a stale
 table makes the rules abstain, never pass. This skill is how it stays current: **one pull
-request per disclosure**, against the open `release/v*` branch (or `main` once no release
-branch is open). Never merge it yourself.
+request per disclosure**, based on the **working tree you are in** (its current branch and
+its uncommitted state), unless the user names another base. Never merge it yourself.
 
 ## Bar: what may enter the table
 
@@ -33,16 +33,42 @@ branch is open). Never merge it yourself.
 
 ## Steps
 
-1. **Orient.** Read `internal/advisory/table.go` (`TableVersion`, `phpFixed`, `nodeFixed`,
-   `phpRows`, `brotliRows`, `eol`), the G8 entry in `docs/ROADMAP.md` and `docs/spec/host-collector.md`
-   §11. Note the current `TableVersion` date: you look for disclosures after it.
-2. **Search** (WebSearch, WebFetch; standard mode first, extended for a thin result):
-   PHP security releases and `php.net` changelogs; the Node.js security blog and
-   `nodejs.org/en/blog/vulnerability`; new end-of-life dates. For each candidate, record
-   the CVE ids, affected lines, the fixed upstream versions, the date, and the URL read.
-   If nothing new exists after the table's date, say so and stop; do not open a PR.
-3. **Split by disclosure.** One disclosure, one branch `advisory-<product>-<yyyy-mm-dd>`
-   from the target release branch, one PR. If two are independent, do two.
+1. **Orient.** Work in the working tree you were started in: its current branch is the base
+   and the PR target, unless the user tells you another branch (then use that one). Do not
+   switch to a release branch on your own. Check `git status` and `git branch --show-current`
+   and say which base you are using. If the tree has uncommitted changes, do not discard them:
+   keep your edits to the advisory files and leave the rest alone, or ask. If
+   `internal/advisory` is missing from the tree, stop and tell the user (the branch predates
+   the table) rather than fetching another branch. Read
+   `internal/advisory/table.go` (`TableVersion`, `phpFixed`, `nodeFixed`, `phpRows`,
+   `brotliRows`, `eol`), the G8 entry in `docs/ROADMAP.md` and `docs/spec/host-collector.md`
+   §11. Note the current `TableVersion` date, and **list every row the table leaves empty**
+   (the comments above `phpRows` and `brotliRows` say which): those are re-checked on every run.
+2. **Search** (load WebSearch and WebFetch with ToolSearch first; standard mode first,
+   extended for a thin result):
+   - new PHP security releases and new Node.js security releases after the table's date;
+   - new end-of-life dates;
+   - **each empty row's tracker**, and any named disclosure still unpatched (the watch list
+     in the report): a tracker that now carries a verified fixed package is a legitimate refresh.
+
+   Authoritative pages: `php.net/ChangeLog-8.php` (very long: request an offset to reach 8.2
+   and 8.3) and `php.net/supported-versions.php`; **not** `php.net/releases/`, which can be
+   stale. `nodejs.org/en/blog/vulnerability` and `nodejs.org/en/about/previous-releases`.
+   Trackers: `security-tracker.debian.org/tracker/CVE-X`, `ubuntu.com/security/CVE-X`,
+   `access.redhat.com/security/cve/CVE-X` and the RHSB bulletin it links. Alpine and Fedora
+   are best-effort: Alpine's `security.alpinelinux.org/vuln/CVE-X` returned 404 and its
+   `secdb.alpinelinux.org` is the alternative; Fedora's Bodhi blocks automated fetches (try
+   `packages.fedoraproject.org` or the Red Hat page). If a tracker cannot be read, leave the
+   row empty and say so; do not treat the row as permanently empty, retry it next run.
+
+   WebFetch returns a small-model summary, not the page. Ask for exact version strings and
+   advisory ids, and **cross-check two pages before a row is accepted**.
+   For each candidate, record the CVE ids, affected lines, the fixed versions, the date and
+   every URL read. If nothing is new and no empty row can be filled, say so and stop: no
+   branch, no PR, and `TableVersion` does not move.
+3. **Split by disclosure.** Only once a candidate passes the bar: one disclosure, one branch
+   `advisory-<product>-<yyyy-mm-dd>` from the base branch, one PR. If two are
+   independent, do two.
 4. **Verify distribution rows** for each release the table covers (Debian and Ubuntu
    today): read the tracker for the fixed package version and its advisory id. Where the
    tracker says "needs evaluation", leave the row out and note it.
@@ -64,9 +90,10 @@ branch is open). Never merge it yourself.
      (OrbStack certificate) also fails on a clean checkout and is the only one to ignore.
 7. **Sync docs.** Update the G8 carried list / fixes paragraph in `docs/ROADMAP.md` and any
    spec sentence naming the disclosure (the `spec-steward` subagent in *sync* mode does
-   this). If the rows or wording touch severity, the report contract or a rule, run the
-   `security-consultant` (*review*) first.
-8. **Open the PR** against the release branch. Body: the disclosure (ids, date, affected
+   this). A table refresh is not a boundary change: run no `code-reviewer` (AGENTS.md
+   "Review budget"). If the rows or wording touch severity, the report contract or a rule,
+   stop and bring it to the user and the `security-consultant` (*review*) first.
+8. **Open the PR** against the base branch (the one you started on, or the one the user named). Body: the disclosure (ids, date, affected
    and fixed versions), every source URL read, which rows were added and which were left
    empty and why, the tests run and their result, and anything unverified. Do not merge.
    Commit messages and the PR body carry the attribution lines the session gives.
@@ -75,4 +102,8 @@ branch is open). Never merge it yourself.
 
 State: what was found (or that nothing new exists), the PR URL, the `TableVersion` before
 and after, the rows added and the ones left empty with the reason, `make check` result,
-and the open questions for the user.
+and the open questions for the user. Always add a **watch list**: named disclosures still
+unpatched or split across releases (for example a CVE whose fix and advisory ship with the
+next routine release), and the release that should trigger the next run. A row for a
+disclosure waits for the primary source that names the fixed version; never fill it from
+the interim advice.
