@@ -321,6 +321,12 @@ commit the table names:
 The seeder of each part is named in the acceptance record, with the model when it is an
 agent. E1a to E2 and E4 need no lab and may proceed while it is being built.
 
+**The lab as code** (defined 2026-10-25, design, not yet accepted): the OpenTofu pieces,
+the fault catalog with decoys, clean controls, cross-asset, context, scope and change-set
+cases, seeding from a sealed random seed, the answer key's format, sealing and reveal, and
+scoring are [spec/lab.md](spec/lab.md). Its "Where this differs from the roadmap" section
+lists what it changes here.
+
 ### E4 — scope stage and the scope gate
 
 **Delivers:** the scope gate, `internal/engagement/gate`, the one place an HTTP request,
@@ -2748,7 +2754,10 @@ between assets is reported as such, not as fixed plus new.
 **Delivers:** the cloud configuration, data stores and backups, logging and web
 application areas of the coverage table move from *not assessed* to *assessed* or
 *partial* with reasons. The lab gains a GCP test project with seeded issues, under the
-same sealed-label rule.
+same sealed-label rule ([spec/lab.md](spec/lab.md): the GCP piece, its faults and
+decoys, and the cross-asset cases with GitHub, Workspace and the cloud host). Sealing the
+GCP part before G1's first commit keeps it on time; the host-depth slices G5 and G8
+landed with no seal, so host-depth faults sealed now are late for them.
 
 ### Release gates
 
