@@ -9,8 +9,8 @@ description: Refresh scheck's runtime advisory table (internal/advisory, G8) whe
 (`docs/spec/host-collector.md` §1 and §11, `docs/ROADMAP.md` G8). Nothing is fetched at run
 time; a disclosure published after `advisory.TableVersion` is unknown to scheck, so a stale
 table makes the rules abstain, never pass. This skill is how it stays current: **one pull
-request per disclosure**, against the open `release/v*` branch (or `main` once no release
-branch is open). Never merge it yourself.
+request per disclosure**, based on the **working tree you are in** (its current branch and
+its uncommitted state), unless the user names another base. Never merge it yourself.
 
 ## Bar: what may enter the table
 
@@ -33,9 +33,13 @@ branch is open). Never merge it yourself.
 
 ## Steps
 
-1. **Orient.** Run `git fetch origin` first: a checkout can be stale and lack this skill
-   and `internal/advisory` (read the skill with `git show origin/release/v0.x:.agents/skills/advisory-refresh/SKILL.md`
-   if needed). The target is the newest open `origin/release/v*` branch. Read
+1. **Orient.** Work in the working tree you were started in: its current branch is the base
+   and the PR target, unless the user tells you another branch (then use that one). Do not
+   switch to a release branch on your own. Check `git status` and `git branch --show-current`
+   and say which base you are using. If the tree has uncommitted changes, do not discard them:
+   keep your edits to the advisory files and leave the rest alone, or ask. If
+   `internal/advisory` is missing from the tree, stop and tell the user (the branch predates
+   the table) rather than fetching another branch. Read
    `internal/advisory/table.go` (`TableVersion`, `phpFixed`, `nodeFixed`, `phpRows`,
    `brotliRows`, `eol`), the G8 entry in `docs/ROADMAP.md` and `docs/spec/host-collector.md`
    §11. Note the current `TableVersion` date, and **list every row the table leaves empty**
@@ -63,7 +67,7 @@ branch is open). Never merge it yourself.
    every URL read. If nothing is new and no empty row can be filled, say so and stop: no
    branch, no PR, and `TableVersion` does not move.
 3. **Split by disclosure.** Only once a candidate passes the bar: one disclosure, one branch
-   `advisory-<product>-<yyyy-mm-dd>` from the target release branch, one PR. If two are
+   `advisory-<product>-<yyyy-mm-dd>` from the base branch, one PR. If two are
    independent, do two.
 4. **Verify distribution rows** for each release the table covers (Debian and Ubuntu
    today): read the tracker for the fixed package version and its advisory id. Where the
@@ -89,7 +93,7 @@ branch is open). Never merge it yourself.
    this). A table refresh is not a boundary change: run no `code-reviewer` (AGENTS.md
    "Review budget"). If the rows or wording touch severity, the report contract or a rule,
    stop and bring it to the user and the `security-consultant` (*review*) first.
-8. **Open the PR** against the release branch. Body: the disclosure (ids, date, affected
+8. **Open the PR** against the base branch (the one you started on, or the one the user named). Body: the disclosure (ids, date, affected
    and fixed versions), every source URL read, which rows were added and which were left
    empty and why, the tests run and their result, and anything unverified. Do not merge.
    Commit messages and the PR body carry the attribution lines the session gives.
