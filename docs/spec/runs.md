@@ -404,7 +404,7 @@ both)". An accepted finding that is gone and decided counts as `fixed`.
 a changed asset id or subject (below); it is still one `still_open` (or other)
 instance, never *fixed* plus *new*.
 
-An instance on a `replaced` asset (same canonical id, different non-null bound id)
+An instance on a `replaced` asset (same canonical id, different non-empty bound ids)
 never joins by key or rename: the earlier one is `not_confirmed` and the later one
 `first_reported`, both with cause `asset_replaced`. The same `{id, asset, key}` held by a
 different non-empty `provider_id` in the other run is a different subject: the gone one is
@@ -427,14 +427,19 @@ and the appearing one counts toward exit 1.
   (`dev`, a describe string with commits after the tag, `-dirty`, empty, `unknown`) is
   never "the same rules" (a rule may change between releases, and a development build
   is never comparable);
-- the bound id is the same; a different bound id at the same canonical id is
-  `asset_replaced` only when both bound ids name an identity (see "Identity across
-  runs");
-- when the engagement file hash differs, the earlier finding's `rule.reads` hold no
-  `declared:` read and its definition does not set `ReadsDeclarations` (a rule that reads
-  the engagement file without naming it: mail senders, selectors and `no_mail`, a host's
-  `app_paths`) (`declaration_changed`; see `report.md`, "Text and JSON"). An appearing
-  instance of such a rule is `first_reported` with the same cause;
+- the bound id is the same; two different non-empty bound ids at the same canonical id
+  are `asset_replaced` whatever their source, since a different machine cannot be ruled
+  out (see "Identity across runs");
+- when the engagement file hash differs, the finding's id does not read the engagement
+  file (`finding.ReadsDeclarations`): the earlier finding's `rule.reads` hold no
+  `declared:` read, and its definition does not set `ReadsDeclarations` (a rule that
+  reads the engagement file without naming it: every `email.*` and
+  `creds.env_file_exposed`), and it is not in the identity area (who is a person, a
+  service account or an administrator is declared), nor `svc.expected_missing`,
+  `github.too_many_owners` or `github.undeclared_public_repository`. An id this build
+  does not know counts as reading it. A gone instance of such a rule is `not_confirmed`
+  (`declaration_changed`; see `report.md`, "Text and JSON"), an appearing one
+  `first_reported` with the same cause;
 - the same principal read the asset (identity, elevation and sorted scopes); an asset with
   no row in a run, where the other run's principal exists, counts as a changed principal;
 - for a domain or url asset, the same run vantage;
@@ -442,7 +447,12 @@ and the appearing one counts toward exit 1.
   fired instance of the same `{id, asset}` (checked after the not-rechecked tests, whatever
   the `redact_extra` counts) that the later run did not decide by the earlier name's exact
   visible key. A gone instance failing this is `not_confirmed` with cause
-  `subject_unmatchable`, never `fixed`.
+  `subject_unmatchable`, never `fixed`;
+- the account's provider id (visible) does not reappear under another key in an
+  `abstained` or `fired` outcome of the other run: an account renamed into an undecided
+  state is neither gone nor new. A gone one is `not_confirmed` and an appearing one
+  `first_reported`, cause `subject_unmatchable`. A `disproved` outcome under another key
+  does not block.
 - for an appearing instance to be `first_reported` with cause `subject_unmatchable` rather
   than decided normally, either the instance is hidden or the counts differ, and the earlier
   run holds a hidden fired instance of the same `{id, asset}` not decided by its exact
@@ -480,7 +490,9 @@ finding's `not_checked` lines (shown at `-v`).
 
 **Identity across runs.** An asset id is the canonical id. An exact-key join is refused
 when both subjects carry non-empty, different `provider_id`s; the provider-id pass may
-then join them. A host or tenant whose
+then join them. The same canonical id with two
+different non-empty bound ids is `replaced` whatever the source of either (a different
+machine cannot be ruled out): it blocks *fixed* and *new* and every key join (above). A host or tenant whose
 canonical id differs between the runs is `moved` only when its non-null `bound_id`,
 whose `bound_id_source` is `machine_id` or `provider_id`, appears on exactly one asset of the same kind in each run and the earlier id is gone. A
 bound id on two or more assets of one run is a cloned image and identifies nothing: the
@@ -501,8 +513,8 @@ not as an error. When the later run no longer lists the asset but still reads un
 still read under it"); its findings compare normally, and one open in both runs is
 `still_open`. A bound id whose source is `hostname`, or
 absent (a report written before `bound_id_source` existed, schema 1.0), names nothing: such
-a host is never `moved` and never `asset_replaced`, and its findings follow the same-id rules
-above. GitHub organizations
+a host is never `moved`, though two different non-empty ids of that kind at one canonical id
+still make it `replaced`, and its findings otherwise follow the same-id rules above. GitHub organizations
 and repositories have a null `bound_id`, so a renamed or transferred repository is never
 `moved` (carried below).
 

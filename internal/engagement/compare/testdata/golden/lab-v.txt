@@ -60,8 +60,7 @@ No longer reported, not confirmed fixed
   The later check did not report these, but something that has to hold before scheck calls a finding
   fixed did not hold. Check them by hand, or compare two runs made with the same scheck release, the
   same file and the same access.
-  The rule did not read everything it needed this time (a cap, a sample or a page limit), so absence
-  is not shown:
+  You changed the engagement file, and the rule reads declarations from it:
     - [high] A Workspace account has no 2-step verification on workspace (bob@example.com)
 
 Not checked again

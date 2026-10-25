@@ -74,10 +74,10 @@ func TestDeclarationChangeBlocksOnlyRulesThatReadDeclarations(t *testing.T) {
 		{[]string{"check:fw.status", "declared:people.carol.left"}, NotConfirmed},
 	} {
 		e, l := pairLab()
-		e.find("fw.a", web, "", "medium", tc.reads...)
-		l.notMatched("fw.a", web)
+		e.find("fw.no_firewall_active", web, "", "medium", tc.reads...)
+		l.notMatched("fw.no_firewall_active", web)
 		l.Engagement.Source.SHA256 = "bbbb"
-		if got := category(compareOK(t, e, l), "fw.a").Category; got != tc.want {
+		if got := category(compareOK(t, e, l), "fw.no_firewall_active").Category; got != tc.want {
 			t.Errorf("reads %v: got %s, want %s", tc.reads, got, tc.want)
 		}
 	}

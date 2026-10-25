@@ -100,14 +100,14 @@
     },
     {
       "key": {
-        "id": "fw.default_allow_in",
+        "id": "fw.no_firewall_active",
         "asset": "host:203.0.113.6:22",
         "subject": null
       },
       "asset_name": "web",
       "bound_id": "M-web",
       "subject": null,
-      "id": "fw.default_allow_in",
+      "id": "fw.no_firewall_active",
       "title": "The firewall allows inbound traffic by default",
       "area": "hosts",
       "category": "",
@@ -130,14 +130,14 @@
     },
     {
       "key": {
-        "id": "pkg.updates_pending",
+        "id": "updates.pending",
         "asset": "host:203.0.113.6:22",
         "subject": null
       },
       "asset_name": "web",
       "bound_id": "M-web",
       "subject": null,
-      "id": "pkg.updates_pending",
+      "id": "updates.pending",
       "title": "Package updates are pending",
       "area": "hosts",
       "category": "",
@@ -160,7 +160,7 @@
     },
     {
       "key": {
-        "id": "identity.no_two_step",
+        "id": "identity.unattributed_admin",
         "asset": "saas:google-workspace:example.com",
         "subject": "bob@example.com"
       },
@@ -171,7 +171,7 @@
         "key": "bob@example.com",
         "label": "bob@example.com"
       },
-      "id": "identity.no_two_step",
+      "id": "identity.unattributed_admin",
       "title": "A Workspace account has no 2-step verification",
       "area": "identity",
       "category": "",
@@ -194,7 +194,7 @@
     },
     {
       "key": {
-        "id": "identity.no_two_step",
+        "id": "identity.unattributed_admin",
         "asset": "saas:google-workspace:example.com",
         "subject": "alice@example.com"
       },
@@ -206,7 +206,7 @@
         "label": "alice@example.com",
         "provider_id": "u-41"
       },
-      "id": "identity.no_two_step",
+      "id": "identity.unattributed_admin",
       "title": "A Workspace account has no 2-step verification",
       "area": "identity",
       "category": "",
@@ -229,7 +229,7 @@
     },
     {
       "key": {
-        "id": "secrets.in_history",
+        "id": "github.history_credential",
         "asset": "repo:github:example-org/shop",
         "subject": "aws:AKIA@0a1b2c3d4e5f"
       },
@@ -240,7 +240,7 @@
         "key": "aws:AKIA@0a1b2c3d4e5f",
         "label": "aws:AKIA@0a1b2c3d4e5f"
       },
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "title": "A credential is in the repository's history",
       "area": "secrets",
       "category": "",
@@ -263,7 +263,7 @@
     },
     {
       "key": {
-        "id": "secrets.in_history",
+        "id": "github.history_credential",
         "asset": "repo:github:example-org/api",
         "subject": "aws:AKIA@9f8e7d6c5b4a"
       },
@@ -274,7 +274,7 @@
         "key": "aws:AKIA@9f8e7d6c5b4a",
         "label": "aws:AKIA@9f8e7d6c5b4a"
       },
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "title": "A credential is in the repository's history",
       "area": "secrets",
       "category": "",
@@ -297,14 +297,14 @@
     },
     {
       "key": {
-        "id": "sshd.root_login",
+        "id": "sshd.root_login_enabled",
         "asset": "host:203.0.113.20:22",
         "subject": null
       },
       "asset_name": "db1",
       "bound_id": "M-image",
       "subject": null,
-      "id": "sshd.root_login",
+      "id": "sshd.root_login_enabled",
       "title": "SSH allows root to sign in",
       "area": "hosts",
       "category": "",
@@ -327,7 +327,7 @@
     },
     {
       "key": {
-        "id": "net.listens_unfiltered",
+        "id": "db.listens_unfiltered",
         "asset": "host:203.0.113.6:22",
         "subject": "5432/tcp"
       },
@@ -338,7 +338,7 @@
         "key": "5432/tcp",
         "label": "5432/tcp"
       },
-      "id": "net.listens_unfiltered",
+      "id": "db.listens_unfiltered",
       "title": "A database listens without a firewall",
       "area": "hosts",
       "category": "",
@@ -404,14 +404,14 @@
     },
     {
       "key": {
-        "id": "sshd.max_auth_tries",
+        "id": "sshd.password_auth_exposed",
         "asset": "host:203.0.113.6:22",
         "subject": null
       },
       "asset_name": "web",
       "bound_id": "M-web",
       "subject": null,
-      "id": "sshd.max_auth_tries",
+      "id": "sshd.password_auth_exposed",
       "title": "SSH allows many authentication attempts",
       "area": "hosts",
       "category": "",
@@ -443,7 +443,7 @@
       "reads": []
     },
     {
-      "id": "fw.default_allow_in",
+      "id": "fw.no_firewall_active",
       "asset": "host:203.0.113.6:22",
       "status": "matched",
       "instances": 0,
@@ -451,7 +451,7 @@
       "reads": []
     },
     {
-      "id": "pkg.updates_pending",
+      "id": "updates.pending",
       "asset": "host:203.0.113.6:22",
       "status": "matched",
       "instances": 0,
@@ -459,7 +459,7 @@
       "reads": []
     },
     {
-      "id": "identity.no_two_step",
+      "id": "identity.unattributed_admin",
       "asset": "saas:google-workspace:example.com",
       "status": "matched",
       "instances": 0,
@@ -467,7 +467,7 @@
       "reads": []
     },
     {
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "asset": "repo:github:example-org/shop",
       "status": "matched",
       "instances": 0,
@@ -475,7 +475,7 @@
       "reads": []
     },
     {
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "asset": "repo:github:example-org/api",
       "status": "matched",
       "instances": 0,
@@ -483,7 +483,7 @@
       "reads": []
     },
     {
-      "id": "sshd.root_login",
+      "id": "sshd.root_login_enabled",
       "asset": "host:203.0.113.20:22",
       "status": "matched",
       "instances": 0,
@@ -491,7 +491,7 @@
       "reads": []
     },
     {
-      "id": "net.listens_unfiltered",
+      "id": "db.listens_unfiltered",
       "asset": "host:203.0.113.6:22",
       "status": "matched",
       "instances": 0,
@@ -507,7 +507,7 @@
       "reads": []
     },
     {
-      "id": "sshd.max_auth_tries",
+      "id": "sshd.password_auth_exposed",
       "asset": "host:203.0.113.6:22",
       "status": "matched",
       "instances": 0,
@@ -515,7 +515,7 @@
       "reads": []
     },
     {
-      "id": "kernel.eol",
+      "id": "accounts.shadow_permissions_unexpected",
       "asset": "host:203.0.113.5:22",
       "status": "not_matched",
       "instances": 0,

@@ -61,7 +61,7 @@
   "instances": [
     {
       "category": "new",
-      "id": "kernel.eol",
+      "id": "accounts.shadow_permissions_unexpected",
       "title": "The kernel is past its end of support",
       "area": "hosts",
       "earlier": null,
@@ -77,7 +77,7 @@
     {
       "category": "first_reported",
       "cause": "asset_not_in_run",
-      "id": "sshd.root_login",
+      "id": "sshd.root_login_enabled",
       "title": "SSH allows root to sign in",
       "area": "hosts",
       "earlier": null,
@@ -130,7 +130,7 @@
     },
     {
       "category": "fixed",
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "title": "A credential is in the repository's history",
       "area": "secrets",
       "earlier": {
@@ -152,7 +152,7 @@
     },
     {
       "category": "fixed",
-      "id": "fw.default_allow_in",
+      "id": "fw.no_firewall_active",
       "title": "The firewall allows inbound traffic by default",
       "area": "hosts",
       "earlier": {
@@ -167,7 +167,7 @@
     },
     {
       "category": "fixed",
-      "id": "pkg.updates_pending",
+      "id": "updates.pending",
       "title": "Package updates are pending",
       "area": "hosts",
       "earlier": {
@@ -182,7 +182,7 @@
     },
     {
       "category": "still_open",
-      "id": "identity.no_two_step",
+      "id": "identity.unattributed_admin",
       "title": "A Workspace account has no 2-step verification",
       "area": "identity",
       "earlier": {
@@ -238,7 +238,7 @@
     },
     {
       "category": "still_open",
-      "id": "net.listens_unfiltered",
+      "id": "db.listens_unfiltered",
       "title": "A database listens without a firewall",
       "area": "hosts",
       "earlier": {
@@ -284,7 +284,7 @@
     },
     {
       "category": "accepted_since",
-      "id": "sshd.max_auth_tries",
+      "id": "sshd.password_auth_exposed",
       "title": "SSH allows many authentication attempts",
       "area": "hosts",
       "earlier": {
@@ -313,8 +313,8 @@
     },
     {
       "category": "not_confirmed",
-      "cause": "incomplete_population",
-      "id": "identity.no_two_step",
+      "cause": "declaration_changed",
+      "id": "identity.unattributed_admin",
       "title": "A Workspace account has no 2-step verification",
       "area": "identity",
       "earlier": {
@@ -335,7 +335,7 @@
       "category": "not_rechecked",
       "cause": "asset_not_read",
       "reason": "insufficient_permission:contents",
-      "id": "secrets.in_history",
+      "id": "github.history_credential",
       "title": "A credential is in the repository's history",
       "area": "secrets",
       "earlier": {
@@ -355,7 +355,7 @@
     {
       "category": "not_rechecked",
       "cause": "asset_not_in_run",
-      "id": "sshd.root_login",
+      "id": "sshd.root_login_enabled",
       "title": "SSH allows root to sign in",
       "area": "hosts",
       "earlier": {

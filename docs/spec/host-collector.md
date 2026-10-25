@@ -832,9 +832,10 @@ The rules below are the ones the schema does not state by itself.
 `host.id` is a hash of the machine id (Linux) or platform UUID (macOS). It is stable
 across runs and hostname changes, and it is the key a fleet aggregator or a drift
 diff would join on, when `host.id_source` is `machine_id` (schema 1.8). The capture is
-used only when it is present and holds no redaction marker (`[REDACTED:`) and no
+used only when it is a machine id (32 hex digits, or a UUID shape) and holds no redaction marker (`[REDACTED:`) and no
 truncation marker (`[TRUNCATED:`), in either case: a hash of a marker would give every
-host a pattern hides one identity. Otherwise `host.id` hashes `hostname:` and the
+host a pattern hides one identity. A placeholder such as `uninitialized` is not a machine
+id. Otherwise `host.id` hashes `hostname:` and the
 hostname, `host.id_source` is `hostname`, and the run carries the warning that the id was
 derived from the hostname. A consumer takes `host.id` as the machine's identity only for
 `machine_id`; `scheck diff` does so (`runs.md`, "Comparing two runs"). A report before 1.8

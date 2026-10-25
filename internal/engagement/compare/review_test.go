@@ -522,15 +522,45 @@ func TestOnlyAMachineIDIsIdentity(t *testing.T) {
 				t.Errorf("source %q: moved on a bound id that names no machine: %+v", source, i)
 			}
 		}
-		// And the same address answering with another hostname-derived id
-		// is not a replaced machine.
+		// And the same address answering with another id, whatever its
+		// source, may be another machine: its finding is not fixed.
 		e2, l2 := pairLab()
 		e2.Assets[0].BoundIDSource, l2.Assets[0].BoundIDSource = source, source
 		*l2.Assets[0].BoundID = "B-other"
 		e2.find("fw.a", "host:203.0.113.6:22", "", "high")
-		l2.find("fw.a", "host:203.0.113.6:22", "", "high")
-		if i := category(compareOK(t, e2, l2), "fw.a"); i.Category != StillOpen {
+		l2.notMatched("fw.a", "host:203.0.113.6:22")
+		if i := category(compareOK(t, e2, l2), "fw.a"); i.Category == Fixed {
 			t.Errorf("source %q: %+v", source, i)
 		}
+	}
+}
+
+func TestIdentityAndAreaDeclarationsBlockAcrossAFileChange(t *testing.T) {
+	const ws = "saas:google-workspace:example.com"
+	for _, id := range []string{"svc.expected_missing", "github.too_many_owners", "github.undeclared_public_repository", "identity.unattributed_admin", "workspace.stale_account", "never.heard.of.it"} {
+		e, l := pairLab()
+		for _, r := range []*lab{e, l} {
+			r.asset(ws, "ws", "saas", "collected", "")
+		}
+		l.Engagement.Source.SHA256 = "bbbb"
+		e.find(id, ws, "", "medium")
+		l.notMatched(id, ws)
+		if i := category(compareOK(t, e, l), id); i.Category == Fixed {
+			t.Errorf("%s was called fixed across a file change", id)
+		}
+	}
+}
+
+func TestAnAccountRenamedIntoAnAbstentionIsNeitherFixedNorNew(t *testing.T) {
+	const ws = "saas:google-workspace:example.com"
+	e, l := pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(ws, "ws", "saas", "collected", "C1")
+	}
+	e.find("identity.no_2sv", ws, "alice@acme.com", "high").Subject.ProviderID = "1001"
+	l.rule("identity.no_2sv", ws, "not_matched", true, report.AssessmentOutcome{
+		Subject: &report.Subject{Kind: "account", Key: "carol@acme.com", ProviderID: "1001"}, Outcome: "abstained", Detail: map[string]any{}})
+	if i := category(compareOK(t, e, l), "identity.no_2sv"); i.Category == Fixed {
+		t.Errorf("%+v", i)
 	}
 }

@@ -119,10 +119,11 @@ func (p *pair) linkAssets() {
 		ea := p.eAssets[id]
 		if la := p.lAssets[id]; la != nil {
 			how := "same"
-			if eb, ok := identityBound(ea); ok {
-				if lb, ok := identityBound(la); ok && eb != lb {
-					how = "replaced"
-				}
+			// Two different ids at one address: a different machine, unless
+			// it is only the id that changed. Any source counts here, since
+			// an id that names no machine cannot rule a replacement out.
+			if ea.BoundID != nil && la.BoundID != nil && *ea.BoundID != "" && *la.BoundID != "" && *ea.BoundID != *la.BoundID {
+				how = "replaced"
 			}
 			p.link[id] = assetLink{later: id, how: how}
 			p.back[id] = id

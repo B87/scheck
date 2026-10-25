@@ -60,31 +60,31 @@ func labRuns() (e, l *lab) {
 	title(e.find("sshd.password_auth_enabled", deployE, "", "high"), "SSH accepts passwords")
 	title(l.find("sshd.password_auth_enabled", deployL, "", "high"), "SSH accepts passwords")
 	// Fixed: the firewall rule decided on a complete read and found nothing.
-	title(e.find("fw.default_allow_in", web, "", "medium"), "The firewall allows inbound traffic by default")
-	l.notMatched("fw.default_allow_in", web)
+	title(e.find("fw.no_firewall_active", web, "", "medium"), "The firewall allows inbound traffic by default")
+	l.notMatched("fw.no_firewall_active", web)
 	// Fixed, low: counted at default verbosity.
-	title(e.find("pkg.updates_pending", web, "", "low"), "Package updates are pending")
-	l.notMatched("pkg.updates_pending", web)
+	title(e.find("updates.pending", web, "", "low"), "Package updates are pending")
+	l.notMatched("updates.pending", web)
 	// Not confirmed: the later user list was cut.
-	title(area(e.find("identity.no_two_step", ws, "bob@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
+	title(area(e.find("identity.unattributed_admin", ws, "bob@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
 	// Renamed: the same account by provider id.
-	ea := title(area(e.find("identity.no_two_step", ws, "alice@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
+	ea := title(area(e.find("identity.unattributed_admin", ws, "alice@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
 	ea.Subject.ProviderID = "u-41"
-	la := title(area(l.find("identity.no_two_step", ws, "alice.smith@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
+	la := title(area(l.find("identity.unattributed_admin", ws, "alice.smith@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
 	la.Subject.ProviderID = "u-41"
-	l.rule("identity.no_two_step", ws, "matched", false)
+	l.rule("identity.unattributed_admin", ws, "matched", false)
 	// Not re-checked: the repository could not be read this time.
-	title(area(e.find("secrets.in_history", shopID, "aws:AKIA@0a1b2c3d4e5f", "high"), "secrets"), "A credential is in the repository's history")
+	title(area(e.find("github.history_credential", shopID, "aws:AKIA@0a1b2c3d4e5f", "high"), "secrets"), "A credential is in the repository's history")
 	// Fixed in the secrets area: the caveat about revocation stays.
-	title(area(e.find("secrets.in_history", api, "aws:AKIA@9f8e7d6c5b4a", "high"), "secrets"), "A credential is in the repository's history")
-	l.notMatched("secrets.in_history", api)
+	title(area(e.find("github.history_credential", api, "aws:AKIA@9f8e7d6c5b4a", "high"), "secrets"), "A credential is in the repository's history")
+	l.notMatched("github.history_credential", api)
 	// Two hosts of one image: no identity, so one is not re-checked and
 	// the other is reported for the first time.
-	title(e.find("sshd.root_login", "host:203.0.113.20:22", "", "medium"), "SSH allows root to sign in")
-	title(l.find("sshd.root_login", "host:203.0.113.22:22", "", "medium"), "SSH allows root to sign in")
+	title(e.find("sshd.root_login_enabled", "host:203.0.113.20:22", "", "medium"), "SSH allows root to sign in")
+	title(l.find("sshd.root_login_enabled", "host:203.0.113.22:22", "", "medium"), "SSH allows root to sign in")
 	// Lowered by a declaration, not by anything read.
-	title(e.find("net.listens_unfiltered", web, "5432/tcp", "high"), "A database listens without a firewall")
-	lf := title(l.find("net.listens_unfiltered", web, "5432/tcp", "info"), "A database listens without a firewall")
+	title(e.find("db.listens_unfiltered", web, "5432/tcp", "high"), "A database listens without a firewall")
+	lf := title(l.find("db.listens_unfiltered", web, "5432/tcp", "info"), "A database listens without a firewall")
 	lf.SeverityBase = "high"
 	lf.Adjustments = []report.Adjustment{adj("exposed_on_purpose", "to_info", "acme.yaml", "assets.web.context.exposure")}
 	// Accepted before, expired now: open again.
@@ -94,13 +94,13 @@ func labRuns() (e, l *lab) {
 	title(l.find("svc.sensitive_listens_unfiltered", web, "6379/tcp", "high"), "A sensitive service listens without a firewall")
 	l.Acceptances = []report.Acceptance{{Entry: "acme.yaml intent.accepted_risks[0]", ID: "svc.sensitive_listens_unfiltered", Asset: "web", AcceptedBy: "carol", Expires: &exp, Outcome: "expired", Findings: []report.Key{{ID: "svc.sensitive_listens_unfiltered", Asset: web, Subject: new("6379/tcp")}}}}
 	// Accepted since.
-	title(e.find("sshd.max_auth_tries", web, "", "medium"), "SSH allows many authentication attempts")
-	af := title(l.find("sshd.max_auth_tries", web, "", "medium"), "SSH allows many authentication attempts")
+	title(e.find("sshd.password_auth_exposed", web, "", "medium"), "SSH allows many authentication attempts")
+	af := title(l.find("sshd.password_auth_exposed", web, "", "medium"), "SSH allows many authentication attempts")
 	far := "2027-01-31"
 	af.Status, af.Acceptance = "accepted", acceptance("dave", &far)
 	// New: the earlier run decided this rule on a complete read.
-	e.notMatched("kernel.eol", deployE)
-	title(l.find("kernel.eol", deployL, "", "high"), "The kernel is past its end of support")
+	e.notMatched("accounts.shadow_permissions_unexpected", deployE)
+	title(l.find("accounts.shadow_permissions_unexpected", deployL, "", "high"), "The kernel is past its end of support")
 	return e, l
 }
 
@@ -220,12 +220,12 @@ func TestGoldenComparison(t *testing.T) {
 		cat   Category
 	}{
 		{"sshd.password_auth_enabled", "host:203.0.113.9:22", StillOpen},
-		{"fw.default_allow_in", "host:203.0.113.6:22", Fixed},
-		{"kernel.eol", "host:203.0.113.9:22", New},
+		{"fw.no_firewall_active", "host:203.0.113.6:22", Fixed},
+		{"accounts.shadow_permissions_unexpected", "host:203.0.113.9:22", New},
 		{"svc.sensitive_listens_unfiltered", "host:203.0.113.6:22", Reopened},
-		{"sshd.max_auth_tries", "host:203.0.113.6:22", AcceptedSince},
-		{"sshd.root_login", "host:203.0.113.22:22", FirstReported},
-		{"sshd.root_login", "host:203.0.113.20:22", NotRechecked},
+		{"sshd.password_auth_exposed", "host:203.0.113.6:22", AcceptedSince},
+		{"sshd.root_login_enabled", "host:203.0.113.22:22", FirstReported},
+		{"sshd.root_login_enabled", "host:203.0.113.20:22", NotRechecked},
 	}
 	for _, ck := range checks {
 		found := false

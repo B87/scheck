@@ -94,7 +94,7 @@ func (p *pair) basis(eAsset, lAsset, id string, reads []string) string {
 	if p.link[eAsset].how == "replaced" {
 		return CauseAssetReplaced
 	}
-	if !p.sameFile && (hasDeclared(reads) || readsDeclarations(id)) {
+	if !p.sameFile && (hasDeclared(reads) || finding.ReadsDeclarations(id)) {
 		return CauseDeclarationChanged
 	}
 	if principalChanged(p.eAssets[eAsset], p.lAssets[lAsset]) {
@@ -155,7 +155,7 @@ func (p *pair) goneVerdict(ef *report.Finding) (Category, string, string) {
 		// hides: the instance may be the same one, so it is not gone.
 		return NotConfirmed, CauseSubjectUnmatchable, ""
 	}
-	if holdsUnknownPID(p.l, p.lAssess, lasset, ef.ID, ef.Subject) {
+	if holdsUnknownPID(p.l, p.lAssess, lasset, ef.ID, ef.Subject) || heldUnderAnotherName(p.lAssess, lasset, ef.ID, ef.Subject) {
 		return NotConfirmed, CauseSubjectUnmatchable, ""
 	}
 	if replacedSubject(p.l, lasset, ef.ID, ef.Subject) {
@@ -188,7 +188,7 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 		// different rules: it cannot be told new from the same instance.
 		return FirstReported, CauseSubjectUnmatchable, ""
 	}
-	if holdsUnknownPID(p.e, p.eAssess, easset, lf.ID, lf.Subject) {
+	if holdsUnknownPID(p.e, p.eAssess, easset, lf.ID, lf.Subject) || heldUnderAnotherName(p.eAssess, easset, lf.ID, lf.Subject) {
 		return FirstReported, CauseSubjectUnmatchable, ""
 	}
 	if replacedSubject(p.e, easset, lf.ID, lf.Subject) {
@@ -263,11 +263,26 @@ func replacedSubject(r *report.Report, asset, id string, s *report.Subject) bool
 	return false
 }
 
-// readsDeclarations says a finding id's rule reads the engagement file
-// without recording it in the finding's reads.
-func readsDeclarations(id string) bool {
-	d, ok := finding.Lookup(id)
-	return ok && d.ReadsDeclarations
+// heldUnderAnotherName says the run's rule did not decide, or still fired on,
+// the account s stands for under another name: an outcome with the same
+// provider id and a different key that abstained or fired. The account may
+// have been renamed into an undecided state, so its finding is neither gone
+// nor new.
+func heldUnderAnotherName(assess map[string]*report.Assessment, asset, id string, s *report.Subject) bool {
+	pid := providerID(s)
+	if pid == "" {
+		return false
+	}
+	as := assess[id+"\x00"+asset]
+	if as == nil {
+		return false
+	}
+	for _, o := range as.Outcomes {
+		if (o.Outcome == "abstained" || o.Outcome == "fired") && o.Subject != nil && providerID(o.Subject) == pid && o.Subject.Key != s.Key {
+			return true
+		}
+	}
+	return false
 }
 
 // holdsUnknownPID says a rename cannot be ruled out because a redaction rule

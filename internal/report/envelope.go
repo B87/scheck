@@ -3,6 +3,7 @@ package report
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -347,5 +348,13 @@ func hostFrom(sheet *baseline.FactSheet, meta Meta) Host {
 // one identity.
 func usableID(raw string) bool {
 	l := strings.ToLower(raw)
-	return strings.TrimSpace(raw) != "" && !strings.Contains(l, "[redacted:") && !strings.Contains(l, "[truncated:")
+	if strings.Contains(l, "[redacted:") || strings.Contains(l, "[truncated:") {
+		return false
+	}
+	return machineID.MatchString(strings.TrimSpace(raw))
 }
+
+// machineID is the shape of a machine identifier: the 32 hex digits of
+// /etc/machine-id, or a platform UUID. A placeholder an image ships
+// ("uninitialized") is the same on every machine built from it and names none.
+var machineID = regexp.MustCompile(`^(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12})$`)
