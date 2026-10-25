@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/b87/scheck/internal/engagement/report"
+	"github.com/b87/scheck/internal/finding"
 )
 
 // This file holds the one predicate that decides whether a finding that is
@@ -86,14 +87,14 @@ func hasDeclared(reads []string) bool {
 // basis says whether a finding's two runs were read on the same footing. The
 // empty cause says they were. eAsset and lAsset are the asset in each run;
 // reads are the declared inputs of the finding's rule.
-func (p *pair) basis(eAsset, lAsset string, reads []string) string {
+func (p *pair) basis(eAsset, lAsset, id string, reads []string) string {
 	if !p.sameRules {
 		return CauseRulesChanged
 	}
 	if p.link[eAsset].how == "replaced" {
 		return CauseAssetReplaced
 	}
-	if !p.sameFile && hasDeclared(reads) {
+	if !p.sameFile && (hasDeclared(reads) || readsDeclarations(id)) {
 		return CauseDeclarationChanged
 	}
 	if principalChanged(p.eAssets[eAsset], p.lAssets[lAsset]) {
@@ -154,13 +155,16 @@ func (p *pair) goneVerdict(ef *report.Finding) (Category, string, string) {
 		// hides: the instance may be the same one, so it is not gone.
 		return NotConfirmed, CauseSubjectUnmatchable, ""
 	}
+	if holdsUnknownPID(p.l, p.lAssess, lasset, ef.ID, ef.Subject) {
+		return NotConfirmed, CauseSubjectUnmatchable, ""
+	}
 	if replacedSubject(p.l, lasset, ef.ID, ef.Subject) {
 		return NotConfirmed, CauseSubjectReplaced, ""
 	}
 	if hidden(ef.Subject) {
 		return NotConfirmed, CauseSubjectUnmatchable, ""
 	}
-	if b := p.basis(ef.Key.Asset, lasset, ef.Rule.Reads); b != "" {
+	if b := p.basis(ef.Key.Asset, lasset, ef.ID, ef.Rule.Reads); b != "" {
 		return NotConfirmed, b, ""
 	}
 	if abs.cause != "" {
@@ -184,6 +188,9 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 		// different rules: it cannot be told new from the same instance.
 		return FirstReported, CauseSubjectUnmatchable, ""
 	}
+	if holdsUnknownPID(p.e, p.eAssess, easset, lf.ID, lf.Subject) {
+		return FirstReported, CauseSubjectUnmatchable, ""
+	}
 	if replacedSubject(p.e, easset, lf.ID, lf.Subject) {
 		return FirstReported, CauseSubjectReplaced, ""
 	}
@@ -197,7 +204,7 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 		// run records that it was read in full, so it is not known to be new.
 		return FirstReported, CauseAssetNotListed, ""
 	}
-	if b := p.basis(easset, lf.Key.Asset, lf.Rule.Reads); b != "" {
+	if b := p.basis(easset, lf.Key.Asset, lf.ID, lf.Rule.Reads); b != "" {
 		return FirstReported, b, ""
 	}
 	if abs.cause != "" {
@@ -251,6 +258,45 @@ func replacedSubject(r *report.Report, asset, id string, s *report.Subject) bool
 		f := &r.Findings[i]
 		if f.ID == id && f.Key.Asset == asset && f.Subject != nil && f.Subject.Key == s.Key && contradicts(f.Subject, s) {
 			return true
+		}
+	}
+	return false
+}
+
+// readsDeclarations says a finding id's rule reads the engagement file
+// without recording it in the finding's reads.
+func readsDeclarations(id string) bool {
+	d, ok := finding.Lookup(id)
+	return ok && d.ReadsDeclarations
+}
+
+// holdsUnknownPID says a rename cannot be ruled out because a redaction rule
+// hid a provider id: the run holds a fired instance of rule id on asset whose
+// provider id is hidden while subject s has one, or s's provider id is hidden
+// while the instance has one. Without it the rename pass cannot join them and
+// neither a fix nor a new finding can be told from a renamed account.
+func holdsUnknownPID(r *report.Report, assess map[string]*report.Assessment, asset, id string, s *report.Subject) bool {
+	if s == nil || s.ProviderID == "" {
+		return false
+	}
+	thisHidden := providerID(s) == ""
+	unknown := func(x *report.Subject) bool {
+		if x == nil || x.ProviderID == "" {
+			return false
+		}
+		xHidden := providerID(x) == ""
+		return xHidden || thisHidden
+	}
+	for i := range r.Findings {
+		if f := &r.Findings[i]; f.ID == id && f.Key.Asset == asset && unknown(f.Subject) {
+			return true
+		}
+	}
+	if as := assess[id+"\x00"+asset]; as != nil {
+		for _, o := range as.Outcomes {
+			if o.Outcome == "fired" && unknown(o.Subject) {
+				return true
+			}
 		}
 	}
 	return false

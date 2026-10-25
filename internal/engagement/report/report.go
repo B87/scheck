@@ -14,7 +14,7 @@ import (
 
 // SchemaVersion is the engagement report's JSON schema version. It may
 // change freely until 0.0.2 is published (AGENTS.md, "Conventions").
-const SchemaVersion = "1.0"
+const SchemaVersion = "1.1"
 
 // Report is the engagement report. Field order and names follow
 // docs/engagement-report-schema.json.
@@ -545,15 +545,20 @@ type OperatorRedaction struct {
 
 // Asset is one asset in scope and what became of it.
 type Asset struct {
-	Name      string  `json:"name"`
-	ID        string  `json:"id"`
-	BoundID   *string `json:"bound_id"`
-	Kind      string  `json:"kind"`
-	Root      bool    `json:"root"`
-	Status    string  `json:"status"`
-	Reason    string  `json:"reason,omitempty"`
-	Detail    string  `json:"detail,omitempty"`
-	Collector *string `json:"collector,omitempty"`
+	Name    string  `json:"name"`
+	ID      string  `json:"id"`
+	BoundID *string `json:"bound_id"`
+	// BoundIDSource says what BoundID is derived from: machine_id (a host's
+	// machine identifier), or hostname (the fallback when that was
+	// unreadable or hidden by a redaction rule). Only machine_id, and a
+	// provider's own id, name an asset's identity across runs.
+	BoundIDSource string  `json:"bound_id_source,omitempty"`
+	Kind          string  `json:"kind"`
+	Root          bool    `json:"root"`
+	Status        string  `json:"status"`
+	Reason        string  `json:"reason,omitempty"`
+	Detail        string  `json:"detail,omitempty"`
+	Collector     *string `json:"collector,omitempty"`
 	// Via is the jump host a host was reached through; nothing ran on it.
 	Via       string     `json:"via,omitempty"`
 	Principal *Principal `json:"principal,omitempty"`

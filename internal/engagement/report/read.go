@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -44,6 +45,9 @@ func ReadJSON(r io.Reader) (*Report, error) {
 	}
 	if err := checkSchemaVersion(version); err != nil {
 		return nil, err
+	}
+	if err := checkKeys(raw, reflect.TypeFor[Report]()); err != nil {
+		return nil, fmt.Errorf("report does not match schema %s: %w", SchemaVersion, err)
 	}
 	if a, ok := top["assets"]; ok {
 		var assets []map[string]json.RawMessage

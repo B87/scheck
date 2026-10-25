@@ -1,7 +1,8 @@
 {
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "host": {
     "id": "f24a50bf4a38f7a356217ae75e722e6decfe71ae813935985302934bcfbf23f9",
+    "id_source": "machine_id",
     "hostname": "ec11fbf6c8e8",
     "platform": "linux",
     "os": "Ubuntu 24.04.5 LTS",

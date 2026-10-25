@@ -402,6 +402,7 @@
           "name": { "type": "string" },
           "id": { "$ref": "#/$defs/asset_id" },
           "bound_id": { "type": ["string", "null"], "description": "What the asset bound to on contact (host.id, a tenant's customer id); null when it binds to nothing or was not contacted." },
+          "bound_id_source": { "enum": ["machine_id", "hostname", "provider_id"], "description": "What bound_id is derived from. hostname: the machine identifier was unreadable, truncated or hidden by a redaction rule. Only machine_id and provider_id name an asset's identity across runs; open." },
           "kind": { "enum": ["domain", "url", "host", "network", "saas", "repo", "cloud"] },
           "root": { "type": "boolean" },
           "status": { "enum": ["collected", "incomplete", "failed", "refused", "not_collected"] },

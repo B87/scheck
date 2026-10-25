@@ -183,6 +183,7 @@
   "assets": [
     {
       "bound_id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+      "bound_id_source": "machine_id",
       "checks": {
         "not_run": 2,
         "planned": 29,
@@ -197,7 +198,7 @@
       "detail": "the connection was lost before every baseline check ran: EOF",
       "envelope": {
         "elided": "pinned by internal/report goldens",
-        "schema_version": "1.7"
+        "schema_version": "1.8"
       },
       "id": "host:macos:22",
       "kind": "host",
@@ -1069,7 +1070,7 @@
     "started": "2026-10-07T07:12:03Z"
   },
   "scheck_version": "test",
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "summary": {
     "areas": {
       "assessed": 0,

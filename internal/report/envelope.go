@@ -21,7 +21,11 @@ import (
 // `run.agent` from phase 2 and carries model findings (docs/spec/host-collector.md §6.4).
 // 1.5 adds immutable observations and exact evidence references.
 // Compatibility starts at the first GitHub release.
-const SchemaVersion = "1.7"
+//
+// 1.8 adds host.id_source: whether host.id hashes the machine identifier or,
+// when that was unreadable or hidden by a redaction rule, the hostname. A
+// consumer takes host.id as the machine's identity only for "machine_id".
+const SchemaVersion = "1.8"
 
 // Envelope is the JSON report (docs/spec/host-collector.md §6.4), shaped so a fleet tool can
 // concatenate reports: host identity block, flat findings array.
@@ -59,7 +63,11 @@ func (e Envelope) NotAssessed() []finding.Assessment {
 // Host identifies the audited machine. ID is stable across runs and
 // hostname changes: a hash of /etc/machine-id or IOPlatformUUID.
 type Host struct {
-	ID          string `json:"id"`
+	ID string `json:"id"`
+	// IDSource says what ID hashes: machine_id, or hostname when the
+	// machine identifier was unreadable, truncated or hidden by a
+	// redaction rule (a hash of a marker names no machine).
+	IDSource    string `json:"id_source,omitempty"`
 	Hostname    string `json:"hostname"`
 	Platform    string `json:"platform"`
 	OS          string `json:"os"`
@@ -280,6 +288,7 @@ func build(sheet *baseline.FactSheet, meta Meta, assessed *finding.Result) Envel
 	env.Host = hostFrom(sheet, meta)
 	if env.Host.ID == "" {
 		env.Host.ID = HashID("hostname:" + env.Host.Hostname)
+		env.Host.IDSource = "hostname"
 		env.Run.Warnings = append(env.Run.Warnings, "host.id derived from hostname: machine identifier unavailable")
 	}
 	return env
@@ -305,8 +314,8 @@ func hostFrom(sheet *baseline.FactSheet, meta Meta) Host {
 	}
 	switch sheet.Platform {
 	case check.Linux:
-		if raw := sheet.Raw("host.machine_id"); raw != "" {
-			h.ID = HashID(raw)
+		if raw := sheet.Raw("host.machine_id"); usableID(raw) {
+			h.ID, h.IDSource = HashID(raw), "machine_id"
 		}
 		if r, ok := sheet.Get("os.release"); ok {
 			if kv, ok := r.Parsed.(map[string]string); ok {
@@ -317,8 +326,8 @@ func hostFrom(sheet *baseline.FactSheet, meta Meta) Host {
 			}
 		}
 	case check.MacOS:
-		if raw := sheet.Raw("host.platform_uuid"); raw != "" {
-			h.ID = HashID(raw)
+		if raw := sheet.Raw("host.platform_uuid"); usableID(raw) {
+			h.ID, h.IDSource = HashID(raw), "machine_id"
 		}
 		if r, ok := sheet.Get("os.release"); ok {
 			if kv, ok := r.Parsed.(map[string]string); ok {
@@ -330,4 +339,13 @@ func hostFrom(sheet *baseline.FactSheet, meta Meta) Host {
 		}
 	}
 	return h
+}
+
+// usableID says a captured machine identifier names a machine: it is there
+// and no redaction rule replaced or cut any of it. Every capture a pattern
+// matches becomes the same marker, so hashing one would give all such hosts
+// one identity.
+func usableID(raw string) bool {
+	l := strings.ToLower(raw)
+	return strings.TrimSpace(raw) != "" && !strings.Contains(l, "[redacted:") && !strings.Contains(l, "[truncated:")
 }

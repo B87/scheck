@@ -343,8 +343,9 @@ sha256 differs from the one `run.json` recorded or that `run.json` does not reco
 bare `report.json` is accepted, and the header says it was not checked against a run
 record. Every file it reads (the report, `run.json`) is `Lstat`ed first and refused
 unless it is a regular file, so a pipe, a device or a link is never opened, and is
-read to at most 256 MiB. `report.ReadJSON` is strict: it refuses another schema MAJOR, a newer MINOR and
-any unknown field, and drops each host asset's embedded envelope. The comparison
+read to at most 256 MiB. `report.ReadJSON` is strict: it refuses another schema MAJOR, a newer MINOR, any
+unknown field, any object key that is not a field's name exactly (a different case is
+refused, not matched) and any key written twice, and drops each host asset's embedded envelope. The comparison
 package (`internal/engagement/compare`) reads no file (`os`, `io/fs`, `io/ioutil` and
 `path/filepath` are forbidden to it); `scripts/depcheck.sh` holds it to
 the report types, `internal/finding` and `internal/report`, with no gate, collector,
@@ -359,8 +360,9 @@ provider id) to the later one and withheld otherwise, the earlier bound id is pr
 when equal to the later one and is omitted on earlier-only instances, the earlier principal label of a
 `principal` asset row is `[withheld]`, and a `fixed` instance's earlier `not_checked`
 lines are omitted. A subject key is hidden when it contains a redaction marker,
-`[REDACTED:` or `[redacted:`, in either case; a provider id that contains one is
-treated as unknown, so it neither joins a rename nor contradicts a key. The asset id and name of an
+`[REDACTED:` or `[redacted:`, in either case; a provider id that contains one, in either
+case, is unknown: it neither joins a rename nor contradicts a key, and an instance whose
+rename it could hide is not decided as gone or new (the `subject_unmatchable` rule below). The asset id and name of an
 earlier-only asset that is not a root (a repository, or a name found under a root) are
 replaced by `[withheld]` on earlier-only instances and on `removed` and `unlisted`
 asset rows. The read errors `scheck diff` prints for either argument are
@@ -425,10 +427,14 @@ and the appearing one counts toward exit 1.
   (`dev`, a describe string with commits after the tag, `-dirty`, empty, `unknown`) is
   never "the same rules" (a rule may change between releases, and a development build
   is never comparable);
-- the bound id is the same; a different non-null bound id at the same canonical id is
-  `asset_replaced`;
+- the bound id is the same; a different bound id at the same canonical id is
+  `asset_replaced` only when both bound ids name an identity (see "Identity across
+  runs");
 - when the engagement file hash differs, the earlier finding's `rule.reads` hold no
-  `declared:` read (`declaration_changed`; see `report.md`, "Text and JSON");
+  `declared:` read and its definition does not set `ReadsDeclarations` (a rule that reads
+  the engagement file without naming it: mail senders, selectors and `no_mail`, a host's
+  `app_paths`) (`declaration_changed`; see `report.md`, "Text and JSON"). An appearing
+  instance of such a rule is `first_reported` with the same cause;
 - the same principal read the asset (identity, elevation and sorted scopes); an asset with
   no row in a run, where the other run's principal exists, counts as a changed principal;
 - for a domain or url asset, the same run vantage;
@@ -445,6 +451,12 @@ and the appearing one counts toward exit 1.
   decision applies and counts toward exit 1: a hidden name nobody held before is `new`, and
   a visible new name with no earlier hidden instance is decided normally even when the
   counts differ.
+- a provider id hidden by a redaction rule is unknown, not absent. A gone instance whose
+  subject has a provider id is `not_confirmed` with cause `subject_unmatchable` when the
+  later run holds a fired instance of the same `{id, asset}` whose provider id is hidden;
+  the same when the subject's own provider id is hidden and that instance has one. An
+  appearing instance is `first_reported` with that cause under the mirror condition on the
+  earlier run. Neither counts toward exit 1.
 - an appearing instance is `first_reported` with cause `superseded` when the earlier run's
   outcome on its subject was `fired` but not reported for the same reason.
 - "Holding the id under another name" counts fired instances only (findings, or assessment
@@ -469,8 +481,8 @@ finding's `not_checked` lines (shown at `-v`).
 **Identity across runs.** An asset id is the canonical id. An exact-key join is refused
 when both subjects carry non-empty, different `provider_id`s; the provider-id pass may
 then join them. A host or tenant whose
-canonical id differs between the runs is `moved` only when its non-null `bound_id`
-appears on exactly one asset of the same kind in each run and the earlier id is gone. A
+canonical id differs between the runs is `moved` only when its non-null `bound_id`,
+whose `bound_id_source` is `machine_id` or `provider_id`, appears on exactly one asset of the same kind in each run and the earlier id is gone. A
 bound id on two or more assets of one run is a cloned image and identifies nothing: the
 earlier instance is `not_rechecked` and the later one `first_reported`. A subject is
 `renamed` when the asset id is the same and continues, `subject.provider_id` is equal
@@ -487,7 +499,10 @@ not as an error. When the later run no longer lists the asset but still reads un
 (its findings or assessments exist), the asset is linked as the same one and the
 `assets[]` row has change `unlisted` ("no longer listed as an asset, but the later run
 still read under it"); its findings compare normally, and one open in both runs is
-`still_open`. GitHub organizations
+`still_open`. A bound id whose source is `hostname`, or
+absent (a report written before `bound_id_source` existed, schema 1.0), names nothing: such
+a host is never `moved` and never `asset_replaced`, and its findings follow the same-id rules
+above. GitHub organizations
 and repositories have a null `bound_id`, so a renamed or transferred repository is never
 `moved` (carried below).
 

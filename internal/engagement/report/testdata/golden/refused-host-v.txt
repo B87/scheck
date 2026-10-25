@@ -176,7 +176,8 @@ DOMAIN                   STATUS   CHECK                    READING
 Host identity            ran      host.hostname            mac-fixture.local
                                                            Hostname
 Host identity            ran      host.platform_uuid       AFCC3024-054E-5B1D-9CDE-9FF60BF8E219
-                                                           IOPlatformUUID (hashed into host.id)
+                                                           IOPlatformUUID (hashed into host.id when
+                                                           unredacted and untruncated)
 Operating system         ran      os.release               3 settings
                                                            macOS product name, version and build
 Software updates         ran      pkg.softwareupdate       3 updates available [finding: low]

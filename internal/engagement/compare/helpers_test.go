@@ -30,6 +30,10 @@ func (l *lab) asset(id, name, kind, status, bound string) *report.Asset {
 	a := report.Asset{Name: name, ID: id, Kind: kind, Status: status, Root: true}
 	if bound != "" {
 		a.BoundID = &bound
+		a.BoundIDSource = "provider_id"
+		if kind == "host" {
+			a.BoundIDSource = "machine_id"
+		}
 	}
 	l.Assets = append(l.Assets, a)
 	return &l.Assets[len(l.Assets)-1]

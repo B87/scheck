@@ -101,13 +101,13 @@ func (p *pair) linkAssets() {
 	boundE := map[string][]string{}
 	boundL := map[string][]string{}
 	for id, a := range p.eAssets {
-		if a.BoundID != nil && *a.BoundID != "" {
-			boundE[*a.BoundID] = append(boundE[*a.BoundID], id)
+		if b, ok := identityBound(a); ok {
+			boundE[b] = append(boundE[b], id)
 		}
 	}
 	for id, a := range p.lAssets {
-		if a.BoundID != nil && *a.BoundID != "" {
-			boundL[*a.BoundID] = append(boundL[*a.BoundID], id)
+		if b, ok := identityBound(a); ok {
+			boundL[b] = append(boundL[b], id)
 		}
 	}
 	ids := make([]string, 0, len(p.eAssets))
@@ -119,8 +119,10 @@ func (p *pair) linkAssets() {
 		ea := p.eAssets[id]
 		if la := p.lAssets[id]; la != nil {
 			how := "same"
-			if ea.BoundID != nil && la.BoundID != nil && *ea.BoundID != "" && *la.BoundID != "" && *ea.BoundID != *la.BoundID {
-				how = "replaced"
+			if eb, ok := identityBound(ea); ok {
+				if lb, ok := identityBound(la); ok && eb != lb {
+					how = "replaced"
+				}
 			}
 			p.link[id] = assetLink{later: id, how: how}
 			p.back[id] = id
@@ -132,10 +134,10 @@ func (p *pair) linkAssets() {
 			p.back[id] = id
 			continue
 		}
-		if ea.BoundID == nil || *ea.BoundID == "" {
+		b, ok := identityBound(ea)
+		if !ok {
 			continue
 		}
-		b := *ea.BoundID
 		if len(boundE[b]) != 1 || len(boundL[b]) != 1 {
 			continue
 		}
@@ -278,4 +280,19 @@ func providerID(s *report.Subject) string {
 		return ""
 	}
 	return s.ProviderID
+}
+
+// identityBound is an asset's bound id when it names the asset across runs: a
+// machine identifier or a provider's own id. A hostname-derived id, or one
+// from a capture a redaction rule hid, names nothing, and every host a
+// pattern hides would share it.
+func identityBound(a *report.Asset) (string, bool) {
+	if a == nil || a.BoundID == nil || *a.BoundID == "" {
+		return "", false
+	}
+	switch a.BoundIDSource {
+	case "machine_id", "provider_id":
+		return *a.BoundID, true
+	}
+	return "", false
 }

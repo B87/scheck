@@ -624,7 +624,7 @@ counts are then "at least", and `audit.jsonl` in the run directory lists every r
 `engagement.edited_by_hand` names files changed since scheck wrote them that this report
 used as written; say so before anything that rests on them.
 
-A host's `envelope` follows `docs/report-schema.json` (schema `1.7`): `host`, `run`,
+A host's `envelope` follows `docs/report-schema.json` (schema `1.8`): `host`, `run`,
 `facts`, `observations`, `assessments`, `findings`. Its findings are the host
 collector's grading; the engagement's `findings` are authoritative where they differ.
 `run.assessment` is now at `assets[i].envelope.run.assessment`.
@@ -705,7 +705,13 @@ hidden fired instance (cause `subject_unmatchable`), is never `fixed`; an appear
 hidden one with differing counts, any fired instance of the id) could be the same, else
 `new` as usual and counted. A gone finding the later run's rule still fired on, not
 reported because a more serious finding stands for it, is `not_confirmed` with cause
-`superseded`, never `fixed`. The same subject key under a
+`superseded`, never `fixed`. A provider id a redaction rule hides is unknown: a fired
+instance of the same id and asset whose provider id is hidden while this one has one (or
+the reverse) makes a gone finding `not_confirmed` and an appearing one `first_reported`,
+cause `subject_unmatchable`, neither counted. A host or tenant is `moved` or `asset_replaced`
+only when its `bound_id_source` is `machine_id` or `provider_id`; a `hostname` source, or
+none (a report before engagement schema 1.1), names nothing. A finding whose rule reads
+the engagement file is `not_confirmed` (`declaration_changed`) across an edit of it. The same subject key under a
 different provider id is `subject_replaced` (`not_confirmed` gone, `first_reported`
 appearing, the latter counted). A finding is neither `fixed` nor `new` on an asset with no entry in a run's asset list
 (cause `asset_not_listed`): gone it is `not_rechecked`, even if the later run lists and

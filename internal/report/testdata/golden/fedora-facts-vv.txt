@@ -5,7 +5,7 @@ Host identity            ran      host.hostname           6d9106647d07
   | 6d9106647d07
 Host identity            ran      host.machine_id         cb80c459978742989ad33bef46e06e0f
                                                           Stable machine identifier (hashed into
-                                                          host.id)
+                                                          host.id when unredacted and untruncated)
   | cb80c459978742989ad33bef46e06e0f
 Host identity            ran      sys.dmi                 no DMI data; cloud platform not identified
                                                           Hardware vendor and product from DMI, to

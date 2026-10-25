@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/b87/scheck/internal/engagement/report"
 	hostreport "github.com/b87/scheck/internal/report"
@@ -419,9 +420,26 @@ func TestHiddenProviderIDsAreNoIdentity(t *testing.T) {
 		if i.Identity != "" || i.Category == StillOpen {
 			t.Errorf("joined on a hidden provider id: %+v", i)
 		}
+		// Whether carol is alice renamed cannot be told: alice is not fixed
+		// and carol is not new.
+		if i.Category == Fixed || i.Category == New {
+			t.Errorf("an unknown identity was called %s: %+v", i.Category, i)
+		}
 	}
-	if c.Exit.Code != 1 {
-		t.Errorf("exit %d", c.Exit.Code)
+	if c.Summary.NotConfirmed != 1 || c.Summary.FirstReported != 1 {
+		t.Errorf("%+v", c.Summary)
+	}
+
+	// A visible provider id in one run and a hidden one in the other.
+	e, l = pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(ws, "ws", "saas", "collected", "C1")
+	}
+	e.find("identity.no_2sv", ws, "alice@acme.com", "high").Subject.ProviderID = "1001"
+	l.find("identity.no_2sv", ws, "bob@acme.com", "high").Subject.ProviderID = "[REDACTED:redact_extra:12 bytes]"
+	c = compareOK(t, e, l)
+	if c.Summary.Fixed != 0 || c.Summary.New != 0 {
+		t.Errorf("one-sided hidden provider id: %+v", c.Summary)
 	}
 }
 
@@ -447,7 +465,72 @@ func TestASupersededAppearanceIsNotAWorsening(t *testing.T) {
 		report.AssessmentOutcome{Subject: &report.Subject{Kind: "workflow", Key: "release.yml"}, Outcome: "fired", Detail: map[string]any{"superseded_by": "github.mutable_action_with_write_token"}})
 	l.find("github.mutable_action_reference", repo, "release.yml", "medium")
 	l.notMatched("github.mutable_action_with_write_token", repo)
-	if c := compareOK(t, e, l); c.Exit.Code != 0 {
+	c := compareOK(t, e, l)
+	if i := category(c, "github.mutable_action_reference"); i.Category != FirstReported || i.Cause != CauseSuperseded {
+		t.Errorf("%+v", i)
+	}
+	if c.Exit.Code != 0 {
 		t.Errorf("exit %d: %+v", c.Exit.Code, c.Instances)
+	}
+}
+
+// A rule that reads the engagement file without recording it in its reads
+// (the declared mail senders and selectors, a host's app_paths) cannot be
+// called fixed or new across a change to the file.
+func TestDeclarationReadingRulesAreBlockedByAFileChange(t *testing.T) {
+	const dom = "domain:example.com"
+	for _, id := range []string{"email.spf_undeclared_sender", "email.dkim_missing", "email.dmarc_not_enforced", "creds.env_file_exposed"} {
+		e, l := pairLab()
+		for _, r := range []*lab{e, l} {
+			r.asset(dom, "example", "domain", "collected", "")
+		}
+		l.Engagement.Source.SHA256 = "bbbb"
+		// gone
+		e.find(id, dom, "", "medium")
+		l.notMatched(id, dom)
+		if i := category(compareOK(t, e, l), id); i.Category != NotConfirmed || i.Cause != CauseDeclarationChanged {
+			t.Errorf("%s gone: %+v", id, i)
+		}
+		// appearing
+		e, l = pairLab()
+		for _, r := range []*lab{e, l} {
+			r.asset(dom, "example", "domain", "collected", "")
+		}
+		l.Engagement.Source.SHA256 = "bbbb"
+		e.notMatched(id, dom)
+		l.find(id, dom, "", "medium")
+		if i := category(compareOK(t, e, l), id); i.Category != FirstReported || i.Cause != CauseDeclarationChanged {
+			t.Errorf("%s appearing: %+v", id, i)
+		}
+	}
+}
+
+// A bound id derived from the hostname, or from a capture a redaction rule
+// hid, names no machine: it neither moves a finding nor replaces a host.
+func TestOnlyAMachineIDIsIdentity(t *testing.T) {
+	for _, source := range []string{"hostname", ""} {
+		e := newLab("0.0.3", t0)
+		l := newLab("0.0.3", t0.Add(24*time.Hour*7))
+		ea := e.asset("host:203.0.113.5:22", "a", "host", "collected", "SAME")
+		la := l.asset("host:203.0.113.9:22", "a", "host", "collected", "SAME")
+		ea.BoundIDSource, la.BoundIDSource = source, source
+		e.find("sshd.password", "host:203.0.113.5:22", "", "high")
+		l.find("sshd.password", "host:203.0.113.9:22", "", "high")
+		c := compareOK(t, e, l)
+		for _, i := range c.Instances {
+			if i.Identity == "moved" || i.Category == StillOpen {
+				t.Errorf("source %q: moved on a bound id that names no machine: %+v", source, i)
+			}
+		}
+		// And the same address answering with another hostname-derived id
+		// is not a replaced machine.
+		e2, l2 := pairLab()
+		e2.Assets[0].BoundIDSource, l2.Assets[0].BoundIDSource = source, source
+		*l2.Assets[0].BoundID = "B-other"
+		e2.find("fw.a", "host:203.0.113.6:22", "", "high")
+		l2.find("fw.a", "host:203.0.113.6:22", "", "high")
+		if i := category(compareOK(t, e2, l2), "fw.a"); i.Category != StillOpen {
+			t.Errorf("source %q: %+v", source, i)
+		}
 	}
 }

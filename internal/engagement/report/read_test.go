@@ -36,6 +36,9 @@ func TestReadJSONRefusesWhatItDoesNotKnow(t *testing.T) {
 		{"newer minor", `{"schema_version":"1.99"}`, "newer than this build reads"},
 		{"not a version", `{"schema_version":"one"}`, "not MAJOR.MINOR"},
 		{"unknown field", `{"schema_version":"1.0","surprise":1}`, "does not match schema"},
+		{"field in another case", `{"schema_version":"1.0","Run":{}}`, "unknown field"},
+		{"duplicate key", `{"schema_version":"1.0","schema_version":"1.0"}`, "written twice"},
+		{"duplicate nested key", `{"schema_version":"1.0","exit":{"code":0,"code":1}}`, "written twice"},
 		{"unknown nested field", `{"schema_version":"1.0","run":{"surprise":1}}`, "does not match schema"},
 	} {
 		_, err := ReadJSON(strings.NewReader(tc.in))

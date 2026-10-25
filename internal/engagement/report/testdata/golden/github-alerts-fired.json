@@ -1217,7 +1217,7 @@
     "started": "2026-10-09T12:00:00Z"
   },
   "scheck_version": "test",
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "summary": {
     "areas": {
       "assessed": 0,

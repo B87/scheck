@@ -831,7 +831,14 @@ The rules below are the ones the schema does not state by itself.
 
 `host.id` is a hash of the machine id (Linux) or platform UUID (macOS). It is stable
 across runs and hostname changes, and it is the key a fleet aggregator or a drift
-diff would join on. A `local` or `ssh` report sets `run.mode` to `facts` and
+diff would join on, when `host.id_source` is `machine_id` (schema 1.8). The capture is
+used only when it is present and holds no redaction marker (`[REDACTED:`) and no
+truncation marker (`[TRUNCATED:`), in either case: a hash of a marker would give every
+host a pattern hides one identity. Otherwise `host.id` hashes `hostname:` and the
+hostname, `host.id_source` is `hostname`, and the run carries the warning that the id was
+derived from the hostname. A consumer takes `host.id` as the machine's identity only for
+`machine_id`; `scheck diff` does so (`runs.md`, "Comparing two runs"). A report before 1.8
+has no `id_source` and says nothing about it. A `local` or `ssh` report sets `run.mode` to `facts` and
 `run.assessment` to `rules`, and leaves the provider block empty (§2.1). `summary`
 is the one-line reading of a fact (§6.6): the same string on the screen, in the JSON
 and in a model prompt. Findings are a flat array keyed by catalog id, never nested
@@ -874,7 +881,7 @@ the harness produces (§2.1), fills the provider block and `run.agent`, includin
 contract. `schema_version` is `MAJOR.MINOR`: additive changes bump MINOR; renames,
 removals and field type changes bump MAJOR. Readers reject an unrecognized MAJOR rather
 than guess at an unsupported shape. The release notes identify the schema version
-shipped. Update the spec, implementation, `docs/report-schema.json` and fixtures
+shipped. 1.8 added the optional `host.id_source` (`machine_id` or `hostname`). Update the spec, implementation, `docs/report-schema.json` and fixtures
 together when a change is implemented.
 
 **Persistence.** *From 0.0.2 (E2) nothing is written under `runs/<host.id>/`: the

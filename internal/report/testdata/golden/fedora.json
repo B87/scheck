@@ -1,7 +1,8 @@
 {
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "host": {
     "id": "ce99afc90319241965b46e5cef264e280b25e9ad91c7a60a816b3bd058b8bbd0",
+    "id_source": "machine_id",
     "hostname": "6d9106647d07",
     "platform": "linux",
     "os": "Fedora Linux 40 (Container Image)",
