@@ -321,6 +321,22 @@ commit the table names:
 The seeder of each part is named in the acceptance record, with the model when it is an
 agent. E1a to E2 and E4 need no lab and may proceed while it is being built.
 
+**The lab as code** (defined 2026-10-25, design): the OpenTofu pieces, the fault catalog
+with decoys, clean controls, cross-asset, context, scope and change-set cases, seeding
+from a sealed random seed, the answer key's format, sealing and reveal, and scoring are
+[spec/lab.md](spec/lab.md). Its "Where this differs from the roadmap" section lists what
+it changes here.
+
+**Known gap: no Workspace lab** (user's decision, 2026-10-25). The Google Workspace test
+tenant this section delivers will not exist. Workspace is run read-only against the
+user's production tenant a limited number of times, under the safety rules of
+[spec/lab.md](spec/lab.md) ("Google Workspace: no lab, observed on the production
+tenant"). The Workspace share of the recall, false-positive, context and prioritization
+gates below is recorded as "Workspace: exercised read-only on a real tenant, not
+measured", never as passed; the coverage gate still applies to it. The same decision makes
+the lab a gate for v1.0.0, which this roadmap does not yet define; the 0.0.2 and 0.0.3
+gates that name the lab are not yet reconciled with it.
+
 ### E4 — scope stage and the scope gate
 
 **Delivers:** the scope gate, `internal/engagement/gate`, the one place an HTTP request,
@@ -2748,7 +2764,14 @@ between assets is reported as such, not as fixed plus new.
 **Delivers:** the cloud configuration, data stores and backups, logging and web
 application areas of the coverage table move from *not assessed* to *assessed* or
 *partial* with reasons. The lab gains a GCP test project with seeded issues, under the
-same sealed-label rule.
+same sealed-label rule ([spec/lab.md](spec/lab.md): the GCP piece, its faults and
+decoys, and the cross-asset cases with GitHub, the domains and the cloud host). Decided
+2026-10-25: the GCP part is sealed before G1's first commit, as a development
+measurement; the project has no organization, so the lab exercises no organization root
+and no organization policy. The host-depth slices G5 and G8 landed with no seal, so
+host-depth faults sealed now are late for them. **Known gap:** there is no Workspace lab,
+so the 0.0.3 gates' "0.0.2 gates, re-run on the larger lab" hold no Workspace measurement;
+Workspace is recorded as "exercised read-only on a real tenant, not measured".
 
 ### Release gates
 

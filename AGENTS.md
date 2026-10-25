@@ -27,6 +27,7 @@ operating manual for a coding agent in this repository.
 | `docs/spec/web-collector.md` | Design of the domain, email and web collector (E7): its reads, rules, takeover table and what the report never claims; contract when E7 lands |
 | `docs/spec/model.md` | The model path (provider contract, agent loop, tools); kept offline |
 | `docs/spec/bounded.md` | The bounded yes/no decision arm (Jev), offline; the pattern behind the `auto` gate |
+| `docs/spec/lab.md` | The lab as OpenTofu code (GCP, GitHub, domains, hosts; no Workspace lab, Workspace observed read-only on the production tenant and never measured): pieces, the fault catalog with decoys and controls, seeding, the sealed answer key, scoring, safety and teardown. Design; seeders and rankers may read it, implementers never read a seed's key before its reveal |
 | `docs/examples/` | Engagement files an operator copies. The spec-steward keeps them true to the specs. |
 | `docs/eval/` | Recorded evidence: frozen criteria, evaluation results, acceptance passes. Appended, never rewritten. |
 | `docs/RELEASING.md` | Release runbook |
