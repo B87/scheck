@@ -234,6 +234,12 @@ repository. Prefer JSON, read `refused`, `incomplete`, `exit` and `coverage` bef
 findings, and never treat exit 0 as a security verdict. Update it in the same commit as
 any change to the report, the exit codes or the command surface.
 
+For keeping the runtime advisory table (`internal/advisory`, G8) current, use the
+`advisory-refresh` skill at [.agents/skills/advisory-refresh/SKILL.md](.agents/skills/advisory-refresh/SKILL.md):
+it searches the primary sources for a new PHP or Node.js disclosure, adds verified rows,
+tests them and opens one pull request per disclosure. It never merges and never changes
+rules, severity or wording.
+
 ## Commands
 
 ```sh
