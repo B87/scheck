@@ -359,7 +359,8 @@ provider id) to the later one and withheld otherwise, the earlier bound id is pr
 when equal to the later one and is omitted on earlier-only instances, the earlier principal label of a
 `principal` asset row is `[withheld]`, and a `fixed` instance's earlier `not_checked`
 lines are omitted. A subject key is hidden when it contains a redaction marker,
-`[REDACTED:` or `[redacted:`, in either case. The asset id and name of an
+`[REDACTED:` or `[redacted:`, in either case; a provider id that contains one is
+treated as unknown, so it neither joins a rename nor contradicts a key. The asset id and name of an
 earlier-only asset that is not a root (a repository, or a name found under a root) are
 replaced by `[withheld]` on earlier-only instances and on `removed` and `unlisted`
 asset rows. The read errors `scheck diff` prints for either argument are
@@ -433,7 +434,8 @@ and the appearing one counts toward exit 1.
 - for a domain or url asset, the same run vantage;
 - the instance's own earlier subject key is not hidden, and the later run holds no hidden
   fired instance of the same `{id, asset}` (checked after the not-rechecked tests, whatever
-  the `redact_extra` counts). A gone instance failing this is `not_confirmed` with cause
+  the `redact_extra` counts) that the later run did not decide by the earlier name's exact
+  visible key. A gone instance failing this is `not_confirmed` with cause
   `subject_unmatchable`, never `fixed`.
 - for an appearing instance to be `first_reported` with cause `subject_unmatchable` rather
   than decided normally, either the instance is hidden or the counts differ, and the earlier
@@ -504,7 +506,7 @@ as expired or the earlier entry's expiry date is past, else `acceptance_ended`.
 |---|---|
 | 3 | A refusal above |
 | 2 | The later run's own exit code is 2 or 3: it did not read everything. The earlier run's incompleteness never sets 2 |
-| 1 | An open `new`, `first_reported` or `reopened` instance, or a `still_open` one whose severity rose across the asset's threshold, is at or above that threshold (the later run's `exit.thresholds`, default `medium`). A `moved` or `renamed` join is not by itself a worsening (a rise across the threshold or an acceptance that lapsed still counts), and accepted instances never count, nor does an instance whose subject a redaction rule hides (cause `subject_unmatchable`, whether `not_confirmed` or `first_reported`): an unknown is not a worsening. A `subject_replaced` or `asset_not_listed` `first_reported` instance does count |
+| 1 | An open `new`, `first_reported` or `reopened` instance, or a `still_open` one whose severity rose across the asset's threshold, is at or above that threshold (the later run's `exit.thresholds`, default `medium`). A `moved` or `renamed` join is not by itself a worsening (a rise across the threshold or an acceptance that lapsed still counts), and accepted instances never count, nor does an instance whose subject a redaction rule hides (cause `subject_unmatchable`, whether `not_confirmed` or `first_reported`) or whose problem the earlier run already held under a more serious finding (cause `superseded`): an unknown is not a worsening. A `subject_replaced` or `asset_not_listed` `first_reported` instance does count |
 | 0 | Otherwise |
 
 Exit 0 prints how many findings at or above their threshold are still open in the later

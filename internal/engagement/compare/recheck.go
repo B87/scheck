@@ -192,6 +192,11 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 		// The earlier run did not look.
 		return FirstReported, abs.cause, abs.reason
 	}
+	if p.lAssets[lf.Key.Asset] == nil {
+		// Reported under a name the later run has no asset row for: neither
+		// run records that it was read in full, so it is not known to be new.
+		return FirstReported, CauseAssetNotListed, ""
+	}
 	if b := p.basis(easset, lf.Key.Asset, lf.Rule.Reads); b != "" {
 		return FirstReported, b, ""
 	}
@@ -239,7 +244,7 @@ func holdsFired(r *report.Report, assess map[string]*report.Assessment, asset, i
 // replacedSubject says a run reports the same {id, asset, key} under a
 // different provider id: a different account now holds the name.
 func replacedSubject(r *report.Report, asset, id string, s *report.Subject) bool {
-	if s == nil || s.ProviderID == "" {
+	if s == nil || providerID(s) == "" {
 		return false
 	}
 	for i := range r.Findings {

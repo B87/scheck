@@ -218,14 +218,14 @@ func (p *pair) join() (pairs []joined, unmatchedE, unmatchedL []*report.Finding)
 	for _, i := range rest {
 		ef := &p.e.Findings[i]
 		la, linked := p.link[ef.Key.Asset]
-		if linked && la.how != "replaced" && ef.Subject != nil && ef.Subject.ProviderID != "" {
+		if linked && la.how != "replaced" && ef.Subject != nil && providerID(ef.Subject) != "" {
 			var cand []int
 			for li := range p.l.Findings {
 				lf := &p.l.Findings[li]
 				if usedL[li] || lf.ID != ef.ID || lf.Key.Asset != la.later || lf.Subject == nil {
 					continue
 				}
-				if lf.Subject.ProviderID == ef.Subject.ProviderID {
+				if providerID(lf.Subject) == providerID(ef.Subject) {
 					cand = append(cand, li)
 				}
 			}
@@ -260,7 +260,7 @@ func fkey(id, asset string, subject *string) string {
 // contradicts says two subjects carry different provider ids: the same key
 // on two different accounts, so the key does not join them.
 func contradicts(a, b *report.Subject) bool {
-	return a != nil && b != nil && a.ProviderID != "" && b.ProviderID != "" && a.ProviderID != b.ProviderID
+	return a != nil && b != nil && providerID(a) != "" && providerID(b) != "" && providerID(a) != providerID(b)
 }
 
 // sameSubject says two subjects print identically.
@@ -269,4 +269,13 @@ func sameSubject(a, b *report.Subject) bool {
 		return a == b
 	}
 	return a.Key == b.Key && a.Label == b.Label && a.ProviderID == b.ProviderID
+}
+
+// providerID is a subject's provider id, or empty when it is unknown or a
+// redaction rule hid it: two ids hidden to one length are not one account.
+func providerID(s *report.Subject) string {
+	if s == nil || strings.Contains(strings.ToLower(s.ProviderID), "[redacted:") {
+		return ""
+	}
+	return s.ProviderID
 }

@@ -405,3 +405,49 @@ func TestAnUnknownAssessmentStatusDecidesNothing(t *testing.T) {
 		t.Errorf("%+v", i)
 	}
 }
+
+func TestHiddenProviderIDsAreNoIdentity(t *testing.T) {
+	const ws = "saas:google-workspace:example.com"
+	e, l := pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(ws, "ws", "saas", "collected", "C1")
+	}
+	e.find("identity.no_2sv", ws, "alice@acme.com", "high").Subject.ProviderID = "[REDACTED:redact_extra:21 bytes]"
+	l.find("identity.no_2sv", ws, "carol@acme.com", "high").Subject.ProviderID = "[REDACTED:redact_extra:21 bytes]"
+	c := compareOK(t, e, l)
+	for _, i := range c.Instances {
+		if i.Identity != "" || i.Category == StillOpen {
+			t.Errorf("joined on a hidden provider id: %+v", i)
+		}
+	}
+	if c.Exit.Code != 1 {
+		t.Errorf("exit %d", c.Exit.Code)
+	}
+}
+
+func TestAppearingOnAnAssetTheLaterRunDoesNotListIsNotNew(t *testing.T) {
+	const name = "domain:old.example.com"
+	e, l := pairLab()
+	e.asset(name, "old", "domain", "collected", "")
+	e.notMatched("web.a", name)
+	l.find("web.a", name, "", "high")
+	if i := category(compareOK(t, e, l), "web.a"); i.Category != FirstReported || i.Cause != CauseAssetNotListed {
+		t.Errorf("%+v", i)
+	}
+}
+
+func TestASupersededAppearanceIsNotAWorsening(t *testing.T) {
+	const repo = "repo:github:example-org/shop"
+	e, l := pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(repo, "shop", "repo", "collected", "")
+	}
+	e.find("github.mutable_action_with_write_token", repo, "release.yml", "high")
+	e.rule("github.mutable_action_reference", repo, "matched", true,
+		report.AssessmentOutcome{Subject: &report.Subject{Kind: "workflow", Key: "release.yml"}, Outcome: "fired", Detail: map[string]any{"superseded_by": "github.mutable_action_with_write_token"}})
+	l.find("github.mutable_action_reference", repo, "release.yml", "medium")
+	l.notMatched("github.mutable_action_with_write_token", repo)
+	if c := compareOK(t, e, l); c.Exit.Code != 0 {
+		t.Errorf("exit %d: %+v", c.Exit.Code, c.Instances)
+	}
+}

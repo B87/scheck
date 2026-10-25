@@ -276,7 +276,7 @@ func (p *pair) exit(c *Comparison) {
 		case New, FirstReported, Reopened:
 			// A name hidden by a redaction rule cannot be matched; an unknown
 			// is not a worsening.
-			if at && i.Cause != CauseSubjectUnmatchable {
+			if at && i.Cause != CauseSubjectUnmatchable && i.Cause != CauseSuperseded {
 				worse++
 			}
 		case StillOpen:
