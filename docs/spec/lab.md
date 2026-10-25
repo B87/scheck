@@ -1062,7 +1062,8 @@ sealed seed.
   "Workspace: exercised read-only on a real tenant, not measured".
 - **The lab is a v1.0.0 gate.** The roadmap names lab measurements in the 0.0.2, 0.0.3
   and 0.0.4 gates and defines no v1.0.0. Here, seals before v1.0.0 are development
-  measurements; the roadmap's gates are not yet reconciled with that.
+  measurements. The roadmap defers its lab-measured 0.0.2 and 0.0.3 gates to v1.0.0
+  ("Release gates and the lab"); what else v1.0.0 contains is not defined.
 - **No GCP organization.** G1 supports organization roots and lists organization
   policies among what is not judged; the lab exercises a project root only.
 - E3 describes the lab host as a docker-compose file. Here the host is one module with a
@@ -1106,6 +1107,6 @@ sealed seed.
    who the second holder is.
 10. **The GCP part's timing** — decided 2026-10-25: sealed before G1's first commit.
 11. **The lab as a gate** — decided 2026-10-25: a gate for v1.0.0; the GCP, GitHub,
-    domain and host seals also serve development and `make live`. Open: reconciling the
-    0.0.2 and 0.0.3 release gates that name the lab with this decision, and defining
-    v1.0.0 in the roadmap.
+    domain and host seals also serve development and `make live`. The roadmap reconciles
+    the 0.0.2 and 0.0.3 release gates that name the lab ("Release gates and the lab").
+    Open: defining v1.0.0 in the roadmap.
