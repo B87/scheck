@@ -65,7 +65,8 @@ func labRuns() (e, l *lab) {
 	// Fixed, low: counted at default verbosity.
 	title(e.find("updates.pending", web, "", "low"), "Package updates are pending")
 	l.notMatched("updates.pending", web)
-	// Not confirmed: the later user list was cut.
+	// Not confirmed: an identity finding reads declarations (who is a person
+	// or a service account), and the engagement file changed between the runs.
 	title(area(e.find("identity.unattributed_admin", ws, "bob@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")
 	// Renamed: the same account by provider id.
 	ea := title(area(e.find("identity.unattributed_admin", ws, "alice@example.com", "high"), "identity"), "A Workspace account has no 2-step verification")

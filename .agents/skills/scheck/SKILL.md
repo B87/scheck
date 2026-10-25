@@ -708,10 +708,16 @@ reported because a more serious finding stands for it, is `not_confirmed` with c
 `superseded`, never `fixed`. A provider id a redaction rule hides is unknown: a fired
 instance of the same id and asset whose provider id is hidden while this one has one (or
 the reverse) makes a gone finding `not_confirmed` and an appearing one `first_reported`,
-cause `subject_unmatchable`, neither counted. A host or tenant is `moved` or `asset_replaced`
+cause `subject_unmatchable`, neither counted. A host or tenant is `moved`
 only when its `bound_id_source` is `machine_id` or `provider_id`; a `hostname` source, or
-none (a report before engagement schema 1.1), names nothing. A finding whose rule reads
-the engagement file is `not_confirmed` (`declaration_changed`) across an edit of it. The same subject key under a
+none (a report before engagement schema 1.1), names nothing. Two different non-empty
+bound ids at one canonical id are `asset_replaced` whatever the source. A finding whose
+rule reads the engagement file is `not_confirmed` (`declaration_changed`) across an edit
+of it: every finding in the identity area, `svc.expected_missing`, `github.too_many_owners`,
+`github.undeclared_public_repository`, `dns.dangling_external`, `dns.dangling_internal`,
+`dns.takeover_candidate` and `dns.unclaimed_at_provider`, any rule that sets `ReadsDeclarations`, and an id the
+build does not know. An account renamed into an `abstained` or `fired` outcome under
+another key is neither gone nor new (`subject_unmatchable`). The same subject key under a
 different provider id is `subject_replaced` (`not_confirmed` gone, `first_reported`
 appearing, the latter counted). A finding is neither `fixed` nor `new` on an asset with no entry in a run's asset list
 (cause `asset_not_listed`): gone it is `not_rechecked`, even if the later run lists and

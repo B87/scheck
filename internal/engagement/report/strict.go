@@ -29,7 +29,10 @@ func walk(dec *json.Decoder, t reflect.Type, path string) error {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if t.Kind() == reflect.Interface || t == envelopeType || reflect.PointerTo(t).Implements(unmarshalerType) || t.Implements(unmarshalerType) {
+	if t.Kind() == reflect.Interface {
+		return walkAny(dec, path)
+	}
+	if t == envelopeType || reflect.PointerTo(t).Implements(unmarshalerType) || t.Implements(unmarshalerType) {
 		var skip json.RawMessage
 		return dec.Decode(&skip)
 	}
@@ -126,4 +129,43 @@ func collectFields(t reflect.Type, out map[string]reflect.Type) {
 		}
 		out[name] = f.Type
 	}
+}
+
+// walkAny reads a free-form value, refusing a key written twice in any
+// object inside it.
+func walkAny(dec *json.Decoder, path string) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	d, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch d {
+	case '{':
+		seen := map[string]bool{}
+		for dec.More() {
+			kt, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			key, _ := kt.(string)
+			if seen[key] {
+				return fmt.Errorf("%s: key %q is written twice", path, key)
+			}
+			seen[key] = true
+			if err := walkAny(dec, path+"."+key); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for dec.More() {
+			if err := walkAny(dec, path+"[]"); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = dec.Token()
+	return err
 }

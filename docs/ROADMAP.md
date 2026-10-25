@@ -2756,7 +2756,9 @@ refusing swapped arguments rather than sorting them; matching a release build po
 `unknown` never are); exit 2 for a later run that did not read everything outweighing
 exit 1.
 
-**Carried from G6:** bound ids for GitHub organizations and repositories (a report
+**Carried from G6:** make an excluded DNS target an abstention (incomplete) instead of
+silence, and record a `declared:` read when a root other than the asset's own decides
+`FinalInRoot`, so the `dns.*` ids no longer need the id list in `declarations.go`; bound ids for GitHub organizations and repositories (a report
 schema MINOR); a structured principal id (today the identity label, elevation and
 scopes); a `superseded_by` category; per-assessment declared-input digests (precise
 declaration drift); re-judging the earlier run's persisted evidence with the newer build,

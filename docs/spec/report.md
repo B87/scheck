@@ -1216,8 +1216,9 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   and, when the engagement file hash differs, `finding.ReadsDeclarations(id)` is false:
   the earlier finding's `rule.reads` hold no `declared:` entry, its definition does not
   set `ReadsDeclarations`, it is not in the identity area and not one of
-  `svc.expected_missing`, `github.too_many_owners` and
-  `github.undeclared_public_repository`, and the id is one this build knows. Otherwise it
+  `svc.expected_missing`, `github.too_many_owners`,
+  `github.undeclared_public_repository`, `dns.dangling_external`,
+  `dns.dangling_internal`, `dns.takeover_candidate` and `dns.unclaimed_at_provider`, and the id is one this build knows. Otherwise it
   is *not confirmed*, and an appearing one *first reported*, cause `declaration_changed`
   (`runs.md`, "Comparing two runs"). That is
   conservative: any rule that reads a declaration is unconfirmed across a file edit.

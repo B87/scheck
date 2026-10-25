@@ -529,7 +529,7 @@ func TestOnlyAMachineIDIsIdentity(t *testing.T) {
 		*l2.Assets[0].BoundID = "B-other"
 		e2.find("fw.a", "host:203.0.113.6:22", "", "high")
 		l2.notMatched("fw.a", "host:203.0.113.6:22")
-		if i := category(compareOK(t, e2, l2), "fw.a"); i.Category == Fixed {
+		if i := category(compareOK(t, e2, l2), "fw.a"); i.Category != NotConfirmed || i.Cause != CauseAssetReplaced {
 			t.Errorf("source %q: %+v", source, i)
 		}
 	}
@@ -537,7 +537,7 @@ func TestOnlyAMachineIDIsIdentity(t *testing.T) {
 
 func TestIdentityAndAreaDeclarationsBlockAcrossAFileChange(t *testing.T) {
 	const ws = "saas:google-workspace:example.com"
-	for _, id := range []string{"svc.expected_missing", "github.too_many_owners", "github.undeclared_public_repository", "identity.unattributed_admin", "workspace.stale_account", "never.heard.of.it"} {
+	for _, id := range []string{"svc.expected_missing", "dns.dangling_external", "dns.dangling_internal", "dns.takeover_candidate", "dns.unclaimed_at_provider", "github.too_many_owners", "github.undeclared_public_repository", "identity.unattributed_admin", "workspace.stale_account", "never.heard.of.it"} {
 		e, l := pairLab()
 		for _, r := range []*lab{e, l} {
 			r.asset(ws, "ws", "saas", "collected", "")
@@ -545,8 +545,19 @@ func TestIdentityAndAreaDeclarationsBlockAcrossAFileChange(t *testing.T) {
 		l.Engagement.Source.SHA256 = "bbbb"
 		e.find(id, ws, "", "medium")
 		l.notMatched(id, ws)
-		if i := category(compareOK(t, e, l), id); i.Category == Fixed {
-			t.Errorf("%s was called fixed across a file change", id)
+		if i := category(compareOK(t, e, l), id); i.Category != NotConfirmed || i.Cause != CauseDeclarationChanged {
+			t.Errorf("%s gone across a file change: %+v", id, i)
+		}
+		// And appearing.
+		e, l = pairLab()
+		for _, r := range []*lab{e, l} {
+			r.asset(ws, "ws", "saas", "collected", "")
+		}
+		l.Engagement.Source.SHA256 = "bbbb"
+		e.notMatched(id, ws)
+		l.find(id, ws, "", "medium")
+		if i := category(compareOK(t, e, l), id); i.Category != FirstReported || i.Cause != CauseDeclarationChanged {
+			t.Errorf("%s appearing across a file change: %+v", id, i)
 		}
 	}
 }
@@ -560,7 +571,19 @@ func TestAnAccountRenamedIntoAnAbstentionIsNeitherFixedNorNew(t *testing.T) {
 	e.find("identity.no_2sv", ws, "alice@acme.com", "high").Subject.ProviderID = "1001"
 	l.rule("identity.no_2sv", ws, "not_matched", true, report.AssessmentOutcome{
 		Subject: &report.Subject{Kind: "account", Key: "carol@acme.com", ProviderID: "1001"}, Outcome: "abstained", Detail: map[string]any{}})
-	if i := category(compareOK(t, e, l), "identity.no_2sv"); i.Category == Fixed {
+	c := compareOK(t, e, l)
+	if i := category(c, "identity.no_2sv"); i.Category != NotConfirmed || i.Cause != CauseSubjectUnmatchable {
 		t.Errorf("%+v", i)
+	}
+	// The mirror: the account was undecided before and has a finding now.
+	e, l = pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(ws, "ws", "saas", "collected", "C1")
+	}
+	e.rule("identity.no_2sv", ws, "not_matched", true, report.AssessmentOutcome{
+		Subject: &report.Subject{Kind: "account", Key: "alice@acme.com", ProviderID: "1001"}, Outcome: "abstained", Detail: map[string]any{}})
+	l.find("identity.no_2sv", ws, "carol@acme.com", "high").Subject.ProviderID = "1001"
+	if i := category(compareOK(t, e, l), "identity.no_2sv"); i.Category != FirstReported || i.Cause != CauseSubjectUnmatchable {
+		t.Errorf("mirror: %+v", i)
 	}
 }

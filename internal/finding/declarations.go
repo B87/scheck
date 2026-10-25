@@ -9,6 +9,13 @@ var alsoReadsDeclarations = map[string]bool{
 	IDExpectedMissing:                  true,
 	IDGitHubTooManyOwners:              true,
 	IDGitHubUndeclaredPublicRepository: true,
+	// Which of these a DNS record is filed as depends on the domain roots
+	// the file declares (a target inside a root is internal) and on its
+	// excludes.
+	IDDNSDanglingExternal:    true,
+	IDDNSDanglingInternal:    true,
+	IDDNSTakeoverCandidate:   true,
+	IDDNSUnclaimedAtProvider: true,
 }
 
 // ReadsDeclarations says whether a change to the engagement file alone could

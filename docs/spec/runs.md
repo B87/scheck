@@ -345,7 +345,7 @@ record. Every file it reads (the report, `run.json`) is `Lstat`ed first and refu
 unless it is a regular file, so a pipe, a device or a link is never opened, and is
 read to at most 256 MiB. `report.ReadJSON` is strict: it refuses another schema MAJOR, a newer MINOR, any
 unknown field, any object key that is not a field's name exactly (a different case is
-refused, not matched) and any key written twice, and drops each host asset's embedded envelope. The comparison
+refused, not matched) and any key written twice (inside a free-form value such as an outcome's `detail` too), and drops each host asset's embedded envelope. The comparison
 package (`internal/engagement/compare`) reads no file (`os`, `io/fs`, `io/ioutil` and
 `path/filepath` are forbidden to it); `scripts/depcheck.sh` holds it to
 the report types, `internal/finding` and `internal/report`, with no gate, collector,
@@ -431,12 +431,15 @@ and the appearing one counts toward exit 1.
   are `asset_replaced` whatever their source, since a different machine cannot be ruled
   out (see "Identity across runs");
 - when the engagement file hash differs, the finding's id does not read the engagement
-  file (`finding.ReadsDeclarations`): the earlier finding's `rule.reads` hold no
+  file (`finding.ReadsDeclarations`): the finding's `rule.reads` hold no
   `declared:` read, and its definition does not set `ReadsDeclarations` (a rule that
   reads the engagement file without naming it: every `email.*` and
   `creds.env_file_exposed`), and it is not in the identity area (who is a person, a
   service account or an administrator is declared), nor `svc.expected_missing`,
-  `github.too_many_owners` or `github.undeclared_public_repository`. An id this build
+  `github.too_many_owners`, `github.undeclared_public_repository`, nor one of
+  `dns.dangling_external`, `dns.dangling_internal`, `dns.takeover_candidate` and
+  `dns.unclaimed_at_provider` (which of them a DNS record is filed as depends on the
+  domain roots the file declares and its excludes). An id this build
   does not know counts as reading it. A gone instance of such a rule is `not_confirmed`
   (`declaration_changed`; see `report.md`, "Text and JSON"), an appearing one
   `first_reported` with the same cause;
