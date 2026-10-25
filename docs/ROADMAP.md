@@ -68,6 +68,46 @@ Hypotheses drawn from the operator's own words, the part of the job that earns t
   for any other reason is a defect. Moving the host into `scheck run` (0.0.2 E1b, E2)
   changes which command and which report a person sees, not what reaches the target.
 
+## Release gates and the lab
+
+Decided by the maintainer:
+
+- **2026-10-24:** `release/v0.0.2` was merged into `main` (PR #21). The 0.0.2 gates 1 to
+  11 were not run, `docs/eval/acceptance-0.0.2.md` does not exist and no tag or release
+  was cut for 0.0.2. Nothing below records any of them as passed
+  ([eval/deferred-gates-0.0.2-2026-10-25.md](eval/deferred-gates-0.0.2-2026-10-25.md)).
+- **2026-10-25:** the lab (E3's rest of the lab, G7's GCP project, and every acceptance
+  pass that needs one) is deferred as a gate for **v1.0.0**. There is no Google Workspace
+  lab: Workspace is exercised read-only on the maintainer's production tenant and is not
+  measured ([spec/lab.md](spec/lab.md), "Google Workspace: no lab, observed on the
+  production tenant"). Every record of a measured run says "Workspace: exercised
+  read-only on a real tenant, not measured."
+- 0.0.3 slices are pull requests into `release/v0.0.3`, as 0.0.2's were into
+  `release/v0.0.2`.
+
+Which gates the lab decision defers, and which still apply:
+
+| Gate | Status |
+|---|---|
+| 0.0.2 gates 1 to 5 (the lab through all stages; recall; false positives; context; prioritization) | Deferred to v1.0.0: each is measured on the lab |
+| 0.0.2 gate 6 (coverage) and gate 7 (scope: the audit log of the lab run) | Deferred to v1.0.0 as lab measurements. Gate 6's second half, an engagement with a collector missing or credentials withheld, and the host integration diff of gate 7 need no lab: see the open placements below |
+| 0.0.2 gates 8 and 9 (`make check`, host traces and facts unchanged; interview consumers exist) | Not lab-bound. They still apply, and were not run for 0.0.2 |
+| 0.0.2 gate 11 (mailbox authorization) | Done offline 2026-10-11, as recorded there; not an acceptance |
+| 0.0.3 "the 0.0.2 gates, re-run on the larger lab" | Deferred to v1.0.0 with the lab; Workspace is not measured |
+| 0.0.3 "every GCP call on the declared list and nothing else (audit log)"; "coverage table correct for every area"; "the comparison of two runs correct against a seeded change list" | Deferred to v1.0.0 with the lab ([spec/lab.md](spec/lab.md), "What the lab measures") |
+| 0.0.3 "no write call possible from the code (a test over the declared list)"; "credentials never in any output" | Their tests run in `make check` and are required; the lab does not replace them |
+| 0.0.3 "probes run only after confirmation and only on assets with named first-party evidence" | Not lab-bound. It still applies |
+| 0.0.4 gates | Unchanged by this decision; they name a freshly seeded lab, which is not reconciled here |
+
+A deferred gate is recorded as *not run*, never as passed, in the release's record
+(Rules for every release, "Evidence for every release gate"). What v1.0.0 contains is not
+defined: the lab gate is the only part decided.
+
+Open placements, undecided: whether 0.0.2 gate 10 (`scheck run --host` against the
+`scheck ssh` alias on the lab host) is lab-bound; whether gate 6's second half and gate
+7's integration diff now count as their own gates; which gates a 0.0.2 or 0.0.3 tag
+would need, if one is ever cut.
+
 ---
 
 ## 0.0.2 — the first engagement
@@ -334,8 +374,11 @@ user's production tenant a limited number of times, under the safety rules of
 tenant"). The Workspace share of the recall, false-positive, context and prioritization
 gates below is recorded as "Workspace: exercised read-only on a real tenant, not
 measured", never as passed; the coverage gate still applies to it. The same decision makes
-the lab a gate for v1.0.0, which this roadmap does not yet define; the 0.0.2 and 0.0.3
-gates that name the lab are not yet reconciled with it.
+the lab a gate for v1.0.0, and the rest of E3 (the GitHub organization, the second
+domain, the SSH host and their sealed labels) is deferred with it. Which 0.0.2 and 0.0.3
+gates this defers is in "Release gates and the lab". E3's sealing duties stay as written
+for the v1.0.0 seals; E5 to E7 shipped without the seals they were to follow, which the
+slices record.
 
 ### E4 — scope stage and the scope gate
 
@@ -1119,7 +1162,7 @@ assess, 2026-10-11; [eval/e6-two-step-verification-2026-10-11.md](eval/e6-two-st
 - *Pre-release live check, open (acceptance, not a decision):* whether Google's own
   mandatory 2-step verification for super admins shows in `isEnforcedIn2Sv`. If it does
   not, a super admin raise under `another_provider` could be false. Record the result in
-  `docs/eval/acceptance-0.0.2.md`. E9's "may a context raise reach critical?" is a
+  the acceptance record of the release that carries it (no 0.0.2 record exists). E9's "may a context raise reach critical?" is a
   separate question.
 - *E9:* "Fix these first" collapses many unit instances of one finding into one line.
 - *Deferred limit:* a fresh detail refused because the account's unit changed leaves
@@ -2340,6 +2383,9 @@ carried to 0.0.3 G4 with "at least" framing; per-account keying of
 
 ### Release gates
 
+None of these was run. `release/v0.0.2` was merged into `main` on 2026-10-24 without
+them, and the lab-measured ones are deferred to v1.0.0 ("Release gates and the lab").
+
 1. `scheck init` produces an engagement file for the lab, and `scheck run` takes it
    through all seven stages, each inspectable with `--stop-after` and resumable.
 2. **Recall:** the run is recorded against the sealed labels; every miss is recorded as
@@ -2601,8 +2647,14 @@ exact allowlist; the world-readable `.env` seeded on the lab host is found.
 ### G8 — runtime security fixes (PHP, Node.js)
 
 **Named G8 because G6 is taken** ("comparing two engagements") and G7 follows it; the
-slice sits after G5 because it extends the host collector's depth. The user has not
-decided between a slice of its own and a "G5 step 4".
+slice sits after G5 because it extends the host collector's depth. Decided by the
+maintainer: it is a slice of its own, G8, not "G5 step 4". The advisory table is refreshed
+one pull request per disclosure through the `advisory-refresh` skill
+(`.agents/skills/advisory-refresh/SKILL.md`), which answers "who refreshes the table and
+on what trigger". "Fix these first" ranks by the base severity table, so a serving
+`php.fix_missing` is not ranked above other highs. The Alpine `os.release` defect was
+fixed in PR #24. Whether the `pkg.*` checks are write-free with a stale apt cache is
+deferred to a later integration test.
 
 **Delivers:** a host that runs a PHP or Node.js package older than the fix of the
 2026-10-21 disclosures is named, with the package and the fix of its own source. An
@@ -2715,7 +2767,7 @@ case and that no persisted audit record shows an attempt to run `php`, `node`, `
 with no new key. The Ubuntu test uses `assertReadOnly` with `ubuntu`, and its guard against
 a runtime being executed also catches a `sudo`-prefixed one. Known limitation: it runs
 `apt-get install nginx` at test time, so it needs the network. The test does not seed a stale apt cache, so whether a `pkg.*` check
-rewrites it when scheck connects as root stays a question for the `code-reviewer`.
+rewrites it when scheck connects as root is deferred to a later integration test.
 
 **Carried, not built in this slice** (each needs a decision or a later step):
 
@@ -2734,15 +2786,10 @@ rewrites it when scheck connects as root stays a question for the `code-reviewer
 - Containers and their images.
 - Lockfile dependencies (see "Later").
 - The E7 `X-Powered-By` header must never become a vulnerability finding.
-- Who refreshes the table and on what trigger (open question).
-- A defect found in review of step 1, outside G8 and not fixed in this slice:
-  `alpine()` in `internal/engagement/rules/firewall.go` reads the `os.release` key `ID`,
-  but the key-value parser lowercases keys, so Alpine detection never matches. Needs an
-  owner (open decision).
 - Whether an rpm `php-cli` should be judged as CGI instead of abstaining `unavailable:php_cli`
   (open decision for the security-consultant).
-- Whether "Fix these first" ranks a serving `php.fix_missing` above other highs (the base
-  table is assumed enough).
+- Whether the `pkg.*` checks are write-free with a stale apt cache: a later integration
+  test (decided).
 
 **Done when:** each of the three rules has fired, disproved and abstained fixtures, and
 the table-trap host does not fire; scheck runs no `php`, `node` or `brew` (the golden
@@ -2763,8 +2810,9 @@ the strict `report.ReadJSON`, `docs/engagement-comparison-schema.json`. The rule
 **Done when:** a golden comparison of two lab runs is committed and a finding that moved
 between assets is reported as such, not as fixed plus new. The committed pair
 (`internal/engagement/compare/testdata/lab`) is synthetic, built in `golden_test.go`; a
-pair of real lab runs replaces it with G7. The 0.0.3 release gate "comparison correct
-against a seeded change list" stays open for the G7 lab.
+pair of real lab runs replaces it when the lab runs. The 0.0.3 release gate "comparison
+correct against a seeded change list" is deferred with the lab to v1.0.0 ("Release gates
+and the lab").
 
 **Decided by the implementing session with the security-consultant, to confirm:**
 refusing swapped arguments rather than sorting them; matching a release build positively
@@ -2804,7 +2852,10 @@ measurement; the project has no organization, so the lab exercises no organizati
 and no organization policy. The host-depth slices G5 and G8 landed with no seal, so
 host-depth faults sealed now are late for them. **Known gap:** there is no Workspace lab,
 so the 0.0.3 gates' "0.0.2 gates, re-run on the larger lab" hold no Workspace measurement;
-Workspace is recorded as "exercised read-only on a real tenant, not measured".
+Workspace is recorded as "exercised read-only on a real tenant, not measured". The GCP
+test project is a lab piece and is deferred with the lab to v1.0.0 as a release gate; its
+development seal before G1's first commit is a development measurement
+([spec/lab.md](spec/lab.md), "`make live` and release gates").
 
 ### Release gates
 
@@ -2813,6 +2864,10 @@ and nothing else (audit log); no write call possible from the code (a test over 
 declared list); credentials never in any output; probes run only after confirmation
 and only on assets with named first-party evidence; the coverage table correct for every
 area; the comparison of two runs correct against a seeded change list.
+
+Since 2026-10-25 the lab-measured gates above are deferred to v1.0.0, and the others still
+apply to 0.0.3: the table in "Release gates and the lab" says which is which. A deferred
+gate is recorded as *not run*.
 
 ---
 

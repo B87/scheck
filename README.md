@@ -11,7 +11,8 @@ timestamp directory, and `ufw status` takes a lock file. They are listed in
 [docs/spec/host-collector.md §1](docs/spec/host-collector.md) and the integration suite
 asserts that nothing else on the target changes.
 
-**This build (0.0.2, in development):** the engagement runs its stages (intake, scope,
+**This build (0.0.3, in development; 0.0.2 was merged into `main` on 2026-10-24 and was
+not tagged or released, its gates not run):** the engagement runs its stages (intake, scope,
 recon, plan, check, analyze, report) and collects **hosts**, locally or over SSH. A root
 of an unbuilt kind (such as GCP) is recorded as *not read by this
 version* and makes the run exit 2; its collectors arrive with the
