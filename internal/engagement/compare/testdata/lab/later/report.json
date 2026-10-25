@@ -1,0 +1,518 @@
+{
+  "schema_version": "1.0",
+  "scheck_version": "0.0.3",
+  "rules_version": "0.0.3",
+  "run": {
+    "vantage": "internet",
+    "started": "2026-10-22T09:00:00Z",
+    "directory": null,
+    "resumed": false,
+    "session_started": "2026-10-22T09:00:00Z",
+    "command": "scheck run /work/acme.yaml"
+  },
+  "engagement": {
+    "name": "acme",
+    "operator": "alice",
+    "timezone": "UTC",
+    "trigger": null,
+    "built_from": "file",
+    "source": {
+      "path": "/work/acme.yaml",
+      "sha256": "bbbb"
+    },
+    "collected": {
+      "from": "2026-10-22T09:00:00Z",
+      "to": "2026-10-22T09:10:00Z"
+    },
+    "method": {
+      "assessment": "",
+      "plan": "",
+      "levels_used": null
+    },
+    "authorization": null,
+    "edited_by_hand": null
+  },
+  "notice": {
+    "personal_data": false,
+    "internal_topology": false,
+    "audience": ""
+  },
+  "refused": null,
+  "incomplete": null,
+  "exit": {
+    "code": 1,
+    "reasons": null,
+    "thresholds": {}
+  },
+  "summary": {
+    "items": null,
+    "more": 0,
+    "below": {
+      "low": 0,
+      "info": 0,
+      "accepted": 0
+    },
+    "areas": {
+      "assessed": 0,
+      "partial": 0,
+      "not_assessed": 0,
+      "not_applicable": 0,
+      "total": 0
+    },
+    "rules": {
+      "selected": 0,
+      "decided": 0,
+      "without_evidence": 0
+    },
+    "matters_most": null
+  },
+  "coverage": null,
+  "findings": [
+    {
+      "key": {
+        "id": "sshd.password_auth_enabled",
+        "asset": "host:203.0.113.9:22",
+        "subject": null
+      },
+      "asset_name": "deploy",
+      "bound_id": "M-deploy",
+      "subject": null,
+      "id": "sshd.password_auth_enabled",
+      "title": "SSH accepts passwords",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "high",
+      "severity": "high",
+      "adjustments": [],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "identity.no_two_step",
+        "asset": "saas:google-workspace:example.com",
+        "subject": "alice.smith@example.com"
+      },
+      "asset_name": "workspace",
+      "bound_id": "C-acme",
+      "subject": {
+        "kind": "account",
+        "key": "alice.smith@example.com",
+        "label": "alice.smith@example.com",
+        "provider_id": "u-41"
+      },
+      "id": "identity.no_two_step",
+      "title": "A Workspace account has no 2-step verification",
+      "area": "identity",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "high",
+      "severity": "high",
+      "adjustments": [],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "sshd.root_login",
+        "asset": "host:203.0.113.22:22",
+        "subject": null
+      },
+      "asset_name": "db1",
+      "bound_id": "M-image",
+      "subject": null,
+      "id": "sshd.root_login",
+      "title": "SSH allows root to sign in",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "medium",
+      "severity": "medium",
+      "adjustments": [],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "net.listens_unfiltered",
+        "asset": "host:203.0.113.6:22",
+        "subject": "5432/tcp"
+      },
+      "asset_name": "web",
+      "bound_id": "M-web",
+      "subject": {
+        "kind": "account",
+        "key": "5432/tcp",
+        "label": "5432/tcp"
+      },
+      "id": "net.listens_unfiltered",
+      "title": "A database listens without a firewall",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "high",
+      "severity": "info",
+      "adjustments": [
+        {
+          "rule": "exposed_on_purpose",
+          "by": "engagement",
+          "delta": "to_info",
+          "source": {
+            "file": "acme.yaml",
+            "key": "assets.web.context.exposure"
+          }
+        }
+      ],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "svc.sensitive_listens_unfiltered",
+        "asset": "host:203.0.113.6:22",
+        "subject": "6379/tcp"
+      },
+      "asset_name": "web",
+      "bound_id": "M-web",
+      "subject": {
+        "kind": "account",
+        "key": "6379/tcp",
+        "label": "6379/tcp"
+      },
+      "id": "svc.sensitive_listens_unfiltered",
+      "title": "A sensitive service listens without a firewall",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "high",
+      "severity": "high",
+      "adjustments": [],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "sshd.max_auth_tries",
+        "asset": "host:203.0.113.6:22",
+        "subject": null
+      },
+      "asset_name": "web",
+      "bound_id": "M-web",
+      "subject": null,
+      "id": "sshd.max_auth_tries",
+      "title": "SSH allows many authentication attempts",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "medium",
+      "severity": "medium",
+      "adjustments": [],
+      "status": "accepted",
+      "acceptance": {
+        "entry": "engagement.yaml intent.accepted_risks[0]",
+        "reason": "decided",
+        "accepted_by": "dave",
+        "expires": "2027-01-31",
+        "expired": false,
+        "covers_every_instance": false,
+        "judged_at": null
+      },
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    },
+    {
+      "key": {
+        "id": "kernel.eol",
+        "asset": "host:203.0.113.9:22",
+        "subject": null
+      },
+      "asset_name": "deploy",
+      "bound_id": "M-deploy",
+      "subject": null,
+      "id": "kernel.eol",
+      "title": "The kernel is past its end of support",
+      "area": "hosts",
+      "category": "",
+      "exposure_finding": false,
+      "severity_base": "high",
+      "severity": "high",
+      "adjustments": [],
+      "status": "open",
+      "rule": {
+        "kind": "single_fact",
+        "reads": null
+      },
+      "evidence": null,
+      "impact": "",
+      "why_here": null,
+      "not_checked": [],
+      "remediation": {
+        "summary": ""
+      }
+    }
+  ],
+  "assessments": [
+    {
+      "id": "sshd.password_auth_enabled",
+      "asset": "host:203.0.113.9:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "fw.default_allow_in",
+      "asset": "host:203.0.113.6:22",
+      "status": "not_matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "pkg.updates_pending",
+      "asset": "host:203.0.113.6:22",
+      "status": "not_matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "identity.no_two_step",
+      "asset": "saas:google-workspace:example.com",
+      "status": "matched",
+      "instances": 0,
+      "complete": false,
+      "reads": []
+    },
+    {
+      "id": "secrets.in_history",
+      "asset": "repo:github:example-org/api",
+      "status": "not_matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "sshd.root_login",
+      "asset": "host:203.0.113.22:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "net.listens_unfiltered",
+      "asset": "host:203.0.113.6:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "svc.sensitive_listens_unfiltered",
+      "asset": "host:203.0.113.6:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "sshd.max_auth_tries",
+      "asset": "host:203.0.113.6:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    },
+    {
+      "id": "kernel.eol",
+      "asset": "host:203.0.113.9:22",
+      "status": "matched",
+      "instances": 0,
+      "complete": true,
+      "reads": []
+    }
+  ],
+  "acceptances": [
+    {
+      "entry": "acme.yaml intent.accepted_risks[0]",
+      "id": "svc.sensitive_listens_unfiltered",
+      "asset": "web",
+      "subject": null,
+      "accepted_by": "carol",
+      "expires": "2026-10-10",
+      "outcome": "expired",
+      "findings": [
+        {
+          "id": "svc.sensitive_listens_unfiltered",
+          "asset": "host:203.0.113.6:22",
+          "subject": "6379/tcp"
+        }
+      ]
+    }
+  ],
+  "people_left": null,
+  "excluded": null,
+  "redaction": {
+    "builtin": {},
+    "operator": {
+      "rules": 0,
+      "matches": 0
+    }
+  },
+  "egress": {
+    "sources": null,
+    "assets": null,
+    "unconfirmed": {
+      "names": null,
+      "requests": 0
+    },
+    "host_side_effects": null,
+    "model": "",
+    "telemetry": "",
+    "user_agent": "",
+    "stored": null,
+    "tenants_read": null,
+    "ssh_resolved": null,
+    "ssh_resolved_by_jump": null
+  },
+  "notes": null,
+  "assets": [
+    {
+      "name": "web",
+      "id": "host:203.0.113.6:22",
+      "bound_id": "M-web",
+      "kind": "host",
+      "root": true,
+      "status": "collected",
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "workspace",
+      "id": "saas:google-workspace:example.com",
+      "bound_id": "C-acme",
+      "kind": "saas",
+      "root": true,
+      "status": "collected",
+      "principal": {
+        "identity": "admin@example.com",
+        "scopes_source": "provider"
+      },
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "api",
+      "id": "repo:github:example-org/api",
+      "bound_id": null,
+      "kind": "repo",
+      "root": true,
+      "status": "collected",
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "deploy",
+      "id": "host:203.0.113.9:22",
+      "bound_id": "M-deploy",
+      "kind": "host",
+      "root": true,
+      "status": "collected",
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "db1",
+      "id": "host:203.0.113.22:22",
+      "bound_id": "M-image",
+      "kind": "host",
+      "root": true,
+      "status": "collected",
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "db2",
+      "id": "host:203.0.113.21:22",
+      "bound_id": "M-image",
+      "kind": "host",
+      "root": true,
+      "status": "collected",
+      "oldest_collected_at": null,
+      "trace": null
+    },
+    {
+      "name": "shop",
+      "id": "repo:github:example-org/shop",
+      "bound_id": null,
+      "kind": "repo",
+      "root": true,
+      "status": "failed",
+      "reason": "insufficient_permission:contents",
+      "detail": "the token cannot read this repository",
+      "oldest_collected_at": null,
+      "trace": null
+    }
+  ]
+}

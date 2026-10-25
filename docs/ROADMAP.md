@@ -2740,8 +2740,37 @@ follow-up: fixed, still open, new, and assets that changed. Deterministic, on th
 report, keyed by canonical asset ids and finding instance keys
 (`spec/engagement.md`, "Identity, references and validation").
 
+**Built:** `scheck diff EARLIER LATER`, `internal/engagement/compare`, `ReadReport` and
+the strict `report.ReadJSON`, `docs/engagement-comparison-schema.json`. The rules (what
+*fixed* needs, identity, severity, exit) are in `spec/runs.md`, "Comparing two runs".
+
 **Done when:** a golden comparison of two lab runs is committed and a finding that moved
-between assets is reported as such, not as fixed plus new.
+between assets is reported as such, not as fixed plus new. The committed pair
+(`internal/engagement/compare/testdata/lab`) is synthetic, built in `golden_test.go`; a
+pair of real lab runs replaces it with G7. The 0.0.3 release gate "comparison correct
+against a seeded change list" stays open for the G7 lab.
+
+**Decided by the implementing session with the security-consultant, to confirm:**
+refusing swapped arguments rather than sorting them; matching a release build positively
+(only `v?MAJOR.MINOR.PATCH` is "the same rules"; `dev`, a describe string, `-dirty`, empty and
+`unknown` never are); exit 2 for a later run that did not read everything outweighing
+exit 1.
+
+**Carried from G6:** bound ids for GitHub organizations and repositories (a report
+schema MINOR); a structured principal id (today the identity label, elevation and
+scopes); a `superseded_by` category; per-assessment declared-input digests (precise
+declaration drift); re-judging the earlier run's persisted evidence with the newer build,
+so a version change does not block every confirmation; per-subject completeness;
+separating an asset no longer listed under a root read whole from one out of scope; the
+"this rule depends on the date" note on new instances of time-dependent rules; the
+earlier report's "Fix these first" with each item's later state; a `rekeyed` identity;
+`-v` extras (the engagement file's key diff, notes changes, reads and collection time per
+fixed instance); choosing the previous run inside `scheck run`; withholding by pattern
+rather than by count when `redact_extra` differs, which also omits a fixed instance's
+earlier `not_checked` lines; reading a run directory takes the run's flock on `.lock`
+(`O_CREATE|O_RDWR`), so a read-only archived run directory cannot be compared and its
+`report.json` file is used instead (fix: a read-only lock open); a fact-level host drift view
+(`host-collector.md §6.4`).
 
 ### G7 — coverage and the lab
 

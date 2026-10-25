@@ -1208,9 +1208,14 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   population: no cap, sample, excluded unit or page limit; for a host, not a check that
   reads a bounded sample by design such as a depth-capped `find`, not a truncated
   capture, and not a command whose non-zero exit was tolerated), its reason, and every input
-  it read, declarations included (`declared:people.carol.left`), so a later run reads an
-  instance as *fixed* only when its rule decided on complete evidence with the same
-  declared inputs, and otherwise as *no longer observed, not assessed*. An assessment
+  it read. The assessment's `reads` do not carry declared inputs in 0.0.3; a finding's
+  `rule.reads` do (`declared:people.carol.left`). `scheck diff` therefore reads an
+  instance as *fixed* only when its rule decided on complete evidence and, when the
+  engagement file hash differs, the earlier finding's `rule.reads` hold no `declared:`
+  entry; otherwise it is *not confirmed* (`runs.md`, "Comparing two runs"). That is
+  conservative: any rule that reads a declaration is unconfirmed across a file edit.
+  Per-assessment declared-input digests, which would say whether the declaration it read
+  changed, are carried. An assessment
   may have an empty `reads` list when no read was collected or a static preload rule
   decided without a request; it never invents a request id. A finding still requires
   nonempty rule inputs and observed evidence;

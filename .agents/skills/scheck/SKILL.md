@@ -667,6 +667,44 @@ Elevation never prompts. The user arranges credentials or installs the generated
 fragment. Do not retry an unchanged failure in a loop. Flags marked unavailable in
 `--help` exit 3; do not use them.
 
+## Compare two runs
+
+To follow up on remediation, run `scheck diff EARLIER LATER` on two run directories (or
+their `report.json` files) of one engagement, the earlier first; add `--format json`
+(`docs/engagement-comparison-schema.json`), `--out FILE` or `-v` (every item, not only
+medium and above). It reads the two reports and nothing else: no target is contacted
+and nothing is checked again, so do not use it to find out the present state. A run in
+progress, an edited or unrecorded report, a different engagement, the same run, swapped
+arguments or a schema this build does not read exit 3 with the reason.
+
+Exit: 3 as above; 2 when the later run did not read everything; 1 when something new,
+reported for the first time, open again or raised is at or above its asset's threshold
+(a subject a redaction rule hides never counts; still-open findings are not what exit 1
+counts); 0 otherwise. Exit 0 is not a clean result and never means fixed: it prints how many
+findings at or above the threshold are still open. Read the header first for what the
+runs can be compared on (versions, engagement file, vantage, principal, days apart).
+
+Read each category as a dated observation: `new` (the earlier run decided the rule absent
+on a complete read) against `first_reported` (it did not, so "new" is not claimed);
+`reopened` (accepted, now open); `fixed` (the later run looked again, with the same
+release of scheck, meaning a `vMAJOR.MINOR.PATCH` build, never `dev` or a build with
+commits after the tag, and the same access, and decided on a complete read; an accepted
+finding that is gone and decided is `fixed` too; a secrets finding
+adds that revocation or rotation was not checked; a binary from `go install ...@tag`
+reports version `dev`, so use a release binary for both runs or nothing is ever `fixed`); `still_open`; `accepted_since` (a
+decision, not a fix); `still_accepted`; `not_confirmed` (no longer reported, but a
+condition for fixed failed, with its `cause`); `not_rechecked` (the later run did not
+look). `moved` or `renamed` marks one instance matched across a changed asset id or
+subject. A severity that dropped because the engagement file changed is said so and is
+not a fix. Never say "clean", "resolved" or "remediated" from this output, and never
+treat `not_confirmed` or `not_rechecked` as fixed. An asset marked `unlisted` is no longer
+in the asset list but the later run still read under it; its findings compare normally.
+A finding whose subject a redaction rule hides (cause `subject_unmatchable`) is never
+`fixed` or `new`, and neither is one on an asset with no entry in a run's asset list
+(cause `asset_not_listed`): gone it is `not_rechecked`, appearing `first_reported`. When
+the runs' redaction rule counts differ, an earlier subject is shown only if identical to
+the later, else `[withheld]`.
+
 ## Explain the result
 
 When `engagement.trigger` is `incident`, say first what the report says: this is not

@@ -325,3 +325,203 @@ into the engagement file (the only key it writes after `scheck init`) and record
 new hash; `confirmed_by` is `engagement.operator`, which must then be a handle under
 `people`.
 
+## Comparing two runs
+
+*Built in 0.0.3 (G6).* `scheck diff EARLIER LATER` compares two finished runs of one
+engagement, for remediation follow-up. Each argument is a run directory or a
+`report.json`; the earlier run comes first. Flags: `--format text|json`, `--out`, `-v`.
+The command sends nothing, runs nothing and calls no collector, the gate, the runner,
+a model or the network. It reads the two reports and prints what changed between them.
+The name `diff` is the one the 0.0.1 host spec reserved; host findings are compared by
+this command like every other finding, and a fact-level view of host drift
+(`host-collector.md §6.4`) is not built.
+
+**What it reads.** Only the two `report.json` files. `internal/engagement.ReadReport`
+opens a run directory the way a resume does: it refuses a link, locks the directory for
+the instant of the read so a run in progress is refused, and refuses a report whose
+sha256 differs from the one `run.json` recorded or that `run.json` does not record. A
+bare `report.json` is accepted, and the header says it was not checked against a run
+record. Every file it reads (the report, `run.json`) is `Lstat`ed first and refused
+unless it is a regular file, so a pipe, a device or a link is never opened, and is
+read to at most 256 MiB. `report.ReadJSON` is strict: it refuses another schema MAJOR, a newer MINOR and
+any unknown field, and drops each host asset's embedded envelope. The comparison
+package (`internal/engagement/compare`) reads no file (`os`, `io/fs`, `io/ioutil` and
+`path/filepath` are forbidden to it); `scripts/depcheck.sh` holds it to
+the report types, `internal/finding` and `internal/report`, with no gate, collector,
+host asset, rules, state or engagement package in its graph.
+
+**What it never shows.** Nothing but report fields, which were redacted before they
+were written; text from a target is escaped again on output. When the two runs'
+`redaction.operator.rules` counts differ, a run may have redacted what the other
+printed, so the subject of an instance only the earlier run holds is withheld, the
+earlier subject of any join is printed only when it is byte-equal (key, label and
+provider id) to the later one and withheld otherwise, the earlier principal label of a
+`principal` asset row is `[withheld]`, and a `fixed` instance's earlier `not_checked`
+lines are omitted. A subject key is hidden when it contains a redaction marker,
+`[REDACTED:` or `[redacted:`, in either case. The asset id and name of an
+earlier-only asset that is not a root (a repository, or a name found under a root) are
+replaced by `[withheld]` on earlier-only instances and on `removed` and `unlisted`
+asset rows. The read errors `scheck diff` prints for either argument are
+control-escaped like any text from a file.
+
+**Refused (exit 3), before any comparison:** a different `engagement.name`; the same
+run (equal report sha256, or equal `run.started`); an earlier run that started after the
+later (give the earlier first; arguments are never sorted for you); a run that is
+unreadable, edited, unrecorded, locked or stopped before its report; a schema MAJOR or a
+newer MINOR this build does not read. **Not refused, and said in the header:** different
+`scheck_version`s, a different engagement file hash, a different vantage or principal, a
+`built_from` that is a file in one run and `--host` in the other, any gap between the
+runs, and runs on one day (some provider changes take a day to show).
+
+**Categories.** Every finding instance, keyed `{id, asset, subject}`, is counted once
+(`instances[].category` in JSON). The categories cover the earlier run's open and
+accepted findings alike: the summary gives `earlier_open` and `earlier_accepted`, and the
+text says "The earlier run had N open findings and M accepted (the list below covers
+both)". An accepted finding that is gone and decided counts as `fixed`.
+
+| Category | Meaning |
+|---|---|
+| `new` | open in the later run; the earlier run decided the rule absent on a complete read of a collected asset on the same footing |
+| `first_reported` | open in the later run; the earlier run did not decide the rule there, so "new" cannot be said (`cause`) |
+| `reopened` | accepted in the earlier run, open in the later |
+| `fixed` | open in the earlier run; the later run looked again and the weakness is not there (below) |
+| `still_open` | open in both |
+| `accepted_since` | open in the earlier run, accepted in the later: a decision, not a fix |
+| `still_accepted` | accepted in both; counted at default verbosity, listed under `-v` |
+| `not_confirmed` | no longer reported, and the later run does not meet every condition for *fixed* |
+| `not_rechecked` | no longer reported because the later run did not look |
+
+`cause` names why, from an open set a later release may extend: `asset_not_in_run`,
+`asset_not_read`, `rule_not_assessed`, `rule_undecided`, `incomplete_population`,
+`rules_changed`, `declaration_changed`, `principal_changed`, `vantage_changed`,
+`asset_replaced`, `subject_unmatchable`, `asset_not_listed`, `acceptance_expired`,
+`acceptance_ended`.
+`identity` is `moved`, `renamed` or `moved_renamed` when the instance was matched across
+a changed asset id or subject (below); it is still one `still_open` (or other)
+instance, never *fixed* plus *new*.
+
+An instance on a `replaced` asset (same canonical id, different non-null bound id)
+never joins by key or rename: the earlier one is `not_confirmed` and the later one
+`first_reported`, both with cause `asset_replaced`.
+
+**Fixed needs all of these.** An instance is `fixed` only when:
+
+- its asset continues in the later run, under the same canonical id or moved (below);
+- the asset's later status is `collected`;
+- the later assessment `{id, asset}` exists, is not `not_assessed` or `not_applicable`,
+  did not abstain on that subject, and has `complete: true`;
+- both runs are the same release build of scheck: equal `scheck_version`, and that
+  version has the form of the release tag, `v?MAJOR.MINOR.PATCH`. Any other version
+  (`dev`, a describe string with commits after the tag, `-dirty`, empty, `unknown`) is
+  never "the same rules" (a rule may change between releases, and a development build
+  is never comparable);
+- the bound id is the same; a different non-null bound id at the same canonical id is
+  `asset_replaced`;
+- when the engagement file hash differs, the earlier finding's `rule.reads` hold no
+  `declared:` read (`declaration_changed`; see `report.md`, "Text and JSON");
+- the same principal read the asset (identity, elevation and sorted scopes);
+- for a domain or url asset, the same run vantage;
+- the instance's own earlier subject key is not hidden, and the later run does not hold
+  the finding's id on that asset under a hidden name (checked after the not-rechecked
+  tests, whatever the `redact_extra` counts). A gone instance failing this is
+  `not_confirmed` with cause `subject_unmatchable`, never `fixed`.
+- for an appearing instance to be `new` rather than `first_reported`, its own subject is
+  not hidden, and, when the two runs' `redaction.operator.rules` counts differ, the
+  earlier run does not hold the same id on that asset under a hidden name. Otherwise it
+  is `first_reported` with cause `subject_unmatchable`, even on an asset the earlier run
+  did not read. With equal counts, a visible new name beside an earlier hidden one is a
+  normal new finding and counts.
+- the asset has an entry in both runs' asset lists (below).
+- the build is a release binary. `go install ...@tag` builds report version `dev`, so
+  a run made by one can never confirm a fix: use a release binary for both runs.
+
+When the later run did not look (the asset is absent or was not collected, the rule was
+not assessed or undecided) the instance is `not_rechecked`; when it looked and a
+condition above failed it is `not_confirmed`. A later run that is incomplete or refused
+never yields `fixed` for an asset it could not read. `new` is the mirror: the earlier
+run must have decided the rule absent on a complete read of a collected asset on the
+same footing, else the instance is `first_reported` with the cause. Both words are a
+dated observation, not a state of the world: the wording never says clean, secure,
+pass, resolved, remediated, verified, OK, no issues, a percentage or a score. A `fixed`
+instance in the secrets area adds that removing a credential from the code does not
+show it was changed: whether it was revoked or rotated was not checked, and anyone who
+copied it could still use it (note `revocation_not_checked`), and any `fixed` instance keeps the earlier
+finding's `not_checked` lines (shown at `-v`).
+
+**Identity across runs.** An asset id is the canonical id. An exact-key join is refused
+when both subjects carry non-empty, different `provider_id`s; the provider-id pass may
+then join them. A host or tenant whose
+canonical id differs between the runs is `moved` only when its non-null `bound_id`
+appears on exactly one asset of the same kind in each run and the earlier id is gone. A
+bound id on two or more assets of one run is a cloned image and identifies nothing: the
+earlier instance is `not_rechecked` and the later one `first_reported`. A subject is
+`renamed` when the asset id is the same and continues, `subject.provider_id` is equal
+and non-empty, and exactly one candidate matches. Everything else is *fixed* or
+*not rechecked* plus *new* or *first reported*: the same weakness on two assets with no
+identity link is two instances. An asset's name is never identity. A finding on an asset with no entry in a run's asset list
+(a name found under a root) can be neither fixed nor new, because whether it was
+collected in full is not recorded: gone, it is `not_rechecked`; appearing, it is
+`first_reported`, both with cause `asset_not_listed`; open in both runs, it is
+`still_open`. A finding on an asset the earlier run listed and
+the later run no longer lists is reported as a removed asset (`Assets that changed`),
+not as an error. When the later run no longer lists the asset but still reads under it
+(its findings or assessments exist), the asset is linked as the same one and the
+`assets[]` row has change `unlisted` ("no longer listed as an asset, but the later run
+still read under it"); its findings compare normally, and one open in both runs is
+`still_open`. GitHub organizations
+and repositories have a null `bound_id`, so a renamed or transferred repository is never
+`moved` (carried below).
+
+**Severity and acceptance.** The comparison recomputes nothing. On a `still_open`
+instance it prints the severity from the earlier run to the later, and the chain steps
+added or removed with their source. When the step is a declaration in the engagement
+file, `lowered_by_declaration` is set and the text says "Lowered because the engagement
+file changed ...; nothing read from the asset was shown to change". Acceptances are not
+joined by entry index. Open to accepted is `accepted_since`; accepted to open is
+`reopened`, with cause `acceptance_expired` when the later run's `acceptances[]` list it
+as expired or the earlier entry's expiry date is past, else `acceptance_ended`.
+
+**Exit.** Only the four codes of `report.md`, "Incompleteness and refusals":
+
+| Code | When |
+|---|---|
+| 3 | A refusal above |
+| 2 | The later run's own exit code is 2 or 3: it did not read everything. The earlier run's incompleteness never sets 2 |
+| 1 | An open `new`, `first_reported` or `reopened` instance, or a `still_open` one whose severity rose across the asset's threshold, is at or above that threshold (the later run's `exit.thresholds`, default `medium`). a `moved` or `renamed` join is not by itself a worsening (a rise across the threshold or an acceptance that lapsed still counts), and accepted instances never count, nor does an instance whose subject a redaction rule hides (cause `subject_unmatchable`, whether `not_confirmed` or `first_reported`): an unknown is not a worsening. An `asset_not_listed` `first_reported` instance does count |
+| 0 | Otherwise |
+
+Exit 0 prints how many findings at or above their threshold are still open in the later
+run and says it is not a clean result. The text of exit 1 says attention is needed and
+that it counts what got worse: findings still open in the later run are not what it
+counts.
+
+**Text order.** The header (the two runs, their dates, versions, days apart, the
+handling notice, and that nothing was contacted); what the runs can be compared on;
+the summary, its categories one per line; New; Reported for the first time; Open again; Fixed; Still
+open; Accepted since; Accepted before and still accepted; No longer reported, not
+confirmed fixed (by cause); Not checked again (by cause); Assets that changed;
+Coverage that changed; People who left (state change); the exit sentence. Default
+verbosity lists medium and above item by item and counts the rest; `-v` lists all.
+
+**JSON.** `docs/engagement-comparison-schema.json`, `schema_version` `1.0`, with the
+same open-enum rule as the report. It is pinned by
+`internal/engagement/compare/testdata/golden/lab.{txt,json}` and `lab-v.txt` over the
+committed pair `testdata/lab/{earlier,later}/report.json`. That pair is synthetic
+(`golden_test.go`, `labRuns`); a pair of real lab runs replaces it with G7.
+
+**Not built (carried).** Bound ids for GitHub organizations and repositories (a report
+schema MINOR); a structured principal id, in place of the identity label, elevation and
+scopes; a `superseded_by` category; per-assessment declared-input digests, for precise
+declaration drift (`report.md`, "Text and JSON"); re-judging the earlier run's persisted
+evidence with the newer build, so a version change does not block every confirmation;
+per-subject completeness; separating an asset no longer listed under a root read whole
+from one out of scope; a note that a new instance of a time-dependent rule depends on
+the date; the earlier report's "Fix these first" with each item's later state; a
+`rekeyed` identity for a finding that gains a subject across versions; `-v` extras (the
+engagement file's key diff, notes changes, reads and collection time per fixed
+instance); choosing the previous run inside `scheck run`; withholding by pattern rather
+than by count when `redact_extra` differs, which also omits a fixed instance's earlier
+`not_checked` lines; opening a run directory read-only (reading one takes the run's
+flock on `.lock`, opened `O_CREATE|O_RDWR`, so a read-only archived run directory
+cannot be compared and its `report.json` file is used instead).
+

@@ -198,8 +198,19 @@ bin/scheck init engagement.yaml                              # asks only what th
 bin/scheck run engagement.yaml --stop-after intake           # validate and print it resolved
 bin/scheck run engagement.yaml                               # every stage, through the report
 bin/scheck run ~/.local/state/scheck/engagements/<name>/<started>   # resume that run
+bin/scheck diff <earlier run> <later run>                    # two runs of one engagement compared; reads two reports, contacts nothing
 bin/scheck catalog --profile hardened                        # every check, without running any
 ```
+
+`scheck diff EARLIER LATER` takes two run directories or two `report.json` files of one
+engagement, the earlier first, and says what is new, reported for the first time, open
+again, fixed, still open, accepted since, no longer reported but not confirmed fixed, and
+not checked again, with `--format json` ([docs/engagement-comparison-schema.json](docs/engagement-comparison-schema.json)).
+A finding is called fixed only when the later run looked again with the same release of
+scheck (a tagged `vMAJOR.MINOR.PATCH` build, never a development one) and the same access and decided it absent on a complete read; otherwise it is not
+confirmed or not checked again. Exit 0 is not a clean result; 2 means the later run did
+not read everything; 3 means the pair cannot be compared
+([docs/spec/runs.md](docs/spec/runs.md), "Comparing two runs").
 
 `scheck init` writes an engagement file from an interview and contacts nothing. It reads no
 flags. With a path, it asks only what the file does not answer, and a file from
