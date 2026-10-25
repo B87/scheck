@@ -1218,7 +1218,8 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   set `ReadsDeclarations`, it is not in the identity area and not one of
   `svc.expected_missing`, `github.too_many_owners`,
   `github.undeclared_public_repository`, `dns.dangling_external`,
-  `dns.dangling_internal`, `dns.takeover_candidate` and `dns.unclaimed_at_provider`, and the id is one this build knows. Otherwise it
+  `dns.dangling_internal`, `dns.takeover_candidate`, `dns.unclaimed_at_provider`,
+  `web.secret_in_response` and `web.version_disclosed`, and the id is one this build knows. Otherwise it
   is *not confirmed*, and an appearing one *first reported*, cause `declaration_changed`
   (`runs.md`, "Comparing two runs"). That is
   conservative: any rule that reads a declaration is unconfirmed across a file edit.

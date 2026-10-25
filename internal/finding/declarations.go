@@ -12,6 +12,10 @@ var alsoReadsDeclarations = map[string]bool{
 	// Which of these a DNS record is filed as depends on the domain roots
 	// the file declares (a target inside a root is internal) and on its
 	// excludes.
+	// The pages a rule reads include every intent URL the file lists, and
+	// a leaked secret or a version is a finding about one page.
+	IDWebSecretInResponse:    true,
+	IDWebVersionDisclosed:    true,
 	IDDNSDanglingExternal:    true,
 	IDDNSDanglingInternal:    true,
 	IDDNSTakeoverCandidate:   true,

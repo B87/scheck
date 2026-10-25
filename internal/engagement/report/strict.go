@@ -22,15 +22,23 @@ var (
 // host envelope is not walked: ReadJSON drops it.
 func checkKeys(raw []byte, t reflect.Type) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
-	return walk(dec, t, "report")
+	return walk(dec, t, "report", 0)
 }
 
-func walk(dec *json.Decoder, t reflect.Type, path string) error {
+// maxDepth bounds how deep a report may nest. A report scheck writes nests
+// a dozen levels; the bound keeps a hostile file from costing more than its
+// size, whatever order the checks run in.
+const maxDepth = 64
+
+func walk(dec *json.Decoder, t reflect.Type, path string, depth int) error {
+	if depth > maxDepth {
+		return fmt.Errorf("%s: nested more than %d levels", path, maxDepth)
+	}
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() == reflect.Interface {
-		return walkAny(dec, path)
+		return walkAny(dec, path, depth)
 	}
 	if t == envelopeType || reflect.PointerTo(t).Implements(unmarshalerType) || t.Implements(unmarshalerType) {
 		var skip json.RawMessage
@@ -44,7 +52,7 @@ func walk(dec *json.Decoder, t reflect.Type, path string) error {
 	case json.Delim:
 		switch d {
 		case '{':
-			return walkObject(dec, t, path)
+			return walkObject(dec, t, path, depth)
 		case '[':
 			for dec.More() {
 				var elem reflect.Type
@@ -54,7 +62,7 @@ func walk(dec *json.Decoder, t reflect.Type, path string) error {
 				default:
 					elem = reflect.TypeFor[any]()
 				}
-				if err := walk(dec, elem, path+"[]"); err != nil {
+				if err := walk(dec, elem, path, depth+1); err != nil {
 					return err
 				}
 			}
@@ -65,7 +73,7 @@ func walk(dec *json.Decoder, t reflect.Type, path string) error {
 	return nil
 }
 
-func walkObject(dec *json.Decoder, t reflect.Type, path string) error {
+func walkObject(dec *json.Decoder, t reflect.Type, path string, depth int) error {
 	var fields map[string]reflect.Type
 	if t.Kind() == reflect.Struct {
 		fields = map[string]reflect.Type{}
@@ -94,7 +102,7 @@ func walkObject(dec *json.Decoder, t reflect.Type, path string) error {
 		default:
 			ft = reflect.TypeFor[any]()
 		}
-		if err := walk(dec, ft, path+"."+key); err != nil {
+		if err := walk(dec, ft, path+"."+key, depth+1); err != nil {
 			return err
 		}
 	}
@@ -133,7 +141,10 @@ func collectFields(t reflect.Type, out map[string]reflect.Type) {
 
 // walkAny reads a free-form value, refusing a key written twice in any
 // object inside it.
-func walkAny(dec *json.Decoder, path string) error {
+func walkAny(dec *json.Decoder, path string, depth int) error {
+	if depth > maxDepth {
+		return fmt.Errorf("%s: nested more than %d levels", path, maxDepth)
+	}
 	tok, err := dec.Token()
 	if err != nil {
 		return err
@@ -155,13 +166,13 @@ func walkAny(dec *json.Decoder, path string) error {
 				return fmt.Errorf("%s: key %q is written twice", path, key)
 			}
 			seen[key] = true
-			if err := walkAny(dec, path+"."+key); err != nil {
+			if err := walkAny(dec, path, depth+1); err != nil {
 				return err
 			}
 		}
 	case '[':
 		for dec.More() {
-			if err := walkAny(dec, path+"[]"); err != nil {
+			if err := walkAny(dec, path, depth+1); err != nil {
 				return err
 			}
 		}
