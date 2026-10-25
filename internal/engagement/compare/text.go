@@ -383,7 +383,7 @@ func (t *tx) group(in []Instance, title string, f func(Instance) string) {
 }
 
 var goneOrder = []string{
-	CauseSubjectUnmatchable, CauseSubjectReplaced, CauseRulesChanged, CauseDeclarationChanged, CausePrincipalChanged, CauseVantageChanged,
+	CauseSuperseded, CauseSubjectUnmatchable, CauseSubjectReplaced, CauseRulesChanged, CauseDeclarationChanged, CausePrincipalChanged, CauseVantageChanged,
 	CauseAssetReplaced, CauseIncomplete, CauseAssetNotInRun, CauseAssetNotListed, CauseAssetNotRead, CauseRuleNotAssessed, CauseRuleUndecided,
 }
 
@@ -443,6 +443,8 @@ func (t *tx) goneCause(cause string, i Instance) string {
 		return "the rule did not read everything it needed this time (a cap, a sample or a page limit), so absence is not shown"
 	case CauseSubjectUnmatchable:
 		return "the name is hidden by a redaction rule, so it cannot be matched between the runs"
+	case CauseSuperseded:
+		return "the rule still fired on it and another, more serious finding stands for it, so the problem is there"
 	case CauseSubjectReplaced:
 		return "the same name is held by a different account in the later run (another provider id), so it is not the same instance"
 	case CauseAssetNotInRun:
@@ -489,6 +491,8 @@ func (t *tx) firstReported(i Instance) string {
 		return "A different machine or tenant answered at this address or name."
 	case CauseSubjectUnmatchable:
 		return "Its name is hidden by a redaction rule, so it cannot be matched to the earlier run."
+	case CauseSuperseded:
+		return "The earlier run reported the same problem under a more serious finding."
 	case CauseSubjectReplaced:
 		return "A different account (another provider id) now holds this name."
 	}

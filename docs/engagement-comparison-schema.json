@@ -176,7 +176,7 @@
       "additionalProperties": false,
       "properties": {
         "category": {"enum": ["new", "first_reported", "reopened", "fixed", "still_open", "accepted_since", "still_accepted", "not_confirmed", "not_rechecked"]},
-        "cause": {"type": "string", "description": "Why a finding is first_reported, reopened, not_confirmed or not_rechecked: asset_not_in_run, asset_not_read, rule_not_assessed, rule_undecided, incomplete_population, rules_changed, declaration_changed, principal_changed, vantage_changed, asset_replaced, subject_unmatchable, asset_not_listed, acceptance_expired, acceptance_ended. Open."},
+        "cause": {"type": "string", "description": "Why a finding is first_reported, reopened, not_confirmed or not_rechecked: asset_not_in_run, asset_not_read, rule_not_assessed, rule_undecided, incomplete_population, rules_changed, declaration_changed, principal_changed, vantage_changed, asset_replaced, subject_unmatchable, subject_replaced, superseded, asset_not_listed, acceptance_expired, acceptance_ended. Open."},
         "reason": {"type": "string", "description": "The asset's or assessment's reason token behind a cause."},
         "id": {"type": "string"},
         "title": {"type": "string"},

@@ -352,3 +352,56 @@ func TestEarlierBoundIDStaysHomeWhenRedactionRulesDiffer(t *testing.T) {
 		t.Errorf("an earlier bound id reached the output:\n%s", js.String())
 	}
 }
+
+func TestASupersededInstanceIsNotFixed(t *testing.T) {
+	const repo = "repo:github:example-org/shop"
+	e, l := pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(repo, "shop", "repo", "collected", "")
+	}
+	e.find("github.mutable_action_reference", repo, "release.yml", "medium")
+	l.rule("github.mutable_action_reference", repo, "matched", true,
+		report.AssessmentOutcome{Subject: &report.Subject{Kind: "workflow", Key: "release.yml"}, Outcome: "fired", Detail: map[string]any{"superseded_by": "github.mutable_action_with_write_token"}})
+	l.find("github.mutable_action_with_write_token", repo, "release.yml", "high")
+	c := compareOK(t, e, l)
+	if i := category(c, "github.mutable_action_reference"); i.Category == Fixed {
+		t.Errorf("a superseded instance was called fixed: %+v", i)
+	}
+}
+
+func TestAnotherVisibleNameBesideAKnownOneCountsWhenRulesDiffer(t *testing.T) {
+	const ws = "saas:google-workspace:example.com"
+	e, l := pairLab()
+	for _, r := range []*lab{e, l} {
+		r.asset(ws, "ws", "saas", "collected", "C1")
+	}
+	l.Redaction.Operator.Rules = 1
+	e.find("identity.no_2sv", ws, "alice@acme.com", "high")
+	l.find("identity.no_2sv", ws, "alice@acme.com", "high")
+	l.find("identity.no_2sv", ws, "mallory@acme.com", "high")
+	if c := compareOK(t, e, l); c.Exit.Code != 1 {
+		t.Errorf("exit %d: %+v", c.Exit.Code, c.Instances)
+	}
+}
+
+func TestGoneOnAnAssetTheEarlierRunDidNotListIsNotFixed(t *testing.T) {
+	const name = "domain:dev.example.com"
+	e, l := pairLab()
+	l.asset(name, "dev", "domain", "collected", "")
+	e.find("web.a", name, "", "medium")
+	l.notMatched("web.a", name)
+	c := compareOK(t, e, l)
+	if i := category(c, "web.a"); i.Category != NotRechecked || i.Cause != CauseAssetNotListed {
+		t.Errorf("%+v", i)
+	}
+}
+
+func TestAnUnknownAssessmentStatusDecidesNothing(t *testing.T) {
+	const web = "host:203.0.113.6:22"
+	e, l := pairLab()
+	e.find("fw.a", web, "", "medium")
+	l.rule("fw.a", web, "bogus", true)
+	if i := category(compareOK(t, e, l), "fw.a"); i.Category == Fixed {
+		t.Errorf("%+v", i)
+	}
+}

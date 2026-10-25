@@ -40,11 +40,15 @@ func decidedAbsent(assess map[string]*report.Assessment, assets map[string]*repo
 	if as == nil {
 		return absence{cause: CauseRuleNotAssessed}
 	}
-	switch as.Status {
-	case "not_assessed", "not_applicable":
+	if as.Status != "matched" && as.Status != "not_matched" {
 		return absence{cause: CauseRuleUndecided, reason: as.Reason}
 	}
 	for _, o := range as.Outcomes {
+		if o.Outcome == "fired" && (o.Subject == nil && subject == nil || o.Subject != nil && subject != nil && o.Subject.Key == *subject) {
+			// The rule fired on this instance and another finding stands for
+			// it (superseded): the problem is there.
+			return absence{cause: CauseSuperseded}
+		}
 		if o.Outcome != "abstained" {
 			continue
 		}
@@ -140,11 +144,14 @@ func (p *pair) goneVerdict(ef *report.Finding) (Category, string, string) {
 	if notRechecked(abs.cause) {
 		return NotRechecked, abs.cause, abs.reason
 	}
-	if holdsFired(p.l, p.lAssess, lasset, ef.ID, true, subjectKey(ef.Subject)) || p.redactionDiffers && holdsFired(p.l, p.lAssess, lasset, ef.ID, false, subjectKey(ef.Subject)) {
+	if p.eAssets[ef.Key.Asset] == nil {
+		// The earlier run records no asset row: whether it read the asset in
+		// full is not recorded, so a gone finding cannot be called fixed.
+		return NotRechecked, CauseAssetNotListed, ""
+	}
+	if holdsFired(p.l, p.lAssess, lasset, ef.ID, true, subjectKey(ef.Subject)) {
 		// The later run reports this id here under a name a redaction rule
-		// hides (or the runs hide names with different rules and it reports
-		// the id under another name): the instance may be the same one, so
-		// it is not gone.
+		// hides: the instance may be the same one, so it is not gone.
 		return NotConfirmed, CauseSubjectUnmatchable, ""
 	}
 	if replacedSubject(p.l, lasset, ef.ID, ef.Subject) {
@@ -170,11 +177,11 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 	if !ok {
 		return FirstReported, CauseAssetNotInRun, ""
 	}
-	if hidden(lf.Subject) && holdsFired(p.e, p.eAssess, easset, lf.ID, true, nil) || p.redactionDiffers && holdsFired(p.e, p.eAssess, easset, lf.ID, false, subjectKey(lf.Subject)) {
+	if (hidden(lf.Subject) || p.redactionDiffers) && holdsFired(p.e, p.eAssess, easset, lf.ID, true, subjectKey(lf.Subject)) ||
+		hidden(lf.Subject) && p.redactionDiffers && holdsFired(p.e, p.eAssess, easset, lf.ID, false, nil) {
 		// The earlier run holds this id here under a name a redaction rule
-		// hides (or the runs hide names with different rules and it holds
-		// the id under another name): it cannot be told new from the same
-		// instance.
+		// hides, and either this name is hidden or the runs hide names with
+		// different rules: it cannot be told new from the same instance.
 		return FirstReported, CauseSubjectUnmatchable, ""
 	}
 	if replacedSubject(p.e, easset, lf.ID, lf.Subject) {
@@ -200,7 +207,7 @@ func (p *pair) appearVerdict(lf *report.Finding) (Category, string, string) {
 // subject key the run decided by its visible name: such a name is not the
 // hidden one.
 func holdsFired(r *report.Report, assess map[string]*report.Assessment, asset, id string, hiddenOnly bool, visible *string) bool {
-	if visible != nil {
+	if visible != nil && !strings.Contains(strings.ToLower(*visible), "[redacted:") {
 		if as := assess[id+"\x00"+asset]; as != nil {
 			for _, o := range as.Outcomes {
 				if o.Subject != nil && o.Subject.Key == *visible {

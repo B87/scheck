@@ -2769,7 +2769,9 @@ fixed instance); choosing the previous run inside `scheck run`; withholding by p
 rather than by count when `redact_extra` differs, which also omits a fixed instance's
 earlier `not_checked` lines; reading a run directory takes the run's flock on `.lock`
 (`O_CREATE|O_RDWR`), so a read-only archived run directory cannot be compared and its
-`report.json` file is used instead (fix: a read-only lock open); a fact-level host drift view
+`report.json` file is used instead (fix: a read-only lock open); the `O_NONBLOCK` hardening of `ReadReport`'s open (a pipe
+swapped in between the `Lstat` and the open can block it; it needs a local race inside an
+owned directory, and adding the flag changes `scripts/depcheck.sh`'s `syscall` pin); a fact-level host drift view
 (`host-collector.md §6.4`).
 
 ### G7 — coverage and the lab

@@ -80,6 +80,7 @@ const (
 	CauseAssetReplaced      = "asset_replaced"
 	CauseSubjectUnmatchable = "subject_unmatchable"
 	CauseSubjectReplaced    = "subject_replaced"
+	CauseSuperseded         = "superseded"
 	CauseAcceptanceExpired  = "acceptance_expired"
 	CauseAcceptanceEnded    = "acceptance_ended"
 )

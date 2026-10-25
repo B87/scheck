@@ -679,7 +679,7 @@ arguments or a schema this build does not read exit 3 with the reason.
 
 Exit: 3 as above; 2 when the later run did not read everything; 1 when something new,
 reported for the first time, open again or raised is at or above its asset's threshold
-(a subject a redaction rule hides never counts; still-open findings are not what exit 1
+(a subject a redaction rule hides never counts, nor a moved or renamed join by itself; still-open findings are not what exit 1
 counts); 0 otherwise. Exit 0 is not a clean result and never means fixed: it prints how many
 findings at or above the threshold are still open. Read the header first for what the
 runs can be compared on (versions, engagement file, vantage, principal, days apart).
@@ -699,9 +699,17 @@ subject. A severity that dropped because the engagement file changed is said so 
 not a fix. Never say "clean", "resolved" or "remediated" from this output, and never
 treat `not_confirmed` or `not_rechecked` as fixed. An asset marked `unlisted` is no longer
 in the asset list but the later run still read under it; its findings compare normally.
-A finding whose subject a redaction rule hides (cause `subject_unmatchable`) is never
-`fixed` or `new`, and neither is one on an asset with no entry in a run's asset list
-(cause `asset_not_listed`): gone it is `not_rechecked`, appearing `first_reported`. When
+A gone finding whose subject a redaction rule hides, or whose id the later run holds as a
+hidden fired instance (cause `subject_unmatchable`), is never `fixed`; an appearing one is
+`first_reported` with that cause only when an earlier hidden fired instance (or, for a
+hidden one with differing counts, any fired instance of the id) could be the same, else
+`new` as usual and counted. A gone finding the later run's rule still fired on, not
+reported because a more serious finding stands for it, is `not_confirmed` with cause
+`superseded`, never `fixed`. The same subject key under a
+different provider id is `subject_replaced` (`not_confirmed` gone, `first_reported`
+appearing, the latter counted). A finding is neither `fixed` nor `new` on an asset with no entry in a run's asset list
+(cause `asset_not_listed`): gone it is `not_rechecked`, even if the later run lists and
+collected the asset; appearing `first_reported`. When
 the runs' redaction rule counts differ, an earlier subject is shown only if identical to
 the later, else `[withheld]`.
 

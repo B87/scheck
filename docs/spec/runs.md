@@ -355,7 +355,8 @@ were written; text from a target is escaped again on output. When the two runs'
 `redaction.operator.rules` counts differ, a run may have redacted what the other
 printed, so the subject of an instance only the earlier run holds is withheld, the
 earlier subject of any join is printed only when it is byte-equal (key, label and
-provider id) to the later one and withheld otherwise, the earlier principal label of a
+provider id) to the later one and withheld otherwise, the earlier bound id is printed only
+when equal to the later one and is omitted on earlier-only instances, the earlier principal label of a
 `principal` asset row is `[withheld]`, and a `fixed` instance's earlier `not_checked`
 lines are omitted. A subject key is hidden when it contains a redaction marker,
 `[REDACTED:` or `[redacted:`, in either case. The asset id and name of an
@@ -394,7 +395,7 @@ both)". An accepted finding that is gone and decided counts as `fixed`.
 `cause` names why, from an open set a later release may extend: `asset_not_in_run`,
 `asset_not_read`, `rule_not_assessed`, `rule_undecided`, `incomplete_population`,
 `rules_changed`, `declaration_changed`, `principal_changed`, `vantage_changed`,
-`asset_replaced`, `subject_unmatchable`, `asset_not_listed`, `acceptance_expired`,
+`asset_replaced`, `subject_replaced`, `subject_unmatchable`, `superseded`, `asset_not_listed`, `acceptance_expired`,
 `acceptance_ended`.
 `identity` is `moved`, `renamed` or `moved_renamed` when the instance was matched across
 a changed asset id or subject (below); it is still one `still_open` (or other)
@@ -402,14 +403,22 @@ instance, never *fixed* plus *new*.
 
 An instance on a `replaced` asset (same canonical id, different non-null bound id)
 never joins by key or rename: the earlier one is `not_confirmed` and the later one
-`first_reported`, both with cause `asset_replaced`.
+`first_reported`, both with cause `asset_replaced`. The same `{id, asset, key}` held by a
+different non-empty `provider_id` in the other run is a different subject: the gone one is
+`not_confirmed` and the appearing one `first_reported`, both with cause `subject_replaced`,
+and the appearing one counts toward exit 1.
 
 **Fixed needs all of these.** An instance is `fixed` only when:
 
 - its asset continues in the later run, under the same canonical id or moved (below);
 - the asset's later status is `collected`;
-- the later assessment `{id, asset}` exists, is not `not_assessed` or `not_applicable`,
-  did not abstain on that subject, and has `complete: true`;
+- the later assessment `{id, asset}` exists, has status `matched` or `not_matched` (any
+  other status is undecided), did not abstain on that subject, and has `complete: true`;
+- the later assessment holds no `fired` outcome on the instance's own subject: a rule that
+  still fired on it, with the finding not reported because another, more serious finding
+  stands for it, is never an absence. A gone instance failing this is `not_confirmed` with
+  cause `superseded` (the rule still fired on it and another, more serious finding stands
+  for it);
 - both runs are the same release build of scheck: equal `scheck_version`, and that
   version has the form of the release tag, `v?MAJOR.MINOR.PATCH`. Any other version
   (`dev`, a describe string with commits after the tag, `-dirty`, empty, `unknown`) is
@@ -419,18 +428,25 @@ never joins by key or rename: the earlier one is `not_confirmed` and the later o
   `asset_replaced`;
 - when the engagement file hash differs, the earlier finding's `rule.reads` hold no
   `declared:` read (`declaration_changed`; see `report.md`, "Text and JSON");
-- the same principal read the asset (identity, elevation and sorted scopes);
+- the same principal read the asset (identity, elevation and sorted scopes); an asset with
+  no row in a run, where the other run's principal exists, counts as a changed principal;
 - for a domain or url asset, the same run vantage;
-- the instance's own earlier subject key is not hidden, and the later run does not hold
-  the finding's id on that asset under a hidden name (checked after the not-rechecked
-  tests, whatever the `redact_extra` counts). A gone instance failing this is
-  `not_confirmed` with cause `subject_unmatchable`, never `fixed`.
-- for an appearing instance to be `new` rather than `first_reported`, its own subject is
-  not hidden, and, when the two runs' `redaction.operator.rules` counts differ, the
-  earlier run does not hold the same id on that asset under a hidden name. Otherwise it
-  is `first_reported` with cause `subject_unmatchable`, even on an asset the earlier run
-  did not read. With equal counts, a visible new name beside an earlier hidden one is a
-  normal new finding and counts.
+- the instance's own earlier subject key is not hidden, and the later run holds no hidden
+  fired instance of the same `{id, asset}` (checked after the not-rechecked tests, whatever
+  the `redact_extra` counts). A gone instance failing this is `not_confirmed` with cause
+  `subject_unmatchable`, never `fixed`.
+- for an appearing instance to be `first_reported` with cause `subject_unmatchable` rather
+  than decided normally, either the instance is hidden or the counts differ, and the earlier
+  run holds a hidden fired instance of the same `{id, asset}` not decided by its exact
+  visible name; or the instance is hidden, the counts differ, and the earlier run holds any
+  fired instance of the id on that asset. Otherwise the normal `new` or `first_reported`
+  decision applies and counts toward exit 1: a hidden name nobody held before is `new`, and
+  a visible new name with no earlier hidden instance is decided normally even when the
+  counts differ.
+- an appearing instance is `first_reported` with cause `superseded` when the earlier run's
+  outcome on its subject was `fired` but not reported for the same reason.
+- "Holding the id under another name" counts fired instances only (findings, or assessment
+  outcomes `fired`), never `disproved` or `abstained` outcomes.
 - the asset has an entry in both runs' asset lists (below).
 - the build is a release binary. `go install ...@tag` builds report version `dev`, so
   a run made by one can never confirm a fix: use a release binary for both runs.
@@ -460,7 +476,8 @@ and non-empty, and exactly one candidate matches. Everything else is *fixed* or
 *not rechecked* plus *new* or *first reported*: the same weakness on two assets with no
 identity link is two instances. An asset's name is never identity. A finding on an asset with no entry in a run's asset list
 (a name found under a root) can be neither fixed nor new, because whether it was
-collected in full is not recorded: gone, it is `not_rechecked`; appearing, it is
+collected in full is not recorded: gone on an asset the earlier run has no row for, it is
+`not_rechecked` even when the later run lists and collected the asset; appearing, it is
 `first_reported`, both with cause `asset_not_listed`; open in both runs, it is
 `still_open`. A finding on an asset the earlier run listed and
 the later run no longer lists is reported as a removed asset (`Assets that changed`),
@@ -487,7 +504,7 @@ as expired or the earlier entry's expiry date is past, else `acceptance_ended`.
 |---|---|
 | 3 | A refusal above |
 | 2 | The later run's own exit code is 2 or 3: it did not read everything. The earlier run's incompleteness never sets 2 |
-| 1 | An open `new`, `first_reported` or `reopened` instance, or a `still_open` one whose severity rose across the asset's threshold, is at or above that threshold (the later run's `exit.thresholds`, default `medium`). a `moved` or `renamed` join is not by itself a worsening (a rise across the threshold or an acceptance that lapsed still counts), and accepted instances never count, nor does an instance whose subject a redaction rule hides (cause `subject_unmatchable`, whether `not_confirmed` or `first_reported`): an unknown is not a worsening. An `asset_not_listed` `first_reported` instance does count |
+| 1 | An open `new`, `first_reported` or `reopened` instance, or a `still_open` one whose severity rose across the asset's threshold, is at or above that threshold (the later run's `exit.thresholds`, default `medium`). A `moved` or `renamed` join is not by itself a worsening (a rise across the threshold or an acceptance that lapsed still counts), and accepted instances never count, nor does an instance whose subject a redaction rule hides (cause `subject_unmatchable`, whether `not_confirmed` or `first_reported`): an unknown is not a worsening. A `subject_replaced` or `asset_not_listed` `first_reported` instance does count |
 | 0 | Otherwise |
 
 Exit 0 prints how many findings at or above their threshold are still open in the later
