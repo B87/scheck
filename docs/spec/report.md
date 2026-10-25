@@ -925,7 +925,7 @@ one id graded differently.
 | Field | Holds |
 |---|---|
 | `key` | `{id, asset, subject}`: the join key for acceptance, grouping and comparing runs |
-| `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null |
+| `asset_name`, `bound_id` | the `assets` name; for a name found under a domain root and not declared, the name; else the id. The bound id or null. The asset beside it carries `bound_id_source`: `machine_id` (a host's machine identifier), `provider_id` (a tenant's own id) or `hostname` (the fallback for a host whose identifier was unreadable, truncated or hidden by a redaction rule); only the first two name an identity across runs |
 | `subject` | `{kind, key, label, provider_id?, person?}`. `kind` is declared per finding definition (`account`, `org_unit`, `group`, `deploy_key`, `token`, `principal`, `oauth_app`, `service`, `repository`, `workflow`, `branch`, `webhook`, `invitation`, `secret_location`, `dependency_alert`, `dns_name`, `dns_record`, `url`, `origin`, `mail_domain`, `dkim_selector`, `spf_mechanism`, `mail_forward`, `package`, `declaration`). `key` is short and typable, what `accepted_risks[].subject` takes; `label` is what a human needs to recognise it, built only from fields rules read; `provider_id` survives a rename; `person` is the `people` handle when attributed |
 | `id`, `title` | `id` is the join key into `scheck explain` |
 | `area` | one of the ten area keys; required on every finding definition |
@@ -1175,7 +1175,7 @@ it; no pseudonymised or shareable version is claimed.
 **JSON consumers.** The engagement report's JSON carries each host asset's collector
 envelope (`host-collector.md §6.4`) whole, under that asset, with its own
 `schema_version`; `run.assessment`, `assessments` and `facts` keep their shape one
-level down. The report on stdout is complete without the run directory, so
+level down. A host asset's `bound_id_source` is the envelope's `host.id_source`. The report on stdout is complete without the run directory, so
 `--no-persist` loses nothing, and `--include-evidence` adds captures to the embedded
 envelope of each host this session collected ([runs.md](runs.md), "Stop and resume"). The engagement's own findings are authoritative where their severity differs
 from the envelope's ("The report", "Findings"). The aliases' deprecation line names the new path of `run.assessment`.
@@ -1208,9 +1208,27 @@ change until 0.0.2 is published) carries what a consumer agent or a comparison o
   population: no cap, sample, excluded unit or page limit; for a host, not a check that
   reads a bounded sample by design such as a depth-capped `find`, not a truncated
   capture, and not a command whose non-zero exit was tolerated), its reason, and every input
-  it read, declarations included (`declared:people.carol.left`), so a later run reads an
-  instance as *fixed* only when its rule decided on complete evidence with the same
-  declared inputs, and otherwise as *no longer observed, not assessed*. An assessment
+  it read. The assessment's `reads` do not carry declared inputs in 0.0.3; a finding's
+  `rule.reads` do (`declared:people.carol.left`). A rule that reads the engagement file
+  without such a read (the mail senders, selectors and `no_mail` a domain declares, a
+  host's `app_paths`) says so in its definition (`ReadsDeclarations`). `scheck diff`
+  therefore reads an instance as *fixed* only when its rule decided on complete evidence
+  and, when the engagement file hash differs, `finding.ReadsDeclarations(id)` is false:
+  the earlier finding's `rule.reads` hold no `declared:` entry, its definition does not
+  set `ReadsDeclarations`, it is not in the identity area and not one of
+  `svc.expected_missing`, `github.too_many_owners`,
+  `github.undeclared_public_repository`, `dns.dangling_external`,
+  `dns.dangling_internal`, `dns.takeover_candidate`, `dns.unclaimed_at_provider`,
+  `web.secret_in_response`, `web.version_disclosed`, `web.security_headers`,
+  `web.hsts_missing`, `web.plaintext_http`, `web.plaintext_http_clients`,
+  `web.security_txt`, `tls.certificate_invalid`, `tls.certificate_expiring`,
+  `tls.legacy_only` and `dns.private_address` (eighteen named ids), and the id is one
+  this build knows. Otherwise it
+  is *not confirmed*, and an appearing one *first reported*, cause `declaration_changed`
+  (`runs.md`, "Comparing two runs"). That is
+  conservative: any rule that reads a declaration is unconfirmed across a file edit.
+  Per-assessment declared-input digests, which would say whether the declaration it read
+  changed, are carried. An assessment
   may have an empty `reads` list when no read was collected or a static preload rule
   decided without a request; it never invents a request id. A finding still requires
   nonempty rule inputs and observed evidence;

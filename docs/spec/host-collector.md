@@ -195,7 +195,7 @@ uid, shell, home), `passwd_status` (name, status), `units` (name, state), `updat
 (name, version), `launchd` (label, pid, status), `file_mode` (symbolic, mode, user,
 group, size), `find_ls` (type, symbolic, user, group, path; 0.0.3 G5), `packages` (name, version, status,
 manager; 0.0.3 G8). A typed shape exists when something downstream needs fields: the summary
-line (§6.6), a posture rule (§6.5) or `scheck diff` (§6.4). Everything else stays
+line (§6.6), a posture rule (§6.5) or a fact-level host diff (§6.4, not built). Everything else stays
 `lines` or `kv`, and `Unit` names what one record is, so the summary reads "0 SUID
 files" and "13 settings" rather than "0 lines" and "13 keys"; the catalog test requires
 `Unit` on every `lines` and `kv` check, and rejects one on a typed shape (§11).
@@ -831,7 +831,15 @@ The rules below are the ones the schema does not state by itself.
 
 `host.id` is a hash of the machine id (Linux) or platform UUID (macOS). It is stable
 across runs and hostname changes, and it is the key a fleet aggregator or a drift
-diff would join on. A `local` or `ssh` report sets `run.mode` to `facts` and
+diff would join on, when `host.id_source` is `machine_id` (schema 1.8). The capture is
+used only when it is a machine id (32 hex digits, or a UUID shape) and holds no redaction marker (`[REDACTED:`) and no
+truncation marker (`[TRUNCATED:`), in either case: a hash of a marker would give every
+host a pattern hides one identity. A placeholder such as `uninitialized` is not a machine
+id. Otherwise `host.id` hashes `hostname:` and the
+hostname, `host.id_source` is `hostname`, and the run carries the warning that the id was
+derived from the hostname. A consumer takes `host.id` as the machine's identity only for
+`machine_id`; `scheck diff` does so (`runs.md`, "Comparing two runs"). A report before 1.8
+has no `id_source` and says nothing about it. A `local` or `ssh` report sets `run.mode` to `facts` and
 `run.assessment` to `rules`, and leaves the provider block empty (§2.1). `summary`
 is the one-line reading of a fact (§6.6): the same string on the screen, in the JSON
 and in a model prompt. Findings are a flat array keyed by catalog id, never nested
@@ -874,7 +882,7 @@ the harness produces (§2.1), fills the provider block and `run.agent`, includin
 contract. `schema_version` is `MAJOR.MINOR`: additive changes bump MINOR; renames,
 removals and field type changes bump MAJOR. Readers reject an unrecognized MAJOR rather
 than guess at an unsupported shape. The release notes identify the schema version
-shipped. Update the spec, implementation, `docs/report-schema.json` and fixtures
+shipped. 1.8 added the optional `host.id_source` (`machine_id` or `hostname`). Update the spec, implementation, `docs/report-schema.json` and fixtures
 together when a change is implemented.
 
 **Persistence.** *From 0.0.2 (E2) nothing is written under `runs/<host.id>/`: the
@@ -883,11 +891,11 @@ envelope is the host asset's evidence file in the engagement's run directory
 `<state-dir>/runs/<host.id>/<started>.json` (default state dir
 `~/.local/state/scheck`, or `$XDG_STATE_HOME/scheck`; `--state-dir` overrides,
 `--no-persist` disables). Persisted files pass the same redactor as the report. The
-`facts` block is what makes posture drift diffable. `scheck diff` is not in this build;
-as planned it compares the two most recent runs for a host (or two named files): added
-and removed listeners, units, SUID files, and findings that appeared, disappeared, or
-changed severity. Typed `parsed` shapes (§3) make that a set difference per record
-kind rather than a line diff.
+`facts` block is what makes posture drift diffable. `scheck diff EARLIER LATER`
+(0.0.3, G6) compares two engagement reports, host findings like every other finding; it
+does not read this envelope (`runs.md`, "Comparing two runs"). A fact-level view of host
+drift, a set difference per record kind (added and removed listeners, units, SUID
+files) over the typed `parsed` shapes (§3), is not built.
 
 ### 6.5 Posture rules — deterministic findings from the fact sheet
 
@@ -1154,7 +1162,7 @@ scheck explain ID                       # CHECK-ID: what a check runs, why, its 
                                         #   adjustment can be reproduced without a run.
 scheck providers                        # configured providers, limits, native features
 scheck config show|validate             # effective settings with provenance; validate exits 0|3 (§8)
-scheck diff [A B]                       # posture drift between two runs; not in this build, exit 3
+scheck diff EARLIER LATER               # two engagement runs compared (0.0.3); not host fact drift (§6.4)
 scheck --format text|json|sarif  --out FILE    # sarif: not in this build, exit 3
        --include-evidence             # JSON facts only: optional redacted diagnostics
        --profile baseline|hardened      # severity thresholds + catalog tier (§3)
@@ -1546,14 +1554,14 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | Question | Decision | Why |
 |---|---|---|
 | Shape JSON for multi-host aggregation now? | Yes: `host` identity block with a stable `host.id`, flat findings array, and a `schema_version` field (§6.4). | Costs nothing now; an aggregator concatenates and can reject a version it wasn't tested against. |
-| Persist fact sheets for drift? | Persist the full envelope on every run (§6.4). `scheck diff` is planned ([../ROADMAP.md](../ROADMAP.md)). | The format is what is hard to retrofit, not the command. |
+| Persist fact sheets for drift? | Persist the full envelope on every run (§6.4). `scheck diff` compares engagement reports since 0.0.3; a fact-level host diff is not built ([../ROADMAP.md](../ROADMAP.md)). | The format is what is hard to retrofit, not the command. |
 | Catalog growth past ~60? | Profile-gated tiers via `MinProfile`; baseline tier capped by test (§3). | Keeps the cheap run's menu small without capping what a hardened audit can do. |
 | Custom finding ids? | Kept, capped at `medium`, flagged `custom: true`, never escalated (§6.1). | The model can surface a novel issue without driving exit codes or matching accepted risks by accident. |
 | SSH canary fails? | Abort, exit 3, no further command sent (§4.3). | Quoting is the whole boundary on SSH; do not guess around it. |
 | Elevation mechanism? | `sudo -n` only, as a prefix, plus `scheck sudoers` (§7.1). Password forwarding and `doas`/`run0` deferred. | Never transmit a password; the prefix design makes the others cheap to add later. |
 | Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§6.5), one fact → one finding, code-graded like everything else. For `local` and `ssh` that is the whole assessment (§2.1). | A fact sheet that never says a recognized fact is wrong is a debug artefact. A conclusion that needs two facts or judgement is not filed until a later record earns phase 2 back. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§7). | One meaning per exit code; CI can gate on the offline run. |
-| Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | A typed record serves the screen, the model and `scheck diff`, and is diffable; a closure serves one consumer and is not. |
+| Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | A typed record serves the screen, the model and a future host diff, and is diffable; a closure serves one consumer and is not. |
 | Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` are aliases for 0.0.2 and go in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
 | An empty password on an account that cannot log in? | Not a finding. `accounts.empty_password` joins `passwd -S -a` with `/etc/passwd` and fires only on an account with a login shell, at high; critical is for an empty password sshd accepts, an engagement multi-fact rule (E9). Libuser's `PS` and `LK` are recognized, and an empty status listing is a broken read, not a pass (E5a). | The 0.0.1 rule fired critical on `NP` alone, so a system account with `/usr/sbin/nologin` topped the first report a reader saw: a false critical costs trust in the whole report. Host facts show local use only; Debian's and RHEL's default PAM accept an empty password locally, so high, not lower. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |

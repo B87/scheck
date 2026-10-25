@@ -1,7 +1,8 @@
 {
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "host": {
     "id": "bc38ac67236d66629aeed872116422f86a48b824bb80271c0d616a92ff3abd14",
+    "id_source": "machine_id",
     "hostname": "mac-fixture.local",
     "platform": "macos",
     "os": "macOS 26.6.2 (25G83)",

@@ -1,0 +1,410 @@
+{
+  "schema_version": "1.0",
+  "engagement": "acme",
+  "earlier": {
+    "directory": null,
+    "started": "2026-10-01T09:00:00Z",
+    "collected_from": "2026-10-01T09:00:00Z",
+    "collected_to": "2026-10-01T09:10:00Z",
+    "timezone": "UTC",
+    "scheck_version": "0.0.3",
+    "rules_version": "0.0.3",
+    "schema_version": "1.1",
+    "source_sha256": "aaaa",
+    "report_sha256": "testdata/lab/earlier",
+    "run_record_checked": true,
+    "built_from": "file",
+    "vantage": "internet",
+    "exit_code": 1,
+    "operator_redaction_rules": 0
+  },
+  "later": {
+    "directory": null,
+    "started": "2026-10-22T09:00:00Z",
+    "collected_from": "2026-10-22T09:00:00Z",
+    "collected_to": "2026-10-22T09:10:00Z",
+    "timezone": "UTC",
+    "scheck_version": "0.0.3",
+    "rules_version": "0.0.3",
+    "schema_version": "1.1",
+    "source_sha256": "bbbb",
+    "report_sha256": "testdata/lab/later",
+    "run_record_checked": true,
+    "built_from": "file",
+    "vantage": "internet",
+    "exit_code": 1,
+    "operator_redaction_rules": 0
+  },
+  "comparable": {
+    "same_rules": true,
+    "same_file": false,
+    "vantage_changed": false,
+    "redaction_rules_differ": false,
+    "hours_apart": 503,
+    "principal_changes": []
+  },
+  "summary": {
+    "earlier_open": 10,
+    "earlier_accepted": 1,
+    "fixed": 3,
+    "still_open": 3,
+    "accepted_since": 1,
+    "still_accepted": 0,
+    "not_confirmed": 1,
+    "not_rechecked": 2,
+    "new": 1,
+    "first_reported": 1,
+    "reopened": 1,
+    "moved": 1,
+    "renamed": 1
+  },
+  "instances": [
+    {
+      "category": "new",
+      "id": "accounts.shadow_permissions_unexpected",
+      "title": "The kernel is past its end of support",
+      "area": "hosts",
+      "earlier": null,
+      "later": {
+        "asset": "host:203.0.113.9:22",
+        "asset_name": "deploy",
+        "bound_id": "M-deploy",
+        "subject": null,
+        "severity": "high",
+        "status": "open"
+      }
+    },
+    {
+      "category": "first_reported",
+      "cause": "asset_not_in_run",
+      "id": "sshd.root_login_enabled",
+      "title": "SSH allows root to sign in",
+      "area": "hosts",
+      "earlier": null,
+      "later": {
+        "asset": "host:203.0.113.22:22",
+        "asset_name": "db1",
+        "bound_id": "M-image",
+        "subject": null,
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "category": "reopened",
+      "cause": "acceptance_expired",
+      "id": "svc.sensitive_listens_unfiltered",
+      "title": "A sensitive service listens without a firewall",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": {
+          "kind": "account",
+          "key": "6379/tcp",
+          "label": "6379/tcp"
+        },
+        "severity": "high",
+        "status": "accepted"
+      },
+      "later": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": {
+          "kind": "account",
+          "key": "6379/tcp",
+          "label": "6379/tcp"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "acceptance_change": {
+        "from_status": "accepted",
+        "to_status": "open",
+        "accepted_by": "carol",
+        "reason": "decided",
+        "expires": "2026-10-10"
+      }
+    },
+    {
+      "category": "fixed",
+      "id": "github.history_credential",
+      "title": "A credential is in the repository's history",
+      "area": "secrets",
+      "earlier": {
+        "asset": "repo:github:example-org/api",
+        "asset_name": "api",
+        "bound_id": null,
+        "subject": {
+          "kind": "account",
+          "key": "aws:AKIA@9f8e7d6c5b4a",
+          "label": "aws:AKIA@9f8e7d6c5b4a"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "later": null,
+      "notes": [
+        "revocation_not_checked"
+      ]
+    },
+    {
+      "category": "fixed",
+      "id": "fw.no_firewall_active",
+      "title": "The firewall allows inbound traffic by default",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": null,
+        "severity": "medium",
+        "status": "open"
+      },
+      "later": null
+    },
+    {
+      "category": "fixed",
+      "id": "updates.pending",
+      "title": "Package updates are pending",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": null,
+        "severity": "low",
+        "status": "open"
+      },
+      "later": null
+    },
+    {
+      "category": "still_open",
+      "id": "identity.unattributed_admin",
+      "title": "A Workspace account has no 2-step verification",
+      "area": "identity",
+      "earlier": {
+        "asset": "saas:google-workspace:example.com",
+        "asset_name": "workspace",
+        "bound_id": "C-acme",
+        "subject": {
+          "kind": "account",
+          "key": "alice@example.com",
+          "label": "alice@example.com",
+          "provider_id": "u-41"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "later": {
+        "asset": "saas:google-workspace:example.com",
+        "asset_name": "workspace",
+        "bound_id": "C-acme",
+        "subject": {
+          "kind": "account",
+          "key": "alice.smith@example.com",
+          "label": "alice.smith@example.com",
+          "provider_id": "u-41"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "identity": "renamed"
+    },
+    {
+      "category": "still_open",
+      "id": "sshd.password_auth_enabled",
+      "title": "SSH accepts passwords",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.5:22",
+        "asset_name": "deploy",
+        "bound_id": "M-deploy",
+        "subject": null,
+        "severity": "high",
+        "status": "open"
+      },
+      "later": {
+        "asset": "host:203.0.113.9:22",
+        "asset_name": "deploy",
+        "bound_id": "M-deploy",
+        "subject": null,
+        "severity": "high",
+        "status": "open"
+      },
+      "identity": "moved"
+    },
+    {
+      "category": "still_open",
+      "id": "db.listens_unfiltered",
+      "title": "A database listens without a firewall",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": {
+          "kind": "account",
+          "key": "5432/tcp",
+          "label": "5432/tcp"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "later": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": {
+          "kind": "account",
+          "key": "5432/tcp",
+          "label": "5432/tcp"
+        },
+        "severity": "info",
+        "status": "open"
+      },
+      "severity_change": {
+        "from": "high",
+        "to": "info",
+        "added": [
+          {
+            "rule": "exposed_on_purpose",
+            "by": "engagement",
+            "delta": "to_info",
+            "source": "acme.yaml assets.web.context.exposure",
+            "declared": true
+          }
+        ],
+        "removed": [],
+        "base_changed": false,
+        "lowered_by_declaration": true
+      }
+    },
+    {
+      "category": "accepted_since",
+      "id": "sshd.password_auth_exposed",
+      "title": "SSH allows many authentication attempts",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": null,
+        "severity": "medium",
+        "status": "open"
+      },
+      "later": {
+        "asset": "host:203.0.113.6:22",
+        "asset_name": "web",
+        "bound_id": "M-web",
+        "subject": null,
+        "severity": "medium",
+        "status": "accepted"
+      },
+      "acceptance_change": {
+        "from_status": "open",
+        "to_status": "accepted",
+        "accepted_by": "dave",
+        "reason": "decided",
+        "expires": "2027-01-31"
+      }
+    },
+    {
+      "category": "not_confirmed",
+      "cause": "declaration_changed",
+      "id": "identity.unattributed_admin",
+      "title": "A Workspace account has no 2-step verification",
+      "area": "identity",
+      "earlier": {
+        "asset": "saas:google-workspace:example.com",
+        "asset_name": "workspace",
+        "bound_id": "C-acme",
+        "subject": {
+          "kind": "account",
+          "key": "bob@example.com",
+          "label": "bob@example.com"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "later": null
+    },
+    {
+      "category": "not_rechecked",
+      "cause": "asset_not_read",
+      "reason": "insufficient_permission:contents",
+      "id": "github.history_credential",
+      "title": "A credential is in the repository's history",
+      "area": "secrets",
+      "earlier": {
+        "asset": "repo:github:example-org/shop",
+        "asset_name": "shop",
+        "bound_id": null,
+        "subject": {
+          "kind": "account",
+          "key": "aws:AKIA@0a1b2c3d4e5f",
+          "label": "aws:AKIA@0a1b2c3d4e5f"
+        },
+        "severity": "high",
+        "status": "open"
+      },
+      "later": null
+    },
+    {
+      "category": "not_rechecked",
+      "cause": "asset_not_in_run",
+      "id": "sshd.root_login_enabled",
+      "title": "SSH allows root to sign in",
+      "area": "hosts",
+      "earlier": {
+        "asset": "host:203.0.113.20:22",
+        "asset_name": "db1",
+        "bound_id": "M-image",
+        "subject": null,
+        "severity": "medium",
+        "status": "open"
+      },
+      "later": null
+    }
+  ],
+  "assets": [
+    {
+      "change": "removed",
+      "asset": "host:203.0.113.20:22",
+      "name": "db1",
+      "from": "collected"
+    },
+    {
+      "change": "moved",
+      "asset": "host:203.0.113.9:22",
+      "name": "deploy",
+      "from": "host:203.0.113.5:22",
+      "to": "host:203.0.113.9:22"
+    },
+    {
+      "change": "status",
+      "asset": "repo:github:example-org/shop",
+      "name": "shop",
+      "from": "collected",
+      "to": "failed",
+      "reason": "insufficient_permission:contents"
+    },
+    {
+      "change": "added",
+      "asset": "host:203.0.113.22:22",
+      "name": "db1",
+      "to": "collected"
+    }
+  ],
+  "coverage": [],
+  "people_left": [],
+  "exit": {
+    "code": 1,
+    "reasons": [
+      "3 new, first-reported, open-again or raised findings at or above the threshold"
+    ],
+    "open_at_or_above_threshold": 5
+  }
+}

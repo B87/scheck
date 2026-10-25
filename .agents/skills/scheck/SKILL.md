@@ -624,7 +624,7 @@ counts are then "at least", and `audit.jsonl` in the run directory lists every r
 `engagement.edited_by_hand` names files changed since scheck wrote them that this report
 used as written; say so before anything that rests on them.
 
-A host's `envelope` follows `docs/report-schema.json` (schema `1.7`): `host`, `run`,
+A host's `envelope` follows `docs/report-schema.json` (schema `1.8`): `host`, `run`,
 `facts`, `observations`, `assessments`, `findings`. Its findings are the host
 collector's grading; the engagement's `findings` are authoritative where they differ.
 `run.assessment` is now at `assets[i].envelope.run.assessment`.
@@ -666,6 +666,64 @@ came from a host that failed its trust check.
 Elevation never prompts. The user arranges credentials or installs the generated sudoers
 fragment. Do not retry an unchanged failure in a loop. Flags marked unavailable in
 `--help` exit 3; do not use them.
+
+## Compare two runs
+
+To follow up on remediation, run `scheck diff EARLIER LATER` on two run directories (or
+their `report.json` files) of one engagement, the earlier first; add `--format json`
+(`docs/engagement-comparison-schema.json`), `--out FILE` or `-v` (every item, not only
+medium and above). It reads the two reports and nothing else: no target is contacted
+and nothing is checked again, so do not use it to find out the present state. A run in
+progress, an edited or unrecorded report, a different engagement, the same run, swapped
+arguments or a schema this build does not read exit 3 with the reason.
+
+Exit: 3 as above; 2 when the later run did not read everything; 1 when something new,
+reported for the first time, open again or raised is at or above its asset's threshold
+(a subject a redaction rule hides never counts, nor a moved or renamed join by itself; still-open findings are not what exit 1
+counts); 0 otherwise. Exit 0 is not a clean result and never means fixed: it prints how many
+findings at or above the threshold are still open. Read the header first for what the
+runs can be compared on (versions, engagement file, vantage, principal, days apart).
+
+Read each category as a dated observation: `new` (the earlier run decided the rule absent
+on a complete read) against `first_reported` (it did not, so "new" is not claimed);
+`reopened` (accepted, now open); `fixed` (the later run looked again, with the same
+release of scheck, meaning a `vMAJOR.MINOR.PATCH` build, never `dev` or a build with
+commits after the tag, and the same access, and decided on a complete read; an accepted
+finding that is gone and decided is `fixed` too; a secrets finding
+adds that revocation or rotation was not checked; a binary from `go install ...@tag`
+reports version `dev`, so use a release binary for both runs or nothing is ever `fixed`); `still_open`; `accepted_since` (a
+decision, not a fix); `still_accepted`; `not_confirmed` (no longer reported, but a
+condition for fixed failed, with its `cause`); `not_rechecked` (the later run did not
+look). `moved` or `renamed` marks one instance matched across a changed asset id or
+subject. A severity that dropped because the engagement file changed is said so and is
+not a fix. Never say "clean", "resolved" or "remediated" from this output, and never
+treat `not_confirmed` or `not_rechecked` as fixed. An asset marked `unlisted` is no longer
+in the asset list but the later run still read under it; its findings compare normally.
+A gone finding whose subject a redaction rule hides, or whose id the later run holds as a
+hidden fired instance (cause `subject_unmatchable`), is never `fixed`; an appearing one is
+`first_reported` with that cause only when an earlier hidden fired instance (or, for a
+hidden one with differing counts, any fired instance of the id) could be the same, else
+`new` as usual and counted. A gone finding the later run's rule still fired on, not
+reported because a more serious finding stands for it, is `not_confirmed` with cause
+`superseded`, never `fixed`. A provider id a redaction rule hides is unknown: a fired
+instance of the same id and asset whose provider id is hidden while this one has one (or
+the reverse) makes a gone finding `not_confirmed` and an appearing one `first_reported`,
+cause `subject_unmatchable`, neither counted. A host or tenant is `moved`
+only when its `bound_id_source` is `machine_id` or `provider_id`; a `hostname` source, or
+none (a report before engagement schema 1.1), names nothing. Two different non-empty
+bound ids at one canonical id are `asset_replaced` whatever the source. A finding whose
+rule reads the engagement file is `not_confirmed` (`declaration_changed`) across an edit
+of it: every finding in the identity area, `svc.expected_missing`, `github.too_many_owners`,
+`github.undeclared_public_repository`, `dns.dangling_external`, `dns.dangling_internal`,
+`dns.takeover_candidate`, `dns.unclaimed_at_provider`, `web.secret_in_response`, `web.version_disclosed`, `web.security_headers`, `web.hsts_missing`, `web.plaintext_http`, `web.plaintext_http_clients`, `web.security_txt`, `tls.certificate_invalid`, `tls.certificate_expiring`, `tls.legacy_only` and `dns.private_address` (eighteen named ids), any rule that sets `ReadsDeclarations`, and an id the
+build does not know. An account renamed into an `abstained` or `fired` outcome under
+another key is neither gone nor new (`subject_unmatchable`). The same subject key under a
+different provider id is `subject_replaced` (`not_confirmed` gone, `first_reported`
+appearing, the latter counted). A finding is neither `fixed` nor `new` on an asset with no entry in a run's asset list
+(cause `asset_not_listed`): gone it is `not_rechecked`, even if the later run lists and
+collected the asset; appearing `first_reported`. When
+the runs' redaction rule counts differ, an earlier subject is shown only if identical to
+the later, else `[withheld]`.
 
 ## Explain the result
 

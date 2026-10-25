@@ -26,7 +26,7 @@ func init() {
 		// never a verdict. No DMI tree (a container) is exit 2, an answer.
 		unit(exitOK(base("sys.dmi", "Hardware vendor and product from DMI, to name a cloud platform (read-only sysfs)", check.DomainHost, check.ParseLines,
 			"grep", "-H", ".", "/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name"), 0, 1, 2), "DMI fields"),
-		base("host.machine_id", "Stable machine identifier (hashed into host.id)", check.DomainHost, check.ParseRaw, "cat", "/etc/machine-id"),
+		base("host.machine_id", "Stable machine identifier (hashed into host.id when unredacted and untruncated)", check.DomainHost, check.ParseRaw, "cat", "/etc/machine-id"),
 
 		// Pending updates: one check per package manager; the absent ones are unavailable.
 		base("pkg.apt_upgradable", "Packages with pending upgrades (apt)", check.DomainUpdates, check.ParseUpdates, "apt", "list", "--upgradable"),

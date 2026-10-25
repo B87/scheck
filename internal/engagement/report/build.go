@@ -187,6 +187,7 @@ func (b *builder) asset(a AssetInput) Asset {
 	env := v.env
 	bound := env.Host.ID
 	out.BoundID = &bound
+	out.BoundIDSource = env.Host.IDSource
 	out.Principal = &Principal{Identity: v.h.User, Elevation: env.Host.Elevation, ScopesSource: "provider"}
 	span := Span{From: env.Run.Started.UTC(), To: env.Run.Started.Add(time.Duration(env.Run.DurationMS) * time.Millisecond).UTC()}
 	if n := len(out.Trace); n > 0 {

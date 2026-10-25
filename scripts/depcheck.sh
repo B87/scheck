@@ -210,4 +210,30 @@ if [ -n "$insecure" ]; then
   printf '%s\n' "$insecure" | sed 's/^/  /' >&2
   status=1
 fi
+# The comparison of two runs (docs/spec/runs.md, "Comparing two runs") works
+# on two reports it is handed: it imports only the report types, the finding
+# vocabulary and the host report's text helpers, reads no file, and has no
+# gate, collector, host asset, rules or the engagement package itself in its
+# dependency graph. Reading a run directory is internal/engagement's.
+if [ -d ./internal/engagement/compare ]; then
+  imports=$(go list -f '{{join .Imports "\n"}}' ./internal/engagement/compare | grep '^github.com/b87/scheck/' || true)
+  other=$(printf '%s\n' "$imports" | grep -vE '^github.com/b87/scheck/internal/(engagement/report|finding|report)$' || true)
+  if [ -n "$other" ]; then
+    echo "depcheck: internal/engagement/compare imports more of the module than the report types, finding and the host report text helpers:" >&2
+    printf '%s\n' "$other" | sed 's/^/  /' >&2
+    status=1
+  fi
+  files=$(go list -f '{{join .Imports "\n"}}' ./internal/engagement/compare | grep -E '^(os|io/fs|io/ioutil|path/filepath|net(/.*)?|os/exec|syscall)$' || true)
+  if [ -n "$files" ]; then
+    echo "depcheck: internal/engagement/compare reads files or reaches the network; internal/engagement.ReadReport reads the reports:" >&2
+    printf '%s\n' "$files" | sed 's/^/  /' >&2
+    status=1
+  fi
+  reach=$(go list -deps ./internal/engagement/compare | grep -E 'internal/(engagement|engagement/gate|engagement/hostasset|engagement/rules|collector/.*|state)$' || true)
+  if [ -n "$reach" ]; then
+    echo "depcheck: internal/engagement/compare depends on a gate, a collector or the engagement package:" >&2
+    printf '%s\n' "$reach" | sed 's/^/  /' >&2
+    status=1
+  fi
+fi
 exit $status

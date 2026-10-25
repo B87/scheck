@@ -28,7 +28,7 @@ func init() {
 	check.Register(
 		// OS / host
 		unit(base("os.release", "macOS product name, version and build", check.DomainOS, check.ParseKV, "sw_vers"), "settings"),
-		extract(base("host.platform_uuid", "IOPlatformUUID (hashed into host.id)", check.DomainHost, check.ParseRaw, "ioreg", "-rd1", "-c", "IOPlatformExpertDevice"),
+		extract(base("host.platform_uuid", "IOPlatformUUID (hashed into host.id when unredacted and untruncated)", check.DomainHost, check.ParseRaw, "ioreg", "-rd1", "-c", "IOPlatformExpertDevice"),
 			`"IOPlatformUUID" = "([0-9A-Fa-f-]+)"`),
 
 		// Pending updates

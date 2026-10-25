@@ -1,0 +1,86 @@
+Comparison of two runs of acme
+  Earlier   read 2026-10-01, scheck 0.0.3, a report file
+  Later     read 2026-10-22, scheck 0.0.3, a report file
+  20 days between the last reading of the earlier run and the first of the later.
+
+This compares what two runs read. Nothing was contacted and nothing was checked again. It holds the
+personal data and internal topology of the reports it compares, for the operator only.
+
+What these two runs can be compared on
+  - The engagement file changed between the runs. A finding whose rule reads a declaration from it
+    is not confirmed as fixed or new.
+
+Summary
+  The earlier run had 10 open findings and 1 accepted (the list below covers both). Since then:
+    - 3 fixed
+    - 3 still open
+    - 1 accepted since
+    - 1 no longer reported but not confirmed fixed
+    - 2 not checked again
+  Not in that count: 1 new, 1 reported for the first time, 1 open again. New means the earlier run
+  read it completely and did not find it; reported for the first time means the earlier run had not
+  looked.
+  1 moved to another asset and 1 renamed; they are counted once, where they stand now.
+
+New since the earlier run
+  - [high] The kernel is past its end of support on deploy. The earlier run read it completely and
+    did not find it.
+
+Reported for the first time
+  - [medium] SSH allows root to sign in on db1. The earlier run did not include this asset.
+
+Open again
+  - [high] A sensitive service listens without a firewall on web (6379/tcp). It was accepted before;
+    the acceptance by carol ran out (until 2026-10-10), so it is on the list again.
+
+Fixed
+  - A credential is in the repository's history on api (aws:AKIA@9f8e7d6c5b4a) (rated high before).
+    The check ran in full on 2026-10-22 and did not find it. Removing a credential from the code
+    does not show it was changed: whether it was revoked or rotated was not checked, and anyone who
+    copied it could still use it.
+  - The firewall allows inbound traffic by default on web (rated medium before). The check ran in
+    full on 2026-10-22 and did not find it.
+  - Package updates are pending on web (rated low before). The check ran in full on 2026-10-22 and
+    did not find it.
+
+Still open
+  - [high] A Workspace account has no 2-step verification on workspace (alice.smith@example.com)
+    (renamed from alice@example.com).
+  - [high] SSH accepts passwords on deploy (moved from deploy (host:203.0.113.5:22); the same
+    machine id, so scheck takes it for the same machine).
+  - [info] A database listens without a firewall on web (5432/tcp) (rated high before). Lowered
+    because the engagement file changed (added exposed_on_purpose to_info acme.yaml
+    assets.web.context.exposure); nothing read from the asset was shown to change.
+
+Accepted since the earlier run, not fixed
+  - [medium] SSH allows many authentication attempts on web. dave agreed to live with it (until
+    2027-01-31); the reason given: decided.
+
+No longer reported, not confirmed fixed
+  The later check did not report these, but something that has to hold before scheck calls a finding
+  fixed did not hold. Check them by hand, or compare two runs made with the same scheck release, the
+  same file and the same access.
+  You changed the engagement file, and the rule reads declarations from it:
+    - [high] A Workspace account has no 2-step verification on workspace (bob@example.com)
+
+Not checked again
+  The later run did not look at these, so nothing is said about them either way. Not looking is not
+  a fix.
+  The asset is not in the later run; removing it from scope does not fix it, and if it was shut down
+  scheck did not check that:
+    - [medium] SSH allows root to sign in on db1
+  The asset was not read this time: the access scheck was given cannot read this; it needs contents,
+  read-only where the provider offers it:
+    - [high] A credential is in the repository's history on shop (aws:AKIA@0a1b2c3d4e5f)
+
+Assets that changed
+  - db1 (host:203.0.113.20:22) is no longer in the engagement. Removing it from scope does not fix
+    anything on it.
+  - deploy moved from host:203.0.113.5:22 to host:203.0.113.9:22, the same machine or tenant.
+  - shop was collected and is now failed. The access scheck was given cannot read this; it needs
+    contents, read-only where the provider offers it.
+  - db1 was added to the engagement (host:203.0.113.22:22).
+
+Exit 1: attention needed. 3 new, first-reported, open-again or raised findings at or above the
+threshold. Exit 1 here counts what got worse. Findings that are still open in the later run (5 at or
+above the threshold) are not what it counts.

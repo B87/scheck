@@ -54,6 +54,14 @@ type Def struct {
 	// facts (docs/spec/engagement.md, "Multi-fact rules"): never a host
 	// posture rule's, and never the model's to report.
 	MultiFact bool
+	// ReadsDeclarations marks a finding whose rule reads the engagement
+	// file (the mail senders and selectors a domain declares, the
+	// application folders of a host) without naming it in the finding's
+	// rule.reads. A comparison of two runs cannot call such a finding fixed
+	// or new when the file changed between them (docs/spec/runs.md,
+	// "Comparing two runs"). Rules that name their declarations as
+	// `declared:` reads do not need it.
+	ReadsDeclarations bool
 }
 
 // Area is a risk area of the engagement report's coverage table, keyed as
@@ -361,7 +369,7 @@ var defs = map[string]Def{
 		},
 	},
 	IDEnvFileExposed: {
-		ID: IDEnvFileExposed, Title: "An application's .env file is open to every account, or to a group everyone belongs to",
+		ID: IDEnvFileExposed, ReadsDeclarations: true, Title: "An application's .env file is open to every account, or to a group everyone belongs to",
 		Category: "fs", Area: AreaSecrets, Exposure: NotExposure, Judges: "who can read .env files in the declared application folders", BaseSeverity: SevMedium,
 		Impact: "The .env files listed as evidence are readable (or writable) by any local account or service, not only the " +
 			"application that uses them. A .env file usually holds database passwords, API keys and signing secrets. " +

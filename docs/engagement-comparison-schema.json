@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scheck.dev/schemas/engagement-comparison-1.json",
+  "title": "scheck engagement comparison",
+  "description": "What `scheck diff` prints with --format json: two runs of one engagement compared from their report.json files alone (docs/spec/runs.md, \"Comparing two runs\"). Every string is a field of one of the two reports, already redacted. Enums a later release will extend (causes, notes, asset changes) are open: adding a value is a MINOR change and a consumer tolerates one it does not know.",
+  "type": "object",
+  "required": ["schema_version", "engagement", "earlier", "later", "comparable", "summary", "instances", "assets", "coverage", "people_left", "exit"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^1\\.[0-9]+$"},
+    "engagement": {"type": "string"},
+    "earlier": {"$ref": "#/$defs/side"},
+    "later": {"$ref": "#/$defs/side"},
+    "comparable": {
+      "type": "object",
+      "required": ["same_rules", "same_file", "vantage_changed", "redaction_rules_differ", "hours_apart", "principal_changes"],
+      "additionalProperties": false,
+      "properties": {
+        "same_rules": {"type": "boolean", "description": "Both runs are the same release build of scheck. Only then may a finding that is gone be fixed, or one that appears be new."},
+        "same_file": {"type": "boolean", "description": "The engagement file's hash is equal."},
+        "vantage_changed": {"type": "boolean"},
+        "redaction_rules_differ": {"type": "boolean", "description": "The runs were redacted with a different number of redact_extra patterns; subjects only the earlier run holds are withheld."},
+        "hours_apart": {"type": "integer", "minimum": 0, "description": "From the earlier run's last collection to the later run's first."},
+        "principal_changes": {"type": "array", "items": {"type": "string"}, "description": "Asset ids read as a different principal."}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["earlier_open", "earlier_accepted", "fixed", "still_open", "accepted_since", "still_accepted", "not_confirmed", "not_rechecked", "new", "first_reported", "reopened", "moved", "renamed"],
+      "additionalProperties": false,
+      "properties": {
+        "earlier_open": {"type": "integer", "minimum": 0},
+        "earlier_accepted": {"type": "integer", "minimum": 0, "description": "The earlier run's accepted findings; the categories cover open and accepted ones alike."},
+        "fixed": {"type": "integer", "minimum": 0},
+        "still_open": {"type": "integer", "minimum": 0},
+        "accepted_since": {"type": "integer", "minimum": 0},
+        "still_accepted": {"type": "integer", "minimum": 0},
+        "not_confirmed": {"type": "integer", "minimum": 0},
+        "not_rechecked": {"type": "integer", "minimum": 0},
+        "new": {"type": "integer", "minimum": 0},
+        "first_reported": {"type": "integer", "minimum": 0},
+        "reopened": {"type": "integer", "minimum": 0},
+        "moved": {"type": "integer", "minimum": 0},
+        "renamed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "instances": {
+      "type": "array",
+      "description": "One record per finding instance, once: a moved or renamed finding is still_open (or its status's category) with identity, never fixed plus new. In the order: new, first_reported, reopened, fixed, still_open, accepted_since, still_accepted, not_confirmed, not_rechecked; then severity, then id, asset and subject.",
+      "items": {"$ref": "#/$defs/instance"}
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["change", "asset", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "change": {"type": "string", "description": "added | removed | unlisted | moved | replaced | status | principal; open. unlisted: no longer in the asset list but the later run still read under it."},
+          "asset": {"type": "string"},
+          "name": {"type": "string"},
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "description": "Coverage rows whose mark differs.",
+      "items": {
+        "type": "object",
+        "required": ["area", "from", "to"],
+        "additionalProperties": false,
+        "properties": {
+          "area": {"type": "string"},
+          "tool": {"type": "string"},
+          "from": {"$ref": "#/$defs/mark"},
+          "to": {"$ref": "#/$defs/mark"}
+        }
+      }
+    },
+    "people_left": {
+      "type": "array",
+      "description": "A left person's line whose state differs between the runs.",
+      "items": {
+        "type": "object",
+        "required": ["handle", "provider", "asset", "from", "to"],
+        "additionalProperties": false,
+        "properties": {
+          "handle": {"type": "string"},
+          "provider": {"type": "string"},
+          "asset": {"type": ["string", "null"]},
+          "from": {"type": "string"},
+          "to": {"type": "string"}
+        }
+      }
+    },
+    "exit": {
+      "type": "object",
+      "description": "0 nothing at or above the asset's threshold is new, first reported, open again or raised (not a clean result); 1 something is; 2 the later run did not read everything. 3 is a pair that cannot be compared and prints no comparison.",
+      "required": ["code", "reasons", "open_at_or_above_threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"enum": [0, 1, 2]},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "open_at_or_above_threshold": {"type": "integer", "minimum": 0, "description": "The later run's open findings at or above their asset's threshold: what exit 0 does not say is fixed."}
+      }
+    }
+  },
+  "$defs": {
+    "mark": {"enum": ["assessed", "partial", "not_assessed", "not_applicable", "outside_scheck"]},
+    "severity": {"enum": ["critical", "high", "medium", "low", "info"]},
+    "side": {
+      "type": "object",
+      "required": ["directory", "started", "collected_from", "collected_to", "timezone", "scheck_version", "rules_version", "schema_version", "source_sha256", "report_sha256", "run_record_checked", "built_from", "exit_code", "operator_redaction_rules"],
+      "additionalProperties": false,
+      "properties": {
+        "directory": {"type": ["string", "null"], "description": "Null for a report file given on its own."},
+        "started": {"type": "string", "format": "date-time"},
+        "collected_from": {"type": "string", "format": "date-time"},
+        "collected_to": {"type": "string", "format": "date-time"},
+        "timezone": {"type": "string"},
+        "scheck_version": {"type": "string"},
+        "rules_version": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "source_sha256": {"type": "string"},
+        "report_sha256": {"type": "string"},
+        "run_record_checked": {"type": "boolean", "description": "The report's bytes matched the hash its run directory recorded. A report file on its own cannot say it was not edited."},
+        "built_from": {"enum": ["file", "host"]},
+        "vantage": {"type": "string"},
+        "exit_code": {"enum": [0, 1, 2, 3]},
+        "operator_redaction_rules": {"type": "integer", "minimum": 0}
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": ["kind", "key", "label"],
+      "properties": {
+        "kind": {"type": "string"},
+        "key": {"type": "string"},
+        "label": {"type": "string"},
+        "provider_id": {"type": "string"},
+        "person": {"type": "string"}
+      }
+    },
+    "ref": {
+      "type": "object",
+      "required": ["asset", "asset_name", "bound_id", "subject", "severity", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "asset": {"type": "string"},
+        "asset_name": {"type": "string"},
+        "bound_id": {"type": ["string", "null"]},
+        "subject": {"oneOf": [{"$ref": "#/$defs/subject"}, {"type": "null"}]},
+        "subject_withheld": {"const": true, "description": "The instance has a subject that is not printed because the two runs' redaction rules differ."},
+        "severity": {"$ref": "#/$defs/severity"},
+        "status": {"enum": ["open", "accepted"]}
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["rule", "by", "delta", "source", "declared"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": {"type": "string"},
+        "by": {"enum": ["collector", "engagement"]},
+        "delta": {"type": "string"},
+        "source": {"type": "string"},
+        "declared": {"type": "boolean", "description": "The step rests on a declaration in the engagement file, not on something read."}
+      }
+    },
+    "instance": {
+      "type": "object",
+      "required": ["category", "id", "title", "area", "earlier", "later"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {"enum": ["new", "first_reported", "reopened", "fixed", "still_open", "accepted_since", "still_accepted", "not_confirmed", "not_rechecked"]},
+        "cause": {"type": "string", "description": "Why a finding is first_reported, reopened, not_confirmed or not_rechecked: asset_not_in_run, asset_not_read, rule_not_assessed, rule_undecided, incomplete_population, rules_changed, declaration_changed, principal_changed, vantage_changed, asset_replaced, subject_unmatchable, subject_replaced, superseded, asset_not_listed, acceptance_expired, acceptance_ended. Open."},
+        "reason": {"type": "string", "description": "The asset's or assessment's reason token behind a cause."},
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "area": {"type": "string"},
+        "earlier": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}], "description": "Null for new, first_reported."},
+        "later": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}], "description": "Null for fixed, not_confirmed, not_rechecked."},
+        "identity": {"enum": ["moved", "renamed", "moved_renamed"], "description": "How the two runs' instances were joined when not by the same key: the asset moved (the same bound id), the subject was renamed (the same provider id), or both."},
+        "severity_change": {
+          "type": "object",
+          "required": ["from", "to", "added", "removed", "base_changed", "lowered_by_declaration"],
+          "additionalProperties": false,
+          "properties": {
+            "from": {"$ref": "#/$defs/severity"},
+            "to": {"$ref": "#/$defs/severity"},
+            "added": {"type": "array", "items": {"$ref": "#/$defs/step"}},
+            "removed": {"type": "array", "items": {"$ref": "#/$defs/step"}},
+            "base_changed": {"type": "boolean"},
+            "lowered_by_declaration": {"type": "boolean"}
+          }
+        },
+        "acceptance_change": {
+          "type": "object",
+          "required": ["from_status", "to_status", "expires"],
+          "additionalProperties": false,
+          "properties": {
+            "from_status": {"enum": ["open", "accepted"]},
+            "to_status": {"enum": ["open", "accepted"]},
+            "accepted_by": {"type": "string"},
+            "reason": {"type": "string"},
+            "expires": {"type": ["string", "null"], "format": "date"}
+          }
+        },
+        "not_checked": {"type": "array", "items": {"type": "string"}, "description": "A fixed instance's own not-checked lines from the earlier report: what the rule never saw still holds."},
+        "notes": {"type": "array", "items": {"type": "string"}, "description": "revocation_not_checked on a fixed secret. Open."}
+      }
+    }
+  }
+}

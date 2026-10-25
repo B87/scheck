@@ -154,6 +154,7 @@ func newRootCmd() *cobra.Command {
 		newLocalCmd(opts),
 		newSSHCmd(opts),
 		newRunCmd(opts),
+		newDiffCmd(opts),
 		newInitCmd(opts),
 		newCatalogCmd(opts),
 		newExplainCmd(opts),

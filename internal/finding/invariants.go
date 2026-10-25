@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/b87/scheck/internal/check"
 )
@@ -29,6 +30,7 @@ const (
 	RuleDefSeverity    = "finding-def-unknown-severity"
 	RuleDefCategory    = "finding-def-unknown-category"
 	RuleDefPremise     = "finding-def-premise-not-rule-covered"
+	RuleDefDeclares    = "finding-def-reads-declarations-unmarked"
 	RuleDefArea        = "finding-def-unknown-area"
 	RuleDefExposure    = "finding-def-exposure-undeclared"
 	RuleDefJudges      = "finding-def-judges-missing"
@@ -94,6 +96,10 @@ func ValidateRules() []Violation {
 		}
 		if d.BaseSeverity.Rank() < 0 {
 			out = append(out, Violation{d.ID, RuleDefSeverity, fmt.Sprintf("severity %q", d.BaseSeverity)})
+		}
+		// Every email rule judges the mail a domain declares it uses.
+		if (strings.HasPrefix(d.ID, "email.") || d.ID == IDEnvFileExposed) && !d.ReadsDeclarations {
+			out = append(out, Violation{d.ID, RuleDefDeclares, "the rule reads the engagement file but the definition does not say so (ReadsDeclarations)"})
 		}
 		for _, id := range d.Premise {
 			if len(rulesFor(id)) == 0 {
