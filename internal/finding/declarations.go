@@ -20,6 +20,18 @@ var alsoReadsDeclarations = map[string]bool{
 	IDDNSDanglingInternal:    true,
 	IDDNSTakeoverCandidate:   true,
 	IDDNSUnclaimedAtProvider: true,
+	// Intent URLs the file lists create the sites and pages the origin and
+	// TLS rules judge, and an exclude silences a record target without
+	// marking the assessment incomplete.
+	IDWebSecurityHeaders:      true,
+	IDWebHSTSMissing:          true,
+	IDWebPlaintextHTTP:        true,
+	IDWebPlaintextHTTPClients: true,
+	IDWebSecurityTXT:          true,
+	IDTLSCertificateInvalid:   true,
+	IDTLSCertificateExpiring:  true,
+	IDTLSLegacyOnly:           true,
+	IDDNSPrivateAddress:       true,
 }
 
 // ReadsDeclarations says whether a change to the engagement file alone could

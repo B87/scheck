@@ -345,7 +345,7 @@ record. Every file it reads (the report, `run.json`) is `Lstat`ed first and refu
 unless it is a regular file, so a pipe, a device or a link is never opened, and is
 read to at most 256 MiB. `report.ReadJSON` is strict: it refuses another schema MAJOR, a newer MINOR, any
 unknown field, any object key that is not a field's name exactly (a different case is
-refused, not matched) and any key written twice (inside a free-form value such as an outcome's `detail` too), and refuses a report nested more than 64 levels, so a hostile file costs no more than its size, and drops each host asset's embedded envelope. The comparison
+refused, not matched) and any key written twice (inside a free-form value such as an outcome's `detail` too), and refuses a report nested more than 64 levels. That bounds recursion depth and, with the 256 MiB size cap, the bytes read; it does not bound memory. Memory for free-form values (an outcome's `detail`, a derived value) grows with the input, many times its text size. It drops each host asset's embedded envelope. The comparison
 package (`internal/engagement/compare`) reads no file (`os`, `io/fs`, `io/ioutil` and
 `path/filepath` are forbidden to it); `scripts/depcheck.sh` holds it to
 the report types, `internal/finding` and `internal/report`, with no gate, collector,
@@ -439,9 +439,14 @@ and the appearing one counts toward exit 1.
   `github.too_many_owners`, `github.undeclared_public_repository`, nor one of
   `dns.dangling_external`, `dns.dangling_internal`, `dns.takeover_candidate` and
   `dns.unclaimed_at_provider` (which of them a DNS record is filed as depends on the
-  domain roots the file declares and its excludes), nor `web.secret_in_response` or
-  `web.version_disclosed` (the pages read include every intent URL the file lists, so
-  a finding about one page can vanish when its entry is removed). An id this build
+  domain roots the file declares and its excludes), nor `web.secret_in_response`,
+  `web.version_disclosed`, `web.security_headers`, `web.hsts_missing`,
+  `web.plaintext_http`, `web.plaintext_http_clients`, `web.security_txt`,
+  `tls.certificate_invalid`, `tls.certificate_expiring`, `tls.legacy_only` or
+  `dns.private_address` (eighteen named ids with those above: the pages and sites read
+  include every intent URL the file lists, so a finding about one can vanish when its
+  entry is removed, and an exclude silences a record target without marking the
+  assessment incomplete). An id this build
   does not know counts as reading it. A gone instance of such a rule is `not_confirmed`
   (`declaration_changed`; see `report.md`, "Text and JSON"), an appearing one
   `first_reported` with the same cause;

@@ -26,8 +26,10 @@ func checkKeys(raw []byte, t reflect.Type) error {
 }
 
 // maxDepth bounds how deep a report may nest. A report scheck writes nests
-// a dozen levels; the bound keeps a hostile file from costing more than its
-// size, whatever order the checks run in.
+// a dozen levels; the bound keeps the key walk's recursion shallow whatever
+// order the checks run in. It does not bound memory: free-form values
+// (an outcome's detail, a derived value) decode into maps and slices at many
+// times the size of their text.
 const maxDepth = 64
 
 func walk(dec *json.Decoder, t reflect.Type, path string, depth int) error {

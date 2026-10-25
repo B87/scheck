@@ -715,7 +715,7 @@ bound ids at one canonical id are `asset_replaced` whatever the source. A findin
 rule reads the engagement file is `not_confirmed` (`declaration_changed`) across an edit
 of it: every finding in the identity area, `svc.expected_missing`, `github.too_many_owners`,
 `github.undeclared_public_repository`, `dns.dangling_external`, `dns.dangling_internal`,
-`dns.takeover_candidate`, `dns.unclaimed_at_provider`, `web.secret_in_response` and `web.version_disclosed`, any rule that sets `ReadsDeclarations`, and an id the
+`dns.takeover_candidate`, `dns.unclaimed_at_provider`, `web.secret_in_response`, `web.version_disclosed`, `web.security_headers`, `web.hsts_missing`, `web.plaintext_http`, `web.plaintext_http_clients`, `web.security_txt`, `tls.certificate_invalid`, `tls.certificate_expiring`, `tls.legacy_only` and `dns.private_address` (eighteen named ids), any rule that sets `ReadsDeclarations`, and an id the
 build does not know. An account renamed into an `abstained` or `fired` outcome under
 another key is neither gone nor new (`subject_unmatchable`). The same subject key under a
 different provider id is `subject_replaced` (`not_confirmed` gone, `first_reported`

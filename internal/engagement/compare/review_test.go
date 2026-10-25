@@ -537,7 +537,7 @@ func TestOnlyAMachineIDIsIdentity(t *testing.T) {
 
 func TestIdentityAndAreaDeclarationsBlockAcrossAFileChange(t *testing.T) {
 	const ws = "saas:google-workspace:example.com"
-	for _, id := range []string{"svc.expected_missing", "web.secret_in_response", "web.version_disclosed", "dns.dangling_external", "dns.dangling_internal", "dns.takeover_candidate", "dns.unclaimed_at_provider", "github.too_many_owners", "github.undeclared_public_repository", "identity.unattributed_admin", "workspace.stale_account", "never.heard.of.it"} {
+	for _, id := range []string{"svc.expected_missing", "web.secret_in_response", "web.version_disclosed", "web.security_headers", "web.hsts_missing", "web.plaintext_http", "web.plaintext_http_clients", "web.security_txt", "tls.certificate_invalid", "tls.certificate_expiring", "tls.legacy_only", "dns.private_address", "dns.dangling_external", "dns.dangling_internal", "dns.takeover_candidate", "dns.unclaimed_at_provider", "github.too_many_owners", "github.undeclared_public_repository", "identity.unattributed_admin", "workspace.stale_account", "never.heard.of.it"} {
 		e, l := pairLab()
 		for _, r := range []*lab{e, l} {
 			r.asset(ws, "ws", "saas", "collected", "")
