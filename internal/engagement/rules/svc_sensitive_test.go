@@ -39,7 +39,7 @@ var sensitiveFixtures = []fixture{
 	})), "2375/tcp", Abstained, "unavailable:firewall_firewalld"},
 	{"iptables in /sbin on Alpine", sensHost(with(noFirewall(ss("tcp 0.0.0.0:2375 dockerd")), func(f fakeFacts) {
 		f.facts[checkBackend] = finding.Fact{Parsed: ""}
-		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"ID": "alpine"}}
+		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"id": "alpine"}}
 	})), "2375/tcp", Abstained, "unavailable:firewall_backend"},
 	{"listeners not read", sensHost(with(noFirewall(ss()), func(f fakeFacts) { f.why[checkListeners] = "check-denied:sudo_refused" })), "", Abstained, reasonListeners},
 }
