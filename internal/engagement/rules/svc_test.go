@@ -44,7 +44,7 @@ var svcFixtures = []fixture{
 		"8080/tcp", Abstained, reasonListeners},
 	{"iptables in /sbin on Alpine", svcHost(with(noFirewall(ss(appAll)), func(f fakeFacts) {
 		f.facts[checkBackend] = finding.Fact{Parsed: ""}
-		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"ID": "alpine"}}
+		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"id": "alpine"}}
 	}), "", declare(8080, "localhost")), "8080/tcp", Abstained, "unavailable:firewall_backend"},
 	{"a listener's port unreadable", svcHost(noFirewall(ss("tcp 0.0.0.0:abc node")), "", declare(8080, "localhost")), "8080/tcp", Abstained, reasonListeners},
 	{"loopback only beside an unreadable port", svcHost(noFirewall(ss("tcp 127.0.0.1:8080 node", "tcp 0.0.0.0:abc node")), "internet", declare(8080, "localhost")),

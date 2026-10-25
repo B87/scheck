@@ -120,7 +120,7 @@ var dbFixtures = []fixture{
 		"5432/tcp", Abstained, "unavailable:firewall_backend"},
 	{"iptables in /sbin on Alpine", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) {
 		f.facts[checkBackend] = finding.Fact{Parsed: ""}
-		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"ID": "alpine"}}
+		f.facts[checkOSRelease] = finding.Fact{Parsed: map[string]string{"id": "alpine"}}
 	})), "5432/tcp", Abstained, "unavailable:firewall_backend"},
 	{"Docker publishes it", host(noFirewall(ss("tcp 0.0.0.0:5432 docker-proxy"))), "5432/tcp", Abstained, reasonContainerPort},
 	{"owner not shown on a database port", host(noFirewall(ss("tcp 0.0.0.0:5432 -"))), "5432/tcp", Abstained, reasonListenerOwner},

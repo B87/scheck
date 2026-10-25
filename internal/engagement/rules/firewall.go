@@ -139,7 +139,7 @@ func unknownFirewall(reason, detail string) firewall {
 func alpine(v *View) bool {
 	f, why := v.Fact(checkOSRelease)
 	kv, _ := f.Parsed.(map[string]string)
-	return why == "" && strings.EqualFold(strings.Trim(kv["ID"], `"`), "alpine")
+	return why == "" && strings.EqualFold(strings.Trim(kv["id"], `"`), "alpine")
 }
 
 func asText(parsed any) string {
