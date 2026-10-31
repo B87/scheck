@@ -10,31 +10,44 @@ import (
 )
 
 // No model assesses a host in this build (docs/spec/host-collector.md §2.1): every flag
-// that selects one is a usage error on local and ssh, with nothing
-// executed and no report written.
-func TestModelFlagsAreRejectedByLocalAndSSH(t *testing.T) {
+// that selects one is a usage error on run, with nothing executed and no report
+// written.
+func TestModelFlagsAreRejectedByRun(t *testing.T) {
 	dir := t.TempDir()
 	cases := [][]string{
-		{"local", "--provider", "mock"},
-		{"local", "--provider", "openai-compatible"},
-		{"local", "--model", "gpt-5"},
-		{"local", "--base-url", "http://localhost:8000/v1"},
-		{"local", "--effort", "high"},
-		{"local", "--transcript", filepath.Join("..", "..", "testdata", "transcripts", "correlated-finding-linux.json")},
-		{"local", "--max-context", "8192"},
-		{"local", "--only", "network", "--stop-after", "facts"},
-		{"local", "--local-only", "--stop-after", "facts"},
-		{"ssh", "user@host", "--model", "gpt-5"},
-		{"ssh", "user@host", "--provider", "mock"},
-		// --include-evidence belongs to the fact stage of local and ssh only.
-		{"local", "--include-evidence", "--stop-after", "plan", "--format", "json"},
-		{"local", "--include-evidence", "--stop-after", "facts"},
+		{"run", "--host", "local", "--provider", "mock"},
+		{"run", "--host", "local", "--provider", "openai-compatible"},
+		{"run", "--host", "local", "--model", "gpt-5"},
+		{"run", "--host", "local", "--base-url", "http://localhost:8000/v1"},
+		{"run", "--host", "local", "--effort", "high"},
+		{"run", "--host", "local", "--transcript", filepath.Join("..", "..", "testdata", "transcripts", "correlated-finding-linux.json")},
+		{"run", "--host", "local", "--max-context", "8192"},
+		{"run", "--host", "local", "--only", "network"},
+		{"run", "--host", "local", "--local-only"},
+		{"run", "--host", "user@host", "--model", "gpt-5"},
+		{"run", "--host", "user@host", "--provider", "mock"},
+		// --include-evidence belongs to the JSON report of run only.
+		{"run", "--host", "local", "--include-evidence", "--stop-after", "plan", "--format", "json"},
+		{"run", "--host", "local", "--include-evidence"},
 		{"catalog", "--include-evidence", "--format", "json"},
 	}
 	for _, args := range cases {
 		out, code := runIn(t, dir, args...)
 		if code != exitUsage || out != "" {
 			t.Errorf("%v: exit %d, output %q", args, code, out)
+		}
+	}
+	// run refuses every flag it does not read, by name (rejectRunFlags).
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "--host", "local", "--model", "gpt-5"}, "--model is not available for scheck run"},
+		{[]string{"run", "--host", "local", "--only", "network"}, "--only is not available for scheck run"},
+	} {
+		_, _, msg, code := runCLI(t, tc.args...)
+		if code != exitUsage || !strings.Contains(msg, tc.want) {
+			t.Errorf("%v: exit %d: %s", tc.args, code, msg)
 		}
 	}
 }

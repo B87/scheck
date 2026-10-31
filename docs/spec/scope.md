@@ -1309,9 +1309,9 @@ deadline, a jump host that cannot reach the host) is a transport failure: the as
 lost after it worked stops that host's plan where it was lost, keeps what was read, and
 is `incomplete` with reason `failed`: never a complete run of unavailable checks. A
 session lost while the canary itself ran is a transport failure too, not a canary
-mismatch: nothing was shown to be altered. As aliases of `scheck run --host`, `scheck
-ssh` and `scheck local` follow these rules too: a host that never answered now exits 2
-where 0.0.1 exited 3, the one change a CI job gating on `scheck ssh` sees. The canary's
+mismatch: nothing was shown to be altered. `scheck run --host` follows these rules: a host
+that never answered exits 2 where 0.0.1's `scheck ssh` exited 3, the one change a CI job
+gating on it sees (`scheck ssh` is removed in 0.0.3, so such a job moves to `scheck run --host`). The canary's
 echo is printed only after redaction, and cut short, in the JSON only.
 
 For an API, a credential that is present but rejected (a 401, an invalid grant) is
@@ -1324,7 +1324,7 @@ exit 2.
 
 So a one-host run exits as the 0.0.1 command did for the same findings and the same
 failures, except a host that never answered (2, a transport failure, where 0.0.1 said
-3), and a CI job gating on `scheck ssh` keeps its meaning.
+3), and a CI job gating on 0.0.1's `scheck ssh`, moved to `scheck run --host`, keeps its meaning.
 
 | Outcome | Coverage reason | Exit |
 |---|---|---|

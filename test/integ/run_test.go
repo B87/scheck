@@ -14,8 +14,7 @@ import (
 	"github.com/b87/scheck/test/containers"
 )
 
-// `scheck run --host` reaches a real host through the same collector as
-// `scheck ssh`: a schema-valid engagement report on stdout and in the run
+// `scheck run --host` reaches a real host through the host collector: a schema-valid engagement report on stdout and in the run
 // directory, a schema-valid host envelope under evidence/, an audit log of
 // catalog argv only that the report's trace repeats, and a target the run
 // left as the exact allowlist of docs/spec/host-collector.md §1 says
@@ -121,57 +120,5 @@ func TestRunHostExitCodes(t *testing.T) {
 	_, errOut, code = containers.Run(t, bin, append([]string{"run", "--host", "u_fish@" + c.Addr()}, reach...)...)
 	if code != 3 || !strings.Contains(errOut, "canary") {
 		t.Fatalf("fish: code=%d stderr=%q", code, errOut)
-	}
-}
-
-// `scheck ssh user@host` and `scheck run --host user@host` give the same
-// report and the same command trace on a real host (docs/ROADMAP.md, E2
-// "Done when"); only times differ.
-func TestSSHAliasEqualsRunHost(t *testing.T) {
-	bin := containers.BuildScheck(t)
-	c := containers.Start(t, "ubuntu")
-	common := []string{"--identity", c.Identity, "--known-hosts", c.KnownHosts, "--sudo", "--format", "json", "--no-persist"}
-	aliasOut, errOut, aliasCode := containers.Run(t, bin, append([]string{"ssh", "ops@" + c.Addr()}, common...)...)
-	if !strings.Contains(errOut, "deprecated") {
-		t.Errorf("no deprecation line: %q", errOut)
-	}
-	runOut, _, runCode := containers.Run(t, bin, append([]string{"run", "--host", "ops@" + c.Addr()}, common...)...)
-	if aliasCode != runCode {
-		t.Fatalf("exit %d vs %d", aliasCode, runCode)
-	}
-	type step struct{ Check, Decision, OutputSHA256 string }
-	trace := func(out string) []step {
-		var rep struct {
-			Assets []struct {
-				Trace []struct {
-					Check        string `json:"check"`
-					Decision     string `json:"decision"`
-					OutputSHA256 string `json:"output_sha256"`
-				} `json:"trace"`
-			} `json:"assets"`
-			Findings []struct{ ID, Severity string } `json:"findings"`
-		}
-		if err := json.Unmarshal([]byte(out), &rep); err != nil {
-			t.Fatal(err)
-		}
-		var out2 []step
-		for _, e := range rep.Assets[0].Trace {
-			// Output hashes of time-dependent checks differ between runs.
-			out2 = append(out2, step{e.Check, e.Decision, ""})
-		}
-		return out2
-	}
-	a, r := trace(aliasOut), trace(runOut)
-	if len(a) == 0 || len(a) != len(r) {
-		t.Fatalf("traces: %d vs %d entries", len(a), len(r))
-	}
-	for i := range a {
-		if a[i] != r[i] {
-			t.Errorf("trace %d: %+v vs %+v", i, a[i], r[i])
-		}
-	}
-	if envelopeOf(t, aliasOut)["findings"] == nil || len(envelopeOf(t, aliasOut)["facts"].(map[string]any)) !=
-		len(envelopeOf(t, runOut)["facts"].(map[string]any)) {
-		t.Error("the two runs read different facts")
 	}
 }

@@ -99,9 +99,9 @@ before it was built, did not earn its cost, and is not part of this build
 sends nothing it read off the machine. v0.0.1, the host checker, is released; see
 [Installation](#installation).
 
-`scheck local` and `scheck ssh` are the 0.0.1 commands. In this build they are
-deprecated aliases of `scheck run --host local` and `scheck run --host user@host`,
-removed in 0.0.3, and scheck reads no configuration file: a 0.0.1 `scheck.yaml` makes a
+`scheck local` and `scheck ssh`, the 0.0.1 commands, are removed: use
+`scheck run --host local` and `scheck run --host user@host`. They are unknown commands
+now and exit 3. scheck reads no configuration file: a 0.0.1 `scheck.yaml` makes a
 run exit 3, naming where each of its keys now lives
 ([docs/spec/engagement.md](docs/spec/engagement.md), "One command, one file").
 

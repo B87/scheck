@@ -1178,7 +1178,7 @@ envelope (`host-collector.md §6.4`) whole, under that asset, with its own
 level down. A host asset's `bound_id_source` is the envelope's `host.id_source`. The report on stdout is complete without the run directory, so
 `--no-persist` loses nothing, and `--include-evidence` adds captures to the embedded
 envelope of each host this session collected ([runs.md](runs.md), "Stop and resume"). The engagement's own findings are authoritative where their severity differs
-from the envelope's ("The report", "Findings"). The aliases' deprecation line names the new path of `run.assessment`.
+from the envelope's ("The report", "Findings").
 
 
 JSON (`docs/engagement-report-schema.json`, `schema_version` `MAJOR.MINOR`, free to

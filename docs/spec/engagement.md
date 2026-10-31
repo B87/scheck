@@ -1433,7 +1433,8 @@ Reachability and the operator-declared vantage are defined in
 
 `scheck run` is the only command that assesses anything (0.0.2 E2). Its input is an
 engagement file or, for one host, a locator; a run directory resumes that run ("Stop
-and resume"):
+and resume"). `scheck local` and `scheck ssh`, the 0.0.1 commands, were aliases of
+`scheck run --host` in 0.0.2 and are removed in 0.0.3: unknown commands, exit 3.
 
 ```
 $ scheck run engagement.yaml
@@ -1484,7 +1485,8 @@ documents and the report as declared, so validation warns when a root, an asset'
 or its locator matches a pattern, naming their positions and the pattern's index, never
 either string.
 
-The deprecated aliases and their flag mapping are defined in
+The 0.0.2 aliases `scheck local` and `scheck ssh`, removed in 0.0.3, and the 0.0.1 flag
+mapping they had are recorded in
 [host-collector.md §8](host-collector.md#8-configuration).
 
 Exit codes and their precedence are defined in [scope.md](scope.md#outcomes).

@@ -9,8 +9,8 @@ What exists today, released as v0.0.1, is the **host collector**: a read-only po
 checker for one macOS or Linux host, local or over SSH. It becomes the collector for
 host assets in the engagement and its guarantees do not change. In 0.0.2 `scheck run`
 is the one command, with an engagement file or `--host`; `scheck local` and `scheck ssh`
-are deprecated aliases of `scheck run --host`, removed in 0.0.3, and no configuration
-file is read (`docs/spec/engagement.md`, "One command, one file"). This file is the
+were its deprecated aliases in 0.0.2 and are removed in 0.0.3 (unknown commands, exit 3),
+and no configuration file is read (`docs/spec/engagement.md`, "One command, one file"). This file is the
 operating manual for a coding agent in this repository.
 
 ## Documents
@@ -93,7 +93,7 @@ test passes.
 
 | Path | Owns |
 |---|---|
-| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report, or a run directory, which it resumes; `legacy.go` refuses a 0.0.1 config file), `init` (the interview, `init.go`, E8), `local` and `ssh` as deprecated aliases of `run --host` (`alias.go`), `diff` (two runs compared, `diff.go`, G6), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
+| `cmd/scheck` | cobra commands: `run` (an engagement file or `--host`, through the report, or a run directory, which it resumes; `legacy.go` refuses a 0.0.1 config file), `init` (the interview, `init.go`, E8), `diff` (two runs compared, `diff.go`, G6), `catalog`, `explain`, `sudoers`, `providers` and the hidden `eval` (model flags only, `model.go`); flag parsing; exit codes; the tty/`NO_COLOR`/width decision (`terminal.go`) |
 | `internal/target` | `Target` interface; `local`, `ssh`, `fixture` implementations |
 | `internal/check` | `Check`/`Param` types, registry, `Bind`, invariants `Validate`, parsers and the typed shapes (`listeners`, `accounts`, `file_mode`, `find_ls`, …); the argv builders of the credential finds and the `creds.app_env_N` slot ids (`credfind.go`, G5); `CloudVendor` and its versioned DMI table (`cloud.go`, G5 step 2), which names a cloud VM on the fact sheet from `sys.dmi` and judges nothing; the argv builders of the runtime package reads and the `packages` shape (`runtimes.go`, G8 step 1) |
 | `internal/advisory` | the dated table of named runtime disclosures (PHP, Node.js; `TableVersion`), the dpkg version ordering and `Assess` and `Covers`, the distributions whose package names the reads cover (G8 step 1, `docs/spec/host-collector.md §1`, §11). A leaf: standard library and `internal/check` only; the rules R7 to R9 in `internal/engagement/rules` call it (G8 step 2) |
@@ -139,7 +139,7 @@ about it:
 | `internal/engagement/rules` | the multi-fact rules over a host's facts, one rule per finding id with its declared reads and fixtures | E9 (step 3a: framework and R1; step 3b: R2; step 5a: R3; G5 step 3: R6; G8 step 2: R7 to R9) |
 | `internal/collector/github`, `internal/collector/workspace`, `internal/collector/web` | one package per collector: a declared list of read requests, their parsers and single-fact rules. A collector describes requests; the gate sends them | E5, E6, E7 |
 | `internal/engagement/hostasset` | the host collector as an asset: runs `baseline` through the runner and maps its facts and findings into the asset map; the only engagement package that imports `internal/runner` | E1b |
-| `cmd/scheck` | `run --stop-after intake` (E1a); `run` and `--host` (E1b); `--jump` (E1c); `local` and `ssh` as aliases of `run --host`, and `config` removed with `internal/config` (E2); `init` (E8) | E1a–E1c, E2, E8 |
+| `cmd/scheck` | `run --stop-after intake` (E1a); `run` and `--host` (E1b); `--jump` (E1c); `config` removed with `internal/config` and `local` and `ssh` as aliases of `run --host` (E2; the aliases removed in 0.0.3); `init` (E8) | E1a–E1c, E2, E8 |
 
 `scripts/depcheck.sh` holds the engagement's rules from E1a: `internal/engagement/...` and
 `internal/collector/...` have no `internal/llm`, `internal/agent` or `internal/bounded`
@@ -477,7 +477,7 @@ code is tested offline in `make check`, and a change that breaks one is still wr
 - The `<operator_context>` block and check output are data; `testdata/context` is the
   corpus and `internal/agent/injection_test.go` the boundary tests. They prove policy,
   not model resistance: only a live run recorded in `docs/eval/` does.
-- A model flag on `local` or `ssh` exits 3 (`modelFlags` in `cmd/scheck/root.go`); the
+- A model flag on `run` exits 3 (`rejectRunFlags` in `cmd/scheck/run.go`); the
   provider pre-flight lives in `cmd/scheck/evalcmd.go`. Keep both there.
 
 ## The bounded arm (`internal/bounded`)

@@ -51,8 +51,8 @@ var unavailableFlags = []string{"only", "local-only"}
 
 // modelFlags select and configure an inference provider. The model-assessed
 // pass did not earn its place in 0.0.1 (docs/spec/host-collector.md §2.1, recorded in
-// docs/eval/phase2-results.md), so `local` and `ssh` assess with the posture
-// rules alone and reject these flags rather than accepting them and
+// docs/eval/phase2-results.md), so `run` assesses with the posture
+// rules alone and `run` rejects these flags (rejectRunFlags) rather than accepting them and
 // quietly ignoring them. They still configure `scheck providers` and the
 // evaluation harness, which is the one remaining caller of phase 2.
 var modelFlags = []string{"provider", "model", "base-url", "effort", "transcript", "max-context"}
@@ -122,8 +122,7 @@ func newRootCmd() *cobra.Command {
 	root.Long = "scheck init interviews the operator and writes an engagement file. scheck run takes\n" +
 		"that file, or --host for one host, and reports what was checked, what was not, and what to\n" +
 		"fix first. It only reads: nothing is probed, scanned or changed, and no model assesses\n" +
-		"anything in this build, so no API key is needed (docs/spec/engagement.md). scheck local and\n" +
-		"scheck ssh are deprecated aliases of scheck run --host, removed in 0.0.3.\n" +
+		"anything in this build, so no API key is needed (docs/spec/engagement.md).\n" +
 		"Exit codes: 0 no open finding at or above threshold (not a clean result: read what\n" +
 		"was not checked), 1 findings, 2 incomplete run, 3 usage/policy/canary error.\n" +
 		"The report goes to stdout; diagnostics to stderr. scheck init contacts nothing and exits 0\n" +
@@ -136,8 +135,6 @@ func newRootCmd() *cobra.Command {
 		if cmd.Name() == "sudoers" && opts.Format != "text" {
 			return usageErr("sudoers emits a text fragment; --format json is not supported")
 		}
-		// The default run and --stop-after facts collect the same facts, so
-		// both may carry the optional diagnostics; plan and context have none.
 		// On run, the report embeds each host's envelope and carries them there.
 		switch {
 		case !opts.IncludeEvidence:
@@ -145,14 +142,12 @@ func newRootCmd() *cobra.Command {
 			if opts.Format != "json" || (opts.StopAfter != "" && opts.StopAfter != "report") {
 				return usageErr("--include-evidence on run requires --format json and no --stop-after other than report")
 			}
-		case opts.Format != "json" || (opts.StopAfter != "" && opts.StopAfter != "facts") || (cmd.Name() != "local" && cmd.Name() != "ssh"):
-			return usageErr("--include-evidence requires scheck run (or its local and ssh aliases) with --format json")
+		default:
+			return usageErr("--include-evidence requires scheck run with --format json")
 		}
 		return nil
 	}
 	root.AddCommand(
-		newLocalCmd(opts),
-		newSSHCmd(opts),
 		newRunCmd(opts),
 		newDiffCmd(opts),
 		newInitCmd(opts),

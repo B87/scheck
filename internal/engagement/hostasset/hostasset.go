@@ -1,7 +1,7 @@
 // Package hostasset is the host collector as an engagement asset
 // (docs/ROADMAP.md, E1b): it reaches one host, verifies the SSH canary,
 // runs the baseline plan through the runner and assesses the facts with the
-// posture rules, exactly as `scheck local` and `scheck ssh` do. It is the
+// posture rules, exactly as `scheck run --host` does. It is the
 // only engagement package that imports internal/runner or a target
 // (AGENTS.md, "Layout"); the host collector's guarantees do not change by
 // being reached from here (docs/spec/host-collector.md §1, §4).
@@ -326,7 +326,7 @@ type Reach struct {
 
 // dial connects over SSH. An address that never answered is a transport
 // failure; anything the operator's own configuration or the host refused
-// is a usage error, as `scheck ssh` treats it.
+// is a usage error, as `scheck run --host` treats it.
 func dial(ctx context.Context, o Options, maxOutput int, logf func(string, ...any)) (*ssh.Target, error) {
 	if o.User == "" {
 		return nil, accessRefused("host %s has no SSH user: write it into the locator as user@%s", o.Host, o.Host)
