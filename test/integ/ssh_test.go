@@ -56,7 +56,7 @@ func TestCanaryMatrix(t *testing.T) {
 	}
 }
 
-// The CLI path, through the 0.0.2 alias: exit 3 on a failed canary with the
+// The CLI path, through `scheck run --host`: exit 3 on a failed canary with the
 // echo kept out of the text, a run on a POSIX shell, and exit 3 on an
 // unknown host key.
 func TestSSHCommandExitCodes(t *testing.T) {
@@ -64,17 +64,17 @@ func TestSSHCommandExitCodes(t *testing.T) {
 	bin := containers.BuildScheck(t)
 	common := []string{"--identity", c.Identity, "--known-hosts", c.KnownHosts, "--no-persist"}
 
-	out, errOut, code := containers.Run(t, bin, append([]string{"ssh", "u_fish@" + c.Addr()}, common...)...)
+	out, errOut, code := containers.Run(t, bin, append([]string{"run", "--host", "u_fish@" + c.Addr()}, common...)...)
 	if code != 3 || !strings.Contains(errOut, "canary") || !strings.Contains(out, "REFUSED:") ||
 		!strings.Contains(out, "login shell changed what it sent back") || !strings.Contains(out, "does not by itself mean") {
 		t.Fatalf("fish: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
-	out, errOut, code = containers.Run(t, bin, append([]string{"ssh", "u_bash@" + c.Addr(), "--format", "json"}, common...)...)
+	out, errOut, code = containers.Run(t, bin, append([]string{"run", "--host", "u_bash@" + c.Addr(), "--format", "json"}, common...)...)
 	if code > 1 || !strings.Contains(out, `"canary": "ok"`) {
 		t.Fatalf("bash: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
 	// An unreadable known_hosts file: refused before any contact, exit 3.
-	out, errOut, code = containers.Run(t, bin, "ssh", "u_bash@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts+".missing", "--no-persist")
+	out, errOut, code = containers.Run(t, bin, "run", "--host", "u_bash@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts+".missing", "--no-persist")
 	if code != 3 || !strings.Contains(out, "scheck could not use the access it was given") {
 		t.Fatalf("missing known_hosts: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}
@@ -83,7 +83,7 @@ func TestSSHCommandExitCodes(t *testing.T) {
 	if err := os.WriteFile(empty, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, errOut, code = containers.Run(t, bin, "ssh", "u_bash@"+c.Addr(), "--identity", c.Identity, "--known-hosts", empty, "--no-persist")
+	out, errOut, code = containers.Run(t, bin, "run", "--host", "u_bash@"+c.Addr(), "--identity", c.Identity, "--known-hosts", empty, "--no-persist")
 	if code != 3 || !strings.Contains(out, "its host key is not in your known_hosts file") {
 		t.Fatalf("unknown host: code=%d stdout=%q stderr=%q", code, out, errOut)
 	}

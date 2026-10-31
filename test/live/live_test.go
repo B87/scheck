@@ -4,8 +4,8 @@
 // docs/spec/host-collector.md §9): SCHECK_LIVE=1 and OPENAI_API_KEY (or a --base-url endpoint) are
 // required, and `make live` runs them. They never run in `make check`.
 //
-// `scheck local` and `scheck ssh` assess with the posture rules alone and
-// cost nothing in this build (docs/spec/host-collector.md §2.1), so the one path left that
+// `scheck run` assesses a host with the posture rules alone and
+// costs nothing in this build (docs/spec/host-collector.md §2.1), so the one path left that
 // spends money is the evaluation harness. This test drives it against one
 // labeled case: it checks the adapter end to end against the real endpoint
 // and records the cost of one agent run.

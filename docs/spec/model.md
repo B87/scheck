@@ -6,7 +6,7 @@ evaluation harness that drives them (`internal/eval`, behind the hidden `scheck 
 The host collector it builds on is [host-collector.md](host-collector.md); the bounded
 experiment is [bounded.md](bounded.md); the plan is [../ROADMAP.md](../ROADMAP.md).
 
-**Status.** No `scheck local` or `scheck ssh` run builds a provider
+**Status.** No `scheck run` builds a provider
 (host-collector.md §2.1). This code is kept and tested offline. The 0.0.1 evaluation
 failed the frozen criteria ([../eval/phase2-criteria.md](../eval/phase2-criteria.md),
 [../eval/phase2-results.md](../eval/phase2-results.md)): the agent loop made no tool
@@ -22,8 +22,8 @@ commit; the history is git history. Code comments cite sections as
 
 ## 1. Inference layer (provider-agnostic)
 
-Inference is a replaceable component behind `scheck eval` (host-collector.md §2.1). A `local` or `ssh`
-run does not build a provider. The built adapters are `openai-compatible` and `mock`.
+Inference is a replaceable component behind `scheck eval` (host-collector.md §2.1). A `scheck run`
+does not build a provider. The built adapters are `openai-compatible` and `mock`.
 A second production adapter, emulation and a guaranteed local-only mode are not in this
 build. A loopback URL does not establish a zero-egress guarantee.
 

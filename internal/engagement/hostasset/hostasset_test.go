@@ -96,7 +96,7 @@ func roundTrip(t *testing.T, env report.Envelope) report.Envelope {
 // fields removed, so only what the collector read and concluded compares.
 //
 // Unelevated, the host collector first runs sys.uid to detect a root
-// session, as `scheck local` and `scheck ssh` do; the report goldens are
+// session, as `scheck run --host` does; the report goldens are
 // built from the plan alone. With rootProbe, that one observation is
 // removed and the plan's own sys.uid takes its reference back; occurrence
 // numbers, which it shifts, are not compared.

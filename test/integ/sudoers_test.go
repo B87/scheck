@@ -23,13 +23,13 @@ func TestSudoersFragmentOnUbuntu(t *testing.T) {
 	}
 
 	sshArgs := func(extra ...string) []string {
-		return append([]string{"ssh", "ops@" + c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-			"--stop-after", "facts", "--format", "json", "--no-persist"}, extra...)
+		return append([]string{"run", "--host", "ops@" + c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
+			"--format", "json", "--no-persist"}, extra...)
 	}
 	facts := func(args []string) map[string]map[string]any {
 		out, errOut, code := containers.Run(t, bin, args...)
 		if code > 1 {
-			t.Fatalf("scheck ssh: %d\n%s", code, errOut)
+			t.Fatalf("scheck run: %d\n%s", code, errOut)
 		}
 		env := envelopeOf(t, out)
 		facts := map[string]map[string]any{}
