@@ -19,7 +19,7 @@ const (
 
 // notCheckedDB is what every R1 judgment leaves unread.
 const notCheckedDB = "Whether a cloud firewall or security group blocks it was not assessed; who can sign in to the " +
-	"database (pg_hba.conf, database users and passwords) was not read"
+	"database (its users, passwords and access rules, such as pg_hba.conf) was not read"
 
 // whyInternet is R1's sentence when the service is declared for the
 // internet: the rating stays at base.
@@ -75,7 +75,7 @@ func dbSubject(v *View, g portGroup, group []listener, fr *firewallReader) (Outc
 	for _, l := range group {
 		reason, detail := ownerDoubt(l)
 		switch {
-		case isDatabase(l.process, l.port):
+		case isDatabase(l):
 			dbs = append(dbs, l)
 		case reason != "" && table:
 			// A container runtime or port proxy hides a database only on a
@@ -121,6 +121,10 @@ func dbSubject(v *View, g portGroup, group []listener, fr *firewallReader) (Outc
 		if line := r.allowedFrom("the ones that need it"); line != "" {
 			o.NotChecked = append(o.NotChecked, line)
 		}
+	}
+	if slices.ContainsFunc(dbs, func(l listener) bool { return l.process == "java" }) {
+		o.NotChecked = append(o.NotChecked, "A java process on "+g.key()+" is read as Elasticsearch or OpenSearch from its port; "+
+			"which program it is was not confirmed")
 	}
 	return o, true
 }

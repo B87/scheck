@@ -1833,7 +1833,8 @@ older than 7 days is collected again on resume; every risk area's row prints its
      (`internal/engagement/judge.go`), graded by `severity.GradeAll`; an acceptance of a
      multi-fact id goes through the report's judged path. The `fw.iptables_backend` check
      (D3) and `net.listeners` elevated (D3b); the golden command traces change by exactly
-     those lines. R1 `db.listens_unfiltered` with `DatabasesVersion` 2026-10-15 and
+     those lines. R1 `db.listens_unfiltered` with `DatabasesVersion` 2026-10-15 (2026-10-31
+     since G5 added `java` on 9200 and 9300) and
      ufw's verbose rule grammar as its `get_status` prints it (no profile table: verbose
      output prints each application rule's ports), the firewall reading (`rules/firewall.go`, reused
      by R3), the severity row `exposure:internet`, the Data row read from a host's
@@ -2630,16 +2631,30 @@ remote-administration ports and the services you declared" (`spec/engagement.md`
 
 **Carried, not built in steps 1 to 3** (each needs a decision or a later step):
 
-- `creds.authorized_keys_writable`, joined with sshd's `StrictModes` (deferred).
+- `creds.authorized_keys_writable`, joined with sshd's `StrictModes`: deferred
+  (`security-consultant`, 2026-10-31). `authorized_keys` is not in `credNames`, so it needs
+  an argv change, a golden trace change and fixtures; `findPruned` lists only
+  non-traversable folders, so a writable `~/.ssh` is invisible to it; and the `StrictModes`
+  join, Debian's user-group modes and `AuthorizedKeysFile` from `sshd -T` make it a design,
+  not a small item.
 - `group_grants_root`: a named group is a deliberate share and is not judged.
-- A rule for membership of the `docker` group (deferred).
+- A rule for membership of the `docker` group: deferred (`security-consultant`,
+  2026-10-31). There is no `/etc/group` fact; the deploy user is in `docker` on nearly
+  every small server, and G5 decided a named group is a deliberate share, so a rule would
+  fire on almost every host. It is better later as an informational "accounts effectively
+  root" line that includes `sudoers` membership.
 - Host acceptance by subject: `creds.*` per file (candidate subject `secret_location`)
-  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Acceptance is
-  by id until decided.
+  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Deferred
+  (2026-10-31): it is larger than a few hundred lines, an engine and report-contract
+  change that needs its own decisions. Acceptance stays by id until then.
 - The listener-exposure rule's cloud part, which needs G1's firewall rules.
 - A presence readout note for credential files on production or internet hosts (G4).
-- Elasticsearch and OpenSearch in R1's database table: recommended by the
-  security-consultant, not decided or built.
+- Elasticsearch and OpenSearch in R1's database table: built 2026-10-31
+  (`security-consultant` decision, `DatabasesVersion` 2026-10-31). Matched as `java` on
+  9200 and 9300 only, since the kernel names the bundled JVM; severity unchanged. The
+  judgment never claims the program or its security setting: a Not-checked sentence says
+  the program was read from its port and not confirmed. Other ports, or a store not shown
+  as `java`, stay in the fixed `data.other_stores` not-judged item.
 - DMI-driven wording: where the cloud platform is identified, the "Not checked" lines of
   R1, R3 and R6 could name that provider's firewall instead of "a cloud firewall"
   (undecided).
@@ -2778,9 +2793,13 @@ rewrites it when scheck connects as root is deferred to a later integration test
   macOS gets no rule and says so.
 - `php.line_unsupported`: not built; unreachable until a source tracking upstream for PHP
   8.1 and older is read, so it is carried with the Homebrew and source reads.
-- A `php.ini` check for `session.upload_progress`: not built, by decision; CVE-2026-115560
-  (no fix; needs application code that sets `session.serialize_handler`) appears in the
-  remediation text only.
+- A `php.ini` check for `session.upload_progress`: not built, by decision
+  (`security-consultant`, re-decided 2026-10-31); CVE-2026-115560 (no fix; needs
+  application code that sets `session.serialize_handler`) appears in the remediation text
+  only, as the `php.fix_missing` caveat. The setting defaults to On, so a rule would fire
+  on nearly every PHP host; a disproof from one `php.ini` is unsound across SAPIs,
+  `conf.d`, pool settings and `.user.ini`; paths vary by version and the catalog takes
+  literal argv; and exploitability depends on application code scheck cannot see.
 - R6 table additions: the PHP-FPM FastCGI port beyond loopback as unauthenticated, and the
   Node inspector on 9229/tcp. Outside the version rules.
 - Installs under home directories (nvm, volta, asdf, fnm).

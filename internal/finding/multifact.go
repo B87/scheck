@@ -32,6 +32,7 @@ var multiFactDefs = []Def{
 				"#   postgres: listen_addresses = 'localhost'",
 				"#   MySQL/MariaDB: bind-address = 127.0.0.1",
 				"#   Redis: bind 127.0.0.1",
+				"#   Elasticsearch/OpenSearch: network.host: 127.0.0.1 in elasticsearch.yml or opensearch.yml",
 				"# other machines need it: allow only their addresses",
 				"sudo ufw default deny incoming",
 				"sudo ufw allow from 10.0.0.5 to any port 5432 proto tcp",

@@ -41,9 +41,10 @@ Data stores and backups  checked in part
   Not judged in this version: who can sign in to each database (pg_hba.conf, database users and
   their passwords); databases on hosts that filter with firewalld or their own nftables rules
   (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules
-  bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
-  RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
-  link; whether backups exist, where they are kept, and who can delete them.
+  bypass the host firewall; data stores not in scheck's database list (MinIO, Cassandra, Kafka,
+  RabbitMQ and others), and Elasticsearch or OpenSearch on ports other than 9200 and 9300 or not
+  shown as java; Google Drive sharing defaults, and files shared with anyone who has the link;
+  whether backups exist, where they are kept, and who can delete them.
 External surface         checked in part
   1 of 1 asset read.
   Not judged in this version: which ports and services answer from the internet (scheck reads; it
@@ -144,8 +145,8 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                  high: the cloud firewall and the service's own sign-in were not read, so scheck
                  cannot say anyone can use this now.
    Not checked   Whether a cloud firewall or security group blocks it was not assessed; who can sign
-                 in to the database (pg_hba.conf, database users and passwords) was not read;
-                 Filters outside nftables (eBPF programs such as Cilium's) were not read
+                 in to the database (its users, passwords and access rules, such as pg_hba.conf) was
+                 not read; Filters outside nftables (eBPF programs such as Cilium's) were not read
    Fix           If only this host uses the database, bind it to localhost and restart it. If other
                  machines need it, allow the port only from their addresses. Check your cloud
                  firewall rules too: scheck did not read them.
@@ -158,6 +159,7 @@ To accept a risk instead of fixing it, see IF YOU DECIDE NOT TO FIX A FINDING af
                    #   postgres: listen_addresses = 'localhost'
                    #   MySQL/MariaDB: bind-address = 127.0.0.1
                    #   Redis: bind 127.0.0.1
+                   #   Elasticsearch/OpenSearch: network.host: 127.0.0.1 in elasticsearch.yml or opensearch.yml
                    # other machines need it: allow only their addresses
                    sudo ufw default deny incoming
                    sudo ufw allow from 10.0.0.5 to any port 5432 proto tcp

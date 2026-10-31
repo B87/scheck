@@ -15,7 +15,7 @@ import (
 // ContextTableVersion identifies C3's table: the CNAME targets, actions and
 // secret names that contradict a not_used area. A change to it changes
 // this constant (docs/spec/engagement.md, "Context notes").
-const ContextTableVersion = "2026-10-15"
+const ContextTableVersion = "2026-10-31"
 
 // cnameClouds are the CNAME target suffixes of a cloud provider's hosting.
 // ghs.googlehosted.com is left out: Google Sites uses it too.
@@ -288,7 +288,11 @@ func (r *run) contradictions(area string) []string {
 				if strings.Contains(addr, ":") {
 					addr = "[" + addr + "]"
 				}
-				out = append(out, fmt.Sprintf("`%s` listens on %s:%d on `%s`", db.Process, addr, db.Port, ra.Name))
+				clause := fmt.Sprintf("`%s` listens on %s:%d on `%s`", db.Process, addr, db.Port, ra.Name)
+				if db.ByPort {
+					clause += ", read as a data store from its port"
+				}
+				out = append(out, clause)
 			}
 		}
 	}
