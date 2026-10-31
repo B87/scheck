@@ -37,6 +37,19 @@ func TestModelFlagsAreRejectedByRun(t *testing.T) {
 			t.Errorf("%v: exit %d, output %q", args, code, out)
 		}
 	}
+	// run refuses every flag it does not read, by name (rejectRunFlags).
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "--host", "local", "--model", "gpt-5"}, "--model is not available for scheck run"},
+		{[]string{"run", "--host", "local", "--only", "network"}, "--only is not available for scheck run"},
+	} {
+		_, _, msg, code := runCLI(t, tc.args...)
+		if code != exitUsage || !strings.Contains(msg, tc.want) {
+			t.Errorf("%v: exit %d: %s", tc.args, code, msg)
+		}
+	}
 }
 
 // The evaluation harness is the one caller of phase 2 left, so it owns the

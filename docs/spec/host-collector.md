@@ -128,19 +128,19 @@ produced. Their findings are the floor: phase 2 can add to them and enrich them,
 remove or soften them. The phase 1 report is written for a person (§6.6), so
 `--stop-after facts` is a complete tool, not a debug dump.
 
-**Decision: `scheck local` and `scheck ssh` assess with the posture rules alone.**
+**Decision: host assessment (0.0.1 `scheck local` and `scheck ssh`, now `scheck run --host`) uses the posture rules alone.**
 The phase 2 evaluation failed its frozen criteria (`docs/eval/phase2-criteria.md`,
 `docs/eval/phase2-results.md`), so no model assesses a host. These commands build no
 provider, need no credential, and send nothing a check observed off the machine. The
 flags that select a model (`--provider`, `--model`, `--base-url`, `--effort`,
-`--transcript`, `--max-context`) exit 3 on those commands, and the same keys in a
+`--transcript`, `--max-context`) exit 3 on `scheck run`, and the same keys in a
 configuration file are unused. Operator context, the grader and the finding store
 still grade what the rules produce.
 
 The model half stays in the tree, reachable only from the hidden `scheck eval`, which
 runs against fixtures and owns the provider pre-flight (model.md). The report envelope
-keeps its phase 2 fields (§6.4) because the harness still produces them; no `local` or
-`ssh` path fills them. Reviving phase 2 on a host run means a new record that passes
+keeps its phase 2 fields (§6.4) because the harness still produces them; no host
+run path fills them. Reviving phase 2 on a host run means a new record that passes
 those criteria, not a spec edit.
 
 ---
@@ -1143,8 +1143,8 @@ contract, pinned by golden tests per fixture (§9):
 > **Superseded in 0.0.2 (ROADMAP E2), removed in 0.0.3.** `scheck local` and
 > `scheck ssh` were aliases of `scheck run --host` in 0.0.2; in 0.0.3 they are unknown
 > commands and exit 3. The 0.0.1 flag mapping is recorded in §8, "0.0.2 migration and
-> aliases". `--context`, `--ignore-context`, `--audit-log` and `--stop-after plan` exit 3
-> on `scheck run`, naming their replacement. `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
+> aliases". `--context`, `--ignore-context` and `--audit-log` exit 3
+> on `scheck run`, naming their replacement. (`--stop-after plan` is a stage of `scheck run`, which reads the host first.) `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
 > `config` was removed with §8. The block below records 0.0.1.
 
 ```
@@ -1331,19 +1331,23 @@ file lookups and stays.
 `scheck run --host local` and `scheck ssh user@host` was `scheck run --host user@host`,
 each printing a deprecation line on stderr. In 0.0.3 both are unknown commands: exit 3,
 `unknown command "local" for "scheck"`, nothing collected, and their flags are not
-parsed. The table records where each 0.0.1 flag lives under `scheck run --host`; on
-`scheck run`, a flag with no home exits 3 naming its replacement:
+parsed. The table records where each 0.0.1 flag lives under `scheck run --host`, and
+what the 0.0.2 aliases did with it. On `scheck run`, only `--context`, `--ignore-context`
+and `--audit-log` exit 3 naming their replacement; `--port` is an unknown flag, and
+`--stop-after` takes the stages of `scheck run` only. Where a row says "exits 3 naming" a
+`--stop-after` value, it describes the 0.0.2 alias; on `scheck run`, `--stop-after plan`
+is the Plan stage, which reads the host first:
 
 | 0.0.1 flag | Under `scheck run --host` |
 |---|---|
-| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (`--port` wins over a port in the argument, as in 0.0.1); `--identity`, `--known-hosts`. |
+| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (the 0.0.2 alias let `--port` win over a port in the argument; `scheck run` has no `--port`); `--identity`, `--known-hosts`. |
 | `--sudo`, `--elevate`, `--profile` | the same, except that `--sudo` with `--elevate none` exits 3, where 0.0.1 let `--elevate` win |
 | `--timeout` | the same: the host collector's run timeout, not `limits.timeout` |
 | `--format`, `--out`, `-v`, `-vv`, `--state-dir`, `--no-persist` | the same; `--format json` prints the engagement report |
 | `--include-evidence` | the same: with `--format json`, the hosts' redacted captures inside each embedded envelope, on stdout only |
 | `--record-fixtures` (hidden) | the same: every exec of the host written to a fixture directory, post-redaction |
 | `--stop-after context` | `--stop-after intake` |
-| `--stop-after plan` | exits 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
+| `--stop-after plan` | (0.0.2 alias) exited 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
 | `--stop-after facts` | no flag: it is the run |
 | `--context`, `--ignore-context` | exit 3: context is `assets.<name>.context` in a file (`--write-engagement`) |
 | `--audit-log` | exits 3 naming the run directory's `audit.jsonl` |

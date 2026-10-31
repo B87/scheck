@@ -104,7 +104,9 @@ A deferred gate is recorded as *not run*, never as passed, in the release's reco
 defined: the lab gate is the only part decided.
 
 Open placements, undecided: whether 0.0.2 gate 10 (`scheck run --host` against the
-`scheck ssh` alias on the lab host) is lab-bound; whether gate 6's second half and gate
+`scheck ssh` alias on the lab host) is lab-bound, and, with the aliases removed in this
+branch, whether it can be run at all (only against a 0.0.2 build; its unit and integration
+evidence went with the aliases, and the maintainer decides whether it is given up); whether gate 6's second half and gate
 7's integration diff now count as their own gates; which gates a 0.0.2 or 0.0.3 tag
 would need, if one is ever cut.
 

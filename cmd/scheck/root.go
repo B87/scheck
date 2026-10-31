@@ -52,7 +52,7 @@ var unavailableFlags = []string{"only", "local-only"}
 // modelFlags select and configure an inference provider. The model-assessed
 // pass did not earn its place in 0.0.1 (docs/spec/host-collector.md §2.1, recorded in
 // docs/eval/phase2-results.md), so `run` assesses with the posture
-// rules alone and rejects these flags rather than accepting them and
+// rules alone and `run` rejects these flags (rejectRunFlags) rather than accepting them and
 // quietly ignoring them. They still configure `scheck providers` and the
 // evaluation harness, which is the one remaining caller of phase 2.
 var modelFlags = []string{"provider", "model", "base-url", "effort", "transcript", "max-context"}
@@ -135,7 +135,6 @@ func newRootCmd() *cobra.Command {
 		if cmd.Name() == "sudoers" && opts.Format != "text" {
 			return usageErr("sudoers emits a text fragment; --format json is not supported")
 		}
-		// The default run and --stop-after facts collect the same facts, so
 		// On run, the report embeds each host's envelope and carries them there.
 		switch {
 		case !opts.IncludeEvidence:

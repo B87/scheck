@@ -477,7 +477,7 @@ code is tested offline in `make check`, and a change that breaks one is still wr
 - The `<operator_context>` block and check output are data; `testdata/context` is the
   corpus and `internal/agent/injection_test.go` the boundary tests. They prove policy,
   not model resistance: only a live run recorded in `docs/eval/` does.
-- A model flag on `run` exits 3 (`modelFlags` in `cmd/scheck/root.go`); the
+- A model flag on `run` exits 3 (`rejectRunFlags` in `cmd/scheck/run.go`); the
   provider pre-flight lives in `cmd/scheck/evalcmd.go`. Keep both there.
 
 ## The bounded arm (`internal/bounded`)
