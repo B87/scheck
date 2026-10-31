@@ -31,6 +31,7 @@ contracts now live in `docs/spec/` (`host-collector.md`, `model.md`, `bounded.md
 | `e6-decisions-2026-10-12.md` | Owner decisions of 2026-10-12: S7 is a coverage gap, not exit 2; `directory_oauth` needs no `authorization.mailboxes` entry. No code change, no acceptance pass, no live tenant |
 | `e6-closing-review-2026-10-12.md` | E6 step 7: offline reviews, documentation drift fixes, and attributed live measurements on one authorized tenant. Not acceptance; recall, false positives and the E3 seal were not passed |
 | `e6-federation-2026-10-18.md` | Owner decision to build option A of the E6 step 4 federation blocker (`access.mfa[i].sign_in`), the AI DEFINE and client interview pass, first adversarial review fixes; re-review pending; offline only, no live tenant, no acceptance |
+| `deferred-gates-0.0.2-2026-10-25.md` | The 0.0.2 gates: none run, merged into `main` without them on 2026-10-24; the lab gates deferred to v1.0.0 on 2026-10-25; what remains unmeasured. Not an acceptance |
 
 New releases add `acceptance-<version>.md` (see `../RELEASING.md`), and any model
 feature that becomes a default adds its frozen criteria and results here first.

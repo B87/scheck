@@ -416,10 +416,13 @@ version constant.
 ## Conventions
 
 - One commit per roadmap slice, `make check` green at every commit, message in the
-  imperative describing the slice. 0.0.2 slices are pull requests into
-  `release/v0.0.2`, one per slice, with CI green; the branch merges into `main` once the
-  0.0.2 gates are recorded in `docs/eval/acceptance-0.0.2.md`. `main` stays at v0.0.1
-  behaviour until then.
+  imperative describing the slice. Each version has a release branch
+  (`release/v0.0.3` now), and its slices are pull requests into it, one per slice, with CI
+  green. `main` holds the last release branch merged: `release/v0.0.2` was merged on
+  2026-10-24 (PR #21), so `main` has the 0.0.2 engagement behaviour. That merge was not a
+  release: the 0.0.2 gates were not run, `docs/eval/acceptance-0.0.2.md` does not exist
+  and no tag was cut (`docs/eval/deferred-gates-0.0.2-2026-10-25.md`). The lab-measured
+  gates wait for v1.0.0 (`docs/ROADMAP.md`, "Release gates and the lab").
 - Exit codes: 0 ok, 1 findings, 2 incomplete, 3 usage/policy/canary. Do not invent a
   fifth.
 - The host report's `schema_version` is `MAJOR.MINOR` since v0.0.1: additions bump
