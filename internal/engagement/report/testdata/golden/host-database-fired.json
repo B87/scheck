@@ -438,7 +438,7 @@
         },
         {
           "id": "data.other_stores",
-          "text": "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"
+          "text": "data stores not in scheck's database list (MinIO, Cassandra, Kafka, RabbitMQ and others), and Elasticsearch or OpenSearch on ports other than 9200 and 9300 or not shown as java"
         },
         {
           "id": "data.drive_sharing",
@@ -1180,7 +1180,7 @@
         "subject": "5432/tcp"
       },
       "not_checked": [
-        "Whether a cloud firewall or security group blocks it was not assessed; who can sign in to the database (pg_hba.conf, database users and passwords) was not read",
+        "Whether a cloud firewall or security group blocks it was not assessed; who can sign in to the database (its users, passwords and access rules, such as pg_hba.conf) was not read",
         "Filters outside nftables (eBPF programs such as Cilium's) were not read"
       ],
       "remediation": {
@@ -1190,6 +1190,7 @@
           "#   postgres: listen_addresses = 'localhost'",
           "#   MySQL/MariaDB: bind-address = 127.0.0.1",
           "#   Redis: bind 127.0.0.1",
+          "#   Elasticsearch/OpenSearch: network.host: 127.0.0.1 in elasticsearch.yml or opensearch.yml",
           "# other machines need it: allow only their addresses",
           "sudo ufw default deny incoming",
           "sudo ufw allow from 10.0.0.5 to any port 5432 proto tcp"

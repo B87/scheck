@@ -49,7 +49,7 @@ var fixedNotJudged = map[finding.Area][]FixedItem{
 		{"data.db_signin", "who can sign in to each database (pg_hba.conf, database users and their passwords)"},
 		{"data.db_firewall_rules", "databases on hosts that filter with firewalld or their own nftables rules (scheck does not read those rules yet)"},
 		{"data.db_containers", "databases published by Docker or Podman, whose port rules bypass the host firewall"},
-		{"data.other_stores", "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"},
+		{"data.other_stores", "data stores not in scheck's database list (MinIO, Cassandra, Kafka, RabbitMQ and others), and Elasticsearch or OpenSearch on ports other than 9200 and 9300 or not shown as java"},
 		{"data.drive_sharing", "Google Drive sharing defaults, and files shared with anyone who has the link"},
 		{"data.backups", "whether backups exist, where they are kept, and who can delete them"},
 	},

@@ -11,7 +11,7 @@ import (
 
 // DatabasesVersion identifies the database table: a change to it changes
 // what R1 reads as a database (docs/spec/engagement.md, R1).
-const DatabasesVersion = "2026-10-15"
+const DatabasesVersion = "2026-10-31"
 
 // database is one database program as the kernel names its process
 // (comm, cut at 15 characters), and the ports it counts on: nil for any.
@@ -25,11 +25,14 @@ var databases = []database{
 	{"postgres", nil}, {"mysqld", nil}, {"mariadbd", nil}, {"redis-server", nil}, {"valkey-server", nil},
 	{"mongod", nil}, {"memcached", nil}, {"clickhouse-serv", nil}, {"clickhouse", nil}, {"influxd", nil},
 	{"couchdb", nil}, {"beam.smp", []int{5984}},
+	// Elasticsearch and OpenSearch run their bundled JVM, so the kernel names
+	// the process java; only its two ports make it a data store.
+	{"java", []int{9200, 9300}},
 }
 
 // tablePorts are the ports of the table's databases: an owner that is not
 // shown there may be one.
-var tablePorts = []int{5432, 3306, 33060, 6379, 27017, 11211, 8123, 9000, 8086, 5984}
+var tablePorts = []int{5432, 3306, 33060, 6379, 27017, 11211, 8123, 9000, 8086, 5984, 9200, 9300}
 
 // containerOwners publish a container's port: their rules bypass the host
 // firewall, and the service behind them is not known.

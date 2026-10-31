@@ -254,7 +254,7 @@
         },
         {
           "id": "data.other_stores",
-          "text": "data stores not in scheck's database list (Elasticsearch, MinIO, RabbitMQ and others)"
+          "text": "data stores not in scheck's database list (MinIO, Cassandra, Kafka, RabbitMQ and others), and Elasticsearch or OpenSearch on ports other than 9200 and 9300 or not shown as java"
         },
         {
           "id": "data.drive_sharing",

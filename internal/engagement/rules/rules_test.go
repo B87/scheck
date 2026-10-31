@@ -108,6 +108,12 @@ var dbFixtures = []fixture{
 	{"ufw denies by default", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "22/tcp ALLOW IN Anywhere")), "5432/tcp", Disproved, ""},
 	{"ufw allows only one network", host(withUFW(ss(pgAll), ufwActive, ufwDeny, "5432/tcp ALLOW IN 10.0.0.0/8")), "5432/tcp", Disproved, ""},
 	{"ufw denies before it allows", host(withUFW(ss(pgAll), ufwActive, ufwAllowIn, "5432 DENY IN Anywhere")), "5432/tcp", Disproved, ""},
+	{"java on Elasticsearch's port, no firewall", host(noFirewall(ss("tcp 0.0.0.0:9200 java"))), "9200/tcp", Fired, ""},
+	{"java on the transport port, ufw denies", host(withUFW(ss("tcp 0.0.0.0:9300 java"), ufwActive, ufwDeny, "22/tcp ALLOW IN Anywhere")), "9300/tcp", Disproved, ""},
+	{"java on loopback", host(noFirewall(ss("tcp 127.0.0.1:9200 java"))), "", Disproved, ""},
+	{"java on another port", host(noFirewall(ss("tcp 0.0.0.0:8080 java"))), "", Disproved, ""},
+	{"owner not shown on Elasticsearch's port", host(noFirewall(ss("tcp 0.0.0.0:9200 -"))), "9200/tcp", Abstained, reasonListenerOwner},
+	{"Docker publishes Elasticsearch's port", host(noFirewall(ss("tcp 0.0.0.0:9200 docker-proxy"))), "9200/tcp", Abstained, reasonContainerPort},
 	{"another program on a database port", host(noFirewall(ss("tcp 0.0.0.0:9000 php-fpm8.2", sshAll))), "", Disproved, ""},
 	{"listeners not read", host(with(noFirewall(ss()), func(f fakeFacts) { f.why[checkListeners] = "check-denied:sudo_refused" })), "", Abstained, reasonListeners},
 	{"firewalld running", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) {
