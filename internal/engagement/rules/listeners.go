@@ -11,7 +11,7 @@ import (
 
 // DatabasesVersion identifies the database table: a change to it changes
 // what R1 reads as a database (docs/spec/engagement.md, R1).
-const DatabasesVersion = "2026-10-15"
+const DatabasesVersion = "2026-10-31"
 
 // database is one database program as the kernel names its process
 // (comm, cut at 15 characters), and the ports it counts on: nil for any.
@@ -25,11 +25,14 @@ var databases = []database{
 	{"postgres", nil}, {"mysqld", nil}, {"mariadbd", nil}, {"redis-server", nil}, {"valkey-server", nil},
 	{"mongod", nil}, {"memcached", nil}, {"clickhouse-serv", nil}, {"clickhouse", nil}, {"influxd", nil},
 	{"couchdb", nil}, {"beam.smp", []int{5984}},
+	// Elasticsearch and OpenSearch run their bundled JVM, so the kernel names
+	// the process java; only its two ports make it a data store.
+	{"java", []int{9200, 9300}},
 }
 
 // tablePorts are the ports of the table's databases: an owner that is not
 // shown there may be one.
-var tablePorts = []int{5432, 3306, 33060, 6379, 27017, 11211, 8123, 9000, 8086, 5984}
+var tablePorts = []int{5432, 3306, 33060, 6379, 27017, 11211, 8123, 9000, 8086, 5984, 9200, 9300}
 
 // containerOwners publish a container's port: their rules bypass the host
 // firewall, and the service behind them is not known.
@@ -41,9 +44,14 @@ var containerOwners = map[string]string{
 // portProxies forward a container's port without saying what is behind it.
 var portProxies = []string{"rootlessport", "pasta", "pasta.avx2", "slirp4netns"}
 
-func isDatabase(process string, port int) bool {
+// tcpOnly are the table's processes that count on tcp alone: Elasticsearch
+// and OpenSearch listen on no udp port.
+var tcpOnly = []string{"java"}
+
+func isDatabase(l listener) bool {
 	for _, d := range databases {
-		if d.process == process && (d.ports == nil || slices.Contains(d.ports, port)) {
+		if d.process == l.process && (d.ports == nil || slices.Contains(d.ports, l.port)) &&
+			(l.proto == "tcp" || !slices.Contains(tcpOnly, d.process)) {
 			return true
 		}
 	}
@@ -227,6 +235,9 @@ func ownerDoubt(l listener) (reason, detail string) {
 type Database struct {
 	Process, Address, Proto string
 	Port                    int
+	// ByPort: the process is read as a data store from its port alone
+	// (java on Elasticsearch's ports), not from its name.
+	ByPort bool
 }
 
 // Databases are the listeners in the database table on any address, in
@@ -241,8 +252,8 @@ func Databases(f Facts) []Database {
 	ls, _ := listeners(recs)
 	var out []Database
 	for _, l := range ls {
-		if isDatabase(l.process, l.port) {
-			out = append(out, Database{Process: l.process, Address: l.address, Proto: l.proto, Port: l.port})
+		if isDatabase(l) {
+			out = append(out, Database{Process: l.process, Address: l.address, Proto: l.proto, Port: l.port, ByPort: l.process == "java"})
 		}
 	}
 	return out

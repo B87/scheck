@@ -104,7 +104,9 @@ A deferred gate is recorded as *not run*, never as passed, in the release's reco
 defined: the lab gate is the only part decided.
 
 Open placements, undecided: whether 0.0.2 gate 10 (`scheck run --host` against the
-`scheck ssh` alias on the lab host) is lab-bound; whether gate 6's second half and gate
+`scheck ssh` alias on the lab host) is lab-bound, and, with the aliases removed in this
+branch, whether it can be run at all (only against a 0.0.2 build; its unit and integration
+evidence went with the aliases, and the maintainer decides whether it is given up); whether gate 6's second half and gate
 7's integration diff now count as their own gates; which gates a 0.0.2 or 0.0.3 tag
 would need, if one is ever cut.
 
@@ -138,7 +140,7 @@ command, one file").
 | Why GCP and Google Workspace rather than AWS and Microsoft 365? | A market decision, stated as one: the authors' own environment is Google, so the live tests and the lab can exist. AWS has the larger share of small companies and is the next collector on the same shape, before Azure and Microsoft 365. |
 | Third-party tools? | None. DNS, TLS, headers, fingerprinting and both APIs need only the Go standard library. |
 | The host side? | The host collector's catalog, runner, policy and guarantees are unchanged in 0.0.2. It becomes the collector for `host:` assets in E1b and gains no check there; the deeper checks a small company needs from it are 0.0.3 G5. One exception, decided 2026-10-13 (owner): E9 adds `fw.iptables_backend` (`realpath -e /usr/sbin/iptables`) so that `db.listens_unfiltered` can tell an empty `nft` ruleset from no firewall. A second, decided 2026-10-15 (D3b): `net.listeners` on Linux is elevated. |
-| One command? | Yes. From E2, `scheck run` is the only assessment command. `scheck local` and `scheck ssh` are aliases of `scheck run --host` in 0.0.2, with a deprecation line on stderr, and are removed in 0.0.3. Two pipelines would mean two reports, two run histories and two places to declare a host, and only one of them would say what it did not assess. |
+| One command? | Yes. From E2, `scheck run` is the only assessment command. `scheck local` and `scheck ssh` were aliases of `scheck run --host` in 0.0.2, with a deprecation line on stderr, and are removed in 0.0.3 (done: they are unknown commands, exit 3). Two pipelines would mean two reports, two run histories and two places to declare a host, and only one of them would say what it did not assess. |
 | `scheck.yaml`? | Not read by `scheck run` (E1b), removed with the aliases (E2). Profile, elevation, host context and the narrowing lists move into the engagement file, per asset where they describe a host; the state directory and the evaluation harness's model settings are flags. A restriction a client asked for is part of the rules of engagement and has to travel with the engagement file: kept in a per-machine file, it silently disappears when a colleague or a CI job runs the same engagement elsewhere. A config file where 0.0.1 read one makes `scheck run` exit 3, naming where each of its keys moved and saying to delete or rename the file, so a v0.0.1 `deny_paths` is never dropped silently, whichever release a user upgrades to; the check stays. |
 | A model? | No. Every stage runs on rules, single-fact and multi-fact. Plan is a checklist per asset type, narrowed and ordered by context, and the report says so. |
 | Reports? | The engagement report is the one report a person or an agent reads, with its own schema starting at 1.0. The engagement file and report may change freely until 0.0.2 is published. The host collector's JSON envelope keeps its schema and versioning (`spec/host-collector.md §6.4`) as the host asset's evidence file in the run directory; the host text report (§6.6) is no longer printed once E2 lands. |
@@ -1830,7 +1832,8 @@ older than 7 days is collected again on resume; every risk area's row prints its
      (`internal/engagement/judge.go`), graded by `severity.GradeAll`; an acceptance of a
      multi-fact id goes through the report's judged path. The `fw.iptables_backend` check
      (D3) and `net.listeners` elevated (D3b); the golden command traces change by exactly
-     those lines. R1 `db.listens_unfiltered` with `DatabasesVersion` 2026-10-15 and
+     those lines. R1 `db.listens_unfiltered` with `DatabasesVersion` 2026-10-15 (2026-10-31
+     since G5 added `java` on 9200 and 9300) and
      ufw's verbose rule grammar as its `get_status` prints it (no profile table: verbose
      output prints each application rule's ports), the firewall reading (`rules/firewall.go`, reused
      by R3), the severity row `exposure:internet`, the Data row read from a host's
@@ -2452,6 +2455,7 @@ the feature a company pays for a second time: comparing two runs. Still rules on
 | Data stores? | Judged from the control plane (public IP, authorized networks, SSL requirement, backups), not by connecting to them. |
 | Probes? | *probe* with `off`, `confirm` and `all`, only on assets with first-party evidence from inventory, a `host` or `url` root, a `network` root, or a `first_party` confirmation in the engagement file, which the report names as the evidence. |
 | A model? | No. New cross-asset links are multi-fact rules. |
+| The 0.0.2 aliases? | Removed, as 0.0.2 promised. `scheck local` and `scheck ssh` are unknown commands (exit 3, nothing collected), and `--include-evidence` is a flag of `scheck run --format json` only. The refusal of a 0.0.1 `scheck.yaml`, user configuration file or `./.scheck/context/` directory by `scheck run` stays (`cmd/scheck/legacy.go`; `spec/host-collector.md §8`). |
 
 ### G1 — GCP collector
 
@@ -2684,16 +2688,30 @@ remote-administration ports and the services you declared" (`spec/engagement.md`
 
 **Carried, not built in steps 1 to 3** (each needs a decision or a later step):
 
-- `creds.authorized_keys_writable`, joined with sshd's `StrictModes` (deferred).
+- `creds.authorized_keys_writable`, joined with sshd's `StrictModes`: deferred
+  (`security-consultant`, 2026-10-31). `authorized_keys` is not in `credNames`, so it needs
+  an argv change, a golden trace change and fixtures; `findPruned` lists only
+  non-traversable folders, so a writable `~/.ssh` is invisible to it; and the `StrictModes`
+  join, Debian's user-group modes and `AuthorizedKeysFile` from `sshd -T` make it a design,
+  not a small item.
 - `group_grants_root`: a named group is a deliberate share and is not judged.
-- A rule for membership of the `docker` group (deferred).
+- A rule for membership of the `docker` group: deferred (`security-consultant`,
+  2026-10-31). There is no `/etc/group` fact; the deploy user is in `docker` on nearly
+  every small server, and G5 decided a named group is a deliberate share, so a rule would
+  fire on almost every host. It is better later as an informational "accounts effectively
+  root" line that includes `sudoers` membership.
 - Host acceptance by subject: `creds.*` per file (candidate subject `secret_location`)
-  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Acceptance is
-  by id until decided.
+  and `accounts.empty_password` per account (carried from E9, 2026-10-13). Deferred
+  (2026-10-31): it is larger than a few hundred lines, an engine and report-contract
+  change that needs its own decisions. Acceptance stays by id until then.
 - The listener-exposure rule's cloud part, which needs G1's firewall rules.
 - A presence readout note for credential files on production or internet hosts (G4).
-- Elasticsearch and OpenSearch in R1's database table: recommended by the
-  security-consultant, not decided or built.
+- Elasticsearch and OpenSearch in R1's database table: built 2026-10-31
+  (`security-consultant` decision, `DatabasesVersion` 2026-10-31). Matched as `java` on
+  9200 and 9300 only, since the kernel names the bundled JVM; severity unchanged. The
+  judgment never claims the program or its security setting: a Not-checked sentence says
+  the program was read from its port and not confirmed. Other ports, or a store not shown
+  as `java`, stay in the fixed `data.other_stores` not-judged item.
 - DMI-driven wording: where the cloud platform is identified, the "Not checked" lines of
   R1, R3 and R6 could name that provider's firewall instead of "a cloud firewall"
   (undecided).
@@ -2832,9 +2850,13 @@ rewrites it when scheck connects as root is deferred to a later integration test
   macOS gets no rule and says so.
 - `php.line_unsupported`: not built; unreachable until a source tracking upstream for PHP
   8.1 and older is read, so it is carried with the Homebrew and source reads.
-- A `php.ini` check for `session.upload_progress`: not built, by decision; CVE-2026-115560
-  (no fix; needs application code that sets `session.serialize_handler`) appears in the
-  remediation text only.
+- A `php.ini` check for `session.upload_progress`: not built, by decision
+  (`security-consultant`, re-decided 2026-10-31); CVE-2026-115560 (no fix; needs
+  application code that sets `session.serialize_handler`) appears in the remediation text
+  only, as the `php.fix_missing` caveat. The setting defaults to On, so a rule would fire
+  on nearly every PHP host; a disproof from one `php.ini` is unsound across SAPIs,
+  `conf.d`, pool settings and `.user.ini`; paths vary by version and the catalog takes
+  literal argv; and exploitability depends on application code scheck cannot see.
 - R6 table additions: the PHP-FPM FastCGI port beyond loopback as unauthenticated, and the
   Node inspector on 9229/tcp. Outside the version rules.
 - Installs under home directories (nvm, volta, asdf, fnm).

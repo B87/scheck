@@ -47,8 +47,7 @@ var runtimeArtifacts = regexp.MustCompile(`^[CA] (` +
 	`|/run/ufw\.lock` +
 	`)$`)
 
-// M1 exit demo, through the 0.0.2 alias: `scheck ssh … --stop-after facts`
-// against Ubuntu and Fedora runs the one-host engagement, whose report embeds
+// M1 exit demo: `scheck run --host user@host` against Ubuntu and Fedora runs the one-host engagement, whose report embeds
 // a schema-valid host envelope persisted as the asset's evidence file, with
 // no API key; the run directory's audit log names only catalog argv, and the
 // target's filesystem is untouched (acceptance criteria 2, 3 and 4).
@@ -60,8 +59,8 @@ func TestSSHFactsReport(t *testing.T) {
 			c := containers.Start(t, name)
 			before := c.Diff(t)
 			stateDir := t.TempDir()
-			out, errOut, code := containers.Run(t, bin, "ssh", "ops@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
-				"--stop-after", "facts", "--format", "json", "--state-dir", stateDir)
+			out, errOut, code := containers.Run(t, bin, "run", "--host", "ops@"+c.Addr(), "--identity", c.Identity, "--known-hosts", c.KnownHosts,
+				"--format", "json", "--state-dir", stateDir)
 			if code != 0 {
 				t.Fatalf("exit %d\n%s", code, errOut)
 			}
@@ -128,8 +127,7 @@ func TestSSHFactsReport(t *testing.T) {
 // rather than a test failure. The classified lines are logged so the
 // acceptance record can show what a read-only run leaves behind
 // (docs/spec/host-collector.md §10, docs/eval/acceptance-0.0.1.md). Every
-// command that reaches a host, `scheck ssh` and `scheck run --host` alike,
-// is held to this one allowlist.
+// command that reaches a host, `scheck run --host`, is held to this one allowlist.
 func assertReadOnly(t *testing.T, c *containers.Container, before, name string) {
 	t.Helper()
 	var noise, documented []string

@@ -39,9 +39,10 @@ Data stores and backups  checked in part
   Not judged in this version: who can sign in to each database (pg_hba.conf, database users and
   their passwords); databases on hosts that filter with firewalld or their own nftables rules
   (scheck does not read those rules yet); databases published by Docker or Podman, whose port rules
-  bypass the host firewall; data stores not in scheck's database list (Elasticsearch, MinIO,
-  RabbitMQ and others); Google Drive sharing defaults, and files shared with anyone who has the
-  link; whether backups exist, where they are kept, and who can delete them.
+  bypass the host firewall; data stores not in scheck's database list (MinIO, Cassandra, Kafka,
+  RabbitMQ and others), and Elasticsearch or OpenSearch on ports other than 9200 and 9300 or not
+  shown as java; Google Drive sharing defaults, and files shared with anyone who has the link;
+  whether backups exist, where they are kept, and who can delete them.
 External surface         checked in part
   1 of 1 asset read.
   Not judged in this version: which ports and services answer from the internet (scheck reads; it

@@ -2,7 +2,8 @@
 
 This is the contract for the host collector: the check catalog, the runner, policy,
 the local and SSH targets, posture rules, grading, the host report, and the CLI that
-drives them (`scheck local`, `scheck ssh`). It was released as v0.0.1.
+drives them (`scheck local`, `scheck ssh` in v0.0.1; `scheck run --host` since 0.0.2).
+It was released as v0.0.1.
 
 In the engagement design ([../VISION.md](../VISION.md), [engagement.md](engagement.md),
 [scope.md](scope.md)) this is the collector for host assets. Its guarantees hold
@@ -127,19 +128,19 @@ produced. Their findings are the floor: phase 2 can add to them and enrich them,
 remove or soften them. The phase 1 report is written for a person (§6.6), so
 `--stop-after facts` is a complete tool, not a debug dump.
 
-**Decision: `scheck local` and `scheck ssh` assess with the posture rules alone.**
+**Decision: host assessment (0.0.1 `scheck local` and `scheck ssh`, now `scheck run --host`) uses the posture rules alone.**
 The phase 2 evaluation failed its frozen criteria (`docs/eval/phase2-criteria.md`,
 `docs/eval/phase2-results.md`), so no model assesses a host. These commands build no
 provider, need no credential, and send nothing a check observed off the machine. The
 flags that select a model (`--provider`, `--model`, `--base-url`, `--effort`,
-`--transcript`, `--max-context`) exit 3 on those commands, and the same keys in a
+`--transcript`, `--max-context`) exit 3 on `scheck run`, and the same keys in a
 configuration file are unused. Operator context, the grader and the finding store
 still grade what the rules produce.
 
 The model half stays in the tree, reachable only from the hidden `scheck eval`, which
 runs against fixtures and owns the provider pre-flight (model.md). The report envelope
-keeps its phase 2 fields (§6.4) because the harness still produces them; no `local` or
-`ssh` path fills them. Reviving phase 2 on a host run means a new record that passes
+keeps its phase 2 fields (§6.4) because the harness still produces them; no host
+run path fills them. Reviving phase 2 on a host run means a new record that passes
 those criteria, not a spec edit.
 
 ---
@@ -1139,11 +1140,11 @@ contract, pinned by golden tests per fixture (§9):
 
 ## 7. CLI
 
-> **Superseded in 0.0.2 (ROADMAP E2).** `scheck local` and `scheck ssh` are aliases of
-> `scheck run --host` for 0.0.2, print a deprecation line, and are removed in 0.0.3; the
-> flag mapping is in §8, "0.0.2 migration and aliases" (`--context`,
-> `--ignore-context`, `--audit-log` and `--stop-after plan` exit 3 naming their
-> replacement). `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
+> **Superseded in 0.0.2 (ROADMAP E2), removed in 0.0.3.** `scheck local` and
+> `scheck ssh` were aliases of `scheck run --host` in 0.0.2; in 0.0.3 they are unknown
+> commands and exit 3. The 0.0.1 flag mapping is recorded in §8, "0.0.2 migration and
+> aliases". `--context`, `--ignore-context` and `--audit-log` exit 3
+> on `scheck run`, naming their replacement. (`--stop-after plan` is a stage of `scheck run`, which reads the host first.) `catalog`, `explain`, `sudoers`, `providers` and the exit codes stay;
 > `config` was removed with §8. The block below records 0.0.1.
 
 ```
@@ -1267,10 +1268,10 @@ reported as `unavailable: <sudo stderr> (no NOPASSWD rule for this command, or X
 installed)`.
 
 To exercise `--sudo` on a workstation where sudo prompts, either cache the credential
-first (`sudo -v && scheck local --sudo …`, valid for the tty's timestamp window) or
+first (`sudo -v && scheck run --host local --sudo …`, valid for the tty's timestamp window) or
 install the `scheck sudoers` fragment.
 
-Running the session as root (`scheck ssh root@host`) needs no prefix and is recorded as
+Running the session as root (`scheck run --host root@host`) needs no prefix and is recorded as
 `elevation: root` in the header. The prefix design leaves room for `doas`, `run0`
 or a custom prefix later without touching the catalog or the loop; they are not in
 this build, and no password-forwarding mode is offered.
@@ -1286,7 +1287,7 @@ binary rather than guessing; a binary installed at different paths on one platfo
 distributions gets a line for each (`ss`: `/usr/bin/ss` and `/usr/sbin/ss` on Linux).
 Because sudoers cannot express an empty argument, the
 sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also sets
-`Defaults:<user> !requiretty`, since `scheck ssh` allocates no tty.
+`Defaults:<user> !requiretty`, since `scheck run --host user@host` allocates no tty.
 
 ---
 
@@ -1295,7 +1296,7 @@ sudoers.d checks use `grep -rH .` rather than `grep -rH ""`. The fragment also s
 > **Removed in 0.0.2 (ROADMAP E1b, E2).** scheck reads no configuration file:
 > `internal/config`, `scheck config` and `docs/CONFIGURATION.md` are gone. Each key below
 > has a home in the engagement file or a flag ("0.0.2 migration and aliases" below);
-> a file found where this section reads one makes `scheck run` and its aliases exit 3,
+> a file found where this section reads one makes `scheck run` exit 3,
 > naming where each key moved. The model keys are flags on `scheck providers` and the
 > hidden `scheck eval`. The narrowing semantics below are what the engagement's
 > `disable_checks`, `deny_paths` and `redact_extra` keep; the rest records 0.0.1.
@@ -1326,21 +1327,27 @@ warning and go on, since they are how those keys move into a file. A narrowing a
 on is never dropped silently, whichever release they upgrade to; the check costs two
 file lookups and stays.
 
-**The aliases, for 0.0.2 only.** `scheck local` is `scheck run --host local` and
-`scheck ssh user@host` is `scheck run --host user@host`; each prints a deprecation line
-on stderr, and both are removed in 0.0.3. Their 0.0.1 flags map as follows, and any
-other exits 3 naming its replacement:
+**The aliases, 0.0.2 only; removed in 0.0.3.** In 0.0.2 `scheck local` was
+`scheck run --host local` and `scheck ssh user@host` was `scheck run --host user@host`,
+each printing a deprecation line on stderr. In 0.0.3 both are unknown commands: exit 3,
+`unknown command "local" for "scheck"`, nothing collected, and their flags are not
+parsed. The table records where each 0.0.1 flag lives under `scheck run --host`, and
+what the 0.0.2 aliases did with it. On `scheck run`, only `--context`, `--ignore-context`
+and `--audit-log` exit 3 naming their replacement; `--port` is an unknown flag, and
+`--stop-after` takes the stages of `scheck run` only. Where a row says "exits 3 naming" a
+`--stop-after` value, it describes the 0.0.2 alias; on `scheck run`, `--stop-after plan`
+is the Plan stage, which reads the host first:
 
 | 0.0.1 flag | Under `scheck run --host` |
 |---|---|
-| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (`--port` wins over a port in the argument, as in 0.0.1); `--identity`, `--known-hosts`. `scheck ssh local` exits 3: `local` is this machine, `scheck run --host local` |
+| `user@host`, `--port`, `--identity`, `--known-hosts` | the user and port in the locator (the 0.0.2 alias let `--port` win over a port in the argument; `scheck run` has no `--port`); `--identity`, `--known-hosts`. |
 | `--sudo`, `--elevate`, `--profile` | the same, except that `--sudo` with `--elevate none` exits 3, where 0.0.1 let `--elevate` win |
 | `--timeout` | the same: the host collector's run timeout, not `limits.timeout` |
 | `--format`, `--out`, `-v`, `-vv`, `--state-dir`, `--no-persist` | the same; `--format json` prints the engagement report |
 | `--include-evidence` | the same: with `--format json`, the hosts' redacted captures inside each embedded envelope, on stdout only |
 | `--record-fixtures` (hidden) | the same: every exec of the host written to a fixture directory, post-redaction |
 | `--stop-after context` | `--stop-after intake` |
-| `--stop-after plan` | exits 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
+| `--stop-after plan` | (0.0.2 alias) exited 3 naming `scheck catalog --platform P --profile P`, which lists the checks without contacting the host |
 | `--stop-after facts` | no flag: it is the run |
 | `--context`, `--ignore-context` | exit 3: context is `assets.<name>.context` in a file (`--write-engagement`) |
 | `--audit-log` | exits 3 naming the run directory's `audit.jsonl` |
@@ -1348,7 +1355,7 @@ other exits 3 naming its replacement:
 
 `scheck catalog`, `scheck explain` and `scheck sudoers` stay; `scheck config` goes with
 the file it read. A 0.0.1 `./.scheck/context/` directory, which `local` and `ssh` read
-implicitly, is refused like the configuration file, so its accepted risks never vanish
+implicitly, is refused by `scheck run` like the configuration file, so its accepted risks never vanish
 without a word.
 
 ### 0.0.1 configuration
@@ -1426,7 +1433,7 @@ shown with the credentials stripped. `docs/CONFIGURATION.md` is the walkthrough.
 - **Integration tests** (`make integ`, build tag `integration`, need Docker or Podman)
   cover what fixtures cannot: the canary matrix, `visudo -cf` on the generated
   fragment plus an elevated run flipping `sshd.config` to populated, and
-  `scheck ssh --stop-after facts` against Ubuntu and Fedora with schema validation and
+  `scheck run --host` over SSH against Ubuntu and Fedora with schema validation and
   an empty `docker diff` afterwards (acceptance criterion 3).
 - **Golden artifacts.** Three per fixture (ubuntu, fedora, macos), diffed in
   `go test`:
@@ -1562,7 +1569,7 @@ beats the one recorded. Decisions about the model path are in model.md §10.
 | Judge anything without a model? | Yes, for facts whose meaning is unambiguous: posture rules (§6.5), one fact → one finding, code-graded like everything else. For `local` and `ssh` that is the whole assessment (§2.1). | A fact sheet that never says a recognized fact is wrong is a debug artefact. A conclusion that needs two facts or judgement is not filed until a later record earns phase 2 back. |
 | Exit code of a facts-only run with a rule finding? | `1`, the same table as a full run (§7). | One meaning per exit code; CI can gate on the offline run. |
 | Per-check summaries? | Typed parser shapes plus a `Unit` noun on `lines` checks (§3), not a summariser function. | A typed record serves the screen, the model and a future host diff, and is diffable; a closure serves one consumer and is not. |
-| Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` are aliases for 0.0.2 and go in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
+| Standalone commands and `scheck.yaml` after 0.0.2? | Folded into `scheck run`: `--host` is a one-root engagement built in memory, `local` and `ssh` were aliases in 0.0.2 and are removed in 0.0.3, and every key of `scheck.yaml` moves into the engagement file or a flag (engagement.md, "One command, one file"). | Two pipelines meant two reports, two run histories and two places to declare a host, and only one said what it did not assess. A client's restrictions have to travel with the engagement file; in a per-machine file they vanish when someone else runs it. |
 | An empty password on an account that cannot log in? | Not a finding. `accounts.empty_password` joins `passwd -S -a` with `/etc/passwd` and fires only on an account with a login shell, at high; critical is for an empty password sshd accepts, an engagement multi-fact rule (E9). Libuser's `PS` and `LK` are recognized, and an empty status listing is a broken read, not a pass (E5a). | The 0.0.1 rule fired critical on `NP` alone, so a system account with `/usr/sbin/nologin` topped the first report a reader saw: a false critical costs trust in the whole report. Host facts show local use only; Debian's and RHEL's default PAM accept an empty password locally, so high, not lower. |
 | How does a user or agent inspect captured output? | `-vv` for text; `--format json --include-evidence` for structured facts (§6.4, §6.6). Both use the same redacted, bounded, extraction-filtered capture; default persistence omits it. No `scheck show`. | Humans and agents can diagnose failed checks without a second execution or a second collection path. |
 | Credential files on disk (0.0.3 G5 step 1, decided 2026-10-24). | `find ... -ls` by exact name over home directories and the application folders a host declares in `app_paths`; four findings (§6.5); modes and owners only, never contents. `creds.home_files` is elevated on Linux; the `.env` slots are not. The path policy gains metadata-only entries for `.env*`, `.pgpass`, `.npmrc`, `gcloud`, `.kube`, `.docker` and the application trees (§4.1). A host that holds `data.matters_most` raises on a credential kept on it. | A leaked `.env` or key is what an attacker with any foothold reads first, and the fact is a mode, which scheck can read without opening the file. A find with a path wildcard under sudo would let the holder append `-exec`, so the declared folder is read without root. A credential on the host that holds the data is the link to that data. Cloud metadata reachability (169.254.169.254) is not built: it cannot be judged without sending a request, which the host collector never does. |

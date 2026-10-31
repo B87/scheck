@@ -329,10 +329,10 @@ needs no API key and sends nothing it read off the machine. The model flags
 configure only `scheck providers` and the project's evaluation harness; on a run they
 exit 3. Do not offer them as a way to get a deeper assessment.
 
-`scheck local` and `scheck ssh user@host` are deprecated aliases of `scheck run --host`,
-removed in 0.0.3; they print a deprecation line on stderr and the same report. Prefer
-`run` in anything you write. scheck reads no configuration file: when a 0.0.1
-`scheck.yaml` or user configuration file exists, every run exits 3 naming where each
+`scheck local` and `scheck ssh user@host` were removed in 0.0.3: they are unknown
+commands and exit 3. Use `scheck run --host local` or `scheck run --host user@host`.
+scheck reads no configuration file: when a 0.0.1 `scheck.yaml` or user
+configuration file exists, every run exits 3 naming where each
 key moves. Relay that message; do not delete or edit the user's file yourself.
 
 Context and narrowing live in the engagement file, never in flags: a host's `context`
@@ -342,7 +342,7 @@ FILE` writes the one-host engagement as a starting point and contacts nothing.
 Placeholder files for a host, a domain, GitHub, Workspace and all four together are in
 `docs/examples/`. Validate one with `--stop-after intake` before a run that contacts
 anything.
-`--context`, `--ignore-context` and `--audit-log` exit 3 on `run` and on the aliases.
+`--context`, `--ignore-context` and `--audit-log` exit 3 on `run`.
 The reach flags (`--identity`, `--known-hosts`, `--jump`, `--sudo`, `--elevate`,
 `--profile`, `--timeout`) are accepted only with `--host`; in a file they are the host
 asset's keys. `--jump user@bastion[:port]` reaches the host through one SSH hop whose key

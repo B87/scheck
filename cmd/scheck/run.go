@@ -122,8 +122,7 @@ func runEngagementCmd(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args [
 }
 
 // executeEngagement runs an engagement file or a --host one through its
-// stages; `scheck run` and the 0.0.1 aliases both end here, so they give the
-// same report and the same command trace.
+// stages; `scheck run` ends here, with an engagement file or --host.
 func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args []string) error {
 	if !engagement.ValidVantage(opts.Vantage) {
 		return usageErr("--vantage must be internet|vpn|lan")
