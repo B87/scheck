@@ -526,10 +526,20 @@ reset is the only answer, and a `3xx` is never followed.
 origin: a `url` root whose path is `/`, a `host` root, a `network` root holding every
 address checked after resolution, or a current `first_party` confirmation whose target
 the name still points at. The front page of a name under a `domain` root is not
-evidence, and a `url` root with a path prefix holds nothing at the origin's own paths,
-where every probe sits. Without evidence the request is `refused:first_party`; a name
+evidence, and a `url` root, or a `url` asset confirmed by the operator, with a path
+prefix holds nothing at the origin's own paths, where every probe sits: only a
+confirmation of the site (a `domain` or `host` asset, or a `url` at `/`) covers them. Without evidence the request is `refused:first_party`; a name
 that moved out of its evidence is `refused:address_moved`, as for any request. Step 9
 tests the window on every probe, and the window index is on the audit line.
+
+**Which mode applies.** A mode is per name, over both schemes. The `assets` entries that
+name the site (a `domain` of that name, or a `url` on it) and set `probe` themselves
+decide, and where they disagree the one that allows least wins; a site no entry sets a
+mode for takes `defaults.probe`. An inherited default never beats an entry's own `off`.
+
+**A probe that could not run on time is a limit.** A request outside every window
+(`refused:window`), cut by the window's end, or ended by `limits.timeout` makes the run
+*incomplete* (exit 2), with the probes marked *not run*; it is never a clean result.
 
 **Preview and confirmation.** In `confirm` mode Plan lists every request per site
 (method, URL, count): the scheme is `https` if the site answered over https, else

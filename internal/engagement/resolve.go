@@ -43,8 +43,11 @@ type ResolvedAsset struct {
 
 	Probe     string   `json:"probe" yaml:"probe"`
 	Framework []string `json:"framework,omitempty" yaml:"framework,omitempty"`
-	Scan      string   `json:"scan" yaml:"scan"`
-	Throttle  Throttle `json:"throttle" yaml:"throttle"`
+	// ProbeSet is the mode the asset's own assets entry sets, empty when it
+	// inherits defaults.probe: an inherited mode never beats an explicit one.
+	ProbeSet string   `json:"-" yaml:"-"`
+	Scan     string   `json:"scan" yaml:"scan"`
+	Throttle Throttle `json:"throttle" yaml:"throttle"`
 
 	Jump       string `json:"jump,omitempty" yaml:"jump,omitempty"`
 	Identity   string `json:"identity,omitempty" yaml:"identity,omitempty"`
@@ -307,6 +310,7 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 		Ref:         r,
 		Root:        root.ID,
 		Probe:       or(a.Probe, d.Probe),
+		ProbeSet:    a.Probe,
 		Framework:   cmpOrSlice(a.Framework, d.Framework),
 		Scan:        or(a.Scan, d.Scan),
 		Throttle:    throttleOr(a.Throttle, d.Throttle),

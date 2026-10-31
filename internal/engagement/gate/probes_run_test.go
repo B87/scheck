@@ -22,6 +22,9 @@ const probeSecret = "AKIA" + "ABCDEFGHIJKLMNOP"
 
 // probeFile is an engagement with one url root probed in mode, framework
 // none, inside a window that holds now.
+// probeWindow is the window around now that probeFile writes.
+var probeWindow = [2]time.Duration{-time.Hour, time.Hour}
+
 func probeFile(mode string) string {
 	now := time.Now()
 	return fmt.Sprintf(`schema: 1
@@ -33,7 +36,7 @@ authorization:
   date: 2026-10-06
   windows:
     - {from: %s, to: %s}
-`, mode, now.Add(-time.Hour).Format(time.RFC3339), now.Add(time.Hour).Format(time.RFC3339))
+`, mode, now.Add(probeWindow[0]).Format(time.RFC3339), now.Add(probeWindow[1]).Format(time.RFC3339))
 }
 
 func probeSite(t *testing.T, h *gate.Harness) func() []string {
@@ -124,9 +127,30 @@ func TestProbesRunInModeAll(t *testing.T) {
 	if !strings.Contains(string(plan), "https://shop.example.com/.env") || !strings.Contains(string(plan), `"count": 5`) {
 		t.Errorf("plan.json does not preview the requests: %s", plan)
 	}
+	if check, _ := os.ReadFile(filepath.Join(dir.Path, "check.json")); !strings.Contains(string(check), `"redacted"`) {
+		t.Errorf("check.json does not record what was redacted from the matched file: %s", check)
+	}
 	audit, _ := os.ReadFile(filepath.Join(dir.Path, "audit.jsonl"))
 	if !strings.Contains(string(audit), `"level":"probe"`) || !strings.Contains(string(audit), `"window":0`) {
 		t.Error("the audit log does not name the level and the window")
+	}
+}
+
+// Probes whose window has closed send nothing, and the run is incomplete
+// (exit 2), never a clean one.
+func TestProbesOutsideTheWindowAreIncomplete(t *testing.T) {
+	probeWindow = [2]time.Duration{-3 * time.Hour, -2 * time.Hour}
+	t.Cleanup(func() { probeWindow = [2]time.Duration{-time.Hour, time.Hour} })
+	out, _, seen := runProbes(t, "all", nil)
+	if hits := probeHits(seen()); len(hits) != 0 {
+		t.Errorf("probes ran outside the window: %v", hits)
+	}
+	if out.ExitCode() != 2 || len(out.Report.Incomplete) == 0 {
+		t.Errorf("exit %d, incomplete %v", out.ExitCode(), out.Report.Incomplete)
+	}
+	raw, _ := json.Marshal(out.Report)
+	if !strings.Contains(string(raw), "unavailable:probe_window") {
+		t.Error("the report does not say why the probes did not run")
 	}
 }
 

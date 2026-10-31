@@ -7,35 +7,68 @@ import (
 	"github.com/b87/scheck/internal/engagement/gate"
 )
 
-// AdmitsProbe is the gate's steps 7 and 8 for a probe (docs/spec/scope.md,
-// "Probes"): the origin has first-party evidence, from the file or, once the
-// name is resolved, from the lookup. The front page of a name under a
-// domain root is not evidence: only a url or host root, a network root
-// holding every address, or a current confirmation that the name still
-// points at. A url root that holds a path prefix holds nothing at the
-// origin's own paths, where every probe sits.
+// probeStanding is the first-party evidence a probe of the origin rests on,
+// as the file gives it (docs/spec/scope.md, "Probes"). ok is false when
+// there is none that covers the origin's own paths, where every probe sits:
+// the front page of a name under a domain root is not evidence, a url root
+// or a confirmed url that holds a path prefix holds nothing outside it, and
+// a confirmation that is expired or suspended counts for nothing. resolve
+// says the gate must still resolve the name to find evidence in the lookup:
+// a confirmation's target, or a network root holding every address. The one
+// predicate behind both the gate's decision and Plan's preview.
+func (s *scope) probeStanding(origin string) (ev *Evidence, resolve, ok bool) {
+	sp := s.site(origin)
+	switch ev = sp.ev; {
+	case ev != nil && ev.Kind == "url_root":
+		i := slices.IndexFunc(s.res.Roots, func(r Ref) bool { return r.ID == ev.Root })
+		return ev, false, i >= 0 && s.res.Roots[i].path == "/"
+	case ev != nil && ev.Kind == "operator":
+		return ev, true, s.confirmedWholeOrigin(origin)
+	case ev != nil:
+		return ev, false, true
+	}
+	return nil, true, len(sp.network) > 0
+}
+
+// confirmedWholeOrigin says a current confirmation vouches for the origin
+// itself: a domain or host asset's, or a url asset's whose path is /. A url
+// asset confirmed at /app/ vouches for /app/ and nothing else on a host
+// that may be shared.
+func (s *scope) confirmedWholeOrigin(origin string) bool {
+	o, err := parseURL(origin + "/")
+	if err != nil {
+		return false
+	}
+	for _, a := range s.res.Assets {
+		if a.FirstParty == nil || !s.res.current(a.FirstParty, s.at) {
+			continue
+		}
+		switch {
+		case a.Kind == KindURL && sameOrigin(a.Ref, o) && a.path == "/":
+			return true
+		case (a.Kind == KindDomain || a.Kind == KindHost) && o.Port == 0 && a.Address() == o.Address():
+			return true
+		}
+	}
+	return false
+}
+
+// AdmitsProbe is the gate's steps 7 and 8 for a probe: probeStanding from
+// the file, or once the name is resolved, from the lookup.
 func (s *scope) AdmitsProbe(origin, path string, l *gate.Lookup) gate.Admission {
 	refused := gate.Admission{Refused: "first_party"}
 	if !strings.HasPrefix(path, "/") {
 		return refused
 	}
-	sp := s.site(origin)
-	ev := sp.ev
+	ev, resolve, ok := s.probeStanding(origin)
 	switch {
-	case ev != nil && ev.Kind != "operator":
-		if ev.Kind == "url_root" {
-			i := slices.IndexFunc(s.res.Roots, func(r Ref) bool { return r.ID == ev.Root })
-			if i < 0 || s.res.Roots[i].path != "/" {
-				return refused
-			}
-		}
-		return gate.Admission{FirstParty: true}
-	case ev == nil && len(sp.network) == 0:
+	case !ok:
 		return refused
+	case !resolve:
+		return gate.Admission{FirstParty: true}
 	case l == nil:
 		return gate.Admission{Resolve: true}
-	}
-	if !s.res.resolvedEvidence(ev, *l).counts() {
+	case !s.res.resolvedEvidence(ev, *l).counts():
 		if ev != nil {
 			return gate.Admission{Refused: "address_moved"}
 		}
@@ -75,57 +108,69 @@ func originHost(origin string) string {
 	return host
 }
 
-// probeMode is the probe mode of the site at origin: its own assets entry
-// when it has one, else defaults.probe. Only the exact name or the exact
-// origin of an entry is its site.
+// modeRank orders the probe modes by how much they allow.
+var modeRank = map[string]int{"off": 0, "confirm": 1, "all": 2}
+
+// probeMode is the probe mode of the site named by origin. A mode is per
+// name, both schemes alike. The assets entries that name the site (a
+// domain of that name, or a url on it) and set a mode of their own decide,
+// and where they disagree the one that allows least wins; a site no entry
+// sets a mode for takes defaults.probe. An inherited default never beats
+// an explicit entry.
 func (s *scope) probeMode(origin string) string {
-	if a, ok := s.siteAsset(origin); ok && a.Probe != "" {
-		return a.Probe
+	mode := ""
+	for _, a := range s.siteAssets(origin) {
+		if a.ProbeSet == "" {
+			continue
+		}
+		if mode == "" || modeRank[a.ProbeSet] < modeRank[mode] {
+			mode = a.ProbeSet
+		}
 	}
-	return s.res.Defaults.Probe
+	if mode == "" {
+		return s.res.Defaults.Probe
+	}
+	return mode
 }
 
-// frameworkOf is the frameworks declared for the site at origin.
+// frameworkOf is the frameworks declared for the site at origin: the first
+// entry that names the site and declares any, else the default.
 func (s *scope) frameworkOf(origin string) []string {
-	if a, ok := s.siteAsset(origin); ok && len(a.Framework) > 0 {
-		return a.Framework
+	for _, a := range s.siteAssets(origin) {
+		if len(a.Framework) > 0 {
+			return a.Framework
+		}
 	}
 	return s.res.Defaults.Framework
 }
 
-// siteAsset is the declared domain or url asset that is the site at origin.
-func (s *scope) siteAsset(origin string) (ResolvedAsset, bool) {
+// siteAssets are the declared domain and url assets that name the site at
+// origin, by its host.
+func (s *scope) siteAssets(origin string) []ResolvedAsset {
 	o, err := parseURL(origin + "/")
 	if err != nil {
-		return ResolvedAsset{}, false
+		return nil
 	}
+	var out []ResolvedAsset
 	for _, a := range s.res.Assets {
 		switch {
-		case a.Kind == KindURL && sameOrigin(a.Ref, o) && a.path == "/":
-			return a, true
+		case a.Kind == KindURL && a.Address() == o.Address() && a.Port == o.Port:
+			out = append(out, a)
 		case a.Kind == KindDomain && o.Port == 0 && a.name == o.name:
-			return a, true
+			out = append(out, a)
 		}
 	}
-	return ResolvedAsset{}, false
+	return out
 }
 
 // ProbeEvidence is the evidence a probe of the site named host would rest
 // on, as the file gives it, and whether the gate must still resolve the name
-// to find it: a network root holding every address. nil, false when there
-// is none. The gate decides every request again at send time.
-func (s *scope) ProbeEvidence(host string) (*Evidence, bool) {
-	sp := s.site("https://" + host)
-	if sp.ev == nil {
-		sp = s.site("http://" + host)
+// to find it. ok is false when there is none. The gate decides every
+// request again at send time.
+func (s *scope) ProbeEvidence(host string) (ev *Evidence, resolve, ok bool) {
+	ev, resolve, ok = s.probeStanding("https://" + host)
+	if !ok {
+		ev, resolve, ok = s.probeStanding("http://" + host)
 	}
-	switch {
-	case sp.ev != nil && sp.ev.Kind != "operator":
-		return sp.ev, false
-	case sp.ev != nil:
-		return sp.ev, true
-	case len(sp.network) > 0:
-		return nil, true
-	}
-	return nil, false
+	return ev, resolve, ok
 }

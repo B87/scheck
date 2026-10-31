@@ -71,8 +71,8 @@ func (r *run) planProbes() (plans []ProbePlan, unevidenced []string) {
 			if mode != "confirm" && mode != "all" {
 				continue
 			}
-			ev, resolve := sc.ProbeEvidence(site.Name)
-			if !ev.counts() && !resolve {
+			ev, _, ok := sc.ProbeEvidence(site.Name)
+			if !ok {
 				unevidenced = append(unevidenced, site.Name)
 				continue
 			}
@@ -195,6 +195,7 @@ func (r *run) checkProbes(ctx context.Context, doc *CheckDoc) error {
 			i = len(doc.Assets) - 1
 		}
 		doc.Assets[i].Probes = &ev
+		r.probesCut(id, ev)
 	}
 	return nil
 }
@@ -213,6 +214,36 @@ func (r *run) probesFor(id string) *web.ProbeEvidence {
 	return nil
 }
 
+// probesCut records the asset incomplete when a limit ended its probes: the
+// authorization window, limits.timeout, or a cancelled run. A window that
+// had closed before Check is the same cut, so the run is never a clean exit
+// for probes that did not run (docs/spec/scope.md, "Authorization windows").
+func (r *run) probesCut(id string, ev web.ProbeEvidence) {
+	cut := ""
+	for _, s := range ev.Sites {
+		for _, rd := range s.Reads {
+			switch {
+			case rd.NotRun == web.NotRunWindow || rd.Decision == "refused:window" || rd.Decision == "unavailable:window_ended":
+				cut = "the authorization window did not cover the probes of " + s.Name
+			case rd.NotRun == web.NotRunCancelled || strings.HasSuffix(rd.Decision, ":deadline") || rd.Decision == "unavailable:canceled":
+				cut = "limits.timeout ended the probes of " + s.Name
+			}
+		}
+	}
+	if cut == "" {
+		return
+	}
+	// The report marks an asset from its Recon entry, as Recon's own cut does.
+	for i := range r.recon.Assets {
+		if ra := &r.recon.Assets[i]; ra.ID == id && ra.Status == StatusCollected {
+			ra.Status, ra.Reason, ra.Detail = StatusIncomplete, ReasonLimitReached, cut
+			if a, ok := r.assetByID(id); ok {
+				r.incomplete(a, *ra)
+			}
+		}
+	}
+}
+
 // probeSent says some probe left this machine in the run.
 func (r *run) probeSent() bool {
 	if r.checked == nil {
@@ -224,7 +255,7 @@ func (r *run) probeSent() bool {
 		}
 		for _, s := range c.Probes.Sites {
 			for _, rd := range s.Reads {
-				if rd.Decision == "sent" || rd.Decision == "reused" {
+				if rd.RequestID != "" && !strings.HasPrefix(rd.Decision, "refused:") {
 					return true
 				}
 			}

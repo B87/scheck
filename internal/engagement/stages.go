@@ -1203,7 +1203,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 			in.LevelsUsed = append(in.LevelsUsed, "passive")
 		}
 	}
-	if r.probeSent() {
+	if r.probeSent() && !slices.Contains(in.LevelsUsed, "probe") {
 		in.LevelsUsed = append(in.LevelsUsed, "probe")
 	}
 	switch {

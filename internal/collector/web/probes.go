@@ -266,6 +266,10 @@ func (j *judging) probes() {
 				x.Reason = "unavailable:http_status"
 			case r.Status >= 300 && r.Status < 400:
 				x.Reason = "unavailable:redirected"
+			case r.Status == 200 && r.ContentType == "":
+				// The signature tests the type too; with none sent, a body of the
+				// right shape would have been missed, not ruled out.
+				x.Reason = "unavailable:content_type"
 			case r.Status == 200 && len(r.Redacted) > 0:
 				x.Reason = "unavailable:redacted"
 			default:
