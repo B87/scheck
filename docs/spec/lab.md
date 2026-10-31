@@ -122,7 +122,7 @@ for client-side state encryption.
 ### GCP project
 
 A project with **no organization** (decided 2026-10-25), on a dedicated billing account
-with a budget of about 50 dollars and alerts at 50, 90 and 100% to two named people.
+with a budget of about 20 dollars and alerts at 50, 90 and 100% to two named people.
 
 Without an organization there are no organization policies. Organizations created on or
 after 2024-05-03 enforce `iam.managed.disableServiceAccountKeyCreation`,
@@ -931,7 +931,7 @@ not be run is recorded as *not run* with the reason, never as passed.
 ### Isolation
 
 - A dedicated GCP project with no organization, on a dedicated billing account with a
-  budget of about 50 dollars (`google_billing_budget`, alerts at 50, 90 and 100% to two
+  budget of about 20 dollars (`google_billing_budget`, alerts at 50, 90 and 100% to two
   named people), every resource labelled `scheck-lab=true`, `lab-seed=<first 8 hex of the
   key hash>`, `expires=<date>`.
 - A dedicated GitHub organization and dedicated domains. Persona accounts belong to the
@@ -989,7 +989,7 @@ Order of magnitude per month if left running; list prices not verified at writin
 
 | Piece | Cost | Note |
 |---|---|---|
-| GCP | tens of dollars running; under a dollar per run; capped by the 50-dollar budget | **the expensive piece**: Cloud SQL in its smallest tier is most of it, then the VM and its external address. Destroying after each run keeps it near zero |
+| GCP | a few dollars a day if left running; under a dollar per run; capped by the 20-dollar budget | **the expensive piece**: Cloud SQL in its smallest tier is most of it, then the VM and its external address. Destroying after each run keeps it near zero |
 | GitHub | zero on the free plan | Team (about 4 dollars per seat) later, by decision |
 | Domain, email and web | about 2 dollars (two domains at 10 to 15 dollars a year; DNS free on Cloudflare) | |
 | Hosts | zero locally; the VM is counted under GCP | |
@@ -1082,8 +1082,7 @@ sealed seed.
 1. **GCP placement** — decided 2026-10-25: a project with no organization. Consequences
    in "GCP project". Open: whether a persistent project exists to age a service account
    key past 90 days.
-2. **Billing** — decided 2026-10-25: a dedicated billing account, a budget of about 50
-   dollars, alerts at 50, 90 and 100% to two people. Open: who the two people are.
+2. **Billing** — decided 2026-10-25, budget lowered from 50 to 20 dollars 2026-10-31: a dedicated billing account, a budget of about 20 dollars, alerts at 50, 90 and 100% to two people. Open: who the two people are.
 3. **GitHub plan** — decided 2026-10-25: free; public repositories for alert and
    protection cases; no paid secret scanning, so F-GH-15 is unmeasured; Team later.
 4. **Personas** — open: which team members or volunteers hold the departed, contractor
