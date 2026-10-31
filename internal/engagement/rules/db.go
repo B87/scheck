@@ -75,7 +75,7 @@ func dbSubject(v *View, g portGroup, group []listener, fr *firewallReader) (Outc
 	for _, l := range group {
 		reason, detail := ownerDoubt(l)
 		switch {
-		case isDatabase(l.process, l.port):
+		case isDatabase(l):
 			dbs = append(dbs, l)
 		case reason != "" && table:
 			// A container runtime or port proxy hides a database only on a

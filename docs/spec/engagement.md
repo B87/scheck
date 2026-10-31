@@ -1419,7 +1419,7 @@ has an organization Actions secret named `X`". A CNAME name an exclusion dropped
 | `cloud` | an Actions secret whose name starts `AWS_`, `GCP_`, `GOOGLE_CLOUD_` or `AZURE_`, or is exactly `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CREDENTIALS` | "`example-org/shop` has an Actions secret named `AWS_ACCESS_KEY_ID`" |
 | `hosts` | a workflow `uses:` of `appleboy/ssh-action`, `appleboy/scp-action`, `easingthemes/ssh-deploy`, `webfactory/ssh-agent` or `shimataro/ssh-key-action` | "a workflow in `example-org/shop` uses `appleboy/ssh-action`, which connects to a server over SSH" |
 | `hosts` | an Actions secret named exactly `SSH_PRIVATE_KEY`, `SSH_KEY`, `SSH_HOST`, `DEPLOY_HOST`, `DEPLOY_SSH_KEY` or `SERVER_SSH_KEY` | as for `cloud`: "`example-org/shop` has an Actions secret named `SSH_PRIVATE_KEY`" |
-| `data` | `net.listeners` on a declared host showing a process of R1's database table on any address, loopback included | "`postgres` listens on 127.0.0.1:5432 on `deploy`" |
+| `data` | `net.listeners` on a declared host showing a process of R1's database table on any address, loopback included | "`postgres` listens on 127.0.0.1:5432 on `deploy`"; for `java` on 9200 or 9300, ", read as a data store from its port" follows |
 | `email` | the Workspace users read: accounts neither suspended nor archived whose mailbox is set up | "*N* accounts in `google-workspace:example.com` have a Gmail mailbox" ("1 account ... has"; "at least *N*" when the users read was not whole, counting only accounts known neither suspended nor archived) |
 
 No `run:` script is matched, and `ghs.googlehosted.com` is not a cloud name.
@@ -1585,7 +1585,7 @@ command name (15 characters, as `ss` prints it) and the ports they use:
 | `influxd` | 8086 |
 | `couchdb` | 5984 |
 | `beam.smp` | 5984 only |
-| `java` | 9200, 9300 only (Elasticsearch, OpenSearch) |
+| `java` | 9200, 9300 only, tcp only (Elasticsearch, OpenSearch) |
 
 A database process counts on any port except `beam.smp` (the Erlang VM of many programs)
 and `java` (the JVM Elasticsearch and OpenSearch bundle, shared with any Java program),
@@ -1676,11 +1676,11 @@ address is still reported. Restrict it to the addresses that need it." Text: "*p
 on *host* listens on *address:port* and the host firewall does not restrict that port."
 Not checked: "Whether a cloud firewall or security group blocks it was not assessed; who
 can sign in to the database (its users, passwords and access rules, such as pg_hba.conf)
-was not read", and, when a `java` process is among the listeners, "A java process on
-*port/proto* is read as Elasticsearch or OpenSearch from its port; which program it is
-was not confirmed", and, on the `ufw` branch, "Only ufw's own rule listing was read: …", or,
+was not read", and, on the `ufw` branch, "Only ufw's own rule listing was read: …", or,
 on the no-firewall branch, "Filters outside nftables (eBPF programs such as Cilium's)
-were not read". Remediation: "If only this host uses the database, bind it to localhost
+were not read", and last, when a `java` process is among the listeners, "A java process on
+*port/proto* is read as Elasticsearch or OpenSearch from its port; which program it is
+was not confirmed". Remediation: "If only this host uses the database, bind it to localhost
 (postgres `listen_addresses = 'localhost'`, MySQL `bind-address = 127.0.0.1`, Redis `bind
 127.0.0.1`, Elasticsearch and OpenSearch `network.host: 127.0.0.1`) and restart it. If other machines need it, allow the port only from their
 addresses (`ufw default deny incoming`, `ufw allow from 10.0.0.5 to any port 5432 proto

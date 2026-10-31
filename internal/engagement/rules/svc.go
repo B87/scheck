@@ -99,7 +99,7 @@ func r1Owns(g portGroup) bool {
 	table := slices.Contains(tablePorts, g.port)
 	return slices.ContainsFunc(g.beyond(), func(l listener) bool {
 		reason, _ := ownerDoubt(l)
-		return isDatabase(l.process, l.port) || table && (l.process == "" || reason != "")
+		return isDatabase(l) || table && (l.process == "" || reason != "")
 	})
 }
 

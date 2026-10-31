@@ -114,6 +114,7 @@ var dbFixtures = []fixture{
 	{"java on another port", host(noFirewall(ss("tcp 0.0.0.0:8080 java"))), "", Disproved, ""},
 	{"owner not shown on Elasticsearch's port", host(noFirewall(ss("tcp 0.0.0.0:9200 -"))), "9200/tcp", Abstained, reasonListenerOwner},
 	{"Docker publishes Elasticsearch's port", host(noFirewall(ss("tcp 0.0.0.0:9200 docker-proxy"))), "9200/tcp", Abstained, reasonContainerPort},
+	{"java over udp on Elasticsearch's port", host(noFirewall(ss("udp 0.0.0.0:9300 java"))), "", Disproved, ""},
 	{"another program on a database port", host(noFirewall(ss("tcp 0.0.0.0:9000 php-fpm8.2", sshAll))), "", Disproved, ""},
 	{"listeners not read", host(with(noFirewall(ss()), func(f fakeFacts) { f.why[checkListeners] = "check-denied:sudo_refused" })), "", Abstained, reasonListeners},
 	{"firewalld running", host(with(noFirewall(ss(pgAll)), func(f fakeFacts) {
@@ -466,6 +467,30 @@ func TestEachIncompleteReadAloneNeverDisproves(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// A java process is read as Elasticsearch or OpenSearch from its port alone,
+// so every judgment about one, fired, disproved or abstained, says so and
+// says the program was not confirmed.
+func TestAJavaJudgmentHedgesWhatItIs(t *testing.T) {
+	hedge := "A java process on 9200/tcp is read as Elasticsearch or OpenSearch from its port; which program it is was not confirmed"
+	for _, tc := range []struct {
+		name    string
+		host    Host
+		verdict string
+	}{
+		{"fired", host(noFirewall(ss("tcp 0.0.0.0:9200 java"))), Fired},
+		{"disproved", host(withUFW(ss("tcp 0.0.0.0:9200 java"), ufwActive, ufwDeny, "22/tcp ALLOW IN Anywhere")), Disproved},
+		{"abstained", host(with(noFirewall(ss("tcp 0.0.0.0:9200 java")), func(f fakeFacts) {
+			delete(f.why, checkFirewalld)
+			f.facts[checkFirewalld] = finding.Fact{Parsed: "running\n"}
+		})), Abstained},
+	} {
+		j := verdictOn(t, Judge([]Host{tc.host})["host:db1:22"].Judged, "9200/tcp")
+		if j.Verdict != tc.verdict || !slices.Contains(j.NotChecked, hedge) {
+			t.Errorf("%s: verdict %q, not checked %q", tc.name, j.Verdict, j.NotChecked)
 		}
 	}
 }

@@ -44,9 +44,14 @@ var containerOwners = map[string]string{
 // portProxies forward a container's port without saying what is behind it.
 var portProxies = []string{"rootlessport", "pasta", "pasta.avx2", "slirp4netns"}
 
-func isDatabase(process string, port int) bool {
+// tcpOnly are the table's processes that count on tcp alone: Elasticsearch
+// and OpenSearch listen on no udp port.
+var tcpOnly = []string{"java"}
+
+func isDatabase(l listener) bool {
 	for _, d := range databases {
-		if d.process == process && (d.ports == nil || slices.Contains(d.ports, port)) {
+		if d.process == l.process && (d.ports == nil || slices.Contains(d.ports, l.port)) &&
+			(l.proto == "tcp" || !slices.Contains(tcpOnly, d.process)) {
 			return true
 		}
 	}
@@ -230,6 +235,9 @@ func ownerDoubt(l listener) (reason, detail string) {
 type Database struct {
 	Process, Address, Proto string
 	Port                    int
+	// ByPort: the process is read as a data store from its port alone
+	// (java on Elasticsearch's ports), not from its name.
+	ByPort bool
 }
 
 // Databases are the listeners in the database table on any address, in
@@ -244,8 +252,8 @@ func Databases(f Facts) []Database {
 	ls, _ := listeners(recs)
 	var out []Database
 	for _, l := range ls {
-		if isDatabase(l.process, l.port) {
-			out = append(out, Database{Process: l.process, Address: l.address, Proto: l.proto, Port: l.port})
+		if isDatabase(l) {
+			out = append(out, Database{Process: l.process, Address: l.address, Proto: l.proto, Port: l.port, ByPort: l.process == "java"})
 		}
 	}
 	return out
