@@ -88,6 +88,10 @@ type RunOptions struct {
 	// Session is when this session started: the time scope, confirmations
 	// and accepted risks are read at. Zero is Started, or now on a resume.
 	Session time.Time
+	// ConfirmProbes asks the operator to approve the previewed requests of
+	// each confirm-mode site and returns the sites approved. Nil means there
+	// is no terminal to ask: those probes are not run.
+	ConfirmProbes func(context.Context, []ProbePreviewSite) []string
 }
 
 // Refusal is a run stopped for a reason the operator has to fix before any
@@ -209,7 +213,9 @@ type run struct {
 	// planned is Plan's document, which Check reads; checked is Check's.
 	planned *PlanDoc
 	checked *CheckDoc
-	out     Outcome
+	// probePlan is the probes Plan previewed, which Check sends.
+	probePlan []ProbePlan
+	out       Outcome
 	// auditFile is the run directory's audit.jsonl, or io.Discard.
 	auditFile io.Writer
 	// gate is the run's scope gate, built when something sends through
@@ -840,6 +846,8 @@ func (r *run) plan(context.Context) (any, error) {
 	}
 	doc.GitHub = r.planGitHub()
 	doc.Workspace = r.planWorkspace()
+	doc.Probes, doc.ProbesUnevidenced = r.planProbes()
+	r.probePlan = doc.Probes
 	doc.NotJudged = r.notJudged()
 	r.planned = doc
 	return doc, r.write("plan.json", doc)
@@ -861,6 +869,9 @@ func (r *run) check(ctx context.Context) (any, error) {
 	// Then the follow-up reads the rules name (docs/spec/engagement.md,
 	// "Plan selection and follow-ups").
 	r.followUps(ctx, doc)
+	if err := r.checkProbes(ctx, doc); err != nil {
+		return nil, err
+	}
 	r.checked = doc
 	return doc, r.write("check.json", doc)
 }
@@ -1136,6 +1147,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
 			}
 			ai.Judged = append(ai.Judged, judged[ra.ID]...)
+			ai.ProbeFrameworkSkipped = r.probeFrameworkGaps(ra.ID)
 		}
 		in.Assets = append(in.Assets, ai)
 	}
@@ -1191,6 +1203,15 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 		if source.Requests > 0 && !slices.Contains(in.LevelsUsed, "passive") {
 			in.LevelsUsed = append(in.LevelsUsed, "passive")
 		}
+	}
+	if r.probeSent() && !slices.Contains(in.LevelsUsed, "probe") {
+		in.LevelsUsed = append(in.LevelsUsed, "probe")
+	}
+	switch {
+	case r.probeSent():
+		in.Probes = "ran"
+	case len(r.probePlan) > 0:
+		in.Probes = "none_ran"
 	}
 	for _, site := range in.Egress.Sites {
 		if site.Requests > 0 && !slices.Contains(in.LevelsUsed, "observe") {

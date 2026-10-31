@@ -77,7 +77,7 @@ NOT CHECKED, AND WHAT WOULD CLOSE THE GAP
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 0 values.
-  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+  Probes and scans      none ran; nothing beyond reading was attempted.
 
 WHAT LEFT THIS MACHINE
   Third-party services:

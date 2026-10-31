@@ -501,7 +501,10 @@ var judgedFamilies = map[finding.Area][]struct {
 		{"SPF senders", "recognized positive SPF includes compared with declared senders", []string{finding.IDEmailSPFUndeclaredSender}},
 		{"DKIM selectors", "declared DKIM keys and their strength", []string{finding.IDEmailDKIMMissing, finding.IDEmailDKIMKeyBreakable, finding.IDEmailDKIMKey1024}},
 	},
-	finding.AreaSecrets: {{"response secrets", "specific secret detector hits in inspected responses", []string{finding.IDWebSecretInResponse}}},
+	finding.AreaSecrets: {
+		{"response secrets", "specific secret detector hits in inspected responses", []string{finding.IDWebSecretInResponse}},
+		{"exposed files", "version-control metadata and configuration files served by sites probed", []string{finding.IDWebVCSMetadataExposed, finding.IDWebConfigFileExposed}},
+	},
 	finding.AreaWeb: {
 		{"HTTPS and plain HTTP", "HSTS and plain HTTP responses from the recorded vantage", []string{finding.IDWebHSTSMissing, finding.IDWebPlaintextHTTP, finding.IDWebPlaintextHTTPClients}},
 		{"entry response headers", "browser security instruction presence", []string{finding.IDWebSecurityHeaders}},
@@ -516,7 +519,22 @@ var judgedFamilies = map[finding.Area][]struct {
 		{"subdomain takeover", "names pointing at providers with verified fingerprints", []string{finding.IDDNSTakeoverCandidate, finding.IDDNSUnclaimedAtProvider}},
 		{"private addresses", "public names publishing private addresses", []string{finding.IDDNSPrivateAddress}},
 		{"TLS and certificates", "one TLS negotiation and its certificate verification and expiry", []string{finding.IDTLSCertificateInvalid, finding.IDTLSCertificateExpiring, finding.IDTLSLegacyOnly}},
+		{"debug and status pages", "framework debug and status pages served by sites probed", []string{finding.IDWebDebugInterfaceExposed}},
 	},
+}
+
+// probeFamilies are the sub-items that exist only for an asset whose sites were
+// probed or planned for it: a run with probes off carries none.
+var probeFamilies = map[string]bool{"exposed files": true, "debug and status pages": true}
+
+// probesNotSent counts the probes of the finding ids that were left unsent
+// for want of a declared framework.
+func probesNotSent(a AssetInput, ids []string) int {
+	n := 0
+	for _, id := range ids {
+		n += a.ProbeFrameworkSkipped[id]
+	}
+	return n
 }
 
 // declaredOnly names what only a declared asset of the area's own kind
@@ -599,6 +617,9 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 			row.Reasons = appendReason(row.Reasons, ReasonDetail{Reason: "limit_reached", Detail: a.Name})
 		}
 		for _, fam := range judgedFamilies[area] {
+			if probeFamilies[fam.name] && !slices.ContainsFunc(a.Judged, func(j Judgment) bool { return slices.Contains(fam.ids, j.ID) }) {
+				continue
+			}
 			si := SubItem{Name: fam.name, Asset: a.ID, Reasons: []ReasonDetail{}, Rules: fam.ids}
 			var decided, undecided int
 			for _, j := range a.Judged {
@@ -631,6 +652,13 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				si.Mark, si.Judged = "partial", []string{fam.judges}
 			default:
 				si.Mark = "not_assessed"
+			}
+			if n := probesNotSent(a, fam.ids); n > 0 && probeFamilies[fam.name] {
+				si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: "unavailable:probe_framework",
+					Detail: fmt.Sprintf("%d framework probes not sent: no framework declared; declare `framework` to select them", n)})
+				if si.Mark == "assessed" {
+					si.Mark, si.Judged = "partial", []string{fam.judges}
+				}
 			}
 			some = some || si.Mark == "assessed" || si.Mark == "partial"
 			for _, r := range si.Reasons {

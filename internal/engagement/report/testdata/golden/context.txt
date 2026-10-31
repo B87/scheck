@@ -158,7 +158,7 @@ EXCLUDED, NARROWED AND NOT RUN
   Narrowed in the file  assets.macos.disable_checks[0]: removed fs.suid
   Redacted              built-in rules: 0 values. Your redact_extra rules: 0 matches (patterns not
                         shown).
-  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+  Probes and scans      none ran; nothing beyond reading was attempted.
 
 WHAT LEFT THIS MACHINE
   Third-party services:

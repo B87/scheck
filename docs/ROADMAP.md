@@ -582,10 +582,9 @@ slices that add callers do them first):
 **Deferred from E4's slice-closing review** (2026-10-08), each carried by the slice
 named:
 
-- G3: before anything raises the gate's `ceiling` above observe, the per-asset mode
-  check of `spec/scope.md`, "Admission", step 6 ("allowed by the asset's mode") exists.
-  Today only `ceiling` is checked, and the window tests admit a test-only probe op that
-  has no mode at all.
+- done in G3: the per-asset mode check of `spec/scope.md`, "Admission", step 6 exists
+  (`Scope.Allows`) and the gate's `ceiling` is the constant *probe*; the window tests
+  run on real probe ops.
 - done in E7 step 5: each session's site request counts remain split by
   first-party status across sessions, so later evidence never moves earlier
   unconfirmed requests into "websites shown to be yours".
@@ -2490,17 +2489,75 @@ that evidence named in the report; one absent from it stays observe-only.
 
 ### G3 — probes
 
-**Delivers:** the reviewed probe list (`/.git/HEAD`, `/.env`, framework debug routes,
-common admin panels), each a single `GET`; the `off`, `confirm` and `all` modes; the
-preview of every planned request; the authorization block and a window required for
-any probe; the interview's framework question returns, since it now
-selects which probes apply; the lab's web tier gains a served `.git` directory and an exposed admin panel,
-seeded under the same rule as 0.0.2.
+**Status: built** (2026-10-31).
 
-**Before the gate's `ceiling` rises above observe** (carried from E4's slice-closing
-review): the per-asset mode check of `spec/scope.md`, "Admission", step 6, which 0.0.2
-does not build; until it exists the window tests admit a test-only probe op with no
-mode at all.
+**Delivers:** the reviewed probe list, each a single `GET`; the `off`, `confirm` and
+`all` modes; the preview of every planned request; the authorization block and a window
+required for any probe; the interview's framework question, since it now selects which
+probes apply (`spec/scope.md`, "Probes"; `spec/web-collector.md`, "Probes").
+
+**Built:**
+
+- Gate: the ceiling is *probe*; scan stays refused. Step 6 calls `Scope.Allows` (mode
+  `all`, or `confirm` with the request approved live in this session; approvals are in
+  memory); steps 7 and 8 call `Scope.AdmitsProbe` (first-party evidence at the origin;
+  new audit rule `first_party`). A probe op declares a signature and a 4 KiB cap; the
+  gate tests the redacted prefix and drops the body; no retry, no redirect. Registry
+  validation refuses a malformed probe op (`gate.checkProbe`).
+- Collector: `web.Probes` (13 entries, `ProbesVersion` 2026-10-31), one op each,
+  `web.Judge` verdicts, and the findings `web.vcs_metadata_exposed`,
+  `web.config_file_exposed` and `web.debug_interface_exposed`.
+- Engagement: `defaults.probe` / `assets.<name>.probe` (`off`, `confirm`, `all`, on
+  domain and url assets), `defaults.framework` / `assets.<name>.framework`, a probe mode
+  requiring an authorization window. Plan previews (`plan.json` `probes`,
+  `probes_unevidenced`), Check asks per site (`cmd/scheck/probes.go`) and writes
+  `check.json` `assets[].probes`; Analyze judges.
+- Report: the coverage sub-items `exposed files` and `debug and status pages` for an
+  asset that had probe judgments, `method.probes` (`ran`, `none_ran`), the Method,
+  Authorization and "Probes and scans" lines true to it. All text goldens changed by the
+  one "Probes and scans" line.
+- Interview: the `framework` question (consumer `web.probe_selection`, slice G3).
+- Example: `docs/examples/probes.yaml`.
+
+**Decisions:** the security-consultant's define pass said a login page that exists is an
+observation, not a finding, so common admin panels are not on the list. Django has no
+probe: its debug page is a `404` and the gate matches only `200`, so it waits for a
+signature that can name its status. No framework declared means only
+the probes that apply to every site; a framework is never guessed from responses. An
+unrecognised answer is never a pass: a `200` that does not match is *disproved* only when
+nothing was redacted and, for a text file, the type is `text/plain` or
+`application/octet-stream` (an HTML page is disproved as "not the file"; any other type or
+none abstains, `unavailable:content_type`). Text-file probes refuse only HTML types
+(`ProbesVersion` 2026-11-01).
+
+**Carried from G3** (2026-10-31):
+
+- `security-consultant` review-mode pass on the probe list and signatures. The define
+  output was partial (paths and signatures withheld), so the list is the implementer's.
+- The interview does not ask for a probe mode or the authorization block; the operator
+  writes them by hand. `spec/engagement.md`, "Intake: the engagement file", says authorization is
+  asked when a probe mode is chosen.
+- The Scope stage's first-party confirmation prompt (`spec/scope.md`, "First-party
+  evidence") is not built; the operator writes `first_party` by hand.
+- Review (2026-10-31) leftovers: Plan's preview does not filter requests an `exclude`
+  covers (the gate refuses them as `excluded`); a probe answered `429`, `5xx` or by a
+  reset is sent again on a resumed session, since only a success is reused.
+- The first-party evidence a probe rests on, "operator confirmed" included, is named in
+  the excerpt of each probe verdict that was sent, as well as in Plan's preview and the
+  confirm prompt; the report has no per-site evidence table of its own.
+- The lab web tier gains a served `.git` directory with the lab (G7).
+
+**Deferred from G3:**
+
+- Common admin panels: a login page that exists is an observation, not a finding.
+- A control request per origin (a path that must not exist), which the consultant
+  suggested against catch-all responses. Page-specific strings make a catch-all match
+  improbable and text-file probes never match an HTML page, so it is not needed yet.
+- An attribute that raises a probe finding to *critical* needs a row in
+  `spec/engagement.md`, "Severity in context", ceilings.
+- Listing, per probe, the framework-specific probes not selected; Plan counts them
+  (`framework_skipped`) and the report counts them in the sub-item's reason
+  (`unavailable:probe_framework`) without listing them.
 
 **Done when:** no probe runs without an authorization window, first-party evidence and
 the asset's mode allowing it; `confirm` with no terminal reports probes as *not run*;

@@ -321,7 +321,7 @@ Every check declares one level.
 |---|---|---|
 | *passive* | No contact with the target: public DNS, certificate transparency, the operator's own files and repositories | Always allowed |
 | *observe* | Reading through the interfaces meant for it: a site's known entry points, a host over SSH, a cloud or SaaS API with read-only access | Allowed for every in-scope asset |
-| *probe* | A fixed, reviewed list of single, harmless requests for well-known sensitive locations on a first-party site | `confirm` from 0.0.3; `off` before |
+| *probe* | A fixed, reviewed list of single, harmless requests for well-known sensitive locations on a first-party site ("Probes") | `off`; a site's mode `confirm` or `all` turns it on (built, 0.0.3 G3) |
 | *scan* | Anything broader: port scans, path discovery, scanner templates, authenticated requests | `off` |
 
 Probes find the most valuable web issues with a few requests each; scans generate
@@ -335,7 +335,7 @@ traffic that looks like an attack. That is why they have separate gates.
 |---|---|
 | *passive* | DNS records, certificate transparency, SPF, DKIM and DMARC records, MX and NS; the names the company's own MX, NS and SPF records point at, resolved and never contacted ("Third-party sources") |
 | *observe* | TLS handshake and certificate; `GET`/`HEAD` of the site's known entry points (its `url` root or entry and the `intent` URLs on it), plus `/robots.txt` and `/.well-known/security.txt`, and one redirect hop on the same host ("Connections"); a discovered name with first-party evidence has `/` as its entry point and reads the same; one without it gets only `GET /` over https and http, whose https handshake is its certificate read. Headers, cookies and technology fingerprint come from those responses |
-| *probe* | single `GET` requests from the reviewed list: `/.git/HEAD`, `/.env`, framework debug routes, common admin panels |
+| *probe* | single `GET` requests from the reviewed list ("Probes"): `/.git/HEAD`, `/.env`, framework debug routes. Admin panels are not on the list |
 | *scan* | path discovery, scanner templates, authenticated requests, port scans |
 
 Header, cookie, `security.txt` and plain-HTTP rules judge declared sites only: a `url`
@@ -448,12 +448,13 @@ assets:
 | Mode | What runs |
 |---|---|
 | `off` | Nothing. The report lists what would have applied as *not run*. |
-| `confirm` | What the operator approves from a preview listing every planned request: method, URL and count. A run with no terminal treats them as *not run*. |
-| `auto` | Experimental: what passes the decision gate below. |
+| `confirm` | What the operator approves from a preview listing every planned request: method, URL and count (built for probes, 0.0.3 G3). Plan writes the preview; Check asks per site on the terminal, and the approval is held in memory for that session only: never written, never read from a file, asked again on a resume. A run with no terminal treats them as *not run*. |
+| `auto` | Experimental: what passes the decision gate below. Not built; a file that sets it exits 3. |
 | `all` | Everything at that level that applies to the asset. |
 
 Every mode other than `off` needs first-party evidence for the asset and an
-authorization window, and stays inside the rules at the top of this page. The throttle, timeout and cost limit
+authorization window, and stays inside the rules at the top of this page. Validation
+refuses a probe mode with no window in `authorization.windows`. The throttle, timeout and cost limit
 (last section) apply in every mode. A model may propose probes and scans during Plan;
 whether they run is still decided by the asset's mode.
 
@@ -498,6 +499,57 @@ There is no "could this request cause harm" question: a check that could harm a 
 does not belong in the catalog, and a fragile path belongs in `exclude`. `auto` can
 never run more than `all` would on the same asset. Without Jev credentials, an asset set
 to `auto` is a usage error before any target is contacted.
+
+## Probes
+
+Built in 0.0.3 G3. A probe is one `GET` of a well-known sensitive path on a first-party
+site. The reviewed list, its signatures and the findings are in
+[web-collector.md](web-collector.md#probes); this section is the gate's side.
+
+**The list is compiled.** One op per probe, `web.probe.<id>`, with a literal path, `GET`
+only, no query, `Accept: */*`. A probe op declares a content signature (an RE2 pattern
+and either the media types it may be served as or, for a text file, the types it may not) and a read cap of 4 KiB (`gate.ProbeMaxBytes`).
+Registry validation refuses a probe op with a path parameter, with no signature, that is
+not `GET`, whose cap is above 4 KiB, or that is a scan op. Nothing a site says and nothing
+the operator writes adds a path.
+
+**What a response keeps.** The gate redacts the body, tests the signature on the
+redacted prefix, and then drops the body. A match needs status `200` and, for a signature
+that lists types, one of them; a text-file signature refuses only the HTML types
+(`text/html`, `application/xhtml+xml`) and matches any other type, or none.
+The body is then dropped. The response keeps the status, the headers, whether it matched, and a
+hash of what was read. No probe body reaches the audit log, `check.json`, the report or
+the run directory. The match runs on redacted bytes, so no secret is compared or kept.
+
+**One request, no retry, no redirect.** A probe is sent once: a `429`, a `5xx` or a
+reset is the only answer, and a `3xx` is never followed.
+
+**First-party evidence at the origin (steps 7 and 8).** A probe needs evidence for its
+origin: a `url` root whose path is `/`, a `host` root, a `network` root holding every
+address checked after resolution, or a current `first_party` confirmation whose target
+the name still points at. The front page of a name under a `domain` root is not
+evidence, and a `url` root, or a `url` asset confirmed by the operator, with a path
+prefix holds nothing at the origin's own paths, where every probe sits: only a
+confirmation of the site (a `domain` or `host` asset, or a `url` at `/`) covers them. Without evidence the request is `refused:first_party`; a name
+that moved out of its evidence is `refused:address_moved`, as for any request. Step 9
+tests the window on every probe, and the window index is on the audit line.
+
+**Which mode applies.** A mode is per name, over both schemes. The `assets` entries that
+name the site (a `domain` of that name, or a `url` on it) and set `probe` themselves
+decide, and where they disagree the one that allows least wins; a site no entry sets a
+mode for takes `defaults.probe`. An inherited default never beats an entry's own `off`.
+
+**A probe that could not run on time is a limit.** A request outside every window
+(`refused:window`), cut by the window's end, or ended by `limits.timeout` makes the run
+*incomplete* (exit 2), with the probes marked *not run*; it is never a clean result.
+
+**Preview and confirmation.** In `confirm` mode Plan lists every request per site
+(method, URL, count): the scheme is `https` if the site answered over https, else
+`http`. Plan also names the sites in a probing mode that have no first-party evidence as
+not probed. Check asks per site on a terminal, with the preview on standard error, and
+sends only what was approved. The approval is in memory: never persisted, never read from
+a file, and a resumed session asks again. With no terminal, or a declined answer, the
+probes are *not run* and the report says so. A site in `all` mode is not asked.
 
 ## Throttle, timeout and cost
 
@@ -588,8 +640,11 @@ audit line:
 3. The destination is classed: a target asset or a third-party source.
 4. The subject falls under a root.
 5. The subject is not excluded.
-6. The op's level is allowed by the asset's mode.
-7. For a web asset, the path is one of its entry points.
+6. The op's level is allowed by the asset's mode ("Running probes and scans"): for a
+   probe, `all`, or `confirm` with this exact request approved by the operator in this
+   session.
+7. For a web asset, the path is one of its entry points; for a probe, the origin has
+   first-party evidence instead ("Probes").
 8. The level or path has the first-party evidence it needs.
 9. For probe and above, the time is inside an authorization window.
 10. A credential is present when the op binds one.
@@ -654,8 +709,9 @@ confirmations in the file. How inventory evidence enters the gate is decided wit
 - **Organizational unit excludes.** These match by path segment: `/Board` excludes
   `/Board/Sub` and not `/Boardroom`.
 
-**Levels in 0.0.2.** Only passive and observe are admitted, whatever a registry
-defines. A discovered name without first-party evidence gets two reads and nothing
+**Levels in 0.0.2 and 0.0.3.** Passive, observe and probe are admitted; scan is not,
+whatever a registry defines (the compiled ceiling is *probe*). The reads below are the
+observe level. A discovered name without first-party evidence gets two reads and nothing
 more: `GET https://name/`, whose TLS handshake on 443 is the name's certificate read,
 and `GET http://name/`. It gets no
 `robots.txt` or `.well-known`. A declared URL asset under a URL root needs no
@@ -666,9 +722,9 @@ discovered name with first-party evidence has `/` as its entry point and reads
 `/robots.txt` and `/.well-known/security.txt` like a `url` root. From 0.0.2 E7 both
 read one redirect hop on the same host ("Connections"). There are no other ports, no query strings and no `HEAD` fallbacks. The intent URLs on
 a first-party site are entry points too; on a name without first-party evidence they
-are not. Step 6 is that compiled ceiling alone: no asset's mode is read, since
-validation refuses every probe and scan mode but `off`. The per-asset mode check is
-built before anything raises the ceiling (probes, 0.0.3 G3). Evidence that only a `network` root holding every address can give is checked
+are not. Step 6 is that ceiling, then for a probe the site's mode:
+a site whose mode is `off` is `refused:level`, and so is a `confirm` site whose request
+the operator has not approved. Evidence that only a `network` root holding every address can give is checked
 when the gate resolves the name; a file with no `network` root has none to give, so a
 request beyond the front page of a name without evidence is `refused:entry_point`, and
 with one it is `refused:address_moved` when an address is outside every network root.
@@ -1259,7 +1315,7 @@ Fields:
   redacted `detail`. The rules, in admission order: `unknown_op`, `bind`, `method`,
   `redirect`, `redirect_depth`, `spf_budget` (a follow-up past SPF's budget,
   "Third-party sources"), `out_of_scope`, `excluded`, `level`, `entry_point`,
-  `window` (checked again after the throttle wait), `no_credentials`, `deadline`,
+  `first_party` (a probe's origin has no first-party evidence, "Probes"), `window` (checked again after the throttle wait), `no_credentials`, `deadline`,
   `rate_limit`, `address_excluded`, `address_not_public`, `address_moved`, `canceled`
   (the run was cancelled while the request waited for its throttle or its retry). A
   request or a DNS lookup cut in flight by `limits.timeout` is `unavailable:deadline`,
@@ -1423,13 +1479,12 @@ the window's end cancels requests in flight as `unavailable:window_ended`; a res
 whose read completes at or after the window's end was in flight, so nothing of it is
 kept and no redirect it names is followed. Both are
 `limit_reached`, as `limits.timeout` is. The audit line records the window's index.
-Passive and observe requests are never checked against windows. Validation rejects
-probe modes in 0.0.2 and the gate admits nothing above observe, so the window is tested
-with a test-only probe op under a ceiling only that test raises.
+Passive and observe requests are never checked against windows. A probe is the first
+op this binds ("Probes").
 
 ### Not built in 0.0.2
 
 No generic HTTP client. No GraphQL. No proxies, custom CAs, client certificates or
 "insecure" flag. No link following, crawling, sitemap parsing or JavaScript rendering.
 No subdomain brute force, zone transfer or port check. No git transport and no `gh`
-exec. No `confirm` preview (0.0.3 G3) and no inventory evidence (0.0.3 G2).
+exec. No scan level, no `auto` mode and no inventory evidence (0.0.3 G2).

@@ -116,6 +116,19 @@ from that vantage produces `web.restricted_reachable`, high after the contradict
 raise. This establishes reachability, not authentication bypass. Refusal or timeout
 disproves with an outage caveat; blocked, denied, unknown or invalid TLS evidence
 abstains. No identity-provider redirect is contacted by the rule.
+Probes (0.0.3 G3) are single GETs from a reviewed list of well-known sensitive files
+(`/.git/HEAD`, `/.env`, framework debug routes) on a `domain` or `url` asset with
+`probe: confirm` or `all`, first-party evidence at its origin and an authorization
+window; the operator writes all three, and `defaults.framework` selects the
+framework-specific ones. Never set a probe mode, add a window or approve a preview for
+the user. `confirm` asks per site on a terminal; with no terminal the probes are *not
+run*, which is a coverage reason (`unavailable:probe_no_terminal`), not a clean
+result. Read `engagement.method.probes` (`ran`, `none_ran`, absent when every mode is
+off) and the `exposed files` and `debug and status pages` coverage sub-items before
+the findings `web.vcs_metadata_exposed`, `web.config_file_exposed` and
+`web.debug_interface_exposed` (one per path, subject the probe URL, no body kept). A
+disproved probe says the path is not served from this vantage, not that nothing is
+exposed. `403`, `429`, `5xx` and redirects abstain. A scan is not built.
 On resume, changed mail declarations refresh the affected records and follow-ups;
 changed intent role or audience refreshes its exact entry. Reasons and web
 acceptances only regrade retained observations. Changed vantage refreshes web/DNS

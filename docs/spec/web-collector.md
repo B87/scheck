@@ -461,6 +461,94 @@ data in the tree.
   text is in [report.md](report.md#coverage) ("Reason wording"). The report
   never praises the protection and never advises turning it off.
 
+## Probes
+
+Built in 0.0.3 G3. The gate's side (mode, preview, confirmation, first-party evidence at
+the origin, no body kept, no retry, no redirect) is [scope.md](scope.md#probes). A probe
+is one `GET` of a path from a compiled list, run only on a `domain` or `url` asset whose
+mode is `confirm` or `all`, with first-party evidence and inside an authorization window.
+A probe asks one question: does this path serve a file of this shape. It does not crawl,
+guess a path, or read more than the first 4 KiB.
+
+**The reviewed list** (`web.Probes`, `ProbesVersion` 2026-11-01). Each entry is one op
+`web.probe.<id>` with a literal path and a signature: an RE2 pattern and, by kind, either
+the media types the page may be served as (`Types`: the HTML and JSON debug pages) or the
+types the file may not be served as (`NotTypes`: the text files, which refuse only
+`text/html` and `application/xhtml+xml`). A match needs status `200`, a type the
+signature allows, and the pattern on the redacted prefix. A text file is matched whatever
+other type, or none, it is served as: servers send `.env` or `HEAD` as `text/plain`,
+`application/octet-stream`, `application/x-trash` or nothing.
+
+| Applies to | Path | Finding |
+|---|---|---|
+| every site | `/.git/HEAD`, `/.git/config` | `web.vcs_metadata_exposed` |
+| every site | `/.env`, `/.htpasswd` | `web.config_file_exposed` |
+| every site | `/server-status` | `web.debug_interface_exposed` |
+| `node` | `/.npmrc` | `web.config_file_exposed` |
+| `wordpress` | `/wp-config.php.bak`, `/wp-content/debug.log` | `web.config_file_exposed` |
+| `php`, also selected by `laravel` and `wordpress` | `/phpinfo.php`, `/_profiler/` (Symfony) | `web.debug_interface_exposed` |
+| `laravel` | `/_ignition/health-check` | `web.debug_interface_exposed` |
+| `spring` | `/actuator/env` | `web.debug_interface_exposed` |
+| `rails` | `/rails/info/properties` | `web.debug_interface_exposed` |
+
+`django` has no probe: its debug page is Django's technical 404 page, served with status
+`404`, and the gate matches only status `200`. Django waits for a signature that can name
+its status. Common admin panels are not on the list: a login page that
+exists is an observation, not a finding.
+
+**Selection.** A site gets the probes that apply to every site, and those whose framework
+the operator declared (`defaults.framework` or the asset's own `framework`, which
+replaces it). A framework is never guessed from the site's responses. A site with no
+declaration, `none` or `unknown` gets only the first group. The scheme is `https` when
+the site answered over https and `http` otherwise.
+
+The framework probes not sent are not silent. With no declaration or `unknown`, the
+`exposed files` and `debug and status pages` sub-items are at most *partial*, reason
+`unavailable:probe_framework`, detail "N framework probes not sent: no framework declared;
+declare `framework` to select them" ([report.md](report.md#coverage)). `none` is a
+declaration that nothing framework-specific applies, and any declared list is one: both
+leave the sub-items decided by the probes that were sent.
+
+**Findings.** `web.vcs_metadata_exposed` (secrets, high), `web.config_file_exposed`
+(secrets, high) and `web.debug_interface_exposed` (external surface, high). The subject
+kind is `url` and the key the probe URL, so a site with two exposed files has two
+findings. None is an exposure finding: `exposed_on_purpose` does not move them.
+
+**Verdicts**, per probe URL:
+
+| Answer | Verdict |
+|---|---|
+| `200` and the signature matched | *fired* |
+| `404`, `410` or another `4xx` other than `401`, `403` and `429` | *disproved*: not served at this path from this vantage |
+| `401`, `403`, `429`, `5xx` | *abstained*, `unavailable:http_status` |
+| `3xx` | *abstained*, `unavailable:redirected`; never followed |
+| a certificate or transport failure | *abstained*, that decision's reason |
+| not sent | *abstained*: `unavailable:probe_no_terminal`, `probe_declined`, `probe_site_unreachable`, `probe_window`, `probe_evidence`, `probe_mode`, `probe_not_reached` |
+
+A `200` that did not match is decided by the kind of probe, in this order.
+
+For a text file (`NotTypes`):
+
+| Answer | Verdict |
+|---|---|
+| `200` with an HTML type (`text/html`, `application/xhtml+xml`), whatever was redacted | *disproved*: answered with a page, not the file |
+| `200` without a match, something redacted | *abstained*, `unavailable:redacted` |
+| `200` without a match, `text/plain` or `application/octet-stream`, nothing redacted | *disproved*: not served at this path from this vantage |
+| `200` without a match, any other type (`application/x-trash`, a binary type) or no `Content-Type` | *abstained*, `unavailable:content_type`; never disproved |
+
+For an HTML or JSON debug page (`Types`): a `200` with no `Content-Type` is *abstained*,
+`unavailable:content_type`; with something redacted, *abstained*, `unavailable:redacted`;
+otherwise *disproved*. A type outside the list never matches.
+
+An answer scheck does not recognise is never a pass. There is no control request for a
+catch-all site that answers `200` to every path: the signatures hold page-specific
+strings, which make a catch-all match improbable, and a text-file probe never matches an
+HTML page.
+
+The report words a disproved probe as "not served at this path from this vantage", never
+"no exposed files". It never prints a probe body, and a matched signature is the whole
+evidence.
+
 ## Reachability and vantage
 
 Whether something is reachable depends on where the request came from. `scheck run
@@ -496,7 +584,7 @@ no trailing dot, default ports dropped, no query or fragment and no spaces; a ke
 | Kind | Key | Rules |
 |---|---|---|
 | `origin` | `scheme://host[:port]`, no path | `web.hsts_missing` (the https origin), `web.plaintext_http` and `web.plaintext_http_clients` (the http origin), `web.session_cookie_flags` (the cookie names under `affected.listed`), `web.security_headers`, `web.security_txt` |
-| `url` | the URL | `web.version_disclosed`, `web.restricted_reachable` |
+| `url` | the URL | `web.version_disclosed`, `web.restricted_reachable`, and the probe findings, one per probe URL ("Probes") |
 | `secret_location` | `<detector>:<url>`, one per detector per page, the count under `derived` | `web.secret_in_response` |
 | `dns_name` | the name, or `*.<root>` for a dangling wildcard and for names Scope could not list | `dns.takeover_candidate`, `dns.unclaimed_at_provider`, `dns.dangling_*` through a CNAME, `dns.private_address`, `tls.*` (port 443 implied) |
 | `dns_record` | `<owner>/<TYPE>/<target>`, `TYPE` one of `MX`, `NS` and `TXT` (an SPF include target), the owner the name whose record points at the target: the domain, or for a nested include the include whose record names it. Labelled "MX of example.com → mx.oldhost.net", "NS of example.com → ns1.dns-host.example", "SPF include of example.com → _spf.gone.example". A records read that said nothing is `<owner>/<TYPE>` | `dns.dangling_*` through an MX, an NS or an SPF include whose target is gone |
@@ -656,6 +744,7 @@ Each is printed with its reason, under the coverage row it belongs to
 - MTA-STS, TLS-RPT, DANE, DNSSEC and BIMI;
 - TLS versions and ciphers other than the one negotiated, and revocation;
 - pages beyond the entry points, the login flow and cookies set after it, and scripts;
+- paths beyond the reviewed probe list, admin panels, and the probes of a framework nobody declared;
 - whether a name pointing at a provider is still the company's;
 - the registrar account: who can sign in, its 2-step verification, auto-renew and the
   domain's expiry;

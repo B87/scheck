@@ -59,8 +59,12 @@ func (bindingScope) Subject(asset, id string) gate.Standing {
 func (bindingScope) Name(string) string                                 { return "" }
 func (bindingScope) Address(netip.Addr) (string, bool)                  { return "", false }
 func (bindingScope) Admits(string, string, *gate.Lookup) gate.Admission { return gate.Admission{} }
-func (bindingScope) Throttle(string) (float64, int)                     { return 0, 0 }
-func (bindingScope) OrgUnits(string) []gate.OrgUnit                     { return nil }
+func (bindingScope) AdmitsProbe(string, string, *gate.Lookup) gate.Admission {
+	return gate.Admission{}
+}
+func (bindingScope) Allows(string, gate.Level, string, string) string { return "" }
+func (bindingScope) Throttle(string) (float64, int)                   { return 0, 0 }
+func (bindingScope) OrgUnits(string) []gate.OrgUnit                   { return nil }
 
 func TestBindUsesGateSelectedCustomerAndExposesOnlyBinding(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

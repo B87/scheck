@@ -41,6 +41,9 @@ var (
 	DeployTargets = []string{"production", "staging", "development"}
 	// Modes are the probe and scan modes; this build runs only off.
 	Modes = []string{"off", "confirm", "auto", "all"}
+	// Frameworks are what a site may be declared as built with; the probes
+	// select by them (docs/spec/scope.md, "Probes").
+	Frameworks = []string{"laravel", "django", "rails", "spring", "wordpress", "node", "php", "none", "unknown"}
 )
 
 func areaKeys() []string {
@@ -130,6 +133,8 @@ type validator struct {
 	// validation").
 	refs   map[string]Ref
 	assets map[string]Ref
+	// probesOn is the first key that turns probes on.
+	probesOn string
 }
 
 func (v *validator) validate() *Resolved {
@@ -151,6 +156,7 @@ func (v *validator) validate() *Resolved {
 	v.references()
 	v.intent()
 	v.authorization()
+	v.probesNeedAuthorization()
 	return v.resolve(assets)
 }
 
@@ -348,15 +354,63 @@ func (v *validator) rootOf(r Ref) *Ref {
 	return nil
 }
 
+// mode checks a scan mode: only off is built.
 func (v *validator) mode(key, val string) {
 	if val == "" || val == "off" {
 		return
 	}
 	if slices.Contains(Modes, val) {
-		v.unavailable(key, "mode %s (probes and scans arrive in 0.0.3; 0.0.2 only reads)", val)
+		v.unavailable(key, "mode %s (scans arrive after 0.0.3; only probes run)", val)
 		return
 	}
 	v.enum(key, val, Modes)
+}
+
+// probeMode checks a probe mode: off, confirm and all are built; auto is
+// not (docs/spec/scope.md, "Running probes and scans"). It reports whether
+// the mode lets a probe run, which needs an authorization window.
+func (v *validator) probeMode(key, val string) {
+	switch val {
+	case "", "off":
+		return
+	case "auto":
+		v.unavailable(key, "mode auto (it follows the scan level)")
+		return
+	}
+	if !v.enum(key, val, Modes) {
+		return
+	}
+	if v.probesOn == "" {
+		v.probesOn = key
+	}
+}
+
+// frameworks checks a list of frameworks against the closed set.
+func (v *validator) frameworks(key string, list []string) {
+	seen := map[string]bool{}
+	for i, f := range list {
+		k := fmt.Sprintf("%s[%d]", key, i)
+		if v.enum(k, f, Frameworks) && seen[f] {
+			v.fail(k, "%q is listed twice", f)
+		}
+		seen[f] = true
+	}
+	if (seen["none"] || seen["unknown"]) && len(list) > 1 {
+		v.fail(key, "none and unknown stand alone: they say the site has no framework, or that you do not know it")
+	}
+}
+
+// probesNeedAuthorization refuses a probe mode with no authorization
+// window: a probe runs only inside one (docs/spec/scope.md, "The
+// authorization block").
+func (v *validator) probesNeedAuthorization() {
+	if v.probesOn == "" {
+		return
+	}
+	a := v.f.Authorization
+	if a == nil || len(a.Windows) == 0 {
+		v.fail("authorization.windows", "at least one window is required because %s turns probes on: a probe runs only inside a window the operator authorized", v.probesOn)
+	}
 }
 
 func (v *validator) throttle(key string, t *Throttle) {
@@ -379,7 +433,8 @@ func (v *validator) profile(key, val string) {
 
 func (v *validator) defaults() {
 	d := v.f.Defaults
-	v.mode("defaults.probe", d.Probe)
+	v.probeMode("defaults.probe", d.Probe)
+	v.frameworks("defaults.framework", d.Framework)
 	v.mode("defaults.scan", d.Scan)
 	v.throttle("defaults.throttle", d.Throttle)
 	v.profile("defaults.profile", d.Profile)
@@ -621,7 +676,8 @@ func (v *validator) assetsSection() map[string]Ref {
 }
 
 func (v *validator) assetSettings(key string, r Ref, a Asset) {
-	v.mode(key+".probe", a.Probe)
+	v.probeMode(key+".probe", a.Probe)
+	v.frameworks(key+".framework", a.Framework)
 	v.mode(key+".scan", a.Scan)
 	v.throttle(key+".throttle", a.Throttle)
 
@@ -634,6 +690,8 @@ func (v *validator) assetSettings(key string, r Ref, a Asset) {
 			v.fail(key+"."+field, "applies only to a %s asset; %s is a %s", strings.Join(names, " or "), r.ID, r.Kind)
 		}
 	}
+	only("probe", a.Probe != "" && a.Probe != "off", KindDomain, KindURL)
+	only("framework", len(a.Framework) > 0, KindDomain, KindURL)
 	only("jump", a.Jump != "", KindHost)
 	only("identity", a.Identity != "", KindHost)
 	only("known_hosts", a.KnownHosts != "", KindHost)

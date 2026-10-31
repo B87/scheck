@@ -64,7 +64,7 @@ func (q Question) Answered(f *File) bool {
 
 // MergedSlices are the slices whose consumers must already exist. E9
 // joins at its step 9 (docs/ROADMAP.md, E9).
-var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7", "E9", "G5"}
+var MergedSlices = []string{"E1a", "E1b", "E1c", "E2", "E4", "E5", "E6", "E7", "E9", "G5", "G3"}
 
 // Questions is the interview, in the order scheck init asks.
 // It asks the Intake questions that have a consumer in a merged slice
@@ -188,6 +188,12 @@ func Questions() []Question {
 			Consumers: []Consumer{{ID: "web.restricted_reachable", Slice: "E7"}},
 			answered:  func(f *File) bool { return len(f.Intent.NotExposed) > 0 },
 			apply:     applyRestricted},
+		{ID: "framework", Prompt: "Not sure what your websites are built with? Leave this blank: nothing depends on it, and it never makes scheck send anything.\n" +
+			"If you know, give one or more of: laravel, django, rails, spring, wordpress, node (Next.js counts as node), php (any other PHP). Or none (a static site or a hosted platform such as Webflow), on its own. Separate several with commas. Whoever built the site, or your agency, can tell you.\n" +
+			"This is only so that scheck does not ask a Laravel site for a WordPress file. It matters only if you later switch on probes, which are extra requests to your own sites and are off unless you ask. The answer applies to all your websites; unknown means the same as blank.",
+			Consumers: []Consumer{{ID: "web.probe_selection", Slice: "G3"}},
+			answered:  func(f *File) bool { return !hasWeb(f) || len(f.Defaults.Framework) > 0 },
+			apply:     applyFramework},
 		{ID: "reach", Prompt: "For each server you want checked, one block. A pasted private key is refused. If you do not know user@address, leave this blank.\n" +
 			"  name: shop\n" +
 			"  host: user@203.0.113.5\n" +
@@ -911,6 +917,32 @@ func applyNotUsed(f *File, answer string) error {
 		f.NotUsed = append(f.NotUsed, area)
 	}
 	return nil
+}
+
+// applyFramework records what the sites are built with, for every site:
+// defaults.framework. none and unknown stand alone.
+func applyFramework(f *File, answer string) error {
+	var list []string
+	for _, line := range linesOf(answer) {
+		for _, w := range splitList(strings.ToLower(line)) {
+			if !contains(Frameworks, w) {
+				return fmt.Errorf("%q is not one of %s", w, strings.Join(Frameworks, ", "))
+			}
+			if !contains(list, w) {
+				list = append(list, w)
+			}
+		}
+	}
+	if len(list) > 1 && (contains(list, "none") || contains(list, "unknown")) {
+		return fmt.Errorf("none and unknown stand alone: they say the sites have no framework, or that you do not know it")
+	}
+	f.Defaults.Framework = list
+	return nil
+}
+
+// hasWeb reports a root that is a website: a domain or a url.
+func hasWeb(f *File) bool {
+	return hasDomain(f) || slices.ContainsFunc(f.Roots, func(r Locator) bool { return r.URL != "" })
 }
 
 func rootRefs(f *File) ([]Ref, error) {

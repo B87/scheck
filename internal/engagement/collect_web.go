@@ -47,6 +47,12 @@ func (r *run) collectDomain(ctx context.Context, a ResolvedAsset, ra ReconAsset)
 // the names Scope looked up, what it could not list, whether the resolver
 // invents answers, and what Recon read.
 func (r *run) webInput(a ResolvedAsset, ev web.Evidence) web.Input {
+	in := r.webInputBase(a, ev)
+	in.Probes = r.probesFor(a.ID)
+	return in
+}
+
+func (r *run) webInputBase(a ResolvedAsset, ev web.Evidence) web.Input {
 	view := web.ScopeView{Vantage: r.o.Vantage}
 	root := a.name
 	for _, plan := range r.webPlans(a) {

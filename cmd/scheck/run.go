@@ -208,7 +208,7 @@ func executeEngagement(cmd *cobra.Command, opts *globalOpts, ho *hostOpts, args 
 
 	started := runClock()
 	ro := engagement.RunOptions{Raw: raw, StopAfter: opts.StopAfter, Started: started, Session: started, Version: version.Version, Vantage: opts.Vantage,
-		RecordFixtures: opts.RecordFixtures, Collect: collectHost, NewGate: newGate, Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
+		RecordFixtures: opts.RecordFixtures, Collect: collectHost, NewGate: newGate, ConfirmProbes: confirmProbes(cmd), Log: func(f string, a ...any) { opts.logf(1, f, a...) }}
 	// Refuse what cannot be reached before a run directory exists, so a
 	// refused run leaves nothing behind.
 	if err := engagement.Preflight(res, !opts.NoPersist); err != nil {
@@ -605,6 +605,12 @@ func writePlan(w io.Writer, doc *engagement.PlanDoc) {
 		if sel.Budget > 0 {
 			fmt.Fprintln(w, "  Check sends nothing until you resume this run; the budget may not reach the later kinds on every repository.")
 		}
+	}
+	for _, p := range doc.Probes {
+		writeProbePlan(w, p)
+	}
+	if len(doc.ProbesUnevidenced) > 0 {
+		fmt.Fprintf(w, "\nNot probed, no first-party evidence: %s\n", report.Sanitize(strings.Join(doc.ProbesUnevidenced, ", ")))
 	}
 	for _, sel := range doc.Workspace {
 		at := ""

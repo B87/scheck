@@ -378,7 +378,7 @@ func (t *Target) Exec(ctx context.Context, argv []string) (target.Result, error)
 	case runErr = <-done:
 	case <-ctx.Done():
 		_ = sess.Close()
-		<-done
+		<-done //nolint:errcheck // waits for the session to end; its error is the timeout's
 		return target.Result{Code: -1, Stdout: stdout.Buf, Stderr: stderr.Buf, Duration: time.Since(start)},
 			fmt.Errorf("%w after %s", target.ErrTimeout, time.Since(start).Round(time.Millisecond))
 	}

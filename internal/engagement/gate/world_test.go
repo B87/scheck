@@ -302,6 +302,10 @@ type fakeScope struct {
 	sites        map[string]SitePaths
 	throttles    map[string]throttle // asset → its own throttle; none when absent, as the engagement's Scope
 	orgUnits     map[string][]OrgUnit
+	// probeMode is the mode every site has; all when empty.
+	probeMode string
+	// approved holds origin+path of the probes a confirm mode allows.
+	approved map[string]bool
 }
 
 func under(id, root string) bool {
@@ -406,6 +410,26 @@ type throttle struct {
 	conc int
 }
 
+// AdmitsProbe is Admits with a refusal worded as a probe's.
+func (s *fakeScope) AdmitsProbe(origin, path string, l *Lookup) Admission {
+	a := s.Admits(origin, path, l)
+	if a.Refused == "entry_point" {
+		a.Refused = "first_party"
+	}
+	return a
+}
+
+// Allows reads the mode the test set, all by default.
+func (s *fakeScope) Allows(_ string, l Level, origin, path string) string {
+	switch {
+	case l < Probe, s.probeMode == "" || s.probeMode == "all":
+		return ""
+	case s.probeMode == "confirm" && s.approved[origin+path]:
+		return ""
+	}
+	return "mode " + s.probeMode
+}
+
 func (s *fakeScope) Throttle(asset string) (float64, int) {
 	t := s.throttles[asset]
 	return t.rate, t.conc
@@ -429,7 +453,8 @@ var testOps = []Op{
 	{ID: "web.cert", Provider: "web", Method: TLS, URL: "https://{host}/",
 		Params: []Param{{Name: "host", Type: Host}}, Level: Observe},
 	{ID: "web.probe", Provider: "web", Method: GET, URL: "https://{host}/.git/HEAD",
-		Params: []Param{{Name: "host", Type: Host}}, Level: Probe, Accept: []string{"*/*"}, MaxBytes: 256},
+		Params: []Param{{Name: "host", Type: Host}}, Level: Probe, Accept: []string{"*/*"}, MaxBytes: 256,
+		Signature: &Signature{Pattern: `\Aref: refs/`, NotTypes: []string{"text/html", "application/xhtml+xml"}}},
 	{ID: "github.org", Provider: "github", Method: GET, URL: "https://api.github.com/orgs/{org}",
 		Subject: "saas:github:{org}", Params: []Param{{Name: "org", Type: Login}},
 		Level: Observe, Auth: GitHubToken, Accept: []string{"application/vnd.github+json"}, Keep: []string{"login", "access_token", "plan.name"}, MaxBytes: 1 << 12},

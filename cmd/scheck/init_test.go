@@ -40,6 +40,7 @@ func TestInitWritesBrightcartAndContactsNothing(t *testing.T) {
 		".",
 		".",
 		".",
+		".",
 		"cloud", ".",
 	}, "\n") + "\n"
 	// The script is one answer per asked question, in order. Blank answers

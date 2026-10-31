@@ -17,8 +17,10 @@ type Input struct {
 	Vantage          string
 	Observations     map[string]Observation
 	LevelsUsed       []string
-	RulesVersion     string
-	Version          string
+	// Probes is Method.Probes.
+	Probes       string
+	RulesVersion string
+	Version      string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string
@@ -177,6 +179,10 @@ type AssetInput struct {
 	// severity chain Analyze gave it.
 	Collector string
 	Judged    []Judgment
+	// ProbeFrameworkSkipped counts, by finding id, the probes of a framework
+	// not sent because the site's framework was not declared (or unknown):
+	// their sub-items are at most partial.
+	ProbeFrameworkSkipped map[string]int
 	// ReadWith is the root a declared domain asset was read with, its
 	// names among the root's.
 	ReadWith string
