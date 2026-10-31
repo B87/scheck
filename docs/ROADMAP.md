@@ -2531,6 +2531,11 @@ nothing was redacted.
   asked when a probe mode is chosen.
 - The Scope stage's first-party confirmation prompt (`spec/scope.md`, "First-party
   evidence") is not built; the operator writes `first_party` by hand.
+- Review (2026-10-31) leftovers: Plan's preview does not filter requests an `exclude`
+  covers (the gate refuses them as `excluded`); a probe answered `429`, `5xx` or by a
+  reset is sent again on a resumed session, since only a success is reused; a `200` of
+  the right shape served with a content type outside the signature's list (not an absent
+  one) is disproved.
 - The first-party evidence a probe rests on, "operator confirmed" included, is named in
   the excerpt of each probe verdict that was sent, as well as in Plan's preview and the
   confirm prompt; the report has no per-site evidence table of its own.
