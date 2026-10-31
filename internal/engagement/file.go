@@ -68,10 +68,13 @@ type Throttle struct {
 // Defaults apply to every asset, declared or discovered. Profile is read
 // only by host assets.
 type Defaults struct {
-	Probe    string    `yaml:"probe,omitempty" json:"probe,omitempty"`
-	Scan     string    `yaml:"scan,omitempty" json:"scan,omitempty"`
-	Throttle *Throttle `yaml:"throttle,omitempty" json:"throttle,omitempty"`
-	Profile  string    `yaml:"profile,omitempty" json:"profile,omitempty"`
+	Probe string `yaml:"probe,omitempty" json:"probe,omitempty"`
+	// Framework is what the sites are built with, read only by the probes
+	// (docs/spec/scope.md, "Probes"); an assets entry replaces it.
+	Framework []string  `yaml:"framework,omitempty" json:"framework,omitempty"`
+	Scan      string    `yaml:"scan,omitempty" json:"scan,omitempty"`
+	Throttle  *Throttle `yaml:"throttle,omitempty" json:"throttle,omitempty"`
+	Profile   string    `yaml:"profile,omitempty" json:"profile,omitempty"`
 }
 
 // Limits bound the whole run (docs/spec/scope.md, "Throttle, timeout and
@@ -239,9 +242,10 @@ type Window struct {
 type Asset struct {
 	Locator `yaml:",inline"`
 
-	Probe    string    `yaml:"probe,omitempty" json:"probe,omitempty"`
-	Scan     string    `yaml:"scan,omitempty" json:"scan,omitempty"`
-	Throttle *Throttle `yaml:"throttle,omitempty" json:"throttle,omitempty"`
+	Probe     string    `yaml:"probe,omitempty" json:"probe,omitempty"`
+	Framework []string  `yaml:"framework,omitempty" json:"framework,omitempty"`
+	Scan      string    `yaml:"scan,omitempty" json:"scan,omitempty"`
+	Throttle  *Throttle `yaml:"throttle,omitempty" json:"throttle,omitempty"`
 
 	Jump          string   `yaml:"jump,omitempty" json:"jump,omitempty"`
 	Identity      string   `yaml:"identity,omitempty" json:"identity,omitempty"`

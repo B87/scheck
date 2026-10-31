@@ -29,9 +29,10 @@ type admitted struct {
 }
 
 // ceiling is the highest level admitted in this build, whatever the
-// registry declares (docs/spec/scope.md, "Admission"). Only a test raises
-// it, to prove the window check on a test-only probe op.
-var ceiling = Observe
+// registry declares (docs/spec/scope.md, "Admission"): probes run, scans
+// are not built. A probe is still admitted only where the asset's mode
+// allows it (step 6).
+const ceiling = Probe
 
 // retry says an attempt may be tried again, and what it ends as if it is
 // not.
@@ -512,7 +513,21 @@ func (g *Gate) admitLevel(_ context.Context, p *pending) *halt {
 	if p.op.Level > ceiling {
 		return refused("level", p.op.Level.String()+" is not admitted in this build")
 	}
+	if p.op.Level >= Probe {
+		if why := g.scope.Allows(p.r.Asset, p.op.Level, origin(p.b), p.b.url.EscapedPath()); why != "" {
+			return refused("level", why)
+		}
+	}
 	return nil
+}
+
+// admitsSite asks the scope whether a web request's path may be read at its
+// origin: an entry point for a read, the first-party evidence for a probe.
+func (g *Gate) admitsSite(p *pending, l *Lookup) Admission {
+	if p.op.Level >= Probe {
+		return g.scope.AdmitsProbe(origin(p.b), p.b.url.EscapedPath(), l)
+	}
+	return g.scope.Admits(origin(p.b), p.b.url.EscapedPath(), l)
 }
 
 // admitPath is steps 7 and 8: a web request reads an entry point, and a
@@ -523,11 +538,20 @@ func (g *Gate) admitPath(_ context.Context, p *pending) *halt {
 		return nil
 	}
 	path := p.b.url.EscapedPath()
-	p.site = g.scope.Admits(origin(p.b), path, nil)
+	p.site = g.admitsSite(p, nil)
 	if p.site.Refused != "" {
-		return refused(p.site.Refused, path+" is not an entry point of "+p.b.url.Host)
+		return refused(p.site.Refused, siteDetail(p, path))
 	}
 	return nil
+}
+
+// siteDetail words a refused path: a probe is refused for want of
+// first-party evidence, a read for not being an entry point.
+func siteDetail(p *pending, path string) string {
+	if p.op.Level >= Probe {
+		return p.b.url.Host + " has no first-party evidence a probe of " + path + " needs"
+	}
+	return path + " is not an entry point of " + p.b.url.Host
 }
 
 // origin is a web request's scheme://host[:port], as Scope.Admits takes it.
@@ -605,13 +629,13 @@ func (g *Gate) admitAddresses(ctx context.Context, p *pending) *halt {
 	p.addrs = sortAddrs(l.Addrs)
 	if p.site.Resolve {
 		path := p.b.url.EscapedPath()
-		p.site = g.scope.Admits(origin(p.b), path, &l)
+		p.site = g.admitsSite(p, &l)
 		switch {
 		case p.site.Refused == "address_moved", p.site.Resolve && p.site.Refused == "":
 			// An answer that still waits on the lookup holds no evidence.
 			return refused("address_moved", p.b.name+" no longer points where its first-party evidence says")
 		case p.site.Refused != "":
-			return refused(p.site.Refused, path+" is not an entry point of "+p.b.url.Host)
+			return refused(p.site.Refused, siteDetail(p, path))
 		}
 	}
 	return nil

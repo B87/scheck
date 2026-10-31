@@ -17,8 +17,10 @@ type Input struct {
 	Vantage          string
 	Observations     map[string]Observation
 	LevelsUsed       []string
-	RulesVersion     string
-	Version          string
+	// Probes is Method.Probes.
+	Probes       string
+	RulesVersion string
+	Version      string
 	// Name, Operator, Trigger and the rest of the header, as declared.
 	Name     string
 	Operator string

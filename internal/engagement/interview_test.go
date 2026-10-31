@@ -2,10 +2,12 @@ package engagement
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/b87/scheck/internal/collector/web"
 	"github.com/b87/scheck/internal/collector/workspace"
 	ereport "github.com/b87/scheck/internal/engagement/report"
 	"github.com/b87/scheck/internal/engagement/severity"
@@ -50,6 +52,26 @@ func proveConsumer(t *testing.T, id string) {
 		res, err := Parse("e.yaml", []byte(minimal+"exclude:\n  - domain: legacy.example.com\n"), testOpts)
 		if err != nil || len(res.Roots) == 0 || len(res.Exclude) != 1 {
 			t.Fatalf("scope: %v %v", res, err)
+		}
+	case "web.probe_selection":
+		f := &File{Roots: []Locator{{Domain: "example.com"}}}
+		for _, bad := range []string{"cobol", "none, laravel", "unknown, rails"} {
+			if err := Apply(f, "framework", bad); err == nil {
+				t.Fatalf("%q was accepted", bad)
+			}
+		}
+		if err := Apply(f, "framework", "Laravel, wordpress\nnode"); err != nil || !slices.Equal(f.Defaults.Framework, []string{"laravel", "wordpress", "node"}) {
+			t.Fatalf("%v %v", f.Defaults.Framework, err)
+		}
+		if q, _ := questionByID("framework"); !q.Answered(f) || q.Answered(&File{Roots: f.Roots}) || !q.Answered(&File{Roots: []Locator{{Host: "deploy@203.0.113.5"}}}) {
+			t.Fatal("answered")
+		}
+		res, err := Parse("e.yaml", []byte(minimal+"defaults:\n  framework: [laravel]\n"), testOpts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if apply, _ := web.SelectProbes(res.Defaults.Framework); !slices.ContainsFunc(apply, func(p web.Probe) bool { return p.ID == "laravel_ignition" }) {
+			t.Fatal("a declared framework selects no probe")
 		}
 	case "github.deploys_to":
 		res, err := Parse("e.yaml", []byte(minimal+"assets:\n  shop:\n    repo: github:example-org/shop\n    deploys_to: production\n"), testOpts)

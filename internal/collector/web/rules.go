@@ -79,6 +79,9 @@ type Input struct {
 	// fingerprints", "Wildcards"). "" when it does not.
 	Doubt    string
 	Evidence Evidence
+	// Probes are what Check read of the sites, nil when no probe ran or was
+	// planned.
+	Probes *ProbeEvidence
 }
 
 // Judge applies the collector's rules. Each rule declares what it reads and
@@ -107,6 +110,7 @@ func Judge(in Input) []Judgment {
 		j.records(in.Root, "NS", in.Evidence.NS, in.Evidence.NSTargets, true)
 	}
 	j.sites()
+	j.probes()
 	j.restricted()
 	return j.out
 }

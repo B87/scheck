@@ -303,8 +303,9 @@ func TestEntryPoints(t *testing.T) {
 	if res := g.Send(context.Background(), web("https", "shop.example.com", "/robots.txt")); !res.OK() {
 		t.Errorf("inside a network root: %+v", res)
 	}
+	w.scope.probeMode = "off"
 	if res := g.Send(context.Background(), Request{Op: "web.probe", Asset: "domain:example.com", Params: map[string]string{"host": "shop.example.com"}}); res.Decision != "refused:level" {
-		t.Errorf("a probe in this build: %+v", res)
+		t.Errorf("a probe in mode off: %+v", res)
 	}
 }
 

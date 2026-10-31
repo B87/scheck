@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +60,9 @@ type Response struct {
 	// Population is set for a list: what the page held and what reached
 	// Body.
 	Population *Population
+	// Matched says a probe's response met its op's signature. A probe keeps
+	// no body: this and the status are all of it.
+	Matched bool `json:",omitempty"`
 	// hash is the hash of a redacted body that was not kept.
 	hash string
 }
@@ -350,7 +355,9 @@ func (s *sending) failed(err error, beforeResponse bool, resp *Response) (Result
 		s.res.end("unavailable:canceled", "the run was cancelled with the request in flight")
 	case errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
 		s.res.end("unavailable:connection_reset", err.Error())
-		if beforeResponse {
+		// A probe is one request: its count is its declaration's
+		// (docs/spec/scope.md, "Probes").
+		if beforeResponse && s.a.b.op.Level < Probe {
 			// Kept for when the retries run out: redacted now, since the
 			// error's text names the URL.
 			detail, _ := s.red.RedactString(err.Error())
@@ -661,6 +668,9 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 		out.Body, out.Truncated = body, truncated
 		out.Redactions = append(out.Redactions, hits...)
 	}
+	if op.sig != nil {
+		g.matchSignature(out, resp, op)
+	}
 	rt := g.classify(res, a, r, resp, out)
 	if code != "" && ok && res.Reason == "" {
 		res.end("unavailable:"+code, codeDetail(code, limit))
@@ -669,6 +679,26 @@ func (g *Gate) pipeline(res *Result, out *Response, a admitted, r Request, resp 
 		}
 	}
 	return p, rt
+}
+
+// matchSignature tests a probe's redacted body against its op's signature
+// and drops the body: a probe keeps whether it matched, a hash of what was
+// read and nothing else (docs/spec/scope.md, "Probes"). The match is on the
+// redacted bytes, so no secret is ever compared or kept.
+func (g *Gate) matchSignature(out *Response, resp *http.Response, op *compiled) {
+	body := out.Body
+	out.Body = nil
+	out.hash = hash(body)
+	if resp.StatusCode != http.StatusOK || len(body) == 0 {
+		return
+	}
+	if len(op.Signature.Types) > 0 {
+		media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if err != nil || !slices.Contains(op.Signature.Types, strings.ToLower(media)) {
+			return
+		}
+	}
+	out.Matched = op.sig.Match(body)
 }
 
 // noContentBody is the filters read's HTTP 204. No body is the empty list.
@@ -739,7 +769,7 @@ func (g *Gate) classify(res *Result, a admitted, r Request, resp *http.Response,
 		// A site is retried on what may pass, and its last answer is kept
 		// as evidence when the retries run out. A site's 429 never stops
 		// the web provider: it binds that site only.
-		if s == 429 || s == 502 || s == 503 || s == 504 {
+		if (s == 429 || s == 502 || s == 503 || s == 504) && a.b.op.Level < Probe {
 			return &retry{provider: p, after: retryAfter, evidence: true}
 		}
 		return nil

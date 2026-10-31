@@ -44,7 +44,8 @@
           "properties": {
             "assessment": { "enum": ["rules"] },
             "plan": { "enum": ["checklist"] },
-            "levels_used": { "type": "array", "items": { "enum": ["passive", "observe", "probe", "scan"] } }
+            "levels_used": { "type": "array", "items": { "enum": ["passive", "observe", "probe", "scan"] } },
+            "probes": { "enum": ["ran", "none_ran"], "description": "Present only when a site was in a probing mode: ran when a probe was sent, none_ran when none was (confirm with no answer, outside the window, no evidence)." }
           }
         },
         "authorization": {

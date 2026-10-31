@@ -279,6 +279,28 @@ type Op struct {
 	WorkflowYAML bool
 	// GitHubMetadata retains only projected metadata and discards all error bodies.
 	GitHubMetadata bool
+	// Signature is what a probe op tests its response for. The body is
+	// read to ProbeMaxBytes, redacted, matched and dropped: only whether it
+	// matched is kept (docs/spec/scope.md, "Probes"). Only a probe op has
+	// one, and every probe op must.
+	Signature *Signature
+}
+
+// ProbeMaxBytes caps what a probe reads of a response: a signature is a
+// file's first lines, never its content.
+const ProbeMaxBytes = 4 << 10
+
+// Signature is the content test of a probe: the response matched when its
+// status is 200, its content type is one of Types (any when empty) and the
+// redacted body's first ProbeMaxBytes match Pattern (RE2). The match is
+// made on the redacted bytes, so a marker may stand where a secret was;
+// nothing of the body is kept.
+type Signature struct {
+	Pattern string
+	// Types are the media types the response must have (lowercase, without
+	// parameters); a response of another type, an HTML catch-all above all,
+	// is not a match.
+	Types []string
 }
 
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
@@ -307,6 +329,8 @@ type compiled struct {
 	// emptyNoContent, set only from the surface table, treats HTTP 204 with
 	// no body as {}. A collector cannot turn it on.
 	emptyNoContent bool
+	// sig is a probe op's compiled signature.
+	sig *regexp.Regexp
 }
 
 // neverRead are URL path segments no op may read, lowercased.
@@ -603,7 +627,48 @@ func (c *compiled) checkResponse(prov provider) error {
 	if err := c.checkWorkspaceOp(); err != nil {
 		return err
 	}
+	if err := c.checkProbe(prov); err != nil {
+		return err
+	}
 	return c.validateBody()
+}
+
+// checkProbe holds a probe op to its declaration: one literal path of a
+// first-party site fetched by GET, matched against a signature and never
+// kept (docs/spec/scope.md, "Probes"). No path is a parameter, so what is
+// sent is what the list declares.
+func (c *compiled) checkProbe(prov provider) error {
+	if c.Level < Probe {
+		if c.Signature != nil {
+			return errors.New("only a probe op declares a signature")
+		}
+		return nil
+	}
+	switch {
+	case c.Level != Probe:
+		return fmt.Errorf("a %s op is not built", c.Level)
+	case !prov.web || c.Method != GET:
+		return errors.New("a probe is a GET of a site")
+	case c.Signature == nil || c.Signature.Pattern == "":
+		return errors.New("a probe declares its signature")
+	case c.MaxBytes > ProbeMaxBytes:
+		return fmt.Errorf("a probe reads at most %d bytes", ProbeMaxBytes)
+	case c.path == "" || strings.Contains(c.path, "{"):
+		return errors.New("a probe's path is literal")
+	case len(c.Accept) != 1 || c.Accept[0] != "*/*":
+		return errors.New("a probe accepts any type and tests the type in its signature")
+	}
+	re, err := regexp.Compile(c.Signature.Pattern)
+	if err != nil {
+		return fmt.Errorf("signature: %v", err)
+	}
+	for _, t := range c.Signature.Types {
+		if !mediaType.MatchString(t) || strings.ContainsAny(t, "*;") || t != strings.ToLower(t) {
+			return fmt.Errorf("signature type %q is not a lowercase media type", t)
+		}
+	}
+	c.sig = re
+	return nil
 }
 
 // wholeTenant checks that a users list building the excluded-subject set

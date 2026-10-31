@@ -130,7 +130,7 @@ func (b *builder) engagement() Engagement {
 		Name: in.Name, Timezone: b.zone.String(), BuiltFrom: "file",
 		Source:           Source{SHA256: in.SHA256},
 		Collected:        Span{From: in.Started.UTC(), To: in.Finished.UTC()},
-		Method:           Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...)},
+		Method:           Method{Assessment: "rules", Plan: "checklist", LevelsUsed: append([]string{}, in.LevelsUsed...), Probes: in.Probes},
 		PrincipalChanges: append([]PrincipalChange{}, in.PrincipalChanges...),
 		Authorization:    in.Authorization, EditedByHand: append([]string{}, in.EditedByHand...),
 	}

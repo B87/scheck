@@ -93,6 +93,9 @@ type Method struct {
 	Assessment string   `json:"assessment"`
 	Plan       string   `json:"plan"`
 	LevelsUsed []string `json:"levels_used"`
+	// Probes is "ran" or "none_ran" when a site was in a probing mode, and
+	// empty when every probe mode was off.
+	Probes string `json:"probes,omitempty"`
 }
 
 // Authorization is the operator's declaration, never verified.

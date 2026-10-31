@@ -236,7 +236,7 @@ intent.accepted_risks in engagement.yaml and write the reason.
 
 EXCLUDED, NARROWED AND NOT RUN
   Redacted              built-in rules: 1 value.
-  Probes and scans      none exist in this version; nothing beyond reading was attempted.
+  Probes and scans      none ran; nothing beyond reading was attempted.
 
 WHAT LEFT THIS MACHINE
   Third-party services:

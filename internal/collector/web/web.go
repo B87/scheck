@@ -35,7 +35,9 @@ const frontMax = 64 << 10
 // Ops are the collector's declared requests: the front page of a read name
 // over https and http. The https read's handshake is the name's one TLS
 // handshake, and its certificate is read from it.
-var Ops = []gate.Op{
+var Ops = slices.Concat(frontOps, ProbeOps())
+
+var frontOps = []gate.Op{
 	{ID: OpFront, Provider: "web", Method: gate.GET, URL: "{scheme}://{host}/",
 		Params: []gate.Param{{Name: "scheme", Type: gate.Scheme}, {Name: "host", Type: gate.Host}},
 		Level:  gate.Observe, Accept: []string{"text/html", "text/plain", "*/*"}, MaxBytes: frontMax},

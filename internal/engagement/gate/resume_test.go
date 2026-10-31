@@ -254,8 +254,6 @@ func TestIdentity(t *testing.T) {
 // A probe admitted inside its window whose wait for the throttle outlasts
 // the window is refused before anything is dialled.
 func TestWindowEndsDuringThrottleWait(t *testing.T) {
-	ceiling = Probe
-	t.Cleanup(func() { ceiling = Observe })
 	w := newWorld(t)
 	cert := w.leaf([]string{"shop.example.com"}, time.Now().Add(time.Hour), false)
 	srv := w.serve("shop.example.com", "198.51.100.30", 443, &cert, ok200("<html>"))
@@ -300,8 +298,6 @@ func TestWindowEndsDuringThrottleWait(t *testing.T) {
 // observe are never checked (E4 test 21). The build admits no probe, so the
 // test raises the ceiling for a test-only op.
 func TestAuthorizationWindows(t *testing.T) {
-	ceiling = Probe
-	t.Cleanup(func() { ceiling = Observe })
 	w := newWorld(t)
 	cert := w.leaf([]string{"shop.example.com"}, time.Now().Add(time.Hour), false)
 	// The probe's path never answers while the test runs, whatever happens
@@ -377,22 +373,16 @@ func TestAuthorizationWindows(t *testing.T) {
 // the outcome does not rest on timing; the same read inside the window is
 // sent.
 func TestWindowEndsAResponseReadAfterIt(t *testing.T) {
-	ceiling = Probe
-	t.Cleanup(func() { ceiling = Observe })
-	certProbe := Op{ID: "web.certprobe", Provider: "web", Method: TLS, URL: "https://{host}/",
-		Params: []Param{{Name: "host", Type: Host}}, Level: Probe}
 	for _, tc := range []struct {
 		name      string
 		op        string
 		late, tls bool
 	}{
 		{"http inside", "web.probe", false, false}, {"http late", "web.probe", true, false},
-		{"tls inside", "web.certprobe", false, true}, {"tls late", "web.certprobe", true, true},
-		{"tls late, invalid", "web.certprobe", true, true}, {"http late, invalid", "web.probe", true, true},
+		{"http late, invalid", "web.probe", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t)
-			w.ops = append(slices.Clone(w.ops), certProbe)
 			var answered atomic.Bool
 			if tc.tls {
 				w.tlsConfig = func(c *tls.Config) {

@@ -49,6 +49,18 @@ type Scope interface {
 	// only check on a web op's port: an origin it admits no path at is
 	// refused, so a discovered name's other ports are never read.
 	Admits(origin, path string, l *Lookup) Admission
+	// AdmitsProbe is Admits for a probe (docs/spec/scope.md, "Probes"):
+	// whether the origin has the first-party evidence a probe needs. A name
+	// with none, a domain root's front page alone included, is refused as
+	// first_party; evidence only the lookup can give is asked for again
+	// with l, as Admits does.
+	AdmitsProbe(origin, path string, l *Lookup) Admission
+	// Allows is step 6: whether the mode of the site at origin allows an op
+	// of the level to read path. "" allows it; otherwise the text is why
+	// not. Passive and observe are not asked. A probe needs its mode to be
+	// all, or confirm with this exact request approved by the operator in
+	// this session (docs/spec/scope.md, "Running probes and scans").
+	Allows(asset string, l Level, origin, path string) string
 	// Throttle is the asset's own throttle in requests per second and
 	// concurrency; 0 for either means it sets none. For a SaaS asset it is
 	// only what its own assets entry sets, which can only lower the

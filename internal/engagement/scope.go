@@ -41,6 +41,7 @@ func (r *Resolved) GateScope(at time.Time) gate.Scope {
 
 type scope struct {
 	suspended sync.Map // names whose provider fingerprint invalidated operator confirmation
+	approved  sync.Map // origin+path of probes the operator approved this session
 	res       *Resolved
 	at        time.Time
 	assets    map[string]ResolvedAsset // by canonical id

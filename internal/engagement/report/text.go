@@ -193,8 +193,12 @@ func (t *text) header() {
 			"it cannot tell you whether you are safe now or how the incident happened. For that you need an incident "+
 			"responder; what this report can do is list weaknesses to close.")
 	}
-	t.field("", "Method", 15, "rules only: a fixed checklist per asset type, no model, no hypotheses. Reading only: "+
-		"nothing was probed, scanned, exploited or changed. Not a penetration test.")
+	method := "Reading only: nothing was probed, scanned, exploited or changed."
+	if e.Method.Probes != "" {
+		method = "Reading, and single GET requests for well-known sensitive files (probes), each listed in the coverage; " +
+			"nothing was scanned, exploited or changed."
+	}
+	t.field("", "Method", 15, "rules only: a fixed checklist per asset type, no model, no hypotheses. "+method+" Not a penetration test.")
 	auth := "none recorded. This run only read, with access you already hold; scheck requires a record for probes, scans and signing in as staff mailboxes."
 	if a := e.Authorization; a != nil {
 		if a.By != "" || a.Date != "" || len(a.Windows) > 0 || len(a.Source) > 0 || a.Note != "" {
@@ -208,7 +212,8 @@ func (t *text) header() {
 			if a.Note != "" {
 				auth += " " + clean(a.Note)
 			}
-			auth += " Levels used: " + orNone(strings.Join(e.Method.LevelsUsed, ", ")) + ". Probe off, scan off."
+			auth += " Levels used: " + orNone(strings.Join(e.Method.LevelsUsed, ", ")) + "." + map[string]string{"": " Probe off, scan off.",
+				"ran": " Scan off.", "none_ran": " Probes were enabled and none ran. Scan off."}[e.Method.Probes]
 		} else {
 			auth = ""
 		}
@@ -1653,7 +1658,14 @@ func (t *text) excluded() {
 		red += fmt.Sprintf(" Your redact_extra rules: %s (patterns not shown).", count(op.Matches, "match", "matches"))
 	}
 	t.field("  ", "Redacted", 22, red)
-	t.field("  ", "Probes and scans", 22, "none exist in this version; nothing beyond reading was attempted.")
+	switch t.r.Engagement.Method.Probes {
+	case "ran":
+		t.field("  ", "Probes and scans", 22, "probes ran on the sites the coverage names, as a fixed list of single GET requests; no scans exist in this version.")
+	case "none_ran":
+		t.field("  ", "Probes and scans", 22, "probes were enabled and none ran; the coverage says why. No scans exist in this version.")
+	default:
+		t.field("  ", "Probes and scans", 22, "none ran; nothing beyond reading was attempted.")
+	}
 	for _, a := range t.r.Acceptances {
 		if a.Outcome == "not_applied" {
 			t.field("  ", "Not applied", 22, t.acceptanceName(a)+": "+clean(a.Why)+".")

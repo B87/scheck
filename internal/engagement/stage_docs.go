@@ -188,6 +188,11 @@ type PlanDoc struct {
 	// decide, or a raise or order that cannot apply, for lack of a
 	// declaration.
 	NotJudged []string `json:"not_judged"`
+	// Probes previews every probe request Check would send, by site;
+	// ProbesUnevidenced names the sites in a probing mode with no
+	// first-party evidence, which are not probed.
+	Probes            []ProbePlan `json:"probes,omitempty"`
+	ProbesUnevidenced []string    `json:"probes_unevidenced,omitempty"`
 }
 
 // PlanHost is one host asset's baseline plan.
@@ -222,6 +227,9 @@ type CheckAsset struct {
 	ID        string                `json:"id"`
 	GitHub    *githubc.Repositories `json:"github,omitempty"`
 	Workspace *WorkspaceCheck       `json:"workspace,omitempty"`
+	// Probes are what Check read of the probes of the sites under a domain
+	// or url root.
+	Probes *web.ProbeEvidence `json:"probes,omitempty"`
 }
 
 // WorkspaceCheck is what Check read of a Workspace tenant: each account's

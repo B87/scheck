@@ -19,10 +19,11 @@ type Source struct {
 
 // EffectiveDefaults are the defaults with every unset value filled in.
 type EffectiveDefaults struct {
-	Probe    string   `json:"probe" yaml:"probe"`
-	Scan     string   `json:"scan" yaml:"scan"`
-	Throttle Throttle `json:"throttle" yaml:"throttle"`
-	Profile  string   `json:"profile" yaml:"profile"`
+	Probe     string   `json:"probe" yaml:"probe"`
+	Framework []string `json:"framework,omitempty" yaml:"framework,omitempty"`
+	Scan      string   `json:"scan" yaml:"scan"`
+	Throttle  Throttle `json:"throttle" yaml:"throttle"`
+	Profile   string   `json:"profile" yaml:"profile"`
 }
 
 // EffectiveLimits are the limits with every unset value filled in.
@@ -40,9 +41,10 @@ type ResolvedAsset struct {
 	// Root is the id of the root the asset equals or falls under.
 	Root string `json:"root" yaml:"root"`
 
-	Probe    string   `json:"probe" yaml:"probe"`
-	Scan     string   `json:"scan" yaml:"scan"`
-	Throttle Throttle `json:"throttle" yaml:"throttle"`
+	Probe     string   `json:"probe" yaml:"probe"`
+	Framework []string `json:"framework,omitempty" yaml:"framework,omitempty"`
+	Scan      string   `json:"scan" yaml:"scan"`
+	Throttle  Throttle `json:"throttle" yaml:"throttle"`
 
 	Jump       string `json:"jump,omitempty" yaml:"jump,omitempty"`
 	Identity   string `json:"identity,omitempty" yaml:"identity,omitempty"`
@@ -191,10 +193,11 @@ func throttleOr(t *Throttle, def Throttle) Throttle {
 func (v *validator) resolve(assets map[string]Ref) *Resolved {
 	f := v.f
 	d := EffectiveDefaults{
-		Probe:    or(f.Defaults.Probe, "off"),
-		Scan:     or(f.Defaults.Scan, "off"),
-		Throttle: throttleOr(f.Defaults.Throttle, Throttle{Rate: DefaultRate, Concurrency: DefaultConcurrency}),
-		Profile:  or(f.Defaults.Profile, DefaultProfile),
+		Probe:     or(f.Defaults.Probe, "off"),
+		Framework: f.Defaults.Framework,
+		Scan:      or(f.Defaults.Scan, "off"),
+		Throttle:  throttleOr(f.Defaults.Throttle, Throttle{Rate: DefaultRate, Concurrency: DefaultConcurrency}),
+		Profile:   or(f.Defaults.Profile, DefaultProfile),
 	}
 	res := &Resolved{
 		Schema:         f.Schema,
@@ -304,6 +307,7 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 		Ref:         r,
 		Root:        root.ID,
 		Probe:       or(a.Probe, d.Probe),
+		Framework:   cmpOrSlice(a.Framework, d.Framework),
 		Scan:        or(a.Scan, d.Scan),
 		Throttle:    throttleOr(a.Throttle, d.Throttle),
 		FirstParty:  a.FirstParty,
@@ -330,4 +334,12 @@ func (v *validator) asset(name string, r, root Ref, a Asset, d EffectiveDefaults
 
 func sortedKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))
+}
+
+// cmpOrSlice is the first list with an entry.
+func cmpOrSlice(a, b []string) []string {
+	if len(a) > 0 {
+		return a
+	}
+	return b
 }
