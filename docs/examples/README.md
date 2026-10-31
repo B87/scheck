@@ -11,8 +11,9 @@ shows every key, are in
 [spec/engagement.md](../spec/engagement.md), "The file".
 
 Omitted `defaults` are probe off, scan off, and throttle `5/s` with
-concurrency 2. A host with no `profile` is `baseline`. This build rejects any
-other probe or scan mode. A cloud root is accepted and not read: its collector
+concurrency 2. A host with no `profile` is `baseline`. This build accepts the
+probe modes `off`, `confirm` and `all`, with an authorization window, and
+rejects `auto` and any other scan mode. A cloud root is accepted and not read: its collector
 is 0.0.3, and the run exits 2. These files do not declare one.
 
 | File | What it runs |
@@ -22,6 +23,7 @@ is 0.0.3, and the run exits 2. These files do not declare one.
 | [github.yaml](github.yaml) | One GitHub organization. |
 | [workspace.yaml](workspace.yaml) | Workspace directory: people, admins, 2-step verification. No mailbox sign-in. |
 | [workspace-mail.yaml](workspace-mail.yaml) | That, plus Gmail forwarding settings. Needs a service account and `authorization.mailboxes`. |
+| [probes.yaml](probes.yaml) | A url root, plus the reviewed probes you approve before they are sent. Needs an authorization window. |
 | [first-engagement.yaml](first-engagement.yaml) | The four roots 0.0.2 reads, in one file. Setup stays in the single-surface files. |
 
 Dates in a file are illustrations. A mailbox approval lasts at most 90 days;

@@ -1,0 +1,70 @@
+# =============================================================================
+#  probes.yaml: one site, with probes you approve before they are sent
+# =============================================================================
+#
+#  The other surfaces are in docs/examples/README.md.
+#
+#  WHAT THIS CHECKS
+#  ----------------
+#  No credential. Everything domain.yaml reads for a url root, plus probes:
+#  a fixed, reviewed list of single GET requests for well-known sensitive
+#  files (spec/scope.md, "Probes"; spec/web-collector.md, "Probes"). On
+#  every site: /.git/HEAD, /.git/config, /.env, /.htpasswd, /server-status.
+#  The framework below adds the Laravel and PHP debug routes. A path counts
+#  only when the answer is a file of the expected shape; the body is
+#  checked, then dropped, and never stored or printed. No probe is retried
+#  or follows a redirect, and no admin panel is on the list.
+#
+#  scheck never guesses a framework from what the site answers. With none
+#  declared, or `none` or `unknown`, only the five on every site are sent.
+#
+#  ONE-TIME SETUP
+#  --------------
+#  A probe runs only inside `authorization.windows`, on a site with
+#  first-party evidence. This url root is that evidence for its own paths.
+#  Replace `authorization` with who approved this and the real window:
+#  scheck checks that it is present and current, not that it is true.
+#
+#  `probe: confirm` sends nothing until you approve it. Plan prints every
+#  request (method, URL, count) per site; Check shows them again and asks
+#  once per site, on a terminal. With no terminal, the probes are not run,
+#  and the report says so. The approval is kept in memory for that run and
+#  asked again on a resume. `probe: all` sends without asking.
+#
+#  HOW TO READ THE RESULT
+#  ----------------------
+#    probes   web.vcs_metadata_exposed, web.config_file_exposed,
+#             web.debug_interface_exposed: one finding per path served,
+#             subject the probe URL.
+#    clean    a probe answered 404 is "not served at this path from this
+#             vantage". That is not a claim that nothing is exposed.
+#    not run  coverage sub-items `exposed files` and `debug and status
+#             pages` list each probe that did not run, with the reason.
+#    method   engagement.method.probes is `ran` or `none_ran`.
+#    exit     1 = findings, 2 = a limit cut the run short.
+#
+#    scheck run docs/examples/probes.yaml --stop-after intake
+#    scheck run docs/examples/probes.yaml --stop-after plan   # the preview
+#    scheck run docs/examples/probes.yaml --vantage internet
+# =============================================================================
+
+schema: 1
+engagement:
+  name: probes-lab
+  operator: yourname
+  timezone: Europe/Madrid
+  trigger: routine
+
+roots:
+  - url: https://yourlab.example/       # first-party evidence for its paths
+
+defaults:
+  probe: confirm                        # off | confirm | all
+  framework: [laravel]                  # selects probes only; laravel adds php
+
+authorization:
+  by: "CTO, Yourlab"
+  date: 2026-10-06
+  windows:
+    - {from: 2026-10-07T09:00:00+02:00, to: 2026-10-07T18:00:00+02:00}
+  note: "Self-assessment of our own site."

@@ -257,7 +257,7 @@ func (j *judging) probes() {
 				x.Reason = probeRefusal(r)
 			case r.Status == 200 && r.Matched:
 				x.Verdict = Fired
-				x.Excerpt = fmt.Sprintf("served (status 200, %s) and matched %s; only its first lines were read and none were kept", r.ContentType, probeShape(r.Probe))
+				x.Excerpt = fmt.Sprintf("served (status 200, %s) and matched %s; only its first lines were read and none were kept; probed on first-party evidence: %s", r.ContentType, probeShape(r.Probe), s.Evidence)
 				x.Details["status"], x.Details["content_type"] = r.Status, r.ContentType
 				if len(r.Redacted) > 0 {
 					x.Details["redacted"] = r.Redacted
@@ -270,7 +270,7 @@ func (j *judging) probes() {
 				x.Reason = "unavailable:redacted"
 			default:
 				x.Verdict = Disproved
-				x.Excerpt = "not served at this path from this vantage"
+				x.Excerpt = "not served at this path from this vantage; probed on first-party evidence: " + s.Evidence
 				x.Details["status"] = r.Status
 			}
 			j.add(x)

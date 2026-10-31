@@ -66,6 +66,24 @@ read. GitHub steps 3–6 group identity, repository-access, CI configuration, se
 and provider-alert judgments into coverage sub-items. Delegated roles, runtime
 enforcement and runner access remain visibly unassessed. Supported mirror history
 and mirror-origin credential detection have separate Secrets coverage sub-items.
+
+**Probe sub-items** (built, 0.0.3 G3). An asset that had probe judgments gets two more:
+`exposed files` under Secrets (`web.vcs_metadata_exposed`, `web.config_file_exposed`) and
+`debug and status pages` under External surface (`web.debug_interface_exposed`). Both are
+marked from the judgments, like any rule. A probe that was not sent is an abstained
+judgment, so the sub-item is at most *partial* and the reason is the probe's:
+`unavailable:probe_no_terminal`, `probe_declined`, `probe_site_unreachable`,
+`probe_window`, `probe_evidence`, `probe_mode` or `probe_not_reached`
+([web-collector.md](web-collector.md#probes)). With every probe mode `off` the report
+carries neither sub-item and says nothing about probes beyond the fixed lines. A disproved
+probe is worded "not served at this path from this vantage", never "no exposed files". The
+framework-specific probes a site's declaration did not select are counted in Plan
+and not listed here. `engagement.method.probes` is `ran` when a probe was sent and
+`none_ran` when a site was in a probing mode and none was (a `confirm` with no
+terminal or a declined preview, outside the window, no evidence); it is omitted when
+every mode is `off`. `levels_used` gains `probe` when one was sent. The evidence a probe
+rests on (a `network` root, a `url` or `host` root, or the operator's `first_party`
+word) is named in Plan's preview, in the prompt, and in the excerpt of every probe verdict that was sent ("operator confirmed (name, date)" for the operator's word).
 Missing or partial mirrors abstain, with read counts and actionable gaps in asset
 notes. Local mirror observations have their own actor and time, separate from the
 GitHub principal. History findings retain only detector markers and commit/path/line
@@ -124,15 +142,19 @@ with revocation or rotation at the provider, before removing reported locations;
 
 Fixed lines:
 
-- Method, in 0.0.2: `rules only: a fixed checklist per asset type, no model, no
+- Method: `rules only: a fixed checklist per asset type, no model, no
   hypotheses. Reading only: nothing was probed, scanned, exploited or changed. Not a
-  penetration test.` A questionnaire asks for the date of the last penetration test,
+  penetration test.` When a site was in a probing mode (`engagement.method.probes` is
+  present), the second sentence is `Reading, and single GET requests for well-known
+  sensitive files (probes), each listed in the coverage; nothing was scanned, exploited
+  or changed.` A questionnaire asks for the date of the last penetration test,
   and this report's date must not be written there.
 - Authorization absent: `none recorded. This run only read, with access you already
   hold; scheck requires a record for probes, scans and signing in as staff mailboxes.`
   Holding access is not authorization, and the line must not teach that it is. Present:
   `by`, `date`, each window, `source` and `note`, and the levels used (`levels used:
-  passive, observe. probe off, scan off.`). The block is the operator's declaration,
+  passive, observe. probe off, scan off.`; with probes, `probe` joins the levels used and
+  the tail reads `Scan off.`, or `Probes were enabled and none ran. Scan off.`). The block is the operator's declaration,
   never presented as verified ([scope.md](scope.md#authorization)).
 - Mailbox authorization, per Workspace asset, in the header after the authorization
   block. Entry used and at least one mailbox signed in as: `Mailbox settings: approved by "<by>" on <date>, until <expires>
@@ -267,9 +289,12 @@ counts, built-in rules by rule and `redact_extra` as rules and matches, never a
 pattern; for `deny_paths`, the reads each entry denied, each counted once under the
 longest entry its requested path falls under, and any none accounts for (a symlink
 into a denied prefix) under `deny_paths` as a whole. A walk the runner refused because a denied entry lies inside its root
-(`path.deny_inside`) is counted the same way, under `deny_paths` as a whole, with no per-entry attribution; probes and scans (in 0.0.2: `none exist in this version; nothing beyond
-reading was attempted.`, and from 0.0.3 the probes that would have applied, as *not
-run*); acceptances not applied, with why.
+(`path.deny_inside`) is counted the same way, under `deny_paths` as a whole, with no per-entry attribution; probes and scans (the "Probes and scans" line, built 0.0.3 G3: `none ran; nothing beyond
+reading was attempted.` when every probe mode is `off`; `probes ran on the sites the
+coverage names, as a fixed list of single GET requests; no scans exist in this version.`
+when one was sent; `probes were enabled and none ran; the coverage says why. No scans
+exist in this version.` otherwise; each probe that did not run is *not run* in the
+coverage with its reason); acceptances not applied, with why.
 
 **What left this machine.** One fixed block, defined with the gate (0.0.2 E4). A
 client's data protection officer asks this question, and so does the CTO, often to

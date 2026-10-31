@@ -188,9 +188,9 @@ func Questions() []Question {
 			Consumers: []Consumer{{ID: "web.restricted_reachable", Slice: "E7"}},
 			answered:  func(f *File) bool { return len(f.Intent.NotExposed) > 0 },
 			apply:     applyRestricted},
-		{ID: "framework", Prompt: "What are your websites built with? One or more of: laravel, django, rails, spring, wordpress, node, php. Or none (a static site or a hosted platform), or unknown, on their own. Separate several with commas.\n" +
-			"This does nothing until you turn probes on in the file (defaults: probe: confirm) and give an authorization window. Then it picks which framework-specific probes are sent: a Laravel debug page is asked for only on a site you called Laravel. " +
-			"If you are not sure, say unknown or leave it blank: scheck sends only the probes that apply to any site and does not guess a framework from what a site answers.",
+		{ID: "framework", Prompt: "Not sure what your websites are built with? Leave this blank: nothing depends on it, and it never makes scheck send anything.\n" +
+			"If you know, give one or more of: laravel, django, rails, spring, wordpress, node (Next.js counts as node), php (any other PHP). Or none (a static site or a hosted platform such as Webflow), on its own. Separate several with commas. Whoever built the site, or your agency, can tell you.\n" +
+			"This is only so that scheck does not ask a Laravel site for a WordPress file. It matters only if you later switch on probes, which are extra requests to your own sites and are off unless you ask. The answer applies to all your websites; unknown means the same as blank.",
 			Consumers: []Consumer{{ID: "web.probe_selection", Slice: "G3"}},
 			answered:  func(f *File) bool { return !hasWeb(f) || len(f.Defaults.Framework) > 0 },
 			apply:     applyFramework},

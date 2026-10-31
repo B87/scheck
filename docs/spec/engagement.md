@@ -22,7 +22,7 @@ run can resume from a saved output.
 | **7. Report** | Coverage per risk area, then findings for the people who will fix them: what, why it matters here, evidence, remediation. | Report |
 
 In 0.0.2, which only reads, Recon runs the inventory and host, DNS and web reads for
-every asset and Check runs the selected per-item reads and the follow-ups (E9 steps 6 and 7); from 0.0.3 Check is also where probes run. Keeping the split there
+every asset and Check runs the selected per-item reads and the follow-ups (E9 steps 6 and 7); from 0.0.3 G3 Check is also where probes run (Plan previews them, `plan.json` `probes` and `probes_unevidenced`; Check asks per site in `confirm` mode and writes `check.json` `assets[].probes`, which hold no body; Analyze judges them; [scope.md](scope.md#probes)). Keeping the split there
 means a collector never decides which stage its requests belong to. A collector's
 choice among its own reads while it collects (the takeover enrichment of a web name, the
 location follow-ups of a secret alert) is read selection: it stays in Recon and emits no
@@ -106,7 +106,7 @@ stubbed to pass.
 | Hosts | For each host: how to reach it, and its exposure, environment and expected services. | The connection, and the host collector's context (`host-collector.md §5.3`). Of those fields, only `internet`, `airgapped` and `dev` move a host finding's severity. `prod` does not raise one. `expected_services` is read by `db.listens_unfiltered` (E9 step 3a), `svc.listens_beyond_declared` (E9 step 5a) and `svc.sensitive_listens_unfiltered` (0.0.3 G5, for the audience it raises on); the service line is worded under the table. The answer `internet` is refused when `not_used` already lists `external`: "you said you run nothing internet-facing (not_used: external); a server the internet can reach is internet-facing" |
 | Hosts | Is an application installed on a server you named, as files on its disk? If it runs only in containers or Kubernetes, or you do not know, leave this blank. Otherwise one block per server, one `path:` line per folder (`name: shop`, `path: /srv/shop`); folders under `/srv`, `/var/www`, `/opt`, `/app` or `/data` (others are refused); a folder under `/home`, `/root` or `/Users` is accepted, but a `.env` there is listed and not judged. | `assets.<host>.app_paths`: the folders `creds.app_env_N` lists `.env` files in (`creds.env_file_exposed`, G5). Asked after `context`; skipped when no host is declared or any host already has `app_paths`. A name that is not a declared host, a block with no `path:` line, and any path "Host settings" refuses, refuse the whole answer. With the answer blank, the report says `.env` files were not looked for (`unavailable:no_app_paths`) |
 | Coverage | Which of hosts, cloud, data, cicd, email, web and external do you not operate at all? | `not_used` marks that area *not applicable*. What is refused is under "Validation"; `external` is refused beside a host already answered `internet`, by the same refusal as intake |
-| Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report |
+| Authorization | Before any probe or scan: who authorized it, for which windows, from which source addresses? | Asked only when a probe or scan mode other than `off` is chosen (0.0.3 on). The windows bound probes and scans and sources are printed ([scope.md](scope.md#authorization)); the block is printed in the report. Not built in G3: the interview asks for no probe mode and no authorization block, and the operator writes both by hand |
 
 **The service line of the `context` question** (built in E9 step 9). The line is
 `service: <port> <tcp|udp> [localhost|lan|vpn|internet] <purpose>`. A third token that
@@ -226,7 +226,13 @@ Not asked, and why. The keys below stay valid. The interview does not ask them.
   mailboxes writes the entry by hand; the not-selected readout note explains what to
   add and who must approve it.
 - **Framework.** Comparing a declared framework with the observed one is not a risk.
-  The question returns with probes (0.0.3 G3), where it selects which ones apply.
+  The interview asks `framework` (built, 0.0.3 G3) because it selects which
+  framework-specific probes apply, and only when the file names a `domain` or `url`
+  root. It is asked after `restricted` and before `reach`, and writes
+  `defaults.framework`. Its consumer is `web.probe_selection`. The answer is one or more
+  of `laravel`, `django`, `rails`, `spring`, `wordpress`, `node`, `php`, or `none` or
+  `unknown` alone. It turns nothing on: the probes run only when the operator sets a
+  probe mode and an authorization window by hand.
 - **Hosting.** The roots already say it.
 - **Compliance goal.** It would select references printed with each finding, and no
   reviewed finding-to-control table exists. It returns with one.
@@ -274,7 +280,8 @@ exclude:
 # scope: full                        # scope.md "Full scope"; 0.0.2 rejects it: "not available in this build"
 
 defaults:                             # every asset, declared or discovered
-  probe: off                          # 0.0.2 accepts only off
+  probe: off                          # off | confirm | all, on domain and url assets; auto exits 3; a mode other than off needs authorization.windows
+  # framework: [laravel, php]         # laravel | django | rails | spring | wordpress | node | php, or none | unknown alone; only selects probes; an assets entry replaces it
   scan: off
   throttle: {rate: 5/s, concurrency: 2}
   profile: baseline                   # host catalog tier, baseline | hardened (host-collector.md §3)
@@ -340,7 +347,7 @@ intent:
       date: 2026-10-06              # the day it was written; expires is at most 365 days later
       expires: 2026-12-31
 
-authorization:                        # optional when no probe or scan runs and no mailbox surface is selected
+authorization:                        # optional when no probe runs and no mailbox surface is selected; a probe mode needs at least one window
   by: "CTO, Example Ltd"             # required when the block also has windows, source, note, by or date
   date: 2026-10-06                   # required when the block also has windows, source, note, by or date
   windows:
@@ -756,8 +763,13 @@ it to that list, with none of the target's documented artefacts.
 **Validation**, before any target contact:
 
 - Unknown keys exit 3.
-- Probe and scan modes other than `off`, `scope: full` and `max_cost` exit 3 with "not
-  available in this build" until their release.
+- Scan modes other than `off`, the probe mode `auto`, `scope: full` and `max_cost` exit 3
+  with "not available in this build" until their release.
+- A probe mode other than `off` (`defaults.probe` or an `assets` entry) needs at least one
+  entry in `authorization.windows`; the error names `authorization.windows` and the key
+  that turned probes on. `probe` and `framework` are accepted on `domain` and `url`
+  assets only. `framework` takes the closed list of the file schema, and `none` or
+  `unknown` stand alone.
 - `0` is never "no limit"; `none` is.
 - A value shaped like a credential is a usage error. Detection is by shape: known
   prefixes such as `ghp_` and `AKIA`, PEM headers, and high-entropy strings, not
@@ -885,6 +897,11 @@ nobody listed, so the engagement's adjustments are a closed table:
 | `attribute:production_write` | people `left` passed, and effective write (push, maintain or admin) on a `deploys_to: production` repository, from the collaborators read (R4 below) | `identity.former_person_has_access` on GitHub | +1 | yes |
 | `attribute:serves_web` | the listener and firewall reads of R7: a web server from `rules.WebServersVersion` listens beyond loopback and the firewall leaves the port open | `php.fix_missing` (R7, 0.0.3 G8) | +1 | no: stops at high |
 | `attribute:<other>` | a fact, cited by observation and excerpt | the finding whose definition declares that attribute (`attribute:password_form`, web-collector.md) | +1 | no: stops at high |
+
+The three probe findings (`web.vcs_metadata_exposed`, `web.config_file_exposed`,
+`web.debug_interface_exposed`, [web-collector.md](web-collector.md#probes)) are not exposure
+findings: `exposed_on_purpose` never moves them. No attribute raises them past high yet; one
+needs a row in this table first.
 
 The table is data in Analyze (`internal/engagement/severity`, built in E9 step 1a): one
 entry per rule, with its source, the definitions or attribute it moves, its step and
@@ -1510,7 +1527,7 @@ place by measurement.
 |---|---|---|
 | Intake | Fixed interview questions | Follow-up questions based on earlier answers; suggestions from docs |
 | Plan | A checklist per asset type, narrowed and ordered by the structured fields. Not hypotheses: a checklist that runs to completion in an hour is the same checklist whatever its order, and the report calls it a checklist | Hypotheses drawn from prose context and from recon, as structured output over the declared checks |
-| Check | Follow-up reads named by rules; from 0.0.3, probes and scans per the asset's modes: `off`, `confirm` or `all` | `auto`: an experimental gate on probes and scans ([scope.md](scope.md)) |
+| Check | Follow-up reads named by rules; from 0.0.3, probes (built, G3) and scans per the asset's modes: `off`, `confirm` or `all` | `auto`: an experimental gate on probes and scans ([scope.md](scope.md)) |
 | Analyze | Deterministic rules, single-fact and multi-fact, each ending as fires, disproved or insufficient evidence; each rule can name the follow-up reads that would settle it | Conclusions across assets the rules do not encode; choosing follow-ups |
 | Report | Templated text per finding | Explanations written for the operator's setup |
 
