@@ -301,6 +301,11 @@ type Signature struct {
 	// parameters); a response of another type, an HTML catch-all above all,
 	// is not a match.
 	Types []string
+	// NotTypes are media types that never match, whatever the body: a text
+	// file probe lists the HTML types, so a page that answers every path is
+	// not the file, and takes any other type or none (a server often sends
+	// none, or binary/octet-stream, for a dotfile).
+	NotTypes []string
 }
 
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
@@ -662,7 +667,10 @@ func (c *compiled) checkProbe(prov provider) error {
 	if err != nil {
 		return fmt.Errorf("signature: %v", err)
 	}
-	for _, t := range c.Signature.Types {
+	if len(c.Signature.Types) > 0 && len(c.Signature.NotTypes) > 0 {
+		return errors.New("a signature lists the types it takes or the types it refuses, not both")
+	}
+	for _, t := range slices.Concat(c.Signature.Types, c.Signature.NotTypes) {
 		if !mediaType.MatchString(t) || strings.ContainsAny(t, "*;") || t != strings.ToLower(t) {
 			return fmt.Errorf("signature type %q is not a lowercase media type", t)
 		}

@@ -470,10 +470,14 @@ mode is `confirm` or `all`, with first-party evidence and inside an authorizatio
 A probe asks one question: does this path serve a file of this shape. It does not crawl,
 guess a path, or read more than the first 4 KiB.
 
-**The reviewed list** (`web.Probes`, `ProbesVersion` 2026-10-31). Each entry is one op
-`web.probe.<id>` with a literal path and a signature (an RE2 pattern and the media types
-the file may be served as). A match needs status `200`, a listed media type, and the
-pattern on the redacted prefix.
+**The reviewed list** (`web.Probes`, `ProbesVersion` 2026-11-01). Each entry is one op
+`web.probe.<id>` with a literal path and a signature: an RE2 pattern and, by kind, either
+the media types the page may be served as (`Types`: the HTML and JSON debug pages) or the
+types the file may not be served as (`NotTypes`: the text files, which refuse only
+`text/html` and `application/xhtml+xml`). A match needs status `200`, a type the
+signature allows, and the pattern on the redacted prefix. A text file is matched whatever
+other type, or none, it is served as: servers send `.env` or `HEAD` as `text/plain`,
+`application/octet-stream`, `application/x-trash` or nothing.
 
 | Applies to | Path | Finding |
 |---|---|---|
@@ -487,8 +491,9 @@ pattern on the redacted prefix.
 | `spring` | `/actuator/env` | `web.debug_interface_exposed` |
 | `rails` | `/rails/info/properties` | `web.debug_interface_exposed` |
 
-`django` has no probe: its debug page answers only to a path that does not exist, which
-a fixed list cannot ask for. Common admin panels are not on the list: a login page that
+`django` has no probe: its debug page is Django's technical 404 page, served with status
+`404`, and the gate matches only status `200`. Django waits for a signature that can name
+its status. Common admin panels are not on the list: a login page that
 exists is an observation, not a finding.
 
 **Selection.** A site gets the probes that apply to every site, and those whose framework
@@ -496,6 +501,13 @@ the operator declared (`defaults.framework` or the asset's own `framework`, whic
 replaces it). A framework is never guessed from the site's responses. A site with no
 declaration, `none` or `unknown` gets only the first group. The scheme is `https` when
 the site answered over https and `http` otherwise.
+
+The framework probes not sent are not silent. With no declaration or `unknown`, the
+`exposed files` and `debug and status pages` sub-items are at most *partial*, reason
+`unavailable:probe_framework`, detail "N framework probes not sent: no framework declared;
+declare `framework` to select them" ([report.md](report.md#coverage)). `none` is a
+declaration that nothing framework-specific applies, and any declared list is one: both
+leave the sub-items decided by the probes that were sent.
 
 **Findings.** `web.vcs_metadata_exposed` (secrets, high), `web.config_file_exposed`
 (secrets, high) and `web.debug_interface_exposed` (external surface, high). The subject
@@ -508,16 +520,30 @@ findings. None is an exposure finding: `exposed_on_purpose` does not move them.
 |---|---|
 | `200` and the signature matched | *fired* |
 | `404`, `410` or another `4xx` other than `401`, `403` and `429` | *disproved*: not served at this path from this vantage |
-| `200` without a match, nothing redacted | *disproved* |
 | `401`, `403`, `429`, `5xx` | *abstained*, `unavailable:http_status` |
 | `3xx` | *abstained*, `unavailable:redirected`; never followed |
-| `200` without a match, something redacted | *abstained*, `unavailable:redacted` |
 | a certificate or transport failure | *abstained*, that decision's reason |
 | not sent | *abstained*: `unavailable:probe_no_terminal`, `probe_declined`, `probe_site_unreachable`, `probe_window`, `probe_evidence`, `probe_mode`, `probe_not_reached` |
 
+A `200` that did not match is decided by the kind of probe, in this order.
+
+For a text file (`NotTypes`):
+
+| Answer | Verdict |
+|---|---|
+| `200` with an HTML type (`text/html`, `application/xhtml+xml`), whatever was redacted | *disproved*: answered with a page, not the file |
+| `200` without a match, something redacted | *abstained*, `unavailable:redacted` |
+| `200` without a match, `text/plain` or `application/octet-stream`, nothing redacted | *disproved*: not served at this path from this vantage |
+| `200` without a match, any other type (`application/x-trash`, a binary type) or no `Content-Type` | *abstained*, `unavailable:content_type`; never disproved |
+
+For an HTML or JSON debug page (`Types`): a `200` with no `Content-Type` is *abstained*,
+`unavailable:content_type`; with something redacted, *abstained*, `unavailable:redacted`;
+otherwise *disproved*. A type outside the list never matches.
+
 An answer scheck does not recognise is never a pass. There is no control request for a
-catch-all site that answers `200` to every path: the strict signatures and media-type
-lists make an HTML catch-all unmatchable.
+catch-all site that answers `200` to every path: the signatures hold page-specific
+strings, which make a catch-all match improbable, and a text-file probe never matches an
+HTML page.
 
 The report words a disproved probe as "not served at this path from this vantage", never
 "no exposed files". It never prints a probe body, and a matched signature is the whole

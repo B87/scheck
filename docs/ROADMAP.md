@@ -2517,10 +2517,14 @@ probes apply (`spec/scope.md`, "Probes"; `spec/web-collector.md`, "Probes").
 
 **Decisions:** the security-consultant's define pass said a login page that exists is an
 observation, not a finding, so common admin panels are not on the list. Django has no
-probe: its debug page answers only to a missing path. No framework declared means only
+probe: its debug page is a `404` and the gate matches only `200`, so it waits for a
+signature that can name its status. No framework declared means only
 the probes that apply to every site; a framework is never guessed from responses. An
 unrecognised answer is never a pass: a `200` that does not match is *disproved* only when
-nothing was redacted.
+nothing was redacted and, for a text file, the type is `text/plain` or
+`application/octet-stream` (an HTML page is disproved as "not the file"; any other type or
+none abstains, `unavailable:content_type`). Text-file probes refuse only HTML types
+(`ProbesVersion` 2026-11-01).
 
 **Carried from G3** (2026-10-31):
 
@@ -2533,9 +2537,7 @@ nothing was redacted.
   evidence") is not built; the operator writes `first_party` by hand.
 - Review (2026-10-31) leftovers: Plan's preview does not filter requests an `exclude`
   covers (the gate refuses them as `excluded`); a probe answered `429`, `5xx` or by a
-  reset is sent again on a resumed session, since only a success is reused; a `200` of
-  the right shape served with a content type outside the signature's list (not an absent
-  one) is disproved.
+  reset is sent again on a resumed session, since only a success is reused.
 - The first-party evidence a probe rests on, "operator confirmed" included, is named in
   the excerpt of each probe verdict that was sent, as well as in Plan's preview and the
   confirm prompt; the report has no per-site evidence table of its own.
@@ -2545,12 +2547,13 @@ nothing was redacted.
 
 - Common admin panels: a login page that exists is an observation, not a finding.
 - A control request per origin (a path that must not exist), which the consultant
-  suggested against catch-all responses. Strict signatures and media-type lists make an
-  HTML catch-all unmatchable, so it is not needed yet.
+  suggested against catch-all responses. Page-specific strings make a catch-all match
+  improbable and text-file probes never match an HTML page, so it is not needed yet.
 - An attribute that raises a probe finding to *critical* needs a row in
   `spec/engagement.md`, "Severity in context", ceilings.
 - Listing, per probe, the framework-specific probes not selected; Plan counts them
-  (`framework_skipped`) and the report does not list them.
+  (`framework_skipped`) and the report counts them in the sub-item's reason
+  (`unavailable:probe_framework`) without listing them.
 
 **Done when:** no probe runs without an authorization window, first-party evidence and
 the asset's mode allowing it; `confirm` with no terminal reports probes as *not run*;

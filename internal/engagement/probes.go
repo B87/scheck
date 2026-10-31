@@ -108,6 +108,30 @@ func (r *run) planProbes() (plans []ProbePlan, unevidenced []string) {
 	return plans, unevidenced
 }
 
+// probeFrameworkGaps counts, by finding id, the probes left unsent under a
+// root because no framework was declared for a probed site, or it was
+// declared unknown. `none` is a declaration: nothing framework-specific
+// applies, and the sub-items stay decided.
+func (r *run) probeFrameworkGaps(root string) map[string]int {
+	var out map[string]int
+	for _, p := range r.probePlan {
+		if p.Asset != root || len(p.Framework) > 0 && !slices.Equal(p.Framework, []string{"unknown"}) {
+			continue
+		}
+		for _, id := range p.FrameworkSkipped {
+			for _, pr := range web.Probes {
+				if pr.ID == id {
+					if out == nil {
+						out = map[string]int{}
+					}
+					out[pr.Finding]++
+				}
+			}
+		}
+	}
+	return out
+}
+
 // answeredOver says Recon got an HTTP answer from the site over the scheme:
 // its front page, or any entry point it read.
 func answeredOver(s web.Site, scheme string) bool {

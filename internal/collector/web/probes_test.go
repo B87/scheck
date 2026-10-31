@@ -29,7 +29,7 @@ func TestProbeListIsValidAndLiteral(t *testing.T) {
 		if !strings.HasPrefix(p.Path, "/") || strings.ContainsAny(p.Path, "?#{}") {
 			t.Errorf("%s: path %q is not a literal path", p.ID, p.Path)
 		}
-		if _, err := regexp.Compile(p.Signature.Pattern); err != nil || len(p.Signature.Types) == 0 {
+		if _, err := regexp.Compile(p.Signature.Pattern); err != nil || len(p.Signature.Types)+len(p.Signature.NotTypes) == 0 {
 			t.Errorf("%s: signature %v, types %v", p.ID, err, p.Signature.Types)
 		}
 		if p.Tag != "" && !slices.Contains([]string{"laravel", "django", "rails", "spring", "wordpress", "node", "php"}, p.Tag) {

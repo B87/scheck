@@ -23,6 +23,7 @@ const probeSecret = "AKIA" + "ABCDEFGHIJKLMNOP"
 // probeFile is an engagement with one url root probed in mode, framework
 // none, inside a window that holds now.
 // probeWindow is the window around now that probeFile writes.
+var probeFramework = "none"
 var probeWindow = [2]time.Duration{-time.Hour, time.Hour}
 
 func probeFile(mode string) string {
@@ -30,13 +31,13 @@ func probeFile(mode string) string {
 	return fmt.Sprintf(`schema: 1
 engagement: {name: probe-review, timezone: Europe/Madrid, trigger: routine}
 roots: [{url: 'https://shop.example.com/'}]
-defaults: {probe: %s, framework: [none]}
+defaults: {probe: %s, framework: [%s]}
 authorization:
   by: CTO, Example Ltd
   date: 2026-10-06
   windows:
     - {from: %s, to: %s}
-`, mode, now.Add(probeWindow[0]).Format(time.RFC3339), now.Add(probeWindow[1]).Format(time.RFC3339))
+`, mode, probeFramework, now.Add(probeWindow[0]).Format(time.RFC3339), now.Add(probeWindow[1]).Format(time.RFC3339))
 }
 
 func probeSite(t *testing.T, h *gate.Harness) func() []string {
@@ -46,8 +47,6 @@ func probeSite(t *testing.T, h *gate.Harness) func() []string {
 		switch r.URL.Path {
 		case "/.env":
 			_, _ = w.Write([]byte("APP_NAME=shop\nAWS_ACCESS_KEY_ID=" + probeSecret + "\n"))
-		case "/server-status":
-			w.WriteHeader(http.StatusForbidden)
 		case "/":
 			w.Header().Set("Content-Type", "text/html")
 			_, _ = w.Write([]byte("<html>shop</html>"))
@@ -151,6 +150,53 @@ func TestProbesOutsideTheWindowAreIncomplete(t *testing.T) {
 	raw, _ := json.Marshal(out.Report)
 	if !strings.Contains(string(raw), "unavailable:probe_window") {
 		t.Error("the report does not say why the probes did not run")
+	}
+}
+
+// A framework left undeclared (or unknown) leaves the framework probes
+// unsent, so the sub-items are partial and say how many; none is a
+// declaration, and the sub-items stay assessed.
+func TestUndeclaredFrameworkIsPartialCoverage(t *testing.T) {
+	subItems := func(framework string) map[string]string {
+		probeFramework = framework
+		t.Cleanup(func() { probeFramework = "none" })
+		out, _, _ := runProbes(t, "all", nil)
+		marks := map[string]string{}
+		raw, _ := json.Marshal(out.Report)
+		var rep struct {
+			Coverage []struct {
+				SubItems []struct {
+					Name    string
+					Mark    string
+					Reasons []struct{ Reason, Detail string }
+				} `json:"sub_items"`
+			}
+		}
+		if err := json.Unmarshal(raw, &rep); err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rep.Coverage {
+			for _, si := range row.SubItems {
+				if si.Name == "exposed files" || si.Name == "debug and status pages" {
+					marks[si.Name] = si.Mark
+					for _, r := range si.Reasons {
+						if r.Reason == "unavailable:probe_framework" && strings.Contains(r.Detail, "framework probes not sent: no framework declared") {
+							marks[si.Name] += "+gap"
+						}
+					}
+				}
+			}
+		}
+		return marks
+	}
+	for _, fw := range []string{"unknown"} {
+		got := subItems(fw)
+		if got["exposed files"] != "partial+gap" || got["debug and status pages"] != "partial+gap" {
+			t.Errorf("%s: %v", fw, got)
+		}
+	}
+	if got := subItems("none"); got["exposed files"] != "assessed" || got["debug and status pages"] != "assessed" {
+		t.Errorf("none: %v", got)
 	}
 }
 

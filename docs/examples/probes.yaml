@@ -16,7 +16,8 @@
 #  or follows a redirect, and no admin panel is on the list.
 #
 #  scheck never guesses a framework from what the site answers. With none
-#  declared, or `none` or `unknown`, only the five on every site are sent.
+#  declared, or `none` or `unknown`, only the five on every site are sent; with none
+#  declared or `unknown`, the coverage says how many were not sent.
 #
 #  ONE-TIME SETUP
 #  --------------

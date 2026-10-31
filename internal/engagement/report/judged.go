@@ -527,6 +527,16 @@ var judgedFamilies = map[finding.Area][]struct {
 // probed or planned for it: a run with probes off carries none.
 var probeFamilies = map[string]bool{"exposed files": true, "debug and status pages": true}
 
+// probesNotSent counts the probes of the finding ids that were left unsent
+// for want of a declared framework.
+func probesNotSent(a AssetInput, ids []string) int {
+	n := 0
+	for _, id := range ids {
+		n += a.ProbeFrameworkSkipped[id]
+	}
+	return n
+}
+
 // declaredOnly names what only a declared asset of the area's own kind
 // brings, for a row a collector's plan read without one.
 var declaredOnly = map[finding.Area]string{finding.AreaEmail: "Domain email settings (SPF, DKIM and DMARC)"}
@@ -642,6 +652,13 @@ func (b *builder) judgedRow(area finding.Area, assets []AssetInput) Row {
 				si.Mark, si.Judged = "partial", []string{fam.judges}
 			default:
 				si.Mark = "not_assessed"
+			}
+			if n := probesNotSent(a, fam.ids); n > 0 && probeFamilies[fam.name] {
+				si.Reasons = appendReason(si.Reasons, ReasonDetail{Reason: "unavailable:probe_framework",
+					Detail: fmt.Sprintf("%d framework probes not sent: no framework declared; declare `framework` to select them", n)})
+				if si.Mark == "assessed" {
+					si.Mark, si.Judged = "partial", []string{fam.judges}
+				}
 			}
 			some = some || si.Mark == "assessed" || si.Mark == "partial"
 			for _, r := range si.Reasons {

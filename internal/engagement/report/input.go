@@ -179,6 +179,10 @@ type AssetInput struct {
 	// severity chain Analyze gave it.
 	Collector string
 	Judged    []Judgment
+	// ProbeFrameworkSkipped counts, by finding id, the probes of a framework
+	// not sent because the site's framework was not declared (or unknown):
+	// their sub-items are at most partial.
+	ProbeFrameworkSkipped map[string]int
 	// ReadWith is the root a declared domain asset was read with, its
 	// names among the root's.
 	ReadWith string

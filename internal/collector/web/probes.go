@@ -35,28 +35,34 @@ type Probe struct {
 }
 
 // ProbesVersion versions the list: a changed path or signature changes it.
-const ProbesVersion = "2026-10-31"
+const ProbesVersion = "2026-11-01"
 
-var textFile = []string{"text/plain", "application/octet-stream"}
+// htmlTypes are the types a text-file probe refuses: a page that answers every
+// path. Any other type, or none, may carry the file.
+var htmlTypes = []string{"text/html", "application/xhtml+xml"}
+
+// listedTextTypes are the types a text file is served as; a no-match under
+// one of them, with nothing redacted, rules the file out.
+var listedTextTypes = []string{"text/plain", "application/octet-stream"}
 
 // Probes is the reviewed list, in the order it is sent.
 var Probes = []Probe{
 	{ID: "git_head", Path: "/.git/HEAD", Finding: finding.IDWebVCSMetadataExposed, Shape: "a git HEAD file",
-		Signature: gate.Signature{Pattern: `\A(ref: refs/[A-Za-z0-9._/-]+|[0-9a-f]{40})\s*\z`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `\A(ref: refs/[A-Za-z0-9._/-]+|[0-9a-f]{40})\s*\z`, NotTypes: htmlTypes}},
 	{ID: "git_config", Path: "/.git/config", Finding: finding.IDWebVCSMetadataExposed, Shape: "a git config file",
-		Signature: gate.Signature{Pattern: `(?m)^\[core\]\s*$`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `(?m)^\[core\]\s*$`, NotTypes: htmlTypes}},
 	{ID: "env", Path: "/.env", Finding: finding.IDWebConfigFileExposed, Shape: "an environment file (KEY=value lines)",
-		Signature: gate.Signature{Pattern: `(?m)^(export\s+)?[A-Z][A-Z0-9_]{2,}\s*=`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `(?m)^(export\s+)?[A-Z][A-Z0-9_]{2,}\s*=`, NotTypes: htmlTypes}},
 	{ID: "htpasswd", Path: "/.htpasswd", Finding: finding.IDWebConfigFileExposed, Shape: "a password file (user:hash lines)",
-		Signature: gate.Signature{Pattern: `(?m)^[A-Za-z0-9._@-]+:(\$apr1\$|\$2[abxy]\$|\{SHA\}|\$[56]\$)`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `(?m)^[A-Za-z0-9._@-]+:(\$apr1\$|\$2[abxy]\$|\{SHA\}|\$[56]\$)`, NotTypes: htmlTypes}},
 	{ID: "server_status", Path: "/server-status", Finding: finding.IDWebDebugInterfaceExposed, Shape: "Apache's server status page",
 		Signature: gate.Signature{Pattern: `Apache Server Status for`, Types: []string{"text/html"}}},
 	{ID: "npmrc", Path: "/.npmrc", Tag: "node", Finding: finding.IDWebConfigFileExposed, Shape: "an npm configuration file",
-		Signature: gate.Signature{Pattern: `(?m)^(//[^\s=]+:_authToken\s*=|_auth\s*=|registry\s*=)`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `(?m)^(//[^\s=]+:_authToken\s*=|_auth\s*=|registry\s*=)`, NotTypes: htmlTypes}},
 	{ID: "wp_config_bak", Path: "/wp-config.php.bak", Tag: "wordpress", Finding: finding.IDWebConfigFileExposed, Shape: "a WordPress configuration backup",
-		Signature: gate.Signature{Pattern: `define\(\s*['"]DB_(NAME|USER|PASSWORD)['"]`, Types: textFile}},
+		Signature: gate.Signature{Pattern: `define\(\s*['"]DB_(NAME|USER|PASSWORD)['"]`, NotTypes: htmlTypes}},
 	{ID: "wp_debug_log", Path: "/wp-content/debug.log", Tag: "wordpress", Finding: finding.IDWebConfigFileExposed, Shape: "a WordPress debug log",
-		Signature: gate.Signature{Pattern: `(?m)^\[\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}:\d{2} UTC\] `, Types: textFile}},
+		Signature: gate.Signature{Pattern: `(?m)^\[\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}:\d{2} UTC\] `, NotTypes: htmlTypes}},
 	{ID: "phpinfo", Path: "/phpinfo.php", Tag: "php", Finding: finding.IDWebDebugInterfaceExposed, Shape: "a phpinfo() page",
 		Signature: gate.Signature{Pattern: `PHP Version [0-9]`, Types: []string{"text/html"}}},
 	{ID: "symfony_profiler", Path: "/_profiler/", Tag: "php", Finding: finding.IDWebDebugInterfaceExposed, Shape: "the Symfony profiler",
@@ -266,6 +272,8 @@ func (j *judging) probes() {
 				x.Reason = "unavailable:http_status"
 			case r.Status >= 300 && r.Status < 400:
 				x.Reason = "unavailable:redirected"
+			case r.Status == 200 && probeIsTextFile(r.Probe):
+				j.textFileVerdict(&x, r, s.Evidence)
 			case r.Status == 200 && r.ContentType == "":
 				// The signature tests the type too; with none sent, a body of the
 				// right shape would have been missed, not ruled out.
@@ -279,6 +287,38 @@ func (j *judging) probes() {
 			}
 			j.add(x)
 		}
+	}
+}
+
+// probeIsTextFile says the probe's signature refuses only HTML: its file is
+// matched whatever the type.
+func probeIsTextFile(id string) bool {
+	for _, p := range Probes {
+		if p.ID == id {
+			return len(p.Signature.NotTypes) > 0
+		}
+	}
+	return false
+}
+
+// textFileVerdict decides a 200 that did not match a text-file signature, in
+// this order: an HTML page is not the file; something redacted could have
+// hidden the shape; a listed text type with nothing redacted rules it out;
+// any other or missing type is unknown, never a pass.
+func (j *judging) textFileVerdict(x *Judgment, r ProbeRead, evidence string) {
+	switch {
+	case slices.Contains(htmlTypes, r.ContentType):
+		x.Verdict = Disproved
+		x.Excerpt = "answered with a page, not the file; probed on first-party evidence: " + evidence
+		x.Details["status"] = r.Status
+	case len(r.Redacted) > 0:
+		x.Reason = "unavailable:redacted"
+	case slices.Contains(listedTextTypes, r.ContentType):
+		x.Verdict = Disproved
+		x.Excerpt = "not served at this path from this vantage; probed on first-party evidence: " + evidence
+		x.Details["status"] = r.Status
+	default:
+		x.Reason = "unavailable:content_type"
 	}
 }
 

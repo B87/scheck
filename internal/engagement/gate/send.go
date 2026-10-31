@@ -692,11 +692,15 @@ func (g *Gate) matchSignature(out *Response, resp *http.Response, op *compiled) 
 	if resp.StatusCode != http.StatusOK || len(body) == 0 {
 		return
 	}
-	if len(op.Signature.Types) > 0 {
-		media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-		if err != nil || !slices.Contains(op.Signature.Types, strings.ToLower(media)) {
-			return
-		}
+	// A missing or unparseable type is "": Types, when listed, refuse it;
+	// NotTypes never name it.
+	media, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	media = strings.ToLower(media)
+	if slices.Contains(op.Signature.NotTypes, media) {
+		return
+	}
+	if len(op.Signature.Types) > 0 && !slices.Contains(op.Signature.Types, media) {
+		return
 	}
 	out.Matched = op.sig.Match(body)
 }

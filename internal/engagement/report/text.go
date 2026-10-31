@@ -924,6 +924,17 @@ func (t *text) reasonText(rd ReasonDetail) string {
 			"no_declaration":                "no service on this host is declared for localhost, lan or vpn (expected_services); scheck judges a service's reach only against what you declared",
 			"audience":                      "a service's audience is localhost, lan, vpn or internet",
 			"audience_network":              "on a host not declared internet-facing, scheck cannot tell which networks its addresses face",
+			"probe_no_terminal":             "probes in confirm mode are asked about on a terminal, and there was none: not run",
+			"probe_declined":                "the probes were previewed and not approved: not run",
+			"probe_site_unreachable":        "the site answered neither over https nor over http, so no probe was sent",
+			"probe_window":                  "the authorization window did not cover the probes: not run",
+			"probe_evidence":                "the site had no first-party evidence when the probe was sent: not run",
+			"probe_mode":                    "the site's probe mode did not allow the probe: not run",
+			"probe_not_reached":             "the run ended before this probe was sent",
+			"probe_framework":               "probes for frameworks the site was not declared to use were not sent",
+			"content_type":                  "the answer had a content type that cannot rule the file out, or none",
+			"redacted":                      "part of the answer was redacted, which could have hidden what the probe looks for",
+			"redirected":                    "the site redirected the probe, which scheck does not follow",
 			"bind_network":                  "the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall",
 		}[arg]; ok {
 			return detail

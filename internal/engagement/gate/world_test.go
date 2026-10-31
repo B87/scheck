@@ -454,7 +454,7 @@ var testOps = []Op{
 		Params: []Param{{Name: "host", Type: Host}}, Level: Observe},
 	{ID: "web.probe", Provider: "web", Method: GET, URL: "https://{host}/.git/HEAD",
 		Params: []Param{{Name: "host", Type: Host}}, Level: Probe, Accept: []string{"*/*"}, MaxBytes: 256,
-		Signature: &Signature{Pattern: `\Aref: refs/`, Types: []string{"text/plain"}}},
+		Signature: &Signature{Pattern: `\Aref: refs/`, NotTypes: []string{"text/html", "application/xhtml+xml"}}},
 	{ID: "github.org", Provider: "github", Method: GET, URL: "https://api.github.com/orgs/{org}",
 		Subject: "saas:github:{org}", Params: []Param{{Name: "org", Type: Login}},
 		Level: Observe, Auth: GitHubToken, Accept: []string{"application/vnd.github+json"}, Keep: []string{"login", "access_token", "plan.name"}, MaxBytes: 1 << 12},

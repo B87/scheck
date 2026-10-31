@@ -21,7 +21,11 @@ func probeWorld(t *testing.T, handler http.HandlerFunc) (*world, *server, Reques
 
 func gitHead(status int, contentType, body string) http.HandlerFunc {
 	return func(rw http.ResponseWriter, _ *http.Request) {
-		rw.Header().Set("Content-Type", contentType)
+		if contentType == "" {
+			rw.Header()["Content-Type"] = nil
+		} else {
+			rw.Header().Set("Content-Type", contentType)
+		}
 		rw.WriteHeader(status)
 		_, _ = rw.Write([]byte(body))
 	}
@@ -37,6 +41,10 @@ func TestProbeKeepsNoBodyAndIsSentOnce(t *testing.T) {
 		matched     bool
 	}{
 		"a git HEAD":                    {200, "text/plain", "ref: refs/heads/main\n", true},
+		"no content type":               {200, "", "ref: refs/heads/main\n", true},
+		"binary/octet-stream":           {200, "binary/octet-stream", "ref: refs/heads/main\n", true},
+		"application/x-trash":           {200, "application/x-trash", "ref: refs/heads/main\n", true},
+		"an xhtml catch-all":            {200, "application/xhtml+xml", "ref: refs/heads/main\n", false},
 		"a catch-all page":              {200, "text/html", "ref: refs/heads/main\n", false},
 		"another body":                  {200, "text/plain", "<html>welcome</html>", false},
 		"not found":                     {404, "text/plain", "ref: refs/heads/main\n", false},

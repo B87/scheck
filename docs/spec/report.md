@@ -73,12 +73,16 @@ and mirror-origin credential detection have separate Secrets coverage sub-items.
 marked from the judgments, like any rule. A probe that was not sent is an abstained
 judgment, so the sub-item is at most *partial* and the reason is the probe's:
 `unavailable:probe_no_terminal`, `probe_declined`, `probe_site_unreachable`,
-`probe_window`, `probe_evidence`, `probe_mode` or `probe_not_reached`
-([web-collector.md](web-collector.md#probes)). With every probe mode `off` the report
+`probe_window`, `probe_evidence`, `probe_mode` or `probe_not_reached`; an answer that
+could not rule the file out gives `http_status`, `redirected`, `redacted` or
+`content_type` ([web-collector.md](web-collector.md#probes)). With every probe mode `off` the report
 carries neither sub-item and says nothing about probes beyond the fixed lines. A disproved
 probe is worded "not served at this path from this vantage", never "no exposed files". The
-framework-specific probes a site's declaration did not select are counted in Plan
-and not listed here. `engagement.method.probes` is `ran` when a probe was sent and
+framework-specific probes a site's declaration did not select are counted in Plan and
+not listed per probe. When a probed site declared no framework, or `unknown`, each
+sub-item is at most *partial* with `unavailable:probe_framework`, detail "N framework
+probes not sent: no framework declared; declare `framework` to select them"; `none` and
+any declared list leave the sub-items decided. `engagement.method.probes` is `ran` when a probe was sent and
 `none_ran` when a site was in a probing mode and none was (a `confirm` with no
 terminal or a declined preview, outside the window, no evidence); it is omitted when
 every mode is `off`. `levels_used` gains `probe` when one was sent. The evidence a probe
@@ -555,6 +559,17 @@ the target:
 | `unavailable:audience` | a service's audience is localhost, lan, vpn or internet |
 | `unavailable:audience_network` | on a host not declared internet-facing, scheck cannot tell which networks its addresses face |
 | `unavailable:bind_network` | the service is bound to a private address; on a cloud VM a public address can forward to it, and scheck did not read the cloud firewall |
+| `unavailable:probe_no_terminal` | probes in confirm mode are asked about on a terminal, and there was none: not run |
+| `unavailable:probe_declined` | the probes were previewed and not approved: not run |
+| `unavailable:probe_site_unreachable` | the site answered neither over https nor over http, so no probe was sent |
+| `unavailable:probe_window` | the authorization window did not cover the probes: not run |
+| `unavailable:probe_evidence` | the site had no first-party evidence when the probe was sent: not run |
+| `unavailable:probe_mode` | the site's probe mode did not allow the probe: not run |
+| `unavailable:probe_not_reached` | the run ended before this probe was sent |
+| `unavailable:probe_framework` | probes for frameworks the site was not declared to use were not sent |
+| `unavailable:content_type` | the answer had a content type that cannot rule the file out, or none |
+| `unavailable:redacted` | part of the answer was redacted, which could have hidden what the probe looks for |
+| `unavailable:redirected` | the site redirected the probe, which scheck does not follow |
 | `unavailable:no_app_paths` | no application folder was declared for this host (`app_paths`), so `.env` files were not looked for |
 | `unavailable:listing_not_trusted` | on macOS any local user can forge a line of the listing, so it can show a file is exposed but never that it is not |
 | `unavailable:no_file_listed` | no file by these names was listed; a read that stops 4 folders deep, and does not follow links or enter other filesystems, cannot tell none from not looked at |

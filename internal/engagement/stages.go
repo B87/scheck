@@ -1147,6 +1147,7 @@ func (r *run) reportInput(evidence map[string]string, judged map[string][]findin
 				ai.MailNotes = append(ai.MailNotes, ereport.Note{Kind: "mail_context", Source: n.Domain, Detail: n.Detail})
 			}
 			ai.Judged = append(ai.Judged, judged[ra.ID]...)
+			ai.ProbeFrameworkSkipped = r.probeFrameworkGaps(ra.ID)
 		}
 		in.Assets = append(in.Assets, ai)
 	}

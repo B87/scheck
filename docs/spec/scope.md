@@ -508,14 +508,16 @@ site. The reviewed list, its signatures and the findings are in
 
 **The list is compiled.** One op per probe, `web.probe.<id>`, with a literal path, `GET`
 only, no query, `Accept: */*`. A probe op declares a content signature (an RE2 pattern
-and the media types it may be served as) and a read cap of 4 KiB (`gate.ProbeMaxBytes`).
+and either the media types it may be served as or, for a text file, the types it may not) and a read cap of 4 KiB (`gate.ProbeMaxBytes`).
 Registry validation refuses a probe op with a path parameter, with no signature, that is
 not `GET`, whose cap is above 4 KiB, or that is a scan op. Nothing a site says and nothing
 the operator writes adds a path.
 
 **What a response keeps.** The gate redacts the body, tests the signature on the
-redacted prefix (status `200` and a content type on the signature's list), and then
-drops the body. The response keeps the status, the headers, whether it matched, and a
+redacted prefix, and then drops the body. A match needs status `200` and, for a signature
+that lists types, one of them; a text-file signature refuses only the HTML types
+(`text/html`, `application/xhtml+xml`) and matches any other type, or none.
+The body is then dropped. The response keeps the status, the headers, whether it matched, and a
 hash of what was read. No probe body reaches the audit log, `check.json`, the report or
 the run directory. The match runs on redacted bytes, so no secret is compared or kept.
 
